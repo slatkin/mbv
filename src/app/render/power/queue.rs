@@ -273,7 +273,7 @@ impl App {
                     layout.queue_row_map.push(None);
                     line_offset += 1;
                 }
-                QueueRow::Track { idx, in_group: _ } => {
+                QueueRow::Track { idx } => {
                     let i = *idx;
                     let indent: usize = 2;
                     let track_content_w = render_w.saturating_sub(2);

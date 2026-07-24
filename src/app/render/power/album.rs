@@ -660,8 +660,7 @@ impl App {
         lib_idx: usize,
         page_down: bool,
     ) -> bool {
-        if self.view_mode != crate::app::ViewMode::Power
-            || self.power_left_tab != lib_idx + 1
+        if self.power_left_tab != lib_idx + 1
             || !matches!(self.power_focus, crate::app::PowerFocus::Left)
             || self.libs[lib_idx].search.is_some()
             || self.libs[lib_idx].album_track_focus.is_some()

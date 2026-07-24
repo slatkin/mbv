@@ -122,7 +122,6 @@ pub fn run(
                     always_skip_intro: base_config.always_skip_intro,
                     show_systray_icon: base_config.show_systray_icon,
                     no_scripts: base_config.no_scripts,
-                    start_on_queue: base_config.start_on_queue,
                     stay_alive: base_config.stay_alive,
                     save_playlist_on_quit: base_config.save_playlist_on_quit,
                     autoload: base_config.autoload,
@@ -142,7 +141,6 @@ pub fn run(
                     daemon_client_endpoint: base_config.daemon_client_endpoint.clone(),
                     daemon_server_tcp_listen: base_config.daemon_server_tcp_listen.clone(),
                     auto_reconnect: base_config.auto_reconnect,
-                    view_mode: base_config.view_mode.clone(),
                 };
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {

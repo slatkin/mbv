@@ -42,31 +42,6 @@ pub(crate) struct LayoutPlayback {
     pub next_area: Rect,
 }
 
-/// Home-tab section/carousel geometry.
-#[derive(Default)]
-pub(crate) struct LayoutHome {
-    pub home_rect: Rect,
-    pub section_areas: Vec<Rect>,
-    pub home_scrolls: Vec<usize>,
-    pub home_scrollbar: Rect,
-    pub home_card_strips: Vec<(usize, Rect)>,
-    pub carousel_slots: [(Option<usize>, Rect); 3],
-    pub carousel_left_arrow: Option<Rect>,
-    pub carousel_right_arrow: Option<Rect>,
-    pub carousel_up_arrow: Option<Rect>,
-    pub carousel_down_arrow: Option<Rect>,
-}
-
-/// Queue list/filmstrip/card view geometry.
-#[derive(Default)]
-pub(crate) struct LayoutQueue {
-    pub row_map: Vec<Option<usize>>,
-    pub rect: Rect,
-    pub inner: Rect,
-    pub scope_local_area: Rect,
-    pub scope_remote_area: Rect,
-}
-
 /// Geometry for the power-view's own Home sub-tab,
 /// separate from `LayoutHome` which belongs to the regular Home tab.
 #[derive(Default)]
@@ -105,25 +80,13 @@ pub(crate) enum PowerLeftRowTarget {
     ArtistHeader(ArtistHeaderSelection),
 }
 
-/// Library table/breadcrumb geometry.
-#[derive(Default)]
-pub(crate) struct LayoutLibrary {
-    pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
-    pub lib_scroll: Vec<usize>,
-    pub lib_row_heights: Vec<Vec<u16>>,
-    pub lib_table_area: Vec<Rect>,
-}
-
 /// All per-frame layout geometry, grouped by the view that produces it.
 /// `App` stores exactly one of these (`app.layout`); render writes into it,
 /// input reads from it. See module docs for the rationale.
 #[derive(Default)]
 pub(crate) struct AppLayout {
     pub playback: LayoutPlayback,
-    pub home: LayoutHome,
-    pub queue: LayoutQueue,
     pub power: LayoutPower,
-    pub library: LayoutLibrary,
     pub tabs_area: Rect,
     pub tabbar_vol_area: Rect,
     pub settings_area: Rect,

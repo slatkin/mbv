@@ -1,15 +1,12 @@
-mod home;
 pub mod indicators;
-mod library;
 mod overlays;
-mod playlist;
 pub(crate) mod power;
 
 use super::ui_util::{fmt_duration, trunc_str};
 use super::{layout::AppLayout, palette, App};
 use crate::app::layout::LayoutPlayback;
 use mbv_core::api::TICKS_PER_SECOND;
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
@@ -108,32 +105,13 @@ impl App {
         // leave `self.layout` holding a mix of fields from two different
         // frames.
         let mut layout = AppLayout::default();
-        // The library-table geometry caches are indexed by library tab index
-        // and sized once (to `self.libs.len()`) by `rebuild_library_tabs_from_views`,
-        // not rebuilt every frame -- each render pass only overwrites the slot
-        // for the currently-viewed library. Carry the existing sizing/values
-        // forward so `get_mut(lib_idx)` below still finds a slot to write into;
-        // otherwise every library-tab index in a freshly-defaulted (empty) Vec
-        // would be unwritable and this state would never survive a frame.
-        layout.library.lib_scroll = self.layout.library.lib_scroll.clone();
-        layout.library.lib_row_heights = self.layout.library.lib_row_heights.clone();
-        layout.library.lib_table_area = self.layout.library.lib_table_area.clone();
 
         let active = self.player.status.lock().unwrap().active;
         let show_controls = active || self.connected_session_id.is_some();
-        let in_power = self.view_mode == super::ViewMode::Power;
         let playing_panel = show_controls;
-        // In Power View always reserve the player rows (title + controls) so that
-        // content doesn't shift when the player appears or disappears.
-        let reserve_player_rows = in_power;
-        // Player panel and tab bar now render within the right column of each
-        // view instead of as full-width rows above the content area.
-        let (seek_h, _gap_h, title_h, controls_h): (u16, u16, u16, u16) =
-            if playing_panel || reserve_player_rows {
-                (1, 0, 1, 2)
-            } else {
-                (1, 0, 0, 0)
-            };
+        // Power View always reserves the player rows (title + controls) so
+        // that content doesn't shift when the player appears or disappears.
+        let (seek_h, _gap_h, title_h, controls_h): (u16, u16, u16, u16) = (1, 0, 1, 2);
         let player_h = seek_h + title_h + controls_h;
         let [main_area] = Layout::vertical([Constraint::Min(0)]).areas(area);
 
@@ -170,102 +148,24 @@ impl App {
         } else {
             None
         };
-        // Top-level render dispatch (issue #275): Power owns its own nav via
-        // `power_left_tab` and ignores `tab_idx` entirely; `tab_idx` is
-        // meaningful only in Standard mode.
-        match self.view_mode {
-            super::ViewMode::Power => {
-                self.render_power_view(
-                    f,
-                    main_area,
-                    &mut layout.power,
-                    &mut layout.playback,
-                    &mut layout.tabs_area,
-                    &mut layout.tabbar_vol_area,
-                    player_h,
-                    show_controls,
-                    &now_playing_title,
-                );
-            }
-            super::ViewMode::Standard => {
-                let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
-                let tab_area = Rect {
-                    height: tab_h,
-                    ..main_area
-                };
-                self.render_tabs(
-                    f,
-                    tab_area,
-                    &mut layout.tabs_area,
-                    &mut layout.tabbar_vol_area,
-                    false,
-                );
-
-                let content_h = main_area
-                    .height
-                    .saturating_sub(tab_h)
-                    .saturating_sub(player_h)
-                    .saturating_sub(1);
-                let content_area = Rect {
-                    y: main_area.y + tab_h + player_h,
-                    height: content_h,
-                    ..main_area
-                };
-
-                if player_h > 0 {
-                    let player_area = Rect {
-                        y: main_area.y + tab_h,
-                        height: player_h,
-                        ..main_area
-                    };
-                    self.render_player_panel(
-                        f,
-                        player_area,
-                        &mut layout.playback,
-                        player_h,
-                        show_controls,
-                        &now_playing_title,
-                    );
-                }
-
-                if self.tab_idx == 0 {
-                    self.render_combined(f, content_area, &mut layout.home);
-                } else if self.tab_idx == 1 {
-                    self.render_queue_panel(f, content_area, &mut layout.queue);
-                } else {
-                    self.render_library(
-                        f,
-                        content_area,
-                        self.tab_idx - self.lib_tab_offset(),
-                        None,
-                        &mut layout.library,
-                    );
-                }
-
-                let sb_area = Rect {
-                    y: main_area.y + content_h + tab_h + player_h,
-                    height: 1,
-                    ..main_area
-                };
-                self.render_status_bar(f, sb_area, &mut layout.playback, true, true);
-                let show_toast =
-                    !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
-                if show_toast {
-                    f.render_widget(Clear, sb_area);
-                    f.render_widget(
-                        Paragraph::new(Self::toast_line(&self.status))
-                            .alignment(Alignment::Center)
-                            .style(Style::default().fg(palette::TOAST_FG).bg(palette::TOAST_BG)),
-                        sb_area,
-                    );
-                }
-            }
-        }
+        // Top-level render dispatch (issue #275, collapsed by #361): Power
+        // View is the only view; it owns its own nav via `power_left_tab`.
+        self.render_power_view(
+            f,
+            main_area,
+            &mut layout.power,
+            &mut layout.playback,
+            &mut layout.tabs_area,
+            &mut layout.tabbar_vol_area,
+            player_h,
+            show_controls,
+            &now_playing_title,
+        );
 
         self.render_context_menu(f, &mut layout);
 
         let power_panel_area =
-            (in_power && layout.power.panel_area.width > 0).then_some(layout.power.panel_area);
+            (layout.power.panel_area.width > 0).then_some(layout.power.panel_area);
         if self.show_sessions {
             self.render_sessions_overlay(f, power_panel_area);
         }
@@ -611,7 +511,6 @@ impl App {
         area: Rect,
         tabs_area_out: &mut Rect,
         tabbar_vol_area_out: &mut Rect,
-        in_power: bool,
     ) {
         // Fill the tab bar area with the tab box's own background.
         f.render_widget(
@@ -697,68 +596,37 @@ impl App {
             width: tabs_w.saturating_sub(left_w + right_w),
             height: area.height,
         };
-        let tab_titles: Vec<Line> = if in_power {
-            let names: Vec<String> = std::iter::once("Home".to_string())
-                .chain(self.libs.iter().map(|l| l.library.name.clone()))
-                .collect();
-            let sel = self.power_left_tab;
-            names
-                .into_iter()
-                .enumerate()
-                .map(|(i, n)| {
-                    let n = n.to_uppercase();
-                    if i == sel {
-                        Line::from(vec![
-                            Span::styled("▐", Style::default().fg(palette::AQUA)),
-                            Span::styled(
-                                format!(" {n}  "),
-                                Style::default()
-                                    .fg(palette::WHITE)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                        ])
-                    } else {
-                        Line::from(Span::styled(
-                            format!("  {n}  "),
-                            Style::default().fg(palette::PLAYBACK_META_FG),
-                        ))
-                    }
-                })
-                .collect()
+        let all_names: Vec<String> = std::iter::once("Home".to_string())
+            .chain(self.libs.iter().map(|l| l.library.name.clone()))
+            .collect();
+        let selected_tab = if self.power_left_tab < vis_start || self.power_left_tab >= vis_end {
+            usize::MAX
         } else {
-            let all_names: Vec<String> = std::iter::once("Home".to_string())
-                .chain(std::iter::once("Queue".to_string()))
-                .chain(self.libs.iter().map(|l| l.library.name.clone()))
-                .collect();
-            let selected_tab = if self.tab_idx < vis_start || self.tab_idx >= vis_end {
-                usize::MAX
-            } else {
-                self.tab_idx - vis_start
-            };
-            all_names[vis_start..vis_end]
-                .iter()
-                .enumerate()
-                .map(|(i, n)| {
-                    let n = n.to_uppercase();
-                    if i == selected_tab {
-                        Line::from(vec![
-                            Span::styled("▐", Style::default().fg(palette::AQUA)),
-                            Span::styled(
-                                format!(" {n}  "),
-                                Style::default()
-                                    .fg(palette::WHITE)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                        ])
-                    } else {
-                        Line::from(Span::styled(
-                            format!("  {n}  "),
-                            Style::default().fg(palette::PLAYBACK_META_FG),
-                        ))
-                    }
-                })
-                .collect()
+            self.power_left_tab - vis_start
         };
+        let tab_titles: Vec<Line> = all_names[vis_start..vis_end]
+            .iter()
+            .enumerate()
+            .map(|(i, n)| {
+                let n = n.to_uppercase();
+                if i == selected_tab {
+                    Line::from(vec![
+                        Span::styled("▐", Style::default().fg(palette::AQUA)),
+                        Span::styled(
+                            format!(" {n}  "),
+                            Style::default()
+                                .fg(palette::WHITE)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ])
+                } else {
+                    Line::from(Span::styled(
+                        format!("  {n}  "),
+                        Style::default().fg(palette::PLAYBACK_META_FG),
+                    ))
+                }
+            })
+            .collect();
         f.render_widget(
             Tabs::new(tab_titles)
                 .select(usize::MAX)
@@ -1378,19 +1246,29 @@ impl App {
             let mut right_spans: Vec<Span> = Vec::new();
             let source_label: Option<(String, Color)> = match &self.queue_source {
                 crate::config::QueueSource::Playlist { .. } => None,
-                crate::config::QueueSource::Album if self.tab_idx == 1 => {
+                crate::config::QueueSource::Album
+                    if matches!(self.power_focus, super::PowerFocus::Queue) =>
+                {
                     Some(("ALBUM".to_string(), palette::MUTED))
                 }
-                crate::config::QueueSource::Series if self.tab_idx == 1 => {
+                crate::config::QueueSource::Series
+                    if matches!(self.power_focus, super::PowerFocus::Queue) =>
+                {
                     Some(("SERIES".to_string(), palette::MUTED))
                 }
-                crate::config::QueueSource::Shuffle if self.tab_idx == 1 => {
+                crate::config::QueueSource::Shuffle
+                    if matches!(self.power_focus, super::PowerFocus::Queue) =>
+                {
                     Some(("SHUFFLE".to_string(), palette::MUTED))
                 }
-                crate::config::QueueSource::Remote if self.tab_idx == 1 => {
+                crate::config::QueueSource::Remote
+                    if matches!(self.power_focus, super::PowerFocus::Queue) =>
+                {
                     Some(("REMOTE Q".to_string(), palette::MUTED))
                 }
-                crate::config::QueueSource::Collection { collection_type } if self.tab_idx == 1 => {
+                crate::config::QueueSource::Collection { collection_type }
+                    if matches!(self.power_focus, super::PowerFocus::Queue) =>
+                {
                     Some((collection_type.to_uppercase(), palette::MUTED))
                 }
                 crate::config::QueueSource::Unknown => None,
@@ -1411,10 +1289,12 @@ impl App {
                     ),
                 );
             }
-            let autosave_on = self.tab_idx == 1 && self.queue_is_saved_playlist() && {
-                let cfg = &self.client.lock().unwrap().config;
-                cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
-            };
+            let autosave_on = matches!(self.power_focus, super::PowerFocus::Queue)
+                && self.queue_is_saved_playlist()
+                && {
+                    let cfg = &self.client.lock().unwrap().config;
+                    cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
+                };
             if self.queue_dirty {
                 append_right(
                     &mut right_spans,
@@ -1755,6 +1635,100 @@ mod tests {
         let spans = app.remote_status_spans(RemoteSlotState::DirectRemote, "tcp://127.0.0.1:9000");
         let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
         assert!(text.contains("music"));
+    }
+
+    // The following `remote_status_spans` tests moved here from
+    // `app::tests` (issue #361, commit 1): they used to render the full app
+    // and scrape the bottom row, which only worked because the deleted
+    // Standard view's status bar passed `show_session_pill: true`. Power
+    // View's status bar (`render/power/mod.rs`) has always passed
+    // `show_session_pill: false` -- unchanged by this diff -- because Power
+    // shows the same remote/session info via the queue column's
+    // Local/Remote title pills instead (`render_power_queue_title` in
+    // `render/power/queue.rs`, which calls this same shared helper). Testing
+    // `remote_status_spans` directly, as `remote_status_spans_prefers_..._`
+    // above already does, covers the underlying logic without depending on
+    // which caller happens to display it.
+
+    #[test]
+    fn remote_status_spans_uses_daemon_endpoint_host_without_folding_in_server_url() {
+        let app = make_app_stub();
+        let spans =
+            app.remote_status_spans(RemoteSlotState::DirectRemote, "tcp://music.local:8097");
+        let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(
+            text.contains("music.local"),
+            "expected the remote glyph label to be the daemon endpoint host:\n{text}"
+        );
+        assert!(
+            !text.contains("music.local@emby.local"),
+            "the Emby server host must not be folded into the daemon-endpoint remote label:\n{text}"
+        );
+    }
+
+    #[test]
+    fn remote_status_spans_uses_attached_session_device_name_not_loopback_host() {
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("sess-1".into());
+        app.connected_session_state = Some(crate::app::tests::make_session("music", "Emby"));
+        let spans = app.remote_status_spans(RemoteSlotState::AttachedSession, "");
+        let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(
+            text.contains("music"),
+            "expected attached session status to use the F3-visible device name:\n{text}"
+        );
+        assert!(
+            !text.contains("local"),
+            "attached remote session should not render as local:\n{text}"
+        );
+    }
+
+    #[test]
+    fn remote_status_spans_keeps_direct_upgrade_session_name_after_state_is_cleared() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+        let sess = crate::app::tests::make_session("music", "mbv");
+
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
+        assert!(app.connected_session_id.is_none());
+        assert!(app.connected_session_state.is_none());
+
+        let spans = app.remote_status_spans(RemoteSlotState::DirectRemote, "");
+        let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(
+            text.contains("music"),
+            "direct-upgraded remote should keep the F3-visible session name:\n{text}"
+        );
+        assert!(
+            !text.contains("local"),
+            "direct-upgraded remote should not fall back to local after clearing session state:\n{text}"
+        );
+    }
+
+    #[test]
+    fn remote_status_spans_shows_local_device_name_when_off() {
+        let app = make_app_stub();
+        let spans = app.remote_status_spans(RemoteSlotState::Off, "");
+        let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(
+            text.contains(&mbv_core::api::device_name()),
+            "expected the local device name when no remote is connected:\n{text}"
+        );
+        assert!(!text.contains("remote:"));
+    }
+
+    #[test]
+    fn remote_status_spans_colors_icon_white_and_label_black_when_off_or_aqua_when_remote() {
+        let app = make_app_stub();
+        let spans = app.remote_status_spans(RemoteSlotState::Off, "");
+        assert_eq!(spans[1].style.fg, Some(ratatui::style::Color::White));
+        assert_eq!(spans[2].style.fg, Some(ratatui::style::Color::Black));
+
+        let mut app = make_app_stub();
+        app.active_route = Some("music".to_string());
+        let spans = app.remote_status_spans(RemoteSlotState::DirectRemote, "");
+        assert_eq!(spans[1].style.fg, Some(ratatui::style::Color::White));
+        assert_eq!(spans[2].style.fg, Some(palette::AQUA));
     }
 
     #[test]

@@ -500,10 +500,7 @@ impl App {
                     })
                     .is_some()
                 {
-                    let saved = self.tab_idx;
-                    self.tab_idx = self.lib_tab_offset() + lib_idx;
                     self.select();
-                    self.tab_idx = saved;
                 }
             }
             Command::PowerAlbumTrackDismiss(lib_idx) => {

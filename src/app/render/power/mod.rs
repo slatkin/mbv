@@ -887,7 +887,7 @@ impl App {
             width: right_area.width,
             height: tab_h,
         };
-        self.render_tabs(f, tab_area, tabs_area_out, tabbar_vol_area_out, true);
+        self.render_tabs(f, tab_area, tabs_area_out, tabbar_vol_area_out);
 
         // Player panel below the tab bar.
         if player_h > 0 {

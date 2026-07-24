@@ -22,7 +22,6 @@ pub struct Config {
     pub always_skip_intro: bool,
     pub show_systray_icon: bool,
     pub no_scripts: bool,
-    pub start_on_queue: bool,
     /// Stay-alive mode (issue #156): survive the controlling terminal
     /// closing while still playing, via an owned pty relay. Consulted only
     /// at launch (`-a`/`--alive` forces it for one launch regardless); a
@@ -71,10 +70,6 @@ pub struct Config {
     /// this is a routing/reconnect *preference*, not daemon configuration.
     /// Default off; editable from config.toml or the F2 Settings panel.
     pub auto_reconnect: bool,
-    /// Top-level view mode ("standard" | "power"), replacing the old
-    /// `prefs.json["playlist_view"]` flag (issue #275). Read at startup and
-    /// written whenever the mode changes via `App::set_view_mode`.
-    pub view_mode: String,
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
@@ -100,7 +95,6 @@ impl Default for Config {
             always_skip_intro: false,
             show_systray_icon: true,
             no_scripts: false,
-            start_on_queue: false,
             stay_alive: false,
             save_playlist_on_quit: true,
             autoload: false,
@@ -120,7 +114,6 @@ impl Default for Config {
             daemon_client_endpoint: String::new(),
             daemon_server_tcp_listen: String::new(),
             auto_reconnect: false,
-            view_mode: "standard".to_string(),
         }
     }
 }
@@ -533,18 +526,13 @@ pub fn load_last_remote_connection() -> Result<Option<LastRemoteConnection>, Str
     load_last_remote_connection_at(&last_remote_connection_path())
 }
 
+/// One library position per library (#361 collapsed the old two-scope
+/// `{default, power}` split -- there is only one view now, so there is only
+/// one saved position per library).
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct LibraryPositionState {
     #[serde(default)]
-    pub libraries: std::collections::HashMap<String, LibraryViewPositions>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-pub struct LibraryViewPositions {
-    #[serde(default)]
-    pub default: Option<LibraryPosition>,
-    #[serde(default)]
-    pub power: Option<LibraryPosition>,
+    pub libraries: std::collections::HashMap<String, LibraryPosition>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -792,11 +780,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let start_on_queue = queue
-        .and_then(|q| q.get("start_on_queue"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
     let always_skip_intro = session
         .and_then(|m| m.get("always_skip_intro"))
         .and_then(|v| v.as_bool())
@@ -816,12 +799,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|m| m.get("auto_reconnect"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-
-    let view_mode = display
-        .and_then(|d| d.get("view_mode"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("standard")
-        .to_string();
 
     let save_playlist_on_quit = session
         .and_then(|m| m.get("save_playlist_on_quit"))
@@ -963,7 +940,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         always_skip_intro,
         show_systray_icon,
         no_scripts,
-        start_on_queue,
         stay_alive,
         save_playlist_on_quit,
         autoload,
@@ -983,7 +959,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         daemon_client_endpoint,
         daemon_server_tcp_listen,
         auto_reconnect,
-        view_mode,
     })
 }
 
@@ -1078,10 +1053,6 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         "system_notifications".to_string(),
         toml::Value::Boolean(cfg.system_notifications),
     );
-    display.insert(
-        "view_mode".to_string(),
-        toml::Value::String(cfg.view_mode.clone()),
-    );
 
     if !cfg.music_levels.is_empty() {
         let library = section!("library");
@@ -1126,10 +1097,6 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
     queue.insert(
         "consume_audio".to_string(),
         toml::Value::Boolean(cfg.consume_audio),
-    );
-    queue.insert(
-        "start_on_queue".to_string(),
-        toml::Value::Boolean(cfg.start_on_queue),
     );
     queue.insert(
         "save_playlist_on_consume".to_string(),
@@ -1725,7 +1692,7 @@ url = "http://host"
     }
 
     #[test]
-    fn library_position_state_round_trips_by_library_and_view() {
+    fn library_position_state_round_trips_by_library() {
         let _g = SYS_ENV_LOCK.lock().unwrap();
         std::env::remove_var("MBV_SYSTEM");
         let temp = std::env::temp_dir().join(format!(
@@ -1738,41 +1705,26 @@ url = "http://host"
         std::env::set_var("XDG_STATE_HOME", &temp);
 
         let mut state = LibraryPositionState::default();
-        let views = state.libraries.entry("lib-movies".into()).or_default();
-        views.default = Some(LibraryPosition {
-            levels: vec![LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Movies".into(),
-                focused_item_id: Some("movie-2".into()),
-                cursor_index: 7,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            feed_selected_group: 0,
-            feed_video_cursor: 0,
-            feed_video_scroll: 0,
-        });
-        views.power = Some(LibraryPosition {
-            levels: vec![LibraryPositionLevel {
-                parent_id: "genre-action".into(),
-                title: "Action".into(),
-                focused_item_id: Some("movie-9".into()),
-                cursor_index: 2,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            feed_selected_group: 0,
-            feed_video_cursor: 0,
-            feed_video_scroll: 0,
-        });
+        state.libraries.insert(
+            "lib-movies".into(),
+            LibraryPosition {
+                levels: vec![LibraryPositionLevel {
+                    parent_id: "lib-movies".into(),
+                    title: "Movies".into(),
+                    focused_item_id: Some("movie-2".into()),
+                    cursor_index: 7,
+                    item_types: Some("Movie".into()),
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
+                }],
+                feed_selected_group: 0,
+                feed_video_cursor: 0,
+                feed_video_scroll: 0,
+            },
+        );
 
         save_library_position_state(&state);
 
@@ -1807,6 +1759,51 @@ url = "http://host"
         assert_eq!(
             load_library_position_state(),
             LibraryPositionState::default()
+        );
+
+        std::env::remove_var("XDG_STATE_HOME");
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    /// #361 collapsed the old `{default, power}` two-scope shape down to a
+    /// bare `LibraryPosition` per library. A pre-#361 on-disk file still has
+    /// the nested shape; per decision 7 in the #361 plan, that file is not
+    /// migrated -- it loads as empty (all libraries reset to root) rather
+    /// than failing or panicking.
+    #[test]
+    fn legacy_nested_scope_shape_loads_as_empty_without_error() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        let temp = std::env::temp_dir().join(format!(
+            "mbv-config-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_dir = temp.join("mbv");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        std::env::set_var("XDG_STATE_HOME", &temp);
+
+        let legacy = serde_json::json!({
+            "libraries": {
+                "lib-1": {
+                    "default": { "levels": [{"parent_id": "p", "title": "t"}] },
+                    "power": { "levels": [{"parent_id": "p2", "title": "t2"}] }
+                }
+            }
+        });
+        std::fs::write(
+            state_dir.join("library_position_state.json"),
+            serde_json::to_string(&legacy).unwrap(),
+        )
+        .unwrap();
+
+        let state = load_library_position_state();
+        let restored = state.libraries.get("lib-1").expect("entry present");
+        assert!(
+            restored.levels.is_empty(),
+            "legacy nested scopes must not be salvaged -- library resets to root"
         );
 
         std::env::remove_var("XDG_STATE_HOME");

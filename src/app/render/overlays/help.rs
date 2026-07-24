@@ -85,8 +85,6 @@ impl App {
             mk("i", "Go to item in library"),
             mk("Del", "Remove from Queue"),
             mk("Ctrl+Z", "Undo removal"),
-            mk("v", "Toggle view"),
-            mk("g", "Toggle grouping"),
             mk("h", "Collapse/expand Power View left column"),
             mk("Shift+← / →", "Resize Power View left column"),
             mk("Ctrl+S", "Save playlist"),
@@ -111,9 +109,9 @@ impl App {
             mk("Ctrl+R", "Rescan"),
             blank(),
         ];
-        let is_lib = self.tab_idx >= self.lib_tab_offset();
-        let is_queue = self.tab_idx == 1;
-        let is_home = self.tab_idx == 0;
+        let is_queue = matches!(self.power_focus, crate::app::PowerFocus::Queue);
+        let is_home = !is_queue && self.power_left_tab == 0;
+        let is_lib = !is_queue && !is_home;
 
         let mut ordered: Vec<Vec<Line>> = Vec::new();
         if is_home {

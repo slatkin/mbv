@@ -185,10 +185,6 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_power_lib_search,
     },
     ContextEntry {
-        name: "lib_search",
-        handler: App::handle_key_lib_search,
-    },
-    ContextEntry {
         name: "power_sidebar_toggle_h",
         handler: App::handle_key_power_sidebar_toggle,
     },
@@ -683,7 +679,6 @@ mod app_level_tests {
         // character while a search box is focused would toggle the sidebar
         // instead of typing 'h' into the query — a real behavior change.
         let mut app = make_app_stub();
-        app.view_mode = crate::app::ViewMode::Power;
         app.search.set_state_for_test(Some(test_home_search()));
         if let Some(hs) = app.search.state_mut() {
             hs.input_focused = true;
@@ -704,24 +699,14 @@ mod app_level_tests {
     #[test]
     fn h_toggles_power_sidebar_in_power_view_via_handle_key() {
         let mut app = make_app_stub();
-        app.view_mode = crate::app::ViewMode::Power;
         let before = app.power_left_collapsed;
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
         assert_ne!(app.power_left_collapsed, before);
     }
 
     #[test]
-    fn h_does_nothing_outside_power_view_via_handle_key() {
-        let mut app = make_app_stub();
-        app.view_mode = crate::app::ViewMode::Standard;
-        app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
-        assert!(!app.power_left_collapsed);
-    }
-
-    #[test]
     fn h_does_not_toggle_power_sidebar_while_context_menu_is_open_via_handle_key() {
         let mut app = make_app_stub();
-        app.view_mode = crate::app::ViewMode::Power;
         app.context_menu = Some(test_empty_context_menu());
         let before = app.power_left_collapsed;
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
@@ -734,7 +719,6 @@ mod app_level_tests {
     #[test]
     fn h_moves_queue_focus_to_library_when_collapsing_power_sidebar() {
         let mut app = make_app_stub();
-        app.view_mode = crate::app::ViewMode::Power;
         app.power_focus = crate::app::PowerFocus::Queue;
 
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
@@ -751,8 +735,6 @@ mod app_level_tests {
     #[test]
     fn power_lib_search_esc_closes_via_handle_key() {
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = crate::app::ViewMode::Power;
         app.power_focus = crate::app::PowerFocus::Left;
         app.power_left_tab = 1;
         app.libs.push(test_lib_with_search());
@@ -765,8 +747,6 @@ mod app_level_tests {
         use crate::app::{BrowseLevel, LibSearch, LibraryTab};
 
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = crate::app::ViewMode::Power;
         app.power_focus = crate::app::PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -820,14 +800,11 @@ mod app_level_tests {
         assert_eq!(app.libs[0].nav_stack.len(), nav_depth);
     }
 
-    #[test]
-    fn lib_search_esc_closes_via_handle_key() {
-        let mut app = make_app_stub();
-        app.tab_idx = 2;
-        app.libs.push(test_lib_with_search());
-        app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-        assert!(app.libs[0].search.is_none());
-    }
+    // `lib_search_esc_closes_via_handle_key` (deleted): identical scenario
+    // to `power_lib_search_esc_closes_via_handle_key` above but without
+    // setting `power_focus`/`power_left_tab`, which is how it used to reach
+    // Standard's now-deleted `lib_search` CONTEXT_STACK entry. Power's
+    // equivalent handler is already covered by the test above.
 
     #[test]
     fn c_prompts_clear_queue_confirmation_via_handle_key() {
@@ -866,7 +843,10 @@ mod app_level_tests {
         // pins the keyboard side of that shared seam end-to-end through
         // `handle_key`.
         let mut app = make_app_stub();
-        app.tab_idx = 1;
+        // `handle_queue_key` branches on `power_focus`; queue-cursor Enter
+        // only fires when the queue side is focused (equivalent of the old
+        // default "Queue tab").
+        app.power_focus = crate::app::PowerFocus::Queue;
         app.player_tab.set_items(
             vec![
                 crate::app::tests::make_item("1", "Audio"),
@@ -891,6 +871,11 @@ mod app_level_tests {
 
     #[test]
     fn context_stack_order_is_pinned() {
+        // Updated for #361: the Standard-only `lib_search` entry (and its
+        // handler `handle_key_lib_search`) was deleted along with the rest
+        // of the Standard view. `power_lib_search` is Power's equivalent and
+        // was already present above it in the stack, so removing the
+        // now-nonexistent entry doesn't change any surviving precedence.
         let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
         assert_eq!(
             names,
@@ -905,7 +890,6 @@ mod app_level_tests {
                 "power_left_width",
                 "home_search",
                 "power_lib_search",
-                "lib_search",
                 "power_sidebar_toggle_h",
                 "confirm_clear_queue",
                 "confirm_rescan",

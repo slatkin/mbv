@@ -180,7 +180,7 @@ impl App {
 mod tests {
     use crate::app::images::POWER_CARD_PLACEHOLDER_KEY;
     use crate::app::tests::{make_app_stub, make_item, make_items};
-    use crate::app::{palette, App, BrowseLevel, LibraryTab, PowerFocus, QueueScope, ViewMode};
+    use crate::app::{palette, App, BrowseLevel, LibraryTab, PowerFocus, QueueScope};
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
     use ratatui::backend::TestBackend;
@@ -197,8 +197,6 @@ mod tests {
 
     fn make_drilled_library_app() -> App {
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 

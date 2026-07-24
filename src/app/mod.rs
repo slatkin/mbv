@@ -65,15 +65,6 @@ static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
 #[cfg(test)]
 static SESSIONS_LOAD_TEST_LOCK: Mutex<()> = Mutex::new(());
 
-/// Top-level rendering mode: Standard (tab-based navigation) or Power (a
-/// dedicated, tab_idx-independent full-screen view). Replaces the old
-/// `queue_view: u8` flag that conflated Power with a variant of the Queue tab.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(super) enum ViewMode {
-    Standard,
-    Power,
-}
-
 pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
 pub(super) const POWER_LEFT_WIDTH_STEP: u16 = 5;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
@@ -161,7 +152,7 @@ fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>, quit_t
     });
 }
 
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 use ratatui_image::picker::Picker;
@@ -394,19 +385,6 @@ impl BrowseLevel {
     }
 }
 
-/// Resolves the startup `tab_idx` from `prefs.json`. Since #275, `tab_idx` is
-/// a Standard-only concept, independent of `view_mode`/Power View -- Power no
-/// longer requires `tab_idx == 1` to render, so this no longer needs to peek
-/// at the persisted view mode at all; it just restores the last plain tab
-/// (or forces the Queue tab when `-q`/`--queue` was passed).
-fn startup_tab_idx(start_on_queue: bool, prefs: &serde_json::Value) -> usize {
-    if start_on_queue {
-        1
-    } else {
-        prefs["tab_idx"].as_u64().unwrap_or(0) as usize
-    }
-}
-
 fn restore_library_position<F>(
     saved: &crate::config::LibraryPosition,
     visible_rows: usize,
@@ -537,7 +515,6 @@ enum LibEvent {
     },
     RecursiveAlbumActivated {
         library_id: String,
-        scope: LibraryPositionScope,
         nav_stack: Vec<BrowseLevel>,
     },
     AllItemsPrefetched {
@@ -550,10 +527,6 @@ enum LibEvent {
         parent_id: String,
         all_items: Vec<MediaItem>,
         groups: Vec<FeedHomeVideoGroup>,
-    },
-    AlbumYearFetched {
-        album_id: String,
-        year: u32,
     },
     AlbumArtistFetched {
         album_id: String,
@@ -589,7 +562,6 @@ enum LibEvent {
     },
     RestoreLibraryPosition {
         lib_idx: usize,
-        scope: LibraryPositionScope,
         requested_position: crate::config::LibraryPosition,
         position: crate::config::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
@@ -611,12 +583,6 @@ enum SessionEvent {
     Loaded(Vec<mbv_core::api::SessionInfo>),
     ItemRefreshed(String, Box<mbv_core::api::MediaItem>), // (item_id, fresh)
     Error(String),
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum LibraryPositionScope {
-    Default,
-    Power,
 }
 
 #[derive(Clone, Default)]
@@ -1040,7 +1006,6 @@ pub struct App {
     mpris: Option<crate::mpris::MprisHandle>,
     player_rx: mpsc::Receiver<PlayerEvent>,
     ws_rx: mpsc::Receiver<WsEvent>,
-    tab_idx: usize,
     home: HomePane,
     libs: Vec<LibraryTab>,
     player_tab: PlayerTab,
@@ -1070,8 +1035,6 @@ pub struct App {
     terminal_width: u16,
     terminal_height: u16,
 
-    home_panel_section_offset: usize,
-    home_cards_section_offset: usize,
     /// True from startup until the first `fetch_home` completes. While true,
     /// the home view doesn't yet know how many remote sections exist, so the
     /// renderer fills the reserved area with skeleton placeholders instead of
@@ -1093,22 +1056,14 @@ pub struct App {
     pending_remote_move_cursor: Option<usize>,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
-    // Power-view UI scalars. NOTE: this is NOT the whole of Power's state — Power also reuses
-    // shared self.libs and self.queue_group.
-    // All runtime mode transitions go through set_view_mode().
-    view_mode: ViewMode,
-    /// The Standard `tab_idx` to return to when leaving Power (set by
-    /// `set_view_mode` on Power entry, consumed on Standard entry).
-    pre_power_tab: usize,
-    queue_group: bool, // list view: group audio by album / episodes by series
+    // Power-view UI scalars. NOTE: this is NOT the whole of Power's state -- Power also
+    // reuses shared self.libs.
     power_focus: PowerFocus,
     power_left_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
-    library_position_scope_override: Option<(usize, LibraryPositionScope)>,
     power_left_width: u16,
     power_left_collapsed: bool,
     power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
     power_queue_scroll: usize,
-    home_card_view: bool,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
     card_image_states:
@@ -1217,8 +1172,6 @@ pub struct App {
     last_scroll_at: Instant,
     last_nav_at: Instant,
     last_power_library_nav_at: Instant,
-    album_year_cache: std::collections::HashMap<String, u32>,
-    album_year_loading: std::collections::HashSet<String>,
     album_artist_cache: std::collections::HashMap<String, String>,
     album_artist_loading: std::collections::HashSet<String>,
     pending_album_artist_fetches: std::collections::VecDeque<String>,
@@ -1287,10 +1240,6 @@ struct AppInit {
     use_nerd_fonts: bool,
     indicator_style: render::indicators::IndicatorStyle,
     image_cache_size: usize,
-    start_on_queue: bool,
-    /// Persisted view mode ("standard" | "power") from `Config::view_mode`
-    /// (issue #275); parsed into `ViewMode` in `build()`.
-    view_mode: String,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
     sessions_tx: mpsc::Sender<SessionEvent>,
@@ -1416,7 +1365,6 @@ enum SettingKey {
     StayAlive,
     AutoReconnect,
     SavePlaylistOnQuit,
-    StartOnQueue,
     AlwaysPlayNext,
     ConsumeVideos,
     ConsumeAudio,
@@ -1438,7 +1386,6 @@ enum SettingKey {
     LibraryRoutes,
     SubtitleLanguage,
     AudioLanguage,
-    ViewMode,
     LogOut,
 }
 
@@ -1456,11 +1403,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ),
     (
         "Display",
-        &[
-            SettingKey::ImageProtocol,
-            SettingKey::SystemNotifications,
-            SettingKey::ViewMode,
-        ],
+        &[SettingKey::ImageProtocol, SettingKey::SystemNotifications],
     ),
     (
         "Session",
@@ -1484,7 +1427,6 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     (
         "Queue",
         &[
-            SettingKey::StartOnQueue,
             SettingKey::AlwaysPlayNext,
             SettingKey::ConsumeVideos,
             SettingKey::ConsumeAudio,
@@ -1508,7 +1450,6 @@ const SESSIONS_PANEL_W: u16 = 40;
 const HELP_PANEL_W: u16 = 40;
 const SETTINGS_PANEL_W: u16 = 40;
 const PLAYLISTS_PANEL_W: u16 = 40;
-const HOME_MIN_SECTION_H: u16 = 7; // 1 header row + 6 content rows (3 two-line items)
 impl App {
     pub(super) fn power_left_width_max_for_terminal(terminal_width: u16) -> u16 {
         POWER_LEFT_WIDTH_DEFAULT.max(terminal_width.saturating_mul(3) / 5)
@@ -1531,92 +1472,47 @@ impl App {
         true
     }
 
+    /// Save the current position of `lib_idx` (#361 collapsed the old
+    /// Default/Power scope split -- there is one view and one saved
+    /// position per library now).
     fn save_default_library_position(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
-        let scope = self.library_position_scope_for(lib_idx);
         let library_id = lib.library.id.clone();
         let position = lib.library_position_snapshot();
-        let views = self
-            .library_position_state
+        self.library_position_state
             .libraries
-            .entry(library_id)
-            .or_default();
-        match scope {
-            LibraryPositionScope::Default => views.default = Some(position),
-            LibraryPositionScope::Power => views.power = Some(position),
-        }
+            .insert(library_id, position);
         crate::config::save_library_position_state(&self.library_position_state);
     }
 
-    fn library_position_scope_for(&self, lib_idx: usize) -> LibraryPositionScope {
-        if let Some((override_idx, scope)) = self.library_position_scope_override {
-            if override_idx == lib_idx {
-                return scope;
-            }
-        }
-        if self.view_mode == ViewMode::Power && self.power_left_tab == lib_idx + 1 {
-            LibraryPositionScope::Power
-        } else {
-            LibraryPositionScope::Default
-        }
+    /// Whether `lib_idx` is the library currently visible in the left
+    /// panel -- used to decide whether a manual refresh/rescan should clear
+    /// its saved position (see `refresh_lib`/`trigger_lib_rescan`).
+    fn active_library_position_scope_for(&self, lib_idx: usize) -> Option<()> {
+        (self.power_left_tab == lib_idx + 1).then_some(())
     }
 
-    fn active_library_position_scope_for(&self, lib_idx: usize) -> Option<LibraryPositionScope> {
-        if self.tab_idx > 1 && self.tab_idx - self.lib_tab_offset() == lib_idx {
-            Some(LibraryPositionScope::Default)
-        } else if self.view_mode == ViewMode::Power && self.power_left_tab == lib_idx + 1 {
-            Some(LibraryPositionScope::Power)
-        } else {
-            None
-        }
-    }
-
-    fn with_library_position_scope_override<R>(
-        &mut self,
-        lib_idx: usize,
-        scope: LibraryPositionScope,
-        f: impl FnOnce(&mut Self) -> R,
-    ) -> R {
-        let previous = self.library_position_scope_override;
-        self.library_position_scope_override = Some((lib_idx, scope));
-        let result = f(self);
-        self.library_position_scope_override = previous;
-        result
-    }
-
-    fn saved_library_position(
-        &self,
-        lib_idx: usize,
-        scope: LibraryPositionScope,
-    ) -> Option<crate::config::LibraryPosition> {
+    fn saved_library_position(&self, lib_idx: usize) -> Option<crate::config::LibraryPosition> {
         let library_id = self.libs.get(lib_idx)?.library.id.as_str();
-        let views = self.library_position_state.libraries.get(library_id)?;
-        match scope {
-            LibraryPositionScope::Default => views.default.clone(),
-            LibraryPositionScope::Power => views.power.clone(),
-        }
+        self.library_position_state
+            .libraries
+            .get(library_id)
+            .cloned()
     }
 
     fn replace_saved_library_position(
         &mut self,
         lib_idx: usize,
-        scope: LibraryPositionScope,
         position: crate::config::LibraryPosition,
     ) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
-        let views = self
-            .library_position_state
+        self.library_position_state
             .libraries
-            .entry(lib.library.id.clone())
-            .or_default();
-        match scope {
-            LibraryPositionScope::Default => views.default = Some(position),
-            LibraryPositionScope::Power => views.power = Some(position),
-        }
+            .insert(lib.library.id.clone(), position);
         crate::config::save_library_position_state(&self.library_position_state);
     }
 
@@ -1641,7 +1537,7 @@ impl App {
         }
     }
 
-    fn activate_library_position_scope(&mut self, lib_idx: usize, scope: LibraryPositionScope) {
+    fn activate_library_position_scope(&mut self, lib_idx: usize) {
         if lib_idx >= self.libs.len() {
             return;
         }
@@ -1650,7 +1546,7 @@ impl App {
             .get(lib_idx)
             .filter(|lib| !lib.nav_stack.is_empty())
             .map(|lib| lib.library_position_snapshot());
-        let saved = self.saved_library_position(lib_idx, scope);
+        let saved = self.saved_library_position(lib_idx);
         if current.as_ref() == saved.as_ref() {
             if current.is_none() {
                 self.ensure_lib_loaded_for(lib_idx);
@@ -1695,7 +1591,7 @@ impl App {
                     }
                     lib.apply_library_position(position.clone(), vec![placeholder]);
                 }
-                self.spawn_restore_library_position(lib_idx, scope, position);
+                self.spawn_restore_library_position(lib_idx, position);
             }
             _ => {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
@@ -1709,20 +1605,17 @@ impl App {
         }
     }
 
-    fn clear_saved_library_position(&mut self, lib_idx: usize, scope: LibraryPositionScope) {
+    fn clear_saved_library_position(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
-        let Some(views) = self
+        if self
             .library_position_state
             .libraries
-            .get_mut(&lib.library.id)
-        else {
+            .remove(&lib.library.id)
+            .is_none()
+        {
             return;
-        };
-        match scope {
-            LibraryPositionScope::Default => views.default = None,
-            LibraryPositionScope::Power => views.power = None,
         }
         crate::config::save_library_position_state(&self.library_position_state);
     }
@@ -1797,11 +1690,6 @@ impl App {
 
     fn build(init: AppInit) -> Self {
         let prefs = Self::load_prefs();
-        let view_mode = match init.view_mode.as_str() {
-            "power" => ViewMode::Power,
-            _ => ViewMode::Standard,
-        };
-        let tab_idx = startup_tab_idx(init.start_on_queue, &prefs);
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         App {
             #[cfg(test)]
@@ -1826,7 +1714,6 @@ impl App {
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
             image_cache_size: init.image_cache_size,
-            tab_idx,
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
             search: SearchSubsystem::new(init.search_tx, init.search_rx),
@@ -1853,8 +1740,6 @@ impl App {
             terminal_width: 80,
             terminal_height: 24,
 
-            home_panel_section_offset: 0,
-            home_cards_section_offset: 0,
             home_loading: true,
             mouse_col: 0,
             mouse_row: 0,
@@ -1872,33 +1757,28 @@ impl App {
             pending_remote_move_cursor: None,
             skip_intro_end_ticks: None,
             next_up_item: None,
-            // Startup deliberately bypasses `set_view_mode`: the App isn't
-            // fully constructed yet and no transition side effects are owed
-            // at boot -- persisted `tab_idx` and `view_mode` are restored
-            // together, independently of each other (issue #275).
-            //
-            // `pre_power_tab` is seeded from the just-computed `tab_idx`
-            // rather than a bare 0: if the session starts in Power (last
-            // quit persisted `view_mode = "power"`), `tab_idx` already holds
-            // the correct restored Standard tab, and the first exit from
-            // Power must return there, not silently reset to Home. If the
-            // session starts in Standard, this value is never read until
-            // Power is entered, at which point `set_view_mode` overwrites it
-            // with the live `tab_idx` anyway.
-            view_mode,
-            pre_power_tab: tab_idx,
-            queue_group: true,
-            power_focus: PowerFocus::from_pref(prefs["power_focus"].as_str()),
+            // #361: read the new prefs key, falling back to the pre-#361 one
+            // for one release. `power_focus`/`power_left_tab`/`power_left_width`
+            // are renamed to `panel_focus`/`library_tab`/`queue_column_width`
+            // in commit 2 of #361; this fallback can be deleted a release
+            // after that lands.
+            power_focus: PowerFocus::from_pref(
+                prefs["panel_focus"]
+                    .as_str()
+                    .or_else(|| prefs["power_focus"].as_str()),
+            ),
             power_left_tab: 0,
-            library_position_scope_override: None,
-            power_left_width: prefs["power_left_width"]
+            power_left_width: prefs["queue_column_width"]
                 .as_u64()
+                .or_else(|| prefs["power_left_width"].as_u64())
                 .map(|v| (v as u16).max(POWER_LEFT_WIDTH_DEFAULT))
                 .unwrap_or(POWER_LEFT_WIDTH_DEFAULT),
             power_left_collapsed: false,
-            power_left_tab_pending: prefs["power_left_tab"].as_u64().unwrap_or(0) as usize,
+            power_left_tab_pending: prefs["library_tab"]
+                .as_u64()
+                .or_else(|| prefs["power_left_tab"].as_u64())
+                .unwrap_or(0) as usize,
             power_queue_scroll: 0,
-            home_card_view: false,
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
             pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),
             mute_on: prefs["mute_on"].as_bool().unwrap_or(false),
@@ -1959,8 +1839,6 @@ impl App {
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             last_power_library_nav_at: Instant::now() - Duration::from_secs(1),
-            album_year_cache: std::collections::HashMap::new(),
-            album_year_loading: std::collections::HashSet::new(),
             album_artist_cache: std::collections::HashMap::new(),
             album_artist_loading: std::collections::HashSet::new(),
             pending_album_artist_fetches: std::collections::VecDeque::new(),
@@ -2005,8 +1883,6 @@ impl App {
         let use_nerd_fonts = ui_config.use_nerd_fonts;
         let indicator_style: render::indicators::IndicatorStyle =
             ui_config.indicator_style.parse().unwrap_or_default();
-        let start_on_queue = client.config.start_on_queue;
-        let view_mode = client.config.view_mode.clone();
         let always_play_next = client.config.always_play_next;
         let always_skip_intro = client.config.always_skip_intro;
         crate::config::evict_old_image_cache();
@@ -2078,8 +1954,6 @@ impl App {
             use_nerd_fonts,
             indicator_style,
             image_cache_size,
-            start_on_queue,
-            view_mode,
             lib_tx,
             lib_rx,
             sessions_tx,
@@ -2128,8 +2002,6 @@ impl App {
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
         let always_play_next = client.config.always_play_next;
-        let start_on_queue = client.config.start_on_queue;
-        let view_mode = client.config.view_mode.clone();
         let image_protocol = ui_config.image_protocol.clone();
         let image_protocol_enabled = image_protocol.is_some();
         let image_cache_size = ui_config.image_cache_size;
@@ -2218,8 +2090,6 @@ impl App {
             use_nerd_fonts,
             indicator_style,
             image_cache_size,
-            start_on_queue,
-            view_mode,
             lib_tx,
             lib_rx,
             sessions_tx,
@@ -3570,79 +3440,17 @@ impl App {
                     Ok(ev) => ev,
                     Err(_) => break,
                 };
-                let is_home_card_nav = self.home_card_view && self.tab_idx == 0;
                 match ev {
                     Event::Key(key) => {
                         if key.kind != KeyEventKind::Press {
                             continue;
                         }
-                        let nav_code =
-                            is_home_card_nav && matches!(key.code, KeyCode::Left | KeyCode::Right);
                         if self.handle_key(key) {
                             break;
                         }
-                        // Drain queued duplicate nav keys to prevent scroll backlog.
-                        if nav_code {
-                            while event::poll(Duration::ZERO).unwrap_or(false) {
-                                match event::read() {
-                                    Ok(Event::Key(k))
-                                        if k.kind == KeyEventKind::Press && k.code == key.code => {}
-                                    Ok(other) => {
-                                        match other {
-                                            Event::Key(k) if k.kind == KeyEventKind::Press => {
-                                                if self.handle_key(k) {
-                                                    break 'outer;
-                                                }
-                                            }
-                                            Event::Mouse(m) => self.handle_mouse(m),
-                                            _ => {}
-                                        }
-                                        break;
-                                    }
-                                    Err(_) => break 'outer,
-                                }
-                            }
-                        }
                     }
                     Event::Mouse(mouse) => {
-                        let nav_scroll = is_home_card_nav
-                            && matches!(
-                                mouse.kind,
-                                crossterm::event::MouseEventKind::ScrollUp
-                                    | crossterm::event::MouseEventKind::ScrollDown
-                            )
-                            && self
-                                .layout
-                                .home
-                                .home_rect
-                                .contains((mouse.column, mouse.row).into());
                         self.handle_mouse(mouse);
-                        // Drain queued scroll events to prevent scroll backlog.
-                        if nav_scroll {
-                            while event::poll(Duration::ZERO).unwrap_or(false) {
-                                match event::read() {
-                                    Ok(Event::Mouse(m))
-                                        if matches!(
-                                            m.kind,
-                                            crossterm::event::MouseEventKind::ScrollUp
-                                                | crossterm::event::MouseEventKind::ScrollDown
-                                        ) => {}
-                                    Ok(other) => {
-                                        match other {
-                                            Event::Key(k) if k.kind == KeyEventKind::Press => {
-                                                if self.handle_key(k) {
-                                                    break 'outer;
-                                                }
-                                            }
-                                            Event::Mouse(m) => self.handle_mouse(m),
-                                            _ => {}
-                                        }
-                                        break;
-                                    }
-                                    Err(_) => break 'outer,
-                                }
-                            }
-                        }
                     }
                     // Terminal resize (SIGWINCH via pty winsize, or a real
                     // terminal resize in bare mode): reflow + re-emit images
@@ -4265,36 +4073,15 @@ fn restore_terminal(
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::ui_util::{fmt_duration, item_text_and_style};
+    use super::ui_util::fmt_duration;
     use super::*;
     use crossterm::event::{
         KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
     };
-    use mbv_core::api::{device_name, TICKS_PER_SECOND};
+    use mbv_core::api::device_name;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use unicode_width::UnicodeWidthStr;
-
-    // Issue #275: tab_idx is now a Standard-only concept, independent of
-    // view_mode/Power View -- Power no longer requires tab_idx == 1 to
-    // render, so startup_tab_idx just restores the saved plain tab.
-    #[test]
-    fn startup_tab_idx_uses_saved_tab_idx_regardless_of_view_mode() {
-        let prefs = serde_json::json!({ "tab_idx": 3 });
-        assert_eq!(startup_tab_idx(false, &prefs), 3);
-    }
-
-    #[test]
-    fn startup_tab_idx_defaults_to_home_with_no_saved_prefs() {
-        let prefs = serde_json::Value::Null;
-        assert_eq!(startup_tab_idx(false, &prefs), 0);
-    }
-
-    #[test]
-    fn startup_tab_idx_start_on_queue_wins_regardless_of_saved_prefs() {
-        let prefs = serde_json::json!({ "tab_idx": 3 });
-        assert_eq!(startup_tab_idx(true, &prefs), 1);
-    }
 
     pub(crate) fn make_item(name: &str, item_type: &str) -> MediaItem {
         MediaItem {
@@ -4412,84 +4199,9 @@ pub(crate) mod tests {
         assert_eq!(fmt_duration(7384), "2:03:04");
     }
 
-    // ── item_text_and_style ──────────────────────────────────────────────────
-
-    #[test]
-    fn item_text_plain_unwatched_movie() {
-        let item = make_item("Inception", "Movie");
-        let (text, style) = item_text_and_style(&item, false);
-        assert_eq!(text, "Inception");
-        assert_eq!(style.fg, Some(palette::WHITE));
-    }
-
-    #[test]
-    fn item_text_played_movie_uses_default_color() {
-        let mut item = make_item("Inception", "Movie");
-        item.played = true;
-        let (_, style) = item_text_and_style(&item, false);
-        assert_eq!(style.fg, Some(palette::WHITE));
-    }
-
-    #[test]
-    fn item_text_in_progress_shows_duration() {
-        let mut item = make_item("Inception", "Movie");
-        item.runtime_ticks = TICKS_PER_SECOND * 7200; // 2 hours
-        item.playback_position_ticks = TICKS_PER_SECOND * 3600; // 1 hour in → 50%
-        let (text, style) = item_text_and_style(&item, false);
-        assert!(text.contains("2h00m"), "expected duration in: {text}");
-        assert!(
-            !text.contains("50%"),
-            "pct should be in span, not text: {text}"
-        );
-        assert_eq!(style.fg, Some(palette::WHITE));
-    }
-
-    #[test]
-    fn item_text_played_but_in_progress_shows_duration() {
-        let mut item = make_item("Inception", "Movie");
-        item.runtime_ticks = TICKS_PER_SECOND * 7200;
-        item.playback_position_ticks = TICKS_PER_SECOND * 3600;
-        item.played = true;
-        let (text, _) = item_text_and_style(&item, false);
-        assert!(text.contains("2h00m"), "expected duration in: {text}");
-        assert!(
-            !text.contains("50%"),
-            "pct should be in span, not text: {text}"
-        );
-    }
-
-    #[test]
-    fn item_text_includes_duration() {
-        let mut item = make_item("Movie", "Movie");
-        item.runtime_ticks = TICKS_PER_SECOND * 5400; // 90 min
-        let (text, _) = item_text_and_style(&item, false);
-        assert!(text.contains("1h30m"), "expected duration in: {text}");
-    }
-
-    #[test]
-    fn item_text_series_shows_unplayed_count_not_green() {
-        let mut item = make_item("Breaking Bad", "Series");
-        item.is_folder = true;
-        item.unplayed_item_count = 5;
-        let (text, style) = item_text_and_style(&item, false);
-        assert!(text.contains("[5]"), "expected count in: {text}");
-        assert_eq!(style.fg, Some(palette::WHITE));
-    }
-
-    #[test]
-    fn item_text_nav_folder_is_white() {
-        let mut item = make_item("Folder", "Folder");
-        item.is_folder = true;
-        let (_, style) = item_text_and_style(&item, false);
-        assert_eq!(style.fg, Some(palette::WHITE));
-    }
-
-    #[test]
-    fn item_text_selected_clears_color() {
-        let item = make_item("X", "Movie");
-        let (_, style) = item_text_and_style(&item, true);
-        assert_eq!(style.fg, None);
-    }
+    // `item_text_and_style` and its dedicated tests above were deleted
+    // (#361): its only production caller was the deleted Standard
+    // `render/library/table/context.rs`.
 
     #[test]
     fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
@@ -4814,9 +4526,14 @@ pub(crate) mod tests {
         assert_eq!(feed.video_scroll, 4);
     }
 
+    // #361 collapsed the old default/power two-scope split to one position
+    // per library, so the three scope-isolation variants of this test
+    // ("default writes must not clear power position" etc.) no longer have
+    // a premise -- there is one saved position now, full stop.
     #[test]
-    fn save_default_library_position_updates_default_scope_only() {
+    fn save_default_library_position_persists_focused_item() {
         let mut app = make_app_stub();
+        app.power_left_tab = 1;
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
         app.libs.push(LibraryTab {
@@ -4844,135 +4561,15 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.library_position_state
-            .libraries
-            .entry("lib-movies".into())
-            .or_default()
-            .power = Some(crate::config::LibraryPosition::default());
 
         app.save_default_library_position(0);
 
-        let views = app
+        let position = app
             .library_position_state
             .libraries
             .get("lib-movies")
             .expect("library position entry");
-        let default = views.default.as_ref().expect("default view position");
-        assert_eq!(default.levels[0].focused_item_id.as_deref(), Some("id2"));
-        assert!(
-            views.power.is_some(),
-            "default writes must not clear power-view position"
-        );
-    }
-
-    #[test]
-    fn save_default_library_position_updates_power_scope_when_power_library_is_active() {
-        let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
-        app.tab_idx = 1;
-        app.power_left_tab = 1;
-        let mut library = make_item("Movies", "CollectionFolder");
-        library.id = "lib-movies".into();
-        app.libs.push(LibraryTab {
-            library,
-            nav_stack: vec![BrowseLevel {
-                parent_id: "lib-movies".into(),
-                title: "Movies".into(),
-                items: make_items(3),
-                total_count: 3,
-                cursor: 1,
-                scroll: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                loading: false,
-                all_items: None,
-                letter_filter: None,
-            }],
-            search: None,
-            feed_home_video: None,
-            album_track_focus: None,
-            artist_header_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
-        app.library_position_state
-            .libraries
-            .entry("lib-movies".into())
-            .or_default()
-            .default = Some(crate::config::LibraryPosition::default());
-
-        app.save_default_library_position(0);
-
-        let views = app
-            .library_position_state
-            .libraries
-            .get("lib-movies")
-            .expect("library position entry");
-        let power = views.power.as_ref().expect("power view position");
-        assert_eq!(power.levels[0].focused_item_id.as_deref(), Some("id1"));
-        assert!(
-            views.default.is_some(),
-            "power writes must not clear default-view position"
-        );
-    }
-
-    #[test]
-    fn save_default_library_position_uses_default_scope_on_library_tab() {
-        let mut app = make_app_stub();
-        let mut library = make_item("Movies", "CollectionFolder");
-        library.id = "lib-movies".into();
-        app.libs.push(LibraryTab {
-            library,
-            nav_stack: vec![BrowseLevel {
-                parent_id: "lib-movies".into(),
-                title: "Movies".into(),
-                items: make_items(3),
-                total_count: 3,
-                cursor: 2,
-                scroll: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                loading: false,
-                all_items: None,
-                letter_filter: None,
-            }],
-            search: None,
-            feed_home_video: None,
-            album_track_focus: None,
-            artist_header_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
-        app.tab_idx = app.lib_tab_offset();
-        app.power_left_tab = 1;
-        app.library_position_state
-            .libraries
-            .entry("lib-movies".into())
-            .or_default()
-            .power = Some(crate::config::LibraryPosition::default());
-
-        app.save_default_library_position(0);
-
-        let views = app
-            .library_position_state
-            .libraries
-            .get("lib-movies")
-            .expect("library position entry");
-        assert_eq!(
-            views
-                .default
-                .as_ref()
-                .and_then(|pos| pos.levels.first())
-                .and_then(|level| level.focused_item_id.as_deref()),
-            Some("id2")
-        );
-        assert!(views.power.is_some());
+        assert_eq!(position.levels[0].focused_item_id.as_deref(), Some("id2"));
     }
 
     #[test]
@@ -5005,7 +4602,6 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
 
         app.move_lib_cursor(1);
 
@@ -5013,8 +4609,7 @@ pub(crate) mod tests {
             .library_position_state
             .libraries
             .get("lib-movies")
-            .and_then(|views| views.default.as_ref())
-            .expect("default position saved");
+            .expect("position saved");
         assert_eq!(saved.levels[0].focused_item_id.as_deref(), Some("id1"));
     }
 
@@ -5050,23 +4645,20 @@ pub(crate) mod tests {
         });
         app.library_position_state.libraries.insert(
             "hidden-lib".into(),
-            mbv_core::config::LibraryViewPositions {
-                default: Some(crate::config::LibraryPosition {
-                    levels: vec![crate::config::LibraryPositionLevel {
-                        parent_id: "hidden-lib".into(),
-                        title: "Hidden".into(),
-                        focused_item_id: Some("id0".into()),
-                        cursor_index: 0,
-                        item_types: Some("Movie".into()),
-                        unplayed_only: false,
-                        sort_by: "SortName".into(),
-                        sort_order: "Ascending".into(),
-                        letter_filter_index: None,
-                        library_total: None,
-                    }],
-                    ..Default::default()
-                }),
-                power: None,
+            crate::config::LibraryPosition {
+                levels: vec![crate::config::LibraryPositionLevel {
+                    parent_id: "hidden-lib".into(),
+                    title: "Hidden".into(),
+                    focused_item_id: Some("id0".into()),
+                    cursor_index: 0,
+                    item_types: Some("Movie".into()),
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
+                }],
+                ..Default::default()
             },
         );
 
@@ -5095,39 +4687,38 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.library_position_state
-            .libraries
-            .entry("lib-movies".into())
-            .or_default()
-            .default = Some(crate::config::LibraryPosition {
-            levels: vec![
-                crate::config::LibraryPositionLevel {
-                    parent_id: "lib-movies".into(),
-                    title: "Movies".into(),
-                    focused_item_id: Some("folder-b".into()),
-                    cursor_index: 1,
-                    item_types: Some("Movie".into()),
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    letter_filter_index: None,
-                    library_total: None,
-                },
-                crate::config::LibraryPositionLevel {
-                    parent_id: "folder-b".into(),
-                    title: "Folder B".into(),
-                    focused_item_id: Some("leaf-1".into()),
-                    cursor_index: 0,
-                    item_types: None,
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    letter_filter_index: None,
-                    library_total: None,
-                },
-            ],
-            ..Default::default()
-        });
+        app.library_position_state.libraries.insert(
+            "lib-movies".into(),
+            crate::config::LibraryPosition {
+                levels: vec![
+                    crate::config::LibraryPositionLevel {
+                        parent_id: "lib-movies".into(),
+                        title: "Movies".into(),
+                        focused_item_id: Some("folder-b".into()),
+                        cursor_index: 1,
+                        item_types: Some("Movie".into()),
+                        unplayed_only: false,
+                        sort_by: "SortName".into(),
+                        sort_order: "Ascending".into(),
+                        letter_filter_index: None,
+                        library_total: None,
+                    },
+                    crate::config::LibraryPositionLevel {
+                        parent_id: "folder-b".into(),
+                        title: "Folder B".into(),
+                        focused_item_id: Some("leaf-1".into()),
+                        cursor_index: 0,
+                        item_types: None,
+                        unplayed_only: false,
+                        sort_by: "SortName".into(),
+                        sort_order: "Ascending".into(),
+                        letter_filter_index: None,
+                        library_total: None,
+                    },
+                ],
+                ..Default::default()
+            },
+        );
 
         app.ensure_lib_loaded_for(0);
 
@@ -5143,8 +4734,6 @@ pub(crate) mod tests {
     #[test]
     fn activating_saved_power_position_initializes_feed_home_video_state() {
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
-        app.tab_idx = 1;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -5163,29 +4752,28 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.library_position_state
-            .libraries
-            .entry("lib-youtube".into())
-            .or_default()
-            .power = Some(crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-youtube".into(),
-                title: "Youtube".into(),
-                focused_item_id: None,
-                cursor_index: 0,
-                item_types: None,
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            feed_selected_group: 0,
-            feed_video_cursor: 2,
-            feed_video_scroll: 1,
-        });
+        app.library_position_state.libraries.insert(
+            "lib-youtube".into(),
+            crate::config::LibraryPosition {
+                levels: vec![crate::config::LibraryPositionLevel {
+                    parent_id: "lib-youtube".into(),
+                    title: "Youtube".into(),
+                    focused_item_id: None,
+                    cursor_index: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
+                }],
+                feed_selected_group: 0,
+                feed_video_cursor: 2,
+                feed_video_scroll: 1,
+            },
+        );
 
-        app.activate_library_position_scope(0, LibraryPositionScope::Power);
+        app.activate_library_position_scope(0);
 
         let feed = app.libs[0]
             .feed_home_video
@@ -5198,74 +4786,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn ensure_lib_loaded_for_prefers_power_scope_and_does_not_bootstrap_from_default() {
-        let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
-        app.tab_idx = 1;
-        app.power_left_tab = 1;
-        let mut library = make_item("Music", "CollectionFolder");
-        library.id = "lib-music".into();
-        library.collection_type = "music".into();
-        app.libs.push(LibraryTab {
-            library,
-            nav_stack: Vec::new(),
-            search: None,
-            feed_home_video: None,
-            album_track_focus: None,
-            artist_header_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
-        let views = app
-            .library_position_state
-            .libraries
-            .entry("lib-music".into())
-            .or_default();
-        views.default = Some(crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-music".into(),
-                title: "Wrong Default".into(),
-                focused_item_id: None,
-                cursor_index: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "DateCreated".into(),
-                sort_order: "Descending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        });
-        views.power = Some(crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-music".into(),
-                title: "Right Power".into(),
-                focused_item_id: None,
-                cursor_index: 0,
-                item_types: None,
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        });
-
-        app.ensure_lib_loaded_for(0);
-
-        let level = &app.libs[0].nav_stack[0];
-        assert_eq!(level.title, "Right Power");
-        assert_eq!(level.item_types, None);
-        assert_eq!(level.sort_by, "SortName");
-    }
-
-    #[test]
     fn ensure_lib_loaded_for_visible_power_library_accepts_restore_from_queue_focus() {
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
-        app.tab_idx = 1;
         app.power_focus = PowerFocus::Queue;
         app.power_left_tab = 1;
         let mut library = make_item("Movies", "CollectionFolder");
@@ -5297,7 +4819,7 @@ pub(crate) mod tests {
             }],
             ..Default::default()
         };
-        app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position.clone());
+        app.replace_saved_library_position(0, power_position.clone());
 
         app.ensure_lib_loaded_for(0);
 
@@ -5307,7 +4829,6 @@ pub(crate) mod tests {
 
         app.handle_lib_event(LibEvent::RestoreLibraryPosition {
             lib_idx: 0,
-            scope: LibraryPositionScope::Power,
             requested_position: power_position.clone(),
             position: power_position,
             nav_stack: vec![BrowseLevel {
@@ -5371,8 +4892,6 @@ pub(crate) mod tests {
             client.user_id = "user-1".into();
             client.token = "token-1".into();
         }
-        app.view_mode = ViewMode::Power;
-        app.tab_idx = 1;
         app.power_focus = PowerFocus::Queue;
         app.power_left_tab = 1;
         let mut library = make_item("Movies", "CollectionFolder");
@@ -5404,7 +4923,7 @@ pub(crate) mod tests {
             }],
             ..Default::default()
         };
-        app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position.clone());
+        app.replace_saved_library_position(0, power_position.clone());
         // Deliberately do NOT call `ensure_lib_loaded_for(0)` here (unlike
         // the neighboring `..._accepts_restore_from_queue_focus` test): with
         // an empty nav_stack and a saved position, it spawns its own
@@ -5421,7 +4940,6 @@ pub(crate) mod tests {
         // (is_fully_loaded() is items.len() >= total_count).
         app.handle_lib_event(LibEvent::RestoreLibraryPosition {
             lib_idx: 0,
-            scope: LibraryPositionScope::Power,
             requested_position: power_position.clone(),
             position: power_position,
             nav_stack: vec![BrowseLevel {
@@ -5497,19 +5015,12 @@ pub(crate) mod tests {
             }],
             ..Default::default()
         };
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Power,
-            pre_feature_position.clone(),
-        );
-        app.view_mode = ViewMode::Power;
-        app.tab_idx = 1;
+        app.replace_saved_library_position(0, pre_feature_position.clone());
         app.power_focus = PowerFocus::Queue;
         app.power_left_tab = 1;
 
         app.handle_lib_event(LibEvent::RestoreLibraryPosition {
             lib_idx: 0,
-            scope: LibraryPositionScope::Power,
             requested_position: pre_feature_position.clone(),
             position: pre_feature_position,
             nav_stack: vec![BrowseLevel {
@@ -5538,110 +5049,18 @@ pub(crate) mod tests {
         );
     }
 
+    // #361: `set_tab` (the Standard tab-switch entry point) is gone; the
+    // scope-isolation premise this test exercised ("default scope survives
+    // a power-scope write") no longer applies -- there is one saved
+    // position per library now (see `save_default_library_position_persists_focused_item`).
     #[test]
-    fn set_tab_activates_default_scope_placeholder_after_power_scope_use() {
+    fn power_left_tab_next_activates_saved_placeholder() {
         let mut app = make_app_stub();
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
         app.libs.push(LibraryTab {
             library,
-            nav_stack: vec![BrowseLevel {
-                parent_id: "lib-movies".into(),
-                title: "Power".into(),
-                items: make_items(2),
-                total_count: 2,
-                cursor: 1,
-                scroll: 0,
-                item_types: None,
-                unplayed_only: false,
-                sort_by: "DateCreated".into(),
-                sort_order: "Descending".into(),
-                loading: false,
-                all_items: None,
-                letter_filter: None,
-            }],
-            search: None,
-            feed_home_video: None,
-            album_track_focus: Some(0),
-            artist_header_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
-        let views = app
-            .library_position_state
-            .libraries
-            .entry("lib-movies".into())
-            .or_default();
-        views.default = Some(crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Default".into(),
-                focused_item_id: Some("id0".into()),
-                cursor_index: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        });
-        views.power = Some(crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Power".into(),
-                focused_item_id: Some("id1".into()),
-                cursor_index: 1,
-                item_types: None,
-                unplayed_only: false,
-                sort_by: "DateCreated".into(),
-                sort_order: "Descending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        });
-        app.view_mode = ViewMode::Power;
-        app.tab_idx = 1;
-        app.power_left_tab = 1;
-
-        app.set_tab(app.lib_tab_offset());
-
-        assert_eq!(app.tab_idx, app.lib_tab_offset());
-        assert_eq!(app.libs[0].nav_stack.len(), 1);
-        assert_eq!(app.libs[0].nav_stack[0].title, "Default");
-        assert_eq!(
-            app.libs[0].nav_stack[0].item_types.as_deref(),
-            Some("Movie")
-        );
-        assert!(app.libs[0].nav_stack[0].loading);
-        assert!(app.libs[0].album_track_focus.is_none());
-    }
-
-    #[test]
-    fn power_left_tab_next_activates_power_scope_placeholder_after_default_scope_use() {
-        let mut app = make_app_stub();
-        let mut library = make_item("Movies", "CollectionFolder");
-        library.id = "lib-movies".into();
-        app.libs.push(LibraryTab {
-            library,
-            nav_stack: vec![BrowseLevel {
-                parent_id: "lib-movies".into(),
-                title: "Default".into(),
-                items: make_items(2),
-                total_count: 2,
-                cursor: 0,
-                scroll: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                loading: false,
-                all_items: None,
-                letter_filter: None,
-            }],
+            nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
             album_track_focus: None,
@@ -5650,51 +5069,31 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        let views = app
-            .library_position_state
-            .libraries
-            .entry("lib-movies".into())
-            .or_default();
-        views.default = Some(crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Default".into(),
-                focused_item_id: Some("id0".into()),
-                cursor_index: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        });
-        views.power = Some(crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Power".into(),
-                focused_item_id: Some("id1".into()),
-                cursor_index: 1,
-                item_types: None,
-                unplayed_only: false,
-                sort_by: "DateCreated".into(),
-                sort_order: "Descending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        });
-        app.view_mode = ViewMode::Power;
-        app.tab_idx = 1;
+        app.library_position_state.libraries.insert(
+            "lib-movies".into(),
+            crate::config::LibraryPosition {
+                levels: vec![crate::config::LibraryPositionLevel {
+                    parent_id: "lib-movies".into(),
+                    title: "Saved".into(),
+                    focused_item_id: Some("id1".into()),
+                    cursor_index: 1,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "DateCreated".into(),
+                    sort_order: "Descending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
+                }],
+                ..Default::default()
+            },
+        );
         app.power_left_tab = 0;
 
         app.power_left_tab_next();
 
         assert_eq!(app.power_left_tab, 1);
         assert_eq!(app.libs[0].nav_stack.len(), 1);
-        assert_eq!(app.libs[0].nav_stack[0].title, "Power");
-        assert_eq!(app.libs[0].nav_stack[0].item_types, None);
+        assert_eq!(app.libs[0].nav_stack[0].title, "Saved");
         assert!(app.libs[0].nav_stack[0].loading);
     }
 
@@ -5730,9 +5129,7 @@ pub(crate) mod tests {
             }],
             ..Default::default()
         };
-        app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position.clone());
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
+        app.replace_saved_library_position(0, power_position.clone());
         app.power_focus = PowerFocus::Queue;
         app.power_left_tab = 0;
 
@@ -5745,7 +5142,6 @@ pub(crate) mod tests {
 
         app.handle_lib_event(LibEvent::RestoreLibraryPosition {
             lib_idx: 0,
-            scope: LibraryPositionScope::Power,
             requested_position: power_position.clone(),
             position: power_position,
             nav_stack: vec![BrowseLevel {
@@ -5798,14 +5194,14 @@ pub(crate) mod tests {
             &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
         )
         .expect("prefs json");
-        assert_eq!(queue_prefs["power_focus"].as_str(), Some("queue_side"));
+        assert_eq!(queue_prefs["panel_focus"].as_str(), Some("queue_side"));
 
         app.set_power_focus(PowerFocus::Left);
         let library_prefs: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
         )
         .expect("prefs json");
-        assert_eq!(library_prefs["power_focus"].as_str(), Some("library_side"));
+        assert_eq!(library_prefs["panel_focus"].as_str(), Some("library_side"));
     }
 
     #[test]
@@ -5858,23 +5254,20 @@ pub(crate) mod tests {
         let state = crate::config::LibraryPositionState {
             libraries: std::iter::once((
                 "lib-movies".into(),
-                mbv_core::config::LibraryViewPositions {
-                    default: Some(crate::config::LibraryPosition {
-                        levels: vec![crate::config::LibraryPositionLevel {
-                            parent_id: "lib-movies".into(),
-                            title: "Movies".into(),
-                            focused_item_id: Some("id1".into()),
-                            cursor_index: 1,
-                            item_types: Some("Movie".into()),
-                            unplayed_only: false,
-                            sort_by: "SortName".into(),
-                            sort_order: "Ascending".into(),
-                            letter_filter_index: None,
-                            library_total: None,
-                        }],
-                        ..Default::default()
-                    }),
-                    power: None,
+                crate::config::LibraryPosition {
+                    levels: vec![crate::config::LibraryPositionLevel {
+                        parent_id: "lib-movies".into(),
+                        title: "Movies".into(),
+                        focused_item_id: Some("id1".into()),
+                        cursor_index: 1,
+                        item_types: Some("Movie".into()),
+                        unplayed_only: false,
+                        sort_by: "SortName".into(),
+                        sort_order: "Ascending".into(),
+                        letter_filter_index: None,
+                        library_total: None,
+                    }],
+                    ..Default::default()
                 },
             ))
             .collect(),
@@ -5895,6 +5288,8 @@ pub(crate) mod tests {
     fn restored_default_library_fallback_rewrites_state_file_after_success() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
         app.libs.push(LibraryTab {
@@ -5944,7 +5339,7 @@ pub(crate) mod tests {
             ],
             ..Default::default()
         };
-        app.replace_saved_library_position(0, LibraryPositionScope::Default, stale);
+        app.replace_saved_library_position(0, stale);
 
         let restored_items = make_items(2);
         let restored_nav = vec![BrowseLevel {
@@ -5966,16 +5361,14 @@ pub(crate) mod tests {
             levels: vec![restored_nav[0].to_position_level()],
             ..Default::default()
         };
-        app.tab_idx = app.lib_tab_offset();
 
         app.handle_lib_event(LibEvent::RestoreLibraryPosition {
             lib_idx: 0,
-            scope: LibraryPositionScope::Default,
             requested_position: crate::config::load_library_position_state()
                 .libraries
                 .get("lib-movies")
-                .and_then(|views| views.default.clone())
-                .expect("requested default position"),
+                .cloned()
+                .expect("requested position"),
             position: restored_position.clone(),
             nav_stack: restored_nav,
         });
@@ -5990,98 +5383,11 @@ pub(crate) mod tests {
         expected_position.levels[0].library_total = Some(2);
         let saved = crate::config::load_library_position_state();
         assert_eq!(
-            saved
-                .libraries
-                .get("lib-movies")
-                .and_then(|views| views.default.clone()),
+            saved.libraries.get("lib-movies").cloned(),
             Some(expected_position)
         );
         assert!(app.libs[0].search.is_none());
         assert!(app.libs[0].album_track_focus.is_none());
-    }
-
-    #[test]
-    fn restored_power_library_position_does_not_overwrite_default_scope() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let mut app = make_app_stub();
-        let mut library = make_item("Movies", "CollectionFolder");
-        library.id = "lib-movies".into();
-        app.libs.push(LibraryTab {
-            library,
-            nav_stack: Vec::new(),
-            search: None,
-            feed_home_video: None,
-            album_track_focus: None,
-            artist_header_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
-        let default_position = crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Default".into(),
-                focused_item_id: Some("id0".into()),
-                cursor_index: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        };
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Default,
-            default_position.clone(),
-        );
-
-        let restored_nav = vec![BrowseLevel {
-            parent_id: "lib-movies".into(),
-            title: "Power".into(),
-            items: make_items(2),
-            total_count: 2,
-            cursor: 1,
-            scroll: 0,
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "DateCreated".into(),
-            sort_order: "Descending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-        }];
-        let power_position = crate::config::LibraryPosition {
-            levels: vec![restored_nav[0].to_position_level()],
-            ..Default::default()
-        };
-        app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position.clone());
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
-
-        app.handle_lib_event(LibEvent::RestoreLibraryPosition {
-            lib_idx: 0,
-            scope: LibraryPositionScope::Power,
-            requested_position: power_position.clone(),
-            position: power_position.clone(),
-            nav_stack: restored_nav,
-        });
-
-        // As in `restored_default_library_fallback_rewrites_state_file_after_success`,
-        // the restore also captures the library's true total (this level's
-        // `total_count`) via `maybe_capture_library_total_and_apply_default_pill`,
-        // so the persisted power-scope level carries `library_total: Some(2)`
-        // rather than the `None` `power_position` was built with.
-        let mut expected_power_position = power_position;
-        expected_power_position.levels[0].library_total = Some(2);
-        let saved = crate::config::load_library_position_state();
-        let views = saved.libraries.get("lib-movies").expect("saved library");
-        assert_eq!(views.default.clone(), Some(default_position));
-        assert_eq!(views.power.clone(), Some(expected_power_position));
     }
 
     #[test]
@@ -6101,7 +5407,6 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
         let requested = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
                 parent_id: "lib-movies".into(),
@@ -6117,12 +5422,11 @@ pub(crate) mod tests {
             }],
             ..Default::default()
         };
-        app.replace_saved_library_position(0, LibraryPositionScope::Default, requested.clone());
-        app.clear_saved_library_position(0, LibraryPositionScope::Default);
+        app.replace_saved_library_position(0, requested.clone());
+        app.clear_saved_library_position(0);
 
         app.handle_lib_event(LibEvent::RestoreLibraryPosition {
             lib_idx: 0,
-            scope: LibraryPositionScope::Default,
             requested_position: requested.clone(),
             position: requested,
             nav_stack: vec![BrowseLevel {
@@ -6143,11 +5447,9 @@ pub(crate) mod tests {
         });
 
         assert!(app.libs[0].nav_stack.is_empty());
-        assert!(crate::config::load_library_position_state()
+        assert!(!crate::config::load_library_position_state()
             .libraries
-            .get("lib-movies")
-            .and_then(|views| views.default.clone())
-            .is_none());
+            .contains_key("lib-movies"));
     }
 
     #[test]
@@ -6181,21 +5483,6 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        let default_position = crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Default".into(),
-                focused_item_id: Some("id0".into()),
-                cursor_index: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        };
         let power_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
                 parent_id: "lib-movies".into(),
@@ -6211,17 +5498,10 @@ pub(crate) mod tests {
             }],
             ..Default::default()
         };
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Default,
-            default_position.clone(),
-        );
-        app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position.clone());
-        app.tab_idx = app.lib_tab_offset();
+        app.replace_saved_library_position(0, power_position.clone());
 
         app.handle_lib_event(LibEvent::RestoreLibraryPosition {
             lib_idx: 0,
-            scope: LibraryPositionScope::Power,
             requested_position: power_position.clone(),
             position: power_position.clone(),
             nav_stack: vec![BrowseLevel {
@@ -6241,15 +5521,19 @@ pub(crate) mod tests {
             }],
         });
 
+        // `power_left_tab` was never pointed at this library, so
+        // `active_library_position_scope_for` says it's not the active
+        // library and the restore must be ignored.
         assert_eq!(app.libs[0].nav_stack[0].title, "Power");
         let saved = crate::config::load_library_position_state();
-        let views = saved.libraries.get("lib-movies").expect("saved library");
-        assert_eq!(views.default.clone(), Some(default_position));
-        assert_eq!(views.power.clone(), Some(power_position));
+        assert_eq!(
+            saved.libraries.get("lib-movies").cloned(),
+            Some(power_position)
+        );
     }
 
     #[test]
-    fn refresh_lib_clears_only_default_scope_for_active_library_tab() {
+    fn refresh_lib_clears_saved_position_for_active_library() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
         let mut library = make_item("Movies", "CollectionFolder");
@@ -6279,118 +5563,14 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Default,
-            crate::config::LibraryPosition {
-                levels: vec![crate::config::LibraryPositionLevel {
-                    parent_id: "lib-movies".into(),
-                    title: "Default".into(),
-                    focused_item_id: Some("id0".into()),
-                    cursor_index: 0,
-                    item_types: Some("Movie".into()),
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    letter_filter_index: None,
-                    library_total: None,
-                }],
-                ..Default::default()
-            },
-        );
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Power,
-            crate::config::LibraryPosition {
-                levels: vec![crate::config::LibraryPositionLevel {
-                    parent_id: "lib-movies".into(),
-                    title: "Power".into(),
-                    focused_item_id: Some("id1".into()),
-                    cursor_index: 1,
-                    item_types: None,
-                    unplayed_only: false,
-                    sort_by: "DateCreated".into(),
-                    sort_order: "Descending".into(),
-                    letter_filter_index: None,
-                    library_total: None,
-                }],
-                ..Default::default()
-            },
-        );
-
-        app.refresh_lib();
-
-        let views = crate::config::load_library_position_state()
-            .libraries
-            .get("lib-movies")
-            .cloned()
-            .expect("library views");
-        assert!(views.default.is_none());
-        assert!(views.power.is_some());
-    }
-
-    #[test]
-    fn refresh_lib_clears_only_power_scope_for_active_power_library() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let mut app = make_app_stub();
-        let mut library = make_item("Movies", "CollectionFolder");
-        library.id = "lib-movies".into();
-        app.libs.push(LibraryTab {
-            library,
-            nav_stack: vec![BrowseLevel {
-                parent_id: "lib-movies".into(),
-                title: "Movies".into(),
-                items: make_items(2),
-                total_count: 2,
-                cursor: 0,
-                scroll: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                loading: false,
-                all_items: None,
-                letter_filter: None,
-            }],
-            search: None,
-            feed_home_video: None,
-            album_track_focus: None,
-            artist_header_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
         app.replace_saved_library_position(
             0,
-            LibraryPositionScope::Default,
             crate::config::LibraryPosition {
                 levels: vec![crate::config::LibraryPositionLevel {
                     parent_id: "lib-movies".into(),
-                    title: "Default".into(),
-                    focused_item_id: Some("id0".into()),
-                    cursor_index: 0,
-                    item_types: Some("Movie".into()),
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    letter_filter_index: None,
-                    library_total: None,
-                }],
-                ..Default::default()
-            },
-        );
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Power,
-            crate::config::LibraryPosition {
-                levels: vec![crate::config::LibraryPositionLevel {
-                    parent_id: "lib-movies".into(),
-                    title: "Power".into(),
+                    title: "Saved".into(),
                     focused_item_id: Some("id1".into()),
                     cursor_index: 1,
                     item_types: None,
@@ -6406,13 +5586,9 @@ pub(crate) mod tests {
 
         app.refresh_lib();
 
-        let views = crate::config::load_library_position_state()
+        assert!(!crate::config::load_library_position_state()
             .libraries
-            .get("lib-movies")
-            .cloned()
-            .expect("library views");
-        assert!(views.default.is_some());
-        assert!(views.power.is_none());
+            .contains_key("lib-movies"));
     }
 
     #[test]
@@ -6446,35 +5622,13 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.replace_saved_library_position(
             0,
-            LibraryPositionScope::Default,
             crate::config::LibraryPosition {
                 levels: vec![crate::config::LibraryPositionLevel {
                     parent_id: "lib-movies".into(),
-                    title: "Default".into(),
-                    focused_item_id: Some("id0".into()),
-                    cursor_index: 0,
-                    item_types: Some("Movie".into()),
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    letter_filter_index: None,
-                    library_total: None,
-                }],
-                ..Default::default()
-            },
-        );
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Power,
-            crate::config::LibraryPosition {
-                levels: vec![crate::config::LibraryPositionLevel {
-                    parent_id: "lib-movies".into(),
-                    title: "Power".into(),
+                    title: "Saved".into(),
                     focused_item_id: Some("id1".into()),
                     cursor_index: 1,
                     item_types: None,
@@ -6490,19 +5644,14 @@ pub(crate) mod tests {
 
         app.trigger_lib_rescan(0);
 
-        let views = crate::config::load_library_position_state()
+        assert!(!crate::config::load_library_position_state()
             .libraries
-            .get("lib-movies")
-            .cloned()
-            .expect("library views");
-        assert!(views.default.is_some());
-        assert!(views.power.is_none());
+            .contains_key("lib-movies"));
     }
 
     #[test]
     fn power_home_navigation_does_not_persist_library_position_state() {
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
         app.power_left_tab = 0;
         app.home.continue_items = make_items(3);
 
@@ -6571,7 +5720,6 @@ pub(crate) mod tests {
             launched_as_remote: false,
             player_rx,
             ws_rx,
-            tab_idx: 0,
             hidden_libraries: Vec::new(),
             library_routes: std::collections::HashMap::new(),
             hidden_latest: Vec::new(),
@@ -6594,8 +5742,6 @@ pub(crate) mod tests {
             terminal_width: 80,
             terminal_height: 24,
 
-            home_panel_section_offset: 0,
-            home_cards_section_offset: 0,
             home_loading: false,
             mouse_col: 0,
             mouse_row: 0,
@@ -6613,17 +5759,12 @@ pub(crate) mod tests {
             pending_remote_move_cursor: None,
             skip_intro_end_ticks: None,
             next_up_item: None,
-            view_mode: ViewMode::Standard,
-            pre_power_tab: 0,
-            queue_group: true,
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
-            library_position_scope_override: None,
             power_left_width: POWER_LEFT_WIDTH_DEFAULT,
             power_left_collapsed: false,
             power_left_tab_pending: 0,
             power_queue_scroll: 0,
-            home_card_view: false,
             last_played_item_id: None,
             last_played_completed: false,
             card_image_states: std::collections::HashMap::new(),
@@ -6699,8 +5840,6 @@ pub(crate) mod tests {
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             last_power_library_nav_at: Instant::now() - Duration::from_secs(1),
-            album_year_cache: std::collections::HashMap::new(),
-            album_year_loading: std::collections::HashSet::new(),
             album_artist_cache: std::collections::HashMap::new(),
             album_artist_loading: std::collections::HashSet::new(),
             pending_album_artist_fetches: std::collections::VecDeque::new(),
@@ -6910,8 +6049,6 @@ pub(crate) mod tests {
             use_nerd_fonts: false,
             indicator_style: render::indicators::IndicatorStyle::default(),
             image_cache_size: 50,
-            start_on_queue: false,
-            view_mode: "standard".to_string(),
             lib_tx,
             lib_rx,
             sessions_tx,
@@ -6924,98 +6061,6 @@ pub(crate) mod tests {
             search_rx,
             stay_alive_ctrl: None,
         })
-    }
-
-    // Issue #275 regression: when a session quit while `view_mode` was
-    // `Power`, the next launch restores `view_mode = Power` *and* the
-    // correct pre-Power `tab_idx` from prefs.json independently. Before this
-    // fix, `pre_power_tab` was unconditionally seeded to 0 at boot, so the
-    // first exit from Power (`'v'` or F2 -> View mode) silently reset the
-    // user to the Home tab instead of the Standard tab they were actually
-    // on when they quit.
-    #[test]
-    fn build_starting_in_power_seeds_pre_power_tab_from_restored_tab_idx() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        // tab_idx 1 (Queue) rather than a library tab: library tabs are
-        // populated from `app.libs`, which this test leaves empty, and
-        // `set_tab` -> `ensure_tab_visible` would spin forever trying to
-        // scroll a library tab into view that doesn't exist. Any non-zero
-        // Standard tab is enough to distinguish "restored correctly" from
-        // the bug's "silently reset to 0".
-        let prefs = serde_json::json!({ "tab_idx": 1 });
-        std::fs::write(
-            crate::config::prefs_path(),
-            serde_json::to_string(&prefs).expect("prefs json"),
-        )
-        .expect("write prefs");
-
-        use mbv_core::player::{PlayerProxy, PlayerStatus};
-        use std::sync::{Arc, Mutex};
-
-        let status = Arc::new(Mutex::new(PlayerStatus {
-            volume_max: 100,
-            ..Default::default()
-        }));
-
-        let (_, player_rx) = std::sync::mpsc::channel();
-        let (_, ws_rx) = std::sync::mpsc::channel();
-        let (lib_tx, lib_rx) = std::sync::mpsc::channel();
-        let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
-        let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
-        let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
-        let (search_tx, search_rx) = std::sync::mpsc::channel::<Result<Vec<MediaItem>, String>>();
-
-        let player = PlayerProxy::stub(status);
-
-        use crate::config::Config;
-        use mbv_core::api::EmbyClient;
-        let client = EmbyClient::new(Config::default());
-
-        let mut app = App::build(AppInit {
-            client: Arc::new(Mutex::new(client)),
-            player,
-            player_rx,
-            ws_rx,
-            ws_send_tx: None,
-            player_tab: PlayerTab::default(),
-            remote_player_tab: None,
-            initial_queue_scope: QueueScope::Local,
-            system_notifications: false,
-            image_protocol: None,
-            image_protocol_enabled: false,
-            hidden_libraries: Vec::new(),
-            library_routes: std::collections::HashMap::new(),
-            hidden_latest: Vec::new(),
-            music_levels: Vec::new(),
-            use_nerd_fonts: false,
-            indicator_style: render::indicators::IndicatorStyle::default(),
-            image_cache_size: 50,
-            start_on_queue: false,
-            view_mode: "power".to_string(),
-            lib_tx,
-            lib_rx,
-            sessions_tx,
-            sessions_rx,
-            card_image_tx,
-            card_image_rx,
-            notif_action_tx,
-            notif_action_rx,
-            search_tx,
-            search_rx,
-            stay_alive_ctrl: None,
-        });
-
-        assert_eq!(app.view_mode, ViewMode::Power);
-        assert_eq!(app.tab_idx, 1);
-        assert_eq!(app.pre_power_tab, 1);
-
-        app.set_view_mode(ViewMode::Standard);
-
-        assert_eq!(
-            app.tab_idx, 1,
-            "leaving Power must restore the tab_idx that was correctly \
-             restored at startup, not reset to Home"
-        );
     }
 
     // ── wants_terminal_render (#156: detached stay-alive must not touch
@@ -8019,9 +7064,9 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
+        app.power_left_tab = 1;
 
         app.apply_route_for_playback(&item);
 
@@ -8066,9 +7111,9 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
+        app.power_left_tab = 1;
 
         app.apply_route_for_playback(&item);
 
@@ -8101,9 +7146,9 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
+        app.power_left_tab = 1;
 
         app.apply_route_for_playback(&item);
 
@@ -8132,7 +7177,6 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Movie", "Movie");
         item.id = "movie-1".to_string();
 
@@ -8191,9 +7235,9 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Movie", "Movie");
         item.id = "movie-1".to_string();
+        app.power_left_tab = 1;
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
         app.apply_route_for_playback(&item);
@@ -8394,7 +7438,6 @@ pub(crate) mod tests {
     #[test]
     fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() {
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -8761,8 +7804,6 @@ pub(crate) mod tests {
     #[test]
     fn go_back_keeps_feed_home_video_group_view_intact() {
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
-        app.tab_idx = 2;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -8826,7 +7867,6 @@ pub(crate) mod tests {
     #[test]
     fn feed_home_video_root_filters_groups_from_all_video_paths() {
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -8947,7 +7987,6 @@ pub(crate) mod tests {
         // A stale selected group from a prior aggregation run with more groups
         // must clamp to the groups that actually exist now.
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -9012,8 +8051,6 @@ pub(crate) mod tests {
     #[test]
     fn refresh_lib_targets_power_feed_selection() {
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
-        app.tab_idx = 1;
         app.power_left_tab = 1;
         app.power_focus = PowerFocus::Left;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
@@ -9160,7 +8197,7 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
+        app.power_left_tab = 1;
 
         app.open_context_menu();
 
@@ -9211,7 +8248,7 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
+        app.power_left_tab = 1;
 
         app.open_context_menu();
 
@@ -9260,8 +8297,6 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -9329,8 +8364,6 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -9435,8 +8468,6 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -9465,7 +8496,6 @@ pub(crate) mod tests {
     #[test]
     fn refreshed_does_not_overwrite_feed_root_with_video_items() {
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -9533,7 +8563,6 @@ pub(crate) mod tests {
     #[test]
     fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -9656,42 +8685,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn non_power_queue_scope_switch_via_keyboard_local() {
-        let local_items = make_items(1);
-        let remote_items = make_items(2);
-        let mut app = make_remote_app_stub(local_items, remote_items);
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Standard;
-        app.queue_scope = QueueScope::Remote;
-
-        assert!(app.has_direct_remote_queue());
-        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
-        assert!(!handled);
-        assert_eq!(app.queue_scope, QueueScope::Local);
-        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
-    }
-
-    #[test]
-    fn non_power_queue_scope_switch_via_keyboard_remote() {
-        let local_items = make_items(1);
-        let remote_items = make_items(2);
-        let mut app = make_remote_app_stub(local_items, remote_items);
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Standard;
-        app.queue_scope = QueueScope::Local;
-
-        assert!(app.has_direct_remote_queue());
-        let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
-        assert!(!handled);
-        assert_eq!(app.queue_scope, QueueScope::Remote);
-        assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
-    }
-
-    #[test]
     fn power_queue_renders_scope_pills_and_hitboxes_for_direct_remote() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.set_queue_scope(QueueScope::Local);
 
@@ -9713,8 +8708,6 @@ pub(crate) mod tests {
     #[test]
     fn power_queue_scope_switch_via_keyboard_works_from_queue_focus() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Queue;
         app.set_queue_scope(QueueScope::Local);
 
@@ -9730,8 +8723,6 @@ pub(crate) mod tests {
     #[test]
     fn power_left_focus_brackets_do_not_switch_queue_scope() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.set_queue_scope(QueueScope::Local);
 
@@ -9744,8 +8735,6 @@ pub(crate) mod tests {
     #[test]
     fn power_queue_scope_switch_via_click_uses_rendered_hitboxes() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.set_queue_scope(QueueScope::Local);
         let _ = render_app_to_string(&mut app, 90, 28);
@@ -9760,42 +8749,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn non_power_queue_scope_switch_via_click_uses_rendered_hitboxes() {
-        let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Standard;
-        app.set_queue_scope(QueueScope::Local);
-        let _ = render_app_to_string(&mut app, 90, 24);
-
-        let remote = app.layout.queue.scope_remote_area;
-        app.handle_mouse(left_down(remote.x, remote.y));
-        assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
-
-        let local = app.layout.queue.scope_local_area;
-        app.handle_mouse(left_down(local.x, local.y));
-        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
-    }
-
-    #[test]
-    fn non_power_remote_queue_row_click_updates_remote_cursor() {
-        let mut app = make_remote_app_stub(make_items(2), make_items(3));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Standard;
-        app.set_queue_scope(QueueScope::Remote);
-        let _ = render_app_to_string(&mut app, 90, 24);
-
-        let row = app.layout.queue.inner.y + 1;
-        app.handle_mouse(left_down(app.layout.queue.inner.x, row));
-
-        assert_eq!(app.player_tab.queue_cursor, 0);
-        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
-    }
-
-    #[test]
     fn power_scope_keys_are_ignored_outside_queue_tab() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 0;
-        app.view_mode = ViewMode::Power;
         app.set_queue_scope(QueueScope::Local);
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
@@ -9808,8 +8763,6 @@ pub(crate) mod tests {
     fn power_view_shift_resize_grows_from_queue_focus_and_persists_pref() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Queue;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
@@ -9820,29 +8773,13 @@ pub(crate) mod tests {
             &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
         )
         .expect("prefs json");
-        assert_eq!(prefs["power_left_width"].as_u64(), Some(45));
-    }
-
-    #[test]
-    fn power_view_shift_resize_is_ignored_outside_power_view() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Standard;
-
-        let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
-
-        assert!(!handled);
-        assert!(app.status.is_empty());
-        assert!(!crate::config::prefs_path().exists());
+        assert_eq!(prefs["queue_column_width"].as_u64(), Some(45));
     }
 
     #[test]
     fn power_view_shift_resize_is_blocked_by_help_overlay() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
         app.show_help = true;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
@@ -9857,8 +8794,6 @@ pub(crate) mod tests {
     fn power_view_shift_resize_clamps_and_reports_minimum_and_maximum() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
         assert!(!handled);
@@ -9878,14 +8813,13 @@ pub(crate) mod tests {
             &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
         )
         .expect("prefs json");
-        assert_eq!(prefs["power_left_width"].as_u64(), Some(48));
+        assert_eq!(prefs["queue_column_width"].as_u64(), Some(48));
     }
 
     #[test]
     fn power_view_render_normalizes_saved_left_width_and_updates_layout() {
         let _guard = crate::config::TestStateDirGuard::new();
         let prefs = serde_json::json!({
-            "tab_idx": 1,
             "power_left_width": 70,
         });
         std::fs::write(
@@ -9895,8 +8829,6 @@ pub(crate) mod tests {
         .expect("write prefs");
 
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
 
         let _ = render_app_to_string(&mut app, 70, 28);
 
@@ -9905,15 +8837,13 @@ pub(crate) mod tests {
             &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
         )
         .expect("prefs json");
-        assert_eq!(saved["power_left_width"].as_u64(), Some(42));
+        assert_eq!(saved["queue_column_width"].as_u64(), Some(42));
     }
 
     #[test]
     fn power_view_render_uses_resized_width_on_next_frame() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
 
         let _ = render_app_to_string(&mut app, 100, 28);
         assert_eq!(app.layout.power.queue_area.width, 36);
@@ -9926,36 +8856,17 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn non_power_queue_scope_switch_ignored_without_direct_remote() {
-        let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Standard;
-        app.queue_scope = QueueScope::Local;
-
-        assert!(!app.has_direct_remote_queue());
-        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
-        assert!(!handled);
-        assert_eq!(app.queue_scope, QueueScope::Local);
-
-        let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
-        assert!(!handled);
-        assert_eq!(app.queue_scope, QueueScope::Local);
-    }
-
-    #[test]
     fn local_daemon_queue_has_no_scope_affordance_or_remote_switch() {
         let mut app = make_local_daemon_app_stub(make_items(2));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Standard;
         let rendered = render_app_to_string(&mut app, 90, 24);
 
         assert!(!app.has_direct_remote_queue());
         assert_eq!(
-            app.layout.queue.scope_local_area,
+            app.layout.power.queue_scope_local_area,
             ratatui::layout::Rect::default()
         );
         assert_eq!(
-            app.layout.queue.scope_remote_area,
+            app.layout.power.queue_scope_remote_area,
             ratatui::layout::Rect::default()
         );
         assert!(
@@ -9973,17 +8884,15 @@ pub(crate) mod tests {
         let mut app = make_app_stub();
         app.connected_session_id = Some("session-1".into());
         app.connected_session_state = Some(make_session("remote-host", "Emby"));
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Standard;
         let rendered = render_app_to_string(&mut app, 90, 24);
 
         assert!(!app.has_direct_remote_queue());
         assert_eq!(
-            app.layout.queue.scope_local_area,
+            app.layout.power.queue_scope_local_area,
             ratatui::layout::Rect::default()
         );
         assert_eq!(
-            app.layout.queue.scope_remote_area,
+            app.layout.power.queue_scope_remote_area,
             ratatui::layout::Rect::default()
         );
         assert!(
@@ -9999,7 +8908,6 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_row_is_always_present_and_holds_status_labels() {
         let mut app = make_app_stub();
-        app.tab_idx = 0; // Home tab, nothing playing — the row must still appear.
 
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
@@ -10663,7 +9571,6 @@ pub(crate) mod tests {
     fn ctrl_a_enqueues_from_home_view() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
-        app.tab_idx = 0;
         app.home.section = 0;
         app.home.continue_items = make_items(1);
         app.home.continue_cursor = 0;
@@ -10681,7 +9588,6 @@ pub(crate) mod tests {
         let local_items = make_items(2);
         let remote_items = make_items(3);
         let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(local_items, remote_items.clone());
-        app.tab_idx = 0;
         app.queue_scope = QueueScope::Remote;
         app.home.section = 0;
         app.home.continue_items = make_items(1);
@@ -10722,7 +9628,6 @@ pub(crate) mod tests {
         let local_items = make_items(2);
         let remote_items = make_items(3);
         let (mut app, cmd_rx) = make_v2_remote_app_stub_with_cmd_rx(local_items, remote_items);
-        app.tab_idx = 0;
         app.queue_scope = QueueScope::Remote;
         app.home.section = 0;
         app.home.continue_items = make_items(1);
@@ -10768,7 +9673,6 @@ pub(crate) mod tests {
             .resolve_slot_at(0)
             .expect("moved slot should be at destination");
 
-        app.tab_idx = 0;
         app.home.section = 0;
         app.home.continue_items = make_items(1);
         app.home.continue_cursor = 0;
@@ -10987,8 +9891,7 @@ pub(crate) mod tests {
         let local_items = make_items(2);
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Standard;
+        app.power_focus = PowerFocus::Queue;
         app.set_queue_scope(QueueScope::Remote);
         app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
@@ -11024,8 +9927,7 @@ pub(crate) mod tests {
         let local_items = make_items(2);
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Standard;
+        app.power_focus = PowerFocus::Queue;
         app.set_queue_scope(QueueScope::Remote);
         app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
@@ -12102,163 +11004,13 @@ pub(crate) mod tests {
         );
     }
 
-    // ── home_section_len_cur ─────────────────────────────────────────────────
-
-    #[test]
-    fn home_section_len_cur_section_zero_uses_continue_items() {
-        let mut app = make_app_stub();
-        app.home.continue_items = make_items(5);
-        app.home.continue_cursor = 3;
-        assert_eq!(app.home_section_len_cur(0), (5, 3));
-    }
-
-    #[test]
-    fn home_section_len_cur_section_one_uses_latest() {
-        let mut app = make_app_stub();
-        app.home.latest = vec![("Latest Movies".into(), "lib1".into(), make_items(7), 2)];
-        assert_eq!(app.home_section_len_cur(1), (7, 2));
-    }
-
-    #[test]
-    fn home_section_len_cur_out_of_bounds_returns_zero() {
-        let app = make_app_stub();
-        assert_eq!(app.home_section_len_cur(99), (0, 0));
-    }
-
-    // ── set_home_cursor ──────────────────────────────────────────────────────
-
-    #[test]
-    fn set_home_cursor_out_of_bounds_section_is_noop() {
-        let mut app = make_app_stub();
-        app.set_home_cursor(99, 3); // should not panic
-    }
-
-    // ── move_home_cursor ─────────────────────────────────────────────────────
-
-    #[test]
-    fn move_home_cursor_forward_within_section() {
-        let mut app = make_app_stub();
-        app.home.continue_items = make_items(5);
-        app.home.continue_cursor = 0;
-        app.move_home_cursor(1);
-        assert_eq!(app.home.continue_cursor, 1);
-        assert_eq!(app.home.section, 0);
-    }
-
-    #[test]
-    fn move_home_cursor_forward_stops_at_end_with_adjacent_section() {
-        let mut app = make_app_stub();
-        app.home.continue_items = make_items(3);
-        app.home.continue_cursor = 2; // at end of section 0
-        app.home.latest = vec![("T".into(), "lib".into(), make_items(4), 0)];
-        app.move_home_cursor(1);
-        // stays at end, does not advance to section 1 or wrap
-        assert_eq!(app.home.section, 0);
-        assert_eq!(app.home.continue_cursor, 2);
-    }
-
-    #[test]
-    fn move_home_cursor_forward_stops_at_end_of_last_section() {
-        let mut app = make_app_stub();
-        app.home.continue_items = make_items(3);
-        app.home.continue_cursor = 2;
-        app.move_home_cursor(1);
-        assert_eq!(app.home.section, 0);
-        assert_eq!(app.home.continue_cursor, 2);
-    }
-
-    #[test]
-    fn move_home_cursor_backward_within_section() {
-        let mut app = make_app_stub();
-        app.home.continue_items = make_items(5);
-        app.home.continue_cursor = 3;
-        app.move_home_cursor(-1);
-        assert_eq!(app.home.continue_cursor, 2);
-        assert_eq!(app.home.section, 0);
-    }
-
-    #[test]
-    fn move_home_cursor_backward_stops_at_start_with_prior_section() {
-        let mut app = make_app_stub();
-        app.home.continue_items = make_items(3);
-        app.home.latest = vec![("T".into(), "lib".into(), make_items(4), 0)];
-        app.home.section = 1;
-        app.home.latest[0].3 = 0; // at start of section 1
-        app.move_home_cursor(-1);
-        // stays at start, does not go back to section 0 or wrap
-        assert_eq!(app.home.section, 1);
-        assert_eq!(app.home.latest[0].3, 0);
-    }
-
-    #[test]
-    fn move_home_cursor_backward_stops_at_start_of_first_section() {
-        let mut app = make_app_stub();
-        app.home.continue_items = make_items(3);
-        app.home.continue_cursor = 0;
-        app.move_home_cursor(-1);
-        assert_eq!(app.home.section, 0);
-        assert_eq!(app.home.continue_cursor, 0);
-    }
-
-    // ── ensure_home_section_visible ──────────────────────────────────────────
+    // ── cursor preservation during home refresh ──────────────────────────────
 
     fn sections(n: usize) -> Vec<(String, String, Vec<MediaItem>, usize)> {
         (0..n)
             .map(|i| (format!("Sec {i}"), format!("lib{i}"), make_items(3), 0))
             .collect()
     }
-
-    #[test]
-    fn ensure_visible_all_sections_fit_no_scrolling_needed() {
-        let mut app = make_app_stub();
-        // terminal_height=24, chrome=3, panel_h=21; HOME_MIN_SECTION_H=6; 3*6=18<=21 => all visible
-        app.terminal_height = 24;
-        app.home.latest = sections(2); // 3 total sections
-        app.home.section = 2;
-        app.home_panel_section_offset = 0;
-        app.ensure_home_section_visible();
-        assert_eq!(app.home_panel_section_offset, 0);
-    }
-
-    #[test]
-    fn ensure_visible_scrolls_offset_down_when_section_below_window() {
-        let mut app = make_app_stub();
-        // panel_h = 24-3 = 21; visible_rows = 21/6 = 3
-        // 8 Latest => n_rows = 1 + (8+1)/2 = 5; max_offset = 2
-        // section 8 (Latest[7]) => sec_row = 1 + 7/2 = 4
-        // 4 >= 0 + 3 => offset = 4 + 1 - 3 = 2
-        app.terminal_height = 24;
-        app.home.latest = sections(8);
-        app.home.section = 8; // last section, row 4
-        app.home_panel_section_offset = 0;
-        app.ensure_home_section_visible();
-        assert_eq!(app.home_panel_section_offset, 2);
-    }
-
-    #[test]
-    fn ensure_visible_scrolls_offset_up_when_section_above_window() {
-        let mut app = make_app_stub();
-        app.terminal_height = 24;
-        app.home.latest = sections(4); // 5 total sections
-        app.home.section = 0;
-        app.home_panel_section_offset = 3; // selected is above window
-        app.ensure_home_section_visible();
-        assert_eq!(app.home_panel_section_offset, 0);
-    }
-
-    #[test]
-    fn ensure_visible_clamps_offset_to_max() {
-        let mut app = make_app_stub();
-        // panel_h = 24 - 3 = 21; visible = 3; 3 total sections => max_offset = 0
-        app.terminal_height = 24;
-        app.home.latest = sections(2); // 3 total sections, all fit
-        app.home.section = 1;
-        app.home_panel_section_offset = 10; // way too high
-        app.ensure_home_section_visible();
-        assert_eq!(app.home_panel_section_offset, 0);
-    }
-
-    // ── cursor preservation during home refresh ──────────────────────────────
 
     #[test]
     fn home_refresh_preserves_cursor_by_lib_id() {
@@ -12348,78 +11100,28 @@ pub(crate) mod tests {
     }
 
     // ── status_bar (Task 2: session/connection label + unsaved marker) ───────
-
-    #[test]
-    fn status_bar_shows_direct_remote_label_next_to_pill() {
-        let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 0;
-        app.set_queue_scope(QueueScope::Remote);
-        app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
-        app.client.lock().unwrap().config.server_url = "http://emby.local:8096".into();
-        app.use_nerd_fonts = false;
-
-        let rendered = render_app_to_string(&mut app, 80, 24);
-        let last_line = rendered.lines().last().unwrap();
-
-        assert!(
-            last_line.contains("\u{1F5A7}  music.local"),
-            "expected the remote glyph to be the label prefix:\n{last_line}"
-        );
-        assert!(
-            !last_line.contains("\u{1F5A7}  music.local@emby.local"),
-            "Emby server host should not be folded into remote status:\n{last_line}"
-        );
-    }
-
-    #[test]
-    fn status_bar_uses_attached_session_device_name_not_loopback_host() {
-        let mut app = make_app_stub();
-        app.tab_idx = 0;
-        app.connected_session_id = Some("sess-1".into());
-        app.connected_session_state = Some(make_session("music", "Emby"));
-
-        let rendered = render_app_to_string(&mut app, 80, 24);
-        let last_line = rendered.lines().last().unwrap();
-
-        assert!(
-            last_line.contains("\u{1F5A7}  music"),
-            "expected attached session status to use the F3-visible device name:\n{last_line}"
-        );
-        assert!(
-            !last_line.contains("local"),
-            "attached remote session should not render as local:\n{last_line}"
-        );
-    }
-
-    #[test]
-    fn status_bar_uses_direct_upgrade_session_name_after_state_is_cleared() {
-        let mut app = make_app_stub();
-        app.tab_idx = 0;
-        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
-        let sess = make_session("music", "mbv");
-
-        app.switch_to_direct_remote(&sess, remote, remote_rx);
-
-        assert!(app.connected_session_id.is_none());
-        assert!(app.connected_session_state.is_none());
-        app.status.clear();
-        let rendered = render_app_to_string(&mut app, 80, 24);
-        let last_line = rendered.lines().last().unwrap();
-
-        assert!(
-            last_line.contains("\u{1F5A7}  music"),
-            "direct-upgraded remote should keep the F3-visible session name:\n{last_line}"
-        );
-        assert!(
-            !last_line.contains("\u{1F5A7}  local"),
-            "direct-upgraded remote should not fall back to local after clearing session state:\n{last_line}"
-        );
-    }
+    //
+    // The remote/session-label resolution tests that used to live here
+    // (direct-remote label, attached-session device name, direct-upgrade
+    // session name, local-status default, left-side ordering, icon/label
+    // coloring) exercised the status bar's own `remote_status_spans`
+    // rendering with `show_session_pill: true` -- a mode only the deleted
+    // Standard view's status-bar call site used. Power View's status bar
+    // has always called `render_status_bar(.., false, true)` (unchanged by
+    // this diff -- confirmed via `git diff origin/main`), because Power
+    // surfaces the same remote/session info via the queue column's
+    // Local/Remote title pills instead (`render_power_queue_title` in
+    // `render/power/queue.rs`, which calls the same shared
+    // `remote_status_spans` helper). That underlying logic still matters in
+    // production, so those tests were moved to `render/mod.rs`'s test
+    // module, rewritten to call `render_status_bar` directly with
+    // `show_session_pill: true` (the same pattern already used by
+    // `status_bar_remote_hitbox_tracks_visible_pill_after_alive_marker`
+    // etc.) rather than deleted outright.
 
     #[test]
     fn status_bar_shows_emby_server_on_the_right_side() {
         let mut app = make_app_stub();
-        app.tab_idx = 0;
         app.client.lock().unwrap().config.server_url = "http://emby.local:8096".into();
 
         let rendered = render_app_to_string(&mut app, 80, 24);
@@ -12442,7 +11144,10 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_right_side_separates_items_with_spaces_and_keeps_server_rightmost() {
         let mut app = make_app_stub();
-        app.tab_idx = 1; // Queue tab
+        // The AUTOSAVE/queue-source segment is only shown while the queue
+        // side is focused (see `render_status_bar`'s `source_label` /
+        // `autosave_on` gating) -- equivalent to the old "Queue tab" state.
+        app.power_focus = PowerFocus::Queue;
         app.queue_source = crate::config::QueueSource::Playlist {
             id: Some("pl1".into()),
             name: "Road Trip".into(),
@@ -12467,7 +11172,6 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_shows_muted_text_without_mute_glyph() {
         let mut app = make_app_stub();
-        app.tab_idx = 0;
         app.mute_on = true;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
@@ -12481,12 +11185,15 @@ pub(crate) mod tests {
             !last_line.contains(" m "),
             "muted state should not use the old single-letter mute glyph:\n{last_line}"
         );
-        let remote_label = format!("\u{1F5A7}  {}", mbv_core::api::device_name());
-        let remote_pos = last_line.find(&remote_label).unwrap();
+        // Ordering relative to the remote pill isn't checked here: Power
+        // View's status bar never shows the session/remote pill (that lives
+        // in the queue column's Local/Remote title pills instead -- see
+        // `render_power_queue_title`), so "muted last among left-side
+        // statuses" no longer has a remote pill to be last *after*.
         let playlist_pos = last_line.find("\u{1F5AD}  none").unwrap();
         let muted_pos = last_line.find("muted").unwrap();
         assert!(
-            remote_pos < playlist_pos && playlist_pos < muted_pos,
+            playlist_pos < muted_pos,
             "muted should be the last left-side status so appearing/disappearing does not shift earlier statuses:\n{last_line}"
         );
     }
@@ -12494,7 +11201,6 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_hides_mute_indicator_when_not_muted() {
         let mut app = make_app_stub();
-        app.tab_idx = 0;
         app.mute_on = false;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
@@ -12512,31 +11218,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn status_bar_separates_left_statuses_with_spaces() {
-        let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 0;
-        app.set_queue_scope(QueueScope::Remote);
-        app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
-        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
-        app.use_nerd_fonts = false;
-
-        let rendered = render_app_to_string(&mut app, 80, 24);
-        let last_line = rendered.lines().last().unwrap();
-
-        let heart_pos = last_line.find('\u{2665}').unwrap();
-        let remote_pos = last_line.find('\u{1F5A7}').unwrap();
-        let playlist_pos = last_line.find('\u{1F5AD}').unwrap();
-        assert!(
-            heart_pos < remote_pos && remote_pos < playlist_pos,
-            "expected the heart, remote pill, and playlist pill in that order:\n{last_line}"
-        );
-    }
-
-    #[test]
     fn status_bar_stay_alive_heart_uses_row_background_not_pill_background() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 0;
         app.set_queue_scope(QueueScope::Remote);
         app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
         let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
@@ -12562,7 +11245,6 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_has_no_session_or_daemon_label_when_remote_slot_is_off() {
         let mut app = make_app_stub();
-        app.tab_idx = 0;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
@@ -12574,27 +11256,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn status_bar_shows_local_remote_status_when_not_connected_to_remote() {
-        let mut app = make_app_stub();
-        app.tab_idx = 0;
-
-        let rendered = render_app_to_string(&mut app, 80, 24);
-        let last_line = rendered.lines().last().unwrap();
-
-        assert!(
-            last_line.contains(&format!("\u{1F5A7}  {}", mbv_core::api::device_name())),
-            "expected local device remote-status when no remote is connected:\n{last_line}"
-        );
-        assert!(
-            !last_line.contains("remote:"),
-            "local playback should not be labeled as remote:\n{last_line}"
-        );
-    }
-
-    #[test]
     fn status_bar_shows_playlist_status_when_none_is_active() {
         let mut app = make_app_stub();
-        app.tab_idx = 0;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
@@ -12608,7 +11271,6 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_shows_active_playlist_name_next_to_playlist_glyph() {
         let mut app = make_app_stub();
-        app.tab_idx = 0;
         app.queue_source = crate::config::QueueSource::Playlist {
             id: Some("pl1".into()),
             name: "Road Trip".into(),
@@ -12624,50 +11286,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn status_bar_colors_remote_pill_icon_white_and_label_black_or_green() {
-        let mut app = make_app_stub();
-        app.tab_idx = 0;
-
-        let term = render_app_to_terminal(&mut app, 80, 24);
-        let buf = term.backend().buffer();
-        let last_y = buf.area().height - 1;
-        let remote_x = (0..buf.area().width)
-            .find(|&x| buf[(x, last_y)].symbol() == "\u{1F5A7}")
-            .unwrap();
-        assert_eq!(buf[(remote_x, last_y)].fg, ratatui::style::Color::White);
-        let remote_label_x = (remote_x + 1..buf.area().width)
-            .find(|&x| buf[(x, last_y)].symbol() != " ")
-            .unwrap();
-        assert_eq!(
-            buf[(remote_label_x, last_y)].fg,
-            ratatui::style::Color::Black
-        );
-
-        let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 0;
-        app.set_queue_scope(QueueScope::Remote);
-        app.queue_source = crate::config::QueueSource::Playlist {
-            id: Some("pl1".into()),
-            name: "Road Trip".into(),
-        };
-
-        let term = render_app_to_terminal(&mut app, 80, 24);
-        let buf = term.backend().buffer();
-        let last_y = buf.area().height - 1;
-        let remote_x = (0..buf.area().width)
-            .find(|&x| buf[(x, last_y)].symbol() == "\u{1F5A7}")
-            .unwrap();
-        assert_eq!(buf[(remote_x, last_y)].fg, ratatui::style::Color::White);
-        let remote_label_x = (remote_x + 1..buf.area().width)
-            .find(|&x| buf[(x, last_y)].symbol() != " ")
-            .unwrap();
-        assert_eq!(buf[(remote_label_x, last_y)].fg, palette::AQUA);
-    }
-
-    #[test]
     fn status_bar_has_surrounding_row_background_and_pill_cells() {
         let mut app = make_app_stub();
-        app.tab_idx = 0;
 
         let term = render_app_to_terminal(&mut app, 80, 24);
         let buf = term.backend().buffer();
@@ -12698,7 +11318,6 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_shows_unsaved_marker_on_any_tab_when_queue_is_dirty() {
         let mut app = make_app_stub();
-        app.tab_idx = 0; // Home tab, not the Queue tab -- unsaved state must still show.
         app.queue_dirty = true;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
@@ -12713,7 +11332,6 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_right_unsaved_does_not_touch_left_segment_when_space_is_tight() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 0;
         app.mute_on = false;
         app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
         app.set_queue_scope(QueueScope::Remote);
@@ -12733,7 +11351,6 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_uses_unsaved_in_autosave_slot_when_dirty() {
         let mut app = make_app_stub();
-        app.tab_idx = 1;
         app.queue_source = crate::config::QueueSource::Playlist {
             id: Some("playlist-1".into()),
             name: "Road Trip".into(),
@@ -12759,7 +11376,9 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_shows_queue_source_label_on_queue_tab() {
         let mut app = make_app_stub();
-        app.tab_idx = 1; // Queue tab
+        // Equivalent of the old "Queue tab": the queue side is focused, so
+        // the queue-source label is relevant and should render.
+        app.power_focus = PowerFocus::Queue;
         app.queue_source = crate::config::QueueSource::Album;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
@@ -12767,14 +11386,13 @@ pub(crate) mod tests {
 
         assert!(
             last_line.contains("ALBUM"),
-            "expected an ALBUM queue-source label on the Queue tab:\n{last_line}"
+            "expected an ALBUM queue-source label when the queue side is focused:\n{last_line}"
         );
     }
 
     #[test]
     fn status_bar_hides_queue_segment_outside_queue_and_power_view() {
         let mut app = make_app_stub();
-        app.tab_idx = 0; // Home tab
         app.queue_source = crate::config::QueueSource::Album;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
@@ -12789,7 +11407,6 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_omits_redundant_remote_queue_label() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 1; // Queue tab
         app.set_queue_scope(QueueScope::Remote);
 
         let rendered = render_app_to_string(&mut app, 80, 24);
@@ -12806,7 +11423,6 @@ pub(crate) mod tests {
     #[test]
     fn toast_renders_in_status_bar_without_covering_main_content_above_it() {
         let mut app = make_app_stub();
-        app.tab_idx = 0;
         app.status = "Saved [Y]".to_string();
         app.status_expires = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
 
@@ -12830,7 +11446,6 @@ pub(crate) mod tests {
     #[test]
     fn status_bar_shows_normal_content_when_no_toast_is_active() {
         let mut app = make_app_stub();
-        app.tab_idx = 0;
         app.status = String::new();
 
         let rendered = render_app_to_string(&mut app, 80, 24);
@@ -12842,35 +11457,17 @@ pub(crate) mod tests {
         );
     }
 
-    #[test]
-    fn status_bar_pill_click_regions_stay_populated_during_toast() {
-        let mut app = make_app_stub();
-        app.tab_idx = 0;
-        app.status = "Saved [Y]".to_string();
-        app.status_expires = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
-
-        let rendered = render_app_to_string(&mut app, 80, 24);
-
-        // The visible remote-cycle click hitbox must still be populated even
-        // though a toast is covering the status bar this frame -- otherwise
-        // clicks on that icon silently do nothing for the toast's duration.
-        assert_ne!(
-            app.layout.playback.ind_rc,
-            ratatui::layout::Rect::default(),
-            "remote-cycle hitbox went stale while a toast was active"
-        );
-
-        // The toast text must win the row, with no leftover pill glyphs
-        // bleeding through underneath it (which would happen if the toast
-        // were drawn without Clear-ing the row render_status_bar just wrote).
-        let last_line = rendered.lines().last().unwrap();
-        assert!(
-            last_line.contains("Saved"),
-            "expected the toast text on the final row:\n{last_line}"
-        );
-        assert!(
-            !last_line.contains('\u{1F5AD}'),
-            "leftover control-pill glyph bled through under the toast:\n{last_line}"
-        );
-    }
+    // `status_bar_pill_click_regions_stay_populated_during_toast` (deleted):
+    // it asserted `layout.playback.ind_rc` (the remote-cycle click hitbox)
+    // stays populated while a toast covers the status bar. `ind_rc` is only
+    // ever populated when `render_status_bar` is called with
+    // `show_session_pill: true` -- the Standard-only call site that this PR
+    // removes. Power View's status bar call (`render/power/mod.rs`,
+    // unchanged by this diff) has always passed `show_session_pill: false`,
+    // so `ind_rc` never populates in Power regardless of any toast --
+    // remote/local cycling in Power happens by clicking the queue column's
+    // own Local/Remote title pills (`queue_scope_local_area` /
+    // `queue_scope_remote_area`, handled in `input.rs`), a separate row the
+    // status-bar toast never covers. The bug this test guarded (hitbox goes
+    // stale specifically *during* a toast) has no Power analog to regress.
 }

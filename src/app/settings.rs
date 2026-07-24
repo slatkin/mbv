@@ -6,7 +6,6 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::StayAlive => "Stay alive on exit",
         SettingKey::AutoReconnect => "Auto reconnect",
         SettingKey::SavePlaylistOnQuit => "Save playlist on quit",
-        SettingKey::StartOnQueue => "Start on queue",
         SettingKey::AlwaysPlayNext => "Always play next",
         SettingKey::ConsumeVideos => "Consume videos",
         SettingKey::ConsumeAudio => "Consume audio",
@@ -29,7 +28,6 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::AudioLanguage => "Audio language",
         SettingKey::FeedViewLibraries => "Feed view",
         SettingKey::LibraryRoutes => "Library routes",
-        SettingKey::ViewMode => "View mode",
         SettingKey::LogOut => "Log out",
     }
 }
@@ -39,7 +37,6 @@ pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
         SettingKey::StayAlive => bool_val(cfg.stay_alive),
         SettingKey::AutoReconnect => bool_val(cfg.auto_reconnect),
         SettingKey::SavePlaylistOnQuit => bool_val(cfg.save_playlist_on_quit),
-        SettingKey::StartOnQueue => bool_val(cfg.start_on_queue),
         SettingKey::AlwaysPlayNext => bool_val(cfg.always_play_next),
         SettingKey::ConsumeVideos => bool_val(cfg.consume_videos),
         SettingKey::ConsumeAudio => bool_val(cfg.consume_audio),
@@ -80,13 +77,6 @@ pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
         }
         SettingKey::FeedViewLibraries => fmt_feed_view_list(&cfg.feed_view_libraries),
         SettingKey::LibraryRoutes => fmt_library_routes(&cfg.library_routes),
-        SettingKey::ViewMode => {
-            if cfg.view_mode == "power" {
-                "Power".into()
-            } else {
-                "Standard".into()
-            }
-        }
         SettingKey::LogOut => String::new(),
     }
 }
