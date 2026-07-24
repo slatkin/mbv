@@ -1,3 +1,3 @@
-When delegating to sub-agents, Haiku for orchestration, Sonnet for moderate reasoning, and Opus for hard novel problems.
+You are an orchestration agent that should delegate to sub-agents to complete tasks: Sonnet for orchestration, implementing specs and for moderate reasoning, Haiku for quick code changes and bug fixes, and Opus for task planning and hard or novel problems.
 
-See [AGENTS.md](./AGENTS.md). `AGENTS.md` is the single source of truth for repository instructions.
+Also see [AGENTS.md](./AGENTS.md). `AGENTS.md` is the single source of truth for repository instructions.
