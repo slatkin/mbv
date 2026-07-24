@@ -43,11 +43,15 @@ These were settled in a grilling session on 2026-07-24. If implementation reveal
 
 Three ordered commits in one PR. **Commit 1 must build clean and pass the full suite on its own before commit 2 begins.** Do not squash them — bisect resolution across this change is the entire point.
 
-| Commit | Contents | Character |
-|---|---|---|
-| 1 | Delete Standard, rewire tab scrolling, migrate persisted state | Behavioural — needs semantic review |
-| 2 | Mechanical rename, `power` → domain vocabulary | Zero behaviour change — reviewable by skimming |
-| 3 | `CONTEXT.md`, ADR-0013, `README.md`, help panel copy | Docs |
+**One agent per commit, not one agent for all three.** Each commit is handed to a fresh agent with clean context, and hands off through the worktree, not through conversation. This was corrected mid-flight: commit 1 generates a large compile-error cascade as a byproduct (`tab_idx` alone has 333 references), and an agent that grinds through that arrives at the rename and the verbatim ADR application with heavily degraded context — exactly backwards, since those are the precision-critical steps. The state the next commit needs is on disk; the instructions are in this plan. Neither requires continuity of context.
+
+| Commit | Contents | Character | Agent |
+|---|---|---|---|
+| 1 | Delete Standard, rewire tab scrolling, migrate persisted state | Behavioural — needs semantic review | Sonnet, fresh |
+| 2 | Mechanical rename, `power` → domain vocabulary | Zero behaviour change — reviewable by skimming | Sonnet, fresh |
+| 3 | `CONTEXT.md`, ADR-0013, `README.md`, help panel copy | Docs | Author of the appendices |
+
+Each agent's entry condition is the previous commit **committed, building clean, clippy-clean, and green**. Verify that before starting, and stop if it does not hold.
 
 ---
 
