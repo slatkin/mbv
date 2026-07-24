@@ -25,6 +25,6 @@
     ]
   },
   "enabledPlugins": {
-    "agent-skills@addy-agent-skills": true
+    "agent-skills@addy-agent-skills": false
   }
 }
