@@ -538,7 +538,11 @@ impl App {
             KeyCode::Home => self.jump_lib_cursor(false),
             KeyCode::End => self.jump_lib_cursor(true),
             KeyCode::Enter => {
-                if !self.activate_recursive_album(lib_idx) {
+                if self.activate_recursive_album(lib_idx) {
+                    // active-search jump; unchanged
+                } else if self.is_viewing_album_folders(lib_idx) {
+                    self.activate_album_folder_row(lib_idx);
+                } else {
                     self.select();
                 }
             }
@@ -1378,39 +1382,14 @@ impl App {
                 // (`move_lib_cursor`). Scoped strictly to `!is_power_nav`
                 // (so Alt+arrow pane-switching is untouched) and to
                 // `is_viewing_album_folders` (so movies/series/home-video
-                // panels, non-power tabs, and the legacy drilled-in
-                // `is_album_level` state are completely unaffected).
+                // panels and non-power tabs are completely unaffected; the
+                // legacy `is_album_level` drilldown this used to also
+                // exclude was removed entirely -- Enter now always routes
+                // here via `activate_album_folder_row`).
                 if !is_power_nav && self.is_viewing_album_folders(lib_idx) {
                     match key.code {
                         KeyCode::Enter => {
-                            if self.libs[lib_idx].artist_header_focus.is_some()
-                                && self.is_music_group_view(lib_idx)
-                            {
-                                return false;
-                            }
-                            if self.libs[lib_idx].album_track_focus.is_none() {
-                                self.clear_artist_header_focus(lib_idx);
-                                self.libs[lib_idx].album_track_focus = Some(0);
-                            } else {
-                                let has_focused_track = self
-                                    .selected_album_item(lib_idx)
-                                    .and_then(|album| {
-                                        self.album_tracks_cache.get(&album.id).and_then(|tracks| {
-                                            self.libs[lib_idx]
-                                                .album_track_focus
-                                                .and_then(|idx| tracks.get(idx))
-                                        })
-                                    })
-                                    .is_some();
-                                if !has_focused_track {
-                                    return false;
-                                }
-                                // Track already focused (#145 task 4): play it.
-                                // Reuses `select()` (track-focus aware via
-                                // `current_lib_item()`) rather than
-                                // duplicating queue-build logic here.
-                                self.select();
-                            }
+                            self.activate_album_folder_row(lib_idx);
                             return false;
                         }
                         KeyCode::Esc | KeyCode::Backspace => {
@@ -2562,6 +2541,25 @@ impl App {
         // Always track mouse position so hover rendering is up to date.
         self.mouse_col = col;
         self.mouse_row = row;
+
+        // Swallow the single click that merely refocused the window (e.g.
+        // alt-tab back in by clicking): if a FocusGained landed within the
+        // last 150ms, this Down(Left)/Down(Right) is that click, not a UI
+        // action. `.take()` makes this strictly one-shot -- it clears
+        // `refocus_at` whether or not the click was in the window, so a
+        // second click right after a suppressed one dispatches normally.
+        if matches!(
+            mouse.kind,
+            MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Down(MouseButton::Right)
+        ) {
+            if let Some(t) = self.refocus_at.take() {
+                if t.elapsed() < Duration::from_millis(150) {
+                    log::debug!(target: "input", "suppressed refocus click at ({col}, {row})");
+                    return;
+                }
+            }
+        }
+
         if matches!(
             mouse.kind,
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
@@ -2802,7 +2800,18 @@ impl App {
                         .unwrap_or(false)
                 {
                     let lib_idx = self.library_tab - 1;
-                    if !self.activate_recursive_album(lib_idx) {
+                    if self.activate_recursive_album(lib_idx) {
+                        // active-search jump; unchanged
+                    } else if self.is_viewing_album_folders(lib_idx) {
+                        // Track-selection mode only opens via Enter; mouse
+                        // click never opens it. If it's already open, a click
+                        // still plays the focused track (mirrors Enter's
+                        // "already focused" branch inside
+                        // `activate_album_folder_row`), but cannot open it.
+                        if self.libs[lib_idx].album_track_focus.is_some() {
+                            self.activate_album_folder_row(lib_idx);
+                        }
+                    } else {
                         self.select();
                     }
                 }
@@ -3813,7 +3822,9 @@ mod power_music_track_focus_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
     use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::{
+        KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    };
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
@@ -4162,6 +4173,128 @@ mod power_music_track_focus_tests {
         assert!(!handled);
         assert_eq!(app.libs[0].album_track_focus, Some(0));
         assert_eq!(app.libs[0].nav_stack.len(), nav_len_before);
+    }
+
+    #[test]
+    fn mouse_click_on_selected_album_folder_row_does_not_open_track_mode() {
+        // Only Enter opens inline track-selection mode. A mouse click on the
+        // already-selected album-folder row must not open it (and must not
+        // fall back to the legacy nav_stack drilldown either).
+        let mut app_key = make_power_music_album_app();
+        let mut app_mouse = make_power_music_album_app();
+
+        let nav_len_before = app_key.libs[0].nav_stack.len();
+        assert_eq!(nav_len_before, app_mouse.libs[0].nav_stack.len());
+        assert!(app_key.is_viewing_album_folders(0));
+        assert!(app_key.libs[0].album_track_focus.is_none());
+        assert!(app_mouse.libs[0].album_track_focus.is_none());
+
+        let handled = app_key.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(!handled);
+
+        app_mouse.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app_mouse.layout.main.left_row_map = vec![Some(0)];
+        app_mouse.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app_key.libs[0].album_track_focus, Some(0));
+        assert_eq!(app_mouse.libs[0].album_track_focus, None);
+        assert_eq!(app_key.libs[0].nav_stack.len(), nav_len_before);
+        assert_eq!(app_mouse.libs[0].nav_stack.len(), nav_len_before);
+    }
+
+    #[test]
+    fn refocus_click_after_focus_gained_is_suppressed() {
+        let mut app = make_power_music_album_app();
+        app.note_focus_gained();
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
+        assert!(app.refocus_at.is_none());
+    }
+
+    #[test]
+    fn click_without_focus_event_dispatches_normally() {
+        let mut app = make_power_music_album_app();
+        assert!(app.refocus_at.is_none());
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+    }
+
+    #[test]
+    fn click_outside_refocus_window_dispatches_normally() {
+        let mut app = make_power_music_album_app();
+        app.refocus_at = Some(Instant::now() - Duration::from_millis(500));
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+    }
+
+    #[test]
+    fn second_click_after_refocus_dispatches() {
+        let mut app = make_power_music_album_app();
+        app.note_focus_gained();
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        let click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        };
+        app.handle_mouse(click);
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
+
+        app.handle_mouse(click);
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+    }
+
+    #[test]
+    fn focus_lost_clears_pending_refocus() {
+        let mut app = make_power_music_album_app();
+        app.note_focus_gained();
+        app.note_focus_lost();
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
     }
 
     #[test]
@@ -4926,10 +5059,9 @@ mod power_music_track_focus_tests {
         // (pre-existing, out of Task 4's scope) calls
         // `on_queue_replace_silent` as its first statement, which
         // unconditionally resets `queue_source` to `Unknown` immediately
-        // after `select()` sets it to `Album`. That happens identically on
-        // the legacy `is_album_level` path (see the regression test below),
-        // so it is not a Task-4 regression -- the queue *contents* (ids +
-        // cursor, asserted above) are the correct observable here.
+        // after `select()` sets it to `Album`, so it is not a Task-4
+        // regression -- the queue *contents* (ids + cursor, asserted
+        // above) are the correct observable here.
     }
 
     #[test]
@@ -5012,88 +5144,6 @@ mod power_music_track_focus_tests {
             )),
             "track mode must not offer album-folder-scoped actions, got: {actions:?}"
         );
-    }
-
-    #[test]
-    fn legacy_is_album_level_drilldown_enter_to_play_is_unaffected() {
-        // The pre-#145 drilldown (`is_album_level`, reached elsewhere in the
-        // app by pushing a nav_stack level of tracks) must keep working
-        // exactly as before -- Task 4 must not change its behavior.
-        let mut app = make_app_stub();
-        app.library_tab = 1;
-        app.music_levels = vec!["album".into()];
-
-        let mut library = make_item("Music", "CollectionFolder");
-        library.id = "lib-music".into();
-        library.is_folder = true;
-        library.collection_type = "music".into();
-
-        let mut album = make_item("An Album", "MusicAlbum");
-        album.id = "album-legacy".into();
-        album.is_folder = true;
-
-        let mut track0 = make_item("Track 0", "Audio");
-        track0.id = "legacy-track-0".into();
-        let mut track1 = make_item("Track 1", "Audio");
-        track1.id = "legacy-track-1".into();
-
-        app.libs.push(LibraryTab {
-            library,
-            nav_stack: vec![
-                BrowseLevel {
-                    parent_id: "lib-music".into(),
-                    title: "Music".into(),
-                    items: vec![album],
-                    total_count: 1,
-                    cursor: 0,
-                    scroll: 0,
-                    item_types: None,
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    loading: false,
-                    all_items: None,
-                    letter_filter: None,
-                },
-                BrowseLevel {
-                    parent_id: "album-legacy".into(),
-                    title: "An Album".into(),
-                    items: vec![track0, track1],
-                    total_count: 2,
-                    cursor: 1,
-                    scroll: 0,
-                    item_types: None,
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    loading: false,
-                    all_items: None,
-                    letter_filter: None,
-                },
-            ],
-            search: None,
-            feed_home_video: None,
-            album_track_focus: None,
-            artist_header_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
-
-        assert!(app.is_album_level(0));
-        assert!(!app.is_viewing_album_folders(0));
-
-        app.select();
-
-        let ids: Vec<_> = app.player_tab.items.iter().map(|i| i.id.clone()).collect();
-        assert_eq!(ids, vec!["legacy-track-0", "legacy-track-1"]);
-        assert_eq!(app.player_tab.queue_cursor, 1);
-        // See the note on `enter_again_in_track_mode_plays_focused_track_
-        // from_cached_queue` above -- `app.queue_source` gets reset to
-        // `Unknown` by `play_items_routed`'s call to
-        // `on_queue_replace_silent` regardless of what `select()` set it to
-        // just before, on both the legacy and new track-focus paths. Not a
-        // Task-4 regression; queue contents are the correct observable.
     }
 }
 

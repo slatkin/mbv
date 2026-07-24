@@ -13,7 +13,9 @@
 
 use crate::relay::{encode_winsize, RESTORE_SEQ, TAG_DATA, TAG_DATA_READY, TAG_WINSZ};
 use crossterm::cursor::{Hide, Show};
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use crossterm::event::{
+    DisableFocusChange, DisableMouseCapture, EnableFocusChange, EnableMouseCapture,
+};
 use crossterm::execute;
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use nix::sys::signal::{sigaction, SaFlags, SigAction, SigHandler, SigSet, Signal};
@@ -202,7 +204,14 @@ pub fn run_terminal_client(socket_path: &str) -> i32 {
         return EXIT_STALE_SOCKET;
     }
     let mut out = std::io::stdout();
-    execute!(out, EnterAlternateScreen, Hide, EnableMouseCapture).ok();
+    execute!(
+        out,
+        EnterAlternateScreen,
+        Hide,
+        EnableMouseCapture,
+        EnableFocusChange
+    )
+    .ok();
     log::info!(target: "terminal_client", "attached to {socket_path}");
 
     // stdin -> data socket
@@ -281,6 +290,7 @@ pub fn run_terminal_client(socket_path: &str) -> i32 {
     execute!(
         std::io::stdout(),
         DisableMouseCapture,
+        DisableFocusChange,
         Show,
         LeaveAlternateScreen
     )

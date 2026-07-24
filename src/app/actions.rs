@@ -1139,9 +1139,11 @@ impl App {
             // context-menu actions target the focused track. Strictly
             // gated on `is_viewing_album_folders` -- per Task 3's
             // invariant, `album_track_focus` is only ever `Some` when that
-            // holds, so this branch is unreachable from every other tab,
-            // every other nav level, and the legacy `is_album_level`
-            // drilldown.
+            // holds, so this branch is unreachable from every other tab
+            // and every other nav level. (The legacy `is_album_level`
+            // drilldown this used to also be unreachable from was removed
+            // entirely; mouse clicks now mirror Enter via
+            // `activate_album_folder_row`.)
             if self.is_viewing_album_folders(lib_idx) {
                 if let Some(track_idx) = lib.album_track_focus {
                     if let Some(album) = self.selected_album_item(lib_idx) {
@@ -1162,24 +1164,6 @@ impl App {
             let lvl = lib.nav_stack.last()?;
             lvl.items.get(lvl.cursor).cloned()
         }
-    }
-
-    pub(super) fn is_album_level(&self, lib_idx: usize) -> bool {
-        let lib = &self.libs[lib_idx];
-        if lib.library.collection_type != "music" {
-            return false;
-        }
-        if self.music_levels.is_empty() {
-            return false;
-        }
-        let stack_len = lib.nav_stack.len();
-        if stack_len < 2 {
-            return false;
-        }
-        self.music_levels
-            .get(stack_len - 2)
-            .map(|s| s == "album")
-            .unwrap_or(false)
     }
 
     pub(super) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
@@ -2753,28 +2737,11 @@ impl App {
             };
             let in_track_focus_mode = self.is_viewing_album_folders(lib_idx)
                 && self.libs[lib_idx].album_track_focus.is_some();
-            if self.libs[lib_idx].search.is_none()
-                && (self.is_album_level(lib_idx) || in_track_focus_mode)
-            {
-                // Legacy `is_album_level` drilldown sources its track list
-                // from the pushed nav_stack level (unchanged); the new
-                // inline track-selection mode (#145 task 4) sources it from
-                // the proactively-fetched `album_tracks_cache` instead,
-                // keyed by the selected album's id. Kept as a separate
-                // if/else picking the source `Vec<MediaItem>` rather than
-                // merging the two paths, so the well-tested legacy path
-                // stays byte-for-byte unchanged.
-                let level_items = if self.is_album_level(lib_idx) {
-                    self.libs[lib_idx]
-                        .nav_stack
-                        .last()
-                        .map(|l| l.items.clone())
-                        .unwrap_or_default()
-                } else {
-                    self.selected_album_item(lib_idx)
-                        .and_then(|album| self.album_tracks_cache.get(&album.id).cloned())
-                        .unwrap_or_default()
-                };
+            if self.libs[lib_idx].search.is_none() && in_track_focus_mode {
+                let level_items = self
+                    .selected_album_item(lib_idx)
+                    .and_then(|album| self.album_tracks_cache.get(&album.id).cloned())
+                    .unwrap_or_default();
                 let mut tracks: Vec<MediaItem> =
                     level_items.into_iter().filter(is_playable).collect();
                 sort_audio_tracks(&mut tracks);
@@ -2827,6 +2794,38 @@ impl App {
                 }
             }
             self.play_item(fresh);
+        }
+    }
+
+    /// Activation for a row in the album-folder listing
+    /// (`is_viewing_album_folders` level). Shared by the Enter key and mouse
+    /// click so the two paths cannot drift (see #145 / mouse-click parity fix).
+    /// Precondition: caller has confirmed `is_viewing_album_folders(lib_idx)`.
+    pub(super) fn activate_album_folder_row(&mut self, lib_idx: usize) {
+        if self.libs[lib_idx].artist_header_focus.is_some() && self.is_music_group_view(lib_idx) {
+            return;
+        }
+        if self.libs[lib_idx].album_track_focus.is_none() {
+            self.clear_artist_header_focus(lib_idx);
+            self.libs[lib_idx].album_track_focus = Some(0);
+        } else {
+            let has_focused_track = self
+                .selected_album_item(lib_idx)
+                .and_then(|album| {
+                    self.album_tracks_cache.get(&album.id).and_then(|tracks| {
+                        self.libs[lib_idx]
+                            .album_track_focus
+                            .and_then(|idx| tracks.get(idx))
+                    })
+                })
+                .is_some();
+            if !has_focused_track {
+                return;
+            }
+            // Track already focused: play it. Reuses `select()` (track-focus
+            // aware via `current_lib_item()`) rather than duplicating
+            // queue-build logic here.
+            self.select();
         }
     }
 
@@ -4211,25 +4210,12 @@ impl App {
         true
     }
 
-    fn normalize_current_browse_level_items(&mut self, lib_idx: usize, log_album_entry: bool) {
-        let is_album = self.is_album_level(lib_idx);
-        if is_album && log_album_entry {
-            let title = self
-                .libs
-                .get(lib_idx)
-                .and_then(|lib| lib.nav_stack.last())
-                .map(|level| level.title.clone())
-                .unwrap_or_default();
-            log::debug!(target: "app", "album: entered «{title}»");
-        }
+    fn normalize_current_browse_level_items(&mut self, lib_idx: usize) {
         if let Some(last) = self
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.nav_stack.last_mut())
         {
-            if is_album {
-                sort_audio_tracks(&mut last.items);
-            }
             if last
                 .items
                 .first()
@@ -4272,7 +4258,7 @@ impl App {
         self.update_current_browse_level(lib_idx, &parent_id, true, |last| {
             *last = level.take().unwrap();
         });
-        self.normalize_current_browse_level_items(lib_idx, true);
+        self.normalize_current_browse_level_items(lib_idx);
         self.snap_grouped_album_cursor_to_display_order(lib_idx);
     }
 
@@ -4524,7 +4510,7 @@ impl App {
             last.total_count = total_count;
             last.loading = false;
         });
-        self.normalize_current_browse_level_items(lib_idx, false);
+        self.normalize_current_browse_level_items(lib_idx);
         self.maybe_aggregate_feed_after_page_append(lib_idx, &parent_id);
         self.maybe_fetch_next_page(lib_idx);
     }
@@ -4549,7 +4535,7 @@ impl App {
                 last.loading = false;
             });
         }
-        self.normalize_current_browse_level_items(lib_idx, false);
+        self.normalize_current_browse_level_items(lib_idx);
         self.maybe_refresh_feed_groups_after_refresh(lib_idx);
         self.spawn_all_items_prefetch(lib_idx);
     }
@@ -6669,7 +6655,7 @@ mod tests {
             library_total: None,
         });
 
-        app.normalize_current_browse_level_items(0, false);
+        app.normalize_current_browse_level_items(0);
 
         let last = app.libs[0].nav_stack.last().unwrap();
         let names: Vec<&str> = last.items.iter().map(|item| item.name.as_str()).collect();
