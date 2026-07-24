@@ -814,10 +814,18 @@ impl App {
         layout.panel_area = left_area;
         layout.panel_content_area = Self::power_panel_content_area(left_area);
 
+        let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
+        let left_focused = !queue_focused;
+
         // Full-column background behind the card image and queue list.
         if !self.power_left_collapsed {
+            let left_bg = if queue_focused {
+                palette::POWER_LEFT_FOCUSED_BG
+            } else {
+                palette::PLAYBACK_PANEL_BG
+            };
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                Block::default().style(Style::default().bg(left_bg)),
                 left_area,
             );
         }
@@ -906,9 +914,6 @@ impl App {
             width: right_area.width,
             height: 1,
         };
-
-        let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
-        let left_focused = !queue_focused;
 
         let (lib_area, queue_area) = if self.power_left_collapsed {
             (right_area, Rect::default())
