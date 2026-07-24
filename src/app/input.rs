@@ -2791,14 +2791,16 @@ impl App {
                     }
                 }
 
+                // Capture the row that was already selected *before* this
+                // click moves the cursor. Clicking a folder row normally
+                // emulates Enter (drills in), but if the click landed on
+                // the row that was already selected (e.g. re-clicking the
+                // current row), drilling in again produces a jarring,
+                // unrequested navigation. Treat that case as a no-op
+                // instead.
+                let prev_id = self.current_lib_item().map(|i| i.id);
                 let hit = self.click_set_cursor(col, row);
-                if hit
-                    && self.library_tab > 0
-                    && self
-                        .current_lib_item()
-                        .map(|i| i.is_folder)
-                        .unwrap_or(false)
-                {
+                if hit && self.library_tab > 0 {
                     let lib_idx = self.library_tab - 1;
                     if self.activate_recursive_album(lib_idx) {
                         // active-search jump; unchanged
@@ -2812,7 +2814,31 @@ impl App {
                             self.activate_album_folder_row(lib_idx);
                         }
                     } else {
-                        self.select();
+                        let cur_item = self.current_lib_item();
+                        let already_selected = cur_item
+                            .as_ref()
+                            .is_some_and(|i| prev_id.as_deref() == Some(i.id.as_str()));
+                        // TV `Series` rows are always `is_folder` (they have
+                        // seasons underneath), but Enter on a Series row
+                        // doesn't drill into a generic folder browse -- it
+                        // opens the inline series-selection detail (season
+                        // pills + episode list; see
+                        // `enter_series_selection`). A mouse click has no
+                        // equivalent of that inline mode, so calling
+                        // `select()` here would instead push a raw
+                        // folder-browse nav level, a screen the click never
+                        // asked for. Mouse clicks on Series rows -- and on
+                        // any row that was already selected before this
+                        // click -- should only ever move the
+                        // cursor/highlight; leave opening the detail view to
+                        // Enter/double-click.
+                        let is_series = cur_item.as_ref().is_some_and(|i| i.item_type == "Series");
+                        if !already_selected
+                            && !is_series
+                            && cur_item.map(|i| i.is_folder).unwrap_or(false)
+                        {
+                            self.select();
+                        }
                     }
                 }
             }
@@ -5385,6 +5411,113 @@ mod power_library_scope_routing_tests {
                 .and_then(|level| level.focused_item_id.as_deref()),
             Some("id1")
         );
+    }
+
+    #[test]
+    fn mouse_click_on_already_selected_folder_row_is_a_noop() {
+        // Regression test: clicking a folder row (e.g. a TV series) that is
+        // already the selected/highlighted row must not re-trigger the
+        // Enter-emulating drill-in (`select`/`activate_recursive_album`).
+        // Before this fix, `click_set_cursor` returning `true` was
+        // sufficient to drill in even when the click landed on the row
+        // already under the cursor, producing an unrequested navigation.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_library_app();
+        for item in app.libs[0].nav_stack[0].items.iter_mut() {
+            item.is_folder = true;
+        }
+        app.libs[0].nav_stack[0].cursor = 0;
+        app.layout.main.left_area = Rect {
+            x: 10,
+            y: 5,
+            width: 20,
+            height: 5,
+        };
+
+        // Row 5 -> click_y 0 -> item index 0, the row already selected.
+        app.handle_mouse(make_power_library_mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            12,
+            5,
+        ));
+
+        assert_eq!(
+            app.libs[0].nav_stack.len(),
+            1,
+            "re-clicking the already-selected folder row must not drill in"
+        );
+        assert_eq!(app.libs[0].nav_stack[0].cursor, 0);
+    }
+
+    #[test]
+    fn mouse_click_on_a_different_folder_row_still_drills_in() {
+        // Companion to the no-op test above: clicking a *different* folder
+        // row must still emulate Enter and drill in, so the no-op fix is
+        // scoped strictly to re-clicking the already-selected row.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_library_app();
+        for item in app.libs[0].nav_stack[0].items.iter_mut() {
+            item.is_folder = true;
+        }
+        app.libs[0].nav_stack[0].cursor = 0;
+        app.layout.main.left_area = Rect {
+            x: 10,
+            y: 5,
+            width: 20,
+            height: 5,
+        };
+
+        // Row 6 -> click_y 1 -> item index 1, not the previously-selected row.
+        app.handle_mouse(make_power_library_mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            12,
+            6,
+        ));
+
+        assert_eq!(
+            app.libs[0].nav_stack.len(),
+            2,
+            "clicking a different folder row should still drill in"
+        );
+        assert_eq!(app.libs[0].nav_stack[0].cursor, 1);
+    }
+
+    #[test]
+    fn mouse_click_on_a_new_series_row_only_moves_the_cursor() {
+        // Regression test: clicking a *different, not-yet-selected* TV
+        // Series row must not drill in either. Series rows are always
+        // `is_folder`, but Enter on one opens the inline series-selection
+        // detail (`enter_series_selection`), not a generic folder browse --
+        // a mouse click has no equivalent gesture for that, so it should
+        // only move the cursor/highlight onto the clicked row.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_library_app();
+        for item in app.libs[0].nav_stack[0].items.iter_mut() {
+            item.is_folder = true;
+            item.item_type = "Series".into();
+        }
+        app.libs[0].library.collection_type = "tvshows".into();
+        app.libs[0].nav_stack[0].cursor = 0;
+        app.layout.main.left_area = Rect {
+            x: 10,
+            y: 5,
+            width: 20,
+            height: 5,
+        };
+
+        // Row 6 -> click_y 1 -> item index 1, not the previously-selected row.
+        app.handle_mouse(make_power_library_mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            12,
+            6,
+        ));
+
+        assert_eq!(
+            app.libs[0].nav_stack.len(),
+            1,
+            "clicking a new Series row must not drill into a folder browse"
+        );
+        assert_eq!(app.libs[0].nav_stack[0].cursor, 1);
     }
 
     #[test]
