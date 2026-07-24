@@ -40,7 +40,7 @@ impl App {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             let avail = ratatui::layout::Size {
                 width: area.width,
-                height: max_h.saturating_sub(1),
+                height: max_h,
             };
             // `size_for` returns `None` while the resize+encode is still
             // in-flight on the worker thread (ThreadProtocol has taken its
@@ -63,8 +63,8 @@ impl App {
                     img_rect,
                     state,
                 );
-                self.last_card_height = actual.height + 1;
-                return (actual.height + 1, false);
+                self.last_card_height = actual.height;
+                return (actual.height, false);
             }
         }
         // No image loaded yet — if a fetch is in-flight and we have never
