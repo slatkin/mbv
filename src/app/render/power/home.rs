@@ -83,8 +83,13 @@ fn render_home_video_item(
     let title_y = row_y + if expanded { 2 } else { 0 };
 
     if expanded {
+        let bg = if focused {
+            palette::MEDIA_SELECTED_BG
+        } else {
+            palette::PLAYBACK_PANEL_BG
+        };
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::MEDIA_SELECTED_BG)),
+            Block::default().style(Style::default().bg(bg)),
             Rect {
                 x: content_area.x,
                 y: row_y + 1,

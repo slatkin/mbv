@@ -831,7 +831,7 @@ impl App {
             f.render_widget(
                 Paragraph::new(Span::styled(
                     "\u{2594}".repeat(area.width.saturating_add(2) as usize),
-                    Style::default().fg(palette::SOFT_WHITE),
+                    Style::default().fg(palette::SEEK_TRACK),
                 )),
                 Rect {
                     x: area.x.saturating_sub(1),

@@ -844,6 +844,11 @@ impl App {
 
         // Paint the colored background block before rendering row content
         if let Some((top_pad_abs, bottom_pad_abs)) = selected_block_bounds {
+            let bg = if focused {
+                palette::MEDIA_SELECTED_BG
+            } else {
+                palette::PLAYBACK_PANEL_BG
+            };
             super::render_selected_block_background(
                 f,
                 area,
@@ -851,7 +856,7 @@ impl App {
                 visible,
                 top_pad_abs,
                 bottom_pad_abs,
-                palette::MEDIA_SELECTED_BG,
+                bg,
             );
         }
 
