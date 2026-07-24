@@ -1663,7 +1663,8 @@ mod tests {
         assert_eq!(buf[(layout.queue_area.x, bottom_y)].symbol(), "\u{2581}");
         assert_eq!(
             buf[(layout.queue_area.x, layout.queue_area.y)].bg,
-            palette::MEDIA_SELECTED_BG
+            palette::POWER_RIGHT_BG,
+            "unfocused queue panel should use the dimmed background, not the focused MEDIA_SELECTED_BG"
         );
     }
 
@@ -3026,9 +3027,9 @@ mod tests {
 
     #[test]
     fn album_folder_inline_detail_keeps_title_gutter_when_library_pane_unfocused() {
-        // Selection now reads via the colored MEDIA_SELECTED_BG block + white
-        // title text, not the legacy `▌` marker -- confirm that styling survives
-        // losing pane focus.
+        // Selection now reads via a colored block + white title text, not the
+        // legacy `▌` marker -- confirm that block dims (rather than
+        // disappearing) and the title stays white when the pane loses focus.
         let mut app = make_power_music_group_app();
 
         let mut track = make_item("Opening Track", "Audio");
@@ -3053,8 +3054,8 @@ mod tests {
         let buf = term.backend().buffer();
         assert_eq!(
             buf[(title_x, title_y as u16)].bg,
-            palette::MEDIA_SELECTED_BG,
-            "selected album title row should keep the colored block background while unfocused:\n{out}"
+            palette::PLAYBACK_PANEL_BG,
+            "selected album title row should keep a colored block background (dimmed) while unfocused:\n{out}"
         );
         assert_eq!(
             buf[(title_x, title_y as u16)].fg,
@@ -3212,70 +3213,6 @@ mod tests {
     // *render* path (`render_power_library`) still picks the original
     // single-pane series/home-video renderer and never touches the new
     // album-tracks cache/track-focus machinery added in tasks 1-4.
-
-    fn make_power_series_app() -> App {
-        let mut app = make_app_stub();
-        app.power_left_tab = 1;
-
-        let mut library = make_item("Shows", "CollectionFolder");
-        library.id = "lib-shows".into();
-        library.is_folder = true;
-        library.collection_type = "tvshows".into();
-
-        let mut season = make_item("Season 1", "Season");
-        season.id = "season-1".into();
-
-        let mut ep1 = make_item("Pilot", "Episode");
-        ep1.id = "ep-1".into();
-        let mut ep2 = make_item("Second Episode", "Episode");
-        ep2.id = "ep-2".into();
-
-        app.libs.push(LibraryTab {
-            library,
-            nav_stack: vec![
-                BrowseLevel {
-                    parent_id: "lib-shows".into(),
-                    title: "Seasons".into(),
-                    items: vec![season],
-                    total_count: 1,
-                    cursor: 0,
-                    scroll: 0,
-                    item_types: None,
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    loading: false,
-                    all_items: None,
-                    letter_filter: None,
-                },
-                BrowseLevel {
-                    parent_id: "season-1".into(),
-                    title: "Episodes".into(),
-                    items: vec![ep1, ep2],
-                    total_count: 2,
-                    cursor: 0,
-                    scroll: 0,
-                    item_types: None,
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    loading: false,
-                    all_items: None,
-                    letter_filter: None,
-                },
-            ],
-            search: None,
-            feed_home_video: None,
-
-            album_track_focus: None,
-            artist_header_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
-
-        app
-    }
 
     fn make_power_home_video_app() -> App {
         let mut app = make_app_stub();

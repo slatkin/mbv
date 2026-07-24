@@ -537,13 +537,14 @@ mod tests {
         .unwrap();
 
         let buf = term.backend().buffer();
-        // Row 1 (y=1) is the second, non-active queue item; its title should
-        // start right after the "N. " index prefix, which is always dimmed.
+        // Row 1 (y=1) is the second, non-active queue item. Rows are indented
+        // two columns (x=0..1), then the "N. " index prefix starts at x=2 and
+        // is always dimmed. The title text starts right after that prefix.
         // Both the prefix and the title text should share the same dim color
         // (palette::MUTED while unfocused) instead of the brighter unfocused
         // row color.
-        let prefix_color = buf[(0, 1)].fg;
-        let title_color = buf[(3, 1)].fg;
+        let prefix_color = buf[(2, 1)].fg;
+        let title_color = buf[(5, 1)].fg;
         assert_eq!(prefix_color, palette::MUTED);
         assert_eq!(
             title_color,
@@ -552,8 +553,9 @@ mod tests {
         );
 
         // The now-playing row (y=0) keeps its distinct highlight color even
-        // while the queue panel is unfocused.
-        let now_playing_title_color = buf[(3, 0)].fg;
+        // while the queue panel is unfocused. Its title starts after the
+        // indent, the "N. " prefix, and the now-playing icon + space.
+        let now_playing_title_color = buf[(7, 0)].fg;
         assert_eq!(now_playing_title_color, palette::AQUA);
     }
 }
