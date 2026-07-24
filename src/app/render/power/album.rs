@@ -671,7 +671,9 @@ impl App {
         }
 
         let idle = self.list_image_fetches_allowed();
-        self.last_nav_at = std::time::Instant::now();
+        let now = std::time::Instant::now();
+        self.last_nav_at = now;
+        self.mark_power_library_navigation(now);
 
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
             return false;
@@ -1245,7 +1247,7 @@ impl App {
         }
 
         let box_rect = inline_art_box_rect(area);
-        let nav_gate_open = self.list_image_renders_allowed();
+        let nav_gate_open = self.power_right_panel_image_renders_allowed();
         let img_rect = self.render_inline_art_cell(
             f,
             box_rect,
@@ -1355,7 +1357,7 @@ impl App {
             ]
         };
 
-        let nav_gate_open = self.list_image_renders_allowed();
+        let nav_gate_open = self.power_right_panel_image_renders_allowed();
         for ((cell, anchor), album) in cells.iter().zip(albums.iter().take(4)) {
             self.render_inline_art_cell(
                 f,

@@ -4237,6 +4237,43 @@ mod power_movie_detail_tests {
     }
 
     #[test]
+    fn power_library_navigation_stays_debounced_after_focus_moves_to_queue() {
+        let mut app = make_power_movie_app();
+
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert!(!app.power_right_panel_image_renders_allowed());
+
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+        assert_eq!(app.power_focus, PowerFocus::Queue);
+        assert!(!app.power_right_panel_image_renders_allowed());
+    }
+
+    #[test]
+    fn power_queue_navigation_keeps_right_panel_gate_open_after_focus_moves_to_library() {
+        let mut app = make_power_movie_app();
+        app.power_focus = PowerFocus::Queue;
+        app.layout.power.queue_area = Rect::new(0, 0, 20, 4);
+        for i in 0..5 {
+            let mut item = make_item(&format!("Queued {i}"), "Movie");
+            item.id = format!("queued-{i}");
+            app.player_tab.items.push(item);
+        }
+        app.player_tab.queue_cursor = 0;
+        let power_library_nav_at = app.last_power_library_nav_at;
+        assert!(app.power_right_panel_image_renders_allowed());
+
+        app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
+        assert_eq!(app.player_tab.queue_cursor, 3);
+        assert_eq!(app.last_power_library_nav_at, power_library_nav_at);
+        assert!(app.power_right_panel_image_renders_allowed());
+
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+
+        assert_eq!(app.power_focus, PowerFocus::Left);
+        assert!(app.power_right_panel_image_renders_allowed());
+    }
+
+    #[test]
     fn power_view_movie_context_menu_offers_unaffected_non_folder_verbs() {
         let mut app = make_power_movie_app();
 
@@ -5165,10 +5202,12 @@ mod power_music_track_focus_tests {
             viewport_rows, 30,
             "fixture sanity: expected 30 rendered list rows"
         );
+        assert!(app.power_right_panel_image_renders_allowed());
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
         assert!(!handled);
+        assert!(!app.power_right_panel_image_renders_allowed());
         // Display rows: 0 = artist header; the selected album 0 is wrapped
         // in the colored-block frame (1 = top border, 2 = colored top
         // padding, 3 = album row, 4 = collapsed action-hint row -- tracks

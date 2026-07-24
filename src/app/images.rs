@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use ratatui::Frame;
 use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use textwrap::wrap;
 
 pub(super) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
@@ -288,8 +288,12 @@ impl App {
         self.last_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
     }
 
-    pub(super) fn list_image_renders_allowed(&self) -> bool {
-        self.list_image_fetches_allowed()
+    pub(super) fn power_right_panel_image_renders_allowed(&self) -> bool {
+        self.last_power_library_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
+    }
+
+    pub(super) fn mark_power_library_navigation(&mut self, at: Instant) {
+        self.last_power_library_nav_at = at;
     }
 
     pub(super) fn fetch_list_card_image_when_idle(
@@ -928,21 +932,5 @@ mod tests {
             app.card_image_loading.contains("idle-nav:P")
                 || app.card_image_states.contains_key("idle-nav:P")
         );
-    }
-
-    #[test]
-    fn recent_navigation_blocks_list_image_render() {
-        let mut app = make_app_stub();
-        app.last_nav_at = Instant::now();
-
-        assert!(!app.list_image_renders_allowed());
-    }
-
-    #[test]
-    fn idle_navigation_allows_list_image_render() {
-        let mut app = make_app_stub();
-        app.last_nav_at = Instant::now() - NAV_IMAGE_FETCH_IDLE_DELAY - Duration::from_millis(1);
-
-        assert!(app.list_image_renders_allowed());
     }
 }
