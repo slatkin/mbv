@@ -1776,9 +1776,10 @@ pub(super) fn selector_pill_style(selected: bool) -> Style {
 
 /// Draws the shared " {count} items" header (SUBTLE) on the first row of
 /// `area` and returns `area` shrunk by that one row, so callers can render
-/// their list into the remaining space. Used by every tab that shows an
-/// item count above its list (home-video, library list) to keep the label
-/// styling and the one-row consumption identical.
+/// their list into the remaining space. Used by the home-video tab to keep
+/// the label styling and the one-row consumption identical to other tabs
+/// that once shared it (movies/tv show library lists no longer show this
+/// row; see `render_power_list`).
 pub(super) fn render_power_count_label(f: &mut Frame, area: Rect, count: usize) -> Rect {
     if area.width == 0 || area.height == 0 {
         return area;
