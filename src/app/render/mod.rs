@@ -264,17 +264,19 @@ impl App {
 
         self.render_context_menu(f, &mut layout);
 
+        let power_panel_area =
+            (in_power && layout.power.panel_area.width > 0).then_some(layout.power.panel_area);
         if self.show_sessions {
-            self.render_sessions_overlay(f);
+            self.render_sessions_overlay(f, power_panel_area);
         }
         if self.show_playlists {
-            self.render_playlists_panel(f);
+            self.render_playlists_panel(f, power_panel_area);
         }
         if self.show_help {
-            self.render_help_panel(f);
+            self.render_help_panel(f, power_panel_area);
         }
         if self.show_settings {
-            self.render_settings_panel(f, &mut layout);
+            self.render_settings_panel(f, &mut layout, power_panel_area);
             if self.multiselect_popup.is_some() {
                 self.render_multiselect_popup(f);
             }
@@ -332,63 +334,162 @@ impl App {
             width: width.min(full.width),
             height: full.height.saturating_sub(2),
         };
+        Self::render_panel_shell_at(f, sidebar, title, hints, false)
+    }
+
+    pub(super) fn panel_content_area(sidebar: Rect) -> Rect {
+        Rect {
+            x: sidebar.x,
+            y: sidebar.y + 1,
+            width: sidebar.width.saturating_sub(1),
+            height: sidebar.height.saturating_sub(3),
+        }
+    }
+
+    pub(super) fn power_panel_content_area(sidebar: Rect) -> Rect {
+        Rect {
+            x: sidebar.x + 2,
+            y: sidebar.y + 3,
+            width: sidebar.width.saturating_sub(4),
+            height: sidebar.height.saturating_sub(5),
+        }
+    }
+
+    pub(super) fn settings_content_area(content: Rect) -> Rect {
+        Rect {
+            x: content.x.saturating_add(2),
+            y: content.y.saturating_add(1),
+            width: content.width.saturating_sub(4),
+            height: content.height.saturating_sub(2),
+        }
+    }
+
+    pub(super) fn render_panel_shell_at(
+        f: &mut Frame,
+        sidebar: Rect,
+        title: &str,
+        hints: &str,
+        power_style: bool,
+    ) -> Rect {
         f.render_widget(Clear, sidebar);
         // Too short to fit a title row, a content row, and the 2-row footer;
         // bail out rather than let `footer_y = sidebar.y + sidebar.height - 2`
         // underflow below.
         if sidebar.height < 4 || sidebar.width == 0 {
-            return sidebar;
+            return if power_style {
+                Self::power_panel_content_area(sidebar)
+            } else {
+                sidebar
+            };
         }
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::PANEL_BG)),
+            Block::default().style(Style::default().bg(if power_style {
+                palette::PLAYBACK_PANEL_BG
+            } else {
+                palette::PANEL_BG
+            })),
             sidebar,
         );
-        for row in sidebar.y..sidebar.y + sidebar.height {
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    "\u{2502}",
-                    Style::default().fg(palette::OVERLAY),
-                )),
-                Rect {
-                    x: sidebar.x + sidebar.width - 1,
-                    y: row,
-                    width: 1,
-                    height: 1,
-                },
-            );
+        if !power_style {
+            for row in sidebar.y..sidebar.y + sidebar.height {
+                f.render_widget(
+                    Paragraph::new(Span::styled(
+                        "\u{2502}",
+                        Style::default().fg(palette::OVERLAY),
+                    )),
+                    Rect {
+                        x: sidebar.x + sidebar.width - 1,
+                        y: row,
+                        width: 1,
+                        height: 1,
+                    },
+                );
+            }
         }
-        let inner_w = sidebar.width.saturating_sub(1);
-        let ix = sidebar.x;
-        f.render_widget(
-            Paragraph::new(Line::from(vec![Span::styled(
-                title.to_owned(),
-                Style::default()
-                    .fg(palette::TEXT)
-                    .add_modifier(Modifier::BOLD),
-            )]))
-            .style(Style::default().bg(palette::FOCUSED)),
+        let (inner_w, ix) = if power_style {
+            (sidebar.width.saturating_sub(4), sidebar.x + 2)
+        } else {
+            (sidebar.width.saturating_sub(1), sidebar.x)
+        };
+        let header_style = Style::default()
+            .fg(palette::TEXT)
+            .bg(if power_style {
+                palette::QUEUE_BUTTON_FOCUSED_BG
+            } else {
+                palette::FOCUSED
+            })
+            .add_modifier(Modifier::BOLD);
+        let header_area = if power_style {
+            Rect {
+                x: sidebar.x + 2,
+                y: sidebar.y + 1,
+                width: sidebar.width.saturating_sub(4),
+                height: 1,
+            }
+        } else {
             Rect {
                 x: sidebar.x,
                 y: sidebar.y,
                 width: sidebar.width.saturating_sub(1),
                 height: 1,
-            },
-        );
+            }
+        };
+        let title_text = if power_style {
+            format!(" {}", title)
+        } else {
+            title.to_owned()
+        };
         f.render_widget(
-            Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
-            Rect {
-                x: sidebar.x + sidebar.width - 1,
-                y: sidebar.y,
-                width: 1,
-                height: 1,
-            },
+            Paragraph::new(Line::from(vec![Span::styled(title_text, header_style)])).style(
+                if power_style {
+                    Style::default().bg(palette::QUEUE_BUTTON_FOCUSED_BG)
+                } else {
+                    Style::default().bg(palette::FOCUSED)
+                },
+            ),
+            header_area,
         );
-        let footer_y = sidebar.y + sidebar.height - 2;
+        if !power_style {
+            f.render_widget(
+                Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
+                Rect {
+                    x: sidebar.x + sidebar.width - 1,
+                    y: sidebar.y,
+                    width: 1,
+                    height: 1,
+                },
+            );
+        }
+        let footer_y = if power_style {
+            sidebar.y + sidebar.height - 2
+        } else {
+            sidebar.y + sidebar.height - 2
+        };
+        if !power_style {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    "\u{2500}".repeat(inner_w as usize),
+                    Style::default().fg(palette::OVERLAY),
+                )),
+                Rect {
+                    x: ix,
+                    y: footer_y,
+                    width: inner_w,
+                    height: 1,
+                },
+            );
+        }
+        let footer_bg = if power_style {
+            palette::DARK_BG
+        } else {
+            palette::FOCUSED
+        };
         f.render_widget(
-            Paragraph::new(Span::styled(
-                "\u{2500}".repeat(inner_w as usize),
-                Style::default().fg(palette::OVERLAY),
-            )),
+            Paragraph::new(Line::from(vec![Span::styled(
+                trunc_str(hints, inner_w as usize),
+                Style::default().fg(palette::TEXT),
+            )]))
+            .style(Style::default().bg(footer_bg)),
             Rect {
                 x: ix,
                 y: footer_y,
@@ -396,33 +497,33 @@ impl App {
                 height: 1,
             },
         );
-        f.render_widget(
-            Paragraph::new(Line::from(vec![Span::styled(
-                trunc_str(hints, inner_w as usize),
-                Style::default().fg(palette::TEXT),
-            )]))
-            .style(Style::default().bg(palette::FOCUSED)),
-            Rect {
-                x: ix,
-                y: footer_y + 1,
-                width: inner_w,
-                height: 1,
-            },
-        );
-        f.render_widget(
-            Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
-            Rect {
-                x: sidebar.x + sidebar.width - 1,
-                y: footer_y + 1,
-                width: 1,
-                height: 1,
-            },
-        );
-        Rect {
-            x: ix,
-            y: sidebar.y + 1,
-            width: inner_w,
-            height: sidebar.height.saturating_sub(3),
+        if power_style {
+            f.render_widget(
+                Paragraph::new(Span::raw(""))
+                    .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                Rect {
+                    x: sidebar.x,
+                    y: sidebar.y + sidebar.height - 1,
+                    width: sidebar.width,
+                    height: 1,
+                },
+            );
+        }
+        if !power_style {
+            f.render_widget(
+                Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
+                Rect {
+                    x: sidebar.x + sidebar.width - 1,
+                    y: footer_y,
+                    width: 1,
+                    height: 1,
+                },
+            );
+        }
+        if power_style {
+            Self::power_panel_content_area(sidebar)
+        } else {
+            Self::panel_content_area(sidebar)
         }
     }
 

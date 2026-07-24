@@ -2792,8 +2792,20 @@ impl App {
         } else {
             return false;
         };
-        let pw = panel_w.min(self.terminal_width);
-        let inside_panel = col < pw;
+        let power_panel =
+            self.view_mode == ViewMode::Power && self.layout.power.panel_area.width > 0;
+        let panel_area = if power_panel {
+            self.layout.power.panel_area
+        } else {
+            Rect {
+                x: 0,
+                y: 0,
+                width: panel_w.min(self.terminal_width),
+                height: self.terminal_height,
+            }
+        };
+        let content_area = self.layout.power.panel_content_area;
+        let inside_panel = panel_area.contains((col, row).into());
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) && !inside_panel {
             if self.show_settings {
                 self.close_settings();
@@ -2817,8 +2829,11 @@ impl App {
             return true;
         }
         if self.show_settings && self.multiselect_popup.is_none() {
-            let content_top: u16 = 1;
-            let content_bottom = self.terminal_height.saturating_sub(2);
+            let settings_content_area = self.layout.settings_content_area;
+            let content_top = settings_content_area.y;
+            let content_bottom = settings_content_area
+                .y
+                .saturating_add(settings_content_area.height);
             match mouse.kind {
                 MouseEventKind::ScrollDown => {
                     self.settings_scroll += 3;
@@ -2847,7 +2862,7 @@ impl App {
         }
         if self.show_sessions {
             const ENTRY_H: u16 = 4;
-            let content_top: u16 = 1;
+            let content_top = if power_panel { content_area.y } else { 1 };
             match mouse.kind {
                 MouseEventKind::ScrollDown => {
                     if !self.sessions.is_empty() {
@@ -2876,7 +2891,7 @@ impl App {
             return true;
         }
         if self.show_playlists {
-            let content_top: u16 = 1;
+            let content_top = if power_panel { content_area.y } else { 1 };
             if self.playlists_open.is_some() {
                 match mouse.kind {
                     MouseEventKind::ScrollDown => {
@@ -2893,8 +2908,12 @@ impl App {
                         let mut y = 0usize;
                         let mut idx = self.playlists_open_scroll;
                         for i in self.playlists_open_items[self.playlists_open_scroll..].iter() {
-                            let pw2 = PLAYLISTS_PANEL_W.min(self.terminal_width) as usize;
-                            let h = if i.display_name().len() <= pw2.saturating_sub(6) {
+                            let text_width = if power_panel {
+                                content_area.width as usize
+                            } else {
+                                PLAYLISTS_PANEL_W.min(self.terminal_width) as usize
+                            };
+                            let h = if i.display_name().len() <= text_width.saturating_sub(6) {
                                 1
                             } else {
                                 2
@@ -3616,6 +3635,47 @@ mod playback_header_mouse_tests {
         // Idle (`active == false`) clamps at 200, matching `adjust_volume`'s
         // existing idle-vs-active clamp split -- unrelated to this issue.
         assert_eq!(app.ui_volume, (before as i64 + 5).clamp(0, 200) as u8);
+    }
+
+    #[test]
+    fn power_panel_bounds_consume_clicks_over_the_physical_sidebar() {
+        let mut app = make_app_stub();
+        app.view_mode = ViewMode::Power;
+        app.show_help = true;
+        app.layout.power.panel_area = Rect::new(0, 0, 31, 24);
+        app.layout.power.panel_content_area = Rect::new(2, 3, 27, 19);
+
+        app.handle_mouse(left_down(30, 23));
+        assert!(
+            app.show_help,
+            "clicks inside the resized sidebar must be consumed"
+        );
+
+        app.handle_mouse(left_down(31, 23));
+        assert!(
+            !app.show_help,
+            "clicks beyond the sidebar must dismiss the panel"
+        );
+    }
+
+    #[test]
+    fn settings_mouse_rows_follow_inset_content_area() {
+        let mut app = make_app_stub();
+        app.show_settings = true;
+        app.terminal_width = 20;
+        app.terminal_height = 10;
+        app.layout.settings_content_area = Rect::new(2, 4, 15, 3);
+        app.layout.settings_line_of_cursor = vec![0, 1];
+        app.settings_cursor = 1;
+
+        app.handle_mouse(left_down(2, 3));
+        assert_eq!(app.settings_cursor, 1, "header inset row is not clickable");
+
+        app.handle_mouse(left_down(2, 4));
+        assert_eq!(
+            app.settings_cursor, 0,
+            "first inset content row is clickable"
+        );
     }
 }
 

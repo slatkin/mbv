@@ -9,7 +9,11 @@ use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
 impl App {
-    pub(in crate::app::render) fn render_playlists_panel(&mut self, f: &mut Frame) {
+    pub(in crate::app::render) fn render_playlists_panel(
+        &mut self,
+        f: &mut Frame,
+        power_area: Option<Rect>,
+    ) {
         let (title, hint) = if self.playlists_open.is_some() {
             let name = self
                 .playlists_open
@@ -27,7 +31,10 @@ impl App {
             )
         };
 
-        let content = Self::render_panel_shell(f, f.area(), PLAYLISTS_PANEL_W, &title, &hint);
+        let content = match power_area {
+            Some(area) => Self::render_panel_shell_at(f, area, &title, &hint, true),
+            None => Self::render_panel_shell(f, f.area(), PLAYLISTS_PANEL_W, &title, &hint),
+        };
         let ix = content.x;
         let iw = content.width as usize;
         let list_h = content.height as usize;

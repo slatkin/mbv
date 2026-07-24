@@ -155,20 +155,33 @@ impl App {
         &mut self,
         f: &mut Frame,
         layout: &mut AppLayout,
+        power_area: Option<ratatui::layout::Rect>,
     ) {
-        let content = Self::render_panel_shell(
-            f,
-            f.area(),
-            SETTINGS_PANEL_W,
-            "SETTINGS",
-            "[Space]toggle [Esc]close",
-        );
+        let power_panel = power_area.is_some();
+        let content = match power_area {
+            Some(area) => {
+                Self::render_panel_shell_at(f, area, "SETTINGS", "[Space]toggle [Esc]close", true)
+            }
+            None => Self::render_panel_shell(
+                f,
+                f.area(),
+                SETTINGS_PANEL_W,
+                "SETTINGS",
+                "[Space]toggle [Esc]close",
+            ),
+        };
+        let content = if power_panel {
+            content
+        } else {
+            Self::settings_content_area(content)
+        };
+        layout.settings_content_area = content;
+
         let cfg = self.client.lock().unwrap().config.clone();
         let ui = self.ui_config_snapshot();
 
         let cursor = self.settings_cursor;
         let confirm_logout = self.confirm_logout;
-        let label_w = 28usize;
 
         let data_sections = &SETTING_SECTIONS[..SETTING_SECTIONS.len() - 1];
 
@@ -183,7 +196,7 @@ impl App {
                 Span::styled(
                     (*sec_name).to_owned(),
                     Style::default()
-                        .fg(palette::IRIS)
+                        .fg(palette::FOAM)
                         .add_modifier(Modifier::BOLD),
                 ),
             ]));
@@ -193,19 +206,20 @@ impl App {
                     cursor_line = lines.len();
                 }
                 let focused = item_idx == cursor;
-                let indicator = if focused { "▌" } else { " " };
                 let label = setting_label(key);
                 let val = setting_value(key, &cfg, &ui);
                 let label_style = if focused {
                     Style::default().fg(palette::TEXT)
                 } else {
-                    Style::default().fg(palette::MUTED)
+                    Style::default().fg(palette::PLAYBACK_META_FG)
                 };
+                let val_w = (content.width as usize).saturating_sub(label.len());
                 lines.push(Line::from(vec![
-                    Span::styled(indicator, Style::default().fg(palette::AQUA)),
-                    Span::raw(" "),
-                    Span::styled(format!("{:<lw$}", label, lw = label_w), label_style),
-                    Span::styled(val, Style::default().fg(palette::GREEN)),
+                    Span::styled(label, label_style),
+                    Span::styled(
+                        format!("{:>w$}", val, w = val_w),
+                        Style::default().fg(palette::AQUA),
+                    ),
                 ]));
                 item_idx += 1;
             }
@@ -218,7 +232,6 @@ impl App {
             cursor_line = lines.len();
         }
         let focused = cursor == logout_cursor_idx;
-        let indicator_color = if focused { palette::RED } else { palette::AQUA };
         let (logout_text, logout_style) = if confirm_logout && focused {
             (
                 "Log out? Press y to confirm",
@@ -227,16 +240,9 @@ impl App {
         } else if focused {
             ("Log out", Style::default().fg(palette::RED))
         } else {
-            ("Log out", Style::default().fg(palette::MUTED))
+            ("Log out", Style::default().fg(palette::PLAYBACK_META_FG))
         };
-        lines.push(Line::from(vec![
-            Span::styled(
-                if focused { "▌" } else { " " },
-                Style::default().fg(indicator_color),
-            ),
-            Span::raw(" "),
-            Span::styled(logout_text, logout_style),
-        ]));
+        lines.push(Line::from(Span::styled(logout_text, logout_style)));
 
         let visible = content.height as usize;
         if cursor_line < self.settings_scroll {

@@ -77,6 +77,10 @@ pub(crate) struct LayoutPowerHome {
 /// Power-view left panel, queue panel, and home-grid geometry.
 #[derive(Default)]
 pub(crate) struct LayoutPower {
+    /// Full expanded Power sidebar covered by an F1-F4 panel, when present.
+    pub panel_area: Rect,
+    /// Content bounds inside `panel_area`, shared with panel mouse hit-testing.
+    pub panel_content_area: Rect,
     pub left_row_map: Vec<Option<usize>>,
     pub left_row_targets: Vec<Option<PowerLeftRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
@@ -123,6 +127,8 @@ pub(crate) struct AppLayout {
     pub tabs_area: Rect,
     pub tabbar_vol_area: Rect,
     pub settings_area: Rect,
+    /// Inset content bounds used by the Settings renderer and mouse hit-testing.
+    pub settings_content_area: Rect,
     /// Mouse-row -> settings-line mapping, set each time the settings panel renders.
     pub settings_line_of_cursor: Vec<usize>,
     /// Bounding rect of the open context menu, if any, for click-outside dismissal.

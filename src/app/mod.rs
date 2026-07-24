@@ -1446,7 +1446,7 @@ enum SettingKey {
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     (
-        "[playback]",
+        "Playback",
         &[
             SettingKey::SubtitleMode,
             SettingKey::SubtitleLanguage,
@@ -1455,7 +1455,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
         ],
     ),
     (
-        "[display]",
+        "Display",
         &[
             SettingKey::ImageProtocol,
             SettingKey::SystemNotifications,
@@ -1463,7 +1463,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
         ],
     ),
     (
-        "[session]",
+        "Session",
         &[
             SettingKey::StayAlive,
             SettingKey::AutoReconnect,
@@ -1473,7 +1473,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
         ],
     ),
     (
-        "[library]",
+        "Library",
         &[
             SettingKey::HiddenLibraries,
             SettingKey::HiddenLatest,
@@ -1482,7 +1482,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
         ],
     ),
     (
-        "[queue]",
+        "Queue",
         &[
             SettingKey::StartOnQueue,
             SettingKey::AlwaysPlayNext,
@@ -1493,7 +1493,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
         ],
     ),
     (
-        "[mpv]",
+        "Mpv",
         &[
             SettingKey::ShowAudioWindow,
             SettingKey::UseMpvConfig,
@@ -1501,7 +1501,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::Autoload,
         ],
     ),
-    ("[actions]", &[SettingKey::LogOut]),
+    ("Actions", &[SettingKey::LogOut]),
 ];
 
 const SESSIONS_PANEL_W: u16 = 40;

@@ -8,14 +8,27 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 impl App {
-    pub(in crate::app::render) fn render_help_panel(&mut self, f: &mut Frame) {
-        let content = Self::render_panel_shell(
-            f,
-            f.area(),
-            HELP_PANEL_W,
-            "KEYBOARD SHORTCUTS",
-            "[↑↓]scroll [Esc]close",
-        );
+    pub(in crate::app::render) fn render_help_panel(
+        &mut self,
+        f: &mut Frame,
+        power_area: Option<ratatui::layout::Rect>,
+    ) {
+        let content = match power_area {
+            Some(area) => Self::render_panel_shell_at(
+                f,
+                area,
+                "KEYBOARD SHORTCUTS",
+                "[↑↓]scroll [Esc]close",
+                true,
+            ),
+            None => Self::render_panel_shell(
+                f,
+                f.area(),
+                HELP_PANEL_W,
+                "KEYBOARD SHORTCUTS",
+                "[↑↓]scroll [Esc]close",
+            ),
+        };
         let key_w = 16usize;
 
         let mk = |key: &str, desc: &str| -> Line<'static> {
@@ -36,7 +49,7 @@ impl App {
                 Span::styled(
                     label.to_owned(),
                     Style::default()
-                        .fg(palette::IRIS)
+                        .fg(palette::FOAM)
                         .add_modifier(Modifier::BOLD),
                 ),
             ])
@@ -44,7 +57,7 @@ impl App {
         let blank = || Line::from("");
 
         let sec_global = vec![
-            section("[global]"),
+            section("Global"),
             mk("F1", "Help"),
             mk("F2", "Settings"),
             mk("F3", "Remote sessions"),
@@ -63,11 +76,11 @@ impl App {
         ];
         // Rendered from `PLAYBACK_HELP_BINDINGS` (issue #133, phase 4) so this
         // section can no longer silently drift from `playback_command_for_key`.
-        let mut sec_playback = vec![section("[playback]")];
+        let mut sec_playback = vec![section("Playback")];
         sec_playback.extend(PLAYBACK_HELP_BINDINGS.iter().map(|b| mk(b.keys, b.label)));
         sec_playback.push(blank());
         let sec_queue = vec![
-            section("[queue]"),
+            section("Queue"),
             mk("p", "Jump to playing item"),
             mk("i", "Go to item in library"),
             mk("Del", "Remove from Queue"),
@@ -80,14 +93,14 @@ impl App {
             blank(),
         ];
         let sec_home = vec![
-            section("[home]"),
+            section("Home"),
             mk("Alt+↑ / ↓", "Switch sections"),
             mk("Ctrl+W", "Toggle watched"),
             mk("Ctrl+A", "Add to Queue"),
             blank(),
         ];
         let sec_library = vec![
-            section("[library]"),
+            section("Library"),
             mk("Esc / Backspace", "Go back"),
             mk("/", "Search library"),
             mk("Ctrl+W", "Toggle watched"),
