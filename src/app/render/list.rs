@@ -464,7 +464,7 @@ impl App {
                     && self.libs[lib_idx].search.is_none()
             };
 
-        // First row area: search input box (when searching) or item count label.
+        // First row area: search input box (when searching).
         if focused && self.library_tab > 0 && content_area.height > 0 {
             let lib_idx = self.library_tab - 1;
             let has_search = self.libs[lib_idx].search.is_some();
@@ -502,8 +502,6 @@ impl App {
                     ),
                     search_area,
                 );
-            } else if !has_search {
-                content_area = super::render_power_count_label(f, content_area, total_count);
             }
         }
 
