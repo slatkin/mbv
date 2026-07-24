@@ -1537,7 +1537,7 @@ impl App {
         }
     }
 
-    fn activate_library_position_scope(&mut self, lib_idx: usize) {
+    fn activate_library_position(&mut self, lib_idx: usize) {
         if lib_idx >= self.libs.len() {
             return;
         }
@@ -4772,7 +4772,7 @@ pub(crate) mod tests {
             },
         );
 
-        app.activate_library_position_scope(0);
+        app.activate_library_position(0);
 
         let feed = app.libs[0]
             .feed_home_video

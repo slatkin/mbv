@@ -187,7 +187,7 @@ fn config_dir() -> PathBuf {
     // had no test isolation at all -- unlike `state_dir()`, *every* call in
     // a test build hit the real `$XDG_CONFIG_HOME`/`~/.config/mbv` on disk.
     // Any App-level test that reached a synchronous config-saving path
-    // (e.g. `set_view_mode`, `cycle_subtitle_mode`, closing a multiselect
+    // (e.g. `cycle_subtitle_mode`, `handle_library_routes_enter`, closing a multiselect
     // settings popup) would silently clobber the developer's real
     // config.toml. `TestStateDirGuard` already attaches to every `App`
     // built in test mode, so piggybacking the override there closes this
@@ -245,7 +245,7 @@ thread_local! {
 
 // `config_dir()` (config.toml, via `save_config_settings`) gets the exact
 // same treatment as `state_dir()` above, for the exact same reason: some
-// App-level settings toggles (`set_view_mode`, `cycle_subtitle_mode`,
+// App-level settings toggles (`cycle_subtitle_mode`, `handle_library_routes_enter`,
 // closing a multiselect settings popup) write to disk synchronously rather
 // than through the debounced `settings_save_at` path, so any unguarded test
 // that reaches one of them writes straight into the developer's real

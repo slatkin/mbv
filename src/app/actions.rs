@@ -5077,7 +5077,7 @@ impl App {
         self.last_card_height = 0; // reset stale image height for new view
         if idx > 0 {
             self.set_panel_focus(PanelFocus::Library);
-            self.activate_library_position_scope(idx - 1);
+            self.activate_library_position(idx - 1);
         }
         self.ensure_tab_visible();
         self.save_prefs();
@@ -5090,7 +5090,7 @@ impl App {
         self.last_card_height = 0; // reset stale image height for new view
         if self.library_tab > 0 {
             self.set_panel_focus(PanelFocus::Library);
-            self.activate_library_position_scope(self.library_tab - 1);
+            self.activate_library_position(self.library_tab - 1);
         }
         self.ensure_tab_visible();
         self.save_prefs();
@@ -5103,7 +5103,7 @@ impl App {
         self.last_card_height = 0;
         if self.library_tab > 0 {
             self.set_panel_focus(PanelFocus::Library);
-            self.activate_library_position_scope(self.library_tab - 1);
+            self.activate_library_position(self.library_tab - 1);
         }
         self.ensure_tab_visible();
         self.save_prefs();

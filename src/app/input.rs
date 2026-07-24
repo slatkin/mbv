@@ -1358,11 +1358,11 @@ impl App {
                 // single source of truth for "did the library view claim
                 // this key" — no more hand-maintained mirror of its key set.
                 //
-                // The `tab_idx` swap stays: many action methods
+                // The `library_tab` derivation stays: many action methods
                 // `handle_lib_key` calls into (`current_lib_item`, `select`,
                 // `move_lib_cursor`, `refresh_lib`, `shuffle_play`,
                 // `play_folder`, `go_back`, ...) derive their own lib index
-                // from `self.tab_idx` rather than taking it as a parameter.
+                // from `self.library_tab` rather than taking it as a parameter.
                 // Impact analysis on `current_lib_item` alone showed 6
                 // affected symbols across `execute_context_action`,
                 // `enqueue_selected`, `select`, and `toggle_watched`
