@@ -2,6 +2,8 @@ mod action;
 mod actions;
 pub(crate) mod images;
 mod input;
+mod input_context_menu;
+mod input_mouse;
 mod input_resolver;
 pub(crate) mod layout;
 mod library_route;
