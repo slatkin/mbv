@@ -1458,9 +1458,7 @@ mod tests {
              stranded above the viewport:\n{out}"
         );
 
-        let header_pos = out
-            .find("A\u{2013}C")
-            .expect("letter header should render");
+        let header_pos = out.find("A\u{2013}C").expect("letter header should render");
         let banner_pos = out
             .find("compact movie banner")
             .expect("banner overview text should render");
