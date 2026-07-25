@@ -1,6 +1,7 @@
 mod action;
 mod actions;
 mod app_state_misc;
+mod app_struct;
 mod bootstrap;
 mod construct;
 mod context_menu_actions;
@@ -37,8 +38,10 @@ mod types_player_tab;
 mod types_settings;
 pub(crate) mod ui_util;
 
+pub use self::app_struct::App;
+use self::app_struct::AppInit;
 use self::bootstrap::bootstrap_local_daemon_queue;
-use self::resize::{spawn_resize_worker, ResizeRegisterTx, ResizeResponseRx};
+use self::resize::spawn_resize_worker;
 use self::search::SearchSubsystem;
 use self::types_browse::{
     restore_library_position, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel,
@@ -53,14 +56,17 @@ use self::types_feed::{
     FeedHomeVideoGroup, FeedHomeVideoState, SavePlaylistDialog, SavePlaylistStage,
 };
 use self::types_library_tab::LibraryTab;
+#[cfg(test)]
+use self::types_playback::HomePane;
 use self::types_playback::{
-    ArtistHeaderSelection, HomePane, LocalPlaybackTarget, PendingQueueAction, PlaybackState,
-    PlaybackTarget, QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteSlotState,
-    SuspendedLocalSession, UndoEntry,
+    ArtistHeaderSelection, LocalPlaybackTarget, PendingQueueAction, PlaybackState, PlaybackTarget,
+    QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteSlotState, SuspendedLocalSession,
+    UndoEntry,
 };
 use self::types_player_tab::PlayerTab;
 use self::types_settings::{PanelFocus, SettingKey, SETTING_SECTIONS};
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(test)]
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -187,285 +193,16 @@ fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>, quit_t
 use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-use mbv_core::api::{EmbyClient, MediaItem};
-use mbv_core::playback_queue::QueueSlotId;
+#[cfg(test)]
+use mbv_core::api::MediaItem;
 #[cfg(test)]
 use mbv_core::playback_queue::RemoveSlotResult;
-use mbv_core::player::{PlayerCommand, PlayerEvent, PlayerProxy};
-use mbv_core::ws::WsEvent;
-use ratatui_image::picker::Picker;
+use mbv_core::player::PlayerCommand;
+#[cfg(test)]
+use mbv_core::player::PlayerEvent;
 
 const PAGE_SIZE: usize = 100;
 const PREFETCH_AHEAD: usize = 25;
-
-pub struct App {
-    client: Arc<Mutex<EmbyClient>>,
-    player: PlayerProxy,
-    /// Handle to the live MPRIS D-Bus registration, if one was started for
-    /// this session (`App::new` / `App::new_remote` both start one; test
-    /// construction via `build()` does not). `None` in tests so they never
-    /// spin up a real D-Bus connection.
-    ///
-    /// `switch_to_direct_remote` and `restore_local_mode` call
-    /// `mpris::rebind` on this whenever they swap `player` between a local
-    /// `Player` and a `RemotePlayer` (#175): MPRIS must always publish
-    /// whichever one currently owns playback, not whatever was live when
-    /// the D-Bus service was first registered.
-    mpris: Option<crate::mpris::MprisHandle>,
-    player_rx: mpsc::Receiver<PlayerEvent>,
-    ws_rx: mpsc::Receiver<WsEvent>,
-    home: HomePane,
-    libs: Vec<LibraryTab>,
-    player_tab: PlayerTab,
-    remote_player_tab: Option<PlayerTab>,
-    status: String,
-    status_expires: Option<Instant>,
-    /// `true` only for instances built via `App::new_remote` (the
-    /// `--connect-daemon` / local-daemon-auto-detect thin-client launch
-    /// path). Those instances never populate `active_route` or
-    /// `connected_session_state` (those are set by runtime library-route
-    /// switches / session attaches that only apply to `App::new` instances),
-    /// so `teardown`'s auto-reconnect persistence (#236) must skip this flag
-    /// entirely rather than compute (and save) a bogus `None` record that
-    /// would wipe out a real record saved by a different `App::new` session.
-    launched_as_remote: bool,
-    hidden_libraries: Vec<String>,
-    hidden_latest: Vec<String>,
-    /// `Config.library_routes` at startup (#256). Values are resolved
-    /// `tcp://host:port` endpoints, read directly with no live-session
-    /// lookup -- see `mbv_core::config::resolve_library_route`.
-    library_routes: std::collections::HashMap<String, String>,
-    music_levels: Vec<String>,
-    album_indexes: std::collections::HashMap<String, AlbumIndexState>,
-    // Per-frame layout geometry from last render, used for mouse hit-testing.
-    // See src/app/layout.rs for the grouping rationale.
-    layout: layout::AppLayout,
-    terminal_width: u16,
-    terminal_height: u16,
-
-    /// True from startup until the first `fetch_home` completes. While true,
-    /// the home view doesn't yet know how many remote sections exist, so the
-    /// renderer fills the reserved area with skeleton placeholders instead of
-    /// collapsing to just the sections that happen to be populated so far.
-    home_loading: bool,
-    mouse_col: u16,
-    mouse_row: u16,
-    last_click_time: Instant,
-    last_click_pos: (u16, u16),
-    last_drag_seek: Instant,
-    last_space_press: Option<Instant>,
-    last_esc_press: Option<Instant>,
-    confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
-    pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
-    pending_queue_removal: Option<(QueueSlotId, bool)>, // deferred removal (slot, is_audio) after TrackChanged index-shifts
-    confirm_clear_queue: bool,
-    queue_undo_stack: Vec<UndoEntry>,
-    remote_queue_undo_stack: Vec<UndoEntry>,
-    pending_remote_move_cursor: Option<usize>,
-    skip_intro_end_ticks: Option<i64>,
-    next_up_item: Option<MediaItem>,
-    // Power-view UI scalars. NOTE: this is NOT the whole of Power's state -- Power also
-    // reuses shared self.libs.
-    panel_focus: PanelFocus,
-    library_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
-    queue_column_width: u16,
-    queue_column_collapsed: bool,
-    library_tab_pending: usize, // restored from prefs; applied once libs have loaded
-    queue_scroll: usize,
-    last_played_item_id: Option<String>,
-    last_played_completed: bool,
-    card_image_states:
-        std::collections::HashMap<String, Option<ratatui_image::thread::ThreadProtocol>>,
-    image_lru: std::collections::VecDeque<String>,
-    image_cache_size: usize,
-    card_image_loading: std::collections::HashSet<String>,
-    last_card_height: u16,
-    pending_image_fetches: std::collections::VecDeque<images::ImageFetchReq>,
-    image_fetches_active: usize,
-    card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
-    card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
-    /// Registers a freshly created per-cache-key `ResizeRequest` receiver
-    /// with the resize worker thread (see `spawn_resize_worker`), so the
-    /// worker can service many concurrently-alive `ThreadProtocol`s off the
-    /// render thread while still routing each `ResizeResponse` back to the
-    /// right `card_image_states` entry (#164). `ResizeRequest`/`ResizeResponse`
-    /// carry no key of their own — that's why each cache key gets its own
-    /// dedicated channel instead of sharing one globally.
-    resize_register_tx: ResizeRegisterTx,
-    /// Completed off-thread resize+encode results, tagged with the
-    /// `card_image_states` cache key they belong to. Drained once per
-    /// event-loop tick alongside `card_image_rx` (#164).
-    resize_response_rx: ResizeResponseRx,
-    image_picker: Option<Picker>,
-    context_menu: Option<ContextMenu>,
-    show_help: bool,
-    show_settings: bool,
-    settings_cursor: usize,
-    settings_scroll: usize,
-    settings_save_at: Option<Instant>,
-    confirm_logout: bool,
-    multiselect_popup: Option<MultiSelectPopup>,
-    library_routes_popup: Option<LibraryRoutePopup>,
-    help_scroll: u16,
-    system_notifications: bool,
-    notif_failed: bool,
-    notif_action_tx: mpsc::Sender<String>,
-    notif_action_rx: mpsc::Receiver<String>,
-    lib_tx: mpsc::Sender<LibEvent>,
-    lib_rx: mpsc::Receiver<LibEvent>,
-    search: SearchSubsystem,
-    sessions: Vec<mbv_core::api::SessionInfo>,
-    sessions_cursor: usize,
-    sessions_scroll: usize,
-    sessions_loading: bool,
-    show_sessions: bool,
-    playlists: Vec<MediaItem>,
-    playlists_cursor: usize,
-    playlists_scroll: usize,
-    playlists_loading: bool,
-    show_playlists: bool,
-    playlists_open: Option<MediaItem>, // playlist currently being browsed
-    playlists_open_items: Vec<MediaItem>,
-    playlists_open_cursor: usize,
-    playlists_open_scroll: usize,
-    playlists_open_loading: bool,
-    queue_source: crate::config::QueueSource,
-    queue_dirty: bool,
-    pending_queue_action: Option<PendingQueueAction>,
-    show_save_playlist_modal: bool,
-    use_nerd_fonts: bool,
-    indicator_style: render::indicators::IndicatorStyle,
-    ws_send_tx: Option<mbv_core::ws::WsSender>,
-    last_keepalive: Instant,
-    last_capabilities: Instant,
-    sessions_tx: mpsc::Sender<SessionEvent>,
-    sessions_rx: mpsc::Receiver<SessionEvent>,
-    connected_session_id: Option<String>,
-    connected_session_state: Option<mbv_core::api::SessionInfo>,
-    direct_remote_connected: bool,
-    direct_remote_label: Option<String>,
-    last_session_poll: Instant,
-    session_miss_count: u8, // consecutive polls that didn't find the connected session
-    remote_pos_s: i64,      // monotonic position estimate for the connected remote
-    remote_pos_at: Instant, // when remote_pos_s was last anchored
-    remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
-    remote_seek_pending_until: Instant, // suppress poll pos-reconcile after a seek
-    runtime_zero_since: Option<Instant>, // when runtime_s first became 0 for the current item (fast-poll cap)
-    suspended_local: Option<SuspendedLocalSession>,
-    /// The library route currently driving playback, if any (#223):
-    /// `Some(name)` holds the lowercased library name whose configured
-    /// daemon is the active player target. `None` means local playback,
-    /// or a Sessions-panel direct remote (`connected_session_id` /
-    /// `direct_remote_label`) -- a separate concept, never conflated with
-    /// this one. Fixed for the life of the current queue: a *new* queue
-    /// re-evaluates it (see `apply_route_for_playback`), but enqueuing
-    /// into the existing queue must match it or be rejected (see
-    /// `enqueue_route_conflict`).
-    active_route: Option<String>,
-    /// Per-item cache of ancestor-lookup library-route resolution for
-    /// cross-library aggregate views (Continue Watching/Next Up,
-    /// Favorites), keyed by item id. `Some(name)` = resolved to that
-    /// library (lowercased); `None` = resolved, no owning library route.
-    /// Avoids a repeat `get_ancestors` round-trip for the same item
-    /// within a session (#223). Each entry also carries the `Instant` it
-    /// was cached at, so a mid-session library reorganization on the
-    /// Emby server self-heals after `LIBRARY_ROUTE_CACHE_TTL` instead of
-    /// requiring an app restart (#223, post-grilling revision item 5).
-    library_route_cache: std::collections::HashMap<String, (Option<String>, Instant)>,
-    force_clear: bool,
-    tab_scroll: usize,
-    ui_volume: u8,
-    pre_mute_volume: Option<u8>,
-    mute_on: bool,
-    last_scroll_at: Instant,
-    last_nav_at: Instant,
-    last_power_library_nav_at: Instant,
-    /// Set when the terminal reports FocusGained; used to swallow the
-    /// single click that merely refocused the window. `None` until the
-    /// first focus event is ever seen (terminals that never report focus
-    /// never suppress).
-    refocus_at: Option<Instant>,
-    album_artist_cache: std::collections::HashMap<String, String>,
-    album_artist_loading: std::collections::HashSet<String>,
-    pending_album_artist_fetches: std::collections::VecDeque<String>,
-    album_artist_fetches_active: usize,
-    /// Track lists for the album currently highlighted in Power View's
-    /// album-folder listing, fetched proactively so the inline album detail
-    /// pane (#145) has data without requiring the user to drill in first.
-    /// Keyed by album id, mirroring `album_artist_cache`'s never-evicted
-    /// lifetime.
-    album_tracks_cache: std::collections::HashMap<String, Vec<MediaItem>>,
-    album_tracks_loading: std::collections::HashSet<String>,
-    /// TV series detail cache for inline rendering in Power View.
-    /// When a Series is selected, we proactively fetch seasons and episodes
-    /// so the inline detail pane can render without drilling in.
-    series_detail_cache: std::collections::HashMap<String, SeriesDetail>,
-    series_detail_loading: std::collections::HashSet<String>,
-    save_playlist_dialog: Option<SavePlaylistDialog>,
-    image_protocol: Option<String>,
-    image_protocol_enabled: bool,
-    confirm_rescan: bool,
-    pending_rescan_lib_idx: Option<usize>,
-    library_position_state: crate::config::LibraryPositionState,
-    queue_scope: QueueScope,
-    /// The relay's out-of-band control channel (ADR 0005), present only
-    /// when running as a stay-alive inferior under a relay. `None` in bare
-    /// mode and for `new_remote` (thin client to `mbvd`).
-    stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>,
-    /// Whether a terminal-client is currently attached to the pty. Always
-    /// `true` outside stay-alive mode (`stay_alive_ctrl` is `None` there, so
-    /// this field is never consulted). Set `false` by `try_quit`'s detach
-    /// path right after a successful `send_detach()`, and back to `true` by
-    /// the T5 reattach-refresh (`take_attach_pending()`).
-    ///
-    /// Exists because `Terminal::clear()` unconditionally queries the
-    /// cursor position over the pty (crossterm `get_cursor_position()`,
-    /// a blocking DSR round-trip) even for a fullscreen viewport. The
-    /// run loop keeps ticking and taking input while detached (that's the
-    /// point of stay-alive), so without this guard, the very next
-    /// `force_clear` — triggered by any number of ordinary UI actions,
-    /// unrelated to detach — blocks for several seconds with no
-    /// terminal-client left to answer, then errors out and kills the whole
-    /// process: a silent `exit(1)` if idle, or a SIGSEGV if it races a live
-    /// mpv Vulkan render thread during the resulting early-return teardown
-    /// (issue #156).
-    attached: bool,
-    #[cfg(test)]
-    _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
-}
-
-struct AppInit {
-    client: std::sync::Arc<std::sync::Mutex<EmbyClient>>,
-    player: mbv_core::player::PlayerProxy,
-    player_rx: std::sync::mpsc::Receiver<mbv_core::player::PlayerEvent>,
-    ws_rx: std::sync::mpsc::Receiver<WsEvent>,
-    ws_send_tx: Option<mbv_core::ws::WsSender>,
-    player_tab: PlayerTab,
-    remote_player_tab: Option<PlayerTab>,
-    initial_queue_scope: QueueScope,
-    system_notifications: bool,
-    image_protocol: Option<String>,
-    image_protocol_enabled: bool,
-    hidden_libraries: Vec<String>,
-    library_routes: std::collections::HashMap<String, String>,
-    hidden_latest: Vec<String>,
-    music_levels: Vec<String>,
-    use_nerd_fonts: bool,
-    indicator_style: render::indicators::IndicatorStyle,
-    image_cache_size: usize,
-    lib_tx: mpsc::Sender<LibEvent>,
-    lib_rx: mpsc::Receiver<LibEvent>,
-    sessions_tx: mpsc::Sender<SessionEvent>,
-    sessions_rx: mpsc::Receiver<SessionEvent>,
-    card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
-    card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
-    notif_action_tx: mpsc::Sender<String>,
-    notif_action_rx: mpsc::Receiver<String>,
-    search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
-    search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
-    stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>,
-}
-
 const SESSIONS_PANEL_W: u16 = 40;
 const HELP_PANEL_W: u16 = 40;
 const SETTINGS_PANEL_W: u16 = 40;
