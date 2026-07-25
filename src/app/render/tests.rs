@@ -855,8 +855,8 @@ fn power_queue_panel_uses_selected_media_frame_and_background() {
 
     let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
     let buf = term.backend().buffer();
-    let top_y = layout.queue_area.y - 2;
-    let bottom_y = layout.queue_area.y + layout.queue_area.height + 1;
+    let top_y = layout.queue_area.y - 1;
+    let bottom_y = layout.queue_area.y + layout.queue_area.height;
     let x = layout.queue_area.x;
 
     assert_eq!(buf[(x, top_y)].symbol(), "\u{2594}");
@@ -869,7 +869,7 @@ fn power_queue_panel_uses_selected_media_frame_and_background() {
         palette::MEDIA_SELECTED_BG
     );
     assert_eq!(
-        buf[(x, layout.queue_area.y + layout.queue_area.height)].bg,
+        buf[(x, layout.queue_area.y + layout.queue_area.height - 1)].bg,
         palette::MEDIA_SELECTED_BG
     );
 }
@@ -879,7 +879,7 @@ fn power_queue_panel_fills_remaining_left_column_with_short_queue() {
     let mut app = make_power_queue_app(1);
 
     let (_term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
-    let bottom_y = layout.queue_area.y + layout.queue_area.height + 1;
+    let bottom_y = layout.queue_area.y + layout.queue_area.height;
 
     assert_eq!(bottom_y, 26);
     assert!(
@@ -914,8 +914,8 @@ fn power_queue_panel_remains_visible_when_unfocused() {
 
     let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
     let buf = term.backend().buffer();
-    let top_y = layout.queue_area.y - 2;
-    let bottom_y = layout.queue_area.y + layout.queue_area.height + 1;
+    let top_y = layout.queue_area.y - 1;
+    let bottom_y = layout.queue_area.y + layout.queue_area.height;
 
     assert_eq!(buf[(layout.queue_area.x, top_y)].symbol(), "\u{2594}");
     assert_eq!(buf[(layout.queue_area.x, bottom_y)].symbol(), "\u{2581}");
@@ -932,7 +932,7 @@ fn power_queue_title_and_scope_pills_stay_outside_panel() {
     app.use_nerd_fonts = false;
 
     let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
-    let top_y = layout.queue_area.y - 2;
+    let top_y = layout.queue_area.y - 1;
     let out = buffer_to_string(&term);
     let header = out
         .lines()
@@ -1041,15 +1041,11 @@ fn power_queue_panel_counts_wrapped_group_headers_before_adding_padding() {
     app.player_tab.set_items(vec![item], 0);
 
     let panel_area = Rect::new(0, 0, 20, 6);
-    let desired_rows =
-        rendered_power_queue_rows_for_padding(&app.displayed_queue().items, panel_area);
-    assert_eq!(desired_rows, 4);
-
     let backend = TestBackend::new(panel_area.width, panel_area.height);
     let mut term = Terminal::new(backend).unwrap();
     let mut layout = LayoutMain::default();
     term.draw(|f| {
-        let queue_area = render_power_queue_panel_frame(f, panel_area, desired_rows, true);
+        let queue_area = render_power_queue_panel_frame(f, panel_area, true);
         app.render_power_queue(f, queue_area, true, &mut layout);
     })
     .unwrap();

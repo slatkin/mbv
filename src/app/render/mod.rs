@@ -25,8 +25,8 @@ use power_widgets::{
     render_power_count_label, render_power_placeholder, render_power_queue_panel_frame,
     render_power_right_scrollbar, render_power_right_scrollbar_with_viewport,
     render_power_scrollbar, render_selected_block_background, render_selected_block_borders,
-    rendered_power_queue_rows_for_padding, selection_marker, selector_pill_style, PillBar,
-    PillUnderlay, MUSIC_ALBUM_IMAGE_TYPES, POWER_RENDER_FILTER, POWER_VIEW_GAP,
+    selection_marker, selector_pill_style, PillBar, PillUnderlay, MUSIC_ALBUM_IMAGE_TYPES,
+    POWER_RENDER_FILTER, POWER_VIEW_GAP,
 };
 use sort_filter::{effective_sort_str, letter_bucket, parse_album_folder_name, strip_article};
 pub(crate) use sort_filter::{initial_group_artist_sort_key, LetterFilter, LIBRARY_PILL_THRESHOLD};
@@ -394,12 +394,7 @@ impl App {
         }
 
         if !self.queue_column_collapsed {
-            let desired_queue_rows = {
-                let queue = self.displayed_queue();
-                rendered_power_queue_rows_for_padding(&queue.items, queue_area)
-            };
-            let queue_list_area =
-                render_power_queue_panel_frame(f, queue_area, desired_queue_rows, queue_focused);
+            let queue_list_area = render_power_queue_panel_frame(f, queue_area, queue_focused);
             self.render_power_queue(f, queue_list_area, queue_focused, layout);
         }
         self.render_power_library(f, render_lib_area, left_focused, layout);

@@ -9,7 +9,6 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
-use textwrap::wrap;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
@@ -245,12 +244,7 @@ pub(super) fn render_selected_block_borders(
     }
 }
 
-pub(super) fn render_power_queue_panel_frame(
-    f: &mut Frame,
-    area: Rect,
-    desired_rows: u16,
-    focused: bool,
-) -> Rect {
+pub(super) fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, focused: bool) -> Rect {
     if area.width == 0 || area.height == 0 {
         return Rect::default();
     }
@@ -285,48 +279,12 @@ pub(super) fn render_power_queue_panel_frame(
     }
 
     let border_rows = area.height.min(2);
-    let use_padding = area.height >= desired_rows.saturating_add(4);
-    let top_decoration = 1 + u16::from(use_padding);
-    let height = area
-        .height
-        .saturating_sub(border_rows)
-        .saturating_sub(if use_padding { 2 } else { 0 });
 
     Rect {
-        y: area.y + top_decoration,
-        height,
+        y: area.y + 1,
+        height: area.height.saturating_sub(border_rows),
         ..area
     }
-}
-
-pub(super) fn rendered_power_queue_rows_for_padding(items: &[MediaItem], panel_area: Rect) -> u16 {
-    if items.is_empty() {
-        return 1;
-    }
-
-    let (display, group_for_header) = build_power_queue_rows(items);
-    let padded_visible = panel_area.height.saturating_sub(4) as usize;
-    let has_sb = display.len() > padded_visible;
-    let render_w = panel_area.width.saturating_sub(u16::from(has_sb)) as usize;
-    let wrap_w = render_w.saturating_sub(1).max(1);
-    let mut header_idx = 0;
-    let mut rows = 0u16;
-
-    for entry in display {
-        match entry {
-            QueueRow::Header => {
-                let group = group_for_header
-                    .get(header_idx)
-                    .map(|s| s.as_str())
-                    .unwrap_or("");
-                header_idx += 1;
-                rows = rows.saturating_add(wrap(group, wrap_w).len().max(1) as u16);
-            }
-            QueueRow::Spacer | QueueRow::Track { .. } => rows = rows.saturating_add(1),
-        }
-    }
-
-    rows
 }
 
 pub(super) fn build_power_queue_rows(items: &[MediaItem]) -> (Vec<QueueRow>, Vec<String>) {
