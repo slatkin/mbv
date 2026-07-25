@@ -2346,230 +2346,16 @@ impl App {
                 }
             }
 
-            while let Ok(action) = self.notif_action_rx.try_recv() {
-                had_events = true;
-                match action.as_str() {
-                    "skip_intro:skip" => {
-                        if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
-                            let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
-                            self.player.send_command(PlayerCommand::SeekAbsolute(secs));
-                            self.player.send_command(PlayerCommand::SkipIntroDismiss);
-                            self.status.clear();
-                        }
-                    }
-                    "next_up:play" => {
-                        if let Some(item) = self.next_up_item.take() {
-                            if let Some(idx) = self
-                                .playback_queue()
-                                .items
-                                .iter()
-                                .position(|i| i.id == item.id)
-                            {
-                                let label = item.playback_label();
-                                self.player.send_command(PlayerCommand::JumpTo(idx));
-                                self.playback_queue_mut().queue_cursor = idx;
-                                self.flash_status(label);
-                            }
-                        }
-                        self.status.clear();
-                    }
-                    "next_up:skip" => {
-                        self.next_up_item = None;
-                        self.player.send_command(PlayerCommand::NextUpDismiss);
-                        self.status.clear();
-                    }
-                    "clear:yes" => {
-                        if self.confirm_clear_queue {
-                            self.confirm_clear_queue = false;
-                            self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
-                        }
-                    }
-                    "__notif_failed__" => {
-                        self.notif_failed = true;
-                    }
-                    _ => {} // dismissed, "ignore", "cancel", or empty: leave TUI prompt untouched
-                }
-            }
+            had_events |= self.drain_notif_actions();
 
             while let Ok(ev) = self.lib_rx.try_recv() {
                 had_events = true;
                 self.handle_lib_event(ev);
             }
 
-            let search_outcome = self.search.drain_results();
-            if search_outcome.received > 0 {
-                had_events = true;
-                for error in search_outcome.errors {
-                    self.flash_status_high(format!("Search error: {error}"));
-                }
-            }
+            had_events |= self.drain_search_results();
 
-            while let Ok(ev) = self.sessions_rx.try_recv() {
-                had_events = true;
-                match ev {
-                    SessionEvent::Loaded(sessions) => {
-                        let old_id = self
-                            .sessions
-                            .get(self.sessions_cursor)
-                            .map(|s| s.id.clone());
-                        self.sessions = sessions;
-                        self.sessions_loading = false;
-                        self.last_session_poll = Instant::now();
-                        if let Some(id) = old_id {
-                            if let Some(pos) = self.sessions.iter().position(|s| s.id == id) {
-                                self.sessions_cursor = pos;
-                            } else {
-                                self.sessions_cursor = self
-                                    .sessions_cursor
-                                    .min(self.sessions.len().saturating_sub(1));
-                                if !self.sessions.is_empty() {
-                                    log::warn!(target: "sessions", "selected session gone; cursor clamped");
-                                }
-                            }
-                        }
-                        // Update connected session state; auto-disconnect if gone
-                        if let Some(ref conn_id) = self.connected_session_id.clone() {
-                            if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id) {
-                                // Maintain a monotonic position estimate within a single video.
-                                // Reset the anchor only when the playing item ID changes.
-                                // Avoid keying on runtime or title — the API occasionally returns
-                                // missing RunTimeTicks (as_i64 returns None → 0) or a slightly
-                                // different name, which would spuriously reset the position anchor
-                                // every poll and prevent smooth interpolation.
-                                let now = Instant::now();
-                                let prev_item_id = self
-                                    .connected_session_state
-                                    .as_ref()
-                                    .and_then(|p| p.now_playing_item_id.as_deref());
-                                let item_changed = s.now_playing_item_id.as_deref() != prev_item_id;
-                                if item_changed {
-                                    // Refresh the previous item so played/progress reflects
-                                    // what the remote client reported to the server.
-                                    if let Some(prev_id) = self
-                                        .connected_session_state
-                                        .as_ref()
-                                        .and_then(|p| p.now_playing_item_id.clone())
-                                    {
-                                        let client = self.client.lock().unwrap().clone();
-                                        let tx = self.sessions_tx.clone();
-                                        std::thread::spawn(move || {
-                                            if let Ok(mut items) = client
-                                                .get_items_by_ids(std::slice::from_ref(&prev_id))
-                                            {
-                                                if let Some(fresh) = items.pop() {
-                                                    let _ = tx.send(SessionEvent::ItemRefreshed(
-                                                        prev_id,
-                                                        Box::new(fresh),
-                                                    ));
-                                                }
-                                            }
-                                        });
-                                    }
-                                }
-                                // Detect playback via API position advancing, not IsPaused.
-                                // Some Emby clients always report IsPaused=true even while playing;
-                                // the only reliable signal is that PositionTicks keeps moving.
-                                let prev_api_pos = self
-                                    .connected_session_state
-                                    .as_ref()
-                                    .map_or(0, |p| p.position_s);
-                                if s.position_s > prev_api_pos {
-                                    self.remote_api_pos_advanced_at = now;
-                                }
-                                // Extrapolate if API advanced recently (within 2× the ~11s report
-                                // interval). After that window lapses we treat it as paused/stopped.
-                                let api_active =
-                                    self.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
-                                let seek_pending = now < self.remote_seek_pending_until;
-                                if seek_pending && !item_changed {
-                                    // A seek was just dispatched; hold the optimistic position until
-                                    // the API catches up. Once the API reports the new position (or
-                                    // the window expires) we fall through to normal reconciliation.
-                                    log::debug!(target: "sessions",
-                                        "pos hold (seek pending): api={}s remote_pos_s={}s",
-                                        s.position_s, self.remote_pos_s);
-                                } else if item_changed {
-                                    log::debug!(target: "sessions",
-                                        "pos reset (item change): api_pos={}s → remote_pos_s {}s→{}s",
-                                        s.position_s, self.remote_pos_s, s.position_s);
-                                    self.remote_pos_s = s.position_s;
-                                    self.remote_api_pos_advanced_at = now;
-                                    self.remote_seek_pending_until = now - Duration::from_secs(1);
-                                } else if api_active {
-                                    let elapsed = self.remote_pos_at.elapsed().as_secs_f64();
-                                    let extrapolated = Self::extrapolated_remote_position(
-                                        self.remote_pos_s,
-                                        self.remote_pos_at.elapsed(),
-                                    );
-                                    let new_pos = s.position_s.max(extrapolated);
-                                    log::debug!(target: "sessions",
-                                        "pos extrap: api={}s paused={} elapsed={:.2}s → remote_pos_s {}s→{}s",
-                                        s.position_s, s.is_paused, elapsed, self.remote_pos_s, new_pos);
-                                    self.remote_pos_s = new_pos;
-                                } else {
-                                    log::debug!(target: "sessions",
-                                        "pos idle (no api advance in 22s): api_pos={}s → remote_pos_s {}s→{}s",
-                                        s.position_s, self.remote_pos_s, s.position_s);
-                                    self.remote_pos_s = s.position_s;
-                                }
-                                if !seek_pending || item_changed {
-                                    self.remote_pos_at = now;
-                                }
-                                if item_changed {
-                                    if let Some(new_idx) =
-                                        s.now_playing_item_id.as_ref().and_then(|id| {
-                                            self.player_tab.items.iter().position(|it| &it.id == id)
-                                        })
-                                    {
-                                        self.player_tab.queue_cursor = new_idx;
-                                    }
-                                    self.runtime_zero_since = None;
-                                }
-                                self.connected_session_state = Some(s.clone());
-                                self.session_miss_count = 0;
-                                // Remote hasn't started playing yet — repoll sooner.
-                                // Cap fast-poll at 30 s: if runtime stays 0 that long the
-                                // remote client likely won't report it and we stop hammering.
-                                if s.runtime_s == 0 {
-                                    let since =
-                                        self.runtime_zero_since.get_or_insert_with(Instant::now);
-                                    if since.elapsed() < Duration::from_secs(30) {
-                                        self.last_session_poll =
-                                            Instant::now() - Duration::from_millis(500);
-                                    }
-                                } else {
-                                    self.runtime_zero_since = None;
-                                }
-                            } else {
-                                self.session_miss_count += 1;
-                                if self.session_miss_count >= 3 {
-                                    log::warn!(target: "sessions", "connected session gone; disconnecting");
-                                    self.flash_status_high(
-                                        "Remote session ended; disconnected".to_string(),
-                                    );
-                                    self.connected_session_id = None;
-                                    self.connected_session_state = None;
-                                    self.session_miss_count = 0;
-                                    self.remote_pos_s = 0;
-                                } else {
-                                    log::warn!(target: "sessions", "connected session not in poll ({}/3); holding", self.session_miss_count);
-                                }
-                            }
-                        }
-                    }
-                    SessionEvent::ItemRefreshed(item_id, fresh) => {
-                        if let Some(slot) =
-                            self.player_tab.items.iter_mut().find(|i| i.id == item_id)
-                        {
-                            *slot = *fresh;
-                        }
-                    }
-                    SessionEvent::Error(e) => {
-                        self.sessions_loading = false;
-                        self.flash_status_high(format!("Sessions error: {e}"));
-                    }
-                }
-            }
+            had_events |= self.drain_session_events();
 
             while let Ok((item_id, img_opt)) = self.card_image_rx.try_recv() {
                 had_events = true;
@@ -2746,6 +2532,249 @@ impl App {
         self.teardown(quit_timeout);
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
         Ok(())
+    }
+
+    /// Drain and act on notification-originated actions (skip-intro, next-up,
+    /// clear-queue confirmation, notif-failure flag). Extracted from `run()`'s
+    /// loop body; returns whether any action was received so the caller can
+    /// fold that into its own `had_events` for render scheduling.
+    fn drain_notif_actions(&mut self) -> bool {
+        let mut produced = false;
+        while let Ok(action) = self.notif_action_rx.try_recv() {
+            produced = true;
+            match action.as_str() {
+                "skip_intro:skip" => {
+                    if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
+                        let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+                        self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+                        self.player.send_command(PlayerCommand::SkipIntroDismiss);
+                        self.status.clear();
+                    }
+                }
+                "next_up:play" => {
+                    if let Some(item) = self.next_up_item.take() {
+                        if let Some(idx) = self
+                            .playback_queue()
+                            .items
+                            .iter()
+                            .position(|i| i.id == item.id)
+                        {
+                            let label = item.playback_label();
+                            self.player.send_command(PlayerCommand::JumpTo(idx));
+                            self.playback_queue_mut().queue_cursor = idx;
+                            self.flash_status(label);
+                        }
+                    }
+                    self.status.clear();
+                }
+                "next_up:skip" => {
+                    self.next_up_item = None;
+                    self.player.send_command(PlayerCommand::NextUpDismiss);
+                    self.status.clear();
+                }
+                "clear:yes" => {
+                    if self.confirm_clear_queue {
+                        self.confirm_clear_queue = false;
+                        self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
+                    }
+                }
+                "__notif_failed__" => {
+                    self.notif_failed = true;
+                }
+                _ => {} // dismissed, "ignore", "cancel", or empty: leave TUI prompt untouched
+            }
+        }
+        produced
+    }
+
+    /// Drain the search-results channel and surface any errors as a flash
+    /// message. Extracted from `run()`'s loop body; returns whether any
+    /// results were received so the caller can fold that into `had_events`.
+    fn drain_search_results(&mut self) -> bool {
+        let search_outcome = self.search.drain_results();
+        let produced = search_outcome.received > 0;
+        if produced {
+            for error in search_outcome.errors {
+                self.flash_status_high(format!("Search error: {error}"));
+            }
+        }
+        produced
+    }
+
+    /// Drain the sessions-poll channel, dispatching each event to
+    /// `handle_session_event`. Extracted from `run()`'s loop body; returns
+    /// whether any event was received so the caller can fold that into
+    /// `had_events`.
+    fn drain_session_events(&mut self) -> bool {
+        let mut produced = false;
+        while let Ok(ev) = self.sessions_rx.try_recv() {
+            produced = true;
+            self.handle_session_event(ev);
+        }
+        produced
+    }
+
+    /// Handle a single `SessionEvent` from the sessions-poll channel. Faithful
+    /// transcription of the match arms previously inlined in `run()`'s
+    /// `sessions_rx` drain loop (see `drain_session_events`).
+    fn handle_session_event(&mut self, ev: SessionEvent) {
+        match ev {
+            SessionEvent::Loaded(sessions) => {
+                let old_id = self
+                    .sessions
+                    .get(self.sessions_cursor)
+                    .map(|s| s.id.clone());
+                self.sessions = sessions;
+                self.sessions_loading = false;
+                self.last_session_poll = Instant::now();
+                if let Some(id) = old_id {
+                    if let Some(pos) = self.sessions.iter().position(|s| s.id == id) {
+                        self.sessions_cursor = pos;
+                    } else {
+                        self.sessions_cursor = self
+                            .sessions_cursor
+                            .min(self.sessions.len().saturating_sub(1));
+                        if !self.sessions.is_empty() {
+                            log::warn!(target: "sessions", "selected session gone; cursor clamped");
+                        }
+                    }
+                }
+                // Update connected session state; auto-disconnect if gone
+                if let Some(ref conn_id) = self.connected_session_id.clone() {
+                    if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id) {
+                        // Maintain a monotonic position estimate within a single video.
+                        // Reset the anchor only when the playing item ID changes.
+                        // Avoid keying on runtime or title — the API occasionally returns
+                        // missing RunTimeTicks (as_i64 returns None → 0) or a slightly
+                        // different name, which would spuriously reset the position anchor
+                        // every poll and prevent smooth interpolation.
+                        let now = Instant::now();
+                        let prev_item_id = self
+                            .connected_session_state
+                            .as_ref()
+                            .and_then(|p| p.now_playing_item_id.as_deref());
+                        let item_changed = s.now_playing_item_id.as_deref() != prev_item_id;
+                        if item_changed {
+                            // Refresh the previous item so played/progress reflects
+                            // what the remote client reported to the server.
+                            if let Some(prev_id) = self
+                                .connected_session_state
+                                .as_ref()
+                                .and_then(|p| p.now_playing_item_id.clone())
+                            {
+                                let client = self.client.lock().unwrap().clone();
+                                let tx = self.sessions_tx.clone();
+                                std::thread::spawn(move || {
+                                    if let Ok(mut items) =
+                                        client.get_items_by_ids(std::slice::from_ref(&prev_id))
+                                    {
+                                        if let Some(fresh) = items.pop() {
+                                            let _ = tx.send(SessionEvent::ItemRefreshed(
+                                                prev_id,
+                                                Box::new(fresh),
+                                            ));
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                        // Detect playback via API position advancing, not IsPaused.
+                        // Some Emby clients always report IsPaused=true even while playing;
+                        // the only reliable signal is that PositionTicks keeps moving.
+                        let prev_api_pos = self
+                            .connected_session_state
+                            .as_ref()
+                            .map_or(0, |p| p.position_s);
+                        if s.position_s > prev_api_pos {
+                            self.remote_api_pos_advanced_at = now;
+                        }
+                        // Extrapolate if API advanced recently (within 2× the ~11s report
+                        // interval). After that window lapses we treat it as paused/stopped.
+                        let api_active = self.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
+                        let seek_pending = now < self.remote_seek_pending_until;
+                        if seek_pending && !item_changed {
+                            // A seek was just dispatched; hold the optimistic position until
+                            // the API catches up. Once the API reports the new position (or
+                            // the window expires) we fall through to normal reconciliation.
+                            log::debug!(target: "sessions",
+                                "pos hold (seek pending): api={}s remote_pos_s={}s",
+                                s.position_s, self.remote_pos_s);
+                        } else if item_changed {
+                            log::debug!(target: "sessions",
+                                "pos reset (item change): api_pos={}s → remote_pos_s {}s→{}s",
+                                s.position_s, self.remote_pos_s, s.position_s);
+                            self.remote_pos_s = s.position_s;
+                            self.remote_api_pos_advanced_at = now;
+                            self.remote_seek_pending_until = now - Duration::from_secs(1);
+                        } else if api_active {
+                            let elapsed = self.remote_pos_at.elapsed().as_secs_f64();
+                            let extrapolated = Self::extrapolated_remote_position(
+                                self.remote_pos_s,
+                                self.remote_pos_at.elapsed(),
+                            );
+                            let new_pos = s.position_s.max(extrapolated);
+                            log::debug!(target: "sessions",
+                                "pos extrap: api={}s paused={} elapsed={:.2}s → remote_pos_s {}s→{}s",
+                                s.position_s, s.is_paused, elapsed, self.remote_pos_s, new_pos);
+                            self.remote_pos_s = new_pos;
+                        } else {
+                            log::debug!(target: "sessions",
+                                "pos idle (no api advance in 22s): api_pos={}s → remote_pos_s {}s→{}s",
+                                s.position_s, self.remote_pos_s, s.position_s);
+                            self.remote_pos_s = s.position_s;
+                        }
+                        if !seek_pending || item_changed {
+                            self.remote_pos_at = now;
+                        }
+                        if item_changed {
+                            if let Some(new_idx) = s.now_playing_item_id.as_ref().and_then(|id| {
+                                self.player_tab.items.iter().position(|it| &it.id == id)
+                            }) {
+                                self.player_tab.queue_cursor = new_idx;
+                            }
+                            self.runtime_zero_since = None;
+                        }
+                        self.connected_session_state = Some(s.clone());
+                        self.session_miss_count = 0;
+                        // Remote hasn't started playing yet — repoll sooner.
+                        // Cap fast-poll at 30 s: if runtime stays 0 that long the
+                        // remote client likely won't report it and we stop hammering.
+                        if s.runtime_s == 0 {
+                            let since = self.runtime_zero_since.get_or_insert_with(Instant::now);
+                            if since.elapsed() < Duration::from_secs(30) {
+                                self.last_session_poll =
+                                    Instant::now() - Duration::from_millis(500);
+                            }
+                        } else {
+                            self.runtime_zero_since = None;
+                        }
+                    } else {
+                        self.session_miss_count += 1;
+                        if self.session_miss_count >= 3 {
+                            log::warn!(target: "sessions", "connected session gone; disconnecting");
+                            self.flash_status_high(
+                                "Remote session ended; disconnected".to_string(),
+                            );
+                            self.connected_session_id = None;
+                            self.connected_session_state = None;
+                            self.session_miss_count = 0;
+                            self.remote_pos_s = 0;
+                        } else {
+                            log::warn!(target: "sessions", "connected session not in poll ({}/3); holding", self.session_miss_count);
+                        }
+                    }
+                }
+            }
+            SessionEvent::ItemRefreshed(item_id, fresh) => {
+                if let Some(slot) = self.player_tab.items.iter_mut().find(|i| i.id == item_id) {
+                    *slot = *fresh;
+                }
+            }
+            SessionEvent::Error(e) => {
+                self.sessions_loading = false;
+                self.flash_status_high(format!("Sessions error: {e}"));
+            }
+        }
     }
 
     /// Shared local-player teardown sequence for both the signal-triggered
