@@ -1,13 +1,18 @@
 mod action;
 mod actions;
+mod context_menu_actions;
+mod feed_actions;
 pub(crate) mod images;
 mod input;
 mod input_context_menu;
 mod input_mouse;
 mod input_resolver;
 pub(crate) mod layout;
+mod library_browse_actions;
 mod library_route;
+mod music_actions;
 pub(crate) mod palette;
+mod queue_actions;
 pub mod render;
 mod search;
 mod settings;
