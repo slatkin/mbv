@@ -4,9 +4,12 @@ use crate::app::library_browse_actions::{
 };
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{
-    AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction, LibraryTab,
+    AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
+    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope,
 };
+use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
+use std::collections::HashMap;
 use std::sync::mpsc;
 
 fn folder(id: &str, name: &str) -> MediaItem {
@@ -1308,12 +1311,12 @@ fn fetch_album_tracks_is_a_no_op_when_already_loading() {
 // touching real stderr at all, so there's nothing left to race against.
 #[test]
 fn notify_with_actions_rings_terminal_bell_even_without_system_notifications() {
-    TEST_BELL_LOG.with(|log| log.borrow_mut().clear());
+    crate::app::notify_actions::TEST_BELL_LOG.with(|log| log.borrow_mut().clear());
 
     let app = crate::app::tests::make_app_stub();
     app.notify_with_actions("mbv", "Next up?", &[("next_up:play", "Play Now")]);
 
-    let rung = TEST_BELL_LOG.with(|log| log.borrow().clone());
+    let rung = crate::app::notify_actions::TEST_BELL_LOG.with(|log| log.borrow().clone());
     assert_eq!(rung, b"\x07");
 }
 

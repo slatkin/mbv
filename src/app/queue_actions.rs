@@ -1,4 +1,6 @@
+use super::ui_util::is_playable;
 use super::{App, LibEvent, PendingQueueAction, QueueScope, UndoEntry};
+use mbv_core::api::MediaItem;
 use mbv_core::player::PlayerCommand;
 use std::sync::Arc;
 
@@ -399,5 +401,77 @@ impl App {
             }
             let _ = tx.send(LibEvent::QueueEnriched { items });
         });
+    }
+
+    pub(super) fn enqueue_selected(&mut self) {
+        if self.library_tab == 0 {
+            let Some(item) = self.current_home_item() else {
+                return;
+            };
+            if item.is_folder {
+                self.do_enqueue_folder(item);
+                return;
+            }
+            if !is_playable(&item) {
+                return;
+            }
+            log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
+            if self.in_non_library_thin_client_mode() {
+                log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
+            }
+            let resolved = self.route_for_item_via_ancestors(&item.id).map(|(n, _)| n);
+            if self.enqueue_route_conflict(resolved) {
+                return;
+            }
+            self.append_item_to_queue_and_sync(item);
+        } else {
+            if self.enqueue_selected_artist_header() {
+                return;
+            }
+            let Some(item) = self.current_lib_item() else {
+                return;
+            };
+            if item.is_folder {
+                self.do_enqueue_folder(item);
+                return;
+            }
+            if !is_playable(&item) {
+                return;
+            }
+            let lib_idx = self.library_tab - 1;
+            let bypass = self.in_non_library_thin_client_mode();
+            log::info!(target: "library_route", "{}", super::actions::enqueue_action_context(&item.id, &item.name, "library-view", bypass));
+            let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
+            if self.enqueue_route_conflict(resolved) {
+                return;
+            }
+            self.append_item_to_queue_and_sync(item);
+        }
+    }
+
+    /// Shared append/sync/rollback tail for a single-item enqueue
+    /// (extracted from `enqueue_selected`'s two branches, which had
+    /// duplicated this verbatim): appends `item` to the visible queue,
+    /// marks local queue metadata dirty when applicable, flashes a status
+    /// confirmation, and syncs the append to the direct-remote queue /
+    /// local persistence -- rolling the whole append back if the sync
+    /// fails.
+    fn append_item_to_queue_and_sync(&mut self, item: MediaItem) {
+        let name = item.display_name();
+        let scope = self.visible_queue_scope();
+        let appended = item.clone();
+        let previous_dirty = self.queue_dirty;
+        let previous_queue = self.queue_for_scope(scope).clone();
+        self.queue_for_scope_mut(scope).append_item(item);
+        if self.local_queue_metadata_applies(scope) {
+            self.queue_dirty = true;
+        }
+        self.flash_status(format!("Added: {name}"));
+        if self.sync_playback_queue_after_append(scope, vec![appended]) {
+            self.persist_local_queue_state_if_needed(scope);
+        } else {
+            self.queue_dirty = previous_dirty;
+            *self.queue_for_scope_mut(scope) = previous_queue;
+        }
     }
 }
