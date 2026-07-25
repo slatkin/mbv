@@ -9,7 +9,6 @@ pub const WHITE: Color = Color::Rgb(248, 245, 228); // warm white (#f8f5e4)
 pub const QUEUE_FOCUS_FG: Color = AQUA;
 pub const QUEUE_UNFOCUSED_FG: Color = Color::Rgb(79, 91, 88); // queue row text (#4f5b58)
 pub const QUEUE_BUTTON_FOCUSED_BG: Color = Color::Rgb(30, 35, 38); // focused queue button (#1E2326)
-pub const QUEUE_BUTTON_UNFOCUSED_BG: Color = Color::Rgb(46, 56, 60); // unfocused queue button (#2E383C)
 pub const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc7f)
 pub const AQUA: Color = Color::Rgb(53, 167, 124); // emby green — folders, watched (#35a77c)
 pub const FOAM: Color = Color::Rgb(58, 148, 197); // project blue (#3a94c5)

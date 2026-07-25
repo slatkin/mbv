@@ -70,22 +70,23 @@ impl App {
                 icon.content = "\u{F0AFE}".into();
             }
         }
-        let local_bg = if local_selected || !has_remote {
+        let local_active = local_selected && has_remote;
+        let local_bg = if local_active {
+            palette::YELLOW
+        } else {
+            palette::QUEUE_BUTTON_FOCUSED_BG
+        };
+        let local_fg = if local_active {
             palette::QUEUE_BUTTON_FOCUSED_BG
         } else {
-            palette::QUEUE_BUTTON_UNFOCUSED_BG
+            palette::YELLOW
         };
-        Self::set_status_pill_style(
-            &mut local_spans,
-            if local_selected || !has_remote {
-                palette::SOFT_WHITE
-            } else {
-                palette::SUBTLE
-            },
-            local_bg,
-        );
+        Self::set_status_pill_style(&mut local_spans, local_fg, local_bg);
+        if let Some(icon) = local_spans.get_mut(1) {
+            icon.style = icon.style.fg(local_fg);
+        }
         Self::uppercase_status_label(&mut local_spans);
-        Self::set_status_label_bold(&mut local_spans, local_selected || !has_remote);
+        Self::set_status_label_bold(&mut local_spans, local_active);
         f.render_widget(
             Block::default().style(Style::default().bg(local_bg)),
             local_area,
@@ -107,22 +108,23 @@ impl App {
                 height: 1,
             };
             let mut remote_spans = self.remote_status_spans(remote_state, &daemon_endpoint);
-            let remote_bg = if !local_selected {
+            let remote_active = !local_selected;
+            let remote_bg = if remote_active {
+                palette::YELLOW
+            } else {
+                palette::QUEUE_BUTTON_FOCUSED_BG
+            };
+            let remote_fg = if remote_active {
                 palette::QUEUE_BUTTON_FOCUSED_BG
             } else {
-                palette::QUEUE_BUTTON_UNFOCUSED_BG
+                palette::YELLOW
             };
-            Self::set_status_pill_style(
-                &mut remote_spans,
-                if !local_selected {
-                    palette::SOFT_WHITE
-                } else {
-                    palette::SUBTLE
-                },
-                remote_bg,
-            );
+            Self::set_status_pill_style(&mut remote_spans, remote_fg, remote_bg);
+            if let Some(icon) = remote_spans.get_mut(1) {
+                icon.style = icon.style.fg(remote_fg);
+            }
             Self::uppercase_status_label(&mut remote_spans);
-            Self::set_status_label_bold(&mut remote_spans, !local_selected);
+            Self::set_status_label_bold(&mut remote_spans, remote_active);
             if remote_spans.len() >= 4 {
                 remote_spans.swap(1, 2);
                 remote_spans[1].content = format!("{} ", remote_spans[1].content).into();
