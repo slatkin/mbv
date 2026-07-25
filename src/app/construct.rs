@@ -13,11 +13,18 @@ use std::time::{Duration, Instant};
 
 impl App {
     pub(super) fn build(init: AppInit) -> Self {
+        // Must run before `load_prefs()`: the guard redirects `config_dir()`/
+        // `state_dir()` to an isolated tmpdir, and `load_prefs()` resolves
+        // its path through that same lookup. Installing the guard after
+        // reading prefs left tests reading (and initializing state from)
+        // the real on-disk prefs.json instead of a fresh one.
+        #[cfg(test)]
+        let _test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         App {
             #[cfg(test)]
-            _test_state_dir_guard: crate::config::TestStateDirGuard::new_if_unset(),
+            _test_state_dir_guard,
             client: init.client,
             player: init.player,
             mpris: None,
