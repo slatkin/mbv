@@ -259,11 +259,11 @@ impl App {
         // Inner content area with padding inside the colored box (queue uses this).
         let left_content = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 3,
+            y: left_area.y + 2,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(4),
+            height: left_area.height.saturating_sub(3),
         };
-        // Blank row, queue title row, then card image.
+        // Queue title row, then card image.
         if !self.queue_column_collapsed {
             self.render_power_queue_title(
                 f,
@@ -278,9 +278,9 @@ impl App {
         }
         let card_area = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 3,
+            y: left_area.y + 2,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(4),
+            height: left_area.height.saturating_sub(3),
         };
 
         let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
