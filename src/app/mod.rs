@@ -3331,3 +3331,43 @@ fn restore_terminal(
 #[cfg(test)]
 #[path = "tests.rs"]
 pub(crate) mod tests;
+
+#[cfg(test)]
+#[path = "tests_ui_util.rs"]
+mod tests_ui_util;
+
+#[cfg(test)]
+#[path = "tests_library_position.rs"]
+mod tests_library_position;
+
+#[cfg(test)]
+#[path = "tests_lifecycle.rs"]
+mod tests_lifecycle;
+
+#[cfg(test)]
+#[path = "tests_session_connect.rs"]
+mod tests_session_connect;
+
+#[cfg(test)]
+#[path = "tests_feed_podcast.rs"]
+mod tests_feed_podcast;
+
+#[cfg(test)]
+#[path = "tests_queue_scope.rs"]
+mod tests_queue_scope;
+
+#[cfg(test)]
+#[path = "tests_queue_consume.rs"]
+mod tests_queue_consume;
+
+#[cfg(test)]
+#[path = "tests_queue_mutation.rs"]
+mod tests_queue_mutation;
+
+#[cfg(test)]
+#[path = "tests_route_state.rs"]
+mod tests_route_state;
+
+#[cfg(test)]
+#[path = "tests_status_bar.rs"]
+mod tests_status_bar;
