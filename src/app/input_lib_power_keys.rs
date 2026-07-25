@@ -1,0 +1,417 @@
+use super::action::{power_album_track_command_for_key, Command};
+use super::input_resolver::KeyChord;
+use super::{App, LibSearch, PanelFocus};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::time::{Duration, Instant};
+
+impl App {
+    pub(super) fn active_power_album_track_lib_idx(&self) -> Option<usize> {
+        if self.library_tab == 0 {
+            return None;
+        }
+        let lib_idx = self.library_tab - 1;
+        let lib = self.libs.get(lib_idx)?;
+        if lib.album_track_focus.is_some() && self.is_viewing_album_folders(lib_idx) {
+            Some(lib_idx)
+        } else {
+            None
+        }
+    }
+
+    pub(super) fn handle_key_power_album_track_mode(&mut self, key: KeyEvent) -> Option<bool> {
+        let lib_idx = self.active_power_album_track_lib_idx()?;
+        let command = power_album_track_command_for_key(KeyChord::from_key(key), lib_idx)?;
+        Some(self.dispatch(command))
+    }
+
+    pub(super) fn handle_key_power_sidebar_toggle(&mut self, key: KeyEvent) -> Option<bool> {
+        if key.code != KeyCode::Char('h') || !key.modifiers.is_empty() || self.context_menu_open() {
+            return None;
+        }
+        Some(self.dispatch(Command::TogglePowerSidebar))
+    }
+
+    pub(super) fn handle_key_power_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
+        if key.modifiers.contains(KeyModifiers::ALT)
+            || key.modifiers.contains(KeyModifiers::CONTROL)
+            || self.context_menu_open()
+            || !matches!(self.panel_focus, PanelFocus::Library)
+            || self.library_tab == 0
+        {
+            return None;
+        }
+        // Let Power View's shared Tab/BackTab cycling path claim these keys.
+        if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
+            return None;
+        }
+        let lib_idx = self.library_tab - 1;
+        if key.code == KeyCode::Enter && self.power_selected_series_item(lib_idx).is_some() {
+            return None;
+        }
+        if self.libs[lib_idx].search.is_some() {
+            self.handle_lib_search_key(lib_idx, key);
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    /// Global view keys shared by the left-column handlers (`handle_lib_key`,
+    /// `handle_queue_key`, and Home nav via `handle_power_cw_key`): quit, tab
+    /// cycling, digit tab-jump, and the context-menu key. Each handler calls
+    /// this at the point in its own precedence order where these keys used
+    /// to be independently matched; genuinely per-view behavior (`/` search,
+    /// `Ctrl+a` enqueue) stays local. See
+    /// docs/adr/0002-centralized-input-handling.md, phase 3 (#132).
+    pub(super) fn handle_global_view_key(&mut self, key: KeyEvent) -> Option<bool> {
+        match key.code {
+            KeyCode::Char('q') if key.modifiers.is_empty() => Some(self.try_quit()),
+            KeyCode::Tab => {
+                self.library_tab_next();
+                Some(false)
+            }
+            KeyCode::BackTab => {
+                self.library_tab_prev();
+                Some(false)
+            }
+            KeyCode::Char(c @ '1'..='9') => {
+                let idx = (c as usize) - ('1' as usize);
+                if idx < self.tab_count() {
+                    self.set_library_tab(idx);
+                }
+                Some(false)
+            }
+            KeyCode::Char('.') => {
+                self.open_context_menu();
+                Some(false)
+            }
+            _ => None,
+        }
+    }
+
+    /// `Ctrl+a`: enqueue the current selection. Shared by `handle_lib_key`
+    /// (Home nav has its own enqueue binding) -- the queue view has no
+    /// "enqueue selected" concept, so `handle_queue_key` does not call this.
+    ///
+    /// Issue #209: `a` (no modifier) is the playback-context audio-track
+    /// binding (`playback_command_for_key`'s `ToggleMuteOrCycleAudio`,
+    /// guarded `!ctrl` there so Ctrl+a never reaches it). Previously Ctrl+a
+    /// fell through this front door unbound and hit that playback binding
+    /// unguarded, muting/cycling audio instead of enqueuing. This arm is
+    /// the actual fix: Ctrl+a now means "enqueue" here, before the playback
+    /// context even sees the key. Replaces the old `Ctrl+q`/`Alt+q`
+    /// bindings, which no longer enqueue.
+    fn handle_enqueue_selected_key(&mut self, key: KeyEvent) -> Option<bool> {
+        match key.code {
+            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.enqueue_selected();
+                Some(false)
+            }
+            _ => None,
+        }
+    }
+
+    fn handle_lib_search_key(&mut self, lib_idx: usize, key: KeyEvent) {
+        match key.code {
+            KeyCode::Esc => {
+                self.libs[lib_idx].search = None;
+            }
+            KeyCode::Backspace => {
+                let empty = self.libs[lib_idx]
+                    .search
+                    .as_ref()
+                    .is_none_or(|s| s.query.is_empty());
+                if empty {
+                    self.libs[lib_idx].search = None;
+                } else {
+                    self.libs[lib_idx].search.as_mut().unwrap().query.pop();
+                    self.update_lib_search(lib_idx);
+                }
+            }
+            KeyCode::Up => self.move_lib_cursor(-1),
+            KeyCode::Down => self.move_lib_cursor(1),
+            KeyCode::PageUp => {
+                let p = self.lib_page_size();
+                self.move_lib_cursor(-(p as i64));
+            }
+            KeyCode::PageDown => {
+                let p = self.lib_page_size();
+                self.move_lib_cursor(p as i64);
+            }
+            KeyCode::Home => self.jump_lib_cursor(false),
+            KeyCode::End => self.jump_lib_cursor(true),
+            KeyCode::Enter => {
+                if self.activate_recursive_album(lib_idx) {
+                    // active-search jump; unchanged
+                } else if self.is_viewing_album_folders(lib_idx) {
+                    self.activate_album_folder_row(lib_idx);
+                } else {
+                    self.select();
+                }
+            }
+            KeyCode::Char(c) => {
+                self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
+                self.update_lib_search(lib_idx);
+            }
+            _ => {}
+        }
+    }
+
+    pub(super) fn handle_lib_key(&mut self, lib_idx: usize, key: KeyEvent) -> Option<bool> {
+        if let Some(quit) = self.handle_enqueue_selected_key(key) {
+            return Some(quit);
+        }
+        if let Some(quit) = self.handle_global_view_key(key) {
+            return Some(quit);
+        }
+
+        match key.code {
+            KeyCode::Esc | KeyCode::Backspace => self.go_back(),
+            KeyCode::Up => self.move_lib_cursor(if self.is_viewing_season_grid(lib_idx) {
+                -4
+            } else {
+                -1
+            }),
+            KeyCode::Down => self.move_lib_cursor(if self.is_viewing_season_grid(lib_idx) {
+                4
+            } else {
+                1
+            }),
+            KeyCode::Left if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(-1),
+            KeyCode::Right if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(1),
+            KeyCode::PageUp => {
+                if !self.page_power_grouped_album_cursor(lib_idx, false) {
+                    let p = self.lib_page_size();
+                    self.move_lib_cursor(-(p as i64));
+                }
+            }
+            KeyCode::PageDown => {
+                if !self.page_power_grouped_album_cursor(lib_idx, true) {
+                    let p = self.lib_page_size();
+                    self.move_lib_cursor(p as i64);
+                }
+            }
+            KeyCode::Home => self.jump_lib_cursor(false),
+            KeyCode::End => self.jump_lib_cursor(true),
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if self.play_selected_artist_header(false) {
+                    return Some(false);
+                }
+                let item = self.current_lib_item();
+                if let Some(item) = item {
+                    if item.is_folder {
+                        let ct = self.libs[lib_idx].library.collection_type.clone();
+                        self.queue_source = crate::config::QueueSource::Collection {
+                            collection_type: ct,
+                        };
+                        self.play_folder(&item.id.clone());
+                        self.save_queue_state();
+                    } else {
+                        self.select();
+                    }
+                }
+            }
+            KeyCode::Enter => self.select(),
+            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.toggle_watched()
+            }
+            KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if self.play_selected_artist_header(true) {
+                    return Some(false);
+                }
+                self.shuffle_play()
+            }
+            KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let name = self.libs[lib_idx].library.name.clone();
+                self.status = format!("Rescan '{name}'? (Y/n)");
+                self.confirm_rescan = true;
+                self.pending_rescan_lib_idx = Some(lib_idx);
+            }
+            KeyCode::Char('r') => self.refresh_lib(),
+            KeyCode::Char('/') => {
+                if self.open_recursive_album_search(lib_idx) {
+                    return Some(false);
+                }
+                let (items, needs_full_load) = if self.is_feed_home_video_group_view(lib_idx) {
+                    (self.feed_home_video_selected_items(lib_idx), false)
+                } else {
+                    self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .map(|l| {
+                            let all = l.all_items.clone().unwrap_or_else(|| l.items.clone());
+                            // With a letter-range pill active, `l.total_count`
+                            // is the FILTERED range's count, not the whole
+                            // library's -- `l.items.len() < l.total_count`
+                            // alone would read a fully-loaded small range as
+                            // "nothing more to fetch" and search would run
+                            // over just that range. Force the full-library
+                            // fetch whenever a filter is active and it
+                            // hasn't already happened (`all_items` still
+                            // unset); `spawn_search_items_load` always fetches
+                            // the whole library unfiltered (see there).
+                            let needs = l.all_items.is_none()
+                                && (l.letter_filter.is_some() || l.items.len() < l.total_count);
+                            (all, needs)
+                        })
+                        .unwrap_or_default()
+                };
+                let n = items.len();
+                self.libs[lib_idx].search = Some(LibSearch {
+                    query: String::new(),
+                    items,
+                    results: (0..n).collect(),
+                    cursor: 0,
+                    scroll: 0,
+                    loading: needs_full_load,
+                });
+                if needs_full_load {
+                    self.spawn_search_items_load(lib_idx);
+                }
+                self.update_lib_search(lib_idx);
+            }
+            // Any other Ctrl/Alt-modified character is claimed here as a
+            // no-op. This mirrors the pre-phase-3 `is_lib_key` mirror's
+            // broad catch-all in `handle_queue_key`'s power-left-panel
+            // routing: unmapped Ctrl/Alt combos are swallowed while a
+            // library sub-panel is focused, rather than leaking through to
+            // an unrelated queue-view shortcut with the same bare key
+            // (e.g. `Ctrl+z` must not trigger queue-undo while the library
+            // panel has focus). Harmless at the other call site
+            // (`handle_key_view_dispatch`), which already swallows any
+            // unmatched key as the last entry in `CONTEXT_STACK`.
+            KeyCode::Char(_)
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    || key.modifiers.contains(KeyModifiers::ALT) => {}
+            _ => {
+                return None;
+            }
+        }
+        Some(false)
+    }
+
+    pub(super) fn adjust_volume(&mut self, delta: i64) {
+        self.playback_target().adjust_volume(self, delta);
+    }
+
+    pub(super) fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
+        let snapshot = self.input_snapshot();
+        match super::input_resolver::resolve_key(
+            super::input_resolver::InputContext::Playback,
+            &snapshot,
+            super::input_resolver::KeyChord::from_key(key),
+        ) {
+            super::input_resolver::KeyResolution::Command(cmd @ Command::TogglePlayPause) => {
+                let now = Instant::now();
+                let double_tap = self
+                    .last_space_press
+                    .is_some_and(|t| t.elapsed() < Duration::from_millis(300));
+                self.last_space_press = Some(now);
+                if double_tap {
+                    self.last_space_press = None;
+                    Some(self.dispatch(cmd))
+                } else {
+                    None
+                }
+            }
+            super::input_resolver::KeyResolution::Command(cmd @ Command::Stop) => {
+                let now = Instant::now();
+                let double_tap = self
+                    .last_esc_press
+                    .is_some_and(|t| t.elapsed() < Duration::from_millis(300));
+                self.last_esc_press = Some(now);
+                if double_tap {
+                    self.last_esc_press = None;
+                    Some(self.dispatch(cmd))
+                } else {
+                    None
+                }
+            }
+            super::input_resolver::KeyResolution::Command(cmd) => Some(self.dispatch(cmd)),
+            // Swallow is unreachable for Playback today; both non-command outcomes
+            // mean "not a playback key" → let it fall through (`None`).
+            super::input_resolver::KeyResolution::FallThrough
+            | super::input_resolver::KeyResolution::Swallow => None,
+        }
+    }
+
+    /// Handle a key for the focused power-view home list (all groups: CW + library latest).
+    /// Returns true if the key was consumed (others fall through to focus nav).
+    pub(super) fn handle_power_cw_key(&mut self, key: KeyEvent) -> bool {
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        match key.code {
+            KeyCode::Up => {
+                self.power_home_move_up();
+                true
+            }
+            KeyCode::Down => {
+                self.power_home_move_down();
+                true
+            }
+            KeyCode::Char('[') if !ctrl => {
+                self.power_home_move_section(-1);
+                true
+            }
+            KeyCode::Char(']') if !ctrl => {
+                self.power_home_move_section(1);
+                true
+            }
+            KeyCode::PageUp => {
+                self.power_home_move_cursor(-(self.power_cw_page() as i64));
+                true
+            }
+            KeyCode::PageDown => {
+                self.power_home_move_cursor(self.power_cw_page() as i64);
+                true
+            }
+            KeyCode::Home => {
+                self.power_home_select_start();
+                true
+            }
+            KeyCode::End => {
+                self.power_home_select_end();
+                true
+            }
+            KeyCode::Enter if ctrl => {
+                self.power_home_enqueue();
+                true
+            }
+            KeyCode::Enter => {
+                self.power_home_play();
+                true
+            }
+            // Ctrl+a: enqueue (issue #209). Replaces the old Ctrl+q/Alt+q
+            // bindings, which no longer enqueue — see
+            // `handle_enqueue_selected_key`'s doc comment for why Ctrl+a
+            // specifically had to become the enqueue key here.
+            KeyCode::Char('a') if ctrl => {
+                self.power_home_enqueue();
+                true
+            }
+            KeyCode::Char('w') if ctrl => {
+                self.power_cw_toggle_watched();
+                true
+            }
+            KeyCode::Char('.') => {
+                self.open_context_menu();
+                true
+            }
+            KeyCode::Delete => {
+                let cursor = self.home.home_cursor;
+                let cw_len = self.home.continue_items.len();
+                if cursor < cw_len {
+                    let saved = self.home.continue_cursor;
+                    self.home.continue_cursor = cursor;
+                    self.remove_from_continue_watching();
+                    self.home.continue_cursor = saved;
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn power_cw_page(&self) -> usize {
+        (self.layout.main.left_area.height as usize).max(1)
+    }
+}
