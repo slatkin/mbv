@@ -34,7 +34,7 @@ impl App {
     ) -> (u16, bool) {
         // On short terminals (<= 30 rows) cap the card image at 12 rows so the queue
         // list keeps adequate space; taller terminals cap at 18 rows.
-        let max_h = max_h.min(if self.terminal_height <= 30 { 12 } else { 18 });
+        let max_h = max_h.min(if self.terminal_height <= 30 { 12 } else { 24 });
         let image_loading = self.card_image_loading.contains(cache_key);
         if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
@@ -98,11 +98,11 @@ impl App {
     fn render_power_card_placeholder(&mut self, f: &mut Frame, area: Rect) -> (u16, bool) {
         self.ensure_placeholder_card_image();
         let rendered =
-            self.render_card_image(f, area, QUEUE_CARD_PLACEHOLDER_KEY, area.height.min(18));
+            self.render_card_image(f, area, QUEUE_CARD_PLACEHOLDER_KEY, area.height.min(24));
         if rendered == (0, false) {
             (
                 area.height
-                    .min(if self.terminal_height <= 30 { 12 } else { 18 }),
+                    .min(if self.terminal_height <= 30 { 12 } else { 24 }),
                 false,
             )
         } else {
