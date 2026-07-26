@@ -289,7 +289,7 @@ fn clearing_remote_queue_does_not_prompt_to_save_local_playlist() {
 
     app.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
 
-    assert!(!app.show_save_playlist_modal);
+    assert!(app.confirm_modal.is_none());
     assert!(app.pending_queue_action.is_none());
     assert!(app.remote_player_tab.as_ref().unwrap().items.is_empty());
     assert!(app.queue_dirty);

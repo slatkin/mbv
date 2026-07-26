@@ -212,20 +212,30 @@ fn f4_opens_playlists_via_handle_key() {
 #[test]
 fn confirm_clear_queue_yes_dispatches_clear_via_handle_key() {
     let mut app = make_app_stub();
-    app.confirm_clear_queue = true;
+    app.confirm_modal = Some(crate::app::ConfirmModal {
+        title: " Clear Queue ".into(),
+        message: "Clear the queue?".into(),
+        hint: "[y] Confirm    [Esc] Cancel".into(),
+        on_confirm: crate::app::ConfirmAction::ClearQueue,
+    });
     app.handle_key(ev(KeyCode::Char('y'), KeyModifiers::NONE));
     assert!(
-        !app.confirm_clear_queue,
-        "confirm flag clears regardless of answer"
+        app.confirm_modal.is_none(),
+        "confirm modal clears regardless of answer"
     );
 }
 
 #[test]
 fn confirm_rescan_no_clears_flag_without_rescan_via_handle_key() {
     let mut app = make_app_stub();
-    app.confirm_rescan = true;
+    app.confirm_modal = Some(crate::app::ConfirmModal {
+        title: " Rescan Library ".into(),
+        message: "Rescan 'Movies'?".into(),
+        hint: "[y] Confirm    [Esc] Cancel".into(),
+        on_confirm: crate::app::ConfirmAction::RescanLibrary(0),
+    });
     app.handle_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
-    assert!(!app.confirm_rescan);
+    assert!(app.confirm_modal.is_none());
 }
 
 #[test]
@@ -469,7 +479,10 @@ fn c_prompts_clear_queue_confirmation_via_handle_key() {
         .items
         .push(crate::app::tests::make_item("1", "Track"));
     app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
-    assert!(app.confirm_clear_queue);
+    assert!(matches!(
+        app.confirm_modal.as_ref().map(|m| &m.on_confirm),
+        Some(crate::app::ConfirmAction::ClearQueue)
+    ));
 }
 
 #[test]
@@ -487,7 +500,7 @@ fn c_does_not_prompt_clear_queue_while_context_menu_is_open_via_handle_key() {
     app.context_menu = Some(test_empty_context_menu());
     app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
     assert!(
-        !app.confirm_clear_queue,
+        app.confirm_modal.is_none(),
         "clear-queue confirmation must not open while a context menu is open"
     );
 }
@@ -532,11 +545,17 @@ fn context_stack_order_is_pinned() {
     // of the Standard view. `power_lib_search` is Power's equivalent and
     // was already present above it in the stack, so removing the
     // now-nonexistent entry doesn't change any surviving precedence.
+    //
+    // Updated for the shared-confirmation-modal change: `save_modal`,
+    // `confirm_clear_queue`, and `confirm_rescan` collapsed into one
+    // `confirm_modal` entry (dispatching on `App::confirm_modal`), placed
+    // at the topmost rank of the ranks it replaces (`save_modal`'s), per
+    // design.md decision 2.
     let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
     assert_eq!(
         names,
         vec![
-            "save_modal",
+            "confirm_modal",
             "save_playlist",
             "settings",
             "help",
@@ -547,8 +566,6 @@ fn context_stack_order_is_pinned() {
             "home_search",
             "lib_search",
             "sidebar_toggle_h",
-            "confirm_clear_queue",
-            "confirm_rescan",
             "confirm_skip_intro",
             "confirm_next_up",
             "clear_queue_prompt_c",

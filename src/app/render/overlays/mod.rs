@@ -1,3 +1,4 @@
+mod confirm_modal;
 mod context_menu;
 mod help;
 mod library_routes;

@@ -455,7 +455,7 @@ impl App {
                                         source: pl_source,
                                     };
                                     self.replace_queue_or_prompt(action);
-                                    if !self.show_save_playlist_modal {
+                                    if self.confirm_modal.is_none() {
                                         self.show_playlists = false;
                                         self.set_panel_focus(PanelFocus::Queue);
                                     }

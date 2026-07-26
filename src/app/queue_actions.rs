@@ -1,5 +1,7 @@
 use super::ui_util::is_playable;
-use super::{App, LibEvent, PendingQueueAction, QueueScope, UndoEntry};
+use super::{
+    App, ConfirmAction, ConfirmModal, LibEvent, PendingQueueAction, QueueScope, UndoEntry,
+};
 use mbv_core::api::MediaItem;
 use mbv_core::player::PlayerCommand;
 use std::sync::Arc;
@@ -22,9 +24,12 @@ impl App {
             return;
         }
         if controls_playback_queue && active && current_idx == pos {
-            self.confirm_remove_idx = Some(pos);
-            self.status = "Remove now-playing item and stop playback? (y/N)".into();
-            self.status_expires = None;
+            self.confirm_modal = Some(ConfirmModal {
+                title: " Remove Item ".into(),
+                message: "Remove now-playing item and stop playback?".into(),
+                hint: "[y] Confirm    [Esc] Cancel".into(),
+                on_confirm: ConfirmAction::RemoveActiveQueueItem(pos),
+            });
             return;
         }
         let Some(item) = self.queue_for_scope_mut(scope).remove_slot_at(pos) else {
@@ -170,7 +175,13 @@ impl App {
             && self.queue_is_saved_playlist()
         {
             self.pending_queue_action = Some(action);
-            self.show_save_playlist_modal = true;
+            let name = super::ui_util::trunc_str(self.queue_playlist_name(), 36);
+            self.confirm_modal = Some(ConfirmModal {
+                title: " Unsaved Playlist Changes ".into(),
+                message: format!("Save changes to \"{}\"?", name),
+                hint: "[s]Save  [d]Discard  [Esc]Cancel".into(),
+                on_confirm: ConfirmAction::DiscardOrSaveDirtyPlaylist,
+            });
         } else {
             self.execute_pending_queue_action(action);
         }
