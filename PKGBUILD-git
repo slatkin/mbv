@@ -1,16 +1,16 @@
 # Maintainer: slatkin@gmail.com
-pkgname=mby-git
+pkgname=mbv-git
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="Terminal client for Emby media server (git)"
 arch=('x86_64')
-url="https://github.com/slatkin/mby"
+url="https://github.com/slatkin/mbv"
 license=('MIT')
 depends=('mpv' 'openssl')
 makedepends=('rust' 'cargo' 'nasm' 'git')
-provides=('mby')
-conflicts=('mby')
-source=("${pkgname}::git+https://github.com/slatkin/mby.git")
+provides=('mbv')
+conflicts=('mbv')
+source=("${pkgname}::git+https://github.com/slatkin/mbv.git")
 sha256sums=('SKIP')
 
 pkgver() {
@@ -30,11 +30,15 @@ build() {
 
 package() {
     cd "${pkgname}"
-    install -Dm755 "target/release/mby" "${pkgdir}/usr/bin/mby"
-    install -Dm644 "scripts/mby.lua" "${pkgdir}/usr/share/mby/scripts/mby.lua"
+    install -Dm755 "target/release/mbv" "${pkgdir}/usr/bin/mbv"
+    install -Dm755 "target/release/mbvd" "${pkgdir}/usr/bin/mbvd"
+    install -Dm644 "scripts/mbv.lua" "${pkgdir}/usr/share/mbv/scripts/mbv.lua"
+    for script in scripts/mbv_*.lua; do
+        install -Dm644 "${script}" "${pkgdir}/usr/share/mbv/scripts/${script##*/}"
+    done
     install -Dm644 "fonts/Material-Design-Iconic-Font.ttf" \
-        "${pkgdir}/usr/share/mby/fonts/Material-Design-Iconic-Font.ttf"
-    install -Dm644 "dist/config.toml" "${pkgdir}/usr/share/mby/config.toml"
-    install -Dm644 "contrib/mbv.service" "${pkgdir}/usr/lib/systemd/system/mbv.service"
-    install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/mby/LICENSE"
+        "${pkgdir}/usr/share/mbv/fonts/Material-Design-Iconic-Font.ttf"
+    install -Dm644 "dist/config.toml" "${pkgdir}/usr/share/mbv/config.toml"
+    install -Dm644 "contrib/mbvd.service" "${pkgdir}/usr/lib/systemd/system/mbvd.service"
+    install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/mbv/LICENSE"
 }

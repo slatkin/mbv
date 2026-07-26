@@ -1,0 +1,16 @@
+name: Code File Lines
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  code-file-lines:
+    name: code-file-lines
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check governed code-file sizes
+        run: make check-code-file-lines

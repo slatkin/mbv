@@ -64,6 +64,7 @@ jobs:
           cp target/release/mbv "${DIST}/"
           cp target/release/mbvd "${DIST}/"
           cp scripts/mbv.lua "${DIST}/"
+          cp scripts/mbv_*.lua "${DIST}/"
           cp fonts/Material-Design-Iconic-Font.ttf "${DIST}/"
           cp dist/config.toml "${DIST}/"
           cp contrib/mbvd.service "${DIST}/"

@@ -224,8 +224,17 @@ mod playback_header_mouse_tests;
 mod power_movie_detail_tests;
 
 #[cfg(test)]
+#[path = "input_power_music_track_artist_fetch_tests.rs"]
+mod power_music_track_artist_fetch_tests;
+#[cfg(test)]
 #[path = "input_power_music_track_focus_tests.rs"]
 mod power_music_track_focus_tests;
+#[cfg(test)]
+#[path = "input_power_music_track_navigation_tests.rs"]
+mod power_music_track_navigation_tests;
+#[cfg(test)]
+#[path = "input_power_music_track_scope_tests.rs"]
+mod power_music_track_scope_tests;
 
 #[cfg(test)]
 #[path = "input_power_library_scope_routing_tests.rs"]

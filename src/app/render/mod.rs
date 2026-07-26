@@ -5,6 +5,10 @@ mod album_detail;
 mod album_plan;
 mod card;
 mod chrome;
+mod chrome_player;
+mod chrome_seekbar;
+mod chrome_status;
+mod chrome_tabs;
 mod detail;
 mod detail_series;
 mod detail_series_view;
@@ -429,6 +433,33 @@ impl App {
     }
 }
 
+#[cfg(test)]
+#[path = "tests_album_detail.rs"]
+mod album_detail_tests;
+#[cfg(test)]
+#[path = "tests_album_focus.rs"]
+mod album_focus_tests;
+#[cfg(test)]
+#[path = "tests_album_listing.rs"]
+mod album_listing_tests;
+#[cfg(test)]
+#[path = "tests_music_detail.rs"]
+mod music_detail_tests;
+#[cfg(test)]
+#[path = "tests_music_groups.rs"]
+mod music_group_tests;
+#[cfg(test)]
+#[path = "tests_non_music.rs"]
+mod non_music_tests;
+#[cfg(test)]
+#[path = "tests_panel.rs"]
+mod panel_tests;
+#[cfg(test)]
+#[path = "tests_queue.rs"]
+mod queue_tests;
+#[cfg(test)]
+#[path = "tests_scroll_pills.rs"]
+mod scroll_pills_tests;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;

@@ -1,0 +1,675 @@
+use crate::api::MediaItem;
+use std::env;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub server_url: String,
+    pub username: String,
+    pub password: String,
+    pub api_key: String,
+    pub hidden_libraries: Vec<String>,
+    pub hidden_latest: Vec<String>,
+    pub show_audio_window: bool,
+    pub use_mpv_config: bool,
+    pub audio_pipe_enabled: bool,
+    pub audio_pipe_path: String,
+    pub audio_pipe_samplerate: u32, // fixed output rate forced on the pipe (Hz); mpv resamples everything to this
+    pub audio_pipe_bitdepth: u8,    // fixed PCM bit depth for the pipe (16|24|32)
+    pub always_play_next: bool,
+    pub consume_videos: bool,
+    pub consume_audio: bool,
+    pub always_skip_intro: bool,
+    pub show_systray_icon: bool,
+    pub no_scripts: bool,
+    /// Stay-alive mode (issue #156): survive the controlling terminal
+    /// closing while still playing, via an owned pty relay. Consulted only
+    /// at launch (`-a`/`--alive` forces it for one launch regardless); a
+    /// running bare session is never live-promoted. Default off.
+    pub stay_alive: bool,
+    /// On any quit with a dirty saved-playlist queue: `true` (default)
+    /// silently pushes the edits to Emby; `false` silently discards them.
+    /// `queue_state.json` local persistence is unconditional either way.
+    pub save_playlist_on_quit: bool,
+    pub autoload: bool,
+    pub music_levels: Vec<String>,
+    pub system_notifications: bool,
+    pub save_playlist_on_consume: bool,
+    pub save_playlist_on_consume_audio: bool,
+    // [playback] — client-only subtitle/audio preferences (never pushed to Emby server)
+    pub subtitle_mode: String, // "Default"|"Always"|"Smart"|"OnlyForced"|"None"|"HearingImpaired"; "" = inherit from Emby
+    pub subtitle_lang: String, // full language name, e.g. "English"; "" = any
+    pub audio_lang: String,    // full language name, e.g. "English"; "" = any
+    pub my_languages: Vec<String>, // user's relevant languages; filters subtitle/audio lang cycling
+    pub feed_view_libraries: Vec<String>, // libraries treated as feed view (unplayed, date-sorted)
+    /// Library name (lowercased) -> resolved `tcp://host:port` daemon
+    /// endpoint, from `[library_routes]` (#256, replacing #239's
+    /// device-name values). Playback/enqueue resolved to one of these
+    /// libraries connects straight to this stored endpoint -- no
+    /// `/Sessions` lookup on the play/enqueue path at all. No device name
+    /// is stored; a device's friendly name is used only transiently by
+    /// the F2 "Library Routes" picker to let the user *pick* a device,
+    /// then immediately resolved to an endpoint before being written here.
+    /// A value that isn't a valid `tcp://` endpoint (including a stale
+    /// pre-#256 device-name string) is malformed: logged and skipped by
+    /// `resolve_library_route`, never routed. No `"*"` wildcard. Editable
+    /// via the F2 Settings "Library routes" row, and hand-editable in
+    /// `config.toml`.
+    pub library_routes: std::collections::HashMap<String, String>,
+    pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
+    pub quit_timeout_secs: u64,      // how long quit waits for local player teardown (seconds)
+    pub daemon_broadcast_ms: u64, // how often the daemon broadcasts status to connected TUIs (ms)
+    pub daemon_client_endpoint: String, // [daemon.client] endpoint; empty = auto-detect local daemon
+    pub daemon_server_tcp_listen: String, // [daemon.server] tcp_listen; empty = unix-only unless system instance default applies
+    /// Reconnect at startup to whatever remote connection (a #223 library
+    /// route, or a Sessions-panel direct-remote/attached session) was
+    /// active when mbv last exited (issue #236 -- #222's original
+    /// "auto-reconnect" intent, which #222's own lazy-connect-only design
+    /// never actually implemented). Client-side setting: deliberately
+    /// under `[general]`, not `[daemon.client]`/`[daemon.server]`, since
+    /// this is a routing/reconnect *preference*, not daemon configuration.
+    /// Default off; editable from config.toml or the F2 Settings panel.
+    pub auto_reconnect: bool,
+}
+
+pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            server_url: String::new(),
+            username: String::new(),
+            password: String::new(),
+            api_key: String::new(),
+            hidden_libraries: vec!["live tv".into()],
+            hidden_latest: vec![],
+            show_audio_window: false,
+            use_mpv_config: false,
+            audio_pipe_enabled: false,
+            audio_pipe_path: "/tmp/mbv-pipe".to_string(),
+            audio_pipe_samplerate: 192_000,
+            audio_pipe_bitdepth: 32,
+            always_play_next: false,
+            consume_videos: false,
+            consume_audio: false,
+            always_skip_intro: false,
+            show_systray_icon: true,
+            no_scripts: false,
+            stay_alive: false,
+            save_playlist_on_quit: true,
+            autoload: false,
+            music_levels: vec![],
+            system_notifications: false,
+            save_playlist_on_consume: false,
+            save_playlist_on_consume_audio: false,
+            subtitle_mode: String::new(),
+            subtitle_lang: String::new(),
+            audio_lang: String::new(),
+            my_languages: vec![],
+            feed_view_libraries: vec![],
+            library_routes: std::collections::HashMap::new(),
+            progress_interval_secs: 10,
+            quit_timeout_secs: 5,
+            daemon_broadcast_ms: 500,
+            daemon_client_endpoint: String::new(),
+            daemon_server_tcp_listen: String::new(),
+            auto_reconnect: false,
+        }
+    }
+}
+
+impl Config {
+    /// The mpv audio-pipe FIFO path to write to, or `None` when the feature
+    /// is disabled. Centralizes the enabled/path pair so callers never need
+    /// to re-derive this themselves.
+    pub fn audio_pipe_target(&self) -> Option<String> {
+        if self.audio_pipe_enabled {
+            Some(self.audio_pipe_path.clone())
+        } else {
+            None
+        }
+    }
+}
+
+/// Resolves the configured endpoint for a library name (#256). Matches
+/// case-insensitively (the query is lowercased before lookup; `routes`'
+/// keys are already lowercased by `parse_config`). No wildcard fallback --
+/// returns `None` if the library has no route, and the caller stays local.
+///
+/// Parses the stored string via `DaemonEndpoint::parse` and requires it to
+/// be `Tcp(_)` -- library routing is a remote-only feature (#239 addendum:
+/// "#222 and #223 are remote-connection features only"), so anything else
+/// is malformed: a bare pre-#256 device-name string (which `parse` would
+/// otherwise silently accept as a bogus `Unix(PathBuf)` socket path), a
+/// `unix://` value, or a bare `local`/empty value are all logged and
+/// skipped rather than routed. This is a pure, synchronous, no-network
+/// lookup -- the entire point of #256 is that route resolution on the
+/// play/enqueue path never touches `/Sessions` again.
+pub fn resolve_library_route(
+    routes: &std::collections::HashMap<String, String>,
+    library_name: &str,
+) -> Option<crate::remote_player::DaemonEndpoint> {
+    let raw = routes.get(&library_name.to_lowercase())?;
+    match crate::remote_player::DaemonEndpoint::parse(raw) {
+        Ok(endpoint @ crate::remote_player::DaemonEndpoint::Tcp(_)) => Some(endpoint),
+        Ok(other) => {
+            log::warn!(
+                target: "library_route",
+                "library_routes entry {raw:?} parsed as {other:?}, but library routing is tcp://-only; skipping"
+            );
+            None
+        }
+        Err(e) => {
+            log::warn!(
+                target: "library_route",
+                "library_routes entry {raw:?} is not a valid tcp:// endpoint: {e}; skipping"
+            );
+            None
+        }
+    }
+}
+
+pub fn is_system_instance() -> bool {
+    env::var("MBV_SYSTEM").ok().as_deref() == Some("1")
+}
+
+pub fn default_daemon_server_tcp_listen() -> String {
+    if is_system_instance() {
+        DEFAULT_SYSTEM_DAEMON_TCP_LISTEN.to_string()
+    } else {
+        String::new()
+    }
+}
+
+fn config_dir() -> PathBuf {
+    // See `TEST_CONFIG_DIR_OVERRIDE` / `TestStateDirGuard`: without this,
+    // `config_dir()` (and therefore `config_path()`/`save_config_settings`)
+    // had no test isolation at all -- unlike `state_dir()`, *every* call in
+    // a test build hit the real `$XDG_CONFIG_HOME`/`~/.config/mbv` on disk.
+    // Any App-level test that reached a synchronous config-saving path
+    // (e.g. `cycle_subtitle_mode`, `handle_library_routes_enter`, closing a multiselect
+    // settings popup) would silently clobber the developer's real
+    // config.toml. `TestStateDirGuard` already attaches to every `App`
+    // built in test mode, so piggybacking the override there closes this
+    // for the whole suite at once.
+    #[cfg(any(test, feature = "test-support"))]
+    if let Some(dir) = TEST_CONFIG_DIR_OVERRIDE.with(|c| c.borrow().clone()) {
+        return dir;
+    }
+    if is_system_instance() {
+        return PathBuf::from("/etc/mbv");
+    }
+    let base = env::var("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            PathBuf::from(home).join(".config")
+        });
+    base.join("mbv")
+}
+
+pub fn cache_dir() -> PathBuf {
+    if is_system_instance() {
+        return PathBuf::from("/var/cache/mbv");
+    }
+    let base = env::var("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            PathBuf::from(home).join(".cache")
+        });
+    base.join("mbv")
+}
+
+// Test-only escape hatch: `state_dir()` (and therefore `queue_state_path()`,
+// `save_queue_state`/`load_queue_state`/`clear_queue_state`) is used not just
+// by tests that are explicitly *about* path resolution, but incidentally by
+// any test that drives consume-mode/queue logic through `App` methods like
+// `save_queue_state()` -- e.g. tests that fire `PlayerEvent::Stopped` and
+// assert on in-memory queue state have no reason to care where the file
+// lands, so historically nobody bothered to isolate them. But
+// `XDG_STATE_HOME`/`MBV_SYSTEM` are process-global env vars: an unguarded
+// test's call to `state_dir()` observes whatever value another, *properly
+// locked* test happens to have set at that exact moment (env vars have no
+// per-thread scoping), so it can transiently read -- and write into --
+// a locked test's private tempdir mid-race, corrupting it. A thread-local
+// override sidesteps the whole problem for these incidental callers: it's
+// only visible on the thread that set it, so two tests running on different
+// threads can never observe (or clobber) each other's override, no lock
+// required. See `TestStateDirGuard` and issue #106.
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    static TEST_STATE_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+// `config_dir()` (config.toml, via `save_config_settings`) gets the exact
+// same treatment as `state_dir()` above, for the exact same reason: some
+// App-level settings toggles (`cycle_subtitle_mode`, `handle_library_routes_enter`,
+// closing a multiselect settings popup) write to disk synchronously rather
+// than through the debounced `settings_save_at` path, so any unguarded test
+// that reaches one of them writes straight into the developer's real
+// config.toml. `TestStateDirGuard` sets this override alongside its own so
+// every test that already uses it (including, automatically, every `App`
+// built in a test binary via `_test_state_dir_guard`) gets both for free.
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    static TEST_CONFIG_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+static TEST_DEFAULT_STATE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+#[cfg(any(test, feature = "test-support"))]
+pub struct TestStateDirGuard;
+
+#[cfg(any(test, feature = "test-support"))]
+impl TestStateDirGuard {
+    /// Points `state_dir()` at a fresh, unique tempdir for the lifetime of
+    /// this guard, visible only on the calling thread. Use this in any test
+    /// that drives `App` logic which might incidentally call
+    /// `save_queue_state`/`restore_queue_state` (e.g. via consume-mode event
+    /// handling) but isn't itself testing path resolution -- so it never
+    /// touches a real on-disk path or races a sibling test.
+    pub fn new() -> Self {
+        let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
+        Self::new_at(dir)
+    }
+
+    /// Points `state_dir()` (and `config_dir()`) at `dir` for the lifetime
+    /// of this guard. Both point at the same directory -- their file names
+    /// never collide (`config.toml` vs. `prefs.json`/`token.json`/
+    /// `queue_state.json`) -- so one guard, one tempdir, one cleanup.
+    pub fn new_at(dir: impl Into<PathBuf>) -> Self {
+        let dir = dir.into();
+        let _ = std::fs::create_dir_all(&dir);
+        TEST_STATE_DIR_OVERRIDE.with(|c| *c.borrow_mut() = Some(dir.clone()));
+        TEST_CONFIG_DIR_OVERRIDE.with(|c| *c.borrow_mut() = Some(dir));
+        TestStateDirGuard
+    }
+
+    /// Installs a fresh override only when this thread does not already have
+    /// one. This lets broad app-test fixtures isolate incidental queue-state
+    /// writes without shadowing tests that explicitly seeded queue state first.
+    pub fn new_if_unset() -> Option<Self> {
+        if TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow().is_some()) {
+            None
+        } else {
+            Some(Self::new())
+        }
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl Default for TestStateDirGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
+impl Drop for TestStateDirGuard {
+    fn drop(&mut self) {
+        // Both overrides point at the same physical directory (see
+        // `new_at`) and are always set/cleared together, so only one
+        // `take()` needs to delete the directory -- but both thread-locals
+        // must be cleared regardless, or the config override would keep
+        // pointing at a directory this guard is about to delete.
+        let dir = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow_mut().take());
+        TEST_CONFIG_DIR_OVERRIDE.with(|c| c.borrow_mut().take());
+        if let Some(dir) = dir {
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+}
+
+fn state_dir() -> PathBuf {
+    #[cfg(any(test, feature = "test-support"))]
+    if let Some(dir) = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow().clone()) {
+        return dir;
+    }
+    #[cfg(test)]
+    {
+        if env::var_os("XDG_STATE_HOME").is_none() && env::var_os("MBV_SYSTEM").is_none() {
+            return TEST_DEFAULT_STATE_DIR
+                .get_or_init(|| {
+                    std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()))
+                })
+                .clone();
+        }
+    }
+    if is_system_instance() {
+        return PathBuf::from("/var/lib/mbv");
+    }
+    let base = env::var("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            PathBuf::from(home).join(".local").join("state")
+        });
+    base.join("mbv")
+}
+
+pub fn data_dir_system_or_local() -> PathBuf {
+    if is_system_instance() {
+        return PathBuf::from("/var/lib/mbv");
+    }
+    let base = env::var("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            PathBuf::from(home).join(".local").join("share")
+        });
+    base.join("mbv")
+}
+
+fn queue_state_path() -> PathBuf {
+    state_dir().join("queue_state.json")
+}
+
+fn library_position_state_path() -> PathBuf {
+    state_dir().join("library_position_state.json")
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum QueueSource {
+    Playlist {
+        id: Option<String>,
+        name: String,
+    },
+    Album,
+    Series,
+    Shuffle,
+    Remote,
+    Collection {
+        collection_type: String,
+    },
+    #[default]
+    Unknown,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct QueueState {
+    #[serde(default)]
+    pub source: QueueSource,
+    // Full items, not just IDs: restoring the queue must be instant and local
+    // (no network round-trip), so everything needed to display and play it
+    // has to already be on disk. A separate best-effort background fetch
+    // refreshes played/position state from the server afterward.
+    #[serde(default)]
+    pub items: Vec<MediaItem>,
+    #[serde(default)]
+    pub cursor: usize,
+    pub last_played_item_id: Option<String>,
+    pub last_played_completed: bool,
+    // Per-item resume positions saved at quit time. Used on restore to override stale Emby
+    // UserData when a fresh launch races with Emby's async position write.
+    #[serde(default)]
+    pub positions: std::collections::HashMap<String, i64>,
+}
+
+pub fn save_queue_state(state: &QueueState) {
+    let path = queue_state_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(json) = serde_json::to_string(state) {
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, &json).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}
+
+pub fn load_queue_state() -> Option<QueueState> {
+    let text = std::fs::read_to_string(queue_state_path()).ok()?;
+    match serde_json::from_str(&text) {
+        Ok(state) => Some(state),
+        Err(e) => {
+            log::warn!(target: "queue", "queue_state.json failed to parse, queue not restored: {e}");
+            None
+        }
+    }
+}
+
+pub fn clear_queue_state() {
+    let _ = std::fs::remove_file(queue_state_path());
+}
+
+/// Which remote connection (if any) was active when mbv last exited
+/// (issue #236). `App::teardown` writes this; `App::new` reads it back at
+/// the next launch when `Config.auto_reconnect` is true. The two
+/// variants mirror `App`'s own separate `active_route` (#223 library
+/// routing) and `connected_session_id`/`connected_session_state`
+/// (Sessions-panel direct-remote/attached) fields -- #222 and #223 were
+/// distinct features and stay distinct here, even though both are
+/// restored under the same on/off switch.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind")]
+pub enum LastRemoteConnection {
+    /// A #223 library route, keyed by the library name that was resolved
+    /// active (`App.active_route`). Re-resolved fresh against current
+    /// `library_routes` at startup, not replayed verbatim -- if the config
+    /// changed since the last exit, the new config wins.
+    LibraryRoute { library: String },
+    /// A Sessions-panel direct-remote or attached session, keyed by the
+    /// other device's name (`SessionInfo.device_name`), not its session id
+    /// -- Emby session ids are ephemeral per-connection and would not
+    /// still identify the same device at the next launch.
+    DirectSession { device_name: String },
+}
+
+fn last_remote_connection_path() -> PathBuf {
+    state_dir().join("last_remote_connection.json")
+}
+
+/// Persists (or, given `None`, clears) the connection active at exit.
+/// Called from `App::teardown` only when `auto_reconnect` is
+/// enabled -- when the feature is off, this file is never written or
+/// read, by design (Task 1's `Global Constraints`).
+fn save_last_remote_connection_at(
+    path: &std::path::Path,
+    conn: Option<&LastRemoteConnection>,
+) -> Result<(), String> {
+    let Some(conn) = conn else {
+        return match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("remove {}: {e}", path.display())),
+        };
+    };
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("create directory {}: {e}", dir.display()))?;
+    }
+    let json =
+        serde_json::to_string(conn).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &json).map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, path)
+        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+}
+
+pub fn save_last_remote_connection(conn: Option<&LastRemoteConnection>) -> Result<(), String> {
+    save_last_remote_connection_at(&last_remote_connection_path(), conn)
+}
+
+fn load_last_remote_connection_at(
+    path: &std::path::Path,
+) -> Result<Option<LastRemoteConnection>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("read {}: {e}", path.display())),
+    };
+    match serde_json::from_str(&text) {
+        Ok(conn) => Ok(Some(conn)),
+        Err(e) => {
+            std::fs::remove_file(path).map_err(|remove_error| {
+                format!(
+                    "parse {}: {e}; remove corrupt {}: {remove_error}",
+                    path.display(),
+                    path.display()
+                )
+            })?;
+            Err(format!(
+                "parse {}: {e}; corrupt file removed",
+                path.display()
+            ))
+        }
+    }
+}
+
+pub fn load_last_remote_connection() -> Result<Option<LastRemoteConnection>, String> {
+    load_last_remote_connection_at(&last_remote_connection_path())
+}
+
+/// One library position per library (#361 collapsed the old two-scope
+/// `{default, power}` split -- there is only one view now, so there is only
+/// one saved position per library).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct LibraryPositionState {
+    #[serde(default)]
+    pub libraries: std::collections::HashMap<String, LibraryPosition>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct LibraryPosition {
+    #[serde(default)]
+    pub levels: Vec<LibraryPositionLevel>,
+    #[serde(default)]
+    pub feed_selected_group: usize,
+    #[serde(default)]
+    pub feed_video_cursor: usize,
+    #[serde(default)]
+    pub feed_video_scroll: usize,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct LibraryPositionLevel {
+    pub parent_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub focused_item_id: Option<String>,
+    #[serde(default)]
+    pub cursor_index: usize,
+    #[serde(default)]
+    pub item_types: Option<String>,
+    #[serde(default)]
+    pub unplayed_only: bool,
+    #[serde(default)]
+    pub sort_by: String,
+    #[serde(default)]
+    pub sort_order: String,
+    /// Index of the active letter-range pill (see `app::render::power::LetterFilter`),
+    /// for the top level of a large library. `None` = unfiltered / not applicable.
+    #[serde(default)]
+    pub letter_filter_index: Option<usize>,
+    /// The library's TRUE unfiltered item count, captured for the top level
+    /// of a library so a restored session doesn't need an extra unfiltered
+    /// fetch just to re-derive whether the letter pill row applies.
+    /// `None` for non-root levels (or when never captured).
+    #[serde(default)]
+    pub library_total: Option<usize>,
+}
+
+pub fn save_library_position_state(state: &LibraryPositionState) {
+    let path = library_position_state_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(json) = serde_json::to_string(state) {
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, &json).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}
+
+pub fn load_library_position_state() -> LibraryPositionState {
+    let text = match std::fs::read_to_string(library_position_state_path()) {
+        Ok(text) => text,
+        Err(_) => return LibraryPositionState::default(),
+    };
+    match serde_json::from_str(&text) {
+        Ok(state) => state,
+        Err(e) => {
+            log::warn!(target: "library_position", "library_position_state.json failed to parse: {e}");
+            LibraryPositionState::default()
+        }
+    }
+}
+
+/// Visibility/size of the now-playing panel, cycled with `h` and remembered across restarts.
+fn migrate_to_state(filename: &str) -> PathBuf {
+    let dest = state_dir().join(filename);
+    if dest.exists() {
+        return dest;
+    }
+    if let Some(parent) = dest.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let cache = cache_dir().join(filename);
+    if cache.exists() {
+        let _ = std::fs::rename(&cache, &dest);
+        return dest;
+    }
+    let old = config_dir().join(filename);
+    if old.exists() {
+        let _ = std::fs::rename(&old, &dest);
+    }
+    dest
+}
+
+pub fn osc_script_path() -> PathBuf {
+    let user = data_dir_system_or_local().join("scripts").join("mbv.lua");
+    if user.exists() {
+        return user;
+    }
+    let dev = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/mbv.lua"));
+    if dev.exists() {
+        return dev;
+    }
+    PathBuf::from("/usr/share/mbv/scripts/mbv.lua")
+}
+
+pub fn prefs_path() -> PathBuf {
+    migrate_to_state("prefs.json")
+}
+
+pub fn osc_fonts_dir() -> PathBuf {
+    let user = data_dir_system_or_local().join("fonts");
+    if user.exists() {
+        return user;
+    }
+    PathBuf::from("/usr/share/mbv/fonts")
+}
+
+fn runtime_dir() -> String {
+    if is_system_instance() {
+        return "/run/mbv".to_string();
+    }
+    env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string())
+}
+
+pub fn mpv_ipc_path() -> String {
+    format!("{}/mbv-mpv.sock", runtime_dir())
+}
+
+pub fn mpv_config_dir() -> PathBuf {
+    PathBuf::from(runtime_dir()).join("mpv-config")
+}
+
+pub fn control_socket_path() -> String {
+    format!("{}/mbv-ctrl.sock", runtime_dir())
+}
+
+pub fn token_cache_path() -> PathBuf {
+    migrate_to_state("token.json")
+}
+
+pub fn config_path() -> PathBuf {
+    config_dir().join("config.toml")
+}

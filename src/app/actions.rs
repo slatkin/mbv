@@ -622,6 +622,18 @@ impl App {
 }
 
 #[cfg(test)]
+#[path = "actions_tests_letter.rs"]
+mod letter_tests;
+#[cfg(test)]
+#[path = "actions_tests_queue_state.rs"]
+mod queue_state_tests;
+#[cfg(test)]
+#[path = "actions_tests_queue.rs"]
+mod queue_tests;
+#[cfg(test)]
+#[path = "actions_tests_routes.rs"]
+mod route_tests;
+#[cfg(test)]
 #[path = "actions_tests.rs"]
 mod tests;
 #[test]
