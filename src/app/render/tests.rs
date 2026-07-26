@@ -2,7 +2,7 @@ use super::album_plan::GroupedAlbumDisplayRow;
 use super::*;
 use crate::app::layout::{AppLayout, LayoutPlayback, LibraryRowTarget};
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab, QueueScope, RemoteSlotState};
+use crate::app::{BrowseLevel, LibSearch, LibraryTab, QueueScope, RemoteSlotState};
 use crate::config::Config;
 use mbv_core::api::EmbyClient;
 use mbv_core::api::MediaItem;
@@ -1892,6 +1892,28 @@ fn flat_album_folder_listing_renders_inline_detail_under_selected_album() {
             .iter()
             .all(|target| !matches!(target, Some(LibraryRowTarget::ArtistHeader(_)))),
         "flat/non-custom grouped album headers must remain non-selectable"
+    );
+}
+
+#[test]
+fn searched_album_listing_does_not_duplicate_artist_row_in_plain_framing() {
+    let mut app = make_power_music_group_app();
+    let items = app.libs[0].nav_stack.last().unwrap().items.clone();
+    app.libs[0].search = Some(LibSearch {
+        query: "First Album".into(),
+        items,
+        results: vec![0],
+        cursor: 0,
+        scroll: 0,
+        loading: false,
+    });
+
+    let out = render_power_library_to_string(&mut app, &mut LayoutMain::default());
+
+    assert_eq!(
+        out.lines().filter(|line| line.trim() == "Alpha").count(),
+        1,
+        "search-result album framing must not duplicate the artist name:\n{out}"
     );
 }
 

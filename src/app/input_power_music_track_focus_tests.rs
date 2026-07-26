@@ -177,6 +177,22 @@ fn make_power_music_album_list_app(album_count: usize, cursor: usize) -> App {
     app
 }
 
+fn add_following_artist_albums(app: &mut App, album_count: usize) {
+    let albums = (0..album_count).map(|i| {
+        let mut album = make_item(&format!("Beta Album {i:02}"), "MusicAlbum");
+        album.id = format!("beta-album-{i}");
+        album.artist = "Beta".into();
+        album.is_folder = true;
+        album
+    });
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .items
+        .extend(albums);
+}
+
 fn render_full_app(app: &mut App, width: u16, height: u16) {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
@@ -1101,7 +1117,8 @@ fn paging_from_non_selectable_hint_and_header_rows_chooses_nearest_album_by_dire
 
     assert!(!handled);
     // The selected artist block contains the header, pinned hint, and every
-    // album. With a 4-row page, PageUp from album 3 resolves to album 0.
+    // album. With a 4-row page, PageUp from album 3 resolves to album 0
+    // rather than leaving the cursor on the non-album header row.
     assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 0);
 }
 
@@ -1143,6 +1160,50 @@ fn oversized_artist_block_scrolls_inline_without_moving_the_outer_block() {
         .left_row_targets
         .iter()
         .any(|target| matches!(target, Some(LibraryRowTarget::Album(0)))));
+}
+
+#[test]
+fn oversized_artist_navigation_reaches_hidden_albums_before_following_artist() {
+    let mut app = make_power_music_album_list_app(60, 0);
+    add_following_artist_albums(&mut app, 2);
+    render_full_app(&mut app, 100, 40);
+
+    for expected_cursor in 1..60 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(
+            app.libs[0].nav_stack.last().unwrap().cursor,
+            expected_cursor
+        );
+        assert!(app.libs[0].artist_header_focus.is_none());
+    }
+
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let beta_header = app.libs[0]
+        .artist_header_focus
+        .as_ref()
+        .expect("expected navigation to reach the following artist header");
+    assert_eq!(beta_header.artist_label, "Beta");
+
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert!(app.libs[0].artist_header_focus.is_none());
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 60);
+}
+
+#[test]
+fn page_down_crosses_oversized_artist_window_to_following_artist() {
+    let mut app = make_power_music_album_list_app(60, 59);
+    add_following_artist_albums(&mut app, 2);
+    render_full_app(&mut app, 100, 40);
+    app.layout.main.left_area.height = 1;
+
+    app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
+
+    assert!(app.libs[0].artist_header_focus.is_none());
+    assert_eq!(
+        app.libs[0].nav_stack.last().unwrap().cursor,
+        60,
+        "PageDown should leave the oversized artist at its boundary"
+    );
 }
 
 fn buffer_to_string(term: &ratatui::Terminal<ratatui::backend::TestBackend>) -> String {

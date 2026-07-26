@@ -1,4 +1,4 @@
-use super::album_plan::GroupedAlbumDisplayRow;
+use super::album_plan::{GroupedAlbumDisplayPlan, GroupedAlbumDisplayRow};
 use crate::app::layout::LibraryRowTarget;
 use crate::app::{App, ArtistHeaderSelection};
 
@@ -24,6 +24,44 @@ impl App {
             lib.album_track_focus = None;
             lib.artist_header_focus = Some(selection);
         }
+    }
+
+    fn grouped_album_navigation_targets(
+        albums: &[mbv_core::api::MediaItem],
+        plan: &GroupedAlbumDisplayPlan,
+    ) -> Vec<LibraryRowTarget> {
+        let Some(selected_group) = plan.selected_group_indices.as_ref() else {
+            return plan
+                .rows
+                .iter()
+                .filter_map(|row| row.row_target(true))
+                .collect();
+        };
+        let Some(first_idx) = selected_group.first().copied() else {
+            return Vec::new();
+        };
+        let Some(first_album_id) = albums.get(first_idx).map(|album| album.id.as_str()) else {
+            return Vec::new();
+        };
+
+        let mut targets = Vec::new();
+        let mut inside_selected_group = false;
+        for row in &plan.rows {
+            match row {
+                GroupedAlbumDisplayRow::ArtistHeader(selection) => {
+                    inside_selected_group = selection.first_album_id == first_album_id;
+                    targets.push(LibraryRowTarget::ArtistHeader(selection.clone()));
+                    if inside_selected_group {
+                        targets.extend(selected_group.iter().copied().map(LibraryRowTarget::Album));
+                    }
+                }
+                GroupedAlbumDisplayRow::Album(idx) if !inside_selected_group => {
+                    targets.push(LibraryRowTarget::Album(*idx));
+                }
+                _ => {}
+            }
+        }
+        targets
     }
 
     pub(in crate::app) fn move_power_music_group_display_cursor(
@@ -57,48 +95,28 @@ impl App {
         if selected.is_some() && !plan.selected_artist_header_valid {
             self.clear_artist_header_focus(lib_idx);
         }
-        let selectable: Vec<usize> = plan
-            .rows
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, row)| row.row_target(true).map(|_| idx))
-            .collect();
-        if selectable.is_empty() {
+        let targets = Self::grouped_album_navigation_targets(&albums, &plan);
+        if targets.is_empty() {
             return true;
         }
-        let current_pos = selectable
+        let current_pos = targets
             .iter()
-            .position(|row_idx| *row_idx == plan.display_cursor)
+            .position(|target| {
+                (selected.as_ref().is_some_and(|selection| {
+                    matches!(target, LibraryRowTarget::ArtistHeader(current) if current == selection)
+                }))
+                    || (selected.is_none()
+                        && matches!(target, LibraryRowTarget::Album(idx) if *idx == cursor))
+            })
             .unwrap_or(0);
-        let new_pos = (current_pos as i64 + delta).clamp(0, selectable.len() as i64 - 1) as usize;
-        let mut target = plan.rows[selectable[new_pos]].row_target(true);
-        if matches!(&target, Some(LibraryRowTarget::Album(idx)) if *idx == cursor) {
-            if let Some(group) = plan
-                .selected_group_indices
-                .as_ref()
-                .filter(|group| group.len() > super::album_plan::SELECTED_ALBUM_WINDOW)
-            {
-                let direction = delta.signum();
-                let cursor_pos = plan.order.iter().position(|&idx| idx == cursor);
-                let candidate = cursor_pos
-                    .and_then(|pos| pos.checked_add_signed(direction as isize))
-                    .and_then(|pos| plan.order.get(pos).copied());
-                if let Some(candidate) = candidate {
-                    let visible = plan.rows.iter().any(
-                        |row| matches!(row, GroupedAlbumDisplayRow::Album(idx) if *idx == candidate),
-                    );
-                    if !visible && group.contains(&candidate) {
-                        target = Some(LibraryRowTarget::Album(candidate));
-                    }
-                }
-            }
-        }
+        let new_pos = (current_pos as i64 + delta).clamp(0, targets.len() as i64 - 1) as usize;
+        let target = targets[new_pos].clone();
         drop(plan);
         match target {
-            Some(LibraryRowTarget::ArtistHeader(selection)) => {
+            LibraryRowTarget::ArtistHeader(selection) => {
                 self.set_artist_header_focus(lib_idx, selection);
             }
-            Some(LibraryRowTarget::Album(idx)) => {
+            LibraryRowTarget::Album(idx) => {
                 self.clear_artist_header_focus(lib_idx);
                 if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                     if level.cursor != idx {
@@ -107,7 +125,6 @@ impl App {
                     }
                 }
             }
-            None => {}
         }
         true
     }
@@ -139,24 +156,26 @@ impl App {
             expand_selected,
             None,
         );
-        let target = if to_end {
-            plan.rows.iter().rev().find_map(|row| row.row_target(true))
+        let targets = Self::grouped_album_navigation_targets(&albums, &plan);
+        let Some(target) = (if to_end {
+            targets.last().cloned()
         } else {
-            plan.rows.iter().find_map(|row| row.row_target(true))
+            targets.first().cloned()
+        }) else {
+            return true;
         };
         drop(plan);
         match target {
-            Some(LibraryRowTarget::ArtistHeader(selection)) => {
+            LibraryRowTarget::ArtistHeader(selection) => {
                 self.set_artist_header_focus(lib_idx, selection);
             }
-            Some(LibraryRowTarget::Album(idx)) => {
+            LibraryRowTarget::Album(idx) => {
                 self.clear_artist_header_focus(lib_idx);
                 if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                     level.cursor = idx;
                     self.libs[lib_idx].album_track_focus = None;
                 }
             }
-            None => {}
         }
         true
     }
@@ -276,55 +295,53 @@ impl App {
         if selected.is_some() && !plan.selected_artist_header_valid {
             self.clear_artist_header_focus(lib_idx);
         }
-        let target_row = if page_down {
-            (plan.display_cursor + page).min(plan.rows.len().saturating_sub(1))
-        } else {
-            plan.display_cursor.saturating_sub(page)
-        };
-        let new_cursor = if let Some(group) = plan
-            .selected_group_indices
-            .as_ref()
-            .filter(|group| group.len() > super::album_plan::SELECTED_ALBUM_WINDOW)
-        {
-            let cursor_pos = plan
-                .order
-                .iter()
-                .position(|&idx| idx == cursor)
-                .unwrap_or(0);
+        let targets = Self::grouped_album_navigation_targets(&albums, &plan);
+        if let Some(current_pos) = targets.iter().position(|target| {
+            (selected.as_ref().is_some_and(|selection| {
+                matches!(target, LibraryRowTarget::ArtistHeader(current) if current == selection)
+            }))
+                || (selected.is_none()
+                    && matches!(target, LibraryRowTarget::Album(idx) if *idx == cursor))
+        }) {
             let target_pos = if page_down {
-                cursor_pos
-                    .saturating_add(page)
-                    .min(plan.order.len().saturating_sub(1))
+                current_pos.saturating_add(page).min(targets.len() - 1)
             } else {
-                cursor_pos.saturating_sub(page)
+                current_pos.saturating_sub(page)
             };
-            let target = plan.order[target_pos];
-            if group.contains(&target) {
-                target
-            } else if page_down {
-                group.last().copied().unwrap_or(cursor)
-            } else {
-                group.first().copied().unwrap_or(cursor)
-            }
-        } else if page_down {
-            plan.rows
-                .iter()
-                .skip(target_row)
-                .find_map(GroupedAlbumDisplayRow::album_index)
-                .unwrap_or_else(|| plan.order.last().copied().unwrap_or(cursor))
-        } else {
-            plan.rows[..=target_row]
-                .iter()
-                .rev()
-                .find_map(GroupedAlbumDisplayRow::album_index)
-                .unwrap_or_else(|| plan.order.first().copied().unwrap_or(cursor))
-        };
-
-        self.clear_artist_header_focus(lib_idx);
-        if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-            if level.cursor != new_cursor {
-                level.cursor = new_cursor;
-                self.libs[lib_idx].album_track_focus = None;
+            let target = match targets[target_pos].clone() {
+                LibraryRowTarget::ArtistHeader(_) if page_down => targets
+                    .iter()
+                    .skip(target_pos + 1)
+                    .find(|target| matches!(target, LibraryRowTarget::Album(_)))
+                    .cloned()
+                    .unwrap_or_else(|| targets[target_pos].clone()),
+                LibraryRowTarget::ArtistHeader(_) => targets[..target_pos]
+                    .iter()
+                    .rev()
+                    .find(|target| matches!(target, LibraryRowTarget::Album(_)))
+                    .cloned()
+                    .or_else(|| {
+                        targets
+                            .iter()
+                            .find(|target| matches!(target, LibraryRowTarget::Album(_)))
+                            .cloned()
+                    })
+                    .unwrap_or_else(|| targets[target_pos].clone()),
+                target => target,
+            };
+            match target {
+                LibraryRowTarget::ArtistHeader(selection) => {
+                    self.set_artist_header_focus(lib_idx, selection);
+                }
+                LibraryRowTarget::Album(new_cursor) => {
+                    self.clear_artist_header_focus(lib_idx);
+                    if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                        if level.cursor != new_cursor {
+                            level.cursor = new_cursor;
+                            self.libs[lib_idx].album_track_focus = None;
+                        }
+                    }
+                }
             }
         }
         if idle {

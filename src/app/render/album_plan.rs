@@ -38,13 +38,6 @@ pub(super) struct GroupedAlbumDisplayPlan {
 }
 
 impl GroupedAlbumDisplayRow {
-    pub(super) fn album_index(&self) -> Option<usize> {
-        match self {
-            Self::Album(idx) => Some(*idx),
-            _ => None,
-        }
-    }
-
     pub(super) fn row_target(&self, selectable_headers: bool) -> Option<LibraryRowTarget> {
         match self {
             Self::Album(idx) => Some(LibraryRowTarget::Album(*idx)),
