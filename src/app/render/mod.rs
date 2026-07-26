@@ -1,4 +1,8 @@
 mod album;
+mod album_art;
+mod album_cursor;
+mod album_detail;
+mod album_plan;
 mod card;
 mod chrome;
 mod detail;
