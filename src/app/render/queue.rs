@@ -116,11 +116,7 @@ impl App {
             } else {
                 palette::QUEUE_BUTTON_FOCUSED_BG
             };
-            let remote_fg = if remote_active {
-                palette::YELLOW
-            } else {
-                palette::YELLOW
-            };
+            let remote_fg = palette::YELLOW;
             Self::set_status_pill_style(&mut remote_spans, remote_fg, remote_bg);
             if let Some(icon) = remote_spans.get_mut(1) {
                 icon.style = icon.style.fg(remote_fg);
