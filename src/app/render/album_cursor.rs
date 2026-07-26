@@ -71,7 +71,28 @@ impl App {
             .position(|row_idx| *row_idx == plan.display_cursor)
             .unwrap_or(0);
         let new_pos = (current_pos as i64 + delta).clamp(0, selectable.len() as i64 - 1) as usize;
-        let target = plan.rows[selectable[new_pos]].row_target(true);
+        let mut target = plan.rows[selectable[new_pos]].row_target(true);
+        if matches!(&target, Some(LibraryRowTarget::Album(idx)) if *idx == cursor) {
+            if let Some(group) = plan
+                .selected_group_indices
+                .as_ref()
+                .filter(|group| group.len() > super::album_plan::SELECTED_ALBUM_WINDOW)
+            {
+                let direction = delta.signum();
+                let cursor_pos = plan.order.iter().position(|&idx| idx == cursor);
+                let candidate = cursor_pos
+                    .and_then(|pos| pos.checked_add_signed(direction as isize))
+                    .and_then(|pos| plan.order.get(pos).copied());
+                if let Some(candidate) = candidate {
+                    let visible = plan.rows.iter().any(
+                        |row| matches!(row, GroupedAlbumDisplayRow::Album(idx) if *idx == candidate),
+                    );
+                    if !visible && group.contains(&candidate) {
+                        target = Some(LibraryRowTarget::Album(candidate));
+                    }
+                }
+            }
+        }
         drop(plan);
         match target {
             Some(LibraryRowTarget::ArtistHeader(selection)) => {
@@ -184,6 +205,15 @@ impl App {
             return None;
         }
 
+        if let Some(indices) = plan.selected_group_indices {
+            return Some(
+                indices
+                    .into_iter()
+                    .filter_map(|idx| albums.get(idx).cloned())
+                    .collect(),
+            );
+        }
+
         let mut in_group = false;
         let mut members = Vec::new();
         for row in plan.rows {
@@ -251,7 +281,32 @@ impl App {
         } else {
             plan.display_cursor.saturating_sub(page)
         };
-        let new_cursor = if page_down {
+        let new_cursor = if let Some(group) = plan
+            .selected_group_indices
+            .as_ref()
+            .filter(|group| group.len() > super::album_plan::SELECTED_ALBUM_WINDOW)
+        {
+            let cursor_pos = plan
+                .order
+                .iter()
+                .position(|&idx| idx == cursor)
+                .unwrap_or(0);
+            let target_pos = if page_down {
+                cursor_pos
+                    .saturating_add(page)
+                    .min(plan.order.len().saturating_sub(1))
+            } else {
+                cursor_pos.saturating_sub(page)
+            };
+            let target = plan.order[target_pos];
+            if group.contains(&target) {
+                target
+            } else if page_down {
+                group.last().copied().unwrap_or(cursor)
+            } else {
+                group.first().copied().unwrap_or(cursor)
+            }
+        } else if page_down {
             plan.rows
                 .iter()
                 .skip(target_row)

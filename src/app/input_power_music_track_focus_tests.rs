@@ -993,15 +993,12 @@ fn page_down_in_album_list_mode_pages_by_rendered_rows_with_inline_detail() {
 
     assert!(!handled);
     assert!(!app.power_right_panel_image_renders_allowed());
-    // Display rows: 0 = artist header; the selected album 0 is wrapped
-    // in the colored-block frame (1 = top border, 2 = colored top
-    // padding, 3 = album row, 4 = collapsed action-hint row -- tracks
-    // stay hidden until Enter is pressed, 5 = colored bottom padding,
-    // 6 = bottom border), then 7.. = the remaining albums one row each.
-    // A 30-row page from display row 3 lands on display row 33 = album 27.
+    // The selected artist block starts with its border, padding, header, and
+    // pinned hint, then renders every album. A 30-row page from album 0's
+    // display row lands on album 30.
     assert_eq!(
         app.libs[0].nav_stack.last().unwrap().cursor,
-        27,
+        30,
         "PageDown should move by rendered display rows, not raw album count"
     );
     assert!(app.libs[0].album_track_focus.is_none());
@@ -1021,14 +1018,11 @@ fn page_up_in_album_list_mode_pages_by_rendered_rows_with_inline_detail() {
     let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
     assert!(!handled);
-    // Display row 0 is the artist header, then one row per album up to
-    // album 35's colored-block frame. The selected block adds its border,
-    // padding, album-artist row, title row, and trailing block rows, so
-    // album 35 is at display row 39. A 30-row page up lands on display
-    // row 9 = album 8.
+    // The selected artist block contains the header, pinned hint, and every
+    // album. A 30-row page up from album 35 lands on album 5.
     assert_eq!(
         app.libs[0].nav_stack.last().unwrap().cursor,
-        8,
+        5,
         "PageUp should move by rendered display rows, not raw album count"
     );
     assert!(app.libs[0].album_track_focus.is_none());
@@ -1092,8 +1086,8 @@ fn paging_from_non_selectable_hint_and_header_rows_chooses_nearest_album_by_dire
     assert!(!handled);
     // Display rows: 0 artist header; selected album 0 is wrapped in the
     // colored-block frame (1 top border, 2 colored top padding, 3
-    // album-artist row, 4 album row, 5 collapsed action hint, 6 colored
-    // bottom padding, 7 bottom border), then 8 = album 1. With a 1-row
+    // album row, 4 collapsed action hint, 5 colored bottom padding, 6
+    // bottom border), then 7 = album 1. With a 1-row
     // page, PageDown targets the hint row, so paging resolves forward to
     // album 1.
     assert_eq!(down_app.libs[0].nav_stack.last().unwrap().cursor, 1);
@@ -1106,12 +1100,49 @@ fn paging_from_non_selectable_hint_and_header_rows_chooses_nearest_album_by_dire
     let handled = up_app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
     assert!(!handled);
-    // Display rows: 0 artist header, 1-3 albums 0-2, then selected album
-    // 3 is wrapped in the colored-block frame (4 top border, 5 colored
-    // top padding, 6 album-artist row, 7 album row, ...). With a 4-row
-    // page, PageUp targets row 3, the nearest album in the upward
-    // direction: album 2.
-    assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 2);
+    // The selected artist block contains the header, pinned hint, and every
+    // album. With a 4-row page, PageUp from album 3 resolves to album 0.
+    assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 0);
+}
+
+#[test]
+fn oversized_artist_block_scrolls_inline_without_moving_the_outer_block() {
+    let mut app = make_power_music_album_list_app(60, 0);
+    render_full_app(&mut app, 100, 40);
+    let initial_offset = app.libs[0].nav_stack.last().unwrap().scroll;
+
+    for _ in 0..35 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    render_full_app(&mut app, 100, 40);
+    let down_offset = app.libs[0].nav_stack.last().unwrap().scroll;
+    assert_eq!(down_offset, initial_offset);
+    assert!(app
+        .layout
+        .main
+        .left_row_targets
+        .iter()
+        .any(|target| matches!(target, Some(LibraryRowTarget::Album(35)))));
+    let cursor_y = app
+        .layout
+        .main
+        .cursor_screen_y
+        .expect("expected the active album marker on screen");
+    let area = app.layout.main.left_area;
+    assert!(cursor_y >= area.y && cursor_y < area.y + area.height);
+
+    for _ in 0..35 {
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    }
+    render_full_app(&mut app, 100, 40);
+    let up_offset = app.libs[0].nav_stack.last().unwrap().scroll;
+    assert_eq!(up_offset, initial_offset);
+    assert!(app
+        .layout
+        .main
+        .left_row_targets
+        .iter()
+        .any(|target| matches!(target, Some(LibraryRowTarget::Album(0)))));
 }
 
 fn buffer_to_string(term: &ratatui::Terminal<ratatui::backend::TestBackend>) -> String {
