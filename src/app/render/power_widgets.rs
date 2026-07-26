@@ -257,14 +257,7 @@ pub(super) fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, focused:
     f.render_widget(Block::default().style(Style::default().bg(bg)), area);
 
     let border_style = Style::default().fg(palette::SEEK_TRACK);
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "\u{2594}".repeat(area.width as usize),
-            border_style,
-        ))),
-        Rect { height: 1, ..area },
-    );
-    if area.height > 1 {
+    if area.height > 0 {
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 "\u{2581}".repeat(area.width as usize),
@@ -278,10 +271,10 @@ pub(super) fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, focused:
         );
     }
 
-    let border_rows = area.height.min(2);
+    let border_rows = 1;
 
     Rect {
-        y: area.y + 1,
+        y: area.y,
         height: area.height.saturating_sub(border_rows),
         ..area
     }

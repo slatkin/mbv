@@ -302,19 +302,12 @@ fn power_queue_panel_uses_selected_media_frame_and_background() {
 
     let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
     let buf = term.backend().buffer();
-    let top_y = layout.queue_area.y - 1;
     let bottom_y = layout.queue_area.y + layout.queue_area.height;
     let x = layout.queue_area.x;
 
-    assert_eq!(buf[(x, top_y)].symbol(), "\u{2594}");
-    assert_eq!(buf[(x, top_y)].fg, palette::SEEK_TRACK);
     assert_eq!(buf[(x, bottom_y)].symbol(), "\u{2581}");
     assert_eq!(buf[(x, bottom_y)].fg, palette::SEEK_TRACK);
     assert_eq!(buf[(x, layout.queue_area.y)].bg, palette::MEDIA_SELECTED_BG);
-    assert_eq!(
-        buf[(x, layout.queue_area.y - 1)].bg,
-        palette::MEDIA_SELECTED_BG
-    );
     assert_eq!(
         buf[(x, layout.queue_area.y + layout.queue_area.height - 1)].bg,
         palette::MEDIA_SELECTED_BG
@@ -361,10 +354,8 @@ fn power_queue_panel_remains_visible_when_unfocused() {
 
     let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
     let buf = term.backend().buffer();
-    let top_y = layout.queue_area.y - 1;
     let bottom_y = layout.queue_area.y + layout.queue_area.height;
 
-    assert_eq!(buf[(layout.queue_area.x, top_y)].symbol(), "\u{2594}");
     assert_eq!(buf[(layout.queue_area.x, bottom_y)].symbol(), "\u{2581}");
     assert_eq!(
         buf[(layout.queue_area.x, layout.queue_area.y)].bg,
@@ -464,10 +455,8 @@ fn short_power_queue_panel_drops_padding_before_rows() {
 
     let (term, layout) = render_power_view_to_terminal(&mut app, 100, 12);
     let buf = term.backend().buffer();
-    let top_y = layout.queue_area.y - 1;
     let bottom_y = layout.queue_area.y + layout.queue_area.height;
 
-    assert_eq!(buf[(layout.queue_area.x, top_y)].symbol(), "\u{2594}");
     assert_eq!(buf[(layout.queue_area.x, bottom_y)].symbol(), "\u{2581}");
     assert!(
         layout.queue_area.height >= 1,
@@ -480,12 +469,19 @@ fn short_power_queue_panel_drops_padding_before_rows() {
 fn power_queue_panel_counts_wrapped_group_headers_before_adding_padding() {
     let mut app = make_power_movie_app();
     app.panel_focus = PanelFocus::Queue;
-    let mut item = make_item("Track", "Audio");
-    item.id = "boundary-track".into();
-    item.album_id = "boundary-album".into();
-    item.album = "Long Album Title".into();
-    item.artist = "Very Long Artist".into();
-    app.player_tab.set_items(vec![item], 0);
+    // A group header only renders for a run of 3+ same-album items, so use
+    // three items here (rather than one) to keep exercising the wrapped-header
+    // line-counting behavior this test targets.
+    let mut items = Vec::new();
+    for i in 0..3 {
+        let mut item = make_item("Track", "Audio");
+        item.id = format!("boundary-track-{i}");
+        item.album_id = "boundary-album".into();
+        item.album = "Long Album Title".into();
+        item.artist = "Very Long Artist".into();
+        items.push(item);
+    }
+    app.player_tab.set_items(items, 0);
 
     let panel_area = Rect::new(0, 0, 20, 6);
     let backend = TestBackend::new(panel_area.width, panel_area.height);
@@ -498,8 +494,8 @@ fn power_queue_panel_counts_wrapped_group_headers_before_adding_padding() {
     .unwrap();
     let out = buffer_to_string(&term);
 
-    assert_eq!(layout.queue_area.y, 1);
-    assert_eq!(layout.queue_area.height, 4);
+    assert_eq!(layout.queue_area.y, 0);
+    assert_eq!(layout.queue_area.height, 5);
     assert!(
         layout.queue_row_map.contains(&Some(0)),
         "expected selected track row to be mapped as visible after wrapped header: {:?}",
