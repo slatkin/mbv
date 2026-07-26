@@ -15,6 +15,9 @@ package() {
     install -Dm755 "${pkgname}" "${pkgdir}/usr/bin/${pkgname}"
     install -Dm755 "mbvd" "${pkgdir}/usr/bin/mbvd"
     install -Dm644 "mbv.lua" "${pkgdir}/usr/share/${pkgname}/scripts/mbv.lua"
+    for script in mbv_*.lua; do
+        install -Dm644 "${script}" "${pkgdir}/usr/share/${pkgname}/scripts/${script}"
+    done
     install -Dm644 "Material-Design-Iconic-Font.ttf" \
         "${pkgdir}/usr/share/${pkgname}/fonts/Material-Design-Iconic-Font.ttf"
     install -Dm644 "config.toml" "${pkgdir}/usr/share/${pkgname}/config.toml"
