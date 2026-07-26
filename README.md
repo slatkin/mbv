@@ -2,7 +2,7 @@
 
 A terminal UI for Emby. It plays media through mpv.
 
-You can browse libraries, build a queue, and play from your server. Playback stays in sync with Emby, so any Emby remote app can control it. It can also run headless, as a daemon, and take commands with nothing on screen.e`, that runs it as a system service: config in `/etc/mbv/config.toml`, state in `/var/lib/mbv/`, sockets in `/run/mbv/`.
+You can browse libraries, build a queue, and play from your server. Playback stays in sync with Emby, so any Emby remote app can control it. It can also run headless as a daemon and launch videos/music via remote control.
 
 # Features
 
