@@ -112,12 +112,12 @@ impl App {
             let mut remote_spans = self.remote_status_spans(remote_state, &daemon_endpoint);
             let remote_active = !local_selected;
             let remote_bg = if remote_active {
-                palette::YELLOW
+                palette::AQUA
             } else {
                 palette::QUEUE_BUTTON_FOCUSED_BG
             };
             let remote_fg = if remote_active {
-                palette::QUEUE_BUTTON_FOCUSED_BG
+                palette::YELLOW
             } else {
                 palette::YELLOW
             };
