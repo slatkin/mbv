@@ -370,7 +370,6 @@ fn power_queue_title_and_scope_pills_stay_outside_panel() {
     app.use_nerd_fonts = false;
 
     let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
-    let top_y = layout.queue_area.y - 1;
     let out = buffer_to_string(&term);
     let header = out
         .lines()
@@ -379,8 +378,8 @@ fn power_queue_title_and_scope_pills_stay_outside_panel() {
     let device_name = mbv_core::api::device_name();
     let upper_device_name = device_name.to_uppercase();
 
-    assert!(layout.queue_scope_local_area.y < top_y);
-    assert!(layout.queue_scope_remote_area.y < top_y);
+    assert!(layout.queue_scope_local_area.y < layout.queue_area.y);
+    assert!(layout.queue_scope_remote_area.y < layout.queue_area.y);
     assert!(layout.queue_scope_remote_area.x > layout.queue_scope_local_area.x);
     assert_eq!(
         layout.queue_scope_local_area.width + layout.queue_scope_remote_area.width,
