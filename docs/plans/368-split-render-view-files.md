@@ -230,6 +230,14 @@ Earlier drafts said "cut a symbol from its origin, paste verbatim". That instruc
 
 So the cut is `sed -n '<start>,$p'` into the test file, then `sed -i '<start>,$d'` on the origin, then append the `#[cfg(test)] #[path = "…"] mod tests;` declaration. **Verify before cutting** — re-confirm the start line and the single-occurrence property; both drift with any edit to the file.
 
+> **CORRECTION (found in execution, lanes D and C).** The recipe as written above **double-nests the module**. The cut span begins at the `#[cfg(test)]` line and therefore carries its own `#[cfg(test)] mod tests {` wrapper into the new file — which the appended `#[path]` declaration then wraps a second time, yielding `detail::tests::tests`. Follow repo precedent `20b3477` (`render/mod.rs` → `tests.rs`) instead:
+> 1. Cut the span as above.
+> 2. **Strip the leading `#[cfg(test)]` and `mod tests {` lines and the trailing `}`** from the extracted file, and **dedent the remaining body by 4 spaces**.
+> 3. Append `#[cfg(test)] #[path = "…"] mod tests;` to the origin.
+> 4. Confirm tests register at `app::render::<file>::tests::*`, not double-nested.
+>
+> **Byte-identity exception:** this span is identical *modulo a uniform 4-space dedent*, not byte-identical. Verify with `diff <(sed 's/^    //' /tmp/before) /tmp/after` and report it as such — a bare "clean diff" claim on a test span is itself a finding.
+
 **A3 is the one commit with genuinely new content** (the carrier struct, two signatures, two derived-local lines, the rewritten dispatch arms). Even there the two branch *bodies* are span-cuts and are held to the same byte-identity check; only the wrapper lines are new. See §3 Lane A / A3.
 
 ---
@@ -701,6 +709,7 @@ Each subsection is self-contained. Hand an executor **exactly one** of these and
 > 1. Resolve each symbol's true start/end line **by symbol name** in the current tree. Line numbers below are hints recorded at commit `9a3e915` and may have drifted — never cut on trust.
 > 2. **Extend each start upward** through contiguous preceding `///`, `//!`, and `#[…]` lines, stopping at the first blank line. Symbol-range tools report the *item* line and exclude its docs and attributes; cutting from the reported line silently strips doc blocks and, where an attribute is involved, breaks the build. Your brief flags the known cases, but apply this to **every** symbol — the hints may have drifted.
 > 3. `sed -n '<start>,<end>p' <origin> >> <newfile>` — redirect to the file, never print span content to the terminal. Append spans in **ascending source order**; `sed -n 'p'` preserves trailing newlines so consecutive spans concatenate cleanly.
+>    **Where symbols are adjacent in the source, cut them as ONE contiguous span, not several.** Per-symbol spans start at an item and end at its closing brace, so the blank lines *between* adjacent items are in no span and are silently dropped — the moved code is individually byte-identical yet the file is malformed. Found in execution (lane C: the hero cluster and both `home_video.rs` clusters). Merge any run of adjacent symbols with nothing else between them into a single span.
 > 4. `sed -i '<start>,<end>d' <origin>` — **highest line number first** so earlier ranges keep their numbering.
 > 5. Hand-write only: the new file's `use` header, the `mod <new>;` line in `src/app/render/mod.rs`, and visibility edits.
 >
@@ -733,20 +742,23 @@ Two commits, in order. Target: `list.rs` 1,811 → ~985 lines.
 sed -n '1152,$p' src/app/render/list.rs > src/app/render/list_tests.rs
 sed -i '1152,$d' src/app/render/list.rs
 ```
+Then — **this step is mandatory; lanes D and C both had to correct for it** — strip the leading `#[cfg(test)]` and `mod tests {` lines and the trailing `}` from `list_tests.rs`, and **dedent the remaining body by 4 spaces**. Without this the appended declaration below wraps the module a second time, producing `list::tests::tests`. Precedent: `20b3477`.
+
 Append to `list.rs`:
 ```rust
 #[cfg(test)]
 #[path = "list_tests.rs"]
 mod tests;
 ```
+Confirm tests register at `app::render::list::tests::*`, singly nested. **Byte-identity for this span is modulo the uniform 4-space dedent** — verify with `diff <(sed 's/^    //' /tmp/before) /tmp/after` and say so explicitly; a bare "clean diff" claim here is wrong.
 `list_tests.rs` opens with `use super::*;`. After A2 that glob no longer reaches the moved helpers — add explicit `use super::list_rows::*;` **inside the test file**. Never re-export from `list.rs` purely to satisfy tests.
 
 **Commit A2 — free helpers → `render/list_rows.rs` (~190 lines).** Move these symbols (hints: L**14**–187 — the region opens with a 14-line doc block above `COMPACT_BANNER_RULE_ROWS`; resolve each by name and extend upward per §1a step 1a):
 `COMPACT_BANNER_RULE_ROWS`, `COMPACT_BANNER_GAP_ROWS`, `COMPACT_BANNER_INDENT`, `enum DisplayRow`, `push_selected_detail_fillers_before`, `push_selected_detail_fillers_after`, `selected_detail_lower_bound`, `build_list_row_spans`, `render_series_detail_background`.
 
-All are currently module-private free items → make each `pub(super)` (a one-line edit to each signature; do not touch bodies). Add `use super::list_rows::{…}` to `list.rs`.
+These nine items are contiguous in the source with nothing else between them, so **cut them as a single span**, not nine — per-symbol spans drop the blank lines between adjacent items (see §1a step 3).
 
-All are currently module-private free items → each becomes `pub(super)`.
+All are currently module-private free items → make each `pub(super)` (a one-line edit to each signature; do not touch bodies). Add `use super::list_rows::{…}` to `list.rs`.
 
 **Do not** decompose `render_power_list` — that is a separate run (A3). Leave it entirely alone. **Do not** touch `render_power_grouped_album_rows`; it lives in `album.rs`, which another run owns.
 
