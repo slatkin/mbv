@@ -5,6 +5,7 @@ mod detail;
 mod home;
 pub mod indicators;
 mod list;
+mod list_rows;
 mod music;
 mod overlays;
 mod pills;
