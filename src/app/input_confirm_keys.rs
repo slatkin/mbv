@@ -1,43 +1,101 @@
-use super::{App, PanelFocus, PendingQueueAction, QueueScope};
+use super::{
+    App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
+    SavePlaylistDialog, SavePlaylistStage,
+};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::player::PlayerCommand;
 
 impl App {
-    pub(super) fn handle_key_confirm_clear_queue(&mut self, key: KeyEvent) -> Option<bool> {
-        if !self.confirm_clear_queue {
-            return None;
-        }
-        self.confirm_clear_queue = false;
-        if matches!(
-            key.code,
-            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-        ) {
-            self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
-        } else {
-            self.status.clear();
-        }
-        Some(false)
-    }
-
-    pub(super) fn handle_key_confirm_rescan(&mut self, key: KeyEvent) -> Option<bool> {
-        if !self.confirm_rescan {
-            return None;
-        }
-        self.confirm_rescan = false;
-        let pending_lib_idx = self.pending_rescan_lib_idx.take();
-        self.status.clear();
-        if matches!(
-            key.code,
-            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-        ) {
-            let lib_idx = pending_lib_idx.unwrap_or_else(|| {
-                if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
-                    self.library_tab - 1
-                } else {
-                    0
+    /// Shared dispatcher for the confirmation-modal component (see
+    /// `render/overlays/confirm_modal.rs`, `types_confirm.rs`): matches on
+    /// which `ConfirmAction` is pending and re-uses each action's existing
+    /// effect, preserving the exact key bindings each confirmation had
+    /// before migrating off status-bar toast text / bespoke dialogs.
+    pub(super) fn handle_key_confirm_modal(&mut self, key: KeyEvent) -> Option<bool> {
+        let action = self.confirm_modal.as_ref()?.on_confirm.clone();
+        match action {
+            ConfirmAction::ClearQueue => {
+                self.confirm_modal = None;
+                if matches!(
+                    key.code,
+                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+                ) {
+                    self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
                 }
-            });
-            self.trigger_lib_rescan(lib_idx);
+            }
+            ConfirmAction::RemoveActiveQueueItem(pos) => {
+                self.confirm_modal = None;
+                if matches!(key.code, KeyCode::Char('y')) {
+                    // Defer the actual removal until PlayerEvent::Stopped arrives so the
+                    // Stopped handler finds the correct item at index `pos`, not the next
+                    // item (which would have its playback_position_ticks corrupted otherwise).
+                    self.pending_delete_idx = Some(pos);
+                    self.player.stop();
+                    if self.local_queue_metadata_applies(self.visible_queue_scope()) {
+                        self.queue_dirty = true;
+                    }
+                }
+            }
+            ConfirmAction::RescanLibrary(lib_idx) => {
+                self.confirm_modal = None;
+                if matches!(
+                    key.code,
+                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+                ) {
+                    self.trigger_lib_rescan(lib_idx);
+                }
+            }
+            ConfirmAction::SaveOverwritePlaylist { existing_id } => match key.code {
+                KeyCode::Char('y') => {
+                    self.confirm_modal = None;
+                    self.do_overwrite_playlist(&existing_id);
+                }
+                KeyCode::Esc => {
+                    self.confirm_modal = None;
+                    if let Some(input) = self.save_playlist_dialog.as_ref().map(|d| d.input.clone())
+                    {
+                        self.save_playlist_dialog = Some(SavePlaylistDialog {
+                            input,
+                            stage: SavePlaylistStage::EnterName,
+                        });
+                    }
+                }
+                _ => {}
+            },
+            ConfirmAction::DiscardOrSaveDirtyPlaylist => {
+                let play_after = matches!(
+                    self.pending_queue_action,
+                    Some(PendingQueueAction::PlayItems { .. })
+                );
+                match key.code {
+                    KeyCode::Char('s') | KeyCode::Char('S') => {
+                        self.confirm_modal = None;
+                        self.save_playlist_to_emby();
+                        if let Some(action) = self.pending_queue_action.take() {
+                            self.execute_pending_queue_action(action);
+                        }
+                        if play_after {
+                            self.show_playlists = false;
+                            self.set_panel_focus(PanelFocus::Queue);
+                        }
+                    }
+                    KeyCode::Char('d') | KeyCode::Char('D') => {
+                        self.confirm_modal = None;
+                        if let Some(action) = self.pending_queue_action.take() {
+                            self.execute_pending_queue_action(action);
+                        }
+                        if play_after {
+                            self.show_playlists = false;
+                            self.set_panel_focus(PanelFocus::Queue);
+                        }
+                    }
+                    KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
+                        self.confirm_modal = None;
+                        self.pending_queue_action = None;
+                    }
+                    _ => {}
+                }
+            }
         }
         Some(false)
     }
@@ -125,8 +183,12 @@ impl App {
             "Clear queue?",
             &[("clear:yes", "Clear"), ("clear:no", "Cancel")],
         );
-        self.status = "Clear queue? (Y/n)".into();
-        self.confirm_clear_queue = true;
+        self.confirm_modal = Some(ConfirmModal {
+            title: " Clear Queue ".into(),
+            message: "Clear the queue?".into(),
+            hint: "[y] Confirm    [Esc] Cancel".into(),
+            on_confirm: ConfirmAction::ClearQueue,
+        });
         Some(false)
     }
 }

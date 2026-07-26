@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item, make_items};
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
+use crate::app::{BrowseLevel, ConfirmAction, LibraryTab, PanelFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
@@ -162,7 +162,10 @@ fn power_view_ctrl_r_confirmation_targets_active_power_library() {
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
     assert!(!handled);
-    assert!(app.confirm_rescan);
+    assert!(matches!(
+        app.confirm_modal.as_ref().map(|m| &m.on_confirm),
+        Some(ConfirmAction::RescanLibrary(_))
+    ));
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 

@@ -178,8 +178,8 @@ impl App {
         if self.save_playlist_dialog.is_some() {
             self.render_save_playlist_dialog(f);
         }
-        if self.show_save_playlist_modal {
-            self.render_dirty_playlist_modal(f);
+        if self.confirm_modal.is_some() {
+            self.render_confirm_modal(f);
         }
 
         // One atomic replace, reached only once the full pass above has

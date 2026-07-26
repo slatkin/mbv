@@ -262,6 +262,12 @@ impl App {
         let Some(ref dialog) = self.save_playlist_dialog else {
             return;
         };
+        // Only `EnterName` renders here -- once a name collides with an
+        // existing playlist, the shared confirmation modal takes over
+        // (`SavePlaylistStage::ConfirmOverwrite` / `ConfirmAction::SaveOverwritePlaylist`).
+        if !matches!(dialog.stage, SavePlaylistStage::EnterName) {
+            return;
+        }
         let full = f.area();
         let w: u16 = 52;
         let h: u16 = 7;
@@ -287,117 +293,39 @@ impl App {
             .border_style(Style::default().fg(palette::IRIS));
         let inner = block.inner(rect);
         f.render_widget(block, rect);
-        match &dialog.stage {
-            SavePlaylistStage::EnterName => {
-                let label = "Name: ";
-                let cursor = "▏";
-                let max_input = inner.width as usize - label.len() - cursor.len() - 2;
-                let visible: String = dialog
-                    .input
-                    .chars()
-                    .rev()
-                    .take(max_input)
-                    .collect::<String>()
-                    .chars()
-                    .rev()
-                    .collect();
-                let input_line = format!("{}{}{}", label, visible, cursor);
-                let hint = "Enter to save · Esc to cancel";
-                let input_y = inner.y + (inner.height.saturating_sub(3)) / 2;
-                let hint_y = input_y + 2;
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        input_line,
-                        Style::default().fg(palette::WHITE),
-                    )),
-                    Rect {
-                        x: inner.x + 1,
-                        y: input_y,
-                        width: inner.width.saturating_sub(2),
-                        height: 1,
-                    },
-                );
-                f.render_widget(
-                    Paragraph::new(Span::styled(hint, Style::default().fg(palette::SUBTLE))),
-                    Rect {
-                        x: inner.x + 1,
-                        y: hint_y,
-                        width: inner.width.saturating_sub(2),
-                        height: 1,
-                    },
-                );
-            }
-            SavePlaylistStage::ConfirmOverwrite { .. } => {
-                let name = trunc_str(&dialog.input, inner.width as usize - 4);
-                let line1 = format!("\"{}\" already exists.", name);
-                let line2 = "Press y to overwrite · Esc to go back";
-                let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
-                f.render_widget(
-                    Paragraph::new(Span::styled(line1, Style::default().fg(palette::WHITE))),
-                    Rect {
-                        x: inner.x + 1,
-                        y: base_y,
-                        width: inner.width.saturating_sub(2),
-                        height: 1,
-                    },
-                );
-                f.render_widget(
-                    Paragraph::new(Span::styled(line2, Style::default().fg(palette::SUBTLE))),
-                    Rect {
-                        x: inner.x + 1,
-                        y: base_y + 2,
-                        width: inner.width.saturating_sub(2),
-                        height: 1,
-                    },
-                );
-            }
-        }
-    }
-
-    pub(in crate::app::render) fn render_dirty_playlist_modal(&self, f: &mut Frame) {
-        let name = trunc_str(self.queue_playlist_name(), 36);
-        let full = f.area();
-        let w: u16 = 56;
-        let h: u16 = 7;
-        let x = full.x + full.width.saturating_sub(w) / 2;
-        let y = full.y + full.height.saturating_sub(h) / 2;
-        let rect = Rect {
-            x,
-            y,
-            width: w,
-            height: h,
-        };
-        f.render_widget(Clear, rect);
-        let block = Block::default()
-            .title(Span::styled(
-                " Unsaved Playlist Changes ",
-                Style::default()
-                    .fg(palette::YELLOW)
-                    .add_modifier(Modifier::BOLD),
-            ))
-            .title_alignment(Alignment::Center)
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(palette::YELLOW));
-        let inner = block.inner(rect);
-        f.render_widget(block, rect);
-        let line1 = format!("Save changes to \"{}\"?", name);
-        let line2 = "[s]Save  [d]Discard  [Esc]Cancel";
-        let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
+        let label = "Name: ";
+        let cursor = "▏";
+        let max_input = inner.width as usize - label.len() - cursor.len() - 2;
+        let visible: String = dialog
+            .input
+            .chars()
+            .rev()
+            .take(max_input)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect();
+        let input_line = format!("{}{}{}", label, visible, cursor);
+        let hint = "Enter to save · Esc to cancel";
+        let input_y = inner.y + (inner.height.saturating_sub(3)) / 2;
+        let hint_y = input_y + 2;
         f.render_widget(
-            Paragraph::new(Span::styled(line1, Style::default().fg(palette::WHITE))),
+            Paragraph::new(Span::styled(
+                input_line,
+                Style::default().fg(palette::WHITE),
+            )),
             Rect {
                 x: inner.x + 1,
-                y: base_y,
+                y: input_y,
                 width: inner.width.saturating_sub(2),
                 height: 1,
             },
         );
         f.render_widget(
-            Paragraph::new(Span::styled(line2, Style::default().fg(palette::SUBTLE))),
+            Paragraph::new(Span::styled(hint, Style::default().fg(palette::SUBTLE))),
             Rect {
                 x: inner.x + 1,
-                y: base_y + 2,
+                y: hint_y,
                 width: inner.width.saturating_sub(2),
                 height: 1,
             },
