@@ -5,6 +5,7 @@ use super::resize::{ResizeRegisterTx, ResizeResponseRx};
 use super::search::SearchSubsystem;
 use super::stay_alive;
 use super::types_browse::{AlbumIndexState, SeriesDetail};
+use super::types_confirm::ConfirmModal;
 use super::types_context_menu::{ContextMenu, LibraryRoutePopup, MultiSelectPopup};
 use super::types_events::{LibEvent, SessionEvent};
 use super::types_feed::SavePlaylistDialog;
@@ -79,10 +80,12 @@ pub struct App {
     pub(super) last_drag_seek: Instant,
     pub(super) last_space_press: Option<Instant>,
     pub(super) last_esc_press: Option<Instant>,
-    pub(super) confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
+    /// The single active yes/no confirmation prompt (clear queue, remove
+    /// now-playing item, rescan library, save-playlist overwrite/discard),
+    /// rendered and dispatched by the shared confirmation-modal component.
+    pub(super) confirm_modal: Option<ConfirmModal>,
     pub(super) pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
     pub(super) pending_queue_removal: Option<(QueueSlotId, bool)>, // deferred removal (slot, is_audio) after TrackChanged index-shifts
-    pub(super) confirm_clear_queue: bool,
     pub(super) queue_undo_stack: Vec<UndoEntry>,
     pub(super) remote_queue_undo_stack: Vec<UndoEntry>,
     pub(super) pending_remote_move_cursor: Option<usize>,
@@ -156,7 +159,6 @@ pub struct App {
     pub(super) queue_source: crate::config::QueueSource,
     pub(super) queue_dirty: bool,
     pub(super) pending_queue_action: Option<PendingQueueAction>,
-    pub(super) show_save_playlist_modal: bool,
     pub(super) use_nerd_fonts: bool,
     pub(super) indicator_style: render::indicators::IndicatorStyle,
     pub(super) ws_send_tx: Option<mbv_core::ws::WsSender>,
@@ -228,8 +230,6 @@ pub struct App {
     pub(super) save_playlist_dialog: Option<SavePlaylistDialog>,
     pub(super) image_protocol: Option<String>,
     pub(super) image_protocol_enabled: bool,
-    pub(super) confirm_rescan: bool,
-    pub(super) pending_rescan_lib_idx: Option<usize>,
     pub(super) library_position_state: crate::config::LibraryPositionState,
     pub(super) queue_scope: QueueScope,
     /// The relay's out-of-band control channel (ADR 0005), present only

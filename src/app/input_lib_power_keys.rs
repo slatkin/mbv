@@ -1,6 +1,6 @@
 use super::action::{power_album_track_command_for_key, Command};
 use super::input_resolver::KeyChord;
-use super::{App, LibSearch, PanelFocus};
+use super::{App, ConfirmAction, ConfirmModal, LibSearch, PanelFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::{Duration, Instant};
 
@@ -223,9 +223,12 @@ impl App {
             }
             KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let name = self.libs[lib_idx].library.name.clone();
-                self.status = format!("Rescan '{name}'? (Y/n)");
-                self.confirm_rescan = true;
-                self.pending_rescan_lib_idx = Some(lib_idx);
+                self.confirm_modal = Some(ConfirmModal {
+                    title: " Rescan Library ".into(),
+                    message: format!("Rescan '{name}'?"),
+                    hint: "[y] Confirm    [Esc] Cancel".into(),
+                    on_confirm: ConfirmAction::RescanLibrary(lib_idx),
+                });
             }
             KeyCode::Char('r') => self.refresh_lib(),
             KeyCode::Char('/') => {

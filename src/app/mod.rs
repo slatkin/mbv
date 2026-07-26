@@ -55,6 +55,7 @@ mod settings;
 mod shuffle_folder_actions;
 pub(crate) mod stay_alive;
 mod types_browse;
+mod types_confirm;
 mod types_context_menu;
 mod types_events;
 mod types_feed;
@@ -74,6 +75,7 @@ use self::types_browse::{
     restore_library_position, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel,
     LibSearch, SeriesDetail,
 };
+use self::types_confirm::{ConfirmAction, ConfirmModal};
 use self::types_context_menu::{
     ContextAction, ContextMenu, ContextMenuEntry, LibraryRoutePopup, LibraryRouteStage,
     MultiSelectKind, MultiSelectPopup,
@@ -586,8 +588,11 @@ impl App {
                     self.status.clear();
                 }
                 "clear:yes" => {
-                    if self.confirm_clear_queue {
-                        self.confirm_clear_queue = false;
+                    if matches!(
+                        self.confirm_modal.as_ref().map(|m| &m.on_confirm),
+                        Some(ConfirmAction::ClearQueue)
+                    ) {
+                        self.confirm_modal = None;
                         self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
                     }
                 }

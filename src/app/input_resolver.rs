@@ -145,8 +145,8 @@ pub(super) struct ContextEntry {
 /// `docs/adr/0002-centralized-input-handling.md`.
 pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
-        name: "save_modal",
-        handler: App::handle_key_save_modal,
+        name: "confirm_modal",
+        handler: App::handle_key_confirm_modal,
     },
     ContextEntry {
         name: "save_playlist",
@@ -187,14 +187,6 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
         name: "sidebar_toggle_h",
         handler: App::handle_key_power_sidebar_toggle,
-    },
-    ContextEntry {
-        name: "confirm_clear_queue",
-        handler: App::handle_key_confirm_clear_queue,
-    },
-    ContextEntry {
-        name: "confirm_rescan",
-        handler: App::handle_key_confirm_rescan,
     },
     ContextEntry {
         name: "confirm_skip_intro",

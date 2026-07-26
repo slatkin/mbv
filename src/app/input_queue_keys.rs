@@ -55,22 +55,6 @@ impl App {
     }
 
     pub(super) fn handle_queue_key(&mut self, key: KeyEvent) -> bool {
-        if let Some(t) = self.confirm_remove_idx {
-            self.confirm_remove_idx = None;
-            self.status.clear();
-            if matches!(key.code, KeyCode::Char('y')) {
-                // Defer the actual removal until PlayerEvent::Stopped arrives so the
-                // Stopped handler finds the correct item at index t, not the next item
-                // (which would have its playback_position_ticks corrupted otherwise).
-                self.pending_delete_idx = Some(t);
-                self.player.stop();
-                if self.local_queue_metadata_applies(self.visible_queue_scope()) {
-                    self.queue_dirty = true;
-                }
-            }
-            return false;
-        }
-
         // Bare Left/Right switch focus between the two panels. Queue is on
         // the left; library is on the right.
         if key.modifiers.is_empty() {
