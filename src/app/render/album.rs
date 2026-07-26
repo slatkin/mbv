@@ -216,6 +216,7 @@ impl App {
                         let suffix_width = suffix.chars().count() as u16;
                         let title_width = content_width.saturating_sub(suffix_width).max(1);
                         let wrapped = wrap(album_name, title_width as usize);
+                        let wrapped_len = wrapped.len();
                         let title_lines: Vec<Line> = wrapped
                             .into_iter()
                             .enumerate()
@@ -233,9 +234,7 @@ impl App {
                                     Style::default().fg(palette::WHITE)
                                 };
                                 spans.push(Span::styled(line.into_owned(), title_style));
-                                if line_idx + 1 == wrap(album_name, title_width as usize).len()
-                                    && !suffix.is_empty()
-                                {
+                                if line_idx + 1 == wrapped_len && !suffix.is_empty() {
                                     spans.push(Span::styled(
                                         " • ",
                                         Style::default().fg(palette::YELLOW),
