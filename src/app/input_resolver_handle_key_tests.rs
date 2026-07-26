@@ -1,0 +1,565 @@
+use crate::app::tests::make_app_stub;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::player::PlayerCommand;
+
+fn ev(code: KeyCode, mods: KeyModifiers) -> KeyEvent {
+    KeyEvent::new(code, mods)
+}
+
+#[test]
+fn help_f1_closes_help_via_handle_key() {
+    let mut app = make_app_stub();
+    app.show_help = true;
+    let quit = app.handle_key(ev(KeyCode::F(1), KeyModifiers::NONE));
+    assert!(!quit);
+    assert!(!app.show_help, "F1 closes the help overlay");
+}
+
+#[test]
+fn help_swallows_unbound_key_via_handle_key() {
+    let mut app = make_app_stub();
+    app.show_help = true;
+    let quit = app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert!(!quit);
+    assert!(
+        app.show_help,
+        "an unbound key is swallowed; help stays open"
+    );
+}
+
+#[test]
+fn help_overlay_blocks_home_search_char_capture_via_handle_key() {
+    let mut app = make_app_stub();
+    app.show_help = true;
+    app.search.set_state_for_test(Some(test_home_search()));
+    if let Some(hs) = app.search.state_mut() {
+        hs.input_focused = true;
+    }
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert!(
+        app.search.state().unwrap().query.is_empty(),
+        "help sits above home_search in CONTEXT_STACK and must swallow 'x'"
+    );
+}
+
+#[test]
+fn space_toggles_pause_when_active_via_handle_key() {
+    let mut app = make_app_stub();
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+    }
+    let rx = app.player.spy_on_commands();
+    // Double-tap required: first press arms, second press fires.
+    app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+    assert!(
+        rx.try_recv().is_err(),
+        "single space must not toggle pause (double-tap required)"
+    );
+    app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+    assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
+}
+
+#[test]
+fn space_does_not_toggle_pause_when_idle_via_handle_key() {
+    let mut app = make_app_stub();
+    let rx = app.player.spy_on_commands();
+    // Idle home tab: Space must not emit a transport command (it falls
+    // through to the view handler, which ignores it).
+    app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+    assert!(
+        !matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)),
+        "Space is inert while nothing plays"
+    );
+}
+
+#[test]
+fn double_space_after_timeout_does_not_toggle_pause() {
+    use std::time::{Duration, Instant};
+
+    let mut app = make_app_stub();
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+    }
+    let rx = app.player.spy_on_commands();
+    // First press arms the double-tap.
+    app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+    // Simulate the timestamp being far in the past (>300ms).
+    app.last_space_press = Some(Instant::now() - Duration::from_millis(500));
+    // Second press should NOT fire because the window expired.
+    app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+    assert!(
+        rx.try_recv().is_err(),
+        "second space after timeout must not toggle pause"
+    );
+}
+
+#[test]
+fn double_esc_stops_when_active() {
+    let mut app = make_app_stub();
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+    }
+    // Double-tap required: first press arms, second press fires.
+    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(
+        app.last_esc_press.is_some(),
+        "first Esc must arm the double-tap (last_esc_press set)"
+    );
+    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(
+        app.last_esc_press.is_none(),
+        "second Esc must fire and clear last_esc_press"
+    );
+}
+
+#[test]
+fn double_esc_after_timeout_does_not_stop() {
+    use std::time::{Duration, Instant};
+
+    let mut app = make_app_stub();
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+    }
+    // First press arms the double-tap.
+    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+    // Simulate the timestamp being far in the past (>300ms).
+    app.last_esc_press = Some(Instant::now() - Duration::from_millis(500));
+    // Second press should NOT fire because the window expired.
+    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(
+        app.last_esc_press.is_some(),
+        "second Esc after timeout must not clear last_esc_press"
+    );
+}
+
+#[test]
+fn f1_opens_help_via_handle_key() {
+    let mut app = make_app_stub();
+    app.handle_key(ev(KeyCode::F(1), KeyModifiers::NONE));
+    assert!(app.show_help);
+}
+
+#[test]
+fn f2_opens_settings_via_handle_key() {
+    let mut app = make_app_stub();
+    assert!(!app.show_settings);
+    app.handle_key(ev(KeyCode::F(2), KeyModifiers::NONE));
+    assert!(app.show_settings);
+    // PRESERVED QUIRK: a second F2 press does not close settings. Once
+    // `show_settings` is true, `handle_key_settings` (ordered ahead of
+    // `global_overlay_open`/`queue_column_width` in CONTEXT_STACK, matching the
+    // pre-phase-2 branch order) claims F2 first and its match has no
+    // `F(2)` arm, so it falls to `_ => {}` and swallows the key. This
+    // predates phase 2 (verified against commit 2147343) — not a
+    // regression introduced by this extraction.
+    app.handle_key(ev(KeyCode::F(2), KeyModifiers::NONE));
+    assert!(
+        app.show_settings,
+        "F2 does not toggle settings closed once open; only Esc/F1/F3/F4/q do"
+    );
+}
+
+#[test]
+fn settings_overlay_blocks_home_search_char_capture_via_handle_key() {
+    let mut app = make_app_stub();
+    app.show_settings = true;
+    app.search.set_state_for_test(Some(test_home_search()));
+    if let Some(hs) = app.search.state_mut() {
+        hs.input_focused = true;
+    }
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert!(
+        app.search.state().unwrap().query.is_empty(),
+        "settings sits above home_search in CONTEXT_STACK and must swallow 'x'"
+    );
+}
+
+#[test]
+fn f3_opens_sessions_via_handle_key() {
+    let mut app = make_app_stub();
+    assert!(!app.show_sessions);
+    app.handle_key(ev(KeyCode::F(3), KeyModifiers::NONE));
+    assert!(app.show_sessions);
+}
+
+#[test]
+fn sessions_overlay_blocks_home_search_char_capture_via_handle_key() {
+    let mut app = make_app_stub();
+    app.show_sessions = true;
+    app.search.set_state_for_test(Some(test_home_search()));
+    if let Some(hs) = app.search.state_mut() {
+        hs.input_focused = true;
+    }
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert!(
+        app.search.state().unwrap().query.is_empty(),
+        "sessions sits above home_search in CONTEXT_STACK and must swallow 'x'"
+    );
+}
+
+#[test]
+fn f4_opens_playlists_via_handle_key() {
+    let mut app = make_app_stub();
+    assert!(!app.show_playlists);
+    app.handle_key(ev(KeyCode::F(4), KeyModifiers::NONE));
+    assert!(app.show_playlists);
+}
+
+#[test]
+fn confirm_clear_queue_yes_dispatches_clear_via_handle_key() {
+    let mut app = make_app_stub();
+    app.confirm_clear_queue = true;
+    app.handle_key(ev(KeyCode::Char('y'), KeyModifiers::NONE));
+    assert!(
+        !app.confirm_clear_queue,
+        "confirm flag clears regardless of answer"
+    );
+}
+
+#[test]
+fn confirm_rescan_no_clears_flag_without_rescan_via_handle_key() {
+    let mut app = make_app_stub();
+    app.confirm_rescan = true;
+    app.handle_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
+    assert!(!app.confirm_rescan);
+}
+
+#[test]
+fn skip_intro_confirm_no_dismisses_via_handle_key() {
+    let mut app = make_app_stub();
+    app.skip_intro_end_ticks = Some(1000);
+    app.handle_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
+    assert!(app.skip_intro_end_ticks.is_none());
+}
+
+#[test]
+fn next_up_confirm_no_dismisses_via_handle_key() {
+    let mut app = make_app_stub();
+    app.next_up_item = Some(crate::app::tests::make_item("item", "Movie"));
+    app.handle_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
+    assert!(app.next_up_item.is_none());
+}
+
+fn test_home_search() -> crate::app::search::HomeSearch {
+    crate::app::search::HomeSearch {
+        query: String::new(),
+        last_query: String::new(),
+        results: Vec::new(),
+        cursor: 0,
+        loading: false,
+        scroll: 0,
+        type_filter: 0,
+        input_focused: false,
+    }
+}
+
+fn test_empty_context_menu() -> crate::app::ContextMenu {
+    crate::app::ContextMenu {
+        x: 0,
+        y: 0,
+        entries: Vec::new(),
+        cursor: 0,
+    }
+}
+
+fn test_lib_with_search() -> crate::app::LibraryTab {
+    use crate::app::tests::make_item;
+    use crate::app::{BrowseLevel, LibSearch, LibraryTab};
+    let mut library = make_item("Movies", "CollectionFolder");
+    library.id = "lib-movies".into();
+    library.is_folder = true;
+    LibraryTab {
+        library,
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            items: Vec::new(),
+            total_count: 0,
+            cursor: 0,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+        }],
+        search: Some(LibSearch {
+            query: String::new(),
+            items: Vec::new(),
+            results: Vec::new(),
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        }),
+        feed_home_video: None,
+
+        album_track_focus: None,
+        artist_header_focus: None,
+        series_selection: None,
+        series_season_cursor: 0,
+        library_total: None,
+    }
+}
+
+#[test]
+fn home_search_captures_char_via_handle_key() {
+    let mut app = make_app_stub();
+    app.search.set_state_for_test(Some(test_home_search()));
+    if let Some(hs) = app.search.state_mut() {
+        hs.input_focused = true;
+    }
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert_eq!(app.search.state().unwrap().query, "x");
+}
+
+#[test]
+fn home_search_esc_closes_via_handle_key() {
+    let mut app = make_app_stub();
+    app.search.set_state_for_test(Some(test_home_search()));
+    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(!app.search.is_open());
+}
+
+#[test]
+fn home_search_char_capture_wins_over_h_power_sidebar_toggle_via_handle_key() {
+    // Regression guard: `power_sidebar_toggle_h` must stay ordered after
+    // `home_search` in CONTEXT_STACK (matching the pre-phase-2 source,
+    // where the h-toggle ran after all three search blocks). If it were
+    // ever reordered ahead of home_search, pressing the literal 'h'
+    // character while a search box is focused would toggle the sidebar
+    // instead of typing 'h' into the query — a real behavior change.
+    let mut app = make_app_stub();
+    app.search.set_state_for_test(Some(test_home_search()));
+    if let Some(hs) = app.search.state_mut() {
+        hs.input_focused = true;
+    }
+    let collapsed_before = app.queue_column_collapsed;
+    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+    assert_eq!(
+        app.search.state().unwrap().query,
+        "h",
+        "home search must capture the literal 'h' character"
+    );
+    assert_eq!(
+        app.queue_column_collapsed, collapsed_before,
+        "Power View sidebar must not toggle while home search captures 'h'"
+    );
+}
+
+#[test]
+fn h_toggles_power_sidebar_in_power_view_via_handle_key() {
+    let mut app = make_app_stub();
+    let before = app.queue_column_collapsed;
+    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+    assert_ne!(app.queue_column_collapsed, before);
+}
+
+#[test]
+fn h_does_not_toggle_power_sidebar_while_context_menu_is_open_via_handle_key() {
+    let mut app = make_app_stub();
+    app.context_menu = Some(test_empty_context_menu());
+    let before = app.queue_column_collapsed;
+    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+    assert_eq!(
+        app.queue_column_collapsed, before,
+        "Power View sidebar must not toggle while a context menu is open"
+    );
+}
+
+#[test]
+fn h_moves_queue_focus_to_library_when_collapsing_power_sidebar() {
+    let mut app = make_app_stub();
+    app.panel_focus = crate::app::PanelFocus::Queue;
+
+    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+
+    assert!(app.queue_column_collapsed);
+    assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
+
+    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+
+    assert!(!app.queue_column_collapsed);
+    assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
+}
+
+#[test]
+fn power_lib_search_esc_closes_via_handle_key() {
+    let mut app = make_app_stub();
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.library_tab = 1;
+    app.libs.push(test_lib_with_search());
+    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.libs[0].search.is_none());
+}
+
+#[test]
+fn power_enter_on_series_search_result_starts_selection_without_drilldown() {
+    use crate::app::{BrowseLevel, LibSearch, LibraryTab};
+
+    let mut app = make_app_stub();
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.library_tab = 1;
+
+    let mut library = crate::app::tests::make_item("Shows", "CollectionFolder");
+    library.id = "lib-shows".into();
+    library.collection_type = "tvshows".into();
+    library.is_folder = true;
+
+    let mut series = crate::app::tests::make_item("Search Result", "Series");
+    series.id = "series-1".into();
+    series.is_folder = true;
+
+    app.libs.push(LibraryTab {
+        library,
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-shows".into(),
+            title: "Shows".into(),
+            items: Vec::new(),
+            total_count: 0,
+            cursor: 0,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+        }],
+        search: Some(LibSearch {
+            query: "search".into(),
+            items: vec![series],
+            results: vec![0],
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        }),
+        feed_home_video: None,
+        album_track_focus: None,
+        artist_header_focus: None,
+        series_selection: None,
+        series_season_cursor: 0,
+        library_total: None,
+    });
+    app.series_detail_loading.insert("series-1".into());
+
+    let nav_depth = app.libs[0].nav_stack.len();
+    app.handle_key(ev(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(app.libs[0].series_selection, Some(0));
+    assert_eq!(app.libs[0].nav_stack.len(), nav_depth);
+}
+
+// `lib_search_esc_closes_via_handle_key` (deleted): identical scenario
+// to `power_lib_search_esc_closes_via_handle_key` above but without
+// setting `panel_focus`/`library_tab`, which is how it used to reach
+// Standard's now-deleted `lib_search` CONTEXT_STACK entry. Power's
+// equivalent handler is already covered by the test above.
+
+#[test]
+fn c_prompts_clear_queue_confirmation_via_handle_key() {
+    let mut app = make_app_stub();
+    app.player_tab
+        .items
+        .push(crate::app::tests::make_item("1", "Track"));
+    app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
+    assert!(app.confirm_clear_queue);
+}
+
+#[test]
+fn c_does_not_prompt_clear_queue_while_context_menu_is_open_via_handle_key() {
+    // Behavior change (phase 6, #135): before this fix,
+    // `clear_queue_prompt_c` had no `context_menu` guard and sat above
+    // `context_menu` in CONTEXT_STACK, so 'c' bled through an open
+    // context menu and silently opened the clear-queue confirmation. It
+    // must now fall through to (and be swallowed by) the context-menu
+    // layer instead.
+    let mut app = make_app_stub();
+    app.player_tab
+        .items
+        .push(crate::app::tests::make_item("1", "Track"));
+    app.context_menu = Some(test_empty_context_menu());
+    app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
+    assert!(
+        !app.confirm_clear_queue,
+        "clear-queue confirmation must not open while a context menu is open"
+    );
+}
+
+#[test]
+fn enter_on_queue_tab_dispatches_queue_play_cursor_via_handle_key() {
+    // Issue #134: the queue tab's `Enter` key and a double-click on a
+    // queue row both go through `Command::QueuePlayCursor` now. This
+    // pins the keyboard side of that shared seam end-to-end through
+    // `handle_key`.
+    let mut app = make_app_stub();
+    // `handle_queue_key` branches on `panel_focus`; queue-cursor Enter
+    // only fires when the queue side is focused (equivalent of the old
+    // default "Queue tab").
+    app.panel_focus = crate::app::PanelFocus::Queue;
+    app.player_tab.set_items(
+        vec![
+            crate::app::tests::make_item("1", "Audio"),
+            crate::app::tests::make_item("2", "Audio"),
+        ],
+        1,
+    );
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.current_idx = 0;
+    }
+    let rx = app.player.spy_on_commands();
+
+    app.handle_key(ev(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(mbv_core::player::PlayerCommand::JumpTo(1))
+    ));
+}
+
+#[test]
+fn context_stack_order_is_pinned() {
+    // Updated for #361: the Standard-only `lib_search` entry (and its
+    // handler `handle_key_lib_search`) was deleted along with the rest
+    // of the Standard view. `power_lib_search` is Power's equivalent and
+    // was already present above it in the stack, so removing the
+    // now-nonexistent entry doesn't change any surviving precedence.
+    let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
+    assert_eq!(
+        names,
+        vec![
+            "save_modal",
+            "save_playlist",
+            "settings",
+            "help",
+            "sessions",
+            "playlists",
+            "global_overlay_open",
+            "queue_column_width",
+            "home_search",
+            "lib_search",
+            "sidebar_toggle_h",
+            "confirm_clear_queue",
+            "confirm_rescan",
+            "confirm_skip_intro",
+            "confirm_next_up",
+            "clear_queue_prompt_c",
+            "context_menu",
+            "playback",
+            "ctrl_l_force_clear",
+            "f5_refresh",
+            "album_track_mode",
+            "view_dispatch",
+        ],
+        "precedence order must match handle_key's pre-phase-2 branch order; \
+         if this intentionally changes, update docs/adr/0002-centralized-input-handling.md too"
+    );
+}
