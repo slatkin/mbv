@@ -673,6 +673,18 @@ mod tests_ui_util;
 mod tests_library_position;
 
 #[cfg(test)]
+#[path = "tests_library_position_activation.rs"]
+mod tests_library_position_activation;
+
+#[cfg(test)]
+#[path = "tests_library_position_restore.rs"]
+mod tests_library_position_restore;
+
+#[cfg(test)]
+#[path = "tests_panel_focus.rs"]
+mod tests_panel_focus;
+
+#[cfg(test)]
 #[path = "tests_lifecycle.rs"]
 mod tests_lifecycle;
 
@@ -681,8 +693,28 @@ mod tests_lifecycle;
 mod tests_session_connect;
 
 #[cfg(test)]
-#[path = "tests_feed_podcast.rs"]
-mod tests_feed_podcast;
+#[path = "tests_daemon_bootstrap.rs"]
+mod tests_daemon_bootstrap;
+
+#[cfg(test)]
+#[path = "tests_auto_reconnect.rs"]
+mod tests_auto_reconnect;
+
+#[cfg(test)]
+#[path = "tests_library_route.rs"]
+mod tests_library_route;
+
+#[cfg(test)]
+#[path = "tests_feed_group_nav.rs"]
+mod tests_feed_group_nav;
+
+#[cfg(test)]
+#[path = "tests_feed_group_loading.rs"]
+mod tests_feed_group_loading;
+
+#[cfg(test)]
+#[path = "tests_podcast.rs"]
+mod tests_podcast;
 
 #[cfg(test)]
 #[path = "tests_queue_scope.rs"]
@@ -695,6 +727,10 @@ mod tests_queue_consume;
 #[cfg(test)]
 #[path = "tests_queue_mutation.rs"]
 mod tests_queue_mutation;
+
+#[cfg(test)]
+#[path = "tests_queue_reorder.rs"]
+mod tests_queue_reorder;
 
 #[cfg(test)]
 #[path = "tests_route_state.rs"]

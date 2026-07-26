@@ -418,3 +418,15 @@ fn transport_prev_next_both_available_for_connected_remote_session_regardless_of
     }
     assert_eq!(app.transport_prev_next_available(), (true, true));
 }
+
+#[test]
+fn remote_position_extrapolation_does_not_round_up_partial_seconds() {
+    assert_eq!(
+        App::extrapolated_remote_position(10, Duration::from_millis(1600)),
+        11
+    );
+    assert_eq!(
+        App::extrapolated_remote_position(10, Duration::from_secs(2)),
+        12
+    );
+}
