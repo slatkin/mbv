@@ -2,6 +2,7 @@ use super::*;
 use crate::app::layout::LayoutMain;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{AlbumIndexState, BrowseLevel, LibSearch, LibraryTab, SeriesDetail};
+use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
