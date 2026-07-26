@@ -5,7 +5,7 @@ In the music-group view, the system SHALL render one selection block around the 
 
 #### Scenario: Album target in a grouped view
 - **WHEN** an album is focused in the music-group view
-- **THEN** the selection frame encloses that album's artist header, hint row, and visible sibling albums
+- **THEN** the selection frame encloses that album's artist header, hint row, and sibling albums
 - **AND** the artist name appears only on the artist row
 
 #### Scenario: Artist target in a grouped view
@@ -26,60 +26,43 @@ The system SHALL reserve a fixed two-column gutter for every artist and album ta
 - **AND** album title columns do not shift horizontally
 - **AND** the hint row changes to the actions available for the new target type
 
-### Requirement: Bounded album region
-The selected artist block SHALL allocate at most eight physical terminal rows to album entries. Wrapped album titles SHALL consume rows from that limit, so the region can contain fewer than eight albums. The system SHALL derive a canonical visible window from the focused target without persistent inner-scroll state, keep the focused album visible, and advance by the minimum number of rendered rows needed to reveal each newly focused complete album.
+### Requirement: Bounded inline album region
+The selected artist block SHALL render every album belonging to the focused artist when the group has 12 or fewer albums. For larger groups, it SHALL render a derived 12-album inline window containing the focused album, and navigation SHALL shift that window without moving the outer artist block.
 
-#### Scenario: Discography fits in the region
-- **WHEN** all album entries for the selected artist occupy eight or fewer rendered rows
-- **THEN** every album is visible and no album entry is clipped
+#### Scenario: Small discography is fully visible
+- **WHEN** the artist-scoped block is rendered for the focused artist
+- **THEN** every album entry for that artist is present in the block, in full
 
-#### Scenario: Focus advances beyond the lower edge
-- **WHEN** the focused album is at the lower edge of an overflowing album region and focus moves to the next album
-- **THEN** the region advances by the minimum rendered rows needed to show the new album
-- **AND** the new focused album remains at the lower edge where possible
-
-#### Scenario: Wrapped titles consume the row budget
-- **WHEN** one or more album titles wrap across multiple terminal rows
-- **THEN** each wrapped row counts toward the eight-row limit
-- **AND** the window shifts by enough rows to keep the newly focused album complete
-- **AND** only complete neighboring album entries that fit with the focused album are included
-
-#### Scenario: Focused album exceeds the row budget
-- **WHEN** the focused album title wraps to more than eight terminal rows
-- **THEN** the region is dedicated to that album
-- **AND** its first eight wrapped lines are visible, beginning with the marker-bearing first line
-- **AND** wrapped lines after the eighth are clipped
-
-### Requirement: Album overflow feedback
-When an artist has albums outside the visible album window, the pinned hint row SHALL show the one-based visible album range and total album count in the form `first-last/total`. The range SHALL update from the derived window as focus moves and SHALL be absent when the full discography is visible.
-
-#### Scenario: Discography overflows
-- **WHEN** albums 3 through 8 of a 20-album artist are visible
-- **THEN** the hint row displays `3-8/20`
-
-#### Scenario: Entire discography is visible
-- **WHEN** every album for the selected artist is in the visible window
-- **THEN** the hint row does not display an overflow range
+#### Scenario: Large discography scrolls inline
+- **WHEN** the focused artist has more than 12 albums
+- **THEN** the selected block renders a 12-album window containing the focused album
+- **AND** moving focus at either window edge shifts the window to reveal the next album
+- **AND** the outer artist block remains anchored
 
 ### Requirement: Stable outer viewport
-The outer library viewport SHALL keep the selected artist block anchored while focus moves within that artist whenever the target remains visible. If the selected block or expanded track target cannot fit in the viewport, the outer viewport SHALL follow the active cursor sufficiently to keep the target visible; the artist header SHALL not become sticky.
+The outer library viewport SHALL keep the selected artist block anchored while focus moves within that artist. For groups larger than 12 albums, the inline album window SHALL shift to reveal the focused album without scrolling the outer viewport through the block; expanded track tables retain their own internal cursor scrolling. The artist header SHALL not become sticky.
 
 #### Scenario: Navigation within a fitting artist block
 - **WHEN** focus moves between targets in one artist block and the target remains visible
 - **THEN** the outer library viewport offset does not change
 
 #### Scenario: Selected content exceeds the viewport
-- **WHEN** expanded content or terminal height places the active target outside the viewport
-- **THEN** the outer viewport scrolls enough to reveal the target
+- **WHEN** expanded track content exceeds the viewport
+- **THEN** the track table scrolls internally enough to reveal the target
 - **AND** no sticky copy of the artist header is rendered
 
+#### Scenario: Discography exceeds the inline window
+- **WHEN** the focused artist has more than 12 albums and focus moves to an album outside the current window
+- **THEN** the inline album window shifts to reveal that album
+- **AND** the selected block's outer position does not change
+
 ### Requirement: Inline track expansion
-When a focused album is expanded, the system SHALL append its loading state or track table below the bounded album region inside the artist selection block. The visible sibling albums SHALL remain present, and the block height SHALL grow with the rendered track content.
+When a focused album is expanded, the system SHALL append its loading state or track table below the album region inside the artist selection block. The sibling albums SHALL remain present, and the block height SHALL grow with the rendered track content.
 
 #### Scenario: Album tracks are available
 - **WHEN** the user expands a focused album whose tracks are loaded
 - **THEN** the track table appears below the album region within the same frame
-- **AND** the visible sibling album entries remain above it
+- **AND** the sibling album entries remain above it
 
 #### Scenario: Track row is focused
 - **WHEN** focus moves within an expanded album's track table
@@ -91,7 +74,9 @@ When a focused album is expanded, the system SHALL append its loading state or t
 - **THEN** a loading row appears below the album region within the same frame
 
 ### Requirement: Target-sensitive inline artwork
-When inline images are enabled, the selected group SHALL show the artist collage while the artist row is targeted and the focused album cover while an album row is targeted. Artwork SHALL occupy a 12-row box anchored to the top of the block; only text rows that vertically overlap that box SHALL use the narrowed wrap width, and rows below the box SHALL use the full content width. The block SHALL retain enough continuation space to avoid cropping the art box for short discographies.
+When inline images are enabled, the selected group SHALL show the artist collage while the artist row is targeted and the focused album cover while an album row is targeted. Artwork SHALL occupy a 12-row box anchored to the top of the block. The block SHALL retain enough continuation space to avoid cropping the art box for short discographies.
+
+> Deferred: row-by-row width recalculation so text below the 12-row art box reclaims full width was considered and is intentionally out of scope here — see design.md's "Deferred" note. This change uses one constant narrowed width for the block, matching current behavior; rows below the art box keep the narrowed width rather than expanding.
 
 #### Scenario: Artist row is targeted
 - **WHEN** the artist row has the marker and inline images are enabled
@@ -105,10 +90,6 @@ When inline images are enabled, the selected group SHALL show the artist collage
 - **WHEN** the track-table cursor is active and inline images are enabled
 - **THEN** the block marker remains on the expanded album
 - **AND** the block continues to render that album's cover
-
-#### Scenario: Text continues below artwork
-- **WHEN** an album entry begins or wraps below the 12-row artwork box
-- **THEN** those non-overlapping rendered rows use the full block content width
 
 ### Requirement: Non-grouped album compatibility
 Outside the music-group view, the system SHALL retain the existing per-album selection frame and SHALL not render a duplicated artist-name row inside it. Removing the duplicated row SHALL also apply to grouped rendering and SHALL not change album action semantics.

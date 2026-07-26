@@ -6,11 +6,15 @@ Grouped music albums currently frame only the selected album and repeat the arti
 
 - Frame the selected artist's entire discography as one block in the music-group view, with the artist rendered once above a pinned action-hint row.
 - Add a fixed marker gutter and cursor styling that distinguish the current artist or album action target without shifting album text.
-- Show albums in an eight-terminal-row sliding region, derive its window from the marker, and report its visible range in the hint row.
+- Show the focused artist's albums below the pinned hint row, using a 12-album inline window for larger discographies so the outer artist block stays stable.
 - Keep the artist block anchored while navigating within it when possible, with cursor-follow fallback for content that exceeds the viewport.
 - Append expanded track details inside the artist block while keeping sibling albums visible.
-- Swap inline art between the artist collage and selected album cover, narrowing only text rows that overlap the art box.
+- Swap inline art between the artist collage and selected album cover, using one constant narrowed width for the block.
 - Remove the duplicated album-artist display row from grouped and plain/search album rendering while retaining per-album framing outside the music-group view.
+
+## Deferred
+
+Following a critic review of the initial implementation plan, row-aware top-down artwork wrapping that reclaims full width below the 12-row art band remains deferred. Larger discographies use a derived 12-album inline window; the window is not persisted and has no nested scrollbar.
 
 ## Capabilities
 
