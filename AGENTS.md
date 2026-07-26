@@ -62,18 +62,6 @@ spawn_agent(message: "<test-engineer prompt>\n\nTask: Write tests for the auth c
 Claude Code spawns child agents via the `spawn_agent` tool (requires `multi_agent = true`).
 To inject role-specific behavior, the parent MUST read the role prompt and pass it in the spawned agent message.
 
-Delegation steps:
-1. Decide which agent role to delegate to (e.g., `architect`, `executor`, `debugger`)
-2. Call `spawn_agent` with `message` containing the prompt content + task description
-3. The child agent receives full role context and executes the task independently
-
-Parallel delegation (up to 6 concurrent):
-```
-spawn_agent(message: "<architect prompt>\n\nTask: Review the auth module")
-spawn_agent(message: "<executor prompt>\n\nTask: Add input validation to login")
-spawn_agent(message: "<test-engineer prompt>\n\nTask: Write tests for the auth changes")
-```
-
 Each child agent:
 - Inherits AGENTS.md context (via child_agents_md feature flag)
 - Runs in an isolated context with its own tool access
