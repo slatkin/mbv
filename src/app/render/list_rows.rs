@@ -30,6 +30,25 @@ pub(super) enum DisplayRow {
     SeriesDetailFiller,
 }
 
+/// Shared inputs to the per-kind row-rendering bodies of `render_power_list`
+/// (`render_power_letter_grouped_rows`, `render_power_plain_rows`): the
+/// prelude values both kinds' bodies read, factored out so each callee takes
+/// one struct instead of the same eight-plus positional arguments.
+/// `area` and `content_area` differ only when a search input box has shifted
+/// `content_area` down (see `render_power_list`'s prelude); both are read
+/// independently by the bodies, so both are carried.
+pub(super) struct ListRenderCtx<'a> {
+    pub(super) area: Rect,
+    pub(super) content_area: Rect,
+    pub(super) items: &'a [mbv_core::api::MediaItem],
+    pub(super) cursor: usize,
+    pub(super) stored_scroll: usize,
+    pub(super) banner_rows: usize,
+    pub(super) banner_content_rows: usize,
+    pub(super) series_detail_rows: usize,
+    pub(super) focused: bool,
+}
+
 pub(super) fn push_selected_detail_fillers_before(
     rows: &mut Vec<DisplayRow>,
     item_idx: usize,
