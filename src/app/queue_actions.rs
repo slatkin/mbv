@@ -14,10 +14,6 @@ impl App {
             let s = self.player.status.lock().unwrap();
             (s.active, s.current_idx)
         };
-        if scope == QueueScope::Remote && !active {
-            self.flash_status_high("Remote queue can only be edited while active".into());
-            return;
-        }
         if pos >= self.queue_for_scope(scope).items.len() {
             let queue = self.queue_for_scope_mut(scope);
             queue.clamp_cursor();
@@ -41,7 +37,7 @@ impl App {
         self.undo_stack_for_scope_mut(scope)
             .push(UndoEntry::Remove(pos, Box::new(item)));
         self.persist_local_queue_state_if_needed(scope);
-        if controls_playback_queue && active {
+        if controls_playback_queue && (active || scope == QueueScope::Remote) {
             self.player.send_command(PlayerCommand::QueueRemove(pos));
             // Player thread adjusts current_idx when it processes the command.
             // No eager adjustment here — doing so races with the player thread
@@ -65,11 +61,6 @@ impl App {
 
     fn move_queue_item_by(&mut self, delta: isize) {
         let scope = self.visible_queue_scope();
-        let active = self.player.status.lock().unwrap().active;
-        if scope == QueueScope::Remote && !active {
-            self.flash_status_high("Remote queue can only be edited while active".into());
-            return;
-        }
         let queue = self.queue_for_scope(scope);
         let from = queue.queue_cursor;
         let len = queue.items.len();
@@ -130,7 +121,7 @@ impl App {
             self.queue_dirty = true;
         }
         self.persist_local_queue_state_if_needed(scope);
-        if controls_playback_queue && active {
+        if controls_playback_queue && (active || scope == QueueScope::Remote) {
             self.player.send_command(PlayerCommand::QueueMove(from, to));
         }
         true

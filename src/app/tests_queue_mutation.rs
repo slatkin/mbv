@@ -296,32 +296,6 @@ fn clearing_remote_queue_does_not_prompt_to_save_local_playlist() {
 }
 
 #[test]
-fn removing_from_inactive_remote_queue_is_rejected() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let local_items = make_items(2);
-    let remote_items = make_items(3);
-    let mut app = make_remote_app_stub(local_items, remote_items.clone());
-    app.player.status.lock().unwrap().active = false;
-
-    app.remove_from_queue(1);
-
-    assert_eq!(
-        app.remote_player_tab
-            .as_ref()
-            .unwrap()
-            .items
-            .iter()
-            .map(|i| i.id.as_str())
-            .collect::<Vec<_>>(),
-        remote_items
-            .iter()
-            .map(|i| i.id.as_str())
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(app.status, "Remote queue can only be edited while active");
-}
-
-#[test]
 fn context_menu_remove_targets_displayed_remote_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let local_items = make_items(2);

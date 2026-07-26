@@ -284,36 +284,6 @@ fn move_queue_item_for_remote_scope_sends_move_command_and_preserves_local_queue
 }
 
 #[test]
-fn move_queue_item_for_inactive_remote_scope_is_rejected() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let local_items = make_items(3);
-    let remote_items = make_items(3);
-    let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(local_items, remote_items.clone());
-    app.set_queue_scope(QueueScope::Remote);
-    app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
-    app.player.status.lock().unwrap().active = false;
-
-    app.move_queue_item_up();
-
-    assert_eq!(
-        app.remote_player_tab
-            .as_ref()
-            .unwrap()
-            .items
-            .iter()
-            .map(|i| i.id.as_str())
-            .collect::<Vec<_>>(),
-        remote_items
-            .iter()
-            .map(|i| i.id.as_str())
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
-    assert_eq!(app.status, "Remote queue can only be edited while active");
-    assert!(cmd_rx.try_recv().is_err());
-}
-
-#[test]
 fn remote_queue_update_reconciles_remote_queue_without_touching_local_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let local_items = make_items(2);
