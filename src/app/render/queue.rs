@@ -45,7 +45,7 @@ impl App {
             .daemon_client_endpoint
             .clone();
         let local_selected = self.visible_queue_scope() == QueueScope::Local;
-        let has_remote = self.has_direct_remote_queue();
+        let has_remote = matches!(remote_state, RemoteSlotState::DirectRemote);
         let has_attached = matches!(remote_state, RemoteSlotState::AttachedSession);
         let show_split = has_remote || has_attached;
         let local_w = if show_split {
