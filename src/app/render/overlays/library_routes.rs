@@ -313,6 +313,7 @@ impl App {
         let Some(ref popup) = self.library_routes_popup else {
             return;
         };
+        self.render_backdrop_dim(f);
         let (title, lines): (&str, Vec<Line>) = match &popup.stage {
             LibraryRouteStage::PickLibrary { items } => {
                 let lines = items
