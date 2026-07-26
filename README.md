@@ -22,7 +22,9 @@ You can browse libraries, build a queue, and play from your server. Playback sta
 - **Headless daemon mode** — `mbvd` runs the player with no terminal attached, as a background service or systemd unit; any `mbv` can connect to it as a thin client over its own protocol, not just standard Emby session control. See "mbvd" above.
 - **mpv-first playback model** — playback runs through embedded mpv, including headless audio and optional PCM pipe output. Configure pipe compatibility with `[mpv].audio_pipe_samplerate` and `[mpv].audio_pipe_bitdepth` (`16`, `24`, or `32`) — Snapserver's `sampleformat` must match both exactly. The pipe is config-only; there's no live toggle.
 - **Opinionated playback defaults** — English audio preferred, subtitles start off, image-based subtitle tracks hidden because they don't work in headless mpv.
-- **Special music library handling** — folder-shaped music libraries via `[music].levels`, with grouped browsing standard Emby clients don't offer.
+- **Special music library handling** — folder-shaped music libraries via `[music].levels`, with grouped browsing standard Emby clients don't offer. Includes recursive album search across all configured ancestor levels.
+- **Sticky library position** — browse position within each library (including drill depth and focused item) is saved and restored across restarts.
+- **Auto-reconnect for daemon routes** — when enabled, reconnects to the last active daemon-routed library at startup via the `[settings] auto_reconnect` option.
 - **Feed-library defaults** — chosen libraries behave like feeds, unplayed and date-sorted — good for YouTube-style libraries.
 - **Extra local control surfaces** — MPRIS lets desktop widgets, `playerctl`, and media keys control mbv.
 - **Desktop-integrated prompts** — with `system_notifications = true`, Skip Intro, Next Up, and queue prompts show as actionable desktop notifications.
