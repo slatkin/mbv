@@ -673,6 +673,10 @@ mod tests_ui_util;
 mod tests_library_position;
 
 #[cfg(test)]
+#[path = "tests_library_position_activation.rs"]
+mod tests_library_position_activation;
+
+#[cfg(test)]
 #[path = "tests_library_position_restore.rs"]
 mod tests_library_position_restore;
 
