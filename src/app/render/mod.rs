@@ -2,6 +2,8 @@ mod album;
 mod card;
 mod chrome;
 mod detail;
+mod detail_series;
+mod detail_series_view;
 mod home;
 pub mod indicators;
 mod list;
