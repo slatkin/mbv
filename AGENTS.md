@@ -10,6 +10,14 @@ Issues live in GitHub Issues (slatkin/mbv), managed via the `gh` CLI. External P
 ## Domain docs
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+## Module naming conventions (src/app/)
+Modules in `src/app/` follow two naming conventions plus a default:
+- **Prefix `types_`**: For modules that primarily define type aliases, enums, or structs used across the app (e.g., `types_browse.rs`, `types_playback.rs`)
+- **Suffix `_actions`**: For modules that implement action handlers or event dispatch logic (e.g., `queue_actions.rs`, `notify_actions.rs`)
+- **Bare noun**: For all other modules (constructors, state, input handling, etc.)
+
+Future module splits should follow this existing pattern. When in doubt, prefer bare nouns — the prefix/suffix conventions are reserved for modules that genuinely benefit from categorization. Existing files are grandfathered in; do not rename for convention compliance alone.
+
 # Execution protocols
 Broad requests: explore first, then plan. Keep and update domain docs while planning. 2+ independent tasks in parallel. run_in_background for builds/tests. Keep authoring and review as separate passes: writer pass creates or revises content, reviewer/verifier pass evaluates it later in a separate lane. Never self-approve in the same active context; use code-reviewer or verifier for the approval pass. Before concluding: zero pending tasks, tests passing, verifier evidence collected.
 
