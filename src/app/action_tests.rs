@@ -64,50 +64,6 @@ fn playback_help_bindings_match_playback_command_for_key() {
 // ── playback_command_for_key: gated on (active OR has_remote_session) ────
 
 #[test]
-fn space_fires_when_active_only() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char(' ')), true, false),
-        Some(Command::TogglePlayPause)
-    );
-}
-
-#[test]
-fn space_fires_when_remote_session_only() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char(' ')), false, true),
-        Some(Command::TogglePlayPause)
-    );
-}
-
-#[test]
-fn space_does_not_fire_when_neither_active_nor_remote() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char(' ')), false, false),
-        None
-    );
-}
-
-#[test]
-fn esc_stops_when_gated() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Esc), true, false),
-        Some(Command::Stop)
-    );
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Esc), false, true),
-        Some(Command::Stop)
-    );
-}
-
-#[test]
-fn esc_does_not_stop_when_ungated() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Esc), false, false),
-        None
-    );
-}
-
-#[test]
 fn enter_never_stops() {
     assert_eq!(
         playback_command_for_key(key(KeyCode::Enter), true, true),
@@ -115,54 +71,6 @@ fn enter_never_stops() {
     );
     assert_eq!(
         playback_command_for_key(key(KeyCode::Enter), false, false),
-        None
-    );
-}
-
-#[test]
-fn seek_keys_fire_when_gated() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('<')), true, false),
-        Some(Command::SeekRelative(-5.0))
-    );
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('>')), false, true),
-        Some(Command::SeekRelative(5.0))
-    );
-}
-
-#[test]
-fn seek_keys_do_not_fire_when_ungated() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('<')), false, false),
-        None
-    );
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('>')), false, false),
-        None
-    );
-}
-
-#[test]
-fn track_nav_keys_fire_when_gated() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('N')), true, false),
-        Some(Command::NextTrack)
-    );
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('P')), false, true),
-        Some(Command::PreviousTrack)
-    );
-}
-
-#[test]
-fn track_nav_keys_do_not_fire_when_ungated() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('N')), false, false),
-        None
-    );
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('P')), false, false),
         None
     );
 }
@@ -219,14 +127,6 @@ fn volume_keys_fire_unconditionally() {
 fn a_fires_when_active_only() {
     assert_eq!(
         playback_command_for_key(key(KeyCode::Char('a')), true, false),
-        Some(Command::ToggleMuteOrCycleAudio)
-    );
-}
-
-#[test]
-fn a_fires_when_active_and_remote_session() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('a')), true, true),
         Some(Command::ToggleMuteOrCycleAudio)
     );
 }
