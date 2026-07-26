@@ -14,6 +14,7 @@ mod home_hero;
 mod home_video;
 pub mod indicators;
 mod list;
+mod list_rows;
 mod music;
 mod overlays;
 mod pills;
