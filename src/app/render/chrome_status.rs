@@ -79,6 +79,47 @@ impl App {
         ]
     }
 
+    /// Returns `(icon, label)` for a remote pill without styling.
+    /// Used by queue-title rendering that applies its own colors.
+    pub(super) fn remote_icon_and_label(
+        &self,
+        remote_state: RemoteSlotState,
+        daemon_endpoint: &str,
+    ) -> (&'static str, String) {
+        let icon = if self.use_nerd_fonts {
+            "\u{f1616}"
+        } else {
+            "\u{1F5A7}"
+        };
+        let gap = if self.use_nerd_fonts { " " } else { "  " };
+        let target = match remote_state {
+            RemoteSlotState::Off => None,
+            RemoteSlotState::AttachedSession => {
+                self.connected_session_state.as_ref().and_then(|session| {
+                    let device_name = session.device_name.trim();
+                    if !device_name.is_empty() {
+                        Some(device_name.to_string())
+                    } else {
+                        let host = session.host.trim();
+                        (!host.is_empty()).then(|| host.to_string())
+                    }
+                })
+            }
+            RemoteSlotState::DirectRemote => self
+                .active_route
+                .as_ref()
+                .map(|name| format!("route:{name}"))
+                .or_else(|| self.direct_remote_label.clone())
+                .or_else(|| daemon_endpoint_label(daemon_endpoint)),
+            RemoteSlotState::LocalDaemon => None,
+        };
+        let label = match target {
+            Some(target) => format!("{gap}{target}"),
+            None => format!("{gap}{}", mbv_core::api::device_name()),
+        };
+        (icon, label)
+    }
+
     pub(super) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let (label, on) = match &self.queue_source {

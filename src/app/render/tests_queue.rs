@@ -653,6 +653,7 @@ fn make_power_home_video_app() -> App {
 
     app
 }
+
 fn make_power_large_movie_library_app(library_total: usize) -> App {
     let mut app = make_app_stub();
     app.library_tab = 1;

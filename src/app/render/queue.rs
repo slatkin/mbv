@@ -1,6 +1,6 @@
 use super::super::ui_util::*;
 use crate::app::layout::LayoutMain;
-use crate::app::{palette, App, QueueScope};
+use crate::app::{palette, App, QueueScope, RemoteSlotState};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -46,7 +46,9 @@ impl App {
             .clone();
         let local_selected = self.visible_queue_scope() == QueueScope::Local;
         let has_remote = self.has_direct_remote_queue();
-        let local_w = if has_remote {
+        let has_attached = matches!(remote_state, RemoteSlotState::AttachedSession);
+        let show_split = has_remote || has_attached;
+        let local_w = if show_split {
             area.width / 2
         } else {
             area.width
@@ -135,6 +137,28 @@ impl App {
             );
             f.render_widget(
                 Paragraph::new(Line::from(remote_spans)).alignment(Alignment::Right),
+                remote_area,
+            );
+        } else if has_attached {
+            let remote_x = area.x + local_w;
+            let remote_area = Rect {
+                x: remote_x,
+                y: area.y,
+                width: remote_w,
+                height: 1,
+            };
+            let (icon, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
+            let fg = palette::QUEUE_BUTTON_FOCUSED_BG;
+            let bg = palette::YELLOW;
+            let icon_style = Style::default().fg(fg).bg(bg);
+            let label_style = Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD);
+            let spans = vec![
+                Span::styled(format!(" {label}"), label_style),
+                Span::styled(format!(" {icon} "), icon_style),
+            ];
+            f.render_widget(Block::default().style(Style::default().bg(bg)), remote_area);
+            f.render_widget(
+                Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
                 remote_area,
             );
         }
