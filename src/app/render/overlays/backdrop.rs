@@ -8,6 +8,8 @@ const DIM_FACTOR: f32 = 0.5;
 
 fn dim(color: Color) -> Color {
     match color {
+        Color::White => Color::Rgb(127, 127, 127),
+        Color::Black | Color::Reset => Color::Rgb(0, 0, 0),
         Color::Rgb(r, g, b) => Color::Rgb(
             (r as f32 * DIM_FACTOR) as u8,
             (g as f32 * DIM_FACTOR) as u8,
