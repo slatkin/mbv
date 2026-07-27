@@ -230,7 +230,11 @@ fn perform_handshake(
     let ctrl_compatibility = match hello {
         CtrlEvent::Hello(info) => {
             info.validate_peer()?;
-            let compatibility = info.compatibility()?;
+            let mut compatibility = info.compatibility()?;
+            compatibility.supports_spectrum = info
+                .capabilities
+                .iter()
+                .any(|cap| cap == crate::ctrl::CTRL_CAP_SPECTRUM);
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",
@@ -334,6 +338,16 @@ fn apply_ctrl_event(
                 let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
                     disconnect_reason_message(&reason).to_string(),
                 ));
+            }
+        }
+        CtrlEvent::Spectrum { bars } => {
+            if notify {
+                let _ = event_tx.send(PlayerEvent::Spectrum(bars));
+            }
+        }
+        CtrlEvent::SpectrumFailed { reason } => {
+            if notify {
+                let _ = event_tx.send(PlayerEvent::SpectrumFailed(reason));
             }
         }
     }
@@ -493,6 +507,10 @@ impl RemotePlayer {
         self.disconnected.clone()
     }
 
+    pub fn send_ctrl_cmd(&self, cmd: CtrlCmd) -> bool {
+        self.cmd_tx.send(cmd).is_ok()
+    }
+
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         let wire_cmd = match cmd {
             PlayerCommand::QueueAppend { items }
@@ -599,6 +617,10 @@ impl RemotePlayer {
 
     pub fn supports_queue_append(&self) -> bool {
         self.ctrl_compatibility.supports_queue_append
+    }
+
+    pub fn supports_spectrum(&self) -> bool {
+        self.ctrl_compatibility.supports_spectrum
     }
 
     fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {

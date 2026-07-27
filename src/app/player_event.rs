@@ -398,6 +398,14 @@ impl App {
             PlayerEvent::QueueDesynced(reason) => {
                 self.flash_status(reason);
             }
+            PlayerEvent::Spectrum(bars) => {
+                self.visualizer_frame = bars;
+            }
+            PlayerEvent::SpectrumFailed(reason) => {
+                log::warn!(target: "visualizer", "daemon spectrum failed: {reason}");
+                self.visualizer_failed = true;
+                self.stop_visualizer_worker();
+            }
         }
         false
     }

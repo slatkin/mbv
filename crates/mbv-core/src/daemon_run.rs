@@ -251,6 +251,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     let mut source = crate::config::QueueSource::Unknown;
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
+    let mut spectrum_state: Option<SpectrumState> = None;
 
     loop {
         if last_keepalive.elapsed() >= Duration::from_secs(30) {
@@ -320,6 +321,12 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 );
             }
             DaemonEvent::Player(pe) => {
+                if let PlayerEvent::Stopped { .. } = &pe {
+                    if let Some(mut state) = spectrum_state.take() {
+                        log::info!(target: "daemon", "auto-stopping spectrum on playback stop");
+                        state.stop();
+                    }
+                }
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
             }
             DaemonEvent::Ws(ws_ev) => {
@@ -352,13 +359,31 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &mut source,
                     &shared_queue,
                     &ctrl_clients,
+                    &merged_tx,
+                    &mut spectrum_state,
                 );
             }
             DaemonEvent::CtrlDisconnected(client_id) => {
+                if let Some(mut state) = spectrum_state.take() {
+                    log::info!(target: "daemon", "stopping spectrum on client disconnect");
+                    state.stop();
+                }
                 ctrl_clients.lock().unwrap().remove(client_id);
+            }
+            DaemonEvent::Spectrum(bars) => {
+                broadcast(&ctrl_clients, &CtrlEvent::Spectrum { bars });
+            }
+            DaemonEvent::SpectrumFailed { reason } => {
+                broadcast(&ctrl_clients, &CtrlEvent::SpectrumFailed { reason });
+                if let Some(mut state) = spectrum_state.take() {
+                    state.stop();
+                }
             }
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");
+                if let Some(mut state) = spectrum_state.take() {
+                    state.stop();
+                }
                 player.stop();
                 player.join_or_timeout(std::time::Duration::from_secs(5));
                 let _ = std::fs::remove_file(pid_file());

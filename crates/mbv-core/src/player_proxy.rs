@@ -177,10 +177,24 @@ impl PlayerProxy {
         }
     }
 
+    pub fn send_ctrl_cmd(&self, cmd: crate::ctrl::CtrlCmd) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.send_ctrl_cmd(cmd),
+        }
+    }
+
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.send_command(cmd),
             PlayerProxyInner::Remote(r) => r.send_command(cmd),
+        }
+    }
+
+    pub fn supports_spectrum(&self) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.supports_spectrum(),
         }
     }
 
