@@ -29,7 +29,7 @@ jobs:
             "$@"
           }
           pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed rust nasm mpv openssl github-cli git openssh
+          pacman_retry pacman -S --noconfirm --needed rust nasm mpv cava openssl github-cli git openssh
 
       - name: Cache Rust build
         uses: actions/cache@v6

@@ -1,9 +1,11 @@
-# Audio visualizer captures mbv-owned audio
+# Audio visualizer follows system audio
 
-mbv's audio visualizer is scoped to PulseAudio/PipeWire-pulse systems and must visualize mbv playback audio only, not the default system monitor. The first capture strategy may route mpv through a dedicated Pulse-compatible sink and read that sink's monitor, but any accepted strategy must preserve normal playback feel: noticeable audio latency or A/V sync regression is a blocker to troubleshoot and pivot around, not an acceptable tradeoff.
+The audio visualizer runs CAVA as a supervised child process while the embedded visualizer is enabled for local playback. CAVA uses its normal Pulse input selection without a named source, so it follows the system default monitor/source. The visualizer therefore represents system audio, not mbv-owned audio only, and may include unrelated applications.
+
+mbv does not create or modify PulseAudio/PipeWire sinks, sources, links, loopbacks, or modules. It also does not change mpv's audio output properties. Starting or stopping the visualizer must leave playback configuration and audio graph state unchanged.
 
 **Considered Options**
 
-- Capture the default monitor source: rejected because it can include unrelated application audio.
+- Capture an mbv-only monitor through a dedicated sink or loopback: rejected because routing adds playback and shutdown risk without being required for an embedded spectrum.
 - Depend on mpv visualization video filters: rejected because they render visualization as video inside mpv rather than exposing samples for mbv's TUI.
-- Treat ALSA/no-Pulse systems as first-class targets: rejected for the initial design to keep per-app audio isolation precise.
+- Implement FFT or audio capture in Rust: rejected because CAVA already provides maintained capture and spectrum analysis.

@@ -66,6 +66,7 @@ copyright = "2024, slatkin"
 license-file = ["LICENSE", "0"]
 extended-description = "Terminal UI client for Emby media servers. Embeds mpv for playback, syncs position with Emby, and supports full remote control via Emby's websocket API."
 depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1"
+recommends = "cava"
 section = "video"
 priority = "optional"
 assets = [

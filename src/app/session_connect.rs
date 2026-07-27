@@ -252,6 +252,7 @@ impl App {
         remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
     ) {
+        self.stop_visualizer_worker();
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
@@ -337,6 +338,7 @@ impl App {
         remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
     ) {
+        self.stop_visualizer_worker();
         let previous_route = self.active_route.clone();
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
