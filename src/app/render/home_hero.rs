@@ -83,7 +83,7 @@ impl App {
 
     /// Renders the Keep Watching hero panel's image column into `area`,
     /// top-aligned (with a one-row pad so it isn't flush against the top of
-    /// the panel) and horizontally centered. The column is a fixed reserved
+    /// the panel) and right-aligned against the panel's right edge. The column is a fixed reserved
     /// box (unlike the queue card's growing/shrinking slot), so a dim
     /// placeholder simply fills it while no artwork is ready yet.
     pub(super) fn render_keep_watching_hero_image(
@@ -113,7 +113,7 @@ impl App {
                 avail,
             ) {
                 let img_rect = Rect {
-                    x: img_area.x + img_area.width.saturating_sub(actual.width) / 2,
+                    x: img_area.x + img_area.width.saturating_sub(actual.width),
                     y: img_area.y,
                     width: actual.width,
                     height: actual.height,

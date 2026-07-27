@@ -117,18 +117,25 @@ impl App {
         // flat cursor item whether the active pill is Continue Watching or one
         // of the Newest sections.
         let hero_item = self.power_home_current_item();
+        // Row budget for the hero image is the primary size control: an
+        // independent, terminal-height-aware target computed up front, not
+        // derived from how long a given item's overview text happens to be.
+        // Mirrors render_card_image's terminal-height-aware cap.
+        let max_allowed = content_area.height.saturating_sub(7);
+        let hero_img_rows = max_allowed
+            .min(if self.terminal_height <= 30 { 12 } else { 24 })
+            .max(10.min(max_allowed));
         let hero: Option<(mbv_core::api::MediaItem, u16, KeepWatchingHeroLayout)> =
             if area.width < 24 {
                 None
             } else {
                 hero_item.and_then(|item| {
                     let img_w = ((area.width as u32 * 2 / 5) as u16)
-                        .clamp(12, 32)
+                        .max(12)
                         .min(area.width.saturating_sub(12));
                     let meta_w = area.width.saturating_sub(img_w + 1) as usize;
                     let mut meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
-                    let max_allowed = content_area.height.saturating_sub(7);
-                    meta_layout.height = meta_layout.height.min(max_allowed);
+                    meta_layout.height = meta_layout.height.min(hero_img_rows);
                     if meta_layout.height < 4 {
                         None
                     } else {
@@ -136,13 +143,7 @@ impl App {
                     }
                 })
             };
-        let hero_h: u16 = hero
-            .as_ref()
-            .map(|(_, _, l)| {
-                let max_allowed = content_area.height.saturating_sub(7);
-                l.height.max(10).min(max_allowed)
-            })
-            .unwrap_or(0);
+        let hero_h: u16 = if hero.is_some() { hero_img_rows } else { 0 };
 
         let list_area = Rect {
             y: content_area.y + hero_h + 2,

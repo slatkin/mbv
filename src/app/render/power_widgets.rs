@@ -258,6 +258,21 @@ pub(super) fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, focused:
 
     let border_style = Style::default().fg(palette::SEEK_TRACK);
     if area.height > 0 {
+        // Top border
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "\u{2594}".repeat(area.width as usize),
+                border_style,
+            ))),
+            Rect {
+                y: area.y,
+                height: 1,
+                ..area
+            },
+        );
+    }
+    if area.height > 0 {
+        // Bottom border
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 "\u{2581}".repeat(area.width as usize),
@@ -271,10 +286,10 @@ pub(super) fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, focused:
         );
     }
 
-    let border_rows = 1;
+    let border_rows = 2;
 
     Rect {
-        y: area.y,
+        y: area.y + 1,
         height: area.height.saturating_sub(border_rows),
         ..area
     }

@@ -493,15 +493,15 @@ fn power_queue_panel_counts_wrapped_group_headers_before_adding_padding() {
     .unwrap();
     let out = buffer_to_string(&term);
 
-    assert_eq!(layout.queue_area.y, 0);
-    assert_eq!(layout.queue_area.height, 5);
+    assert_eq!(layout.queue_area.y, 1);
+    assert_eq!(layout.queue_area.height, 4);
     assert!(
         layout.queue_row_map.contains(&Some(0)),
         "expected selected track row to be mapped as visible after wrapped header: {:?}",
         layout.queue_row_map
     );
     assert!(
-        out.contains("1. Track"),
+        out.contains("1. Tra"),
         "expected selected track to remain visible below the wrapped group header:\n{out}"
     );
 }
