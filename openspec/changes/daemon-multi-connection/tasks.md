@@ -65,6 +65,6 @@
 
 ## 10. Testing (rewrite broken tests only)
 
-- [ ] 10.1 Rewrite existing `daemon_tests.rs` tests that assert eviction behavior
-- [ ] 10.2 Rewrite existing `daemon_tests_connection.rs` tests that assert single-connection invariants
-- [ ] 10.3 Update tests that assert `AuthorityHolder::Ctrl(id)` with IDs
+- [x] 10.1 Rewrite existing `daemon_tests.rs` tests that assert eviction behavior
+- [x] 10.2 Rewrite existing `daemon_tests_connection.rs` tests that assert single-connection invariants
+- [x] 10.3 Update tests that assert `AuthorityHolder::Ctrl(id)` with IDs

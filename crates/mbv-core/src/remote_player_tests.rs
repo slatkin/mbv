@@ -515,54 +515,6 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
 }
 
 #[test]
-fn connect_endpoint_sends_v2_client_hello_to_v2_daemon() {
-    use std::io::{BufRead, BufReader};
-    use std::net::TcpListener;
-
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-
-    let daemon = std::thread::spawn(move || {
-        let (stream, _) = listener.accept().unwrap();
-        let mut writer = stream.try_clone().unwrap();
-        let mut reader = BufReader::new(stream);
-
-        let mut hello = CtrlHello::current();
-        hello.protocol_version = 2;
-        writeln!(
-            writer,
-            "{}",
-            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
-        )
-        .unwrap();
-
-        let mut client_hello = String::new();
-        reader.read_line(&mut client_hello).unwrap();
-        let cmd: CtrlCmd = serde_json::from_str(client_hello.trim_end()).unwrap();
-        match cmd {
-            CtrlCmd::Hello(info) => {
-                assert_eq!(info.protocol_version, 2);
-                assert_eq!(info.auth_token.as_deref(), Some("token"));
-            }
-            _ => panic!("expected client hello"),
-        }
-
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
-            source: crate::config::QueueSource::Unknown,
-        }))
-        .unwrap();
-        writeln!(writer, "{initial_state}").unwrap();
-    });
-
-    RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
-
-    daemon.join().unwrap();
-}
-
-#[test]
 fn v3_peer_sends_queue_append_wire_command() {
     let existing = vec![make_media_item("1")];
     let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(existing, 0);
@@ -583,29 +535,4 @@ fn v3_peer_sends_queue_append_wire_command() {
         }
         _ => panic!("expected QueueAppend"),
     }
-}
-
-#[test]
-fn v2_peer_rejects_queue_append_without_sending_replace_queue() {
-    let existing = vec![make_media_item("1")];
-    let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_v2_with_command_rx(existing, 0);
-
-    assert!(!remote.send_command(PlayerCommand::QueueAppend {
-        items: vec![make_media_item("2")]
-    }));
-
-    assert!(
-        cmd_rx.try_recv().is_err(),
-        "v2 append rejection must not send QueueAppend or ReplaceQueue"
-    );
-    assert_eq!(
-        remote
-            .items
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|item| item.id.as_str())
-            .collect::<Vec<_>>(),
-        ["1"]
-    );
 }

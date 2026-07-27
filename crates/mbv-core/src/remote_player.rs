@@ -679,13 +679,14 @@ impl RemotePlayer {
         )
     }
 
-    /// Test helper variant for callers that need a protocol-v2 remote handle.
+    /// Test helper variant for callers that need a remote handle without
+    /// spectrum support (e.g. testing visualizer toggle rejection).
     pub fn stub_v2_with_command_rx(
         items: Vec<MediaItem>,
         current_idx: usize,
     ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
         let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
-        remote.ctrl_compatibility = CtrlCompatibility::for_peer(2).unwrap();
+        remote.ctrl_compatibility.supports_spectrum = false;
         (remote, event_rx, cmd_rx)
     }
 }
