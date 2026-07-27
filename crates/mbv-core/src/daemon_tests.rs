@@ -123,14 +123,6 @@ fn cold_player() -> Player {
 fn recv_event(rx: &mpsc::Receiver<CtrlOutbound>) -> CtrlEvent {
     match rx.recv().unwrap() {
         CtrlOutbound::Event(json) => serde_json::from_str(&json).unwrap(),
-        CtrlOutbound::Close => panic!("expected event, got close"),
-    }
-}
-
-fn assert_close(rx: &mpsc::Receiver<CtrlOutbound>) {
-    match rx.recv().unwrap() {
-        CtrlOutbound::Close => {}
-        CtrlOutbound::Event(json) => panic!("expected close, got {json}"),
     }
 }
 
@@ -160,49 +152,10 @@ fn connecting_ctrl_client_becomes_driver_immediately() {
 }
 
 #[test]
-fn second_connect_evicts_first_and_becomes_sole_connection() {
-    let mut clients = CtrlClients::default();
-    let (old_id, old_rx) = connect_client(&mut clients);
-    let (new_id, new_rx) = connect_client(&mut clients);
-
-    match recv_event(&old_rx) {
-        CtrlEvent::Disconnected { reason } => {
-            assert_eq!(reason, DisconnectReason::TakenOverByCtrlClient);
-        }
-        _ => panic!("expected structured disconnect"),
-    }
-    assert_close(&old_rx);
-
-    // Exactly one connection can ever exist: the evicted id is gone, the
-    // new id is the sole driver. This is what makes the co-pending
-    // AdoptQueue race from #119 structurally impossible — there is never
-    // a second live connection to lose the cold-check.
-    assert!(!clients.has_client(old_id));
-    assert!(clients.has_client(new_id));
-    assert!(clients.has_driver());
-
-    let registry = Arc::new(Mutex::new(clients));
-    broadcast(
-        &registry,
-        &CtrlEvent::StatusOnly(PlayerStatus {
-            volume: 77,
-            ..PlayerStatus::default()
-        }),
-    );
-
-    match recv_event(&new_rx) {
-        CtrlEvent::StatusOnly(status) => assert_eq!(status.volume, 77),
-        _ => panic!("expected status update"),
-    }
-    assert!(old_rx.try_recv().is_err());
-}
-
-#[test]
-fn emby_remote_takeover_disconnects_current_ctrl_driver() {
-    // Scope boundary (ADR 0003 / issue #119 brief): the ctrl-vs-Emby-
-    // remote-websocket authority axis is untouched by the exclusive-
-    // connection collapse — a successful Emby remote command must still
-    // fully evict the sole ctrl connection exactly as before.
+fn emby_remote_takeover_notifies_ctrl_client_and_keeps_connection() {
+    // Emby remote authority is a notification, not a connection close.
+    // The ctrl client stays connected and receives broadcasts, but its
+    // commands are rejected until authority returns to Ctrl.
     let mut clients = CtrlClients::default();
     let (driver_id, driver_rx) = connect_client(&mut clients);
     assert!(clients.has_client(driver_id));
@@ -213,15 +166,18 @@ fn emby_remote_takeover_disconnects_current_ctrl_driver() {
         CtrlEvent::Disconnected { reason } => {
             assert_eq!(reason, DisconnectReason::TakenOverByEmbyRemote);
         }
-        _ => panic!("expected structured disconnect"),
+        _ => panic!("expected structured disconnect notification"),
     }
-    assert_close(&driver_rx);
-    assert!(!clients.has_driver());
+    // Connection stays open — no Close sent, client remains registered
+    assert!(clients.has_driver());
     assert_eq!(clients.authority, AuthorityHolder::EmbyRemote);
 }
 
 #[test]
-fn ctrl_reconnect_after_emby_remote_takeover_becomes_driver_and_receives_broadcasts() {
+fn ctrl_connect_during_emby_authority_does_not_override_authority() {
+    // Connecting a new ctrl client during Emby remote authority does NOT
+    // override authority. The new client receives broadcasts but its
+    // commands are rejected until authority returns to Ctrl.
     let mut clients = CtrlClients::default();
     let (_old_id, old_rx) = connect_client(&mut clients);
     clients.take_authority_for_emby_remote();
@@ -230,14 +186,15 @@ fn ctrl_reconnect_after_emby_remote_takeover_becomes_driver_and_receives_broadca
         CtrlEvent::Disconnected { reason } => {
             assert_eq!(reason, DisconnectReason::TakenOverByEmbyRemote);
         }
-        _ => panic!("expected structured disconnect"),
+        _ => panic!("expected structured disconnect notification"),
     }
-    assert_close(&old_rx);
+    // Old client stays connected — notification only, no close
     assert_eq!(clients.authority, AuthorityHolder::EmbyRemote);
 
     let (new_id, new_rx) = connect_client(&mut clients);
     assert!(clients.has_client(new_id));
-    assert_eq!(clients.authority, AuthorityHolder::Ctrl(new_id));
+    // Authority stays EmbyRemote — connect does NOT override
+    assert_eq!(clients.authority, AuthorityHolder::EmbyRemote);
 
     let registry = Arc::new(Mutex::new(clients));
     broadcast(
@@ -248,9 +205,14 @@ fn ctrl_reconnect_after_emby_remote_takeover_becomes_driver_and_receives_broadca
         }),
     );
 
+    // Both clients should receive the broadcast
+    match recv_event(&old_rx) {
+        CtrlEvent::StatusOnly(status) => assert_eq!(status.volume, 66),
+        _ => panic!("expected status update on old client"),
+    }
     match recv_event(&new_rx) {
         CtrlEvent::StatusOnly(status) => assert_eq!(status.volume, 66),
-        _ => panic!("expected status update"),
+        _ => panic!("expected status update on new client"),
     }
 }
 
