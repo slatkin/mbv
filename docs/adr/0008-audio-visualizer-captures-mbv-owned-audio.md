@@ -1,4 +1,4 @@
-# Audio visualizer follows system audio
+# Audio visualizer captures system audio, not mbv-only audio
 
 The audio visualizer runs CAVA as a supervised child process while the embedded visualizer is enabled for local playback. CAVA uses its normal Pulse input selection without a named source, so it follows the system default monitor/source. The visualizer therefore represents system audio, not mbv-owned audio only, and may include unrelated applications.
 

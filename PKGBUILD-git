@@ -8,6 +8,7 @@ url="https://github.com/slatkin/mbv"
 license=('MIT')
 depends=('mpv' 'openssl')
 makedepends=('rust' 'cargo' 'nasm' 'git')
+optdepends=('cava: audio visualizer support')
 provides=('mbv')
 conflicts=('mbv')
 source=("${pkgname}::git+https://github.com/slatkin/mbv.git")
