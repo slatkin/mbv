@@ -320,6 +320,7 @@ fn inline_album_track_selection_block_hides_its_own_scrollbar() {
             true,
             true,
             false,
+            true,
             0,
             &mut layout,
         );

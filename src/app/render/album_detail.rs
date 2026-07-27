@@ -34,6 +34,7 @@ impl App {
         show_title: bool,
         selected_region_gutter: bool,
         flush_left: bool,
+        show_hint: bool,
         art_reserved_w: u16,
         layout: &mut LayoutMain,
     ) {
@@ -75,7 +76,7 @@ impl App {
         }
 
         // — Inline album actions / spacer row —
-        if row < max_y {
+        if row < max_y && show_hint {
             if selected_region_gutter {
                 let hint_w = (area.width as usize).saturating_sub(gutter_w);
                 // `focused` mirrors `album_track_focus.is_some()` at the call
@@ -194,6 +195,13 @@ impl App {
         let title_col_w = (table_area.width as usize)
             .saturating_sub(gutter_w + 2 + if show_length { dur_col_w + 1 } else { 0 });
 
+        let max_track_num = items
+            .iter()
+            .map(|item| item.index_number.max(0) as usize)
+            .max()
+            .unwrap_or(n);
+        let track_num_width = max_track_num.to_string().len();
+
         let rows: Vec<Row> = items
             .iter()
             .enumerate()
@@ -210,9 +218,9 @@ impl App {
                 let marker =
                     super::selection_marker(selected_region_gutter || (is_cursor && focused));
                 let track_num = if item.index_number > 0 {
-                    format!("{}. ", item.index_number)
+                    format!("{:>width$}. ", item.index_number, width = track_num_width)
                 } else {
-                    format!("{}. ", i + 1)
+                    format!("{:>width$}. ", i + 1, width = track_num_width)
                 };
                 let mut title_spans = vec![marker];
                 if selected_region_gutter {
@@ -229,7 +237,7 @@ impl App {
                         let mut first_line = title_spans.clone();
                         first_line.push(Span::styled(
                             track_num.clone(),
-                            Style::default().fg(palette::SUBTLE),
+                            Style::default().fg(palette::SOFT_WHITE),
                         ));
                         if is_playing {
                             first_line.push(Span::styled(
@@ -237,7 +245,10 @@ impl App {
                                 Style::default().fg(palette::AQUA),
                             ));
                         }
-                        first_line.push(Span::raw(line.into_owned()));
+                        first_line.push(Span::styled(
+                            line.into_owned(),
+                            Style::default().fg(palette::SOFT_WHITE),
+                        ));
                         wrapped_title_lines.push(Line::from(first_line));
                     } else {
                         wrapped_title_lines.push(Line::from(vec![
@@ -246,7 +257,10 @@ impl App {
                                     + num_w
                                     + play_icon_w,
                             )),
-                            Span::raw(line.into_owned()),
+                            Span::styled(
+                                line.into_owned(),
+                                Style::default().fg(palette::SOFT_WHITE),
+                            ),
                         ]));
                     }
                 }
@@ -254,7 +268,7 @@ impl App {
                 let title_cell = Cell::from(Text::from(wrapped_title_lines));
                 let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
                 let length = if len_secs > 0 {
-                    fmt_duration_approx(len_secs)
+                    fmt_duration_mmss(len_secs)
                 } else {
                     "\u{2014}".to_string()
                 };

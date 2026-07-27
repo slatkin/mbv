@@ -85,6 +85,7 @@ impl App {
         let display_cursor = plan.display_cursor;
         let display_rows = plan.rows;
         let selected_block_bounds = plan.selected_block_bounds;
+        let track_detail_bounds = plan.track_detail_bounds;
         let selected_art_reserved_w = if self.images_enabled()
             && selected_block_bounds.is_some()
             && area.width >= INLINE_ALBUM_ART_RESERVED + 20
@@ -129,6 +130,30 @@ impl App {
                 bottom_pad_abs,
                 bg,
             );
+        }
+
+        // Paint the track detail block background
+        if let Some((track_start, track_end)) = track_detail_bounds {
+            let vis_top = track_start.max(offset);
+            let vis_bot = (track_end.saturating_sub(1)).min(offset + visible.saturating_sub(1));
+            if vis_top <= vis_bot {
+                let block_y = area.y + (vis_top - offset) as u16;
+                let block_h = (vis_bot - vis_top + 1) as u16;
+                let block_x = area.x + 4;
+                let block_w = area
+                    .width
+                    .saturating_sub(6)
+                    .saturating_sub(selected_art_reserved_w);
+                f.render_widget(
+                    Block::default().style(Style::default().bg(palette::TRACK_BLOCK_BG)),
+                    Rect {
+                        x: block_x,
+                        y: block_y,
+                        width: block_w,
+                        height: block_h,
+                    },
+                );
+            }
         }
 
         let visible_rows: Vec<&GroupedAlbumDisplayRow> =
@@ -441,16 +466,26 @@ impl App {
                     if let Some(tracks) = self.album_tracks_cache.get(&albums[*idx].id).cloned() {
                         let cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
                         let detail_focused = self.libs[lib_idx].album_track_focus.is_some();
+                        let track_area = Rect {
+                            x: row_area.x + 6,
+                            y: row_area.y,
+                            width: row_area
+                                .width
+                                .saturating_sub(10)
+                                .saturating_sub(selected_art_reserved_w),
+                            height,
+                        };
                         self.render_power_album_detail(
                             f,
-                            Rect { height, ..row_area },
+                            track_area,
                             &tracks,
                             cursor,
                             detail_focused,
                             false, // show_title: Album(idx) row above already shows it
                             false,
                             true,
-                            selected_art_reserved_w,
+                            false, // show_hint: AlbumActionHint row at top already shows it
+                            0,     // art_reserved_w: already accounted for in track_area
                             layout,
                         );
                     }

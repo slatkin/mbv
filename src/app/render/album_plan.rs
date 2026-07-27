@@ -35,6 +35,8 @@ pub(super) struct GroupedAlbumDisplayPlan {
     /// Absolute (unscrolled) indices into `rows` of the selected block's
     /// framing `AlbumDetailRule` rows — `(top_rule_idx, bottom_rule_idx)`.
     pub(super) selected_block_bounds: Option<(usize, usize)>,
+    /// Absolute indices into `rows` of the track detail block — `(start_idx, end_idx)`.
+    pub(super) track_detail_bounds: Option<(usize, usize)>,
 }
 
 impl GroupedAlbumDisplayRow {
@@ -135,20 +137,13 @@ impl App {
         let use_nerd_fonts = self.use_nerd_fonts;
         let selected_detail_rows = |tracks: &[mbv_core::api::MediaItem]| {
             let Some((full_width, artwork_width)) = wrap_widths else {
-                return 2 + tracks.len();
+                return tracks.len();
             };
-            let table_width = full_width.saturating_sub(artwork_width);
+            let table_width = full_width.saturating_sub(artwork_width).saturating_sub(4);
             let show_length = table_width > 40;
             let title_col_width =
                 (table_width as usize).saturating_sub(4 + if show_length { 8 } else { 0 });
-            let hint_width = table_width.saturating_sub(2).max(1) as usize;
-            let hint_lines = wrap(
-                "^P: Play | ^A: Enqueue | ^S: Shuffle | BACK: Exit",
-                hint_width,
-            )
-            .len()
-            .max(1);
-            let track_lines = tracks
+            tracks
                 .iter()
                 .enumerate()
                 .map(|(i, track)| {
@@ -171,12 +166,12 @@ impl App {
                     .len()
                     .max(1)
                 })
-                .sum::<usize>();
-            hint_lines + 1 + track_lines
+                .sum::<usize>()
         };
         let mut rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
         let mut has_artist_group = false;
         let mut selected_block_bounds: Option<(usize, usize)> = None;
+        let mut track_detail_bounds: Option<(usize, usize)> = None;
         let mut selected_group_indices = None;
         let mut group_start = 0;
         while group_start < order.len() {
@@ -244,37 +239,40 @@ impl App {
                         GroupedAlbumDisplayRow::AlbumWrappedContinuation,
                         selected_title_lines(idx).saturating_sub(1),
                     ));
-                }
-
-                if !header_selected && expand_selected && group_contains_cursor {
-                    match self.album_tracks_cache.get(&albums[cursor].id) {
-                        Some(tracks) if !tracks.is_empty() => {
-                            let detail_rows =
-                                selected_detail_rows(tracks).max(inline_art_rows_after_album);
-                            rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(cursor));
-                            rows.extend(
-                                std::iter::repeat_with(|| {
-                                    GroupedAlbumDisplayRow::AlbumDetailContinuation
-                                })
-                                .take(detail_rows.saturating_sub(1)),
-                            );
-                        }
-                        Some(_) => {}
-                        None => {
-                            if fetch_missing_tracks {
-                                self.fetch_album_tracks(albums[cursor].id.clone());
+                    if !header_selected && expand_selected && idx == cursor {
+                        match self.album_tracks_cache.get(&albums[idx].id) {
+                            Some(tracks) if !tracks.is_empty() => {
+                                let detail_rows = selected_detail_rows(tracks);
+                                let track_start = rows.len();
+                                rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
+                                rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
+                                rows.extend(
+                                    std::iter::repeat_with(|| {
+                                        GroupedAlbumDisplayRow::AlbumDetailContinuation
+                                    })
+                                    .take(detail_rows.saturating_sub(1)),
+                                );
+                                rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
+                                let track_end = rows.len();
+                                track_detail_bounds = Some((track_start, track_end));
                             }
-                            rows.push(GroupedAlbumDisplayRow::AlbumLoading);
-                            rows.extend(std::iter::repeat_n(
-                                GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                                selected_hint_lines("Loading…").saturating_sub(1),
-                            ));
-                            rows.extend(
-                                std::iter::repeat_with(|| {
-                                    GroupedAlbumDisplayRow::AlbumDetailContinuation
-                                })
-                                .take(inline_art_rows_after_album.saturating_sub(1)),
-                            );
+                            Some(_) => {}
+                            None => {
+                                if fetch_missing_tracks {
+                                    self.fetch_album_tracks(albums[idx].id.clone());
+                                }
+                                rows.push(GroupedAlbumDisplayRow::AlbumLoading);
+                                rows.extend(std::iter::repeat_n(
+                                    GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                                    selected_hint_lines("Loading…").saturating_sub(1),
+                                ));
+                                rows.extend(
+                                    std::iter::repeat_with(|| {
+                                        GroupedAlbumDisplayRow::AlbumDetailContinuation
+                                    })
+                                    .take(inline_art_rows_after_album.saturating_sub(1)),
+                                );
+                            }
                         }
                     }
                 }
@@ -419,6 +417,7 @@ impl App {
             selected_artist_header_valid,
             selected_group_indices,
             selected_block_bounds,
+            track_detail_bounds,
         }
     }
 }

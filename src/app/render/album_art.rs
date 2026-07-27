@@ -5,8 +5,8 @@ use ratatui::style::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 
-const INLINE_ALBUM_ART_COLS: u16 = 24;
-pub(super) const INLINE_ALBUM_ART_ROWS: u16 = 12;
+const INLINE_ALBUM_ART_COLS: u16 = 30;
+pub(super) const INLINE_ALBUM_ART_ROWS: u16 = 15;
 const INLINE_ALBUM_ART_GAP: u16 = 2;
 const INLINE_ALBUM_ART_RIGHT_PAD: u16 = 2;
 pub(super) const INLINE_ALBUM_ART_RESERVED: u16 =

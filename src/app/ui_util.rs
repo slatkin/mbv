@@ -87,6 +87,14 @@ pub fn fmt_duration_approx(s: i64) -> String {
     }
 }
 
+/// Format duration as minutes:seconds — for music tracks.
+/// Examples: "0:47", "3:47", "12:05".
+pub fn fmt_duration_mmss(s: i64) -> String {
+    let m = s / 60;
+    let s = s % 60;
+    format!("{}:{:02}", m, s)
+}
+
 pub fn trunc_overview(s: &str) -> String {
     let stripped = regex_strip_urls(s);
     trunc_str(stripped.trim(), 400)
