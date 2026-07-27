@@ -150,6 +150,7 @@ impl App {
         let Some(ref popup) = self.multiselect_popup else {
             return;
         };
+        self.render_backdrop_dim(f);
         let title = match popup.kind {
             MultiSelectKind::HiddenLibraries => " Hidden Libraries ",
             MultiSelectKind::HiddenLatest => " Hidden Latest ",

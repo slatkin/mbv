@@ -16,6 +16,7 @@ impl App {
         let Some(ref modal) = self.confirm_modal else {
             return;
         };
+        self.render_backdrop_dim(f);
         let full = f.area();
         let w: u16 = 60.min(full.width.saturating_sub(2));
         let h: u16 = 7.min(full.height);

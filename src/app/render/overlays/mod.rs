@@ -1,3 +1,4 @@
+mod backdrop;
 mod confirm_modal;
 mod context_menu;
 mod help;

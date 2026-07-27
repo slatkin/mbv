@@ -268,6 +268,7 @@ impl App {
         if !matches!(dialog.stage, SavePlaylistStage::EnterName) {
             return;
         }
+        self.render_backdrop_dim(f);
         let full = f.area();
         let w: u16 = 52;
         let h: u16 = 7;

@@ -182,6 +182,11 @@ impl App {
         if self.save_playlist_dialog.is_some() {
             self.render_save_playlist_dialog(f);
         }
+        debug_assert!(
+            !(self.save_playlist_dialog.is_some() && self.confirm_modal.is_some()),
+            "save_playlist_dialog and confirm_modal must not both be active — \
+             the backdrop would be dimmed twice"
+        );
         if self.confirm_modal.is_some() {
             self.render_confirm_modal(f);
         }
