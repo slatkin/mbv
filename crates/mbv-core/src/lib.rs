@@ -7,4 +7,6 @@ pub mod daemon;
 pub mod playback_queue;
 pub mod player;
 pub mod remote_player;
+#[cfg(unix)]
+pub mod visualizer;
 pub mod ws;

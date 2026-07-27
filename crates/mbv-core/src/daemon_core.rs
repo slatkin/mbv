@@ -45,7 +45,86 @@ enum DaemonEvent {
     /// instead of broadcast to every connected TUI.
     Ctrl(CtrlCmd, CtrlClientId, CtrlSender),
     CtrlDisconnected(CtrlClientId),
+    /// A spectrum frame from the daemon's spectrum reader thread, carrying
+    /// 64 normalized bar values (0.0–1.0) from `CavaWorker::take_latest_frame()`.
+    Spectrum(Vec<f32>),
+    /// The spectrum reader thread detected a CAVA failure.
+    SpectrumFailed {
+        reason: String,
+    },
     Shutdown,
+}
+
+/// Daemon-local state for an active spectrum streaming session.
+///
+/// Holds the reader thread that converts frames from
+/// `CavaWorker::take_latest_frame()` into `DaemonEvent::Spectrum` messages.
+/// The `CavaWorker` is owned by the reader thread and dropped when it exits.
+/// The `stop()` method is idempotent — safe to call from `StopSpectrum`,
+/// `CtrlDisconnected`, playback stop, and shutdown paths.
+pub(crate) struct SpectrumState {
+    reader: Option<std::thread::JoinHandle<()>>,
+    stop_tx: std::sync::mpsc::Sender<()>,
+}
+
+impl SpectrumState {
+    fn start(worker: crate::visualizer::CavaWorker, merged_tx: mpsc::Sender<DaemonEvent>) -> Self {
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            loop {
+                if stop_rx.try_recv().is_ok() {
+                    break;
+                }
+                match worker.take_latest_frame() {
+                    Ok(Some(frame)) => {
+                        let _ = merged_tx.send(DaemonEvent::Spectrum(frame));
+                    }
+                    Ok(None) => {
+                        std::thread::sleep(std::time::Duration::from_millis(16));
+                    }
+                    Err(()) => {
+                        let _ = merged_tx.send(DaemonEvent::SpectrumFailed {
+                            reason: "CAVA worker channel closed".to_string(),
+                        });
+                        break;
+                    }
+                }
+            }
+            drop(worker);
+        });
+        Self {
+            reader: Some(reader),
+            stop_tx,
+        }
+    }
+
+    /// Idempotent stop: signals the reader thread to exit and joins it with
+    /// a timeout. Safe to call multiple times.
+    pub(crate) fn stop(&mut self) {
+        let _ = self.stop_tx.send(());
+        if let Some(handle) = self.reader.take() {
+            let started = std::time::Instant::now();
+            let join_timeout = std::time::Duration::from_millis(500);
+            let (done_tx, done_rx) = mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = handle.join();
+                let _ = done_tx.send(());
+            });
+            if done_rx.recv_timeout(join_timeout).is_err() {
+                log::warn!(
+                    target: "daemon",
+                    "spectrum reader thread did not join within {}ms; detaching",
+                    join_timeout.as_millis()
+                );
+                return;
+            }
+            log::debug!(
+                target: "daemon",
+                "spectrum reader thread joined in {}ms",
+                started.elapsed().as_millis()
+            );
+        }
+    }
 }
 
 type CtrlClientId = u64;
@@ -267,7 +346,11 @@ fn spawn_ctrl_client<S>(
     };
     let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
 
-    if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())) {
+    let mut daemon_hello = CtrlHello::current();
+    daemon_hello
+        .capabilities
+        .push(crate::ctrl::CTRL_CAP_SPECTRUM.to_string());
+    if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(daemon_hello)) {
         ev_tx.send(CtrlOutbound::Event(hello_json)).ok();
     }
 

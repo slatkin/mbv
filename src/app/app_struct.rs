@@ -15,10 +15,10 @@ use super::types_playback::{
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::PanelFocus;
-use super::visualizer::CavaWorker;
 use mbv_core::api::{EmbyClient, MediaItem};
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
+use mbv_core::visualizer::CavaWorker;
 use mbv_core::ws::WsEvent;
 use ratatui_image::picker::Picker;
 use std::sync::{mpsc, Arc, Mutex};
@@ -206,6 +206,7 @@ pub struct App {
     pub(super) mute_on: bool,
     pub(super) visualizer_enabled: bool,
     pub(super) visualizer_failed: bool,
+    pub(super) spectrum_started: bool,
     pub(super) visualizer: Option<CavaWorker>,
     pub(super) visualizer_frame: Vec<f32>,
     pub(super) last_scroll_at: Instant,

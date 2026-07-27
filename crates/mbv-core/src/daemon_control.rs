@@ -37,6 +37,8 @@ fn handle_ctrl(
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
+    merged_tx: &mpsc::Sender<DaemonEvent>,
+    spectrum_state: &mut Option<SpectrumState>,
 ) {
     match cmd {
         CtrlCmd::Hello(_) => {
@@ -254,6 +256,28 @@ fn handle_ctrl(
         }
         CtrlCmd::Stop => {
             player.stop();
+        }
+        CtrlCmd::StartSpectrum => {
+            if spectrum_state.is_some() {
+                log::debug!(target: "daemon", "spectrum already active, ignoring StartSpectrum");
+                return;
+            }
+            match crate::visualizer::CavaWorker::start() {
+                Ok(worker) => {
+                    log::info!(target: "daemon", "spectrum streaming started");
+                    *spectrum_state = Some(SpectrumState::start(worker, merged_tx.clone()));
+                }
+                Err(e) => {
+                    log::warn!(target: "daemon", "spectrum start failed: {e}");
+                    send_to(request.reply_tx, &CtrlEvent::SpectrumFailed { reason: e });
+                }
+            }
+        }
+        CtrlCmd::StopSpectrum => {
+            if let Some(mut state) = spectrum_state.take() {
+                log::info!(target: "daemon", "spectrum streaming stopped");
+                state.stop();
+            }
         }
     }
 }

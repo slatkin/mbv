@@ -235,6 +235,7 @@ pub(crate) fn make_app_stub() -> App {
         mute_on: false,
         visualizer_enabled: false,
         visualizer_failed: false,
+        spectrum_started: false,
         visualizer: None,
         visualizer_frame: Vec::new(),
         sessions: Vec::new(),
