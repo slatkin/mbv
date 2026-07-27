@@ -3,7 +3,7 @@ use super::super::super::App;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
 impl App {
@@ -28,6 +28,60 @@ impl App {
             width: w,
             height: h,
         };
+
+        // Draw frame around modal
+        let frame_rect = Rect {
+            x: rect.x.saturating_sub(2),
+            y: rect.y.saturating_sub(1),
+            width: rect.width + 4,
+            height: rect.height + 2,
+        };
+        let frame_style = Style::default().bg(palette::LIBRARY_SIDE_BG);
+
+        // Top row
+        f.render_widget(
+            Block::default().borders(Borders::NONE).style(frame_style),
+            Rect {
+                x: frame_rect.x,
+                y: frame_rect.y,
+                width: frame_rect.width,
+                height: 1,
+            },
+        );
+
+        // Bottom row
+        f.render_widget(
+            Block::default().borders(Borders::NONE).style(frame_style),
+            Rect {
+                x: frame_rect.x,
+                y: frame_rect.y + frame_rect.height - 1,
+                width: frame_rect.width,
+                height: 1,
+            },
+        );
+
+        // Left column
+        f.render_widget(
+            Block::default().borders(Borders::NONE).style(frame_style),
+            Rect {
+                x: frame_rect.x,
+                y: frame_rect.y + 1,
+                width: 2,
+                height: frame_rect.height - 2,
+            },
+        );
+
+        // Right column
+        f.render_widget(
+            Block::default().borders(Borders::NONE).style(frame_style),
+            Rect {
+                x: frame_rect.x + frame_rect.width - 2,
+                y: frame_rect.y + 1,
+                width: 2,
+                height: frame_rect.height - 2,
+            },
+        );
+
         f.render_widget(Clear, rect);
         let block = Block::default()
             .title(Span::styled(
@@ -37,9 +91,8 @@ impl App {
                     .add_modifier(Modifier::BOLD),
             ))
             .title_alignment(Alignment::Center)
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(palette::IRIS));
+            .borders(Borders::NONE)
+            .style(Style::default().bg(palette::GREEN));
         let inner = block.inner(rect);
         f.render_widget(block, rect);
         let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
