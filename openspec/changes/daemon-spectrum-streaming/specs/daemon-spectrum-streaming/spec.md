@@ -12,10 +12,10 @@ The CAVA worker (`CavaWorker`) SHALL be located in `crates/mbv-core/src/visualiz
 - **THEN** mbvd imports and uses `CavaWorker` from `mbv-core::visualizer`
 
 ### Requirement: Spectrum capability advertisement
-The daemon SHALL advertise `spectrum-streaming` in `CtrlHello.capabilities` to signal spectrum support.
+The daemon SHALL advertise `spectrum-streaming` in `CtrlHello.capabilities` to signal spectrum support. The capability is always advertised; if `cava` is not installed, the daemon relies on `SpectrumFailed` as the fallback.
 
-#### Scenario: Daemon supports spectrum
-- **WHEN** mbvd starts and the `cava` binary is available on the system
+#### Scenario: Daemon advertises spectrum capability
+- **WHEN** mbvd starts
 - **THEN** mbvd includes `spectrum-streaming` in its `CtrlHello.capabilities`
 
 #### Scenario: Client checks capability before enabling
