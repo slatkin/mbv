@@ -28,6 +28,60 @@ impl App {
             width: w,
             height: h,
         };
+
+        // Draw frame around modal
+        let frame_rect = Rect {
+            x: rect.x.saturating_sub(2),
+            y: rect.y.saturating_sub(1),
+            width: rect.width + 4,
+            height: rect.height + 2,
+        };
+        let frame_style = Style::default().bg(palette::LIBRARY_SIDE_BG);
+
+        // Top row
+        f.render_widget(
+            Block::default().borders(Borders::NONE).style(frame_style),
+            Rect {
+                x: frame_rect.x,
+                y: frame_rect.y,
+                width: frame_rect.width,
+                height: 1,
+            },
+        );
+
+        // Bottom row
+        f.render_widget(
+            Block::default().borders(Borders::NONE).style(frame_style),
+            Rect {
+                x: frame_rect.x,
+                y: frame_rect.y + frame_rect.height - 1,
+                width: frame_rect.width,
+                height: 1,
+            },
+        );
+
+        // Left column
+        f.render_widget(
+            Block::default().borders(Borders::NONE).style(frame_style),
+            Rect {
+                x: frame_rect.x,
+                y: frame_rect.y + 1,
+                width: 2,
+                height: frame_rect.height - 2,
+            },
+        );
+
+        // Right column
+        f.render_widget(
+            Block::default().borders(Borders::NONE).style(frame_style),
+            Rect {
+                x: frame_rect.x + frame_rect.width - 2,
+                y: frame_rect.y + 1,
+                width: 2,
+                height: frame_rect.height - 2,
+            },
+        );
+
         f.render_widget(Clear, rect);
         let block = Block::default()
             .title(Span::styled(
