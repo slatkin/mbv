@@ -159,6 +159,7 @@ impl App {
         struct SavedLibState {
             nav_stack: Vec<BrowseLevel>,
             feed_home_video: Option<FeedHomeVideoState>,
+            library_total: Option<usize>,
         }
         let old_libs: HashMap<String, SavedLibState> = self
             .libs
@@ -169,6 +170,7 @@ impl App {
                     SavedLibState {
                         nav_stack: std::mem::take(&mut l.nav_stack),
                         feed_home_video: l.feed_home_video,
+                        library_total: l.library_total,
                     },
                 )
             })
@@ -202,6 +204,7 @@ impl App {
                 })
                 .unwrap_or_default();
             let feed_home_video = saved.and_then(|s| s.feed_home_video.clone());
+            let library_total = saved.and_then(|s| s.library_total);
             self.libs.push(super::LibraryTab {
                 library: view.clone(),
                 nav_stack: stack,
@@ -212,7 +215,7 @@ impl App {
                 artist_header_focus: None,
                 series_selection: None,
                 series_season_cursor: 0,
-                library_total: None,
+                library_total,
             });
         }
     }
