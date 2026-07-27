@@ -652,6 +652,8 @@ impl RemotePlayer {
         let disconnected = Arc::new(AtomicBool::new(false));
         let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
         let (_event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
+        let mut compat = CtrlCompatibility::current();
+        compat.supports_spectrum = true;
         (
             RemotePlayer {
                 status,
@@ -660,7 +662,7 @@ impl RemotePlayer {
                 queue_source,
                 cmd_tx,
                 disconnected,
-                ctrl_compatibility: CtrlCompatibility::current(),
+                ctrl_compatibility: compat,
                 control_stream: Arc::new(Mutex::new(None)),
             },
             event_rx,

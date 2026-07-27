@@ -25,7 +25,10 @@ impl App {
             && active
             && self.player.supports_spectrum()
         {
-            let _ = self.player.send_ctrl_cmd(CtrlCmd::StartSpectrum);
+            if !self.spectrum_started {
+                let _ = self.player.send_ctrl_cmd(CtrlCmd::StartSpectrum);
+                self.spectrum_started = true;
+            }
             return;
         }
 
@@ -56,6 +59,7 @@ impl App {
         if self.player.is_remote() {
             let _ = self.player.send_ctrl_cmd(CtrlCmd::StopSpectrum);
         }
+        self.spectrum_started = false;
         self.visualizer_frame.clear();
     }
 

@@ -648,10 +648,14 @@ fn websocket_takeover_helper_records_emby_remote_authority() {
 }
 
 #[test]
-fn start_spectrum_creates_spectrum_state() {
-    // When StartSpectrum is handled and CavaWorker::start succeeds,
-    // spectrum_state should be populated. If cava is not installed,
-    // it should remain None and a SpectrumFailed reply is sent.
+fn start_spectrum_failure_path() {
+    // When CavaWorker::start fails (cava not installed), SpectrumFailed is
+    // sent and spectrum_state remains None.
+    let original_path = std::env::var_os("PATH");
+    let restricted = std::env::temp_dir().join("mbv-cava-test-no-cava");
+    let _ = std::fs::create_dir_all(&restricted);
+    std::env::set_var("PATH", &restricted);
+
     let player = cold_player();
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
@@ -682,18 +686,67 @@ fn start_spectrum_creates_spectrum_state() {
         &mut spectrum_state,
     );
 
-    if spectrum_state.is_some() {
-        // CavaWorker::start succeeded (cava is installed)
-        spectrum_state.take().unwrap().stop();
-    } else {
-        // CavaWorker::start failed (cava not installed) — SpectrumFailed sent
-        match recv_event(&reply_rx) {
-            CtrlEvent::SpectrumFailed { reason } => {
-                assert!(!reason.is_empty());
-            }
-            _ => panic!("expected SpectrumFailed when cava is not installed"),
+    assert!(spectrum_state.is_none());
+    match recv_event(&reply_rx) {
+        CtrlEvent::SpectrumFailed { reason } => {
+            assert!(!reason.is_empty());
         }
+        _ => panic!("expected SpectrumFailed when cava is not installed"),
     }
+
+    match original_path {
+        Some(value) => std::env::set_var("PATH", value),
+        None => std::env::remove_var("PATH"),
+    }
+}
+
+#[test]
+fn start_spectrum_success_path() {
+    // When CavaWorker::start succeeds (cava is installed), spectrum_state
+    // is populated. Skipped if cava is not available.
+    let has_cava = std::process::Command::new("cava")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok();
+    if !has_cava {
+        eprintln!("skipping start_spectrum_success_path: cava not installed");
+        return;
+    }
+
+    let player = cold_player();
+    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (_sender_id, _sender_rx) = {
+        let mut clients = registry.lock().unwrap();
+        connect_client(&mut clients)
+    };
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let mut items = Vec::new();
+    let mut cursor = 0;
+    let mut source = QueueSource::Unknown;
+    let (dummy_merged_tx, mut spectrum_state) = dummy_spectrum_ctx();
+
+    handle_ctrl(
+        CtrlCmd::StartSpectrum,
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
+        &client,
+        &player,
+        false,
+        &mut items,
+        &mut cursor,
+        &mut source,
+        &shared_queue_state(),
+        &registry,
+        &dummy_merged_tx,
+        &mut spectrum_state,
+    );
+
+    assert!(spectrum_state.is_some());
+    spectrum_state.take().unwrap().stop();
 }
 
 #[test]

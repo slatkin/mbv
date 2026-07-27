@@ -84,7 +84,7 @@ impl CtrlCompatibility {
                 peer_protocol_version,
                 client_protocol_version: CTRL_PROTOCOL_VERSION,
                 supports_queue_append: true,
-                supports_spectrum: true,
+                supports_spectrum: false,
             }),
             2 => Ok(Self {
                 peer_protocol_version,
