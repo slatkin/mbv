@@ -50,6 +50,9 @@ impl App {
     /// Falls back to a slow 1 s cadence when nothing is changing, to avoid
     /// spinning the terminal for no reason.
     pub(super) fn render_interval(&self) -> Duration {
+        if self.visualizer.is_some() {
+            return Duration::from_millis(12);
+        }
         let playback = self.effective_playback_state();
         if playback.active
             || self.connected_session_state.is_some()

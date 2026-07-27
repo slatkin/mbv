@@ -15,6 +15,7 @@ use super::types_playback::{
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::PanelFocus;
+use super::visualizer::CavaWorker;
 use mbv_core::api::{EmbyClient, MediaItem};
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
@@ -203,6 +204,10 @@ pub struct App {
     pub(super) ui_volume: u8,
     pub(super) pre_mute_volume: Option<u8>,
     pub(super) mute_on: bool,
+    pub(super) visualizer_enabled: bool,
+    pub(super) visualizer_failed: bool,
+    pub(super) visualizer: Option<CavaWorker>,
+    pub(super) visualizer_frame: Vec<f32>,
     pub(super) last_scroll_at: Instant,
     pub(super) last_nav_at: Instant,
     pub(super) last_power_library_nav_at: Instant,

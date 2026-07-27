@@ -63,6 +63,7 @@ impl App {
             mk("F3", "Remote sessions"),
             mk("F4", "Playlists"),
             mk("F5", "Refresh view"),
+            mk("v", "Toggle system-audio visualizer"),
             mk("Tab", "Cycle menu"),
             mk("1 – 9", "Jump to tab"),
             mk("↑ / ↓", "Move cursor"),

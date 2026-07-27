@@ -205,6 +205,10 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_context_menu,
     },
     ContextEntry {
+        name: "visualizer",
+        handler: App::handle_key_visualizer,
+    },
+    ContextEntry {
         name: "playback",
         handler: App::handle_playback_key,
     },

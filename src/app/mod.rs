@@ -64,6 +64,7 @@ mod types_playback;
 mod types_player_tab;
 mod types_settings;
 pub(crate) mod ui_util;
+mod visualizer;
 mod ws_event_actions;
 
 pub use self::app_struct::App;
@@ -420,6 +421,8 @@ impl App {
                 self.handle_ws_event(ev);
             }
 
+            self.sync_visualizer();
+
             if let Some(at) = self.settings_save_at {
                 if Instant::now() >= at {
                     let cfg = self.client.lock().unwrap().config.clone();
@@ -454,7 +457,12 @@ impl App {
             // Break instead of propagating I/O errors: when the terminal closes
             // (SIGHUP), poll/read fail because the fd is gone. Breaking lets the
             // post-loop cleanup run (player.stop + join) so the mpv window closes.
-            let poll_ready = match event::poll(Duration::from_millis(50)) {
+            let poll_timeout = if self.visualizer.is_some() {
+                Duration::from_millis(8)
+            } else {
+                Duration::from_millis(50)
+            };
+            let poll_ready = match event::poll(poll_timeout) {
                 Ok(r) => r,
                 Err(_) => break,
             };

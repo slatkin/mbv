@@ -185,6 +185,7 @@ impl App {
     /// never had test coverage since it unconditionally calls
     /// `enable_raw_mode()`).
     pub(super) fn teardown(&mut self, quit_timeout: Duration) {
+        self.stop_visualizer_worker();
         // #236: persist whichever remote connection (if any) is active
         // right now, before anything below or in the caller's cleanup
         // path clears `active_route` / direct-session identity -- so the

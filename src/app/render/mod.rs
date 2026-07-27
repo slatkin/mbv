@@ -27,6 +27,7 @@ mod pills;
 mod power_widgets;
 mod queue;
 mod sort_filter;
+mod visualizer;
 
 // Re-exports so paths that resolved at `render::X` (or, from render's other
 // submodules, `super::X`) before the render/mod.rs split (issue #365 step 2,
@@ -418,7 +419,9 @@ impl App {
             let queue_list_area = render_power_queue_panel_frame(f, queue_area, queue_focused);
             self.render_power_queue(f, queue_list_area, queue_focused, layout);
         }
-        self.render_power_library(f, render_lib_area, left_focused, layout);
+        let (library_area, visualizer_area) = self.split_visualizer_area(render_lib_area);
+        self.render_visualizer(f, visualizer_area);
+        self.render_power_library(f, library_area, left_focused, layout);
 
         // Status bar + toast overlay at the bottom of the right panel.
         if status_area.width > 0 {

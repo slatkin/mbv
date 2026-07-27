@@ -550,7 +550,8 @@ fn context_stack_order_is_pinned() {
     // `confirm_clear_queue`, and `confirm_rescan` collapsed into one
     // `confirm_modal` entry (dispatching on `App::confirm_modal`), placed
     // at the topmost rank of the ranks it replaces (`save_modal`'s), per
-    // design.md decision 2.
+    // design.md decision 2. The visualizer is a global action and therefore
+    // sits after modal/context-menu handlers but before playback dispatch.
     let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
     assert_eq!(
         names,
@@ -570,6 +571,7 @@ fn context_stack_order_is_pinned() {
             "confirm_next_up",
             "clear_queue_prompt_c",
             "context_menu",
+            "visualizer",
             "playback",
             "ctrl_l_force_clear",
             "f5_refresh",

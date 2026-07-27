@@ -14,6 +14,7 @@ You can browse libraries, build a queue, and play from your server. Playback sta
 - **Session control from mbv** — connect to another active Emby session and control it from mbv. `F3` opens the session list.
 - **Playlist integration** — browse Emby playlists, enqueue them, save the current queue back with `Ctrl+S`.
 - **Normal playback controls** — seek, pause, adjust volume, cycle audio tracks, toggle subtitles.
+- **System-audio visualizer** — press `v` to show CAVA's spectrum for the default system audio path. This intentionally may include audio from other applications; it does not reroute or change mpv playback.
 - **Home / continue-watching views** — Continue Watching and recent additions across libraries.
 
 ## mbv-Only Features

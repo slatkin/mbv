@@ -126,6 +126,15 @@ impl App {
         }
     }
 
+    pub(super) fn handle_key_visualizer(&mut self, key: KeyEvent) -> Option<bool> {
+        if key.code == KeyCode::Char('v') && key.modifiers.is_empty() {
+            self.toggle_visualizer();
+            Some(false)
+        } else {
+            None
+        }
+    }
+
     pub(super) fn handle_key_view_dispatch(&mut self, key: KeyEvent) -> Option<bool> {
         // `handle_queue_key` (despite its name -- a holdover from when this
         // was Standard's Queue-tab handler) is Power's single left-column
@@ -205,6 +214,7 @@ impl App {
             "ui_volume": self.ui_volume,
             "mute_on": self.mute_on,
             "pre_mute_volume": self.pre_mute_volume,
+            "visualizer_enabled": self.visualizer_enabled,
             "panel_focus": self.panel_focus.pref_value(),
             "library_tab": self.library_tab,
             "queue_column_width": self.queue_column_width,
