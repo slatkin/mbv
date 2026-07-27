@@ -32,3 +32,4 @@ pub const MUTED_GREEN: Color = Color::Rgb(108, 118, 108); // muted greenish-grey
 pub const PILL: Color = Color::Rgb(211, 198, 170); // unselected pill text (#D3C6AA)
 pub const SOFT_WHITE: Color = PILL; // warm off-white for hint/label text (#D3C6AA)
 pub const SCROLLBAR: Color = Color::Rgb(79, 91, 88); // queue-style scrollbar track/thumb
+pub const TRACK_BLOCK_BG: Color = Color::Rgb(45, 54, 49); // track block background (#2d3631)
