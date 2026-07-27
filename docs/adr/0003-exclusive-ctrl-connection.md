@@ -1,5 +1,9 @@
 # Exclusive Ctrl-Socket Connection
 
+> **Superseded by [ADR 0014](0014-multi-connection-model.md).** The daemon now
+> accepts multiple concurrent ctrl connections without eviction. Connecting no
+> longer conveys authority. See ADR 0014 for the current model.
+
 ## Decision
 
 A daemon accepts **at most one ctrl-socket connection at a time**, and that
