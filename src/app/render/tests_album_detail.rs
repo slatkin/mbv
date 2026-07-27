@@ -376,11 +376,11 @@ fn album_folder_listing_fetches_and_shows_loading_on_cache_miss() {
         .position(|l| l.contains("First Album"))
         .expect("expected selected album row");
     assert!(
-        lines[title_y - 4].contains("\u{2581}"),
-        "expected the artist block top border four rows above the first album:\n{out}"
+        lines[title_y - 5].contains("\u{2581}"),
+        "expected the artist block top border five rows above the first album:\n{out}"
     );
     assert!(
-        lines[title_y - 3].trim().is_empty(),
+        lines[title_y - 4].trim().is_empty(),
         "expected the colored top-padding row above the artist header to be blank:\n{out}"
     );
     assert_eq!(
