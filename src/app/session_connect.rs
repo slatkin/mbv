@@ -74,9 +74,9 @@ impl App {
     /// targets a statically configured `DaemonEndpoint` with no session
     /// discovery involved -- the shape #223's per-library routing needs.
     ///
-    /// Connecting **is** taking driving-client authority on that daemon
-    /// (ADR 0003, ADR 0007, ADR 0010) -- logged here so it is diagnosable,
-    /// not a hidden side effect.
+    /// Under multi-connection (v4), connecting does NOT evict other ctrl
+    /// clients. Authority is determined by command flow, not connection
+    /// lifecycle (ADR 0014 supersedes ADR 0003).
     ///
     /// `#[allow(dead_code)]`: this repo's convention (`mem:conventions`) is
     /// "fix all compile warnings -- delete unused code, never
@@ -108,7 +108,7 @@ impl App {
 
         log::info!(
             target: "daemon_route",
-            "connecting to daemon route endpoint {endpoint}; this takes driving-client authority on that daemon (see ADR 0003, ADR 0007, ADR 0010)"
+            "connecting to daemon route endpoint {endpoint}; under multi-connection (v4) this does not evict other ctrl clients (see ADR 0014)"
         );
         mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint, auth_token)
     }

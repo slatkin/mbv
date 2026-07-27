@@ -395,6 +395,12 @@ impl App {
                 self.refresh_after_stop();
                 return true;
             }
+            PlayerEvent::EmbyAuthorityTaken(reason) => {
+                // Authority-change notification: Emby remote has taken authority.
+                // The connection stays open — do NOT call restore_local_mode().
+                // Just flash the status so the user knows commands are temporarily rejected.
+                self.flash_status_high(reason);
+            }
             PlayerEvent::QueueDesynced(reason) => {
                 self.flash_status(reason);
             }

@@ -335,9 +335,12 @@ fn apply_ctrl_event(
         }
         CtrlEvent::Disconnected { reason } => {
             if notify {
-                let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
-                    disconnect_reason_message(&reason).to_string(),
-                ));
+                let msg = disconnect_reason_message(&reason).to_string();
+                match reason {
+                    DisconnectReason::TakenOverByEmbyRemote => {
+                        let _ = event_tx.send(PlayerEvent::EmbyAuthorityTaken(msg));
+                    }
+                }
             }
         }
         CtrlEvent::Spectrum { bars } => {
@@ -420,7 +423,16 @@ impl RemotePlayer {
                             log::warn!(target: "remote", "unrecognized event from daemon: {l}");
                             continue;
                         };
-                        let is_structured_disconnect = matches!(ev, CtrlEvent::Disconnected { .. });
+                        // Under multi-connection (v4), `Disconnected { TakenOverByEmbyRemote }` is
+                        // a notification — the connection stays open. Only set expected_disconnect
+                        // for events that actually close the connection. Exhaustive match ensures
+                        // new DisconnectReason variants are evaluated.
+                        let is_structured_disconnect = match &ev {
+                            CtrlEvent::Disconnected { reason } => match reason {
+                                DisconnectReason::TakenOverByEmbyRemote => false,
+                            },
+                            _ => false,
+                        };
                         apply_ctrl_event(
                             ev,
                             &status_r,

@@ -54,14 +54,14 @@
 
 ## 9. TUI Client: Protocol and State Machine Rework
 
-- [ ] 9.1 Update TUI client protocol version to 4
-- [ ] 9.2 Update `remote_player.rs` reader thread to handle `Disconnected { TakenOverByEmbyRemote }` as authority notification, NOT connection close — do NOT call `restore_local_mode()`
-- [ ] 9.3 Update `apply_ctrl_event` to distinguish authority-change `Disconnected` from connection-ending events
-- [ ] 9.4 Update `player_event.rs` to NOT call `restore_local_mode()` on authority-change notifications
-- [ ] 9.5 Handle `CommandRejected` events with authority reason — display message to user
-- [ ] 9.6 Rework `connected_session_id` / `direct_remote_connected` state machine to reflect multi-connection model (no eviction, no takeover tracking)
-- [ ] 9.7 Remove all logic that assumes eviction on new connection
-- [ ] 9.8 Audit all ~80 references to `connected_session_id` and `direct_remote_connected` across TUI files for correctness under new model
+- [x] 9.1 Update TUI client protocol version to 4
+- [x] 9.2 Update `remote_player.rs` reader thread to handle `Disconnected { TakenOverByEmbyRemote }` as authority notification, NOT connection close — do NOT call `restore_local_mode()`
+- [x] 9.3 Update `apply_ctrl_event` to distinguish authority-change `Disconnected` from connection-ending events
+- [x] 9.4 Update `player_event.rs` to NOT call `restore_local_mode()` on authority-change notifications
+- [x] 9.5 Handle `CommandRejected` events with authority reason — display message to user
+- [x] 9.6 Rework `connected_session_id` / `direct_remote_connected` state machine to reflect multi-connection model (no eviction, no takeover tracking)
+- [x] 9.7 Remove all logic that assumes eviction on new connection
+- [x] 9.8 Audit all ~80 references to `connected_session_id` and `direct_remote_connected` across TUI files for correctness under new model
 
 ## 10. Testing (rewrite broken tests only)
 
