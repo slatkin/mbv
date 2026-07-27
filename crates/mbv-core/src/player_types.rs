@@ -208,8 +208,12 @@ pub enum PlayerEvent {
     /// as-is (e.g. via the transient status toast). See #90.
     CommandRejected(String),
     /// Emitted by RemotePlayer when the daemon intentionally disconnects this
-    /// ctrl client, for example because another controller took over.
+    /// ctrl client (actual connection close, not an authority-change notification).
     RemoteDisconnected(String),
+    /// Emitted by RemotePlayer when the daemon sends a `Disconnected` notification
+    /// for Emby remote authority takeover. Unlike `RemoteDisconnected`, this is
+    /// an authority-change notification — the connection stays open.
+    EmbyAuthorityTaken(String),
     /// Emitted when an external tool modifies mpv's playlist outside of mbv's
     /// control (e.g. by writing to the mpv IPC socket), causing mbv's queue
     /// mirror to become stale. The detail describes what was detected. The UI
