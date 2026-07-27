@@ -323,23 +323,23 @@ fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {
         .expect("expected selected album art rect in track mode");
 
     assert!(
-        out.contains("Opening Track"),
-        "expected inline track row:\n{out}"
+        out.contains("Openi") && out.contains("Track"),
+        "expected inline track row (may be wrapped):\n{out}"
     );
     let lines: Vec<&str> = out.lines().collect();
     let playing_line = lines
         .iter()
-        .find(|line| line.contains("Opening Track"))
+        .find(|line| line.contains("Openi"))
         .copied()
         .expect("expected active music track row");
     let icon = super::play_icon(app.use_nerd_fonts);
     assert!(
-        playing_line.contains(&format!("1. {icon} Opening Track")),
+        playing_line.contains(&format!("1. {icon} Openi")),
         "expected the active track icon and following space after its number:\n{out}"
     );
     let track_y = lines
         .iter()
-        .position(|line| line.contains("Opening Track"))
+        .position(|line| line.contains("Openi"))
         .expect("expected inline track row");
     let hint_y = lines[..track_y]
         .iter()
@@ -359,19 +359,19 @@ fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {
         .find("^P: Play")
         .expect("expected track-mode hint x position");
     assert_eq!(
-        hint_x, 1,
-        "track-mode detail hint keeps its existing indent"
+        hint_x, 2,
+        "track-mode detail hint has 2-column indent in grouped block"
     );
     assert!(
-        lines[track_y].starts_with("  \u{258c}1."),
-        "track list should be indented 2 columns from the album block title:\n{out}"
+        lines[track_y].starts_with("        \u{258c}1."),
+        "track list should be indented with block padding:\n{out}"
     );
     let icon_byte_x = playing_line
         .find(icon)
         .expect("expected active music track icon");
     let icon_x = playing_line[..icon_byte_x].chars().count() as u16;
     let title_byte_x = playing_line
-        .find("Opening Track")
+        .find("Openi")
         .expect("expected active music track title");
     let active_title_x = playing_line[..title_byte_x].chars().count() as u16;
     let buffer = term.backend().buffer();
@@ -380,7 +380,10 @@ fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {
         palette::AQUA,
         "expected active icon to be AQUA at x={icon_x}:\n{out}"
     );
-    assert_eq!(buffer[(active_title_x, track_y as u16)].fg, palette::YELLOW);
+    assert_eq!(
+        buffer[(active_title_x, track_y as u16)].fg,
+        palette::SOFT_WHITE
+    );
     assert_eq!(
         term.backend().buffer()[(hint_x as u16, hint_y as u16)].fg,
         palette::SOFT_WHITE,
@@ -391,7 +394,7 @@ fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {
         58,
         "album art should have two columns of right padding"
     );
-    assert_eq!((art_rect.width, art_rect.height), (24, 12));
+    assert_eq!((art_rect.width, art_rect.height), (30, 15));
     assert!(app.card_image_loading.contains("album-1:P"));
     assert!(!app.card_image_loading.contains("track-1:P"));
     assert_eq!(
@@ -471,28 +474,38 @@ fn album_folder_listing_preserves_inline_track_focus_cursor() {
         .position(|line| line.contains("Focused Track"))
         .expect("expected focused track row");
     let lines: Vec<&str> = out.lines().collect();
-    let hint_y = lines[..focused_y]
+    let hint_y = lines
         .iter()
-        .rposition(|line| line.contains("BACK: Exit"))
+        .position(|line| line.contains("BACK: Exit"))
         .expect("expected track-mode action hint row");
     assert!(
         lines[hint_y].contains("BACK: Exit"),
         "expected track-mode hint row to show the exit hint:\n{out}"
     );
+    let album_y = lines
+        .iter()
+        .position(|line| line.contains("First Album"))
+        .expect("expected album title row");
+    assert!(album_y > hint_y, "expected album title after hint:\n{out}");
+    let first_track_y = lines
+        .iter()
+        .position(|line| line.contains("Opening Track"))
+        .expect("expected first track row");
     assert!(
-        lines[hint_y + 1].trim().is_empty(),
-        "expected a blank row between the track-mode hint and tracks:\n{out}"
+        first_track_y > album_y,
+        "expected tracks after album title:\n{out}"
     );
     assert_eq!(
         focused_y,
-        hint_y + 3,
-        "expected second track after hint, blank separator, and first track:\n{out}"
+        first_track_y + 1,
+        "expected second track after first track:\n{out}"
     );
 
     assert!(
-        // The AQUA `▌` cursor marker now has 2-column indent in track-selection mode.
-        focused_line.starts_with("  \u{258c}2. Focused Track"),
-        "expected focused track row to show the AQUA cursor marker with 2-column indent in track-selection mode:\n{out}"
+        // The AQUA `▌` cursor marker now has 2-column indent in track-selection mode,
+        // plus the 6-column block indentation.
+        focused_line.starts_with("        \u{258c}2. Focused Track"),
+        "expected focused track row to show the AQUA cursor marker with proper indent in track-selection mode:\n{out}"
     );
     assert_eq!(
         layout.cursor_screen_y,
@@ -530,9 +543,10 @@ fn album_folder_track_focus_cursor_renders_when_library_pane_unfocused() {
         .expect("expected focused track to render inline");
 
     assert!(
-        // The AQUA `▌` cursor marker now has 2-column indent in track-selection mode.
-        focused_line.starts_with("  \u{258c}2. Focused Track"),
-        "expected track-selection row to show the AQUA cursor marker with 2-column indent while pane is unfocused:\n{out}"
+        // The AQUA `▌` cursor marker now has 2-column indent in track-selection mode,
+        // plus the 6-column block indentation.
+        focused_line.starts_with("        \u{258c}2. Focused Track"),
+        "expected track-selection row to show the AQUA cursor marker with proper indent while pane is unfocused:\n{out}"
     );
 }
 

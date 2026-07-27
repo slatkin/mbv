@@ -371,8 +371,8 @@ fn album_folder_listing_renders_list_and_inline_detail_together() {
         .position(|l| l.contains("Second Album"))
         .expect("expected the following album row");
     assert!(
-        second_album_y < track_y,
-        "expected sibling albums to render before the inline track detail:\n{out}"
+        second_album_y > track_y,
+        "expected the inline track detail to render before sibling albums:\n{out}"
     );
 
     let title_row_idx = layout

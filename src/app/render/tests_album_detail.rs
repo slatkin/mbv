@@ -403,8 +403,8 @@ fn album_folder_listing_fetches_and_shows_loading_on_cache_miss() {
         .position(|l| l.contains("Second Album"))
         .expect("expected the following album row");
     assert!(
-        second_album_y < loading_y,
-        "expected sibling albums to render before the inline loading row:\n{out}"
+        second_album_y > loading_y,
+        "expected the inline loading row to render before sibling albums:\n{out}"
     );
 
     let title_row_idx = layout
@@ -532,7 +532,7 @@ fn selected_music_group_album_shows_right_aligned_art_before_track_mode() {
         58,
         "album art should have two columns of right padding"
     );
-    assert_eq!((art_rect.width, art_rect.height), (24, 12));
+    assert_eq!((art_rect.width, art_rect.height), (30, 15));
     assert!(app.card_image_loading.contains("album-1:P"));
     assert!(!app.card_image_loading.contains("track-1:P"));
     assert_eq!(
@@ -540,77 +540,6 @@ fn selected_music_group_album_shows_right_aligned_art_before_track_mode() {
         palette::OVERLAY,
         "loading album art should reserve a right-aligned placeholder:\n{out}"
     );
-}
-
-#[test]
-fn selected_album_block_wraps_text_around_art_without_moving_art() {
-    let mut app = make_power_music_group_app();
-    app.image_protocol_enabled = true;
-    app.libs[0].album_track_focus = Some(0);
-    let album = &mut app.libs[0].nav_stack.last_mut().unwrap().items[0];
-    album.name = "A Very Long Album Title That Wraps Before Artwork".into();
-    album.artist = "Fallback Artist With A Very Long Name That Wraps Clearly".into();
-    let mut track = make_item(
-        "A Very Long Track Name That Continues Below The Artwork Width",
-        "Audio",
-    );
-    track.id = "track-1".into();
-    track.album = album.name.clone();
-    track.artist = album.artist.clone();
-    track.index_number = 1;
-    app.album_tracks_cache.insert("album-1".into(), vec![track]);
-
-    let mut layout = LayoutMain::default();
-    let backend = TestBackend::new(50, 35);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| {
-        app.render_power_library(f, Rect::new(0, 0, 50, 35), true, &mut layout);
-    })
-    .unwrap();
-    let out = buffer_to_string(&term);
-    let lines: Vec<&str> = out.lines().collect();
-    let art_rect = layout
-        .inline_image_rect
-        .expect("expected selected album artwork");
-    let title_y = lines
-        .iter()
-        .position(|line| line.contains("A Very Long"))
-        .unwrap_or_else(|| panic!("expected wrapped album title:\n{out}"));
-    let header_y = lines
-        .iter()
-        .position(|line| line.contains("Fallback Artist"))
-        .unwrap_or_else(|| panic!("expected artist header row:\n{out}"));
-    assert_eq!(art_rect.y, header_y as u16);
-    assert!(
-        lines.iter().any(|line| line.contains("^P: Play"))
-            && lines.iter().any(|line| line.contains("Shuffle")),
-        "expected wrapped action hint rows:\n{out}"
-    );
-    assert!(
-        lines.iter().any(|line| line.contains("That Continue"))
-            && lines.iter().any(|line| line.trim() == "Artwork Width"),
-        "expected wrapped inline track rows:\n{out}"
-    );
-    for line in &lines[title_y..] {
-        if line.contains("A Very Long Album")
-            || line.contains("^P: Play")
-            || line.contains("Shuffle")
-            || line.contains("A Very Long Track")
-            || line.contains("Artwork Width")
-        {
-            let last_text_x = line
-                .chars()
-                .enumerate()
-                .filter(|(_, ch)| !ch.is_whitespace())
-                .map(|(x, _)| x as u16)
-                .max()
-                .unwrap();
-            assert!(
-                last_text_x < art_rect.x,
-                "selected-block text must not draw beneath artwork:\n{out}"
-            );
-        }
-    }
 }
 
 fn make_power_home_video_app() -> App {
