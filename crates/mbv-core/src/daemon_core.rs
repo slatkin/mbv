@@ -132,7 +132,6 @@ type CtrlSender = mpsc::Sender<CtrlOutbound>;
 
 enum CtrlOutbound {
     Event(String),
-    Close,
 }
 
 trait CtrlStream: std::io::Read + Write + Send + Sized + 'static {
@@ -164,14 +163,14 @@ impl CtrlStream for TcpStream {
 enum AuthorityHolder {
     #[default]
     None,
-    Ctrl(CtrlClientId),
+    Ctrl,
     EmbyRemote,
 }
 
 #[derive(Default)]
 struct CtrlClients {
     next_id: CtrlClientId,
-    connection: Option<CtrlClient>,
+    connection: Vec<CtrlClient>,
     authority: AuthorityHolder,
 }
 
@@ -216,7 +215,7 @@ fn broadcast(clients: &ClientRegistry, event: &CtrlEvent) {
     let Some(json) = serialize_ctrl_event(event) else {
         return;
     };
-    clients.lock().unwrap().send_to_driver(json);
+    clients.lock().unwrap().broadcast_to_all(json);
 }
 
 /// Send an event to a single ctrl-socket client, rather than every connected
@@ -234,78 +233,58 @@ fn serialize_ctrl_event(event: &CtrlEvent) -> Option<String> {
 }
 
 impl CtrlClients {
-    /// Install `tx` as the sole ctrl connection. Connecting **is** the
-    /// takeover (ADR 0003 / #119): if a connection already exists it is
-    /// evicted first — sent a structured takeover-disconnect event and
-    /// closed — before the newcomer becomes the connection. This is one
-    /// uniform path whether the slot was occupied or empty, so "connected
-    /// but not yet driving" is unrepresentable.
+    /// Append `tx` as a new ctrl connection. Multiple clients may coexist.
+    /// Does NOT override authority if it is currently `EmbyRemote` — the new
+    /// client receives broadcasts but its commands are rejected until
+    /// authority returns to `Ctrl`.
     fn connect(&mut self, tx: CtrlSender) -> CtrlClientId {
-        if let Some(incumbent) = self.connection.take() {
-            send_to(
-                &incumbent.tx,
-                &CtrlEvent::Disconnected {
-                    reason: DisconnectReason::TakenOverByCtrlClient,
-                },
-            );
-            let _ = incumbent.tx.send(CtrlOutbound::Close);
-        }
         let id = self.next_id;
         self.next_id += 1;
-        self.connection = Some(CtrlClient { id, tx });
-        self.authority = AuthorityHolder::Ctrl(id);
+        self.connection.push(CtrlClient { id, tx });
+        if self.authority == AuthorityHolder::None {
+            self.authority = AuthorityHolder::Ctrl;
+        }
         id
     }
 
     fn remove(&mut self, id: CtrlClientId) {
-        if self.has_client(id) {
-            self.connection = None;
-            if self.authority == AuthorityHolder::Ctrl(id) {
-                self.authority = AuthorityHolder::None;
-            }
+        self.connection.retain(|c| c.id != id);
+        if self.connection.is_empty() && self.authority == AuthorityHolder::Ctrl {
+            self.authority = AuthorityHolder::None;
         }
     }
 
     fn has_client(&self, id: CtrlClientId) -> bool {
-        self.connection.as_ref().is_some_and(|c| c.id == id)
+        self.connection.iter().any(|c| c.id == id)
     }
 
     fn has_driver(&self) -> bool {
-        self.connection.is_some()
+        !self.connection.is_empty()
     }
 
-    fn send_to_driver(&mut self, json: String) {
-        let Some(conn) = self.connection.as_ref() else {
-            return;
-        };
-        if conn.tx.send(CtrlOutbound::Event(json)).is_err() {
-            if self.authority == AuthorityHolder::Ctrl(conn.id) {
-                self.authority = AuthorityHolder::None;
-            }
-            self.connection = None;
-        }
+    /// Broadcast `json` to all connected ctrl clients. Removes any client
+    /// whose channel has failed (broken pipe / disconnected).
+    fn broadcast_to_all(&mut self, json: String) {
+        self.connection
+            .retain(|c| c.tx.send(CtrlOutbound::Event(json.clone())).is_ok());
     }
 
-    fn disconnect(&mut self, id: CtrlClientId, reason: DisconnectReason) {
-        if !self.has_client(id) {
-            return;
-        }
-        if self.authority == AuthorityHolder::Ctrl(id) {
-            self.authority = AuthorityHolder::None;
-        }
-        let client = self.connection.take().unwrap();
-        send_to(&client.tx, &CtrlEvent::Disconnected { reason });
-        let _ = client.tx.send(CtrlOutbound::Close);
-    }
-
-    fn disconnect_driver(&mut self, reason: DisconnectReason) {
-        if let Some(id) = self.connection.as_ref().map(|c| c.id) {
-            self.disconnect(id, reason);
+    /// Broadcast a `Disconnected` notification to all connected ctrl clients
+    /// without closing their connections. Used for Emby remote authority
+    /// transitions — clients observe the authority change but stay connected.
+    fn notify_disconnected_all(&self, reason: DisconnectReason) {
+        for client in &self.connection {
+            send_to(
+                &client.tx,
+                &CtrlEvent::Disconnected {
+                    reason: reason.clone(),
+                },
+            );
         }
     }
 
     fn take_authority_for_emby_remote(&mut self) {
-        self.disconnect_driver(DisconnectReason::TakenOverByEmbyRemote);
+        self.notify_disconnected_all(DisconnectReason::TakenOverByEmbyRemote);
         self.authority = AuthorityHolder::EmbyRemote;
     }
 }
@@ -363,7 +342,6 @@ fn spawn_ctrl_client<S>(
                         break;
                     }
                 }
-                CtrlOutbound::Close => break,
             }
         }
         w.shutdown_stream();

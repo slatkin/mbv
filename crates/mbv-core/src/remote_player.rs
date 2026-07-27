@@ -355,9 +355,6 @@ fn apply_ctrl_event(
 
 fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
     match reason {
-        DisconnectReason::TakenOverByCtrlClient => {
-            "Another controller took over — returned to local mode"
-        }
         DisconnectReason::TakenOverByEmbyRemote => {
             "Emby remote control took over — returned to local mode"
         }

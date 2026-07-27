@@ -369,11 +369,10 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &mut spectrum_state,
                 );
             }
-            // Under the exclusive-connection model (ADR 0003) there is at
-            // most one connected client, so any disconnect means the sole
-            // spectrum consumer is gone. Multi-client support (#395) would
-            // need to check which client was consuming spectrum before
-            // unconditionally stopping.
+            // Phase 1: stop spectrum on any client disconnect (preserves
+            // pre-multi-connection behavior). Phase 2 should track which
+            // client started spectrum and stop only when that client
+            // disconnects.
             DaemonEvent::CtrlDisconnected(client_id) => {
                 if let Some(mut state) = spectrum_state.take() {
                     log::info!(target: "daemon", "stopping spectrum on client disconnect");
