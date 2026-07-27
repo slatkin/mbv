@@ -135,15 +135,31 @@ impl App {
         }
         .flatten();
         let use_nerd_fonts = self.use_nerd_fonts;
-        let selected_detail_rows = |tracks: &[mbv_core::api::MediaItem]| {
+        let selected_detail_rows = |tracks: &[mbv_core::api::MediaItem], show_hint: bool| {
             let Some((full_width, artwork_width)) = wrap_widths else {
-                return tracks.len();
+                return if show_hint {
+                    2 + tracks.len()
+                } else {
+                    tracks.len()
+                };
             };
             let table_width = full_width.saturating_sub(artwork_width).saturating_sub(4);
             let show_length = table_width > 40;
             let title_col_width =
                 (table_width as usize).saturating_sub(4 + if show_length { 8 } else { 0 });
-            tracks
+            let hint_overhead = if show_hint {
+                let hint_width = table_width.saturating_sub(2).max(1) as usize;
+                let hint_lines = wrap(
+                    "^P: Play | ^A: Enqueue | ^S: Shuffle | BACK: Exit",
+                    hint_width,
+                )
+                .len()
+                .max(1);
+                hint_lines + 1
+            } else {
+                0
+            };
+            let track_lines = tracks
                 .iter()
                 .enumerate()
                 .map(|(i, track)| {
@@ -166,7 +182,8 @@ impl App {
                     .len()
                     .max(1)
                 })
-                .sum::<usize>()
+                .sum::<usize>();
+            hint_overhead + track_lines
         };
         let mut rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
         let mut has_artist_group = false;
@@ -242,7 +259,7 @@ impl App {
                     if !header_selected && expand_selected && idx == cursor {
                         match self.album_tracks_cache.get(&albums[idx].id) {
                             Some(tracks) if !tracks.is_empty() => {
-                                let detail_rows = selected_detail_rows(tracks);
+                                let detail_rows = selected_detail_rows(tracks, false);
                                 let track_start = rows.len();
                                 rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
                                 rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
@@ -325,8 +342,8 @@ impl App {
                     } else if idx == cursor && !selectable_headers {
                         match self.album_tracks_cache.get(&albums[idx].id) {
                             Some(tracks) if !tracks.is_empty() => {
-                                let detail_rows =
-                                    selected_detail_rows(tracks).max(inline_art_rows_after_album);
+                                let detail_rows = selected_detail_rows(tracks, true)
+                                    .max(inline_art_rows_after_album);
                                 rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                                 let top_idx = rows.len();
                                 rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
