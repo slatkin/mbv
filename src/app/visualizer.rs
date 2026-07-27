@@ -74,7 +74,20 @@ impl CavaWorker {
         let _ = self.stop_tx.send(());
         if let Some(handle) = self.handle.take() {
             let started = Instant::now();
-            let _ = handle.join();
+            let join_timeout = Duration::from_millis(500);
+            let (done_tx, done_rx) = mpsc::channel();
+            thread::spawn(move || {
+                let _ = handle.join();
+                let _ = done_tx.send(());
+            });
+            if done_rx.recv_timeout(join_timeout).is_err() {
+                log::warn!(
+                    target: "visualizer",
+                    "CAVA worker did not join within {}ms; detaching",
+                    join_timeout.as_millis()
+                );
+                return;
+            }
             log::debug!(
                 target: "visualizer",
                 "CAVA worker joined in {}ms",
@@ -133,87 +146,81 @@ fn run_worker(
 
     let mut frame = Vec::with_capacity(MAX_FRAME_BYTES.min(BAR_COUNT * 5));
     let mut discarding_frame = false;
-    let result = (|| -> io::Result<()> {
-        loop {
-            if stop_rx.try_recv().is_ok() {
-                return Ok(());
-            }
+    (|| loop {
+        if stop_rx.try_recv().is_ok() {
+            return;
+        }
 
-            if let Some(status) = child_guard.try_wait()? {
-                if !status.success() {
-                    log::warn!(
-                        target: "visualizer",
-                        "CAVA exited unexpectedly with status {status}"
-                    );
-                } else {
-                    log::info!(target: "visualizer", "CAVA exited");
-                }
-                return Ok(());
+        if let Some(status) = child_guard.try_wait().ok().flatten() {
+            if !status.success() {
+                log::warn!(
+                    target: "visualizer",
+                    "CAVA exited unexpectedly with status {status}"
+                );
+            } else {
+                log::info!(target: "visualizer", "CAVA exited");
             }
+            return;
+        }
 
-            let mut pollfd = libc::pollfd {
-                fd: fifo.as_raw_fd(),
-                events: libc::POLLIN,
-                revents: 0,
-            };
-            let poll_result = unsafe { libc::poll(&mut pollfd, 1, POLL_INTERVAL_MS) };
-            if poll_result < 0 {
-                let error = io::Error::last_os_error();
-                if error.kind() != io::ErrorKind::Interrupted {
-                    log::warn!(target: "visualizer", "CAVA FIFO poll failed: {error}");
-                    return Ok(());
-                }
-                continue;
+        let mut pollfd = libc::pollfd {
+            fd: fifo.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let poll_result = unsafe { libc::poll(&mut pollfd, 1, POLL_INTERVAL_MS) };
+        if poll_result < 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::Interrupted {
+                log::warn!(target: "visualizer", "CAVA FIFO poll failed: {error}");
+                return;
             }
-            if poll_result == 0 || pollfd.revents & libc::POLLIN == 0 {
-                continue;
-            }
+            continue;
+        }
+        if poll_result == 0 || pollfd.revents & libc::POLLIN == 0 {
+            continue;
+        }
 
-            let mut bytes = [0u8; 1024];
-            match fifo.read(&mut bytes) {
-                Ok(0) => {
-                    log::warn!(target: "visualizer", "CAVA closed its raw-output FIFO");
-                    return Ok(());
-                }
-                Ok(count) => {
-                    for byte in &bytes[..count] {
-                        if discarding_frame {
-                            if *byte == b'\n' {
-                                discarding_frame = false;
-                            }
-                            continue;
-                        }
+        let mut bytes = [0u8; 1024];
+        match fifo.read(&mut bytes) {
+            Ok(0) => {
+                log::warn!(target: "visualizer", "CAVA closed its raw-output FIFO");
+                return;
+            }
+            Ok(count) => {
+                for byte in &bytes[..count] {
+                    if discarding_frame {
                         if *byte == b'\n' {
-                            if let Some(parsed) = parse_ascii_frame(&frame) {
-                                match frames_tx.try_send(parsed) {
-                                    Ok(()) | Err(TrySendError::Full(_)) => {}
-                                    Err(TrySendError::Disconnected(_)) => {
-                                        return Ok(());
-                                    }
+                            discarding_frame = false;
+                        }
+                        continue;
+                    }
+                    if *byte == b'\n' {
+                        if let Some(parsed) = parse_ascii_frame(&frame) {
+                            match frames_tx.try_send(parsed) {
+                                Ok(()) | Err(TrySendError::Full(_)) => {}
+                                Err(TrySendError::Disconnected(_)) => {
+                                    return;
                                 }
                             }
-                            frame.clear();
-                        } else if frame.len() == MAX_FRAME_BYTES {
-                            frame.clear();
-                            discarding_frame = true;
-                        } else {
-                            frame.push(*byte);
                         }
+                        frame.clear();
+                    } else if frame.len() == MAX_FRAME_BYTES {
+                        frame.clear();
+                        discarding_frame = true;
+                    } else {
+                        frame.push(*byte);
                     }
                 }
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                Err(error) => {
-                    log::warn!(target: "visualizer", "CAVA FIFO read failed: {error}");
-                    return Ok(());
-                }
+            }
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+            Err(error) => {
+                log::warn!(target: "visualizer", "CAVA FIFO read failed: {error}");
+                return;
             }
         }
     })();
-
-    if let Err(error) = result {
-        log::warn!(target: "visualizer", "CAVA worker exited with error: {error}");
-    }
     drop(fifo);
     cleanup_private_resources(&resources);
 }
@@ -226,7 +233,11 @@ struct PrivateResources {
 
 fn create_private_resources() -> io::Result<PrivateResources> {
     let suffix = RESOURCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("mbv-cava-{}-{suffix}", std::process::id()));
+    let base = std::env::var_os("XDG_RUNTIME_DIR")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let dir = base.join(format!("mbv-cava-{}-{suffix}", std::process::id()));
     fs::create_dir(&dir)?;
     #[cfg(unix)]
     fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
