@@ -3,7 +3,7 @@ use super::super::super::App;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
 impl App {
@@ -37,9 +37,8 @@ impl App {
                     .add_modifier(Modifier::BOLD),
             ))
             .title_alignment(Alignment::Center)
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(palette::IRIS));
+            .borders(Borders::NONE)
+            .style(Style::default().bg(palette::GREEN));
         let inner = block.inner(rect);
         f.render_widget(block, rect);
         let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
