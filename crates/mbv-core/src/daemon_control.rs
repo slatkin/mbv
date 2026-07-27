@@ -40,6 +40,14 @@ fn handle_ctrl(
     merged_tx: &mpsc::Sender<DaemonEvent>,
     spectrum_state: &mut Option<SpectrumState>,
 ) {
+    // Authority returns to Ctrl on the next ctrl command (not on connect).
+    {
+        let mut clients = ctrl_clients.lock().unwrap();
+        if clients.authority == AuthorityHolder::EmbyRemote {
+            clients.authority = AuthorityHolder::Ctrl;
+        }
+    }
+
     match cmd {
         CtrlCmd::Hello(_) => {
             log::warn!(target: "daemon", "unexpected ctrl protocol hello after negotiation");
@@ -67,10 +75,10 @@ fn handle_ctrl(
                         "daemon already has a queue; adoption skipped".to_string(),
                     ),
                 );
-                // Exclusive connection means there is exactly one client to
-                // reconcile (ADR 0003): push the daemon's authoritative State
-                // so the sole client overwrites its optimistic mutation
-                // instead of lingering diverged from what the daemon holds.
+                // With multiple concurrent connections, reconciliation
+                // pushes the daemon's authoritative State so the sending
+                // client overwrites its optimistic mutation instead of
+                // lingering diverged from what the daemon holds.
                 send_to(
                     request.reply_tx,
                     &CtrlEvent::State(CtrlState {

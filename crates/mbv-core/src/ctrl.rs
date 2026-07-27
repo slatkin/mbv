@@ -4,7 +4,7 @@ use crate::api::MediaItem;
 use crate::config::QueueSource;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
-pub const CTRL_PROTOCOL_VERSION: u32 = 3;
+pub const CTRL_PROTOCOL_VERSION: u32 = 4;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
@@ -84,12 +84,6 @@ impl CtrlCompatibility {
                 peer_protocol_version,
                 client_protocol_version: CTRL_PROTOCOL_VERSION,
                 supports_queue_append: true,
-                supports_spectrum: false,
-            }),
-            2 => Ok(Self {
-                peer_protocol_version,
-                client_protocol_version: 2,
-                supports_queue_append: false,
                 supports_spectrum: false,
             }),
             _ => Err(format!(
@@ -314,8 +308,6 @@ pub enum CtrlEvent {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DisconnectReason {
-    #[serde(rename = "TakenOverByCtrlClient")]
-    TakenOverByCtrlClient,
     #[serde(rename = "TakenOverByEmbyRemote")]
     TakenOverByEmbyRemote,
 }
@@ -372,11 +364,17 @@ mod tests {
     }
 
     #[test]
-    fn hello_accepts_compatible_v2_protocol_version() {
+    fn hello_rejects_v2_protocol_version() {
         let mut hello = CtrlHello::current();
         hello.protocol_version = 2;
+        assert!(hello.validate_peer().is_err());
+    }
 
-        hello.validate_peer().unwrap();
+    #[test]
+    fn hello_rejects_v3_protocol_version() {
+        let mut hello = CtrlHello::current();
+        hello.protocol_version = 3;
+        assert!(hello.validate_peer().is_err());
     }
 
     #[test]
@@ -384,17 +382,6 @@ mod tests {
         let mut hello = CtrlHello::current();
         hello.capabilities.retain(|cap| cap != CTRL_CAP_START_INDEX);
         assert!(hello.validate_peer().is_err());
-    }
-
-    #[test]
-    fn compatible_v2_hello_still_rejects_missing_capability() {
-        let mut hello = CtrlHello::current();
-        hello.protocol_version = 2;
-        hello.capabilities.retain(|cap| cap != CTRL_CAP_START_INDEX);
-
-        let err = hello.validate_peer().unwrap_err();
-
-        assert!(err.contains("peer missing daemon protocol capability"));
     }
 
     #[test]
