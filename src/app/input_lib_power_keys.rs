@@ -181,13 +181,13 @@ impl App {
             KeyCode::Right if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(1),
             KeyCode::PageUp
                 if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && self.is_viewing_album_folders(lib_idx) =>
+                    && self.is_music_group_view(lib_idx) =>
             {
                 self.jump_power_music_group_display_cursor_to_artist(lib_idx, false);
             }
             KeyCode::PageDown
                 if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && self.is_viewing_album_folders(lib_idx) =>
+                    && self.is_music_group_view(lib_idx) =>
             {
                 self.jump_power_music_group_display_cursor_to_artist(lib_idx, true);
             }

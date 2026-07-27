@@ -208,6 +208,9 @@ impl App {
             expand_selected,
             None,
         );
+        if selected.is_some() && !plan.selected_artist_header_valid {
+            self.clear_artist_header_focus(lib_idx);
+        }
         let targets = Self::grouped_album_navigation_targets(&albums, &plan);
         if targets.is_empty() {
             return true;
