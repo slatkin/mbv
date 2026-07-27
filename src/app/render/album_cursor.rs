@@ -180,6 +180,81 @@ impl App {
         true
     }
 
+    pub(in crate::app) fn jump_power_music_group_display_cursor_to_artist(
+        &mut self,
+        lib_idx: usize,
+        forward: bool,
+    ) -> bool {
+        if !self.is_music_group_view(lib_idx) {
+            return false;
+        }
+        let Some(level) = self.libs[lib_idx].nav_stack.last() else {
+            return true;
+        };
+        if level.items.is_empty() {
+            self.clear_artist_header_focus(lib_idx);
+            return true;
+        }
+        let cursor = level.cursor;
+        let albums = level.items.clone();
+        let selected = self.selected_power_music_artist_header(lib_idx);
+        let expand_selected = self.libs[lib_idx].album_track_focus.is_some();
+        let plan = self.build_grouped_album_display_plan(
+            &albums,
+            cursor,
+            false,
+            true,
+            selected.as_ref(),
+            expand_selected,
+            None,
+        );
+        let targets = Self::grouped_album_navigation_targets(&albums, &plan);
+        if targets.is_empty() {
+            return true;
+        }
+        let current_pos = targets
+            .iter()
+            .position(|target| {
+                (selected.as_ref().is_some_and(|selection| {
+                    matches!(target, LibraryRowTarget::ArtistHeader(current) if current == selection)
+                }))
+                    || (selected.is_none()
+                        && matches!(target, LibraryRowTarget::Album(idx) if *idx == cursor))
+            })
+            .unwrap_or(0);
+        let found = if forward {
+            targets
+                .iter()
+                .skip(current_pos + 1)
+                .find(|t| matches!(t, LibraryRowTarget::ArtistHeader(_)))
+                .cloned()
+                .unwrap_or_else(|| targets.last().cloned().unwrap())
+        } else {
+            targets[..current_pos]
+                .iter()
+                .rev()
+                .find(|t| matches!(t, LibraryRowTarget::ArtistHeader(_)))
+                .cloned()
+                .unwrap_or_else(|| targets.first().cloned().unwrap())
+        };
+        drop(plan);
+        match found {
+            LibraryRowTarget::ArtistHeader(selection) => {
+                self.set_artist_header_focus(lib_idx, selection);
+            }
+            LibraryRowTarget::Album(idx) => {
+                self.clear_artist_header_focus(lib_idx);
+                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                    if level.cursor != idx {
+                        level.cursor = idx;
+                        self.libs[lib_idx].album_track_focus = None;
+                    }
+                }
+            }
+        }
+        true
+    }
+
     pub(in crate::app) fn selected_artist_header_album_items(
         &mut self,
         lib_idx: usize,
