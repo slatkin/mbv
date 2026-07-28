@@ -161,6 +161,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::TogglePause)),
+        1,
         CtrlRequest {
             reply_tx: &reply_tx,
         },

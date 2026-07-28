@@ -24,6 +24,7 @@ impl App {
             && self.player.is_remote()
             && active
             && self.player.supports_spectrum()
+            && !self.visualizer_failed
         {
             if !self.spectrum_started {
                 let _ = self.player.send_ctrl_cmd(CtrlCmd::StartSpectrum);
@@ -35,7 +36,6 @@ impl App {
         let should_run = self.visualizer_enabled && is_local && active && !audio_pipe_enabled;
         if !should_run {
             self.stop_visualizer_worker();
-            self.visualizer_failed = false;
             return;
         }
         if self.visualizer.is_none() && !self.visualizer_failed {
@@ -100,9 +100,11 @@ mod tests {
         let (mut app, cmd_rx) =
             crate::app::tests::make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
         app.visualizer_enabled = false;
+        app.visualizer_failed = true;
         app.player.status.lock().unwrap().active = true;
         app.toggle_visualizer();
         assert!(app.visualizer_enabled);
+        assert!(!app.visualizer_failed);
         let cmd = cmd_rx.try_recv().unwrap();
         assert!(matches!(cmd, mbv_core::ctrl::CtrlCmd::StartSpectrum));
     }
@@ -162,5 +164,34 @@ mod tests {
         let ev = mbv_core::player::PlayerEvent::SpectrumFailed("cava not found".to_string());
         app.handle_player_event(ev);
         assert!(app.visualizer_failed);
+    }
+
+    #[test]
+    fn remote_spectrum_failure_does_not_retry_on_sync() {
+        let (mut app, cmd_rx) =
+            crate::app::tests::make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
+        app.visualizer_enabled = true;
+        app.player.status.lock().unwrap().active = true;
+
+        app.handle_player_event(mbv_core::player::PlayerEvent::SpectrumFailed(
+            "cava exited".to_string(),
+        ));
+        app.sync_visualizer();
+        app.sync_visualizer();
+
+        assert!(app.visualizer_failed);
+        assert!(!cmd_rx
+            .try_iter()
+            .any(|cmd| matches!(cmd, mbv_core::ctrl::CtrlCmd::StartSpectrum)));
+    }
+
+    #[test]
+    fn new_playback_clears_visualizer_failure() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_failed = true;
+
+        app.handle_player_event(mbv_core::player::PlayerEvent::TrackChanged(0));
+
+        assert!(!app.visualizer_failed);
     }
 }

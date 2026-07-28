@@ -18,12 +18,12 @@ The left panel has unused vertical space below the queue list. Adding a second v
 
 ## Decisions
 
-**Reuse `split_visualizer_area` and `render_visualizer` as-is.**
-The existing methods are width-agnostic — they scale bars to whatever `area.width` is passed. The left panel's narrower width will simply produce fewer bars. No new methods needed.
-*Alternative considered:* a dedicated narrower render function — rejected because the existing code already handles arbitrary widths.
+**Render the visualizer within the queue panel's existing bounds.**
+The left panel's queue list area is shortened by `VISUALIZER_HEIGHT` (11) rows, and the visualizer fills the bottom strip. The card area and overall `left_area` are untouched — only the queue list content shrinks to make room. This is different from the right panel, which splits the entire library area.
+*Alternative considered:* splitting `left_area` like the right panel does — rejected because it would push the card image up, reducing the visible queue panel.
 
-**Split the visualizer area from `left_area` (or `left_content`), not from a new source.**
-The left panel's full column rect (`left_area`) or its padded content rect is the natural input. The split carves `VISUALIZER_HEIGHT` rows off the bottom, and the remaining area is used for the existing queue/card content. This mirrors exactly how the right panel splits `render_lib_area`.
+**Compute visualizer strip from `left_content`, reduce `queue_area` height.**
+The visualizer area is carved from the bottom of `left_content`. The `queue_area` height is reduced by the visualizer height so the queue list doesn't overlap. The card area and `left_area` are unchanged.
 *Alternative considered:* using a fixed position at the bottom of the screen — rejected because it wouldn't respect panel collapse or resize.
 
 **Gate on `queue_column_collapsed`.**

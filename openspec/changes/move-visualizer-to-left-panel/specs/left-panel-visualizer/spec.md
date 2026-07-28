@@ -2,7 +2,7 @@
 
 ### Requirement: Left panel visualizer strip
 
-The system SHALL render an audio visualizer strip at the bottom of the left panel (queue/card column) in the main view when the visualizer is enabled. The strip SHALL use the same height as the right-panel visualizer (11 rows) and SHALL display the same `visualizer_frame` data. The existing right-panel visualizer SHALL remain unchanged.
+The system SHALL render an audio visualizer strip at the bottom of the left panel (queue/card column) in the main view when the visualizer is enabled. The strip SHALL use the same height as the right-panel visualizer (11 rows) and SHALL display the same `visualizer_frame` data. The visualizer SHALL render within the queue panel's existing bounds — the queue list content area SHALL be reduced to make room, but the card area and overall panel dimensions SHALL remain unchanged. The existing right-panel visualizer SHALL remain unchanged.
 
 #### Scenario: Visualizer enabled with left panel visible
 

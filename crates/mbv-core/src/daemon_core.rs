@@ -1,4 +1,5 @@
 use std::io::{BufRead, BufReader, Write};
+use std::collections::HashSet;
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::{mpsc, Arc, Mutex};
@@ -65,14 +66,44 @@ enum DaemonEvent {
 pub(crate) struct SpectrumState {
     reader: Option<std::thread::JoinHandle<()>>,
     stop_tx: std::sync::mpsc::Sender<()>,
+    subscribers: HashSet<CtrlClientId>,
+}
+
+fn spectrum_child_failure_reason(status: std::process::ExitStatus, diagnostics: &str) -> String {
+    format!(
+        "Snapclient exited during spectrum streaming with {status}: {}",
+        diagnostics.trim()
+    )
 }
 
 impl SpectrumState {
-    fn start(worker: crate::visualizer::CavaWorker, merged_tx: mpsc::Sender<DaemonEvent>) -> Self {
+    fn start(
+        config: crate::config::Config,
+        merged_tx: mpsc::Sender<DaemonEvent>,
+        subscriber: CtrlClientId,
+    ) -> Result<Self, String> {
+        let snapclient = crate::visualizer::SpectrumSnapclient::start(&config)?;
+        let worker = match crate::visualizer::CavaWorker::start_with_input(
+            crate::visualizer::CavaInput::Fifo(config.spectrum_fifo_path.into()),
+        ) {
+            Ok(worker) => worker,
+            Err(error) => {
+                drop(snapclient);
+                return Err(error);
+            }
+        };
         let (stop_tx, stop_rx) = mpsc::channel();
         let reader = std::thread::spawn(move || {
+            let mut snapclient = snapclient;
             loop {
                 if stop_rx.try_recv().is_ok() {
+                    break;
+                }
+                if let Ok(Some(status)) = snapclient.try_wait() {
+                    let diagnostics = snapclient.diagnostics();
+                    let _ = merged_tx.send(DaemonEvent::SpectrumFailed {
+                        reason: spectrum_child_failure_reason(status, &diagnostics),
+                    });
                     break;
                 }
                 match worker.take_latest_frame() {
@@ -92,10 +123,24 @@ impl SpectrumState {
             }
             drop(worker);
         });
-        Self {
+        Ok(Self {
             reader: Some(reader),
             stop_tx,
-        }
+            subscribers: HashSet::from([subscriber]),
+        })
+    }
+
+    fn add_subscriber(&mut self, client_id: CtrlClientId) {
+        self.subscribers.insert(client_id);
+    }
+
+    fn remove_subscriber(&mut self, client_id: CtrlClientId) -> bool {
+        self.subscribers.remove(&client_id);
+        self.subscribers.is_empty()
+    }
+
+    fn has_subscriber(&self, client_id: CtrlClientId) -> bool {
+        self.subscribers.contains(&client_id)
     }
 
     /// Idempotent stop: signals the reader thread to exit and joins it with
@@ -326,9 +371,17 @@ fn spawn_ctrl_client<S>(
     let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
 
     let mut daemon_hello = CtrlHello::current();
-    daemon_hello
-        .capabilities
-        .push(crate::ctrl::CTRL_CAP_SPECTRUM.to_string());
+    let spectrum_config = client.lock().unwrap().config.clone();
+    if crate::visualizer::daemon_spectrum_prerequisites(&spectrum_config).is_ok() {
+        daemon_hello
+            .capabilities
+            .push(crate::ctrl::CTRL_CAP_SPECTRUM.to_string());
+    } else {
+        log::info!(
+            target: "daemon",
+            "spectrum-streaming capability omitted: prerequisites unavailable"
+        );
+    }
     if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(daemon_hello)) {
         ev_tx.send(CtrlOutbound::Event(hello_json)).ok();
     }

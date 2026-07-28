@@ -443,7 +443,7 @@ impl App {
         };
         let mut spans = Vec::with_capacity(3);
         if grouped_block {
-            spans.push(Span::raw(" "));
+            spans.push(super::selection_marker(selected));
             spans.push(Span::raw(" "));
         } else {
             spans.push(Span::raw(" "));
@@ -499,7 +499,7 @@ impl App {
                 .enumerate()
                 .map(|(line_idx, line)| {
                     let mut spans = if line_idx == 0 {
-                        vec![Span::raw(" "), Span::raw(" ")]
+                        vec![super::selection_marker(selected), Span::raw(" ")]
                     } else {
                         vec![Span::raw("  ")]
                     };
@@ -598,7 +598,11 @@ impl App {
         }
 
         let mut spans: Vec<Span> = Vec::new();
-        spans.push(Span::raw(" "));
+        if selected {
+            spans.push(super::selection_marker(true));
+        } else {
+            spans.push(Span::raw(" "));
+        }
 
         if selected {
             spans.push(Span::raw(" "));
