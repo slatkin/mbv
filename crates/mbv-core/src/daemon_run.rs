@@ -394,15 +394,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 }
             }
             DaemonEvent::SpectrumFailed { reason } => {
-                if let Some(state) = spectrum_state.as_ref() {
-                    if let Some(json) = serialize_ctrl_event(&CtrlEvent::SpectrumFailed { reason }) {
-                        let mut clients = ctrl_clients.lock().unwrap();
-                        clients.connection.retain(|client| {
-                            !state.has_subscriber(client.id)
-                                || client.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
-                        });
-                    }
-                }
+                broadcast(&ctrl_clients, &CtrlEvent::SpectrumFailed { reason });
                 if let Some(mut state) = spectrum_state.take() {
                     state.stop();
                 }
