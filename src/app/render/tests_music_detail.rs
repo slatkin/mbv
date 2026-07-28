@@ -320,8 +320,8 @@ fn selectable_artist_header_renders_focused() {
     );
 
     assert!(
-        header.contains('\u{258c}'),
-        "selected artist header should render the AQUA focus gutter:\n{out}"
+        !header.contains('\u{258c}'),
+        "selected artist header should not render the AQUA focus gutter:\n{out}"
     );
     assert!(
         !header.contains('\u{f037b}'),

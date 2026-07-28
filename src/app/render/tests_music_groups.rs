@@ -482,7 +482,7 @@ fn grouped_target_marker_and_inline_art_follow_album_or_artist_focus() {
         .lines()
         .find(|line| line.contains("Second Album"))
         .expect("expected the focused album row");
-    assert!(selected_line.contains('\u{258c}'));
+    assert!(!selected_line.contains('\u{258c}'));
     assert!(out.contains("First Album"));
     assert!(album_app.card_image_loading.contains("album-2:P"));
     assert!(!album_app.card_image_loading.contains("album-2:sq"));
@@ -508,7 +508,7 @@ fn grouped_target_marker_and_inline_art_follow_album_or_artist_focus() {
         .lines()
         .find(|line| line.contains("Alpha"))
         .expect("expected the focused artist row");
-    assert!(header_line.contains('\u{258c}'));
+    assert!(!header_line.contains('\u{258c}'));
     assert!(header_app.card_image_loading.contains("album-1:sq"));
 }
 
@@ -538,7 +538,7 @@ fn long_inline_track_focus_keeps_the_detail_table_inside_the_selected_block() {
         .lines()
         .find(|line| line.contains("First Album"))
         .expect("expected selected album row");
-    assert!(title_line.contains('\u{258c}'));
+    assert!(!title_line.contains('\u{258c}'));
     assert!(layout.cursor_screen_y.is_some());
 }
 

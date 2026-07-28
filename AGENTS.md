@@ -15,6 +15,7 @@
 - Keep and update domain docs while planning.
 - run_in_background for builds/tests.
 - Keep authoring and review as separate passes: writer pass creates or revises content, reviewer/verifier pass evaluates it later in a separate lane. Never self-approve in the same active context.
+- If a unit test is flaky, delete it and write a new one. Do not troubleshoot unit tests.
 
 # Operation principles
 - Be conscious of actions which will explode your context and delegate to a subagent to that task instead.

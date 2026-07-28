@@ -19,6 +19,11 @@ impl App {
     }
 
     pub(super) fn handle_key_power_album_track_mode(&mut self, key: KeyEvent) -> Option<bool> {
+        if matches!(self.panel_focus, PanelFocus::Queue)
+            && matches!(key.code, KeyCode::Up | KeyCode::Down)
+        {
+            return None;
+        }
         let lib_idx = self.active_power_album_track_lib_idx()?;
         let command = power_album_track_command_for_key(KeyChord::from_key(key), lib_idx)?;
         Some(self.dispatch(command))

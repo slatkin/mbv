@@ -383,7 +383,7 @@ fn up_down_in_track_mode_move_only_track_focus_and_clamp() {
 }
 
 #[test]
-fn track_mode_down_still_moves_track_focus_when_queue_panel_has_focus() {
+fn track_mode_down_does_not_move_track_focus_when_queue_panel_has_focus() {
     let mut app = make_power_music_album_app();
     push_tracks(&mut app, "album-1", 3);
     app.libs[0].album_track_focus = Some(1);
@@ -392,7 +392,7 @@ fn track_mode_down_still_moves_track_focus_when_queue_panel_has_focus() {
 
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
-    assert_eq!(app.libs[0].album_track_focus, Some(2));
+    assert_eq!(app.libs[0].album_track_focus, Some(1));
     assert_eq!(
         app.libs[0].nav_stack.last().unwrap().cursor,
         album_cursor_before
