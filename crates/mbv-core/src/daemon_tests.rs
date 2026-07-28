@@ -104,6 +104,49 @@ fn dummy_spectrum_ctx() -> (mpsc::Sender<DaemonEvent>, Option<SpectrumState>) {
     (tx, None)
 }
 
+#[test]
+fn spectrum_subscribers_stop_only_after_last_unsubscribe() {
+    let (stop_tx, _stop_rx) = mpsc::channel();
+    let mut state = SpectrumState {
+        reader: None,
+        stop_tx,
+        subscribers: std::collections::HashSet::from([1, 2]),
+    };
+
+    assert!(state.has_subscriber(1));
+    assert!(!state.remove_subscriber(1));
+    assert!(state.has_subscriber(2));
+    assert!(state.remove_subscriber(2));
+    assert!(!state.has_subscriber(1));
+}
+
+#[test]
+fn empty_spectrum_state_stop_is_idempotent() {
+    let (stop_tx, _stop_rx) = mpsc::channel();
+    let mut state = SpectrumState {
+        reader: None,
+        stop_tx,
+        subscribers: std::collections::HashSet::new(),
+    };
+
+    state.stop();
+    state.stop();
+}
+
+#[test]
+fn spectrum_child_failure_preserves_exit_status_and_diagnostics() {
+    use std::process::Command;
+
+    let status = Command::new("sh")
+        .args(["-c", "printf 'snapclient test failure\\n' >&2; exit 7"])
+        .status()
+        .expect("shell is available in CI");
+    let reason = super::spectrum_child_failure_reason(status, "snapclient test failure\n");
+
+    assert!(reason.contains("exit status: 7"));
+    assert!(reason.contains("snapclient test failure"));
+}
+
 fn cold_player() -> Player {
     let (event_tx, _event_rx) = mpsc::channel::<PlayerEvent>();
     Player::new(
@@ -260,6 +303,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::TogglePause)),
+        1,
         CtrlRequest {
             reply_tx: &reply_tx,
         },
@@ -308,6 +352,7 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
             cursor: 0,
             source: QueueSource::Unknown,
         },
+        1,
         CtrlRequest {
             reply_tx: &reply_tx,
         },
@@ -373,6 +418,7 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(1, 2))),
+        1,
         CtrlRequest {
             reply_tx: &reply_tx,
         },
@@ -449,6 +495,7 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueAppend {
             items: appended.clone(),
         })),
+        1,
         CtrlRequest {
             reply_tx: &reply_tx,
         },
@@ -524,6 +571,7 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(1, 2))),
+        1,
         CtrlRequest {
             reply_tx: &reply_tx,
         },

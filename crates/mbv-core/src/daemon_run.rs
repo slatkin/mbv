@@ -354,6 +354,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 }
                 handle_ctrl(
                     cmd,
+                    client_id,
                     CtrlRequest {
                         reply_tx: &reply_tx,
                     },
@@ -369,22 +370,39 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &mut spectrum_state,
                 );
             }
-            // Phase 1: stop spectrum on any client disconnect (preserves
-            // pre-multi-connection behavior). Phase 2 should track which
-            // client started spectrum and stop only when that client
-            // disconnects.
             DaemonEvent::CtrlDisconnected(client_id) => {
-                if let Some(mut state) = spectrum_state.take() {
-                    log::info!(target: "daemon", "stopping spectrum on client disconnect");
-                    state.stop();
+                if spectrum_state
+                    .as_mut()
+                    .is_some_and(|state| state.remove_subscriber(client_id))
+                {
+                    if let Some(mut state) = spectrum_state.take() {
+                        log::info!(target: "daemon", "stopping spectrum on last client disconnect");
+                        state.stop();
+                    }
                 }
                 ctrl_clients.lock().unwrap().remove(client_id);
             }
             DaemonEvent::Spectrum(bars) => {
-                broadcast(&ctrl_clients, &CtrlEvent::Spectrum { bars });
+                if let Some(state) = spectrum_state.as_ref() {
+                    if let Some(json) = serialize_ctrl_event(&CtrlEvent::Spectrum { bars }) {
+                        let mut clients = ctrl_clients.lock().unwrap();
+                        clients.connection.retain(|client| {
+                            !state.has_subscriber(client.id)
+                                || client.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
+                        });
+                    }
+                }
             }
             DaemonEvent::SpectrumFailed { reason } => {
-                broadcast(&ctrl_clients, &CtrlEvent::SpectrumFailed { reason });
+                if let Some(state) = spectrum_state.as_ref() {
+                    if let Some(json) = serialize_ctrl_event(&CtrlEvent::SpectrumFailed { reason }) {
+                        let mut clients = ctrl_clients.lock().unwrap();
+                        clients.connection.retain(|client| {
+                            !state.has_subscriber(client.id)
+                                || client.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
+                        });
+                    }
+                }
                 if let Some(mut state) = spectrum_state.take() {
                     state.stop();
                 }

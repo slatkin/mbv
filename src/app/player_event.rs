@@ -221,6 +221,7 @@ impl App {
                 }
             }
             PlayerEvent::TrackChanged(idx) => {
+                self.visualizer_failed = false;
                 self.skip_intro_end_ticks = None;
                 self.next_up_item = None;
                 if self.status.starts_with("Next up:") {
