@@ -506,5 +506,8 @@ mod queue_tests;
 #[path = "tests_scroll_pills.rs"]
 mod scroll_pills_tests;
 #[cfg(test)]
+#[path = "test_helpers.rs"]
+mod test_helpers;
+#[cfg(test)]
 #[path = "tests.rs"]
 mod tests;

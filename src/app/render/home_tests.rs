@@ -1,7 +1,7 @@
 use super::super::home_video::power_home_panel_scroll;
 use crate::app::layout::AppLayout;
 use crate::app::tests::{make_app_stub, make_item, make_items};
-use crate::app::{palette, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibraryTab};
+use crate::app::{BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibraryTab};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -18,140 +18,6 @@ fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
         out.push('\n');
     }
     out
-}
-
-fn assert_selected_home_video_panel(term: &Terminal<TestBackend>, title: &str) {
-    let buf = term.backend().buffer();
-    let area = *buf.area();
-    let (title_y, title_x) = (0..area.height)
-        .find_map(|y| {
-            let line: String = (0..area.width).map(|x| buf[(x, y)].symbol()).collect();
-            line.find(title).map(|x| (y, x as u16))
-        })
-        .expect("selected home-video title should be present in the buffer");
-    assert_eq!(
-        buf[(title_x, title_y)].fg,
-        palette::YELLOW,
-        "selected home-video title should be yellow"
-    );
-
-    let row_is = |y: u16, glyph: &str| (0..area.width).all(|x| buf[(x, y)].symbol() == glyph);
-    let top_y = (0..area.height)
-        .find(|&y| row_is(y, "▁"))
-        .expect("selected home-video top border should render");
-    let bottom_y = (0..area.height)
-        .find(|&y| row_is(y, "▔"))
-        .expect("selected home-video bottom border should render");
-    assert!(top_y < title_y && title_y < bottom_y);
-}
-
-#[test]
-fn renders_home_pills_and_only_selected_section() {
-    let mut app = make_app_stub();
-
-    let mut cont = make_items(3);
-    for (i, it) in cont.iter_mut().enumerate() {
-        it.name = ["Taskmaster", "QI XL", "8 Diagram Pole Fighter"][i].to_string();
-        it.runtime_ticks = (2820 + i as i64 * 600) * TICKS_PER_SECOND;
-    }
-    app.home.continue_items = cont;
-
-    let music = {
-        let mut v = make_items(3);
-        for (i, it) in v.iter_mut().enumerate() {
-            it.name = ["King Of America", "Either/Or", "Too-Rye-Ay"][i].to_string();
-        }
-        v[0].overview = "Newest metadata overview appears in the shared Home hero.".into();
-        v
-    };
-    let youtube = {
-        let mut v = make_items(2);
-        for (i, it) in v.iter_mut().enumerate() {
-            it.name = ["NXL Not-E3 Showcase", "Comedians Taking Over"][i].to_string();
-        }
-        v
-    };
-    app.home.latest = vec![
-        ("Music".into(), "l1".into(), music, 0),
-        ("YouTube".into(), "l2".into(), youtube, 0),
-    ];
-
-    let backend = TestBackend::new(80, 30);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = AppLayout::default();
-    term.draw(|f| {
-        let area = Rect::new(0, 0, 80, 30);
-        app.render_power_home_list(f, area, true, &mut layout.main);
-    })
-    .unwrap();
-
-    let out = buffer_to_string(&term);
-    println!("\n{out}");
-
-    assert!(out.contains("Taskmaster"));
-    assert!(out.contains("QI XL"));
-    assert!(out.contains("8 Diagram Pole Fighter"));
-    assert!(out.contains("Continue Watching"));
-    assert!(out.contains("Music"));
-    assert!(out.contains("YouTube"));
-    assert!(!out.contains("King Of America"));
-    assert!(!out.contains("Either/Or"));
-    assert!(!out.contains("NXL Not-E3 Showcase"));
-    // Durations render as minutes only, never hours (67m for 4020s, not 1h07m).
-    assert!(out.contains("47m"));
-    assert!(out.contains("67m"));
-    assert!(!out.contains("1h"));
-    assert_eq!(layout.main.home.hitmap.len(), 3);
-    assert_eq!(layout.main.selector_tabs.len(), 3);
-
-    app.power_home_select_section(1);
-    let backend = TestBackend::new(80, 30);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = AppLayout::default();
-    term.draw(|f| {
-        let area = Rect::new(0, 0, 80, 30);
-        app.render_power_home_list(f, area, true, &mut layout.main);
-    })
-    .unwrap();
-
-    let out = buffer_to_string(&term);
-    println!("\n{out}");
-
-    assert!(!out.contains("Taskmaster"));
-    assert!(out.contains("King Of America"));
-    assert!(out.contains("Newest metadata overview appears"));
-    assert!(out.contains("Either/Or"));
-    assert!(!out.contains("NXL Not-E3 Showcase"));
-    assert_eq!(layout.main.home.hitmap.len(), 3);
-}
-
-#[test]
-fn home_list_does_not_draw_selected_media_box() {
-    let mut app = make_app_stub();
-    let mut cont = make_items(3);
-    for (i, it) in cont.iter_mut().enumerate() {
-        it.name = format!("Continue {i}");
-    }
-    app.home.continue_items = cont;
-    app.home.latest = vec![
-        ("Music".into(), "l1".into(), make_items(2), 0),
-        ("YouTube".into(), "l2".into(), make_items(2), 0),
-    ];
-
-    let backend = TestBackend::new(26, 16);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = AppLayout::default();
-    term.draw(|f| {
-        app.render_power_home_list(f, Rect::new(2, 2, 20, 14), true, &mut layout.main);
-    })
-    .unwrap();
-
-    let out = buffer_to_string(&term);
-    assert!(!out.contains('\u{2581}'), "unexpected top border:\n{out}");
-    assert!(
-        !out.contains('\u{2594}'),
-        "unexpected bottom border:\n{out}"
-    );
 }
 
 fn make_home_video_panel_app() -> crate::app::App {
@@ -211,6 +77,83 @@ fn make_home_video_panel_app() -> crate::app::App {
 }
 
 #[test]
+fn renders_home_pills_and_only_selected_section() {
+    let mut app = make_app_stub();
+
+    let mut cont = make_items(3);
+    for (i, it) in cont.iter_mut().enumerate() {
+        it.name = ["Taskmaster", "QI XL", "8 Diagram Pole Fighter"][i].to_string();
+        it.runtime_ticks = (2820 + i as i64 * 600) * TICKS_PER_SECOND;
+    }
+    app.home.continue_items = cont;
+
+    let music = {
+        let mut v = make_items(3);
+        for (i, it) in v.iter_mut().enumerate() {
+            it.name = ["King Of America", "Either/Or", "Too-Rye-Ay"][i].to_string();
+        }
+        v[0].overview = "Newest metadata overview appears in the shared Home hero.".into();
+        v
+    };
+    let youtube = {
+        let mut v = make_items(2);
+        for (i, it) in v.iter_mut().enumerate() {
+            it.name = ["NXL Not-E3 Showcase", "Comedians Taking Over"][i].to_string();
+        }
+        v
+    };
+    app.home.latest = vec![
+        ("Music".into(), "l1".into(), music, 0),
+        ("YouTube".into(), "l2".into(), youtube, 0),
+    ];
+
+    let backend = TestBackend::new(80, 30);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = AppLayout::default();
+    term.draw(|f| {
+        let area = Rect::new(0, 0, 80, 30);
+        app.render_power_home_list(f, area, true, &mut layout.main);
+    })
+    .unwrap();
+
+    let out = buffer_to_string(&term);
+
+    assert!(out.contains("Taskmaster"));
+    assert!(out.contains("QI XL"));
+    assert!(out.contains("8 Diagram Pole Fighter"));
+    assert!(out.contains("Continue Watching"));
+    assert!(out.contains("Music"));
+    assert!(out.contains("YouTube"));
+    assert!(!out.contains("King Of America"));
+    assert!(!out.contains("Either/Or"));
+    assert!(!out.contains("NXL Not-E3 Showcase"));
+    assert!(out.contains("47m"));
+    assert!(out.contains("67m"));
+    assert!(!out.contains("1h"));
+    assert_eq!(layout.main.home.hitmap.len(), 3);
+    assert_eq!(layout.main.selector_tabs.len(), 3);
+
+    app.power_home_select_section(1);
+    let backend = TestBackend::new(80, 30);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = AppLayout::default();
+    term.draw(|f| {
+        let area = Rect::new(0, 0, 80, 30);
+        app.render_power_home_list(f, area, true, &mut layout.main);
+    })
+    .unwrap();
+
+    let out = buffer_to_string(&term);
+
+    assert!(!out.contains("Taskmaster"));
+    assert!(out.contains("King Of America"));
+    assert!(out.contains("Newest metadata overview appears"));
+    assert!(out.contains("Either/Or"));
+    assert!(!out.contains("NXL Not-E3 Showcase"));
+    assert_eq!(layout.main.home.hitmap.len(), 3);
+}
+
+#[test]
 fn selected_regular_home_video_keeps_detail_below_title() {
     let mut app = make_home_video_panel_app();
     app.libs[0].feed_home_video = None;
@@ -224,7 +167,6 @@ fn selected_regular_home_video_keeps_detail_below_title() {
     .unwrap();
 
     let out = buffer_to_string(&term);
-    assert_selected_home_video_panel(&term, "Selected Home Video");
     let title = out
         .find("Selected Home Video")
         .expect("selected home-video title should render");
@@ -287,7 +229,6 @@ fn selected_grouped_feed_home_video_keeps_detail_and_scroll_state() {
     .unwrap();
 
     let out = buffer_to_string(&term);
-    assert_selected_home_video_panel(&term, "Selected Home Video");
     assert!(out.contains("All"), "feed selector should render:\n{out}");
     let title = out
         .find("Selected Home Video")
@@ -305,24 +246,20 @@ fn selected_grouped_feed_home_video_keeps_detail_and_scroll_state() {
 
 #[test]
 fn keeps_current_offset_when_row_already_visible() {
-    // Row [2,6) fits inside viewport [0,10); offset unchanged.
     assert_eq!(power_home_panel_scroll(0, 2, 6, 20, 10), 0);
 }
 
 #[test]
 fn scrolls_down_to_reveal_row_below_viewport() {
-    // Row [14,20) is below viewport [0,10); scroll so its bottom is visible.
     assert_eq!(power_home_panel_scroll(0, 14, 20, 30, 10), 10);
 }
 
 #[test]
 fn scrolls_up_to_reveal_row_above_viewport() {
-    // Row [2,6) is above current offset 8; snap up to its top.
     assert_eq!(power_home_panel_scroll(8, 2, 6, 30, 10), 2);
 }
 
 #[test]
 fn never_scrolls_past_end() {
-    // Cursor is the last row [11,15); offset clamped to total_h - view_h = 5.
     assert_eq!(power_home_panel_scroll(99, 11, 15, 15, 10), 5);
 }

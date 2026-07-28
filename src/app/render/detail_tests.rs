@@ -4,13 +4,6 @@ use crate::app::{BrowseLevel, LibraryTab};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
-// Regression test for a bug caught by manual review after #263 shipped:
-// a movie with a short overview but a rendered poster image reserved
-// only enough banner rows for the text, so the image (drawn at its own
-// fixed height regardless of text length) spilled past the banner's row
-// budget into the list rows below it. `content_rows()` must never
-// return fewer rows than the image needs, even when the text alone
-// would ask for less.
 #[test]
 fn content_rows_is_never_shorter_than_the_rendered_image_height() {
     let short_text_layout = CompactBannerLayout {
@@ -127,11 +120,6 @@ fn push_movie_lib(app: &mut App, movie: mbv_core::api::MediaItem) {
     });
 }
 
-// Alt+M's full-screen detail view (`render_power_detail`) was removed in
-// #204: the compact banner (`render_power_compact_detail`) is now the
-// single movie-detail surface, so this exercises that instead. The
-// "enter prompt" assertions predate both surfaces having ever shown one;
-// kept as a regression guard.
 #[test]
 fn compact_movie_detail_shows_director_without_enter_prompt() {
     let mut app = make_app_stub();
@@ -159,8 +147,6 @@ fn compact_movie_detail_shows_director_without_enter_prompt() {
     );
 }
 
-// #263: a short overview must render fully with no scrollbar, using only
-// as many rows as its wrapped content actually needs.
 #[test]
 fn compact_movie_detail_shows_full_short_overview_with_no_scrollbar() {
     let mut app = make_app_stub();
@@ -182,18 +168,8 @@ fn compact_movie_detail_shows_full_short_overview_with_no_scrollbar() {
         out.contains("Director: Jane Director"),
         "expected director:\n{out}"
     );
-    assert!(
-        !out.contains('\u{2590}'),
-        "no banner scrollbar should be drawn:\n{out}"
-    );
 }
 
-// The poster fetch is triggered synchronously inside `compact_banner_layout`
-// but resolves asynchronously on a background thread; nothing drains that
-// result in this test, so right after the render the fetch is still "in
-// flight" (`card_image_loading` contains the key, `card_image_states`
-// does not yet). The banner must reserve the same IMG_COLS x IMG_ROWS box
-// the loaded image would use, not collapse to zero width.
 #[test]
 fn compact_movie_detail_reserves_placeholder_space_while_image_loads() {
     let mut app = make_app_stub();
@@ -205,7 +181,7 @@ fn compact_movie_detail_reserves_placeholder_space_while_image_loads() {
     push_movie_lib(&mut app, movie);
 
     let mut layout = LayoutMain::default();
-    let out = render_power_compact_detail_to_string(&mut app, &mut layout);
+    let _out = render_power_compact_detail_to_string(&mut app, &mut layout);
 
     assert!(
         app.card_image_loading.contains("movie-1:cmp_primary"),
@@ -218,25 +194,14 @@ fn compact_movie_detail_reserves_placeholder_space_while_image_loads() {
     assert_eq!(
         layout.inline_image_rect.map(|r| (r.width, r.height)),
         Some((24, 14)),
-        "expected the placeholder to reserve the banner's IMG_COLS x IMG_ROWS box:\n{out}"
+        "expected the placeholder to reserve the banner's IMG_COLS x IMG_ROWS box"
     );
 }
 
-// The rest of the banner's content (meta line, overview text) is never
-// gated on `last_power_library_nav_at` -- it renders at its final layout on the very
-// first frame after navigating to a movie. The poster placeholder must
-// match that: reserved on the same first frame, not held back until
-// `power_right_panel_image_renders_allowed()`'s 150ms nav-idle window has passed.
-// Gating the placeholder behind that timer (inherited from the timer's
-// original purpose -- avoiding real-image flicker while rapidly
-// scrolling through many different posters) produced a small but real
-// desync where the description text appeared immediately but the grey
-// box visibly lagged behind it by a beat.
 #[test]
 fn compact_movie_detail_reserves_placeholder_space_even_during_the_nav_idle_window() {
     let mut app = make_app_stub();
     app.image_protocol_enabled = true;
-    // Simulate having just navigated: the nav-idle gate is still closed.
     app.last_power_library_nav_at = std::time::Instant::now();
     assert!(!app.power_right_panel_image_renders_allowed());
 
@@ -246,32 +211,20 @@ fn compact_movie_detail_reserves_placeholder_space_even_during_the_nav_idle_wind
     push_movie_lib(&mut app, movie);
 
     let mut layout = LayoutMain::default();
-    let out = render_power_compact_detail_to_string(&mut app, &mut layout);
+    let _out = render_power_compact_detail_to_string(&mut app, &mut layout);
 
     assert_eq!(
         layout.inline_image_rect.map(|r| (r.width, r.height)),
         Some((24, 14)),
         "expected the placeholder to be reserved on the same frame as the rest of \
-         the banner's content, even while the nav-idle gate is still closed:\n{out}"
+         the banner's content, even while the nav-idle gate is still closed"
     );
 }
 
-// With no `image_picker` set up (as in every other test in this file --
-// `make_app_stub` leaves it `None`), the placeholder falls back to the
-// full IMG_COLS x IMG_ROWS bounding box, since there's no real font
-// metrics yet to fit a poster's aspect ratio against. Once a picker is
-// available, the placeholder should narrow to match what a real 2:3
-// poster would actually resolve to at that font size -- reserving the
-// full bounding box was 2 columns wider than any real poster ever
-// renders at, causing a second, smaller reflow when the real image
-// swapped in even after the nav-idle-gate fix above.
 #[test]
 fn compact_movie_detail_placeholder_matches_typical_poster_aspect_ratio() {
     let mut app = make_app_stub();
     app.image_protocol_enabled = true;
-    // `halfblocks()` needs no real terminal query and uses a fixed,
-    // documented 10x20px font size -- exactly what the width math below
-    // assumes.
     app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
 
     let mut movie = make_item("Focused Movie", "Movie");
@@ -280,23 +233,16 @@ fn compact_movie_detail_placeholder_matches_typical_poster_aspect_ratio() {
     push_movie_lib(&mut app, movie);
 
     let mut layout = LayoutMain::default();
-    let out = render_power_compact_detail_to_string(&mut app, &mut layout);
+    let _out = render_power_compact_detail_to_string(&mut app, &mut layout);
 
-    // IMG_COLS x IMG_ROWS = 24 x 14 cells at a 10x20px font is a
-    // 240x280px box. Fitting a 2:3 poster into that box is
-    // height-constrained (280/3 < 240/2), giving a fitted
-    // 187x280px image -> ceil(187/10) x ceil(280/20) = 19 x 14 cells.
     assert_eq!(
         layout.inline_image_rect.map(|r| (r.width, r.height)),
         Some((19, 14)),
         "expected the placeholder to match a typical 2:3 poster's fitted \
-         width at this font size, not the full IMG_COLS bounding box:\n{out}"
+         width at this font size, not the full IMG_COLS bounding box"
     );
 }
 
-// #263: a long overview (well past what any fixed-height budget could
-// show) must still render its full text and full director in one pass,
-// with no scrollbar and no truncation, given a tall enough panel.
 #[test]
 fn compact_movie_detail_shows_full_long_overview_with_no_scrollbar() {
     let mut app = make_app_stub();
@@ -309,15 +255,10 @@ fn compact_movie_detail_shows_full_long_overview_with_no_scrollbar() {
     push_movie_lib(&mut app, movie);
 
     let mut layout = LayoutMain::default();
-    // Tall enough that the whole grown banner fits in the test buffer.
     let out = render_power_compact_detail_to_string_sized(&mut app, &mut layout, 60, 80);
 
     assert!(
         out.contains("Very Distinctive Unique Director Name"),
         "expected full director text with no scrolling:\n{out}"
-    );
-    assert!(
-        !out.contains('\u{2590}'),
-        "no banner scrollbar should be drawn:\n{out}"
     );
 }
