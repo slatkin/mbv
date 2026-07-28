@@ -179,11 +179,26 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         "audio_pipe_bitdepth".to_string(),
         toml::Value::Integer(cfg.audio_pipe_bitdepth as i64),
     );
-    mbvd.insert("spectrum_snapserver_host".to_string(), toml::Value::String(cfg.spectrum_snapserver_host.clone()));
-    mbvd.insert("spectrum_snapserver_port".to_string(), toml::Value::Integer(cfg.spectrum_snapserver_port as i64));
-    mbvd.insert("spectrum_snapclient_host_id".to_string(), toml::Value::String(cfg.spectrum_snapclient_host_id.clone()));
-    mbvd.insert("spectrum_snapclient_instance".to_string(), toml::Value::Integer(cfg.spectrum_snapclient_instance as i64));
-    mbvd.insert("spectrum_fifo_path".to_string(), toml::Value::String(cfg.spectrum_fifo_path.clone()));
+    mbvd.insert(
+        "spectrum_snapserver_host".to_string(),
+        toml::Value::String(cfg.spectrum_snapserver_host.clone()),
+    );
+    mbvd.insert(
+        "spectrum_snapserver_port".to_string(),
+        toml::Value::Integer(cfg.spectrum_snapserver_port as i64),
+    );
+    mbvd.insert(
+        "spectrum_snapclient_host_id".to_string(),
+        toml::Value::String(cfg.spectrum_snapclient_host_id.clone()),
+    );
+    mbvd.insert(
+        "spectrum_snapclient_instance".to_string(),
+        toml::Value::Integer(cfg.spectrum_snapclient_instance as i64),
+    );
+    mbvd.insert(
+        "spectrum_fifo_path".to_string(),
+        toml::Value::String(cfg.spectrum_fifo_path.clone()),
+    );
     let mbvd_client = mbvd
         .entry("client".to_string())
         .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))

@@ -371,10 +371,10 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 );
             }
             DaemonEvent::CtrlDisconnected(client_id) => {
-                if spectrum_state
+                let last_subscriber_removed = spectrum_state
                     .as_mut()
-                    .is_some_and(|state| state.remove_subscriber(client_id))
-                {
+                    .map_or(false, |state| state.remove_subscriber(client_id));
+                if last_subscriber_removed {
                     if let Some(mut state) = spectrum_state.take() {
                         log::info!(target: "daemon", "stopping spectrum on last client disconnect");
                         state.stop();

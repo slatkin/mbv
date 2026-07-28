@@ -277,7 +277,10 @@ fn handle_ctrl(
             let config = client.lock().unwrap().config.clone();
             if let Err(error) = crate::visualizer::daemon_spectrum_prerequisites(&config) {
                 log::warn!(target: "daemon", "spectrum prerequisites unavailable: {error}");
-                send_to(request.reply_tx, &CtrlEvent::SpectrumFailed { reason: error });
+                send_to(
+                    request.reply_tx,
+                    &CtrlEvent::SpectrumFailed { reason: error },
+                );
                 return;
             }
             match SpectrumState::start(config, merged_tx.clone(), client_id) {
@@ -292,10 +295,10 @@ fn handle_ctrl(
             }
         }
         CtrlCmd::StopSpectrum => {
-            if spectrum_state
+            let last_subscriber_removed = spectrum_state
                 .as_mut()
-                .is_some_and(|state| state.remove_subscriber(client_id))
-            {
+                .map_or(false, |state| state.remove_subscriber(client_id));
+            if last_subscriber_removed {
                 if let Some(mut state) = spectrum_state.take() {
                     log::info!(target: "daemon", "spectrum streaming stopped");
                     state.stop();
