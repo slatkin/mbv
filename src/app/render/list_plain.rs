@@ -1,8 +1,8 @@
 use super::super::ui_util::*;
 use super::list_rows::{
-    build_list_row_spans, push_selected_detail_fillers_after, push_selected_detail_fillers_before,
-    render_series_detail_background, selected_detail_lower_bound, DisplayRow, ListRenderCtx,
-    COMPACT_BANNER_INDENT,
+    build_list_row_spans, focused_or_subtle, push_selected_detail_fillers_after,
+    push_selected_detail_fillers_before, render_series_detail_background,
+    selected_detail_lower_bound, DisplayRow, ListRenderCtx, COMPACT_BANNER_INDENT,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
@@ -187,11 +187,7 @@ impl App {
                     };
                     let name_w = avail.saturating_sub(dur_str.width());
                     let title = trunc_str(&item_name, name_w);
-                    let fg = if focused {
-                        palette::WHITE
-                    } else {
-                        palette::SUBTLE
-                    };
+                    let fg = focused_or_subtle(focused);
 
                     let is_series = item.item_type == "Series";
                     let spans = build_list_row_spans(

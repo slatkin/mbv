@@ -438,8 +438,8 @@ fn album_folder_inline_detail_keeps_title_gutter_when_library_pane_unfocused() {
     );
     assert_eq!(
         buf[(title_x, title_y as u16)].fg,
-        palette::WHITE,
-        "selected album title should keep its white text while unfocused:\n{out}"
+        palette::FOAM,
+        "selected album title should retain FOAM+BOLD while unfocused:\n{out}"
     );
 }
 
