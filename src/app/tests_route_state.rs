@@ -151,12 +151,13 @@ fn switch_to_direct_remote_disconnects_the_previous_remote_on_a_remote_to_remote
     daemon_a_stream
         .set_read_timeout(Some(Duration::from_secs(2)))
         .unwrap();
-    let mut buf = [0u8; 8];
-    let n = daemon_a_stream.read(&mut buf).unwrap_or(usize::MAX);
-    assert_eq!(
-        n, 0,
-        "old direct-remote client socket must be shut down after the swap"
-    );
+    // `stop_visualizer_worker` may have queued a final StopSpectrum command
+    // before the socket shutdown. Drain any such in-flight control bytes and
+    // require the peer to reach EOF within the timeout.
+    let mut pending_control_bytes = Vec::new();
+    daemon_a_stream
+        .read_to_end(&mut pending_control_bytes)
+        .expect("old direct-remote client socket must be shut down after the swap");
 
     drop(daemon_b);
     let _ = addr_b;
@@ -256,12 +257,13 @@ fn switch_to_library_route_disconnects_the_previous_remote_on_a_route_to_route_s
     daemon_a_stream
         .set_read_timeout(Some(Duration::from_secs(2)))
         .unwrap();
-    let mut buf = [0u8; 8];
-    let n = daemon_a_stream.read(&mut buf).unwrap_or(usize::MAX);
-    assert_eq!(
-        n, 0,
-        "old library route's client socket must be shut down after the swap"
-    );
+    // `stop_visualizer_worker` may have queued a final StopSpectrum command
+    // before the socket shutdown. Drain any such in-flight control bytes and
+    // require the peer to reach EOF within the timeout.
+    let mut pending_control_bytes = Vec::new();
+    daemon_a_stream
+        .read_to_end(&mut pending_control_bytes)
+        .expect("old library route's client socket must be shut down after the swap");
 
     drop(daemon_b);
     let _ = addr_b; // silence unused warning if daemon_b's thread hasn't been joined
