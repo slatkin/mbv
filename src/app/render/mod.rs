@@ -53,6 +53,8 @@ use super::{layout::AppLayout, palette, App, PanelFocus};
 use crate::app::layout::{LayoutMain, LayoutPlayback};
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::Widget;
 use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 use std::time::Instant;
@@ -67,8 +69,6 @@ use mbv_core::api::TICKS_PER_SECOND;
 use power_widgets::{render_power_scrollbar_with_viewport, POWER_TAB_LEFT_PAD};
 #[cfg(test)]
 use ratatui::style::Modifier;
-#[cfg(test)]
-use ratatui::text::Span;
 #[cfg(test)]
 use unicode_width::UnicodeWidthStr;
 
@@ -358,11 +358,18 @@ impl App {
             // the rows below it. Short terminals keep that same structure.
             let (card_h, _) = self.render_power_card(f, card_area);
             let left_remaining = left_content.height.saturating_sub(card_h);
+            // Reserve space for visualizer at the bottom of the queue panel
+            let visualizer_h = if self.visualizer_enabled && left_remaining >= 3 {
+                left_remaining.min(11)
+            } else {
+                0
+            };
+            let queue_h = left_remaining.saturating_sub(visualizer_h);
             (
                 right_area,
                 Rect {
                     y: left_content.y + card_h,
-                    height: left_remaining,
+                    height: queue_h,
                     ..left_content
                 },
             )
@@ -418,6 +425,34 @@ impl App {
         if !self.queue_column_collapsed {
             let queue_list_area = render_power_queue_panel_frame(f, queue_area, queue_focused);
             self.render_power_queue(f, queue_list_area, queue_focused, layout);
+            // Render visualizer at the bottom of the left panel (within queue panel bounds)
+            if self.visualizer_enabled {
+                let left_viz_area = Rect {
+                    x: left_content.x,
+                    y: left_content.y + left_content.height.saturating_sub(11),
+                    width: left_content.width,
+                    height: left_content.height.min(11),
+                };
+                if left_viz_area.height >= 3 {
+                    self.render_visualizer(f, left_viz_area);
+                    // Render horizontal rule at the bottom of the left visualizer
+                    let bottom_y = left_viz_area.y + left_viz_area.height - 1;
+                    let hr_text = "▁".repeat(left_viz_area.width as usize);
+                    let hr_line = Line::from(Span::styled(
+                        hr_text,
+                        Style::default()
+                            .fg(palette::SEEK_TRACK)
+                            .bg(palette::LIBRARY_SIDE_BG),
+                    ));
+                    let hr_area = Rect {
+                        x: left_viz_area.x,
+                        y: bottom_y,
+                        width: left_viz_area.width,
+                        height: 1,
+                    };
+                    Paragraph::new(vec![hr_line]).render(hr_area, f.buffer_mut());
+                }
+            }
         }
         let (library_area, visualizer_area) = self.split_visualizer_area(render_lib_area);
         self.render_visualizer(f, visualizer_area);
