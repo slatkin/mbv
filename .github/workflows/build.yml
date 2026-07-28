@@ -38,7 +38,6 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin/cargo-deb
-            ~/.cargo/bin/cargo-nextest
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
@@ -55,11 +54,8 @@ jobs:
           sed -i "s/^version = \".*\"/version = \"${PKGVER}\"/" Cargo.toml
           echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
 
-      - name: Install cargo-nextest
-        run: test -x ~/.cargo/bin/cargo-nextest || cargo install cargo-nextest --locked
-
       - name: Build and test
-        run: cargo nextest run --release --locked && cargo build --release
+        run: cargo test --release && cargo build --release
 
       - name: Bundle release tarball
         run: |
