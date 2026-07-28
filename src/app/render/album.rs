@@ -253,7 +253,7 @@ impl App {
                                 };
                                 let title_style = if selected {
                                     Style::default()
-                                        .fg(palette::WHITE)
+                                        .fg(palette::FOAM)
                                         .add_modifier(Modifier::BOLD)
                                 } else {
                                     Style::default().fg(palette::WHITE)
@@ -312,7 +312,7 @@ impl App {
                                 Span::styled(
                                     line.into_owned(),
                                     Style::default()
-                                        .fg(palette::WHITE)
+                                        .fg(palette::FOAM)
                                         .add_modifier(Modifier::BOLD),
                                 ),
                             ];
@@ -366,7 +366,7 @@ impl App {
 
                     let title_style = if selected && focused {
                         Style::default()
-                            .fg(palette::WHITE)
+                            .fg(palette::FOAM)
                             .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(palette::WHITE)

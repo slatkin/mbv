@@ -417,8 +417,8 @@ fn grouped_album_rows_use_styled_suffix_and_single_group_spacers() {
     let selected_title_x = lines[selected_album_y].find("Beta Album").unwrap() as u16;
     assert_eq!(
         buffer[(selected_title_x, selected_album_y as u16)].fg,
-        palette::WHITE,
-        "selected album titles should remain white"
+        palette::FOAM,
+        "selected album titles should be foam"
     );
 }
 
