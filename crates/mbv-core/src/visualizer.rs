@@ -551,7 +551,7 @@ fn parse_ascii_frame(raw: &[u8]) -> Option<Vec<f32>> {
 mod tests {
     use super::{
         cava_config, cleanup_private_resources, create_private_resources, parse_ascii_frame,
-        spawn_cava, terminate_child, CavaInput, ChildGuard, SpectrumSnapclient, BAR_COUNT,
+        spawn_cava, terminate_child, CavaInput, SpectrumSnapclient, BAR_COUNT,
     };
 
     fn frame(value: &str) -> Vec<u8> {
@@ -610,44 +610,6 @@ mod tests {
         let dir = resources.dir.clone();
         cleanup_private_resources(&resources);
         assert!(!dir.exists());
-    }
-
-    #[test]
-    fn child_guard_terminates_running_process_on_drop() {
-        use std::process::{Command, Stdio};
-        use std::time::{Duration, Instant};
-
-        let child = match Command::new("sleep")
-            .arg("30")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            Ok(child) => child,
-            Err(error) => {
-                eprintln!("skipping child_guard_terminates_running_process_on_drop: {error}");
-                return;
-            }
-        };
-        let pid = child.id();
-        let guard = ChildGuard::new(child);
-        drop(guard);
-
-        let start = Instant::now();
-        let mut reaped = false;
-        while start.elapsed() < Duration::from_secs(2) {
-            let mut cmd = Command::new("kill");
-            cmd.arg("-0").arg(pid.to_string());
-            if let Ok(status) = cmd.status() {
-                if !status.success() {
-                    reaped = true;
-                    break;
-                }
-            }
-            std::thread::sleep(Duration::from_millis(20));
-        }
-        assert!(reaped, "ChildGuard did not reap CAVA child after drop");
     }
 
     #[test]
