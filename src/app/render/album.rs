@@ -1,7 +1,9 @@
 use super::super::ui_util::trunc_str;
 use super::album_art::{INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS};
 use super::album_plan::GroupedAlbumDisplayRow;
-use super::list_rows::{focused_aqua_or_muted, focused_or_muted, focused_or_subtle};
+use super::list_rows::{
+    focused_aqua_or_muted, focused_or_muted, focused_or_muted_soft_white, focused_or_subtle,
+};
 use super::parse_album_folder_name;
 use crate::app::layout::LayoutMain;
 use crate::app::ArtistHeaderSelection;
@@ -191,17 +193,19 @@ impl App {
                 GroupedAlbumDisplayRow::Album(idx) => {
                     self.render_album_row(
                         f,
-                        row_area,
-                        *idx,
-                        &album_info,
-                        cursor,
-                        header_selected,
-                        avail,
-                        selected_block_bounds,
-                        selectable_headers,
-                        abs_row_idx,
-                        selected_art_reserved_w,
-                        focused,
+                        AlbumRowCtx {
+                            row_area,
+                            idx: *idx,
+                            album_info: &album_info,
+                            cursor,
+                            header_selected,
+                            avail,
+                            selected_block_bounds,
+                            selectable_headers,
+                            abs_row_idx,
+                            selected_art_reserved_w,
+                            focused,
+                        },
                     );
                 }
                 GroupedAlbumDisplayRow::AlbumActionHint => {
@@ -213,6 +217,7 @@ impl App {
                         abs_row_idx,
                         selected_art_reserved_w,
                         lib_idx,
+                        focused,
                     );
                 }
                 GroupedAlbumDisplayRow::ArtistActionHint => {
@@ -223,6 +228,7 @@ impl App {
                         selected_block_bounds,
                         abs_row_idx,
                         selected_art_reserved_w,
+                        focused,
                     );
                 }
                 GroupedAlbumDisplayRow::AlbumDetailStart(idx) => {
@@ -373,6 +379,23 @@ impl App {
 
 // ── Extracted row-rendering helpers ──────────────────────────────────
 
+/// Render-time inputs for `render_album_row`, bundled so the call takes one
+/// struct instead of a long positional argument list (mirrors the
+/// `ListRenderCtx` pattern in `list_rows.rs`).
+struct AlbumRowCtx<'a> {
+    row_area: Rect,
+    idx: usize,
+    album_info: &'a [(String, String, String)],
+    cursor: usize,
+    header_selected: bool,
+    avail: usize,
+    selected_block_bounds: Option<(usize, usize)>,
+    selectable_headers: bool,
+    abs_row_idx: usize,
+    selected_art_reserved_w: u16,
+    focused: bool,
+}
+
 impl App {
     fn render_artist_header_row(
         &self,
@@ -413,7 +436,7 @@ impl App {
             Style::default()
                 .fg(palette::YELLOW)
                 .add_modifier(Modifier::BOLD)
-        } else if focused {
+        } else if selected || focused {
             Style::default().fg(palette::YELLOW)
         } else {
             Style::default().fg(palette::SUBTLE)
@@ -429,22 +452,20 @@ impl App {
         f.render_widget(Paragraph::new(Line::from(spans)), label_area);
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn render_album_row(
-        &self,
-        f: &mut Frame,
-        row_area: Rect,
-        idx: usize,
-        album_info: &[(String, String, String)],
-        cursor: usize,
-        header_selected: bool,
-        avail: usize,
-        selected_block_bounds: Option<(usize, usize)>,
-        selectable_headers: bool,
-        abs_row_idx: usize,
-        selected_art_reserved_w: u16,
-        focused: bool,
-    ) {
+    fn render_album_row(&self, f: &mut Frame, ctx: AlbumRowCtx) {
+        let AlbumRowCtx {
+            row_area,
+            idx,
+            album_info,
+            cursor,
+            header_selected,
+            avail,
+            selected_block_bounds,
+            selectable_headers,
+            abs_row_idx,
+            selected_art_reserved_w,
+            focused,
+        } = ctx;
         let selected = idx == cursor && !header_selected;
         let (_, year_str, album_name) = &album_info[idx];
         let suffix_w = if year_str.is_empty() {
@@ -619,6 +640,7 @@ impl App {
         abs_row_idx: usize,
         selected_art_reserved_w: u16,
         lib_idx: usize,
+        focused: bool,
     ) {
         let in_selected_block = selected_block_bounds
             .is_some_and(|(top, bottom)| abs_row_idx > top && abs_row_idx < bottom);
@@ -645,7 +667,10 @@ impl App {
             .map(|line| {
                 Line::from(vec![
                     Span::raw(" ".repeat(gutter_w as usize)),
-                    Span::styled(line.into_owned(), Style::default().fg(palette::SOFT_WHITE)),
+                    Span::styled(
+                        line.into_owned(),
+                        Style::default().fg(focused_or_muted_soft_white(focused)),
+                    ),
                 ])
             })
             .collect();
@@ -666,6 +691,7 @@ impl App {
         selected_block_bounds: Option<(usize, usize)>,
         abs_row_idx: usize,
         selected_art_reserved_w: u16,
+        focused: bool,
     ) {
         let in_selected_block = selected_block_bounds
             .is_some_and(|(top, bottom)| abs_row_idx > top && abs_row_idx < bottom);
@@ -682,7 +708,10 @@ impl App {
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::raw(" ".repeat(gutter_w as usize)),
-                Span::styled(hint.to_string(), Style::default().fg(palette::SOFT_WHITE)),
+                Span::styled(
+                    hint.to_string(),
+                    Style::default().fg(focused_or_muted_soft_white(focused)),
+                ),
             ])),
             Rect {
                 width: row_area.width.saturating_sub(selected_art_reserved_w),

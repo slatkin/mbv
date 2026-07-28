@@ -49,6 +49,15 @@ pub(super) fn focused_aqua_or_muted(focused: bool) -> Color {
     }
 }
 
+/// Returns `palette::SOFT_WHITE` when `focused`, `palette::MUTED` otherwise.
+pub(super) fn focused_or_muted_soft_white(focused: bool) -> Color {
+    if focused {
+        palette::SOFT_WHITE
+    } else {
+        palette::MUTED
+    }
+}
+
 pub(super) enum DisplayRow {
     Spacer,
     LetterHeader(String),
