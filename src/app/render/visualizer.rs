@@ -5,7 +5,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use ratatui::Frame;
 
-const VISUALIZER_HEIGHT: u16 = 11;
+pub(super) const VISUALIZER_HEIGHT: u16 = 11;
 
 impl App {
     pub(super) fn split_visualizer_area(&self, area: Rect) -> (Rect, Rect) {
