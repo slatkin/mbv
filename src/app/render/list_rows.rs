@@ -22,6 +22,42 @@ pub(super) const COMPACT_BANNER_RULE_ROWS: usize = 1;
 pub(super) const COMPACT_BANNER_GAP_ROWS: usize = 1;
 pub(super) const COMPACT_BANNER_INDENT: u16 = 1;
 
+/// Returns `palette::WHITE` when `focused`, `palette::SUBTLE` otherwise.
+pub(super) fn focused_or_subtle(focused: bool) -> Color {
+    if focused {
+        palette::WHITE
+    } else {
+        palette::SUBTLE
+    }
+}
+
+/// Returns `palette::YELLOW` when `focused`, `palette::MUTED` otherwise.
+pub(super) fn focused_or_muted(focused: bool) -> Color {
+    if focused {
+        palette::YELLOW
+    } else {
+        palette::MUTED
+    }
+}
+
+/// Returns `palette::AQUA` when `focused`, `palette::MUTED` otherwise.
+pub(super) fn focused_aqua_or_muted(focused: bool) -> Color {
+    if focused {
+        palette::AQUA
+    } else {
+        palette::MUTED
+    }
+}
+
+/// Returns `palette::SOFT_WHITE` when `focused`, `palette::MUTED` otherwise.
+pub(super) fn focused_or_muted_soft_white(focused: bool) -> Color {
+    if focused {
+        palette::SOFT_WHITE
+    } else {
+        palette::MUTED
+    }
+}
+
 pub(super) enum DisplayRow {
     Spacer,
     LetterHeader(String),

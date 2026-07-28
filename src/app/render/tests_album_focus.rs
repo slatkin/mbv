@@ -406,9 +406,9 @@ fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {
 
 #[test]
 fn album_folder_inline_detail_keeps_title_gutter_when_library_pane_unfocused() {
-    // Selection now reads via a colored block + white title text, not the
-    // legacy `▌` marker -- confirm that block dims (rather than
-    // disappearing) and the title stays white when the pane loses focus.
+    // Selection now reads via a colored block + FOAM+BOLD title text, not
+    // the legacy `▌` marker -- confirm that block dims (rather than
+    // disappearing) and the title stays FOAM+BOLD when the pane loses focus.
     let mut app = make_power_music_group_app();
 
     let mut track = make_item("Opening Track", "Audio");
@@ -438,8 +438,14 @@ fn album_folder_inline_detail_keeps_title_gutter_when_library_pane_unfocused() {
     );
     assert_eq!(
         buf[(title_x, title_y as u16)].fg,
-        palette::WHITE,
-        "selected album title should keep its white text while unfocused:\n{out}"
+        palette::FOAM,
+        "selected album title should retain FOAM+BOLD while unfocused:\n{out}"
+    );
+    assert!(
+        buf[(title_x, title_y as u16)]
+            .modifier
+            .contains(ratatui::style::Modifier::BOLD),
+        "selected album title should retain FOAM+BOLD while unfocused:\n{out}"
     );
 }
 

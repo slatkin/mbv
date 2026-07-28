@@ -1,6 +1,7 @@
 use super::super::ui_util::*;
 use super::home_hero::KeepWatchingHeroLayout;
 use super::home_video::power_home_panel_scroll;
+use super::list_rows::focused_or_subtle;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -255,11 +256,7 @@ impl App {
                     // truncation kicks in, above).
                     let pad = avail.saturating_sub(title.width() + dur_str.width() + 1);
 
-                    let fg = if focused {
-                        palette::WHITE
-                    } else {
-                        palette::SUBTLE
-                    };
+                    let fg = focused_or_subtle(focused);
                     let mut spans: Vec<Span> = if selected_row && focused {
                         vec![
                             super::selection_marker(true),

@@ -1,4 +1,5 @@
 use super::super::ui_util::*;
+use super::list_rows::focused_or_subtle;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use ratatui::layout::*;
@@ -113,7 +114,7 @@ pub(super) fn render_home_video_item(
     } else if selected && focused {
         palette::IRIS
     } else {
-        palette::TEXT
+        focused_or_subtle(focused)
     };
     let title_style = if selected && focused {
         Style::default()
