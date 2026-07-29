@@ -8,7 +8,6 @@ pub const CTRL_PROTOCOL_VERSION: u32 = 4;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
-pub const CTRL_CAP_SPECTRUM: &str = "spectrum-streaming";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CtrlHello {
@@ -74,7 +73,6 @@ pub struct CtrlCompatibility {
     pub peer_protocol_version: u32,
     pub client_protocol_version: u32,
     pub supports_queue_append: bool,
-    pub supports_spectrum: bool,
 }
 
 impl CtrlCompatibility {
@@ -84,7 +82,6 @@ impl CtrlCompatibility {
                 peer_protocol_version,
                 client_protocol_version: CTRL_PROTOCOL_VERSION,
                 supports_queue_append: true,
-                supports_spectrum: false,
             }),
             _ => Err(format!(
                 "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
@@ -113,8 +110,6 @@ pub enum CtrlCmd {
         source: QueueSource,
     },
     Stop,
-    StartSpectrum,
-    StopSpectrum,
 }
 
 /// Wire-stable representation of a `PlayerCommand`, serialized across the
@@ -298,12 +293,6 @@ pub enum CtrlEvent {
     /// design so future rejection reasons (not just audio-only mode) can
     /// reuse it — see #90.
     CommandRejected(String),
-    Spectrum {
-        bars: Vec<f32>,
-    },
-    SpectrumFailed {
-        reason: String,
-    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -602,63 +591,5 @@ mod tests {
             },
             _ => panic!("expected PlayerCmd"),
         }
-    }
-
-    #[test]
-    fn start_spectrum_command_wire_tag_is_pinned() {
-        assert_eq!(
-            serde_json::to_string(&CtrlCmd::StartSpectrum).unwrap(),
-            "\"StartSpectrum\""
-        );
-    }
-
-    #[test]
-    fn stop_spectrum_command_wire_tag_is_pinned() {
-        assert_eq!(
-            serde_json::to_string(&CtrlCmd::StopSpectrum).unwrap(),
-            "\"StopSpectrum\""
-        );
-    }
-
-    #[test]
-    fn spectrum_event_wire_shape_is_pinned() {
-        let json = serde_json::to_string(&CtrlEvent::Spectrum {
-            bars: vec![0.0; 64],
-        })
-        .unwrap();
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        let obj = value.as_object().expect("tagged object");
-        assert_eq!(obj.len(), 1);
-        assert!(obj.contains_key("Spectrum"));
-        let inner = &obj["Spectrum"];
-        assert_eq!(inner["bars"].as_array().unwrap().len(), 64);
-    }
-
-    #[test]
-    fn spectrum_failed_event_wire_tag_is_pinned() {
-        let json = serde_json::to_string(&CtrlEvent::SpectrumFailed {
-            reason: "cava not found".to_string(),
-        })
-        .unwrap();
-        assert_eq!(json, r#"{"SpectrumFailed":{"reason":"cava not found"}}"#);
-    }
-
-    #[test]
-    fn player_spectrum_event_wire_tag_is_pinned() {
-        let json =
-            serde_json::to_string(&crate::player::PlayerEvent::Spectrum(vec![0.5; 64])).unwrap();
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        let obj = value.as_object().expect("tagged object");
-        assert!(obj.contains_key("Spectrum"));
-        assert_eq!(obj["Spectrum"].as_array().unwrap().len(), 64);
-    }
-
-    #[test]
-    fn player_spectrum_failed_event_wire_tag_is_pinned() {
-        let json = serde_json::to_string(&crate::player::PlayerEvent::SpectrumFailed(
-            "cava not found".to_string(),
-        ))
-        .unwrap();
-        assert_eq!(json, r#"{"SpectrumFailed":"cava not found"}"#);
     }
 }

@@ -230,11 +230,7 @@ fn perform_handshake(
     let ctrl_compatibility = match hello {
         CtrlEvent::Hello(info) => {
             info.validate_peer()?;
-            let mut compatibility = info.compatibility()?;
-            compatibility.supports_spectrum = info
-                .capabilities
-                .iter()
-                .any(|cap| cap == crate::ctrl::CTRL_CAP_SPECTRUM);
+            let compatibility = info.compatibility()?;
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",
@@ -341,16 +337,6 @@ fn apply_ctrl_event(
                         let _ = event_tx.send(PlayerEvent::EmbyAuthorityTaken(msg));
                     }
                 }
-            }
-        }
-        CtrlEvent::Spectrum { bars } => {
-            if notify {
-                let _ = event_tx.send(PlayerEvent::Spectrum(bars));
-            }
-        }
-        CtrlEvent::SpectrumFailed { reason } => {
-            if notify {
-                let _ = event_tx.send(PlayerEvent::SpectrumFailed(reason));
             }
         }
     }
@@ -628,10 +614,6 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_queue_append
     }
 
-    pub fn supports_spectrum(&self) -> bool {
-        self.ctrl_compatibility.supports_spectrum
-    }
-
     fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
             current_idx,
@@ -661,8 +643,7 @@ impl RemotePlayer {
         let disconnected = Arc::new(AtomicBool::new(false));
         let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
         let (_event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
-        let mut compat = CtrlCompatibility::current();
-        compat.supports_spectrum = true;
+        let compat = CtrlCompatibility::current();
         (
             RemotePlayer {
                 status,
@@ -677,16 +658,5 @@ impl RemotePlayer {
             event_rx,
             cmd_rx,
         )
-    }
-
-    /// Test helper variant for callers that need a remote handle without
-    /// spectrum support (e.g. testing visualizer toggle rejection).
-    pub fn stub_v2_with_command_rx(
-        items: Vec<MediaItem>,
-        current_idx: usize,
-    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
-        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
-        remote.ctrl_compatibility.supports_spectrum = false;
-        (remote, event_rx, cmd_rx)
     }
 }

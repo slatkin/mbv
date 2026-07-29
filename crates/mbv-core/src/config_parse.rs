@@ -89,32 +89,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         })
         .unwrap_or(32);
 
-    let spectrum_snapserver_host = mbvd
-        .and_then(|m| m.get("spectrum_snapserver_host"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("127.0.0.1")
-        .to_string();
-    let spectrum_snapserver_port = mbvd
-        .and_then(|m| m.get("spectrum_snapserver_port"))
-        .and_then(|v| v.as_integer())
-        .map(|v| v.clamp(1, u16::MAX as i64) as u16)
-        .unwrap_or(1704);
-    let spectrum_snapclient_host_id = mbvd
-        .and_then(|m| m.get("spectrum_snapclient_host_id"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("puffin-balls")
-        .to_string();
-    let spectrum_snapclient_instance = mbvd
-        .and_then(|m| m.get("spectrum_snapclient_instance"))
-        .and_then(|v| v.as_integer())
-        .map(|v| v.max(0) as u32)
-        .unwrap_or(2);
-    let spectrum_fifo_path = mbvd
-        .and_then(|m| m.get("spectrum_fifo_path"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("/tmp/mbv-spectrum.fifo")
-        .to_string();
-
     let always_play_next = queue
         .and_then(|q| q.get("always_play_next"))
         .and_then(|v| v.as_bool())
@@ -284,11 +258,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         audio_pipe_path,
         audio_pipe_samplerate,
         audio_pipe_bitdepth,
-        spectrum_snapserver_host,
-        spectrum_snapserver_port,
-        spectrum_snapclient_host_id,
-        spectrum_snapclient_instance,
-        spectrum_fifo_path,
         always_play_next,
         consume_videos,
         consume_audio,

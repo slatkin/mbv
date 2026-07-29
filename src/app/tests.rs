@@ -235,7 +235,6 @@ pub(crate) fn make_app_stub() -> App {
         mute_on: false,
         visualizer_enabled: false,
         visualizer_failed: false,
-        spectrum_started: false,
         visualizer: None,
         visualizer_frame: Vec::new(),
         sessions: Vec::new(),
@@ -419,21 +418,6 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
 
     let (remote, player_rx, cmd_rx) =
         mbv_core::remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
-    let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
-    app.player_tab.items = local_items;
-    app.player_tab.queue_cursor = 0;
-    (app, cmd_rx)
-}
-
-pub(crate) fn make_v2_remote_app_stub_with_cmd_rx(
-    local_items: Vec<MediaItem>,
-    remote_items: Vec<MediaItem>,
-) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
-    use crate::config::Config;
-    use mbv_core::api::EmbyClient;
-
-    let (remote, player_rx, cmd_rx) =
-        mbv_core::remote_player::RemotePlayer::stub_v2_with_command_rx(remote_items, 0);
     let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
     app.player_tab.items = local_items;
     app.player_tab.queue_cursor = 0;

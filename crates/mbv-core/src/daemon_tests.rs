@@ -1,7 +1,7 @@
 use super::{
     all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
-    CtrlRequest, DaemonEvent, SharedQueueState, SpectrumState,
+    CtrlRequest, DaemonEvent, SharedQueueState,
 };
 use crate::api::MediaItem;
 use crate::config::{Config, QueueSource};
@@ -97,54 +97,6 @@ fn shared_queue_state() -> SharedQueueState {
         cursor: Arc::new(Mutex::new(0)),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
     }
-}
-
-fn dummy_spectrum_ctx() -> (mpsc::Sender<DaemonEvent>, Option<SpectrumState>) {
-    let (tx, _rx) = mpsc::channel();
-    (tx, None)
-}
-
-#[test]
-fn spectrum_subscribers_stop_only_after_last_unsubscribe() {
-    let (stop_tx, _stop_rx) = mpsc::channel();
-    let mut state = SpectrumState {
-        reader: None,
-        stop_tx,
-        subscribers: std::collections::HashSet::from([1, 2]),
-    };
-
-    assert!(state.has_subscriber(1));
-    assert!(!state.remove_subscriber(1));
-    assert!(state.has_subscriber(2));
-    assert!(state.remove_subscriber(2));
-    assert!(!state.has_subscriber(1));
-}
-
-#[test]
-fn empty_spectrum_state_stop_is_idempotent() {
-    let (stop_tx, _stop_rx) = mpsc::channel();
-    let mut state = SpectrumState {
-        reader: None,
-        stop_tx,
-        subscribers: std::collections::HashSet::new(),
-    };
-
-    state.stop();
-    state.stop();
-}
-
-#[test]
-fn spectrum_child_failure_preserves_exit_status_and_diagnostics() {
-    use std::process::Command;
-
-    let status = Command::new("sh")
-        .args(["-c", "printf 'snapclient test failure\\n' >&2; exit 7"])
-        .status()
-        .expect("shell is available in CI");
-    let reason = super::spectrum_child_failure_reason(status, "snapclient test failure\n");
-
-    assert!(reason.contains("exit status: 7"));
-    assert!(reason.contains("snapclient test failure"));
 }
 
 fn cold_player() -> Player {
@@ -299,7 +251,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
     let mut items = Vec::new();
     let mut cursor = 0;
     let mut source = QueueSource::Unknown;
-    let (dummy_merged_tx, mut dummy_spectrum) = dummy_spectrum_ctx();
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::TogglePause)),
@@ -316,7 +268,6 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         &shared_queue_state(),
         &registry,
         &dummy_merged_tx,
-        &mut dummy_spectrum,
     );
 
     // The connection was already the driver from connect-time, so a
@@ -344,7 +295,7 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
     let mut items = vec![item("existing", "Video", "Movie")];
     let mut cursor = 0;
     let mut source = QueueSource::Remote;
-    let (dummy_merged_tx, mut dummy_spectrum) = dummy_spectrum_ctx();
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
         CtrlCmd::AdoptQueue {
@@ -365,7 +316,6 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &shared_queue_state(),
         &registry,
         &dummy_merged_tx,
-        &mut dummy_spectrum,
     );
 
     // The daemon's real queue is untouched by the rejected adoption.
@@ -414,7 +364,7 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
     ];
     let mut cursor = 1;
     let mut source = QueueSource::Remote;
-    let (dummy_merged_tx, mut dummy_spectrum) = dummy_spectrum_ctx();
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(1, 2))),
@@ -431,7 +381,6 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
         &shared_queue,
         &registry,
         &dummy_merged_tx,
-        &mut dummy_spectrum,
     );
 
     assert!(matches!(
@@ -489,7 +438,7 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
     let mut cursor = 1;
     let mut source = QueueSource::Remote;
     let appended = vec![item("item-2", "Video", "Movie")];
-    let (dummy_merged_tx, mut dummy_spectrum) = dummy_spectrum_ctx();
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueAppend {
@@ -508,7 +457,6 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
         &shared_queue,
         &registry,
         &dummy_merged_tx,
-        &mut dummy_spectrum,
     );
 
     assert!(matches!(
@@ -567,7 +515,7 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
     ];
     let mut cursor = 1;
     let mut source = QueueSource::Remote;
-    let (dummy_merged_tx, mut dummy_spectrum) = dummy_spectrum_ctx();
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(1, 2))),
@@ -584,7 +532,6 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
         &shared_queue,
         &registry,
         &dummy_merged_tx,
-        &mut dummy_spectrum,
     );
 
     assert!(player_cmd_rx.try_recv().is_err());
