@@ -117,7 +117,7 @@ pub fn render_power_library_to_string(app: &mut App, layout: &mut LayoutMain) ->
     buffer_to_string(&term)
 }
 
-pub fn render_power_view_to_terminal(
+pub fn render_view_to_terminal(
     app: &mut App,
     width: u16,
     height: u16,
@@ -142,8 +142,8 @@ pub fn render_power_view_to_terminal(
     (term, layout)
 }
 
-pub fn render_power_view(app: &mut App, width: u16, height: u16) -> LayoutMain {
-    render_power_view_to_terminal(app, width, height).1
+pub fn render_view(app: &mut App, width: u16, height: u16) -> LayoutMain {
+    render_view_to_terminal(app, width, height).1
 }
 
 pub fn make_power_movie_app() -> App {

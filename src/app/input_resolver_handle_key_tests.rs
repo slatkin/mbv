@@ -43,19 +43,16 @@ fn help_overlay_blocks_home_search_char_capture_via_handle_key() {
 }
 
 #[test]
-fn space_toggles_pause_when_active_via_handle_key() {
+fn space_toggles_pause_on_first_press_when_active_via_handle_key() {
     let mut app = make_app_stub();
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
     }
     let rx = app.player.spy_on_commands();
-    // Double-tap required: first press arms, second press fires.
+    // Double-tap required: first press arms, second within 300ms dispatches.
     app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
-    assert!(
-        rx.try_recv().is_err(),
-        "single space must not toggle pause (double-tap required)"
-    );
+    assert!(!matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
     app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
 }
@@ -74,66 +71,41 @@ fn space_does_not_toggle_pause_when_idle_via_handle_key() {
 }
 
 #[test]
-fn double_space_after_timeout_does_not_toggle_pause() {
-    use std::time::{Duration, Instant};
-
+fn repeated_space_dispatches_each_available_toggle() {
     let mut app = make_app_stub();
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
     }
     let rx = app.player.spy_on_commands();
-    // First press arms the double-tap.
+    // Double-tap required: each dispatch needs a pair of presses.
     app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
-    // Simulate the timestamp being far in the past (>300ms).
-    app.last_space_press = Some(Instant::now() - Duration::from_millis(500));
-    // Second press should NOT fire because the window expired.
     app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
-    assert!(
-        rx.try_recv().is_err(),
-        "second space after timeout must not toggle pause"
-    );
+    assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
+    app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+    app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+    assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
 }
 
 #[test]
-fn double_esc_stops_when_active() {
+fn esc_stops_on_first_press_when_active() {
     let mut app = make_app_stub();
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
     }
-    // Double-tap required: first press arms, second press fires.
     app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(
-        app.last_esc_press.is_some(),
-        "first Esc must arm the double-tap (last_esc_press set)"
-    );
-    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(
-        app.last_esc_press.is_none(),
-        "second Esc must fire and clear last_esc_press"
-    );
 }
 
 #[test]
-fn double_esc_after_timeout_does_not_stop() {
-    use std::time::{Duration, Instant};
-
+fn repeated_esc_remains_available_while_active() {
     let mut app = make_app_stub();
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
     }
-    // First press arms the double-tap.
     app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-    // Simulate the timestamp being far in the past (>300ms).
-    app.last_esc_press = Some(Instant::now() - Duration::from_millis(500));
-    // Second press should NOT fire because the window expired.
     app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(
-        app.last_esc_press.is_some(),
-        "second Esc after timeout must not clear last_esc_press"
-    );
 }
 
 #[test]
@@ -358,12 +330,12 @@ fn home_search_char_capture_wins_over_h_power_sidebar_toggle_via_handle_key() {
     );
     assert_eq!(
         app.queue_column_collapsed, collapsed_before,
-        "Power View sidebar must not toggle while home search captures 'h'"
+        "Sidebar must not toggle while home search captures 'h'"
     );
 }
 
 #[test]
-fn h_toggles_power_sidebar_in_power_view_via_handle_key() {
+fn h_toggles_sidebar_via_handle_key() {
     let mut app = make_app_stub();
     let before = app.queue_column_collapsed;
     app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
@@ -378,7 +350,7 @@ fn h_does_not_toggle_power_sidebar_while_context_menu_is_open_via_handle_key() {
     app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
     assert_eq!(
         app.queue_column_collapsed, before,
-        "Power View sidebar must not toggle while a context menu is open"
+        "Sidebar must not toggle while a context menu is open"
     );
 }
 

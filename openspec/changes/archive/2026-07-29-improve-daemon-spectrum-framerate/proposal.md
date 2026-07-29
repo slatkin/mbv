@@ -1,3 +1,7 @@
+> **Superseded (2026-07-29):** This change is superseded by `remove-daemon-spectrum-streaming`,
+> which removes the entire daemon spectrum streaming path. The temporary frame-rate
+> instrumentation is deleted along with the daemon FIFO path.
+
 ## Why
 
 The daemon's spectrum visualization is throttled to ~10 fps by the `POLL_INTERVAL_MS = 100ms` poll timeout in `CavaWorker`, despite CAVA being configured to produce 60 fps and the client render loop running at ~83 fps. This causes jerky, low-resolution visualizations that waste the CAVA pipeline's capacity and the client's rendering budget.

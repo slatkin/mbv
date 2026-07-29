@@ -110,7 +110,7 @@ impl App {
     }
 
     /// Renders the Continue/library list items into `area`.
-    /// The title header is now drawn in the top-of-screen FOAM bar by `render_power_view`.
+    /// The title header is now drawn in the top-of-screen FOAM bar.
     pub(super) fn render_power_list(
         &mut self,
         f: &mut Frame,

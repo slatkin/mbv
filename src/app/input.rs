@@ -131,13 +131,6 @@ impl App {
             if self.connected_session_id.is_some() {
                 return Some(false);
             }
-            if !self.visualizer_enabled
-                && self.player.is_remote()
-                && !self.player.supports_spectrum()
-            {
-                self.flash_status("Visualizer not supported by this daemon".to_string());
-                return Some(false);
-            }
             self.toggle_visualizer();
             Some(false)
         } else {

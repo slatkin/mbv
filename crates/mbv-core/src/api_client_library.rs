@@ -85,7 +85,7 @@ impl EmbyClient {
     /// Like `get_items_sorted`, but additionally scopes the fetch to a
     /// SortName range via Emby's `NameStartsWithOrGreater` /
     /// `NameLessThan` filters (`name_ge`/`name_lt`, either or both
-    /// optional) -- used by the Power View letter-range pills so only the
+    /// optional) -- used by the letter-range pills so only the
     /// selected range is fetched from the server. Verified empirically
     /// against a live Emby server (2026-07-22): these filters key off
     /// SortName, not the raw display Name, matching the app's own

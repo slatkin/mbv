@@ -12,7 +12,7 @@ use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
-// Power View re-renders frequently while scrolling; prefer a cheaper filter in
+// The main UI re-renders frequently while scrolling; prefer a cheaper filter in
 // these hot paths to reduce terminal image preparation stalls.
 pub(super) const POWER_RENDER_FILTER: ratatui_image::FilterType =
     ratatui_image::FilterType::Triangle;
@@ -21,10 +21,10 @@ pub(super) const POWER_RENDER_FILTER: ratatui_image::FilterType =
 // album containers do not reliably expose usable Primary images.
 pub(super) const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];
 
-/// Columns of empty space between the left and right panels in power view.
-pub(super) const POWER_VIEW_GAP: u16 = 0;
+/// Columns of empty space between the left and right panels.
+pub(super) const COLUMN_GAP: u16 = 0;
 
-/// Left-edge padding applied once to every power-view tab's content area
+/// Left-edge padding applied once to every tab's content area
 /// (Home, library lists, music groups, albums, series, home-video, feed
 /// groups) plus the music-group pills row, so all tabs share a consistent
 /// gutter. Applied at the single dispatch chokepoint in the main render
@@ -311,7 +311,7 @@ pub(super) fn build_power_queue_rows(items: &[MediaItem]) -> (Vec<QueueRow>, Vec
 
 /// Style for a selector pill (group/section/artist tab row): dark active text
 /// on YELLOW, yellow inactive text on the dark pill background. Shared by
-/// every power-view pill row (home's group/section pills, music's group
+/// every pill row (home's group/section pills, music's group
 /// pills) so they can't drift apart on the selected-vs-unselected look.
 pub(super) fn selector_pill_style(selected: bool) -> Style {
     if selected {
@@ -347,7 +347,7 @@ pub(super) fn render_power_count_label(f: &mut Frame, area: Rect, count: usize) 
     }
 }
 
-/// The shared left cursor marker span used by every power-view list row.
+/// The shared left cursor marker span used by every list row.
 /// `active` (row is both selected and focused) renders the AQUA half-block
 /// `▌`; otherwise a single blank space so unselected rows stay aligned.
 /// Only the marker glyph is unified here -- each renderer keeps its own
@@ -360,7 +360,7 @@ pub(super) fn selection_marker(active: bool) -> Span<'static> {
     }
 }
 
-/// Width in columns reserved for a power-view list's scrollbar gutter.
+/// Width in columns reserved for a list's scrollbar gutter.
 pub(super) const POWER_SCROLLBAR_GUTTER: u16 = 1;
 
 /// Usable text width of a list column of the given `width` once the
@@ -383,7 +383,7 @@ pub(super) enum PillUnderlay {
     Blank { fill: bool },
 }
 
-/// A horizontally-scrolling row of selector pills, shared by every power-view
+/// A horizontally-scrolling row of selector pills, shared by every
 /// pill bar (Home's "Newest" section pills, feed-group tabs, music-group
 /// tabs) so their scroll/overflow/selection behavior can't drift apart.
 /// Callers pre-truncate `labels`, supply the parallel `ids` recorded as click

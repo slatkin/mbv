@@ -1,7 +1,7 @@
 use super::{App, PanelFocus};
 
 impl App {
-    /// Number of selectable left-panel tabs in Power View: Home/CW + all libraries.
+    /// Number of selectable left-panel tabs: Home/CW + all libraries.
     pub(super) fn library_tab_count(&self) -> usize {
         1 + self.libs.len()
     }

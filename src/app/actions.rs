@@ -193,9 +193,12 @@ impl App {
                 self.apply_route_for_playback(&item);
             }
         }
-        self.on_queue_replace_silent();
+        let direct_remote = self.has_direct_remote_queue();
+        if !direct_remote {
+            self.on_queue_replace_silent();
+        }
         self.set_queue_scope(self.playback_target_queue_scope());
-        // Keep library focus when playing from the power-view library panel.
+        // Keep library focus when playing from the library panel.
         if !matches!(self.panel_focus, PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
@@ -217,6 +220,11 @@ impl App {
             return;
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
+        if direct_remote {
+            if let Some(item) = items.get(start_idx) {
+                self.flash_status(format!("Requesting playback: {}", item.playback_label()));
+            }
+        }
         self.player.play_queue(
             items,
             start_idx,
@@ -235,8 +243,11 @@ impl App {
         } else {
             self.apply_route_for_playback(&item);
         }
-        self.on_queue_replace_silent();
-        // Keep library focus when playing from the power-view library panel.
+        let direct_remote = self.has_direct_remote_queue();
+        if !direct_remote {
+            self.on_queue_replace_silent();
+        }
+        // Keep library focus when playing from the library panel.
         if !matches!(self.panel_focus, PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
@@ -256,8 +267,10 @@ impl App {
             drop(c);
             if episodes.len() > 1 {
                 let c = Arc::new(self.client.lock().unwrap().clone());
-                self.on_queue_replace_silent();
-                self.replace_playback_queue(episodes.clone(), 0);
+                if !direct_remote {
+                    self.on_queue_replace_silent();
+                    self.replace_playback_queue(episodes.clone(), 0);
+                }
                 self.queue_source = crate::config::QueueSource::Series;
                 self.player
                     .play_queue(episodes, 0, self.queue_source.clone(), c, self.ui_volume);
@@ -270,7 +283,11 @@ impl App {
             }
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
-        self.replace_playback_queue(vec![item.clone()], 0);
+        if !direct_remote {
+            self.replace_playback_queue(vec![item.clone()], 0);
+        } else {
+            self.flash_status(format!("Requesting playback: {label}"));
+        }
         self.player
             .play(&item, self.queue_source.clone(), c, self.ui_volume);
         self.player

@@ -375,6 +375,15 @@ impl App {
                     self.playlists_open_loading = false;
                 }
             }
+            LibEvent::PlaylistRenamed { new_name } => {
+                self.save_playlist_dialog = None;
+                self.force_clear = true;
+                self.flash_status(format!("Renamed to '{new_name}'"));
+            }
+            LibEvent::PlaylistDeleted { name } => {
+                self.confirm_modal = None;
+                self.flash_status(format!("Deleted '{name}'"));
+            }
             LibEvent::QueueEnriched { items } => {
                 let _ = self.merge_refreshed_queue(QueueScope::Local, items);
             }

@@ -16,11 +16,6 @@ pub struct Config {
     pub audio_pipe_path: String,
     pub audio_pipe_samplerate: u32, // fixed output rate forced on the pipe (Hz); mpv resamples everything to this
     pub audio_pipe_bitdepth: u8,    // fixed PCM bit depth for the pipe (16|24|32)
-    pub spectrum_snapserver_host: String,
-    pub spectrum_snapserver_port: u16,
-    pub spectrum_snapclient_host_id: String,
-    pub spectrum_snapclient_instance: u32,
-    pub spectrum_fifo_path: String,
     pub always_play_next: bool,
     pub consume_videos: bool,
     pub consume_audio: bool,
@@ -94,11 +89,6 @@ impl Default for Config {
             audio_pipe_path: "/tmp/mbv-pipe".to_string(),
             audio_pipe_samplerate: 192_000,
             audio_pipe_bitdepth: 32,
-            spectrum_snapserver_host: "127.0.0.1".to_string(),
-            spectrum_snapserver_port: 1704,
-            spectrum_snapclient_host_id: "puffin-balls".to_string(),
-            spectrum_snapclient_instance: 2,
-            spectrum_fifo_path: "/tmp/mbv-spectrum.fifo".to_string(),
             always_play_next: false,
             consume_videos: false,
             consume_audio: false,

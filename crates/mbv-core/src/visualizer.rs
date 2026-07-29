@@ -27,11 +27,8 @@ enum Startup {
     Failed(String),
 }
 
-#[derive(Clone, Debug)]
-pub enum CavaInput {
-    System,
-    Fifo(PathBuf),
-}
+/// Local-only CAVA input uses system audio (PulseAudio).
+/// The FIFO-based daemon spectrum path has been removed.
 
 /// Owns one CAVA child, its private raw-output FIFO, and the bounded frame queue.
 pub struct CavaWorker {
@@ -42,14 +39,10 @@ pub struct CavaWorker {
 
 impl CavaWorker {
     pub fn start() -> Result<Self, String> {
-        Self::start_with_input(CavaInput::System)
-    }
-
-    pub fn start_with_input(input: CavaInput) -> Result<Self, String> {
         let (stop_tx, stop_rx) = mpsc::channel();
         let (startup_tx, startup_rx) = mpsc::channel();
         let (frames_tx, frames_rx) = mpsc::sync_channel(FRAME_QUEUE_CAPACITY);
-        let handle = thread::spawn(move || run_worker(stop_rx, startup_tx, frames_tx, input));
+        let handle = thread::spawn(move || run_worker(stop_rx, startup_tx, frames_tx));
 
         match startup_rx.recv_timeout(STARTUP_TIMEOUT) {
             Ok(Startup::Started) => Ok(Self {
@@ -118,9 +111,8 @@ fn run_worker(
     stop_rx: Receiver<()>,
     startup_tx: mpsc::Sender<Startup>,
     frames_tx: SyncSender<Vec<f32>>,
-    input: CavaInput,
 ) {
-    let resources = match create_private_resources(&input) {
+    let resources = match create_private_resources() {
         Ok(resources) => resources,
         Err(error) => {
             let _ = startup_tx.send(Startup::Failed(format!(
@@ -255,7 +247,7 @@ struct PrivateResources {
     config: PathBuf,
 }
 
-fn create_private_resources(input: &CavaInput) -> io::Result<PrivateResources> {
+fn create_private_resources() -> io::Result<PrivateResources> {
     let suffix = RESOURCE_COUNTER.fetch_add(1, Ordering::Relaxed);
     let base = std::env::var_os("XDG_RUNTIME_DIR")
         .filter(|v| !v.is_empty())
@@ -290,10 +282,7 @@ fn create_private_resources(input: &CavaInput) -> io::Result<PrivateResources> {
         let _ = fs::remove_dir(&dir);
         return Err(error);
     }
-    let input_config = match input {
-        CavaInput::System => "method = pulse".to_string(),
-        CavaInput::Fifo(path) => format!("method = fifo\nsource = {}", path.display()),
-    };
+    let input_config = "method = pulse".to_string();
     if let Err(error) = fs::write(&config, cava_config(output_path, &input_config)) {
         let resources = PrivateResources { dir, fifo, config };
         cleanup_private_resources(&resources);
@@ -400,128 +389,6 @@ impl Drop for ChildGuard {
     }
 }
 
-/// Checks static requirements without starting any audio process.
-pub fn daemon_spectrum_prerequisites(config: &crate::config::Config) -> Result<(), String> {
-    if !config.audio_pipe_enabled {
-        return Err("daemon spectrum requires audio_pipe_enabled = true".to_string());
-    }
-    for executable in ["cava", "snapclient"] {
-        if !executable_in_path(executable) {
-            return Err(format!(
-                "required executable '{executable}' was not found in PATH"
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn executable_in_path(name: &str) -> bool {
-    std::env::var_os("PATH")
-        .into_iter()
-        .flat_map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
-        .map(|dir| dir.join(name))
-        .any(|path| {
-            path.is_file() && {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    path.metadata()
-                        .map(|m| m.permissions().mode() & 0o111 != 0)
-                        .unwrap_or(false)
-                }
-                #[cfg(not(unix))]
-                {
-                    true
-                }
-            }
-        })
-}
-
-pub struct SpectrumSnapclient {
-    _guard: ChildGuard,
-    fifo: PathBuf,
-}
-
-impl SpectrumSnapclient {
-    pub fn start(config: &crate::config::Config) -> Result<Self, String> {
-        let fifo = PathBuf::from(&config.spectrum_fifo_path);
-        let path = fifo
-            .to_str()
-            .ok_or_else(|| "spectrum FIFO path is not valid UTF-8".to_string())?;
-        let cpath = std::ffi::CString::new(path)
-            .map_err(|_| "spectrum FIFO path contains NUL".to_string())?;
-        match unsafe { libc::mkfifo(cpath.as_ptr(), 0o600) } {
-            0 => {}
-            _ if io::Error::last_os_error().kind() == io::ErrorKind::AlreadyExists => {
-                let _ = fs::remove_file(&fifo);
-                let result = unsafe { libc::mkfifo(cpath.as_ptr(), 0o600) };
-                if result != 0 {
-                    return Err(format!(
-                        "failed to recreate spectrum FIFO {path}: {}",
-                        io::Error::last_os_error()
-                    ));
-                }
-            }
-            _ => {
-                return Err(format!(
-                    "failed to create spectrum FIFO {path}: {}",
-                    io::Error::last_os_error()
-                ))
-            }
-        }
-        let child = match Command::new("snapclient")
-            .arg("--host")
-            .arg(&config.spectrum_snapserver_host)
-            .arg("--port")
-            .arg(config.spectrum_snapserver_port.to_string())
-            .arg("--hostID")
-            .arg(&config.spectrum_snapclient_host_id)
-            .arg("--instance")
-            .arg(config.spectrum_snapclient_instance.to_string())
-            .arg("--player")
-            .arg(format!("file:filename={path},mode=w"))
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
-            Ok(child) => child,
-            Err(error) => {
-                let _ = fs::remove_file(&fifo);
-                return Err(format!("failed to start snapclient: {error}"));
-            }
-        };
-        let mut guard = ChildGuard::new(child);
-        thread::sleep(CHILD_STARTUP_GRACE);
-        if let Ok(Some(status)) = guard.try_wait() {
-            let diagnostics = guard.take_stderr();
-            let _ = fs::remove_file(&fifo);
-            return Err(format!(
-                "snapclient exited during startup with {status}: {}",
-                diagnostics.trim()
-            ));
-        }
-        Ok(Self {
-            _guard: guard,
-            fifo,
-        })
-    }
-
-    pub fn try_wait(&mut self) -> io::Result<Option<std::process::ExitStatus>> {
-        self._guard.try_wait()
-    }
-
-    pub fn diagnostics(&mut self) -> String {
-        self._guard.take_stderr()
-    }
-}
-
-impl Drop for SpectrumSnapclient {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.fifo);
-    }
-}
-
 fn terminate_child(child: &mut Child) {
     if child.try_wait().ok().flatten().is_none() {
         let _ = child.kill();
@@ -551,7 +418,7 @@ fn parse_ascii_frame(raw: &[u8]) -> Option<Vec<f32>> {
 mod tests {
     use super::{
         cava_config, cleanup_private_resources, create_private_resources, parse_ascii_frame,
-        spawn_cava, terminate_child, CavaInput, SpectrumSnapclient, BAR_COUNT,
+        spawn_cava, terminate_child, BAR_COUNT,
     };
 
     fn frame(value: &str) -> Vec<u8> {
@@ -571,17 +438,6 @@ mod tests {
         assert!(config.contains("sensitivity = 200"));
         assert!(!config.contains("source ="));
         assert!(!config.contains("module-") && !config.contains("audio-device"));
-    }
-
-    #[test]
-    fn cava_config_supports_daemon_fifo_input() {
-        let config = cava_config(
-            "/tmp/private-cava.fifo",
-            "method = fifo\nsource = /tmp/mbv-spectrum.fifo",
-        );
-        assert!(config.contains("method = fifo"));
-        assert!(config.contains("source = /tmp/mbv-spectrum.fifo"));
-        assert!(config.contains("method = raw"));
     }
 
     #[test]
@@ -605,8 +461,7 @@ mod tests {
 
     #[test]
     fn private_resources_are_removed_after_worker_shutdown() {
-        let resources =
-            create_private_resources(&CavaInput::System).expect("private CAVA resources");
+        let resources = create_private_resources().expect("private CAVA resources");
         let dir = resources.dir.clone();
         cleanup_private_resources(&resources);
         assert!(!dir.exists());
@@ -636,7 +491,7 @@ mod tests {
         let _ = std::fs::create_dir_all(&with_empty);
         env::set_var("PATH", &with_empty);
 
-        let path = create_private_resources(&CavaInput::System).expect("private CAVA resources");
+        let path = create_private_resources().expect("private CAVA resources");
         let result = spawn_cava(&path.config);
         cleanup_private_resources(&path);
 
@@ -647,32 +502,5 @@ mod tests {
 
         let err = result.expect_err("spawn must fail when cava is absent");
         assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
-    }
-
-    #[test]
-    fn snapclient_start_failure_removes_configured_fifo() {
-        use std::env;
-
-        let original_path = env::var_os("PATH");
-        let mut empty_path = env::temp_dir();
-        empty_path.push("mbv-snapclient-empty-path");
-        let _ = std::fs::create_dir_all(&empty_path);
-        env::set_var("PATH", &empty_path);
-
-        let mut config = crate::config::Config::default();
-        config.spectrum_fifo_path = env::temp_dir()
-            .join(format!("mbv-spectrum-test-{}.fifo", std::process::id()))
-            .display()
-            .to_string();
-        let fifo = std::path::PathBuf::from(&config.spectrum_fifo_path);
-        let result = SpectrumSnapclient::start(&config);
-
-        match original_path {
-            Some(value) => env::set_var("PATH", value),
-            None => env::remove_var("PATH"),
-        }
-
-        assert!(result.is_err());
-        assert!(!fifo.exists());
     }
 }

@@ -1,12 +1,14 @@
 use std::io::{BufRead, BufReader, Write};
-use std::collections::HashSet;
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, MediaItem};
-use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason};
+use crate::ctrl::{
+    CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason, PlaybackGeneration, PlaybackIntent,
+    PlaybackIntentAction, PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
+};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 
@@ -45,131 +47,16 @@ enum DaemonEvent {
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.
     Ctrl(CtrlCmd, CtrlClientId, CtrlSender),
-    CtrlDisconnected(CtrlClientId),
-    /// A spectrum frame from the daemon's spectrum reader thread, carrying
-    /// 64 normalized bar values (0.0–1.0) from `CavaWorker::take_latest_frame()`.
-    Spectrum(Vec<f32>),
-    /// The spectrum reader thread detected a CAVA failure.
-    SpectrumFailed {
-        reason: String,
+    PlaybackResolved {
+        command: CtrlCmd,
+        client_id: CtrlClientId,
+        reply_tx: CtrlSender,
+        request_id: PlaybackRequestId,
+        generation: PlaybackGeneration,
+        fetched: Result<Vec<MediaItem>, String>,
     },
+    CtrlDisconnected(CtrlClientId),
     Shutdown,
-}
-
-/// Daemon-local state for an active spectrum streaming session.
-///
-/// Holds the reader thread that converts frames from
-/// `CavaWorker::take_latest_frame()` into `DaemonEvent::Spectrum` messages.
-/// The `CavaWorker` is owned by the reader thread and dropped when it exits.
-/// The `stop()` method is idempotent — safe to call from `StopSpectrum`,
-/// `CtrlDisconnected`, playback stop, and shutdown paths.
-pub(crate) struct SpectrumState {
-    reader: Option<std::thread::JoinHandle<()>>,
-    stop_tx: std::sync::mpsc::Sender<()>,
-    subscribers: HashSet<CtrlClientId>,
-}
-
-fn spectrum_child_failure_reason(status: std::process::ExitStatus, diagnostics: &str) -> String {
-    format!(
-        "Snapclient exited during spectrum streaming with {status}: {}",
-        diagnostics.trim()
-    )
-}
-
-impl SpectrumState {
-    fn start(
-        config: crate::config::Config,
-        merged_tx: mpsc::Sender<DaemonEvent>,
-        subscriber: CtrlClientId,
-    ) -> Result<Self, String> {
-        let snapclient = crate::visualizer::SpectrumSnapclient::start(&config)?;
-        let worker = match crate::visualizer::CavaWorker::start_with_input(
-            crate::visualizer::CavaInput::Fifo(config.spectrum_fifo_path.into()),
-        ) {
-            Ok(worker) => worker,
-            Err(error) => {
-                drop(snapclient);
-                return Err(error);
-            }
-        };
-        let (stop_tx, stop_rx) = mpsc::channel();
-        let reader = std::thread::spawn(move || {
-            let mut snapclient = snapclient;
-            loop {
-                if stop_rx.try_recv().is_ok() {
-                    break;
-                }
-                if let Ok(Some(status)) = snapclient.try_wait() {
-                    let diagnostics = snapclient.diagnostics();
-                    let _ = merged_tx.send(DaemonEvent::SpectrumFailed {
-                        reason: spectrum_child_failure_reason(status, &diagnostics),
-                    });
-                    break;
-                }
-                match worker.take_latest_frame() {
-                    Ok(Some(frame)) => {
-                        let _ = merged_tx.send(DaemonEvent::Spectrum(frame));
-                    }
-                    Ok(None) => {
-                        std::thread::sleep(std::time::Duration::from_millis(16));
-                    }
-                    Err(()) => {
-                        let _ = merged_tx.send(DaemonEvent::SpectrumFailed {
-                            reason: "CAVA worker channel closed".to_string(),
-                        });
-                        break;
-                    }
-                }
-            }
-            drop(worker);
-        });
-        Ok(Self {
-            reader: Some(reader),
-            stop_tx,
-            subscribers: HashSet::from([subscriber]),
-        })
-    }
-
-    fn add_subscriber(&mut self, client_id: CtrlClientId) {
-        self.subscribers.insert(client_id);
-    }
-
-    fn remove_subscriber(&mut self, client_id: CtrlClientId) -> bool {
-        self.subscribers.remove(&client_id);
-        self.subscribers.is_empty()
-    }
-
-    fn has_subscriber(&self, client_id: CtrlClientId) -> bool {
-        self.subscribers.contains(&client_id)
-    }
-
-    /// Idempotent stop: signals the reader thread to exit and joins it with
-    /// a timeout. Safe to call multiple times.
-    pub(crate) fn stop(&mut self) {
-        let _ = self.stop_tx.send(());
-        if let Some(handle) = self.reader.take() {
-            let started = std::time::Instant::now();
-            let join_timeout = std::time::Duration::from_millis(500);
-            let (done_tx, done_rx) = mpsc::channel();
-            std::thread::spawn(move || {
-                let _ = handle.join();
-                let _ = done_tx.send(());
-            });
-            if done_rx.recv_timeout(join_timeout).is_err() {
-                log::warn!(
-                    target: "daemon",
-                    "spectrum reader thread did not join within {}ms; detaching",
-                    join_timeout.as_millis()
-                );
-                return;
-            }
-            log::debug!(
-                target: "daemon",
-                "spectrum reader thread joined in {}ms",
-                started.elapsed().as_millis()
-            );
-        }
-    }
 }
 
 type CtrlClientId = u64;
@@ -228,6 +115,193 @@ type ClientRegistry = Arc<Mutex<CtrlClients>>;
 
 struct CtrlRequest<'a> {
     reply_tx: &'a CtrlSender,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlaybackIntentPhase {
+    Accepted,
+    Resolving,
+    Starting,
+    Applied,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct CurrentPlaybackIntent {
+    connection_id: CtrlClientId,
+    request_id: PlaybackRequestId,
+    generation: PlaybackGeneration,
+    action: PlaybackIntentAction,
+    phase: PlaybackIntentPhase,
+    /// The index this intent is expected to land on, set when the action is
+    /// executed (e.g. the `next_idx()` computed at command time for `Next`).
+    /// `None` until the command is actually dispatched; used by the
+    /// `TrackChanged` handler to avoid crediting natural track transitions
+    /// (end-of-file auto-advance) to a pending Next/Previous intent.
+    target_idx: Option<usize>,
+}
+
+/// Daemon-owned lifecycle state for the guarded direct-playback protocol.
+/// Keeping this separate from the player status prevents queued commands and
+/// early active flags from being mistaken for confirmed playback state.
+#[derive(Default)]
+struct PlaybackIntentState {
+    current: Option<CurrentPlaybackIntent>,
+}
+
+impl PlaybackIntentState {
+    fn is_current(
+        &self,
+        connection_id: CtrlClientId,
+        request_id: PlaybackRequestId,
+        generation: PlaybackGeneration,
+    ) -> bool {
+        self.current.as_ref().is_some_and(|current| {
+            current.connection_id == connection_id
+                && current.request_id == request_id
+                && current.generation == generation
+        })
+    }
+
+    fn accept(
+        &mut self,
+        connection_id: CtrlClientId,
+        intent: PlaybackIntent,
+    ) -> Vec<PlaybackIntentEvent> {
+        if let Some(current) = &self.current {
+            let unresolved = current.phase != PlaybackIntentPhase::Applied;
+            if unresolved && current.connection_id == connection_id {
+                let equivalent = current.action == intent.action
+                    || matches!(
+                        (&current.action, &intent.action),
+                        (PlaybackIntentAction::Next, PlaybackIntentAction::Next)
+                            | (
+                                PlaybackIntentAction::Previous,
+                                PlaybackIntentAction::Previous
+                            )
+                    );
+                if equivalent {
+                    return vec![PlaybackIntentEvent {
+                        request_id: intent.request_id,
+                        generation: intent.generation,
+                        outcome: PlaybackIntentOutcome::Coalesced {
+                            canonical_request_id: current.request_id,
+                        },
+                    }];
+                }
+                if matches!(intent.action, PlaybackIntentAction::Stop)
+                    || matches!(
+                        (&current.action, &intent.action),
+                        (
+                            PlaybackIntentAction::Play { .. },
+                            PlaybackIntentAction::Play { .. }
+                        )
+                    )
+                {
+                    let superseded = PlaybackIntentEvent {
+                        request_id: current.request_id,
+                        generation: current.generation,
+                        outcome: PlaybackIntentOutcome::Superseded,
+                    };
+                    self.current = None;
+                    let accepted = self.accept(connection_id, intent);
+                    let mut events = vec![superseded];
+                    events.extend(accepted);
+                    return events;
+                }
+            }
+        }
+        let event = PlaybackIntentEvent {
+            request_id: intent.request_id,
+            generation: intent.generation,
+            outcome: PlaybackIntentOutcome::Accepted,
+        };
+        self.current = Some(CurrentPlaybackIntent {
+            connection_id,
+            request_id: intent.request_id,
+            generation: intent.generation,
+            action: intent.action,
+            phase: PlaybackIntentPhase::Accepted,
+            target_idx: None,
+        });
+        vec![event]
+    }
+
+    fn mark_resolving(&mut self, request_id: PlaybackRequestId) {
+        if let Some(current) = &mut self.current {
+            if current.request_id == request_id {
+                current.phase = PlaybackIntentPhase::Resolving;
+            }
+        }
+    }
+
+    fn mark_starting(&mut self, request_id: PlaybackRequestId) {
+        if let Some(current) = &mut self.current {
+            if current.request_id == request_id {
+                current.phase = PlaybackIntentPhase::Starting;
+            }
+        }
+    }
+
+    fn set_target_idx(&mut self, request_id: PlaybackRequestId, idx: usize) {
+        if let Some(current) = &mut self.current {
+            if current.request_id == request_id {
+                current.target_idx = Some(idx);
+            }
+        }
+    }
+
+    fn applied_if_current(
+        &mut self,
+        connection_id: CtrlClientId,
+        request_id: PlaybackRequestId,
+        generation: PlaybackGeneration,
+    ) -> Option<PlaybackIntentEvent> {
+        let current = self.current.as_mut()?;
+        if current.connection_id != connection_id
+            || current.request_id != request_id
+            || current.generation != generation
+        {
+            return None;
+        }
+        current.phase = PlaybackIntentPhase::Applied;
+        Some(PlaybackIntentEvent {
+            request_id,
+            generation,
+            outcome: PlaybackIntentOutcome::Applied,
+        })
+    }
+
+    fn rejected_if_current(
+        &mut self,
+        connection_id: CtrlClientId,
+        request_id: PlaybackRequestId,
+        generation: PlaybackGeneration,
+        reason: crate::ctrl::PlaybackIntentRejection,
+    ) -> Option<PlaybackIntentEvent> {
+        let current = self.current.as_ref()?;
+        if current.connection_id != connection_id
+            || current.request_id != request_id
+            || current.generation != generation
+        {
+            return None;
+        }
+        self.current = None;
+        Some(PlaybackIntentEvent {
+            request_id,
+            generation,
+            outcome: PlaybackIntentOutcome::Rejected { reason },
+        })
+    }
+
+    fn invalidate_connection(&mut self, connection_id: CtrlClientId) {
+        if self
+            .current
+            .as_ref()
+            .is_some_and(|current| current.connection_id == connection_id)
+        {
+            self.current = None;
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -303,6 +377,12 @@ impl CtrlClients {
         self.connection.iter().any(|c| c.id == id)
     }
 
+    fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
+        if let Some(client) = self.connection.iter().find(|client| client.id == id) {
+            send_to(&client.tx, event);
+        }
+    }
+
     fn has_driver(&self) -> bool {
         !self.connection.is_empty()
     }
@@ -370,18 +450,7 @@ fn spawn_ctrl_client<S>(
     };
     let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
 
-    let mut daemon_hello = CtrlHello::current();
-    let spectrum_config = client.lock().unwrap().config.clone();
-    if crate::visualizer::daemon_spectrum_prerequisites(&spectrum_config).is_ok() {
-        daemon_hello
-            .capabilities
-            .push(crate::ctrl::CTRL_CAP_SPECTRUM.to_string());
-    } else {
-        log::info!(
-            target: "daemon",
-            "spectrum-streaming capability omitted: prerequisites unavailable"
-        );
-    }
+    let daemon_hello = CtrlHello::current();
     if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(daemon_hello)) {
         ev_tx.send(CtrlOutbound::Event(hello_json)).ok();
     }

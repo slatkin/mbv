@@ -106,6 +106,20 @@ impl EmbyClient {
         Ok(())
     }
 
+    pub fn rename_playlist(&self, playlist_id: &str, new_name: &str) -> Result<(), String> {
+        let body = ureq::json!({"Name": new_name});
+        self.post(&format!("/Items/{}", playlist_id))
+            .send_json(body)
+            .map_err(|e| match e {
+                ureq::Error::Status(code, r) => {
+                    let body = r.into_string().unwrap_or_default();
+                    format!("HTTP {code}: {body}")
+                }
+                e => e.to_string(),
+            })?;
+        Ok(())
+    }
+
     /// Replace a playlist's contents with the given item ids (in order).
     /// Fetches current entry ids, deletes them all, then adds the new set.
     pub fn get_playlist_items(&self, playlist_id: &str) -> Result<Vec<MediaItem>, String> {
@@ -238,5 +252,4 @@ impl EmbyClient {
         log::info!(target: "api", "inbound: ChapterAPI intro start={start} end={end}");
         Some((start, end))
     }
-
 }

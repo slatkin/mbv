@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::os::unix::net::UnixStream;
@@ -7,7 +8,9 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 use crate::api::{EmbyClient, MediaItem};
-use crate::ctrl::{CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason};
+use crate::ctrl::{
+    CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
+};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
@@ -48,6 +51,8 @@ pub struct RemotePlayer {
     /// them; `Option` so a second call is a no-op instead of a double
     /// shutdown.
     control_stream: Arc<Mutex<Option<ControlStream>>>,
+    next_playback_id: Arc<std::sync::atomic::AtomicU64>,
+    pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -230,11 +235,7 @@ fn perform_handshake(
     let ctrl_compatibility = match hello {
         CtrlEvent::Hello(info) => {
             info.validate_peer()?;
-            let mut compatibility = info.compatibility()?;
-            compatibility.supports_spectrum = info
-                .capabilities
-                .iter()
-                .any(|cap| cap == crate::ctrl::CTRL_CAP_SPECTRUM);
+            let compatibility = info.compatibility()?;
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",
@@ -280,6 +281,7 @@ fn apply_ctrl_event(
     items: &Arc<Mutex<Vec<MediaItem>>>,
     queue_source: &Arc<Mutex<crate::config::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
+    pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     notify: bool,
 ) {
     match ev {
@@ -322,6 +324,9 @@ fn apply_ctrl_event(
                 PlayerEvent::TrackChanged(idx) => {
                     status.lock().unwrap().current_idx = *idx;
                 }
+                PlayerEvent::PausedChanged(paused) => {
+                    status.lock().unwrap().paused = *paused;
+                }
                 _ => {}
             }
             if notify {
@@ -333,6 +338,14 @@ fn apply_ctrl_event(
                 let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
             }
         }
+        CtrlEvent::PlaybackIntent(event) => {
+            // A coalesced request is terminal for that request identity too;
+            // the canonical request remains tracked separately by the daemon.
+            pending_playback.lock().unwrap().remove(&event.request_id);
+            if notify {
+                let _ = event_tx.send(PlayerEvent::PlaybackIntent(event));
+            }
+        }
         CtrlEvent::Disconnected { reason } => {
             if notify {
                 let msg = disconnect_reason_message(&reason).to_string();
@@ -341,16 +354,6 @@ fn apply_ctrl_event(
                         let _ = event_tx.send(PlayerEvent::EmbyAuthorityTaken(msg));
                     }
                 }
-            }
-        }
-        CtrlEvent::Spectrum { bars } => {
-            if notify {
-                let _ = event_tx.send(PlayerEvent::Spectrum(bars));
-            }
-        }
-        CtrlEvent::SpectrumFailed { reason } => {
-            if notify {
-                let _ = event_tx.send(PlayerEvent::SpectrumFailed(reason));
             }
         }
     }
@@ -381,6 +384,8 @@ impl RemotePlayer {
         let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
         let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
+        let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
+        let pending_playback = Arc::new(Mutex::new(HashMap::new()));
 
         let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
         let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
@@ -403,6 +408,7 @@ impl RemotePlayer {
             &items,
             &queue_source,
             &event_tx,
+            &pending_playback,
             false,
         );
 
@@ -410,6 +416,7 @@ impl RemotePlayer {
         let status_r = status.clone();
         let items_r = items.clone();
         let queue_source_r = queue_source.clone();
+        let pending_playback_r = pending_playback.clone();
         let disconnected_r = disconnected.clone();
         let event_tx_r = event_tx;
         std::thread::spawn(move || {
@@ -423,7 +430,7 @@ impl RemotePlayer {
                             log::warn!(target: "remote", "unrecognized event from daemon: {l}");
                             continue;
                         };
-                        // Under multi-connection (v4), `Disconnected { TakenOverByEmbyRemote }` is
+                        // Under multi-connection (v5), `Disconnected { TakenOverByEmbyRemote }` is
                         // a notification — the connection stays open. Only set expected_disconnect
                         // for events that actually close the connection. Exhaustive match ensures
                         // new DisconnectReason variants are evaluated.
@@ -439,6 +446,7 @@ impl RemotePlayer {
                             &items_r,
                             &queue_source_r,
                             &event_tx_r,
+                            &pending_playback_r,
                             true,
                         );
                         expected_disconnect |= is_structured_disconnect;
@@ -446,6 +454,7 @@ impl RemotePlayer {
                 }
             }
             disconnected_r.store(true, Ordering::SeqCst);
+            pending_playback_r.lock().unwrap().clear();
             log::info!(target: "remote", "daemon disconnected");
             if !expected_disconnect {
                 let _ = event_tx_r.send(PlayerEvent::Stopped {
@@ -495,6 +504,8 @@ impl RemotePlayer {
                 disconnected,
                 ctrl_compatibility,
                 control_stream: Arc::new(Mutex::new(Some(disconnect_stream))),
+                next_playback_id,
+                pending_playback,
             },
             event_rx,
         ))
@@ -518,6 +529,32 @@ impl RemotePlayer {
 
     pub fn send_ctrl_cmd(&self, cmd: CtrlCmd) -> bool {
         self.cmd_tx.send(cmd).is_ok()
+    }
+
+    /// Send a guarded playback intent through its dedicated protocol
+    /// envelope. There is deliberately no conversion to `PlayerCmd` here:
+    /// callers that need lifecycle correlation must use this boundary.
+    pub fn send_playback_intent(&self, intent: PlaybackIntent) -> bool {
+        let request_id = intent.request_id;
+        self.pending_playback
+            .lock()
+            .unwrap()
+            .insert(request_id, intent.clone());
+        if self.cmd_tx.send(CtrlCmd::PlaybackIntent(intent)).is_ok() {
+            true
+        } else {
+            self.pending_playback.lock().unwrap().remove(&request_id);
+            false
+        }
+    }
+
+    pub fn new_playback_intent(&self, action: crate::ctrl::PlaybackIntentAction) -> PlaybackIntent {
+        let id = self.next_playback_id.fetch_add(1, Ordering::Relaxed);
+        PlaybackIntent {
+            request_id: id,
+            generation: id,
+            action,
+        }
     }
 
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
@@ -569,12 +606,14 @@ impl RemotePlayer {
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) {
-        let _ = self.cmd_tx.send(CtrlCmd::PlayItems {
-            item_ids: vec![item.id.clone()],
-            start_idx: 0,
-            start_ticks: item.playback_position_ticks,
-            source: source.clone(),
-        });
+        let _ = self.send_playback_intent(self.new_playback_intent(
+            crate::ctrl::PlaybackIntentAction::Play {
+                item_ids: vec![item.id.clone()],
+                start_idx: 0,
+                start_ticks: item.playback_position_ticks,
+                source: source.clone(),
+            },
+        ));
         *self.items.lock().unwrap() = vec![item.clone()];
         *self.queue_source.lock().unwrap() = source;
     }
@@ -591,18 +630,22 @@ impl RemotePlayer {
         let start_ticks = items
             .get(start_idx)
             .map_or(0, |i| i.playback_position_ticks);
-        let _ = self.cmd_tx.send(CtrlCmd::PlayItems {
-            item_ids,
-            start_idx,
-            start_ticks,
-            source: source.clone(),
-        });
+        let _ = self.send_playback_intent(self.new_playback_intent(
+            crate::ctrl::PlaybackIntentAction::Play {
+                item_ids,
+                start_idx,
+                start_ticks,
+                source: source.clone(),
+            },
+        ));
         *self.items.lock().unwrap() = items;
         *self.queue_source.lock().unwrap() = source;
     }
 
     pub fn stop(&self) {
-        let _ = self.cmd_tx.send(CtrlCmd::Stop);
+        let _ = self.send_playback_intent(
+            self.new_playback_intent(crate::ctrl::PlaybackIntentAction::Stop),
+        );
     }
 
     pub fn join(&self) {
@@ -626,10 +669,6 @@ impl RemotePlayer {
 
     pub fn supports_queue_append(&self) -> bool {
         self.ctrl_compatibility.supports_queue_append
-    }
-
-    pub fn supports_spectrum(&self) -> bool {
-        self.ctrl_compatibility.supports_spectrum
     }
 
     fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
@@ -659,10 +698,11 @@ impl RemotePlayer {
         let items = Arc::new(Mutex::new(items));
         let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
+        let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
+        let pending_playback = Arc::new(Mutex::new(HashMap::new()));
         let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
         let (_event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
-        let mut compat = CtrlCompatibility::current();
-        compat.supports_spectrum = true;
+        let compat = CtrlCompatibility::current();
         (
             RemotePlayer {
                 status,
@@ -673,20 +713,11 @@ impl RemotePlayer {
                 disconnected,
                 ctrl_compatibility: compat,
                 control_stream: Arc::new(Mutex::new(None)),
+                next_playback_id,
+                pending_playback,
             },
             event_rx,
             cmd_rx,
         )
-    }
-
-    /// Test helper variant for callers that need a remote handle without
-    /// spectrum support (e.g. testing visualizer toggle rejection).
-    pub fn stub_v2_with_command_rx(
-        items: Vec<MediaItem>,
-        current_idx: usize,
-    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
-        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
-        remote.ctrl_compatibility.supports_spectrum = false;
-        (remote, event_rx, cmd_rx)
     }
 }

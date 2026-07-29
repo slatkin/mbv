@@ -144,7 +144,7 @@ fn power_scope_keys_are_ignored_outside_queue_tab() {
 }
 
 #[test]
-fn power_view_shift_resize_grows_from_queue_focus_and_persists_pref() {
+fn shift_resize_grows_from_queue_focus_and_persists_pref() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
     app.panel_focus = PanelFocus::Queue;
@@ -152,7 +152,7 @@ fn power_view_shift_resize_grows_from_queue_focus_and_persists_pref() {
     let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
 
     assert!(!handled);
-    assert_eq!(app.status, "Power view width: 45 cols");
+    assert_eq!(app.status, "Queue column width: 45 cols");
     let prefs: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
     )
@@ -161,7 +161,7 @@ fn power_view_shift_resize_grows_from_queue_focus_and_persists_pref() {
 }
 
 #[test]
-fn power_view_shift_resize_is_blocked_by_help_overlay() {
+fn shift_resize_is_blocked_by_help_overlay() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
     app.show_help = true;
@@ -175,23 +175,29 @@ fn power_view_shift_resize_is_blocked_by_help_overlay() {
 }
 
 #[test]
-fn power_view_shift_resize_clamps_and_reports_minimum_and_maximum() {
+fn shift_resize_clamps_and_reports_minimum_and_maximum() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
     assert!(!handled);
-    assert_eq!(app.status, "Power view width already at minimum (40 cols)");
+    assert_eq!(
+        app.status,
+        "Queue column width already at minimum (40 cols)"
+    );
     assert!(!crate::config::prefs_path().exists());
 
     assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
-    assert_eq!(app.status, "Power view width: 45 cols");
+    assert_eq!(app.status, "Queue column width: 45 cols");
 
     assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
-    assert_eq!(app.status, "Power view width: 48 cols");
+    assert_eq!(app.status, "Queue column width: 48 cols");
 
     assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
-    assert_eq!(app.status, "Power view width already at maximum (48 cols)");
+    assert_eq!(
+        app.status,
+        "Queue column width already at maximum (48 cols)"
+    );
 
     let prefs: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
@@ -201,7 +207,7 @@ fn power_view_shift_resize_clamps_and_reports_minimum_and_maximum() {
 }
 
 #[test]
-fn power_view_render_normalizes_saved_left_width_and_updates_layout() {
+fn render_normalizes_saved_left_width_and_updates_layout() {
     let _guard = crate::config::TestStateDirGuard::new();
     let prefs = serde_json::json!({
         "queue_column_width": 70,
@@ -225,7 +231,7 @@ fn power_view_render_normalizes_saved_left_width_and_updates_layout() {
 }
 
 #[test]
-fn power_view_render_uses_resized_width_on_next_frame() {
+fn render_uses_resized_width_on_next_frame() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
 
@@ -322,7 +328,7 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
     let local_items = make_items(2);
     let remote_items = make_items(3);
     let replacement = make_items(4);
-    let mut app = make_remote_app_stub(local_items.clone(), remote_items);
+    let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
     app.queue_source = crate::config::QueueSource::Album;
 
     app.execute_pending_queue_action(PendingQueueAction::PlayItems {
@@ -351,12 +357,12 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
-        replacement
+        remote_items
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>()
     );
-    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
+    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
     assert!(matches!(
         app.queue_source,
         crate::config::QueueSource::Album

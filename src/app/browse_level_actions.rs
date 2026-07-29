@@ -54,7 +54,7 @@ impl App {
     }
 
     pub(super) fn maybe_auto_push_power_tv_season_level(&mut self, lib_idx: usize) {
-        // In Power View: when a season list arrives for a TV library,
+        // When a season list arrives for a TV library,
         // automatically push a loading placeholder and fetch the first season's
         // episodes so the user lands directly in the combined series view.
         let should_auto_push = self.library_tab == lib_idx + 1

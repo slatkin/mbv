@@ -32,7 +32,7 @@ pub struct PlayerStatus {
     #[serde(default)]
     pub art_item_id: String,
     /// Album id for the current track, when it's a grouped audio track
-    /// (mirrors the `Audio` + non-empty `album_id` grouping the Power View
+    /// (mirrors the `Audio` + non-empty `album_id` grouping the
     /// queue card already uses in `src/app/render/power/card.rs`, so the
     /// same disk-cache entry a browsed album card populated can be reused
     /// here). Empty when not applicable.
@@ -60,7 +60,7 @@ impl PlayerStatus {
         self.artist = item.artist.clone();
         self.album = item.album.clone();
         self.art_item_id = item.id.clone();
-        // Same audio-album grouping condition as the Power View queue card
+        // Same audio-album grouping condition as the queue card
         // (src/app/render/power/card.rs) uses for its cache key, so a
         // previously browsed/cached album cover is found under the same key.
         self.art_album_id = if item.item_type == "Audio" && !item.album_id.is_empty() {
@@ -163,6 +163,8 @@ pub enum PlayerEvent {
         error: Option<String>,
     },
     TrackChanged(usize),
+    /// Emitted after the player confirms its paused property transition.
+    PausedChanged(bool),
     TrackCompleted {
         idx: usize,
         position_ticks: i64,
@@ -207,6 +209,9 @@ pub enum PlayerEvent {
     /// command. The reason string is server-computed and shown to the user
     /// as-is (e.g. via the transient status toast). See #90.
     CommandRejected(String),
+    /// Correlated lifecycle update for a guarded direct-daemon playback
+    /// intent. The confirmed PlayerStatus remains authoritative separately.
+    PlaybackIntent(crate::ctrl::PlaybackIntentEvent),
     /// Emitted by RemotePlayer when the daemon intentionally disconnects this
     /// ctrl client (actual connection close, not an authority-change notification).
     RemoteDisconnected(String),
@@ -219,10 +224,6 @@ pub enum PlayerEvent {
     /// mirror to become stale. The detail describes what was detected. The UI
     /// shows this as a warning toast.
     QueueDesynced(String),
-    /// Spectrum frame from daemon spectrum streaming (64 normalized bar values).
-    Spectrum(Vec<f32>),
-    /// Daemon spectrum streaming failed (CAVA unavailable or crashed).
-    SpectrumFailed(String),
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

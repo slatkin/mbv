@@ -42,14 +42,14 @@ pub(crate) struct LayoutPlayback {
     pub next_area: Rect,
 }
 
-/// Geometry for the power-view's own Home sub-tab,
+/// Geometry for the Home sub-tab,
 /// separate from `LayoutHome` which belongs to the regular Home tab.
 #[derive(Default)]
 pub(crate) struct LayoutHome {
     pub hitmap: Vec<(Rect, usize)>,
 }
 
-/// Power-view left panel, queue panel, and home-grid geometry.
+/// Library panel, queue panel, and home-grid geometry.
 #[derive(Default)]
 pub(crate) struct LayoutMain {
     /// Full expanded Power sidebar covered by an F1-F4 panel, when present.
@@ -60,7 +60,7 @@ pub(crate) struct LayoutMain {
     pub left_row_targets: Vec<Option<LibraryRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
-    /// Geometry for the power-view's own Home sub-tab grid. Distinct from
+    /// Geometry for the Home sub-tab grid. Distinct from
     /// `AppLayout::home` (`LayoutHome`), which is the regular Home-tab.
     pub home: LayoutHome,
     pub queue_row_map: Vec<Option<usize>>,

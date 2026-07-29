@@ -192,7 +192,9 @@ impl App {
                 if self.local_queue_metadata_applies(self.playback_target_queue_scope()) {
                     self.queue_source = source;
                 }
-                self.replace_playback_queue(items.clone(), start_idx);
+                if !direct_remote {
+                    self.replace_playback_queue(items.clone(), start_idx);
+                }
                 self.set_queue_scope(self.playback_target_queue_scope());
                 if let Some(ref conn_id) = self.connected_session_id.clone() {
                     self.clear_playback_overlays();

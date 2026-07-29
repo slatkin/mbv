@@ -5,10 +5,23 @@ use mbv_core::player::PlayerCommand;
 
 impl LocalPlaybackTarget {
     pub(super) fn toggle_play_pause(&self, app: &mut App) {
-        app.player.send_command(PlayerCommand::TogglePause);
+        if app.player.is_remote() {
+            let paused = !app.player.status.lock().unwrap().paused;
+            app.flash_status(if paused {
+                "Pause requested".to_string()
+            } else {
+                "Resume requested".to_string()
+            });
+            app.player.set_paused(paused);
+        } else {
+            app.player.send_command(PlayerCommand::TogglePause);
+        }
     }
 
     pub(super) fn stop(&self, app: &mut App) {
+        if app.player.is_remote() {
+            app.flash_status("Stop requested".to_string());
+        }
         app.player.stop();
     }
 
@@ -18,8 +31,14 @@ impl LocalPlaybackTarget {
 
     pub(super) fn jump_track(&self, app: &mut App, step: i64) {
         if step >= 0 {
+            if app.player.is_remote() {
+                app.flash_status("Next requested".to_string());
+            }
             app.player.next();
         } else {
+            if app.player.is_remote() {
+                app.flash_status("Previous requested".to_string());
+            }
             app.player.previous();
         }
     }

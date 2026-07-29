@@ -9,7 +9,7 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::io::{Read, Write};
 
-/// Power-view music library sitting on the album-folder-listing nav
+/// Music library sitting on the album-folder-listing nav
 /// level (`is_viewing_album_folders` holds): a grouped `["group",
 /// "album"]` config, mirroring `render_power_library`'s inline-detail
 /// tests, with two albums at the album level and `album-1` selected.

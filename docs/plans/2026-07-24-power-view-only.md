@@ -1,4 +1,6 @@
 # Power View Becomes The Only View (issue #361)
+**Note (2026-07-29):** The remaining "Power View" terminology cleanup was completed in [#402](https://github.com/slatkin/mbv/issues/402).
+
 
 **Issue:** [#361](https://github.com/slatkin/mbv/issues/361) — "Make the 'power view' the standard view and remove 'standard view'"
 **ADR:** 0013, reserved 2026-07-24

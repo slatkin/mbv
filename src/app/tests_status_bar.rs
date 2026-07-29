@@ -94,7 +94,7 @@ fn home_section_clamped_after_refresh_removes_sections() {
 // session name, local-status default, left-side ordering, icon/label
 // coloring) exercised the status bar's own `remote_status_spans`
 // rendering with `show_session_pill: true` -- a mode only the deleted
-// Standard view's status-bar call site used. Power View's status bar
+// Standard view's status-bar call site used. The main status bar
 // has always called `render_status_bar(.., false, true)` (unchanged by
 // this diff -- confirmed via `git diff origin/main`), because Power
 // surfaces the same remote/session info via the queue column's
@@ -379,7 +379,7 @@ fn status_bar_shows_queue_source_label_on_queue_tab() {
 }
 
 #[test]
-fn status_bar_hides_queue_segment_outside_queue_and_power_view() {
+fn status_bar_hides_queue_segment_outside_queue() {
     let mut app = make_app_stub();
     app.queue_source = crate::config::QueueSource::Album;
 
@@ -450,7 +450,7 @@ fn status_bar_shows_normal_content_when_no_toast_is_active() {
 // stays populated while a toast covers the status bar. `ind_rc` is only
 // ever populated when `render_status_bar` is called with
 // `show_session_pill: true` -- the Standard-only call site that this PR
-// removes. Power View's status bar call (`render/power/mod.rs`,
+// removes. The main status bar call (`render/power/mod.rs`,
 // unchanged by this diff) has always passed `show_session_pill: false`,
 // so `ind_rc` never populates in Power regardless of any toast --
 // remote/local cycling in Power happens by clicking the queue column's

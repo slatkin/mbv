@@ -45,6 +45,7 @@ pub(super) enum SavePlaylistStage {
     // confirmation modal; this stage only marks "we're mid-overwrite-flow"
     // so `handle_key_confirm_modal`'s Esc arm knows to return to `EnterName`.
     ConfirmOverwrite,
+    RenamePlaylist { id: String },
 }
 
 pub(super) struct SavePlaylistDialog {

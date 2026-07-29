@@ -7,11 +7,11 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 #[test]
-fn expanded_power_view_tab_panel_has_two_column_side_gutters() {
+fn expanded_tab_panel_has_two_column_side_gutters() {
     let mut app = make_app_stub();
     app.queue_column_width = 40;
 
-    let layout = render_power_view(&mut app, 80, 24);
+    let layout = render_view(&mut app, 80, 24);
 
     assert_eq!(layout.left_area.x, 40 + POWER_TAB_LEFT_PAD);
     assert_eq!(layout.left_area.width, 40 - 2 * POWER_TAB_LEFT_PAD);
@@ -21,12 +21,12 @@ fn expanded_power_view_tab_panel_has_two_column_side_gutters() {
 fn expanded_power_panel_bounds_follow_sidebar_resize() {
     let mut app = make_app_stub();
     app.queue_column_width = 31;
-    let first = render_power_view(&mut app, 80, 24);
+    let first = render_view(&mut app, 80, 24);
     assert_eq!(first.panel_area, Rect::new(0, 0, 31, 24));
     assert_eq!(first.panel_content_area, Rect::new(2, 3, 27, 19));
 
     app.queue_column_width = 47;
-    let second = render_power_view(&mut app, 80, 24);
+    let second = render_view(&mut app, 80, 24);
     assert_eq!(second.panel_area, Rect::new(0, 0, 47, 24));
     assert_eq!(second.panel_content_area, Rect::new(2, 3, 43, 19));
 }

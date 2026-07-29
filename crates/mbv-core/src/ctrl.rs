@@ -4,11 +4,13 @@ use crate::api::MediaItem;
 use crate::config::QueueSource;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
-pub const CTRL_PROTOCOL_VERSION: u32 = 4;
+pub const CTRL_PROTOCOL_VERSION: u32 = 5;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
-pub const CTRL_CAP_SPECTRUM: &str = "spectrum-streaming";
+
+pub type PlaybackRequestId = u64;
+pub type PlaybackGeneration = u64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CtrlHello {
@@ -74,7 +76,6 @@ pub struct CtrlCompatibility {
     pub peer_protocol_version: u32,
     pub client_protocol_version: u32,
     pub supports_queue_append: bool,
-    pub supports_spectrum: bool,
 }
 
 impl CtrlCompatibility {
@@ -84,7 +85,6 @@ impl CtrlCompatibility {
                 peer_protocol_version,
                 client_protocol_version: CTRL_PROTOCOL_VERSION,
                 supports_queue_append: true,
-                supports_spectrum: false,
             }),
             _ => Err(format!(
                 "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
@@ -113,8 +113,33 @@ pub enum CtrlCmd {
         source: QueueSource,
     },
     Stop,
-    StartSpectrum,
-    StopSpectrum,
+    /// Correlated playback control. This is intentionally separate from
+    /// `PlayerCmd` so guarded actions cannot silently fall back to the old,
+    /// unacknowledged command path.
+    PlaybackIntent(PlaybackIntent),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PlaybackIntent {
+    pub request_id: PlaybackRequestId,
+    pub generation: PlaybackGeneration,
+    pub action: PlaybackIntentAction,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum PlaybackIntentAction {
+    Play {
+        item_ids: Vec<String>,
+        start_idx: usize,
+        start_ticks: i64,
+        source: QueueSource,
+    },
+    Stop,
+    SetPaused {
+        paused: bool,
+    },
+    Next,
+    Previous,
 }
 
 /// Wire-stable representation of a `PlayerCommand`, serialized across the
@@ -298,12 +323,36 @@ pub enum CtrlEvent {
     /// design so future rejection reasons (not just audio-only mode) can
     /// reuse it — see #90.
     CommandRejected(String),
-    Spectrum {
-        bars: Vec<f32>,
+    PlaybackIntent(PlaybackIntentEvent),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaybackIntentEvent {
+    pub request_id: PlaybackRequestId,
+    pub generation: PlaybackGeneration,
+    pub outcome: PlaybackIntentOutcome,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlaybackIntentOutcome {
+    Accepted,
+    Applied,
+    Coalesced {
+        canonical_request_id: PlaybackRequestId,
     },
-    SpectrumFailed {
-        reason: String,
+    Superseded,
+    Rejected {
+        reason: PlaybackIntentRejection,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlaybackIntentRejection {
+    EmptyTarget,
+    InvalidTarget,
+    ResolutionFailed,
+    AudioOnly,
+    Unavailable,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -374,6 +423,13 @@ mod tests {
     fn hello_rejects_v3_protocol_version() {
         let mut hello = CtrlHello::current();
         hello.protocol_version = 3;
+        assert!(hello.validate_peer().is_err());
+    }
+
+    #[test]
+    fn hello_rejects_previous_v4_protocol_version() {
+        let mut hello = CtrlHello::current();
+        hello.protocol_version = 4;
         assert!(hello.validate_peer().is_err());
     }
 
@@ -605,60 +661,45 @@ mod tests {
     }
 
     #[test]
-    fn start_spectrum_command_wire_tag_is_pinned() {
-        assert_eq!(
-            serde_json::to_string(&CtrlCmd::StartSpectrum).unwrap(),
-            "\"StartSpectrum\""
-        );
+    fn playback_intent_round_trips_as_a_distinct_command() {
+        let command = CtrlCmd::PlaybackIntent(PlaybackIntent {
+            request_id: 7,
+            generation: 3,
+            action: PlaybackIntentAction::SetPaused { paused: true },
+        });
+
+        let json = serde_json::to_string(&command).unwrap();
+        let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            decoded,
+            CtrlCmd::PlaybackIntent(PlaybackIntent {
+                request_id: 7,
+                generation: 3,
+                action: PlaybackIntentAction::SetPaused { paused: true },
+            })
+        ));
     }
 
     #[test]
-    fn stop_spectrum_command_wire_tag_is_pinned() {
-        assert_eq!(
-            serde_json::to_string(&CtrlCmd::StopSpectrum).unwrap(),
-            "\"StopSpectrum\""
-        );
-    }
+    fn playback_intent_event_round_trips_structured_rejection() {
+        let event = CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
+            request_id: 7,
+            generation: 3,
+            outcome: PlaybackIntentOutcome::Rejected {
+                reason: PlaybackIntentRejection::AudioOnly,
+            },
+        });
 
-    #[test]
-    fn spectrum_event_wire_shape_is_pinned() {
-        let json = serde_json::to_string(&CtrlEvent::Spectrum {
-            bars: vec![0.0; 64],
-        })
-        .unwrap();
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        let obj = value.as_object().expect("tagged object");
-        assert_eq!(obj.len(), 1);
-        assert!(obj.contains_key("Spectrum"));
-        let inner = &obj["Spectrum"];
-        assert_eq!(inner["bars"].as_array().unwrap().len(), 64);
-    }
-
-    #[test]
-    fn spectrum_failed_event_wire_tag_is_pinned() {
-        let json = serde_json::to_string(&CtrlEvent::SpectrumFailed {
-            reason: "cava not found".to_string(),
-        })
-        .unwrap();
-        assert_eq!(json, r#"{"SpectrumFailed":{"reason":"cava not found"}}"#);
-    }
-
-    #[test]
-    fn player_spectrum_event_wire_tag_is_pinned() {
-        let json =
-            serde_json::to_string(&crate::player::PlayerEvent::Spectrum(vec![0.5; 64])).unwrap();
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        let obj = value.as_object().expect("tagged object");
-        assert!(obj.contains_key("Spectrum"));
-        assert_eq!(obj["Spectrum"].as_array().unwrap().len(), 64);
-    }
-
-    #[test]
-    fn player_spectrum_failed_event_wire_tag_is_pinned() {
-        let json = serde_json::to_string(&crate::player::PlayerEvent::SpectrumFailed(
-            "cava not found".to_string(),
-        ))
-        .unwrap();
-        assert_eq!(json, r#"{"SpectrumFailed":"cava not found"}"#);
+        let json = serde_json::to_string(&event).unwrap();
+        let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            decoded,
+            CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
+                outcome: PlaybackIntentOutcome::Rejected {
+                    reason: PlaybackIntentRejection::AudioOnly,
+                },
+                ..
+            })
+        ));
     }
 }

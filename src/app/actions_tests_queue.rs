@@ -100,7 +100,7 @@ fn context_menu_play_on_queue_tab_seeks_to_start_for_current_playing_audio_item(
 }
 
 #[test]
-fn power_view_enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
+fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     use crate::app::action::Command;
     use crate::app::tests::make_item;
     use crate::app::{BrowseLevel, LibraryTab, PanelFocus};

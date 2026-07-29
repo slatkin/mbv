@@ -74,6 +74,7 @@ impl PlaybackSession {
                             self.startup_pause_events_to_skip -= 1;
                             continue;
                         }
+                        let _ = self.event_tx.send(PlayerEvent::PausedChanged(paused));
                         if self.quit_at.is_none() {
                             let event_name = if paused { "Pause" } else { "Unpause" };
                             self.reporter.report_progress(event_name);

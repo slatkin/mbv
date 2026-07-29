@@ -149,7 +149,7 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
 }
 
 #[test]
-fn power_view_podcast_context_menu_uses_left_pane_library_context() {
+fn podcast_context_menu_uses_left_pane_library_context() {
     let mut app = make_app_stub();
     let mut library = make_item("Podcasts", "CollectionFolder");
     library.id = "lib-podcasts".into();
@@ -200,7 +200,7 @@ fn power_view_podcast_context_menu_uses_left_pane_library_context() {
 }
 
 #[test]
-fn power_view_podcast_context_menu_offers_mark_all_played_for_selected_show() {
+fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
     let mut app = make_app_stub();
     let mut library = make_item("Podcasts", "CollectionFolder");
     library.id = "lib-podcasts".into();
@@ -296,7 +296,7 @@ fn power_view_podcast_context_menu_offers_mark_all_played_for_selected_show() {
 }
 
 #[test]
-fn power_view_podcast_context_menu_mark_all_played_uses_all_pill_selection() {
+fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
     let mut app = make_app_stub();
     let mut library = make_item("Podcasts", "CollectionFolder");
     library.id = "lib-podcasts".into();

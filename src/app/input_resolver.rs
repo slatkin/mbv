@@ -63,7 +63,7 @@ pub(super) enum KeyResolution {
 pub(super) struct InputSnapshot {
     pub player_active: bool,
     pub has_remote_session: bool,
-    /// Power-view inline album track-selection mode is active (`album_track_focus`
+    /// Inline album track-selection mode is active (`album_track_focus`
     /// is `Some`). While active, Esc must exit track-selection mode rather than
     /// stop playback -- see the `Stop` special-case in `resolve_key`.
     pub track_select_active: bool,
@@ -113,7 +113,10 @@ impl App {
     pub(super) fn input_snapshot(&self) -> InputSnapshot {
         InputSnapshot {
             player_active: self.player.status.lock().unwrap().active,
-            has_remote_session: self.connected_session_id.is_some(),
+            // A direct daemon connection is also a valid playback route even
+            // before it reports active playback; this keeps Stop available
+            // while a guarded Play is resolving.
+            has_remote_session: self.connected_session_id.is_some() || self.player.is_remote(),
             track_select_active: self.active_power_album_track_lib_idx().is_some(),
         }
     }

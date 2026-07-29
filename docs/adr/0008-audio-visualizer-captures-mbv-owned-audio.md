@@ -1,22 +1,26 @@
 # Audio visualizer follows the audible Snapcast playout
 
+> **Superseded (2026-07-29):** The daemon spectrum streaming path described below
+> has been removed by the `remove-daemon-spectrum-streaming` change. The local
+> CAVA visualizer for local playback is retained; daemon-connected clients no
+> longer offer a daemon-backed visualizer. See the `remove-daemon-spectrum-streaming`
+> change's `specs/local-audio-visualizer/spec.md` for the current behavior.
+
 The local audio visualizer runs CAVA as a supervised child process and keeps its existing system-audio input. Daemon playback uses a separate post-Snapcast capture path so the visualizer follows the audible playout timeline rather than leading it from mpv's pre-Snapcast PCM pipe.
 
 mbv does not create or modify PulseAudio/PipeWire sinks, sources, links, loopbacks, or modules. It also does not change mpv's audio output properties. Starting or stopping the visualizer must leave playback configuration and audio graph state unchanged.
 
-## Daemon spectrum streaming
+## Daemon spectrum streaming (removed)
 
-When `mbvd` runs headless with `audio_pipe_enabled = true`, the daemon starts a dedicated second Snapclient and CAVA and streams spectrum frames over the control protocol. The flow is:
+**This section is preserved for historical context only.** The daemon spectrum feature was removed by `remove-daemon-spectrum-streaming` because it produced visibly different cadence from CAVA's direct local-audio input, added runtime dependencies and lifecycle complexity, and was not worth maintaining for a visual-only feature.
 
-1. The client sends `StartSpectrum` when the user enables the visualizer during daemon playback (guarded by the `spectrum-streaming` capability advertised in the daemon's control hello).
-2. The daemon creates `/tmp/mbv-spectrum.fifo` (configurable), starts Snapclient with host ID `puffin-balls` and instance `2` in `-o file` mode, then starts CAVA with `method = fifo` reading that path. The primary Snapclient and mpv/Snapserver pipe are not touched.
-3. Spectrum frames are broadcast as `CtrlEvent::Spectrum` to the connected client, which writes them to `visualizer_frame` for rendering.
-4. The client sends `StopSpectrum` on toggle-off, session switch, teardown, or connection-type transition.
-5. The daemon stops the CAVA worker and joins the reader thread on `StopSpectrum`, `CtrlDisconnected` (client crash/disconnect), `PlayerEvent::Stopped` (playback ends), or `DaemonEvent::Shutdown`.
+When `mbvd` ran headless with `audio_pipe_enabled = true`, the daemon started a dedicated second Snapclient and CAVA and streamed spectrum frames over the control protocol. The flow was:
 
-CAVA and Snapclient are runtime dependencies for daemon visualization. The daemon advertises `spectrum-streaming` only when the audio-pipe mode and both executables are available, and repeats the check at `StartSpectrum`. Child stderr is captured for actionable startup failures; either child can fail without interrupting primary playback.
-
-The dedicated Snapclient identity must be assigned to the same Snapserver stream as the audible client. Configure `spectrum_snapserver_host`, `spectrum_snapserver_port`, `spectrum_snapclient_host_id`, `spectrum_snapclient_instance`, and `spectrum_fifo_path` under `[mbvd]`. In Snapserver's web UI, verify that `puffin-balls` appears and assign it to the audible stream (or make the equivalent group assignment in Snapserver configuration). This assignment is intentionally operator-managed and persists by client identity.
+1. The client sent `StartSpectrum` when the user enabled the visualizer during daemon playback.
+2. The daemon created a FIFO, started Snapclient and CAVA, then forwarded frames.
+3. Spectrum frames were broadcast as `CtrlEvent::Spectrum` to the connected client.
+4. The client sent `StopSpectrum` on toggle-off, session switch, teardown, or connection-type transition.
+5. The daemon stopped the CAVA worker and joined the reader thread on stop, disconnect, playback end, or shutdown.
 
 **Considered Options**
 

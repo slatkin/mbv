@@ -391,6 +391,18 @@ impl App {
                 self.pending_remote_move_cursor = None;
                 self.flash_status(reason);
             }
+            PlayerEvent::PlaybackIntent(event) => {
+                use mbv_core::ctrl::PlaybackIntentOutcome;
+                let message = match event.outcome {
+                    PlaybackIntentOutcome::Accepted => "Playback request accepted",
+                    PlaybackIntentOutcome::Applied => "Playback request applied",
+                    PlaybackIntentOutcome::Coalesced { .. } => "Playback request already pending",
+                    PlaybackIntentOutcome::Superseded => "Playback request superseded",
+                    PlaybackIntentOutcome::Rejected { .. } => "Playback request rejected",
+                };
+                self.flash_status(message.to_string());
+            }
+            PlayerEvent::PausedChanged(_) => {}
             PlayerEvent::RemoteDisconnected(reason) => {
                 self.restore_local_mode(&reason);
                 self.refresh_after_stop();
@@ -404,14 +416,6 @@ impl App {
             }
             PlayerEvent::QueueDesynced(reason) => {
                 self.flash_status(reason);
-            }
-            PlayerEvent::Spectrum(bars) => {
-                self.visualizer_frame = bars;
-            }
-            PlayerEvent::SpectrumFailed(reason) => {
-                log::warn!(target: "visualizer", "daemon spectrum failed: {reason}");
-                self.visualizer_failed = true;
-                self.stop_visualizer_worker();
             }
         }
         false

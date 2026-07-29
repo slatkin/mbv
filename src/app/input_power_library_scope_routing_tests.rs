@@ -53,7 +53,7 @@ fn make_power_library_mouse_event(kind: MouseEventKind, column: u16, row: u16) -
 }
 
 #[test]
-fn power_view_left_panel_movement_saves_position_via_real_key_path() {
+fn left_panel_movement_saves_position_via_real_key_path() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_power_library_app();
 
@@ -75,7 +75,7 @@ fn power_view_left_panel_movement_saves_position_via_real_key_path() {
 }
 
 #[test]
-fn power_view_left_panel_refresh_clears_saved_position_via_real_key_path() {
+fn left_panel_refresh_clears_saved_position_via_real_key_path() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_power_library_app();
     let saved_position = crate::config::LibraryPosition {
@@ -104,7 +104,7 @@ fn power_view_left_panel_refresh_clears_saved_position_via_real_key_path() {
 }
 
 #[test]
-fn power_view_ctrl_r_confirmation_targets_active_power_library() {
+fn ctrl_r_confirmation_targets_active_library() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
@@ -176,7 +176,7 @@ fn power_view_ctrl_r_confirmation_targets_active_power_library() {
 }
 
 #[test]
-fn power_view_left_panel_mouse_scroll_saves_position() {
+fn left_panel_mouse_scroll_saves_position() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_power_library_app();
     app.layout.main.left_area = Rect {
@@ -207,7 +207,7 @@ fn power_view_left_panel_mouse_scroll_saves_position() {
 }
 
 #[test]
-fn power_view_left_panel_mouse_click_saves_position() {
+fn left_panel_mouse_click_saves_position() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_power_library_app();
     app.layout.main.left_area = Rect {
@@ -345,7 +345,7 @@ fn mouse_click_on_a_new_series_row_only_moves_the_cursor() {
 }
 
 #[test]
-fn power_view_breadcrumb_click_saves_position() {
+fn breadcrumb_click_saves_position() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_power_library_app();
     app.libs[0].nav_stack.push(BrowseLevel {
@@ -381,7 +381,7 @@ fn power_view_breadcrumb_click_saves_position() {
 }
 
 #[test]
-fn power_view_mouse_tab_selection_from_queue_focus_applies_restore_result() {
+fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;

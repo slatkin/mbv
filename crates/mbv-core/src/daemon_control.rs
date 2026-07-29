@@ -26,9 +26,10 @@ fn broadcast_queue_state(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_ctrl(
     cmd: CtrlCmd,
-    client_id: CtrlClientId,
+    _client_id: CtrlClientId,
     request: CtrlRequest<'_>,
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
@@ -38,8 +39,9 @@ fn handle_ctrl(
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
-    merged_tx: &mpsc::Sender<DaemonEvent>,
-    spectrum_state: &mut Option<SpectrumState>,
+    playback_intents: &mut PlaybackIntentState,
+    mut resolved_items: Option<Result<Vec<MediaItem>, String>>,
+    _merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
     // Authority returns to Ctrl on the next ctrl command (not on connect).
     {
@@ -190,17 +192,29 @@ fn handle_ctrl(
             start_ticks,
             source: new_source,
         } => {
-            let fetched = {
-                let c = client.lock().unwrap();
-                match c.get_items_by_ids(&item_ids) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        log::warn!(target: "daemon", "ctrl play error: {e}");
-                        return;
+            let fetched = match resolved_items.take() {
+                Some(Ok(v)) => v,
+                Some(Err(e)) => {
+                    log::warn!(target: "daemon", "ctrl play error: {e}");
+                    send_to(request.reply_tx, &CtrlEvent::CommandRejected(e));
+                    return;
+                }
+                None => {
+                    let c = client.lock().unwrap();
+                    match c.get_items_by_ids(&item_ids) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            log::warn!(target: "daemon", "ctrl play error: {e}");
+                            return;
+                        }
                     }
                 }
             };
             if fetched.is_empty() {
+                log::warn!(
+                    target: "daemon",
+                    "ctrl play: fetched items are empty, discarding request"
+                );
                 return;
             }
             if let Some(reason) = audio_only_rejection(audio_only, &fetched) {
@@ -266,42 +280,68 @@ fn handle_ctrl(
         CtrlCmd::Stop => {
             player.stop();
         }
-        CtrlCmd::StartSpectrum => {
-            if spectrum_state.is_some() {
-                log::debug!(target: "daemon", "spectrum already active, ignoring StartSpectrum");
-                if let Some(state) = spectrum_state.as_mut() {
-                    state.add_subscriber(client_id);
-                }
+        CtrlCmd::PlaybackIntent(intent) => {
+            let accepted = playback_intents.accept(_client_id, intent.clone());
+            let coalesced = accepted.iter().any(|event| {
+                matches!(
+                    event.outcome,
+                    crate::ctrl::PlaybackIntentOutcome::Coalesced { .. }
+                )
+            });
+            for event in accepted {
+                send_to(request.reply_tx, &CtrlEvent::PlaybackIntent(event));
+            }
+            if coalesced {
                 return;
             }
-            let config = client.lock().unwrap().config.clone();
-            if let Err(error) = crate::visualizer::daemon_spectrum_prerequisites(&config) {
-                log::warn!(target: "daemon", "spectrum prerequisites unavailable: {error}");
-                send_to(
-                    request.reply_tx,
-                    &CtrlEvent::SpectrumFailed { reason: error },
-                );
-                return;
-            }
-            match SpectrumState::start(config, merged_tx.clone(), client_id) {
-                Ok(state) => {
-                    log::info!(target: "daemon", "spectrum streaming started");
-                    *spectrum_state = Some(state);
+            match intent.action {
+                crate::ctrl::PlaybackIntentAction::Play {
+                    item_ids,
+                    start_idx,
+                    start_ticks,
+                    source: intent_source,
+                } => {
+                    playback_intents.mark_resolving(intent.request_id);
+                    let command = CtrlCmd::PlayItems {
+                        item_ids: item_ids.clone(),
+                        start_idx,
+                        start_ticks,
+                        source: intent_source,
+                    };
+                    let tx = _merged_tx.clone();
+                    let lookup_client = client.lock().unwrap().clone();
+                    let request_id = intent.request_id;
+                    let generation = intent.generation;
+                    let reply_tx = (*request.reply_tx).clone();
+                    std::thread::spawn(move || {
+                        let fetched = lookup_client.get_items_by_ids(&item_ids);
+                        let _ = tx.send(DaemonEvent::PlaybackResolved {
+                            command,
+                            client_id: _client_id,
+                            reply_tx,
+                            request_id,
+                            generation,
+                            fetched,
+                        });
+                    });
                 }
-                Err(e) => {
-                    log::warn!(target: "daemon", "spectrum start failed: {e}");
-                    send_to(request.reply_tx, &CtrlEvent::SpectrumFailed { reason: e });
+                crate::ctrl::PlaybackIntentAction::Stop => player.stop(),
+                crate::ctrl::PlaybackIntentAction::SetPaused { paused } => {
+                    if player.status.lock().unwrap().paused != paused {
+                        player.send_command(PlayerCommand::TogglePause);
+                    }
                 }
-            }
-        }
-        CtrlCmd::StopSpectrum => {
-            let last_subscriber_removed = spectrum_state
-                .as_mut()
-                .map_or(false, |state| state.remove_subscriber(client_id));
-            if last_subscriber_removed {
-                if let Some(mut state) = spectrum_state.take() {
-                    log::info!(target: "daemon", "spectrum streaming stopped");
-                    state.stop();
+                crate::ctrl::PlaybackIntentAction::Next => {
+                    if let Some(idx) = player.status.lock().unwrap().next_idx() {
+                        playback_intents.set_target_idx(intent.request_id, idx);
+                        player.send_command(PlayerCommand::JumpTo(idx));
+                    }
+                }
+                crate::ctrl::PlaybackIntentAction::Previous => {
+                    if let Some(idx) = player.status.lock().unwrap().previous_idx() {
+                        playback_intents.set_target_idx(intent.request_id, idx);
+                        player.send_command(PlayerCommand::JumpTo(idx));
+                    }
                 }
             }
         }
