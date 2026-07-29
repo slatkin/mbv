@@ -328,7 +328,7 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
     let local_items = make_items(2);
     let remote_items = make_items(3);
     let replacement = make_items(4);
-    let mut app = make_remote_app_stub(local_items.clone(), remote_items);
+    let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
     app.queue_source = crate::config::QueueSource::Album;
 
     app.execute_pending_queue_action(PendingQueueAction::PlayItems {
@@ -357,12 +357,12 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
-        replacement
+        remote_items
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>()
     );
-    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
+    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
     assert!(matches!(
         app.queue_source,
         crate::config::QueueSource::Album

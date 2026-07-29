@@ -113,7 +113,10 @@ impl App {
     pub(super) fn input_snapshot(&self) -> InputSnapshot {
         InputSnapshot {
             player_active: self.player.status.lock().unwrap().active,
-            has_remote_session: self.connected_session_id.is_some(),
+            // A direct daemon connection is also a valid playback route even
+            // before it reports active playback; this keeps Stop available
+            // while a guarded Play is resolving.
+            has_remote_session: self.connected_session_id.is_some() || self.player.is_remote(),
             track_select_active: self.active_power_album_track_lib_idx().is_some(),
         }
     }

@@ -249,6 +249,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     let mut items: Vec<MediaItem> = Vec::new();
     let mut cursor: usize = 0;
     let mut source = crate::config::QueueSource::Unknown;
+    let mut playback_intents = PlaybackIntentState::default();
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
 
@@ -282,6 +283,39 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::TrackChanged(idx)),
                 );
+                if let Some((connection_id, request_id, generation)) = playback_intents
+                    .current
+                    .as_ref()
+                    .filter(|current| match &current.action {
+                        PlaybackIntentAction::Play { item_ids, .. } => items
+                            .get(idx)
+                            .is_some_and(|item| item_ids.iter().any(|id| id == &item.id)),
+                        PlaybackIntentAction::Next | PlaybackIntentAction::Previous => {
+                            current.target_idx.is_some_and(|target| target == idx)
+                        }
+                        _ => false,
+                    })
+                    .map(|current| {
+                        (
+                            current.connection_id,
+                            current.request_id,
+                            current.generation,
+                        )
+                    })
+                {
+                    if items.get(idx).is_some() {
+                        if let Some(event) = playback_intents.applied_if_current(
+                            connection_id,
+                            request_id,
+                            generation,
+                        ) {
+                            ctrl_clients
+                                .lock()
+                                .unwrap()
+                                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+                        }
+                    }
+                }
             }
             DaemonEvent::Player(PlayerEvent::NextUpThreshold {
                 series_id,
@@ -320,6 +354,60 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 );
             }
             DaemonEvent::Player(pe) => {
+                if let PlayerEvent::PausedChanged(paused) = &pe {
+                    if let Some((connection_id, request_id, generation)) = playback_intents
+                        .current
+                        .as_ref()
+                        .and_then(|current| match &current.action {
+                            PlaybackIntentAction::SetPaused { paused: desired }
+                                if desired == paused =>
+                            {
+                                Some((
+                                    current.connection_id,
+                                    current.request_id,
+                                    current.generation,
+                                ))
+                            }
+                            _ => None,
+                        })
+                    {
+                        if let Some(event) = playback_intents.applied_if_current(
+                            connection_id,
+                            request_id,
+                            generation,
+                        ) {
+                            ctrl_clients
+                                .lock()
+                                .unwrap()
+                                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+                        }
+                    }
+                }
+                if matches!(pe, PlayerEvent::Stopped { .. }) {
+                    if let Some((connection_id, request_id, generation)) = playback_intents
+                        .current
+                        .as_ref()
+                        .filter(|current| matches!(current.action, PlaybackIntentAction::Stop))
+                        .map(|current| {
+                            (
+                                current.connection_id,
+                                current.request_id,
+                                current.generation,
+                            )
+                        })
+                    {
+                        if let Some(event) = playback_intents.applied_if_current(
+                            connection_id,
+                            request_id,
+                            generation,
+                        ) {
+                            ctrl_clients
+                                .lock()
+                                .unwrap()
+                                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+                        }
+                    }
+                }
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
             }
             DaemonEvent::Ws(ws_ev) => {
@@ -353,11 +441,84 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &mut source,
                     &shared_queue,
                     &ctrl_clients,
+                    &mut playback_intents,
+                    None,
+                    &merged_tx,
+                );
+            }
+            DaemonEvent::PlaybackResolved {
+                command,
+                client_id,
+                reply_tx,
+                request_id,
+                generation,
+                fetched,
+            } => {
+                if !ctrl_clients.lock().unwrap().has_client(client_id) {
+                    playback_intents.invalidate_connection(client_id);
+                    continue;
+                }
+                if !playback_intents.is_current(client_id, request_id, generation) {
+                    continue;
+                }
+                if let Err(error) = &fetched {
+                    if let Some(event) = playback_intents.rejected_if_current(
+                        client_id,
+                        request_id,
+                        generation,
+                        crate::ctrl::PlaybackIntentRejection::ResolutionFailed,
+                    ) {
+                        ctrl_clients
+                            .lock()
+                            .unwrap()
+                            .send_to_client(client_id, &CtrlEvent::PlaybackIntent(event));
+                    }
+                    log::warn!(target: "daemon", "ctrl play resolution failed: {error}");
+                    continue;
+                }
+                if let Ok(items_for_intent) = &fetched {
+                    let rejection = if items_for_intent.is_empty() {
+                        Some(crate::ctrl::PlaybackIntentRejection::EmptyTarget)
+                    } else if audio_only_rejection(audio_only, items_for_intent).is_some() {
+                        Some(crate::ctrl::PlaybackIntentRejection::AudioOnly)
+                    } else {
+                        None
+                    };
+                    if let Some(reason) = rejection {
+                        if let Some(event) = playback_intents
+                            .rejected_if_current(client_id, request_id, generation, reason)
+                        {
+                            ctrl_clients
+                                .lock()
+                                .unwrap()
+                                .send_to_client(client_id, &CtrlEvent::PlaybackIntent(event));
+                        }
+                        continue;
+                    }
+                }
+                playback_intents.mark_starting(request_id);
+                handle_ctrl(
+                    command,
+                    client_id,
+                    CtrlRequest {
+                        reply_tx: &reply_tx,
+                    },
+                    &client,
+                    &player,
+                    audio_only,
+                    &mut items,
+                    &mut cursor,
+                    &mut source,
+                    &shared_queue,
+                    &ctrl_clients,
+                    &mut playback_intents,
+                    Some(fetched),
                     &merged_tx,
                 );
             }
             DaemonEvent::CtrlDisconnected(client_id) => {
                 ctrl_clients.lock().unwrap().remove(client_id);
+                playback_intents.invalidate_connection(client_id);
             }
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");

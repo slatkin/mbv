@@ -184,6 +184,13 @@ impl PlayerProxy {
         }
     }
 
+    pub fn send_playback_intent(&self, intent: crate::ctrl::PlaybackIntent) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(remote) => remote.send_playback_intent(intent),
+        }
+    }
+
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.send_command(cmd),
@@ -200,22 +207,38 @@ impl PlayerProxy {
 
     pub fn next(&self) -> bool {
         match self.status.lock().unwrap().next_idx() {
-            Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),
+            Some(idx) => match &self.inner {
+                PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::JumpTo(idx)),
+                PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
+                    remote.new_playback_intent(crate::ctrl::PlaybackIntentAction::Next),
+                ),
+            },
             None => false,
         }
     }
 
     pub fn previous(&self) -> bool {
         match self.status.lock().unwrap().previous_idx() {
-            Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),
+            Some(idx) => match &self.inner {
+                PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::JumpTo(idx)),
+                PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
+                    remote.new_playback_intent(crate::ctrl::PlaybackIntentAction::Previous),
+                ),
+            },
             None => false,
         }
     }
 
     pub fn set_paused(&self, paused: bool) -> bool {
-        match self.status.lock().unwrap().toggle_to_reach(paused) {
-            Some(cmd) => self.send_command(cmd),
-            None => false,
+        match &self.inner {
+            PlayerProxyInner::Local(_) => match self.status.lock().unwrap().toggle_to_reach(paused)
+            {
+                Some(cmd) => self.send_command(cmd),
+                None => false,
+            },
+            PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
+                remote.new_playback_intent(crate::ctrl::PlaybackIntentAction::SetPaused { paused }),
+            ),
         }
     }
 
