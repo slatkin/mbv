@@ -88,6 +88,16 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
             _ => 32,
         })
         .unwrap_or(32);
+    let audio_pipe_playout_delay_ms = match misc
+        .and_then(|m| m.get("audio_pipe_playout_delay_ms"))
+        .and_then(|v| v.as_integer())
+    {
+        Some(value) if value < 0 => {
+            return Err("mpv.audio_pipe_playout_delay_ms must be nonnegative".to_string())
+        }
+        Some(value) => Some(value as u64),
+        None => None,
+    };
 
     let always_play_next = queue
         .and_then(|q| q.get("always_play_next"))
@@ -258,6 +268,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         audio_pipe_path,
         audio_pipe_samplerate,
         audio_pipe_bitdepth,
+        audio_pipe_playout_delay_ms,
         always_play_next,
         consume_videos,
         consume_audio,

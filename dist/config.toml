@@ -12,6 +12,10 @@ audio_pipe_enabled    = false
 audio_pipe_path       = "/tmp/mbv-pipe"
 audio_pipe_samplerate = 44100
 audio_pipe_bitdepth   = 16
+# Optional user-calibrated estimate after mbv starts pipe output. It only
+# drives progress display and duplicate-play guarding; mbv never contacts the
+# downstream consumer. Omit it when the delay is unknown.
+# audio_pipe_playout_delay_ms = 1250
 
 [daemon]
 show_systray_icon = true

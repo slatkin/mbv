@@ -281,7 +281,8 @@ fn handle_ctrl(
             player.stop();
         }
         CtrlCmd::PlaybackIntent(intent) => {
-            let accepted = playback_intents.accept(_client_id, intent.clone());
+            let pipe_output = client.lock().unwrap().config.audio_pipe_enabled;
+            let accepted = playback_intents.accept(_client_id, intent.clone(), pipe_output);
             let coalesced = accepted.iter().any(|event| {
                 matches!(
                     event.outcome,
@@ -290,6 +291,10 @@ fn handle_ctrl(
             });
             for event in accepted {
                 send_to(request.reply_tx, &CtrlEvent::PlaybackIntent(event));
+            }
+            if let Some(status) = playback_intents.pipe_status() {
+                log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
+                send_to(request.reply_tx, &CtrlEvent::PipePlaybackStatus(status));
             }
             if coalesced {
                 return;
@@ -302,6 +307,10 @@ fn handle_ctrl(
                     source: intent_source,
                 } => {
                     playback_intents.mark_resolving(intent.request_id);
+                    if let Some(status) = playback_intents.pipe_status() {
+                        log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
+                        send_to(request.reply_tx, &CtrlEvent::PipePlaybackStatus(status));
+                    }
                     let command = CtrlCmd::PlayItems {
                         item_ids: item_ids.clone(),
                         start_idx,

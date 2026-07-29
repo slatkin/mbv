@@ -346,6 +346,11 @@ fn apply_ctrl_event(
                 let _ = event_tx.send(PlayerEvent::PlaybackIntent(event));
             }
         }
+        CtrlEvent::PipePlaybackStatus(status_event) => {
+            if notify {
+                let _ = event_tx.send(PlayerEvent::PipePlaybackStatus(status_event));
+            }
+        }
         CtrlEvent::Disconnected { reason } => {
             if notify {
                 let msg = disconnect_reason_message(&reason).to_string();

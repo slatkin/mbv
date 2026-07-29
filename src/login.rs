@@ -116,6 +116,7 @@ pub fn run(
                     audio_pipe_path: base_config.audio_pipe_path.clone(),
                     audio_pipe_samplerate: base_config.audio_pipe_samplerate,
                     audio_pipe_bitdepth: base_config.audio_pipe_bitdepth,
+                    audio_pipe_playout_delay_ms: base_config.audio_pipe_playout_delay_ms,
                     always_play_next: base_config.always_play_next,
                     consume_videos: base_config.consume_videos,
                     consume_audio: base_config.consume_audio,

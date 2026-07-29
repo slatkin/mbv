@@ -38,12 +38,14 @@ audio_pipe_enabled = true
         audio_pipe_path = "/tmp/custom-pipe"
 audio_pipe_samplerate = 96000
 audio_pipe_bitdepth = 16
+audio_pipe_playout_delay_ms = 1250
 "#;
         let cfg = parse_config(toml).unwrap();
         assert!(cfg.audio_pipe_enabled);
         assert_eq!(cfg.audio_pipe_path, "/tmp/custom-pipe");
         assert_eq!(cfg.audio_pipe_samplerate, 96000);
         assert_eq!(cfg.audio_pipe_bitdepth, 16);
+        assert_eq!(cfg.audio_pipe_playout_delay_ms, Some(1250));
     }
 
     #[cfg(test)]
@@ -54,6 +56,14 @@ audio_pipe_bitdepth = 16
         assert_eq!(cfg.audio_pipe_path, "/tmp/mbv-pipe");
         assert_eq!(cfg.audio_pipe_samplerate, 192_000);
         assert_eq!(cfg.audio_pipe_bitdepth, 32);
+        assert_eq!(cfg.audio_pipe_playout_delay_ms, None);
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn negative_audio_pipe_playout_delay_is_rejected() {
+        let error = parse_config("[server]\nurl = \"http://localhost\"\n[mpv]\naudio_pipe_playout_delay_ms = -1").unwrap_err();
+        assert!(error.contains("audio_pipe_playout_delay_ms"));
     }
 
     #[cfg(test)]

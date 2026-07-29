@@ -16,6 +16,10 @@ pub struct Config {
     pub audio_pipe_path: String,
     pub audio_pipe_samplerate: u32, // fixed output rate forced on the pipe (Hz); mpv resamples everything to this
     pub audio_pipe_bitdepth: u8,    // fixed PCM bit depth for the pipe (16|24|32)
+    /// Optional user-calibrated estimate of buffering after mbv starts
+    /// writing PCM to the pipe. This is deliberately not a downstream
+    /// consumer setting: mbv never queries or controls that consumer.
+    pub audio_pipe_playout_delay_ms: Option<u64>,
     pub always_play_next: bool,
     pub consume_videos: bool,
     pub consume_audio: bool,
@@ -89,6 +93,7 @@ impl Default for Config {
             audio_pipe_path: "/tmp/mbv-pipe".to_string(),
             audio_pipe_samplerate: 192_000,
             audio_pipe_bitdepth: 32,
+            audio_pipe_playout_delay_ms: None,
             always_play_next: false,
             consume_videos: false,
             consume_audio: false,
