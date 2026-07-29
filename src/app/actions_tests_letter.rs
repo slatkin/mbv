@@ -73,7 +73,7 @@ fn active_lib_is_tvshows_true_only_on_a_tvshows_library_tab() {
     // fetch) branches on this. Covers both view modes indirectly, since
     // `lib_tab_offset()` is view-mode-independent -- the tab_idx math is
     // identical whether the active library tab was reached through the
-    // standard tab bar or Power View's left panel.
+    // standard tab bar or the library panel.
     let mut app = make_app_stub();
     app.libs.push(lib_tab("tvshows"));
     app.libs.push(lib_tab("music"));

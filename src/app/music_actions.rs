@@ -1,7 +1,7 @@
 use super::{App, BrowseLevel};
 
 impl App {
-    /// True when Power View should show the combined music group view:
+    /// True when mbv should show the combined music group view:
     /// a group-selector bar at top with the album list below.
     /// Activated when `music.levels` starts with `"group"` and the nav stack
     /// has a group level plus an album level above it.
@@ -148,7 +148,7 @@ impl App {
         );
     }
 
-    /// Whether the Power View letter-range pill row applies to `lib_idx`
+    /// Whether the letter-range pill row applies to `lib_idx`
     /// right now: a non-music library, not searching, at the top browse
     /// level of its nav stack (`nav_stack.len() == 1`), with a captured true
     /// total (`LibraryTab.library_total`) over `LIBRARY_PILL_THRESHOLD`. See
@@ -305,7 +305,7 @@ impl App {
     // Visibility bump: private -> `pub(super)`. Called from
     // `handle_lib_loaded`, which stays behind in `actions.rs`.
     pub(super) fn maybe_auto_push_power_music_group_level(&mut self, lib_idx: usize) {
-        // In Power View: when the group list loads for a music library with
+        // When the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.
         let should_auto_push_music = self.library_tab == lib_idx + 1

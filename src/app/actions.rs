@@ -195,7 +195,7 @@ impl App {
         }
         self.on_queue_replace_silent();
         self.set_queue_scope(self.playback_target_queue_scope());
-        // Keep library focus when playing from the power-view library panel.
+        // Keep library focus when playing from the library panel.
         if !matches!(self.panel_focus, PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
@@ -236,7 +236,7 @@ impl App {
             self.apply_route_for_playback(&item);
         }
         self.on_queue_replace_silent();
-        // Keep library focus when playing from the power-view library panel.
+        // Keep library focus when playing from the library panel.
         if !matches!(self.panel_focus, PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }

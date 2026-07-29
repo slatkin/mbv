@@ -7,11 +7,11 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 #[test]
-fn power_view_uses_configured_left_column_width() {
+fn uses_configured_left_column_width() {
     let mut app = make_power_movie_app();
     app.queue_column_width = 55;
 
-    let layout = render_power_view(&mut app, 100, 28);
+    let layout = render_view(&mut app, 100, 28);
 
     assert_eq!(layout.queue_area.width, 51);
 }
@@ -22,7 +22,7 @@ fn collapsed_power_left_column_gives_library_full_width() {
     app.queue_column_width = 55;
     app.queue_column_collapsed = true;
 
-    let layout = render_power_view(&mut app, 100, 28);
+    let layout = render_view(&mut app, 100, 28);
 
     assert_eq!(layout.queue_area, Rect::default());
     assert_eq!(layout.left_area.x, 0);
@@ -30,11 +30,11 @@ fn collapsed_power_left_column_gives_library_full_width() {
 }
 
 #[test]
-fn short_power_view_keeps_queue_in_left_column() {
+fn short_window_keeps_queue_in_left_column() {
     let mut app = make_power_movie_app();
     app.queue_column_width = 40;
 
-    let layout = render_power_view(&mut app, 100, 12);
+    let layout = render_view(&mut app, 100, 12);
 
     assert!(
         layout.queue_area.x < app.queue_column_width,
@@ -52,7 +52,7 @@ fn short_power_view_keeps_queue_in_left_column() {
 fn power_queue_panel_fills_remaining_left_column_with_short_queue() {
     let mut app = make_power_queue_app(1);
 
-    let (_term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
+    let (_term, layout) = render_view_to_terminal(&mut app, 100, 28);
     let bottom_y = layout.queue_area.y + layout.queue_area.height;
 
     assert_eq!(bottom_y, 26);
@@ -67,7 +67,7 @@ fn power_queue_panel_fills_remaining_left_column_with_short_queue() {
 fn power_queue_panel_empty_state_is_inside_panel() {
     let mut app = make_power_queue_app(0);
 
-    let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
+    let (term, layout) = render_view_to_terminal(&mut app, 100, 28);
     let out = buffer_to_string(&term);
     let empty_y = out
         .lines()
@@ -82,7 +82,7 @@ fn power_queue_title_and_scope_pills_stay_outside_panel() {
     let mut app = make_power_remote_queue_app();
     app.use_nerd_fonts = false;
 
-    let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
+    let (term, layout) = render_view_to_terminal(&mut app, 100, 28);
     let out = buffer_to_string(&term);
     let header = out
         .lines()
@@ -112,7 +112,7 @@ fn power_queue_title_does_not_render_playlist_pill() {
         name: "Road Mix".into(),
     };
 
-    let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
+    let (term, layout) = render_view_to_terminal(&mut app, 100, 28);
     let out = buffer_to_string(&term);
     let header = out
         .lines()
@@ -132,20 +132,20 @@ fn power_queue_title_does_not_render_playlist_pill() {
 }
 
 #[test]
-fn power_view_bottom_status_bar_shows_playlist_pill_when_queue_is_a_playlist() {
+fn bottom_status_bar_shows_playlist_pill_when_queue_is_a_playlist() {
     let mut app = make_power_queue_app(2);
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("pl1".into()),
         name: "Road Mix".into(),
     };
 
-    let (term, _layout) = render_power_view_to_terminal(&mut app, 100, 28);
+    let (term, _layout) = render_view_to_terminal(&mut app, 100, 28);
     let out = buffer_to_string(&term);
     let last_line = out.lines().last().unwrap_or_default();
 
     assert!(
         last_line.contains("Road Mix"),
-        "expected the playlist pill to appear in the Power View status bar:\n{last_line}"
+        "expected the playlist pill to appear in the main status bar:\n{last_line}"
     );
 }
 
@@ -153,7 +153,7 @@ fn power_view_bottom_status_bar_shows_playlist_pill_when_queue_is_a_playlist() {
 fn short_power_queue_panel_drops_padding_before_rows() {
     let mut app = make_power_queue_app(20);
 
-    let (_term, layout) = render_power_view_to_terminal(&mut app, 100, 12);
+    let (_term, layout) = render_view_to_terminal(&mut app, 100, 12);
 
     assert!(
         layout.queue_area.height >= 1,
@@ -226,7 +226,7 @@ fn power_queue_panel_preserves_group_aware_scrolling() {
     app.player_tab.set_items(items, 4);
     app.queue_scroll = 9;
 
-    let (_term, _layout) = render_power_view_to_terminal(&mut app, 100, 20);
+    let (_term, _layout) = render_view_to_terminal(&mut app, 100, 20);
 
     assert_eq!(app.queue_scroll, 9);
 }

@@ -92,8 +92,8 @@ pub(super) enum Command {
         delta: i64,
     },
 
-    /// `h` in Power View: collapse or expand the physical left column that
-    /// contains the Power View queue card and queue.
+    /// `h` in the queue column: collapse or expand the physical left column that
+    /// contains the queue card and queue.
     TogglePowerSidebar,
 }
 
@@ -148,7 +148,7 @@ pub(super) fn playback_command_for_key(
 /// command it must resolve to — so the test exercises the whole displayed
 /// claim, not just one side of it.
 ///
-/// Power-view-specific bindings that are not playback commands stay documented
+/// View-specific bindings that are not playback commands stay documented
 /// separately in `render_help_panel`.
 pub(super) struct PlaybackHelpBinding {
     /// Display text shown in the help overlay (e.g. `"Space"`, `"< / >"`).
@@ -331,12 +331,12 @@ pub(super) fn help_command_for_key(chord: KeyChord) -> Option<Command> {
     }
 }
 
-/// Translate a key event in active Power inline album track mode.
+/// Translate a key event in active inline album track mode.
 ///
 /// This context is only active once `album_track_focus` is already `Some`, so
-/// entering track mode from the album row remains in the Power left-panel view
-/// handler. The command keeps `lib_idx` because Power View's left panel can
-/// point at any library tab while `tab_idx` remains on the queue tab.
+/// entering track mode from the album row remains in the library-panel view
+/// handler. The command keeps `lib_idx` because the library panel can
+/// point at any library tab.
 pub(super) fn power_album_track_command_for_key(
     chord: KeyChord,
     lib_idx: usize,

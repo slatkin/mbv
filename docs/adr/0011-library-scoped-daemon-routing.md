@@ -15,7 +15,7 @@ route is rejected with a toast, not auto-swapped or auto-cleared. Starting
 a new queue (replace) re-evaluates the route from scratch.
 
 Route resolution order:
-1. Nav-scoped views (Library tab, Power View, Album/Artist drill-down,
+1. Nav-scoped views (Library tab, Album/Artist drill-down,
    in-library search) resolve the active library directly from
    navigation state -- no network call.
 2. Cross-library aggregate views (Home tab: Continue Watching/Next Up,

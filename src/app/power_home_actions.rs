@@ -2,7 +2,7 @@ use super::App;
 use mbv_core::api::MediaItem;
 
 impl App {
-    // ── Power-view home flat list ────────────────────────────────────────────
+    // ── Home flat list ───────────────────────────────────────────────────────
 
     /// The MediaItem at the current flat `home_cursor`, or None.
     pub(super) fn power_home_current_item(&self) -> Option<MediaItem> {

@@ -117,7 +117,7 @@ fn toggle_mute_falls_back_to_cycle_audio_when_remote_session_connected() {
 }
 
 // ── album_tracks_cache / LibEvent::AlbumTracksFetched (#145) ────────────
-// Proactive track-list fetch/cache for the Power View inline album
+// Proactive track-list fetch/cache for the inline album
 // detail pane, mirroring the existing `album_artist_cache` pattern.
 
 #[test]

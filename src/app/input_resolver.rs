@@ -63,7 +63,7 @@ pub(super) enum KeyResolution {
 pub(super) struct InputSnapshot {
     pub player_active: bool,
     pub has_remote_session: bool,
-    /// Power-view inline album track-selection mode is active (`album_track_focus`
+    /// Inline album track-selection mode is active (`album_track_focus`
     /// is `Some`). While active, Esc must exit track-selection mode rather than
     /// stop playback -- see the `Stop` special-case in `resolve_key`.
     pub track_select_active: bool,

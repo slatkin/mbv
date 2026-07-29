@@ -32,7 +32,7 @@ pub struct PlayerStatus {
     #[serde(default)]
     pub art_item_id: String,
     /// Album id for the current track, when it's a grouped audio track
-    /// (mirrors the `Audio` + non-empty `album_id` grouping the Power View
+    /// (mirrors the `Audio` + non-empty `album_id` grouping the
     /// queue card already uses in `src/app/render/power/card.rs`, so the
     /// same disk-cache entry a browsed album card populated can be reused
     /// here). Empty when not applicable.
@@ -60,7 +60,7 @@ impl PlayerStatus {
         self.artist = item.artist.clone();
         self.album = item.album.clone();
         self.art_item_id = item.id.clone();
-        // Same audio-album grouping condition as the Power View queue card
+        // Same audio-album grouping condition as the queue card
         // (src/app/render/power/card.rs) uses for its cache key, so a
         // previously browsed/cached album cover is found under the same key.
         self.art_album_id = if item.item_type == "Audio" && !item.album_id.is_empty() {

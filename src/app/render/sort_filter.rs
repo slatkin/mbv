@@ -115,7 +115,7 @@ pub(super) fn letter_bucket(item: &mbv_core::api::MediaItem, total: usize) -> St
     .to_string()
 }
 
-/// Library size above which the Power View library list shows the
+/// Library size above which the library list shows the
 /// letter-range pill row (see `LetterFilter`), scoping the server fetch to
 /// one range at a time. Unrelated to the 50-item in-list header threshold
 /// used by `use_letter_groups` in `list.rs`.
