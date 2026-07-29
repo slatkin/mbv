@@ -62,6 +62,16 @@ impl App {
                 }
                 _ => {}
             },
+            ConfirmAction::DeletePlaylist { id, name } => match key.code {
+                KeyCode::Char('y') => {
+                    self.confirm_modal = None;
+                    self.spawn_delete_playlist(id, name);
+                }
+                KeyCode::Esc => {
+                    self.confirm_modal = None;
+                }
+                _ => {}
+            },
             ConfirmAction::DiscardOrSaveDirtyPlaylist => {
                 let play_after = matches!(
                     self.pending_queue_action,

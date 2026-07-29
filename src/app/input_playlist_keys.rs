@@ -9,7 +9,7 @@ impl App {
     pub(super) fn handle_key_save_playlist_entry(&mut self, key: KeyEvent) -> Option<bool> {
         let is_entry_stage = matches!(
             self.save_playlist_dialog.as_ref().map(|d| &d.stage),
-            Some(SavePlaylistStage::EnterName)
+            Some(SavePlaylistStage::EnterName | SavePlaylistStage::RenamePlaylist { .. })
         );
         if is_entry_stage {
             Some(self.handle_save_playlist_key(key))
@@ -159,6 +159,30 @@ impl App {
                     self.load_and_play_playlist(pl.id);
                 }
             }
+            KeyCode::Char('n') if key.modifiers.is_empty() && self.playlists_open.is_none() => {
+                if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
+                    self.save_playlist_dialog = Some(SavePlaylistDialog {
+                        input: pl.name,
+                        stage: SavePlaylistStage::RenamePlaylist { id: pl.id },
+                    });
+                }
+            }
+            KeyCode::Char('d') if key.modifiers.is_empty() && self.playlists_open.is_none() => {
+                if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
+                    self.confirm_modal = Some(ConfirmModal {
+                        title: " Delete Playlist ".into(),
+                        message: format!(
+                            "Delete playlist '{}'?",
+                            super::ui_util::trunc_str(&pl.name, 40)
+                        ),
+                        hint: "[y] Confirm    [Esc] Cancel".into(),
+                        on_confirm: ConfirmAction::DeletePlaylist {
+                            id: pl.id,
+                            name: pl.name,
+                        },
+                    });
+                }
+            }
             KeyCode::Char('r') => {
                 if self.playlists_open.is_some() {
                     if let Some(pl) = self.playlists_open.clone() {
@@ -178,13 +202,14 @@ impl App {
         let Some(ref dialog) = self.save_playlist_dialog else {
             return false;
         };
-        // Only `EnterName` is handled here -- once a name collides with an
-        // existing playlist, `SavePlaylistStage::ConfirmOverwrite` is driven
-        // entirely by the shared confirmation-modal dispatcher
-        // (`handle_key_confirm_modal`), which sits above this entry in
-        // `CONTEXT_STACK` and claims the key first whenever `confirm_modal`
-        // is `Some`.
-        if !matches!(dialog.stage, SavePlaylistStage::EnterName) {
+        // Only `EnterName` and `RenamePlaylist` are handled here -- once a
+        // name collides with an existing playlist, `ConfirmOverwrite` is
+        // driven entirely by the shared confirmation-modal dispatcher
+        // (`handle_key_confirm_modal`).
+        if !matches!(
+            dialog.stage,
+            SavePlaylistStage::EnterName | SavePlaylistStage::RenamePlaylist { .. }
+        ) {
             return false;
         }
         match key.code {
@@ -208,6 +233,13 @@ impl App {
             KeyCode::Enter => {
                 let name = dialog.input.trim().to_string();
                 if name.is_empty() {
+                    return false;
+                }
+                if let SavePlaylistStage::RenamePlaylist { ref id } = dialog.stage {
+                    let id = id.clone();
+                    self.save_playlist_dialog = None;
+                    self.force_clear = true;
+                    self.spawn_rename_playlist(id, name);
                     return false;
                 }
                 let playlists = {

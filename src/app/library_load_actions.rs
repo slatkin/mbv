@@ -85,6 +85,46 @@ impl App {
         });
     }
 
+    pub(super) fn spawn_rename_playlist(&mut self, playlist_id: String, new_name: String) {
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = client.rename_playlist(&playlist_id, &new_name) {
+                let _ = tx.send(LibEvent::Error(format!("Rename failed: {e}")));
+            } else {
+                let _ = tx.send(LibEvent::PlaylistRenamed { new_name });
+            }
+            match client.get_playlists() {
+                Ok(items) => {
+                    let _ = tx.send(LibEvent::PlaylistsLoaded(items));
+                }
+                Err(e) => {
+                    let _ = tx.send(LibEvent::Error(e));
+                }
+            }
+        });
+    }
+
+    pub(super) fn spawn_delete_playlist(&mut self, playlist_id: String, name: String) {
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = client.delete_playlist(&playlist_id) {
+                let _ = tx.send(LibEvent::Error(format!("Delete failed: {e}")));
+            } else {
+                let _ = tx.send(LibEvent::PlaylistDeleted { name });
+            }
+            match client.get_playlists() {
+                Ok(items) => {
+                    let _ = tx.send(LibEvent::PlaylistsLoaded(items));
+                }
+                Err(e) => {
+                    let _ = tx.send(LibEvent::Error(e));
+                }
+            }
+        });
+    }
+
     pub(super) fn spawn_open_playlist(&mut self, playlist: MediaItem) {
         if self.playlists_open_loading {
             return;

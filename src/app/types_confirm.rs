@@ -10,6 +10,7 @@ pub(super) enum ConfirmAction {
     RescanLibrary(usize),
     SaveOverwritePlaylist { existing_id: String },
     DiscardOrSaveDirtyPlaylist,
+    DeletePlaylist { id: String, name: String },
 }
 
 /// State for the shared confirmation-modal overlay: a centered, bordered
