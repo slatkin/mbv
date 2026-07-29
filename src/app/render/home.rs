@@ -118,16 +118,67 @@ impl App {
         // flat cursor item whether the active pill is Continue Watching or one
         // of the Newest sections.
         let hero_item = self.power_home_current_item();
-        // Row budget for the hero image is the primary size control: an
-        // independent, terminal-height-aware target computed up front, not
-        // derived from how long a given item's overview text happens to be.
-        // Mirrors render_card_image's terminal-height-aware cap.
-        let max_allowed = content_area.height.saturating_sub(7);
-        let hero_img_rows = max_allowed
-            .min(if self.terminal_height <= 30 { 12 } else { 24 })
-            .max(10.min(max_allowed));
-        let hero: Option<(mbv_core::api::MediaItem, u16, KeepWatchingHeroLayout)> =
-            if area.width < 24 {
+        let two_column = area.width >= 80;
+
+        // Hero data: (item, meta_area, img_area, meta_layout)
+        let hero_data: Option<(mbv_core::api::MediaItem, Rect, Rect, KeepWatchingHeroLayout)>;
+        let list_area: Rect;
+
+        if two_column {
+            // Two-column layout: hero on left, list on right
+            let hero_col_width = ((area.width as u32 * 2 / 5) as u16)
+                .max(12)
+                .min(area.width.saturating_sub(12));
+            let hero_col_height = content_area.height;
+
+            hero_data = hero_item.and_then(|item| {
+                let meta_w = hero_col_width as usize;
+                let mut meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
+                // Cap metadata to leave at least 4 rows for the image
+                let max_meta = hero_col_height.saturating_sub(4);
+                meta_layout.height = meta_layout.height.min(max_meta);
+                if meta_layout.height < 4 || hero_col_height < 5 {
+                    None
+                } else {
+                    let meta_area = Rect {
+                        x: content_area.x,
+                        y: content_area.y,
+                        width: hero_col_width,
+                        height: meta_layout.height,
+                    };
+                    let img_area = Rect {
+                        x: content_area.x,
+                        y: content_area.y + meta_layout.height,
+                        width: hero_col_width,
+                        height: hero_col_height.saturating_sub(meta_layout.height),
+                    };
+                    Some((item, meta_area, img_area, meta_layout))
+                }
+            });
+
+            list_area = if hero_data.is_some() {
+                Rect {
+                    x: content_area.x + hero_col_width + 1,
+                    y: content_area.y,
+                    width: content_area.width.saturating_sub(hero_col_width + 1),
+                    height: content_area.height,
+                }
+            } else {
+                // No hero item: list takes full width
+                content_area
+            };
+        } else {
+            // Vertical layout: hero on top, list below (unchanged behavior)
+            // Row budget for the hero image is the primary size control: an
+            // independent, terminal-height-aware target computed up front, not
+            // derived from how long a given item's overview text happens to be.
+            // Mirrors render_card_image's terminal-height-aware cap.
+            let max_allowed = content_area.height.saturating_sub(7);
+            let hero_img_rows = max_allowed
+                .min(if self.terminal_height <= 30 { 12 } else { 24 })
+                .max(10.min(max_allowed));
+
+            hero_data = if area.width < 24 {
                 None
             } else {
                 hero_item.and_then(|item| {
@@ -140,40 +191,45 @@ impl App {
                     if meta_layout.height < 4 {
                         None
                     } else {
-                        Some((item, img_w, meta_layout))
+                        let hero_area = Rect {
+                            x: content_area.x,
+                            y: content_area.y,
+                            width: content_area.width,
+                            height: hero_img_rows,
+                        };
+                        let meta_area = Rect {
+                            x: hero_area.x,
+                            y: hero_area.y,
+                            width: hero_area.width.saturating_sub(img_w + 1),
+                            height: hero_img_rows,
+                        };
+                        let img_area = Rect {
+                            x: hero_area.x + hero_area.width.saturating_sub(img_w),
+                            y: hero_area.y,
+                            width: img_w,
+                            height: hero_img_rows,
+                        };
+                        Some((item, meta_area, img_area, meta_layout))
                     }
                 })
             };
-        let hero_h: u16 = if hero.is_some() { hero_img_rows } else { 0 };
 
-        let list_area = Rect {
-            y: content_area.y + hero_h + 2,
-            height: content_area.height.saturating_sub(hero_h + 2),
-            ..content_area
-        };
+            let hero_h: u16 = if hero_data.is_some() {
+                hero_img_rows
+            } else {
+                0
+            };
+            list_area = Rect {
+                y: content_area.y + hero_h + 2,
+                height: content_area.height.saturating_sub(hero_h + 2),
+                ..content_area
+            };
+        }
+
         layout.left_area = list_area;
 
-        if let Some((item, img_w, meta_layout)) = &hero {
-            let img_w = *img_w;
-            let hero_area = Rect {
-                x: content_area.x,
-                y: content_area.y,
-                width: content_area.width,
-                height: hero_h,
-            };
-            let meta_area = Rect {
-                x: hero_area.x,
-                y: hero_area.y,
-                width: hero_area.width.saturating_sub(img_w + 1),
-                height: hero_h,
-            };
-            let img_area = Rect {
-                x: hero_area.x + hero_area.width.saturating_sub(img_w),
-                y: hero_area.y,
-                width: img_w,
-                height: hero_h,
-            };
-
+        // Render hero (shared between both layout modes)
+        if let Some((item, meta_area, img_area, meta_layout)) = &hero_data {
             let cache_key = format!("{}:pwr_kw", item.id);
             if self.images_enabled() {
                 let img_types = Self::keep_watching_hero_image_types(item);
@@ -184,8 +240,8 @@ impl App {
                     img_types,
                 );
             }
-            self.render_keep_watching_hero_image(f, img_area, &cache_key);
-            self.render_keep_watching_hero_meta(f, meta_area, item, meta_layout, focused);
+            self.render_keep_watching_hero_image(f, *img_area, &cache_key);
+            self.render_keep_watching_hero_meta(f, *meta_area, item, meta_layout, focused);
         }
 
         let content_h = rows.len().max(1) as u16;
