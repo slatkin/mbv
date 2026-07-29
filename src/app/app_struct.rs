@@ -206,7 +206,6 @@ pub struct App {
     pub(super) mute_on: bool,
     pub(super) visualizer_enabled: bool,
     pub(super) visualizer_failed: bool,
-    pub(super) spectrum_started: bool,
     pub(super) visualizer: Option<CavaWorker>,
     pub(super) visualizer_frame: Vec<f32>,
     pub(super) last_scroll_at: Instant,

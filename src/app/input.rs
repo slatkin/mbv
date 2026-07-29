@@ -128,13 +128,6 @@ impl App {
 
     pub(super) fn handle_key_visualizer(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code == KeyCode::Char('v') && key.modifiers.is_empty() {
-            if !self.visualizer_enabled
-                && self.player.is_remote()
-                && !self.player.supports_spectrum()
-            {
-                self.flash_status("Visualizer not supported by this daemon".to_string());
-                return Some(false);
-            }
             self.toggle_visualizer();
             Some(false)
         } else {

@@ -69,7 +69,5 @@ the old connection dying first).
   arrives.
 - Authority goes to `None` only when the last ctrl client disconnects. If any
   ctrl clients remain, they can still command.
-- Spectrum state stops on any client disconnect (phase 1, acknowledged as
-  imperfect; phase 2 adds per-client tracking).
 - Method renames: `send_to_driver()` → `broadcast_to_all()`,
   `disconnect_driver()` → `notify_emby_authority()` or removed.

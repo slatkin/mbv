@@ -1,5 +1,4 @@
 use super::App;
-use mbv_core::ctrl::CtrlCmd;
 use mbv_core::visualizer::CavaWorker;
 
 impl App {
@@ -19,19 +18,6 @@ impl App {
         let is_local = !self.player.is_remote() && self.connected_session_id.is_none();
         let audio_pipe_enabled = self.client.lock().unwrap().config.audio_pipe_enabled;
         let active = self.player.status.lock().unwrap().active;
-
-        if self.visualizer_enabled
-            && self.player.is_remote()
-            && active
-            && self.player.supports_spectrum()
-            && !self.visualizer_failed
-        {
-            if !self.spectrum_started {
-                let _ = self.player.send_ctrl_cmd(CtrlCmd::StartSpectrum);
-                self.spectrum_started = true;
-            }
-            return;
-        }
 
         let should_run = self.visualizer_enabled && is_local && active && !audio_pipe_enabled;
         if !should_run {
@@ -56,10 +42,6 @@ impl App {
         if let Some(mut worker) = self.visualizer.take() {
             worker.stop();
         }
-        if self.player.is_remote() {
-            let _ = self.player.send_ctrl_cmd(CtrlCmd::StopSpectrum);
-        }
-        self.spectrum_started = false;
         self.visualizer_frame.clear();
     }
 
@@ -93,96 +75,6 @@ mod tests {
         app.visualizer_enabled = true;
         app.sync_visualizer();
         assert!(app.visualizer.is_none());
-    }
-
-    #[test]
-    fn daemon_visualizer_toggle_sends_start_spectrum() {
-        let (mut app, cmd_rx) =
-            crate::app::tests::make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
-        app.visualizer_enabled = false;
-        app.visualizer_failed = true;
-        app.player.status.lock().unwrap().active = true;
-        app.toggle_visualizer();
-        assert!(app.visualizer_enabled);
-        assert!(!app.visualizer_failed);
-        let cmd = cmd_rx.try_recv().unwrap();
-        assert!(matches!(cmd, mbv_core::ctrl::CtrlCmd::StartSpectrum));
-    }
-
-    #[test]
-    fn daemon_visualizer_toggle_off_sends_stop_spectrum() {
-        let (mut app, cmd_rx) =
-            crate::app::tests::make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
-        app.visualizer_enabled = true;
-        app.toggle_visualizer();
-        assert!(!app.visualizer_enabled);
-        let cmd = cmd_rx.try_recv().unwrap();
-        assert!(matches!(cmd, mbv_core::ctrl::CtrlCmd::StopSpectrum));
-    }
-
-    #[test]
-    fn stop_visualizer_worker_sends_stop_spectrum_for_remote() {
-        let (mut app, cmd_rx) =
-            crate::app::tests::make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
-        app.stop_visualizer_worker();
-        let cmd = cmd_rx.try_recv().unwrap();
-        assert!(matches!(cmd, mbv_core::ctrl::CtrlCmd::StopSpectrum));
-    }
-
-    #[test]
-    fn stop_visualizer_worker_does_not_send_stop_spectrum_for_local() {
-        let mut app = crate::app::tests::make_app_stub();
-        app.stop_visualizer_worker();
-        // No ctrl channel, so send_ctrl_cmd returns false — no panic
-    }
-
-    #[test]
-    fn daemon_without_spectrum_support_cannot_toggle_visualizer() {
-        let (mut app, _cmd_rx) =
-            crate::app::tests::make_v2_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
-        app.visualizer_enabled = false;
-        app.player.status.lock().unwrap().active = true;
-        app.handle_key_visualizer(crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('v'),
-            crossterm::event::KeyModifiers::NONE,
-        ));
-        assert!(!app.visualizer_enabled);
-    }
-
-    #[test]
-    fn spectrum_event_writes_frame() {
-        let mut app = crate::app::tests::make_app_stub();
-        let bars = vec![0.5; 64];
-        let ev = mbv_core::player::PlayerEvent::Spectrum(bars.clone());
-        app.handle_player_event(ev);
-        assert_eq!(app.visualizer_frame, bars);
-    }
-
-    #[test]
-    fn spectrum_failed_sets_visualizer_failed() {
-        let mut app = crate::app::tests::make_app_stub();
-        let ev = mbv_core::player::PlayerEvent::SpectrumFailed("cava not found".to_string());
-        app.handle_player_event(ev);
-        assert!(app.visualizer_failed);
-    }
-
-    #[test]
-    fn remote_spectrum_failure_does_not_retry_on_sync() {
-        let (mut app, cmd_rx) =
-            crate::app::tests::make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
-        app.visualizer_enabled = true;
-        app.player.status.lock().unwrap().active = true;
-
-        app.handle_player_event(mbv_core::player::PlayerEvent::SpectrumFailed(
-            "cava exited".to_string(),
-        ));
-        app.sync_visualizer();
-        app.sync_visualizer();
-
-        assert!(app.visualizer_failed);
-        assert!(!cmd_rx
-            .try_iter()
-            .any(|cmd| matches!(cmd, mbv_core::ctrl::CtrlCmd::StartSpectrum)));
     }
 
     #[test]

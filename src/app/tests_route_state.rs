@@ -151,9 +151,8 @@ fn switch_to_direct_remote_disconnects_the_previous_remote_on_a_remote_to_remote
     daemon_a_stream
         .set_read_timeout(Some(Duration::from_secs(2)))
         .unwrap();
-    // `stop_visualizer_worker` may have queued a final StopSpectrum command
-    // before the socket shutdown. Drain any such in-flight control bytes and
-    // require the peer to reach EOF within the timeout.
+    // Drain any in-flight control bytes before the socket shutdown
+    // and require the peer to reach EOF within the timeout.
     let mut pending_control_bytes = Vec::new();
     daemon_a_stream
         .read_to_end(&mut pending_control_bytes)
@@ -257,9 +256,8 @@ fn switch_to_library_route_disconnects_the_previous_remote_on_a_route_to_route_s
     daemon_a_stream
         .set_read_timeout(Some(Duration::from_secs(2)))
         .unwrap();
-    // `stop_visualizer_worker` may have queued a final StopSpectrum command
-    // before the socket shutdown. Drain any such in-flight control bytes and
-    // require the peer to reach EOF within the timeout.
+    // Drain any in-flight control bytes before the socket shutdown
+    // and require the peer to reach EOF within the timeout.
     let mut pending_control_bytes = Vec::new();
     daemon_a_stream
         .read_to_end(&mut pending_control_bytes)

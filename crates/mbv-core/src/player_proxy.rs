@@ -191,13 +191,6 @@ impl PlayerProxy {
         }
     }
 
-    pub fn supports_spectrum(&self) -> bool {
-        match &self.inner {
-            PlayerProxyInner::Local(_) => false,
-            PlayerProxyInner::Remote(r) => r.supports_spectrum(),
-        }
-    }
-
     pub fn supports_queue_append(&self) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => true,

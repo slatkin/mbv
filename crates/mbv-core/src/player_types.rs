@@ -219,10 +219,6 @@ pub enum PlayerEvent {
     /// mirror to become stale. The detail describes what was detected. The UI
     /// shows this as a warning toast.
     QueueDesynced(String),
-    /// Spectrum frame from daemon spectrum streaming (64 normalized bar values).
-    Spectrum(Vec<f32>),
-    /// Daemon spectrum streaming failed (CAVA unavailable or crashed).
-    SpectrumFailed(String),
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

@@ -28,7 +28,7 @@ fn broadcast_queue_state(
 
 fn handle_ctrl(
     cmd: CtrlCmd,
-    client_id: CtrlClientId,
+    _client_id: CtrlClientId,
     request: CtrlRequest<'_>,
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
@@ -38,8 +38,7 @@ fn handle_ctrl(
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
-    merged_tx: &mpsc::Sender<DaemonEvent>,
-    spectrum_state: &mut Option<SpectrumState>,
+    _merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
     // Authority returns to Ctrl on the next ctrl command (not on connect).
     {
@@ -265,45 +264,6 @@ fn handle_ctrl(
         }
         CtrlCmd::Stop => {
             player.stop();
-        }
-        CtrlCmd::StartSpectrum => {
-            if spectrum_state.is_some() {
-                log::debug!(target: "daemon", "spectrum already active, ignoring StartSpectrum");
-                if let Some(state) = spectrum_state.as_mut() {
-                    state.add_subscriber(client_id);
-                }
-                return;
-            }
-            let config = client.lock().unwrap().config.clone();
-            if let Err(error) = crate::visualizer::daemon_spectrum_prerequisites(&config) {
-                log::warn!(target: "daemon", "spectrum prerequisites unavailable: {error}");
-                send_to(
-                    request.reply_tx,
-                    &CtrlEvent::SpectrumFailed { reason: error },
-                );
-                return;
-            }
-            match SpectrumState::start(config, merged_tx.clone(), client_id) {
-                Ok(state) => {
-                    log::info!(target: "daemon", "spectrum streaming started");
-                    *spectrum_state = Some(state);
-                }
-                Err(e) => {
-                    log::warn!(target: "daemon", "spectrum start failed: {e}");
-                    send_to(request.reply_tx, &CtrlEvent::SpectrumFailed { reason: e });
-                }
-            }
-        }
-        CtrlCmd::StopSpectrum => {
-            let last_subscriber_removed = spectrum_state
-                .as_mut()
-                .map_or(false, |state| state.remove_subscriber(client_id));
-            if last_subscriber_removed {
-                if let Some(mut state) = spectrum_state.take() {
-                    log::info!(target: "daemon", "spectrum streaming stopped");
-                    state.stop();
-                }
-            }
         }
     }
 }

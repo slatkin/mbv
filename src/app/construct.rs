@@ -113,7 +113,6 @@ impl App {
             mute_on: prefs["mute_on"].as_bool().unwrap_or(false),
             visualizer_enabled: prefs["visualizer_enabled"].as_bool().unwrap_or(false),
             visualizer_failed: false,
-            spectrum_started: false,
             visualizer: None,
             visualizer_frame: Vec::new(),
             last_played_item_id: None,
