@@ -26,6 +26,7 @@ fn broadcast_queue_state(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_ctrl(
     cmd: CtrlCmd,
     _client_id: CtrlClientId,
@@ -38,6 +39,8 @@ fn handle_ctrl(
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
+    playback_intents: &mut PlaybackIntentState,
+    mut resolved_items: Option<Result<Vec<MediaItem>, String>>,
     _merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
     // Authority returns to Ctrl on the next ctrl command (not on connect).
@@ -189,13 +192,21 @@ fn handle_ctrl(
             start_ticks,
             source: new_source,
         } => {
-            let fetched = {
-                let c = client.lock().unwrap();
-                match c.get_items_by_ids(&item_ids) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        log::warn!(target: "daemon", "ctrl play error: {e}");
-                        return;
+            let fetched = match resolved_items.take() {
+                Some(Ok(v)) => v,
+                Some(Err(e)) => {
+                    log::warn!(target: "daemon", "ctrl play error: {e}");
+                    send_to(request.reply_tx, &CtrlEvent::CommandRejected(e));
+                    return;
+                }
+                None => {
+                    let c = client.lock().unwrap();
+                    match c.get_items_by_ids(&item_ids) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            log::warn!(target: "daemon", "ctrl play error: {e}");
+                            return;
+                        }
                     }
                 }
             };
@@ -264,6 +275,66 @@ fn handle_ctrl(
         }
         CtrlCmd::Stop => {
             player.stop();
+        }
+        CtrlCmd::PlaybackIntent(intent) => {
+            let accepted = playback_intents.accept(_client_id, intent.clone());
+            let coalesced = accepted.iter().any(|event| {
+                matches!(event.outcome, crate::ctrl::PlaybackIntentOutcome::Coalesced { .. })
+            });
+            for event in accepted {
+                send_to(request.reply_tx, &CtrlEvent::PlaybackIntent(event));
+            }
+            if coalesced {
+                return;
+            }
+            match intent.action {
+                crate::ctrl::PlaybackIntentAction::Play {
+                    item_ids,
+                    start_idx,
+                    start_ticks,
+                    source: intent_source,
+                } => {
+                    playback_intents.mark_resolving(intent.request_id);
+                    let command = CtrlCmd::PlayItems {
+                        item_ids: item_ids.clone(),
+                        start_idx,
+                        start_ticks,
+                        source: intent_source,
+                    };
+                    let tx = _merged_tx.clone();
+                    let lookup_client = client.lock().unwrap().clone();
+                    let request_id = intent.request_id;
+                    let generation = intent.generation;
+                    let reply_tx = (*request.reply_tx).clone();
+                    std::thread::spawn(move || {
+                        let fetched = lookup_client.get_items_by_ids(&item_ids);
+                        let _ = tx.send(DaemonEvent::PlaybackResolved {
+                            command,
+                            client_id: _client_id,
+                            reply_tx,
+                            request_id,
+                            generation,
+                            fetched,
+                        });
+                    });
+                }
+                crate::ctrl::PlaybackIntentAction::Stop => player.stop(),
+                crate::ctrl::PlaybackIntentAction::SetPaused { paused } => {
+                    if player.status.lock().unwrap().paused != paused {
+                        player.send_command(PlayerCommand::TogglePause);
+                    }
+                }
+                crate::ctrl::PlaybackIntentAction::Next => {
+                    if let Some(idx) = player.status.lock().unwrap().next_idx() {
+                        player.send_command(PlayerCommand::JumpTo(idx));
+                    }
+                }
+                crate::ctrl::PlaybackIntentAction::Previous => {
+                    if let Some(idx) = player.status.lock().unwrap().previous_idx() {
+                        player.send_command(PlayerCommand::JumpTo(idx));
+                    }
+                }
+            }
         }
     }
 }

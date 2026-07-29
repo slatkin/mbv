@@ -100,6 +100,7 @@ fn status_only_preserves_event_confirmed_current_index() {
         &items,
         &queue_source,
         &tx,
+        &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
     );
 
@@ -124,6 +125,7 @@ fn state_uses_cursor_as_current_index() {
         &items,
         &queue_source,
         &tx,
+        &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
     );
 
@@ -147,6 +149,7 @@ fn status_only_preserves_current_idx_and_queue_len() {
         &items,
         &queue_source,
         &tx,
+        &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
     );
 
@@ -176,6 +179,7 @@ fn state_derives_queue_len_from_items_not_status() {
         &items,
         &queue_source,
         &tx,
+        &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
     );
 
@@ -195,6 +199,7 @@ fn track_changed_updates_current_idx_but_not_queue_len() {
         &items,
         &queue_source,
         &tx,
+        &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
     );
 
@@ -216,6 +221,7 @@ fn command_rejected_forwards_reason_as_player_event() {
         &items,
         &queue_source,
         &tx,
+        &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
     );
 

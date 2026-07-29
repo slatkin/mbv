@@ -163,6 +163,8 @@ pub enum PlayerEvent {
         error: Option<String>,
     },
     TrackChanged(usize),
+    /// Emitted after the player confirms its paused property transition.
+    PausedChanged(bool),
     TrackCompleted {
         idx: usize,
         position_ticks: i64,
@@ -207,6 +209,9 @@ pub enum PlayerEvent {
     /// command. The reason string is server-computed and shown to the user
     /// as-is (e.g. via the transient status toast). See #90.
     CommandRejected(String),
+    /// Correlated lifecycle update for a guarded direct-daemon playback
+    /// intent. The confirmed PlayerStatus remains authoritative separately.
+    PlaybackIntent(crate::ctrl::PlaybackIntentEvent),
     /// Emitted by RemotePlayer when the daemon intentionally disconnects this
     /// ctrl client (actual connection close, not an authority-change notification).
     RemoteDisconnected(String),

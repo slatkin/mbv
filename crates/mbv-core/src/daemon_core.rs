@@ -5,7 +5,11 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, MediaItem};
-use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason};
+use crate::ctrl::{
+    CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason, PlaybackGeneration,
+    PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent, PlaybackIntentOutcome,
+    PlaybackRequestId,
+};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 
@@ -44,6 +48,14 @@ enum DaemonEvent {
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.
     Ctrl(CtrlCmd, CtrlClientId, CtrlSender),
+    PlaybackResolved {
+        command: CtrlCmd,
+        client_id: CtrlClientId,
+        reply_tx: CtrlSender,
+        request_id: PlaybackRequestId,
+        generation: PlaybackGeneration,
+        fetched: Result<Vec<MediaItem>, String>,
+    },
     CtrlDisconnected(CtrlClientId),
     Shutdown,
 }
@@ -104,6 +116,172 @@ type ClientRegistry = Arc<Mutex<CtrlClients>>;
 
 struct CtrlRequest<'a> {
     reply_tx: &'a CtrlSender,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PlaybackIntentPhase {
+    Accepted,
+    Resolving,
+    Starting,
+    Applied,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct CurrentPlaybackIntent {
+    connection_id: CtrlClientId,
+    request_id: PlaybackRequestId,
+    generation: PlaybackGeneration,
+    action: PlaybackIntentAction,
+    phase: PlaybackIntentPhase,
+}
+
+/// Daemon-owned lifecycle state for the guarded direct-playback protocol.
+/// Keeping this separate from the player status prevents queued commands and
+/// early active flags from being mistaken for confirmed playback state.
+#[derive(Default)]
+struct PlaybackIntentState {
+    current: Option<CurrentPlaybackIntent>,
+}
+
+impl PlaybackIntentState {
+    fn is_current(
+        &self,
+        connection_id: CtrlClientId,
+        request_id: PlaybackRequestId,
+        generation: PlaybackGeneration,
+    ) -> bool {
+        self.current.as_ref().is_some_and(|current| {
+            current.connection_id == connection_id
+                && current.request_id == request_id
+                && current.generation == generation
+        })
+    }
+
+    fn accept(
+        &mut self,
+        connection_id: CtrlClientId,
+        intent: PlaybackIntent,
+    ) -> Vec<PlaybackIntentEvent> {
+        if let Some(current) = &self.current {
+            let unresolved = current.phase != PlaybackIntentPhase::Applied;
+            if unresolved && current.connection_id == connection_id {
+                let equivalent = current.action == intent.action
+                    || matches!(
+                        (&current.action, &intent.action),
+                        (PlaybackIntentAction::Next, PlaybackIntentAction::Next)
+                            | (PlaybackIntentAction::Previous, PlaybackIntentAction::Previous)
+                    );
+                if equivalent {
+                    return vec![PlaybackIntentEvent {
+                        request_id: intent.request_id,
+                        generation: intent.generation,
+                        outcome: PlaybackIntentOutcome::Coalesced {
+                            canonical_request_id: current.request_id,
+                        },
+                    }];
+                }
+                if matches!(intent.action, PlaybackIntentAction::Stop)
+                    || matches!(
+                        (&current.action, &intent.action),
+                        (PlaybackIntentAction::Play { .. }, PlaybackIntentAction::Play { .. })
+                    )
+                {
+                    let superseded = PlaybackIntentEvent {
+                        request_id: current.request_id,
+                        generation: current.generation,
+                        outcome: PlaybackIntentOutcome::Superseded,
+                    };
+                    self.current = None;
+                    let accepted = self.accept(connection_id, intent);
+                    let mut events = vec![superseded];
+                    events.extend(accepted);
+                    return events;
+                }
+            }
+        }
+        let event = PlaybackIntentEvent {
+            request_id: intent.request_id,
+            generation: intent.generation,
+            outcome: PlaybackIntentOutcome::Accepted,
+        };
+        self.current = Some(CurrentPlaybackIntent {
+            connection_id,
+            request_id: intent.request_id,
+            generation: intent.generation,
+            action: intent.action,
+            phase: PlaybackIntentPhase::Accepted,
+        });
+        vec![event]
+    }
+
+    fn mark_resolving(&mut self, request_id: PlaybackRequestId) {
+        if let Some(current) = &mut self.current {
+            if current.request_id == request_id {
+                current.phase = PlaybackIntentPhase::Resolving;
+            }
+        }
+    }
+
+    fn mark_starting(&mut self, request_id: PlaybackRequestId) {
+        if let Some(current) = &mut self.current {
+            if current.request_id == request_id {
+                current.phase = PlaybackIntentPhase::Starting;
+            }
+        }
+    }
+
+    fn applied_if_current(
+        &mut self,
+        connection_id: CtrlClientId,
+        request_id: PlaybackRequestId,
+        generation: PlaybackGeneration,
+    ) -> Option<PlaybackIntentEvent> {
+        let current = self.current.as_mut()?;
+        if current.connection_id != connection_id
+            || current.request_id != request_id
+            || current.generation != generation
+        {
+            return None;
+        }
+        current.phase = PlaybackIntentPhase::Applied;
+        Some(PlaybackIntentEvent {
+            request_id,
+            generation,
+            outcome: PlaybackIntentOutcome::Applied,
+        })
+    }
+
+    fn rejected_if_current(
+        &mut self,
+        connection_id: CtrlClientId,
+        request_id: PlaybackRequestId,
+        generation: PlaybackGeneration,
+        reason: crate::ctrl::PlaybackIntentRejection,
+    ) -> Option<PlaybackIntentEvent> {
+        let current = self.current.as_ref()?;
+        if current.connection_id != connection_id
+            || current.request_id != request_id
+            || current.generation != generation
+        {
+            return None;
+        }
+        self.current = None;
+        Some(PlaybackIntentEvent {
+            request_id,
+            generation,
+            outcome: PlaybackIntentOutcome::Rejected { reason },
+        })
+    }
+
+    fn invalidate_connection(&mut self, connection_id: CtrlClientId) {
+        if self
+            .current
+            .as_ref()
+            .is_some_and(|current| current.connection_id == connection_id)
+        {
+            self.current = None;
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -177,6 +355,12 @@ impl CtrlClients {
 
     fn has_client(&self, id: CtrlClientId) -> bool {
         self.connection.iter().any(|c| c.id == id)
+    }
+
+    fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
+        if let Some(client) = self.connection.iter().find(|client| client.id == id) {
+            send_to(&client.tx, event);
+        }
     }
 
     fn has_driver(&self) -> bool {

@@ -1,12 +1,14 @@
 use super::{
     all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
-    CtrlRequest, DaemonEvent, SharedQueueState,
+    CtrlRequest, DaemonEvent, PlaybackIntentState, SharedQueueState,
 };
 use crate::api::MediaItem;
 use crate::config::{Config, QueueSource};
 use crate::ctrl::DisconnectReason;
-use crate::ctrl::{CtrlCmd, WireCommand};
+use crate::ctrl::{
+    CtrlCmd, PlaybackIntent, PlaybackIntentAction, PlaybackIntentOutcome, WireCommand,
+};
 use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
 use crate::ws::WsEvent;
 use std::sync::{mpsc, Arc, Mutex};
@@ -267,6 +269,8 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         &mut source,
         &shared_queue_state(),
         &registry,
+        &mut PlaybackIntentState::default(),
+        None,
         &dummy_merged_tx,
     );
 
@@ -315,6 +319,8 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &mut source,
         &shared_queue_state(),
         &registry,
+        &mut PlaybackIntentState::default(),
+        None,
         &dummy_merged_tx,
     );
 
@@ -380,6 +386,8 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
         &mut source,
         &shared_queue,
         &registry,
+        &mut PlaybackIntentState::default(),
+        None,
         &dummy_merged_tx,
     );
 
@@ -456,6 +464,8 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
         &mut source,
         &shared_queue,
         &registry,
+        &mut PlaybackIntentState::default(),
+        None,
         &dummy_merged_tx,
     );
 
@@ -531,6 +541,8 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
         &mut source,
         &shared_queue,
         &registry,
+        &mut PlaybackIntentState::default(),
+        None,
         &dummy_merged_tx,
     );
 
@@ -602,4 +614,57 @@ fn websocket_takeover_helper_records_emby_remote_authority() {
     let clients = registry.lock().unwrap();
     assert!(!clients.has_driver());
     assert_eq!(clients.authority, AuthorityHolder::EmbyRemote);
+}
+
+#[test]
+fn playback_intent_state_coalesces_startup_and_supersedes_new_play() {
+    let mut state = PlaybackIntentState::default();
+    let first = PlaybackIntent {
+        request_id: 1,
+        generation: 1,
+        action: PlaybackIntentAction::Play {
+            item_ids: vec!["a".into()],
+            start_idx: 0,
+            start_ticks: 0,
+            source: QueueSource::Album,
+        },
+    };
+    assert!(matches!(
+        state.accept(7, first.clone())[0].outcome,
+        PlaybackIntentOutcome::Accepted
+    ));
+    state.mark_resolving(1);
+
+    let duplicate = PlaybackIntent { request_id: 2, generation: 2, ..first.clone() };
+    assert!(matches!(
+        state.accept(7, duplicate)[0].outcome,
+        PlaybackIntentOutcome::Coalesced { canonical_request_id: 1 }
+    ));
+
+    let newer = PlaybackIntent {
+        request_id: 3,
+        generation: 3,
+        action: PlaybackIntentAction::Play {
+            item_ids: vec!["b".into()],
+            start_idx: 0,
+            start_ticks: 0,
+            source: QueueSource::Album,
+        },
+    };
+    let events = state.accept(7, newer);
+    assert!(matches!(events[0].outcome, PlaybackIntentOutcome::Superseded));
+    assert!(matches!(events[1].outcome, PlaybackIntentOutcome::Accepted));
+}
+
+#[test]
+fn stale_playback_resolution_cannot_apply_after_disconnect() {
+    let mut state = PlaybackIntentState::default();
+    let intent = PlaybackIntent {
+        request_id: 9,
+        generation: 4,
+        action: PlaybackIntentAction::Stop,
+    };
+    state.accept(11, intent);
+    state.invalidate_connection(11);
+    assert!(state.applied_if_current(11, 9, 4).is_none());
 }
