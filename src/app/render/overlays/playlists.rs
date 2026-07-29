@@ -27,7 +27,7 @@ impl App {
         } else {
             (
                 "PLAYLISTS".to_string(),
-                "[↵]play [→]browse [r]refresh [Esc]close".to_string(),
+                "[↵]play [→]browse [n]rename [d]delete [r]refresh [Esc]close".to_string(),
             )
         };
 
@@ -262,10 +262,10 @@ impl App {
         let Some(ref dialog) = self.save_playlist_dialog else {
             return;
         };
-        // Only `EnterName` renders here -- once a name collides with an
-        // existing playlist, the shared confirmation modal takes over
-        // (`SavePlaylistStage::ConfirmOverwrite` / `ConfirmAction::SaveOverwritePlaylist`).
-        if !matches!(dialog.stage, SavePlaylistStage::EnterName) {
+        // Only `EnterName` and `RenamePlaylist` render here -- once a name
+        // collides with an existing playlist, the shared confirmation modal
+        // takes over (`ConfirmOverwrite` / `ConfirmAction::SaveOverwritePlaylist`).
+        if matches!(dialog.stage, SavePlaylistStage::ConfirmOverwrite) {
             return;
         }
         self.render_backdrop_dim(f);
@@ -281,9 +281,13 @@ impl App {
             height: h,
         };
         f.render_widget(Clear, rect);
+        let title_text = match dialog.stage {
+            SavePlaylistStage::RenamePlaylist { .. } => " Rename Playlist ",
+            _ => " Save as Playlist ",
+        };
         let block = Block::default()
             .title(Span::styled(
-                " Save as Playlist ",
+                title_text,
                 Style::default()
                     .fg(palette::IRIS)
                     .add_modifier(Modifier::BOLD),
