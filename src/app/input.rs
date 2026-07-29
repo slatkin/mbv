@@ -128,6 +128,9 @@ impl App {
 
     pub(super) fn handle_key_visualizer(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code == KeyCode::Char('v') && key.modifiers.is_empty() {
+            if self.connected_session_id.is_some() {
+                return Some(false);
+            }
             if !self.visualizer_enabled
                 && self.player.is_remote()
                 && !self.player.supports_spectrum()

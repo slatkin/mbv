@@ -150,6 +150,37 @@ mod tests {
     }
 
     #[test]
+    fn attached_remote_session_visualizer_key_is_noop() {
+        let (mut app, cmd_rx) =
+            crate::app::tests::make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
+        app.connected_session_id = Some("session-1".to_string());
+        app.visualizer_enabled = false;
+
+        let handled = app.handle_key_visualizer(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('v'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert_eq!(handled, Some(false));
+        assert!(!app.visualizer_enabled);
+        assert!(cmd_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn local_visualizer_key_still_toggles() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = false;
+
+        let handled = app.handle_key_visualizer(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('v'),
+            crossterm::event::KeyModifiers::NONE,
+        ));
+
+        assert_eq!(handled, Some(false));
+        assert!(app.visualizer_enabled);
+    }
+
+    #[test]
     fn spectrum_event_writes_frame() {
         let mut app = crate::app::tests::make_app_stub();
         let bars = vec![0.5; 64];
