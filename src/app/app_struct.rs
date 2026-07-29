@@ -79,6 +79,8 @@ pub struct App {
     pub(super) last_click_time: Instant,
     pub(super) last_click_pos: (u16, u16),
     pub(super) last_drag_seek: Instant,
+    pub(super) last_space_press: Option<Instant>,
+    pub(super) last_esc_press: Option<Instant>,
     /// The single active yes/no confirmation prompt (clear queue, remove
     /// now-playing item, rescan library, save-playlist overwrite/discard),
     /// rendered and dispatched by the shared confirmation-modal component.

@@ -290,10 +290,18 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                         PlaybackIntentAction::Play { item_ids, .. } => items
                             .get(idx)
                             .is_some_and(|item| item_ids.iter().any(|id| id == &item.id)),
-                        PlaybackIntentAction::Next | PlaybackIntentAction::Previous => true,
+                        PlaybackIntentAction::Next | PlaybackIntentAction::Previous => {
+                            current.target_idx.is_some_and(|target| target == idx)
+                        }
                         _ => false,
                     })
-                    .map(|current| (current.connection_id, current.request_id, current.generation))
+                    .map(|current| {
+                        (
+                            current.connection_id,
+                            current.request_id,
+                            current.generation,
+                        )
+                    })
                 {
                     if items.get(idx).is_some() {
                         if let Some(event) = playback_intents.applied_if_current(
@@ -301,10 +309,10 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                             request_id,
                             generation,
                         ) {
-                            ctrl_clients.lock().unwrap().send_to_client(
-                                connection_id,
-                                &CtrlEvent::PlaybackIntent(event),
-                            );
+                            ctrl_clients
+                                .lock()
+                                .unwrap()
+                                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
                         }
                     }
                 }
@@ -352,11 +360,14 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                         .as_ref()
                         .and_then(|current| match &current.action {
                             PlaybackIntentAction::SetPaused { paused: desired }
-                                if desired == paused => Some((
+                                if desired == paused =>
+                            {
+                                Some((
                                     current.connection_id,
                                     current.request_id,
                                     current.generation,
-                                )),
+                                ))
+                            }
                             _ => None,
                         })
                     {
@@ -365,10 +376,10 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                             request_id,
                             generation,
                         ) {
-                            ctrl_clients.lock().unwrap().send_to_client(
-                                connection_id,
-                                &CtrlEvent::PlaybackIntent(event),
-                            );
+                            ctrl_clients
+                                .lock()
+                                .unwrap()
+                                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
                         }
                     }
                 }
@@ -377,18 +388,24 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                         .current
                         .as_ref()
                         .filter(|current| matches!(current.action, PlaybackIntentAction::Stop))
-                        .map(|current| (current.connection_id, current.request_id, current.generation))
+                        .map(|current| {
+                            (
+                                current.connection_id,
+                                current.request_id,
+                                current.generation,
+                            )
+                        })
                     {
-                            if let Some(event) = playback_intents.applied_if_current(
-                                connection_id,
-                                request_id,
-                                generation,
-                            ) {
-                                ctrl_clients.lock().unwrap().send_to_client(
-                                    connection_id,
-                                    &CtrlEvent::PlaybackIntent(event),
-                                );
-                            }
+                        if let Some(event) = playback_intents.applied_if_current(
+                            connection_id,
+                            request_id,
+                            generation,
+                        ) {
+                            ctrl_clients
+                                .lock()
+                                .unwrap()
+                                .send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+                        }
                     }
                 }
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
@@ -468,12 +485,9 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                         None
                     };
                     if let Some(reason) = rejection {
-                        if let Some(event) = playback_intents.rejected_if_current(
-                            client_id,
-                            request_id,
-                            generation,
-                            reason,
-                        ) {
+                        if let Some(event) = playback_intents
+                            .rejected_if_current(client_id, request_id, generation, reason)
+                        {
                             ctrl_clients
                                 .lock()
                                 .unwrap()
@@ -486,7 +500,9 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 handle_ctrl(
                     command,
                     client_id,
-                    CtrlRequest { reply_tx: &reply_tx },
+                    CtrlRequest {
+                        reply_tx: &reply_tx,
+                    },
                     &client,
                     &player,
                     audio_only,

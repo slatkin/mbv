@@ -184,6 +184,8 @@ pub(crate) fn make_app_stub() -> App {
         mouse_row: 0,
         last_click_time: std::time::Instant::now(),
         last_drag_seek: std::time::Instant::now(),
+        last_space_press: None,
+        last_esc_press: None,
         last_click_pos: (u16::MAX, u16::MAX),
         confirm_modal: None,
         pending_delete_idx: None,

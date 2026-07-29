@@ -211,6 +211,10 @@ fn handle_ctrl(
                 }
             };
             if fetched.is_empty() {
+                log::warn!(
+                    target: "daemon",
+                    "ctrl play: fetched items are empty, discarding request"
+                );
                 return;
             }
             if let Some(reason) = audio_only_rejection(audio_only, &fetched) {
@@ -279,7 +283,10 @@ fn handle_ctrl(
         CtrlCmd::PlaybackIntent(intent) => {
             let accepted = playback_intents.accept(_client_id, intent.clone());
             let coalesced = accepted.iter().any(|event| {
-                matches!(event.outcome, crate::ctrl::PlaybackIntentOutcome::Coalesced { .. })
+                matches!(
+                    event.outcome,
+                    crate::ctrl::PlaybackIntentOutcome::Coalesced { .. }
+                )
             });
             for event in accepted {
                 send_to(request.reply_tx, &CtrlEvent::PlaybackIntent(event));
@@ -326,11 +333,13 @@ fn handle_ctrl(
                 }
                 crate::ctrl::PlaybackIntentAction::Next => {
                     if let Some(idx) = player.status.lock().unwrap().next_idx() {
+                        playback_intents.set_target_idx(intent.request_id, idx);
                         player.send_command(PlayerCommand::JumpTo(idx));
                     }
                 }
                 crate::ctrl::PlaybackIntentAction::Previous => {
                     if let Some(idx) = player.status.lock().unwrap().previous_idx() {
+                        playback_intents.set_target_idx(intent.request_id, idx);
                         player.send_command(PlayerCommand::JumpTo(idx));
                     }
                 }

@@ -219,10 +219,8 @@ impl PlayerProxy {
 
     pub fn previous(&self) -> bool {
         match self.status.lock().unwrap().previous_idx() {
-            Some(_) => match &self.inner {
-                PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::JumpTo(
-                    self.status.lock().unwrap().previous_idx().unwrap(),
-                )),
+            Some(idx) => match &self.inner {
+                PlayerProxyInner::Local(_) => self.send_command(PlayerCommand::JumpTo(idx)),
                 PlayerProxyInner::Remote(remote) => remote.send_playback_intent(
                     remote.new_playback_intent(crate::ctrl::PlaybackIntentAction::Previous),
                 ),
@@ -233,7 +231,8 @@ impl PlayerProxy {
 
     pub fn set_paused(&self, paused: bool) -> bool {
         match &self.inner {
-            PlayerProxyInner::Local(_) => match self.status.lock().unwrap().toggle_to_reach(paused) {
+            PlayerProxyInner::Local(_) => match self.status.lock().unwrap().toggle_to_reach(paused)
+            {
                 Some(cmd) => self.send_command(cmd),
                 None => false,
             },

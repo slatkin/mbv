@@ -6,9 +6,8 @@ use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, MediaItem};
 use crate::ctrl::{
-    CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason, PlaybackGeneration,
-    PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent, PlaybackIntentOutcome,
-    PlaybackRequestId,
+    CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason, PlaybackGeneration, PlaybackIntent,
+    PlaybackIntentAction, PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
 };
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
@@ -133,6 +132,12 @@ struct CurrentPlaybackIntent {
     generation: PlaybackGeneration,
     action: PlaybackIntentAction,
     phase: PlaybackIntentPhase,
+    /// The index this intent is expected to land on, set when the action is
+    /// executed (e.g. the `next_idx()` computed at command time for `Next`).
+    /// `None` until the command is actually dispatched; used by the
+    /// `TrackChanged` handler to avoid crediting natural track transitions
+    /// (end-of-file auto-advance) to a pending Next/Previous intent.
+    target_idx: Option<usize>,
 }
 
 /// Daemon-owned lifecycle state for the guarded direct-playback protocol.
@@ -169,7 +174,10 @@ impl PlaybackIntentState {
                     || matches!(
                         (&current.action, &intent.action),
                         (PlaybackIntentAction::Next, PlaybackIntentAction::Next)
-                            | (PlaybackIntentAction::Previous, PlaybackIntentAction::Previous)
+                            | (
+                                PlaybackIntentAction::Previous,
+                                PlaybackIntentAction::Previous
+                            )
                     );
                 if equivalent {
                     return vec![PlaybackIntentEvent {
@@ -183,7 +191,10 @@ impl PlaybackIntentState {
                 if matches!(intent.action, PlaybackIntentAction::Stop)
                     || matches!(
                         (&current.action, &intent.action),
-                        (PlaybackIntentAction::Play { .. }, PlaybackIntentAction::Play { .. })
+                        (
+                            PlaybackIntentAction::Play { .. },
+                            PlaybackIntentAction::Play { .. }
+                        )
                     )
                 {
                     let superseded = PlaybackIntentEvent {
@@ -210,6 +221,7 @@ impl PlaybackIntentState {
             generation: intent.generation,
             action: intent.action,
             phase: PlaybackIntentPhase::Accepted,
+            target_idx: None,
         });
         vec![event]
     }
@@ -226,6 +238,14 @@ impl PlaybackIntentState {
         if let Some(current) = &mut self.current {
             if current.request_id == request_id {
                 current.phase = PlaybackIntentPhase::Starting;
+            }
+        }
+    }
+
+    fn set_target_idx(&mut self, request_id: PlaybackRequestId, idx: usize) {
+        if let Some(current) = &mut self.current {
+            if current.request_id == request_id {
+                current.target_idx = Some(idx);
             }
         }
     }

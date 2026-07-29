@@ -611,9 +611,11 @@ impl RemotePlayer {
                 item_ids: vec![item.id.clone()],
                 start_idx: 0,
                 start_ticks: item.playback_position_ticks,
-                source,
+                source: source.clone(),
             },
         ));
+        *self.items.lock().unwrap() = vec![item.clone()];
+        *self.queue_source.lock().unwrap() = source;
     }
 
     pub fn play_queue(
@@ -633,9 +635,11 @@ impl RemotePlayer {
                 item_ids,
                 start_idx,
                 start_ticks,
-                source,
+                source: source.clone(),
             },
         ));
+        *self.items.lock().unwrap() = items;
+        *self.queue_source.lock().unwrap() = source;
     }
 
     pub fn stop(&self) {

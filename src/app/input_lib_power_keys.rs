@@ -2,6 +2,7 @@ use super::action::{power_album_track_command_for_key, Command};
 use super::input_resolver::KeyChord;
 use super::{App, ConfirmAction, ConfirmModal, LibSearch, PanelFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::time::{Duration, Instant};
 
 impl App {
     pub(super) fn active_power_album_track_lib_idx(&self) -> Option<usize> {
@@ -321,10 +322,30 @@ impl App {
             super::input_resolver::KeyChord::from_key(key),
         ) {
             super::input_resolver::KeyResolution::Command(cmd @ Command::TogglePlayPause) => {
-                Some(self.dispatch(cmd))
+                let now = Instant::now();
+                let double_tap = self
+                    .last_space_press
+                    .is_some_and(|t| t.elapsed() < Duration::from_millis(300));
+                self.last_space_press = Some(now);
+                if double_tap {
+                    self.last_space_press = None;
+                    Some(self.dispatch(cmd))
+                } else {
+                    None
+                }
             }
             super::input_resolver::KeyResolution::Command(cmd @ Command::Stop) => {
-                Some(self.dispatch(cmd))
+                let now = Instant::now();
+                let double_tap = self
+                    .last_esc_press
+                    .is_some_and(|t| t.elapsed() < Duration::from_millis(300));
+                self.last_esc_press = Some(now);
+                if double_tap {
+                    self.last_esc_press = None;
+                    Some(self.dispatch(cmd))
+                } else {
+                    None
+                }
             }
             super::input_resolver::KeyResolution::Command(cmd) => Some(self.dispatch(cmd)),
             // Swallow is unreachable for Playback today; both non-command outcomes

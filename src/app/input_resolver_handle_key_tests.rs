@@ -50,6 +50,9 @@ fn space_toggles_pause_on_first_press_when_active_via_handle_key() {
         st.active = true;
     }
     let rx = app.player.spy_on_commands();
+    // Double-tap required: first press arms, second within 300ms dispatches.
+    app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+    assert!(!matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
     app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
 }
@@ -75,9 +78,12 @@ fn repeated_space_dispatches_each_available_toggle() {
         st.active = true;
     }
     let rx = app.player.spy_on_commands();
+    // Double-tap required: each dispatch needs a pair of presses.
     app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
     app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
+    app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+    app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
 }
 

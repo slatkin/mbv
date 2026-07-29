@@ -76,6 +76,8 @@ impl App {
             mouse_row: 0,
             last_click_time: Instant::now(),
             last_drag_seek: Instant::now() - Duration::from_secs(1),
+            last_space_press: None,
+            last_esc_press: None,
             last_click_pos: (u16::MAX, u16::MAX),
             confirm_modal: None,
             pending_delete_idx: None,
