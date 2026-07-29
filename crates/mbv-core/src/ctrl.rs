@@ -4,7 +4,7 @@ use crate::api::MediaItem;
 use crate::config::QueueSource;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
-pub const CTRL_PROTOCOL_VERSION: u32 = 5;
+pub const CTRL_PROTOCOL_VERSION: u32 = 6;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
@@ -324,6 +324,28 @@ pub enum CtrlEvent {
     /// reuse it — see #90.
     CommandRejected(String),
     PlaybackIntent(PlaybackIntentEvent),
+    /// Observed pipe-startup progress for a direct daemon client. The daemon
+    /// owns this status; it never represents downstream audibility.
+    PipePlaybackStatus(PipePlaybackStatus),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PipePlaybackStatus {
+    pub request_id: PlaybackRequestId,
+    pub generation: PlaybackGeneration,
+    pub phase: PipePlaybackPhase,
+    /// Approximate time until the configured local estimate expires. Only
+    /// present for `OutputBuffering`; it is not an observed downstream value.
+    pub estimated_remaining_ms: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PipePlaybackPhase {
+    Resolving,
+    PlayerOpening,
+    /// mbv observed mpv's `PlaybackRestart` event for this generation.
+    OutputStarted,
+    OutputBuffering,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -430,6 +452,13 @@ mod tests {
     fn hello_rejects_previous_v4_protocol_version() {
         let mut hello = CtrlHello::current();
         hello.protocol_version = 4;
+        assert!(hello.validate_peer().is_err());
+    }
+
+    #[test]
+    fn hello_rejects_previous_v5_protocol_version() {
+        let mut hello = CtrlHello::current();
+        hello.protocol_version = 5;
         assert!(hello.validate_peer().is_err());
     }
 

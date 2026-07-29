@@ -121,7 +121,8 @@ struct CtrlRequest<'a> {
 enum PlaybackIntentPhase {
     Accepted,
     Resolving,
-    Starting,
+    PlayerOpening,
+    OutputBuffering,
     Applied,
 }
 
@@ -138,6 +139,9 @@ struct CurrentPlaybackIntent {
     /// `TrackChanged` handler to avoid crediting natural track transitions
     /// (end-of-file auto-advance) to a pending Next/Previous intent.
     target_idx: Option<usize>,
+    accepted_at: Instant,
+    pipe_output: bool,
+    buffering_deadline: Option<Instant>,
 }
 
 /// Daemon-owned lifecycle state for the guarded direct-playback protocol.
@@ -166,6 +170,7 @@ impl PlaybackIntentState {
         &mut self,
         connection_id: CtrlClientId,
         intent: PlaybackIntent,
+        pipe_output: bool,
     ) -> Vec<PlaybackIntentEvent> {
         if let Some(current) = &self.current {
             let unresolved = current.phase != PlaybackIntentPhase::Applied;
@@ -203,7 +208,7 @@ impl PlaybackIntentState {
                         outcome: PlaybackIntentOutcome::Superseded,
                     };
                     self.current = None;
-                    let accepted = self.accept(connection_id, intent);
+                    let accepted = self.accept(connection_id, intent, pipe_output);
                     let mut events = vec![superseded];
                     events.extend(accepted);
                     return events;
@@ -222,6 +227,9 @@ impl PlaybackIntentState {
             action: intent.action,
             phase: PlaybackIntentPhase::Accepted,
             target_idx: None,
+            accepted_at: Instant::now(),
+            pipe_output,
+            buffering_deadline: None,
         });
         vec![event]
     }
@@ -237,9 +245,90 @@ impl PlaybackIntentState {
     fn mark_starting(&mut self, request_id: PlaybackRequestId) {
         if let Some(current) = &mut self.current {
             if current.request_id == request_id {
-                current.phase = PlaybackIntentPhase::Starting;
+                current.phase = PlaybackIntentPhase::PlayerOpening;
             }
         }
+    }
+
+    fn pipe_status(&self) -> Option<crate::ctrl::PipePlaybackStatus> {
+        use crate::ctrl::PipePlaybackPhase;
+        let current = self.current.as_ref()?;
+        if !current.pipe_output {
+            return None;
+        }
+        let (phase, estimated_remaining_ms) = match current.phase {
+            PlaybackIntentPhase::Resolving => (PipePlaybackPhase::Resolving, None),
+            PlaybackIntentPhase::PlayerOpening => (PipePlaybackPhase::PlayerOpening, None),
+            PlaybackIntentPhase::OutputBuffering => (
+                PipePlaybackPhase::OutputBuffering,
+                current.buffering_deadline.map(|deadline| {
+                    deadline
+                        .saturating_duration_since(Instant::now())
+                        .as_millis()
+                        .try_into()
+                        .unwrap_or(u64::MAX)
+                }),
+            ),
+            PlaybackIntentPhase::Accepted | PlaybackIntentPhase::Applied => return None,
+        };
+        Some(crate::ctrl::PipePlaybackStatus {
+            request_id: current.request_id,
+            generation: current.generation,
+            phase,
+            estimated_remaining_ms,
+        })
+    }
+
+    fn output_started_if_current(
+        &mut self,
+        delay: Option<Duration>,
+    ) -> Option<(CtrlClientId, crate::ctrl::PipePlaybackStatus)> {
+        let current = self.current.as_mut()?;
+        if !current.pipe_output || !matches!(current.action, PlaybackIntentAction::Play { .. }) {
+            return None;
+        }
+        let (phase, estimated_remaining_ms) = match delay {
+            Some(delay) => {
+                current.phase = PlaybackIntentPhase::OutputBuffering;
+                current.buffering_deadline = Some(Instant::now() + delay);
+                (
+                    crate::ctrl::PipePlaybackPhase::OutputBuffering,
+                    Some(delay.as_millis().try_into().unwrap_or(u64::MAX)),
+                )
+            }
+            None => {
+                current.phase = PlaybackIntentPhase::Applied;
+                (crate::ctrl::PipePlaybackPhase::OutputStarted, None)
+            }
+        };
+        Some((
+            current.connection_id,
+            crate::ctrl::PipePlaybackStatus {
+                request_id: current.request_id,
+                generation: current.generation,
+                phase,
+                estimated_remaining_ms,
+            },
+        ))
+    }
+
+    fn settle_buffering_if_due(&mut self) -> Option<(CtrlClientId, PlaybackIntentEvent)> {
+        let current = self.current.as_mut()?;
+        if current.phase != PlaybackIntentPhase::OutputBuffering
+            || current.buffering_deadline.is_none_or(|deadline| deadline > Instant::now())
+        {
+            return None;
+        }
+        current.phase = PlaybackIntentPhase::Applied;
+        current.buffering_deadline = None;
+        Some((
+            current.connection_id,
+            PlaybackIntentEvent {
+                request_id: current.request_id,
+                generation: current.generation,
+                outcome: PlaybackIntentOutcome::Applied,
+            },
+        ))
     }
 
     fn set_target_idx(&mut self, request_id: PlaybackRequestId, idx: usize) {

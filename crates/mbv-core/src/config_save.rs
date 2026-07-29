@@ -179,6 +179,17 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         "audio_pipe_bitdepth".to_string(),
         toml::Value::Integer(cfg.audio_pipe_bitdepth as i64),
     );
+    match cfg.audio_pipe_playout_delay_ms {
+        Some(delay_ms) => {
+            mbvd.insert(
+                "audio_pipe_playout_delay_ms".to_string(),
+                toml::Value::Integer(delay_ms as i64),
+            );
+        }
+        None => {
+            mbvd.remove("audio_pipe_playout_delay_ms");
+        }
+    }
     let mbvd_client = mbvd
         .entry("client".to_string())
         .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))

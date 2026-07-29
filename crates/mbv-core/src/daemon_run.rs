@@ -269,7 +269,19 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
 
         let ev = match merged_rx.recv_timeout(Duration::from_millis(250)) {
             Ok(ev) => ev,
-            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if let Some((connection_id, event)) = playback_intents.settle_buffering_if_due() {
+                    log::info!(target: "pipe_latency", "request={} generation={} outcome=settled", event.request_id, event.generation);
+                    let clients = ctrl_clients.lock().unwrap();
+                    if clients.has_client(connection_id) {
+                        clients.send_to_client(connection_id, &CtrlEvent::PlaybackIntent(event));
+                    } else {
+                        drop(clients);
+                        playback_intents.invalidate_connection(connection_id);
+                    }
+                }
+                continue;
+            }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 unreachable!("daemon event channel closed")
             }
@@ -352,6 +364,34 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::QueueNextUp { next_idx }),
                 );
+            }
+            DaemonEvent::Player(PlayerEvent::OutputStarted) => {
+                let delay = client
+                    .lock()
+                    .unwrap()
+                    .config
+                    .audio_pipe_playout_delay_ms
+                    .map(Duration::from_millis);
+                if let Some((connection_id, status)) = playback_intents.output_started_if_current(delay) {
+                    log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
+                    ctrl_clients
+                        .lock()
+                        .unwrap()
+                        .send_to_client(connection_id, &CtrlEvent::PipePlaybackStatus(status));
+                    if delay.is_none() {
+                        if let Some(current) = playback_intents.current.as_ref() {
+                            ctrl_clients.lock().unwrap().send_to_client(
+                                current.connection_id,
+                                &CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
+                                    request_id: current.request_id,
+                                    generation: current.generation,
+                                    outcome: PlaybackIntentOutcome::Applied,
+                                }),
+                            );
+                        }
+                    }
+                }
+                broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::OutputStarted));
             }
             DaemonEvent::Player(pe) => {
                 if let PlayerEvent::PausedChanged(paused) = &pe {
@@ -497,6 +537,13 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     }
                 }
                 playback_intents.mark_starting(request_id);
+                if let Some(status) = playback_intents.pipe_status() {
+                    log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
+                    ctrl_clients
+                        .lock()
+                        .unwrap()
+                        .send_to_client(client_id, &CtrlEvent::PipePlaybackStatus(status));
+                }
                 handle_ctrl(
                     command,
                     client_id,

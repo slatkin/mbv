@@ -165,6 +165,9 @@ pub enum PlayerEvent {
     TrackChanged(usize),
     /// Emitted after the player confirms its paused property transition.
     PausedChanged(bool),
+    /// mpv's `PlaybackRestart` event. This confirms mbv's player output
+    /// boundary, not sound at a downstream pipe consumer.
+    OutputStarted,
     TrackCompleted {
         idx: usize,
         position_ticks: i64,
@@ -212,6 +215,9 @@ pub enum PlayerEvent {
     /// Correlated lifecycle update for a guarded direct-daemon playback
     /// intent. The confirmed PlayerStatus remains authoritative separately.
     PlaybackIntent(crate::ctrl::PlaybackIntentEvent),
+    /// Direct-daemon pipe startup status; absent for local, Emby-attached,
+    /// and non-pipe playback routes.
+    PipePlaybackStatus(crate::ctrl::PipePlaybackStatus),
     /// Emitted by RemotePlayer when the daemon intentionally disconnects this
     /// ctrl client (actual connection close, not an authority-change notification).
     RemoteDisconnected(String),

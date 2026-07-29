@@ -147,6 +147,10 @@ impl PlaybackSession {
     }
 
     fn on_playback_restart(&mut self, mpv: &Mpv) {
+        // `PlaybackRestart` is the concrete mpv-owned event used by mbvd as
+        // its output-started boundary. It says nothing about downstream pipe
+        // buffers or actual audibility.
+        let _ = self.event_tx.send(PlayerEvent::OutputStarted);
         {
             let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
             let is_img: bool = mpv

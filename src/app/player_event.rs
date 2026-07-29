@@ -402,7 +402,28 @@ impl App {
                 };
                 self.flash_status(message.to_string());
             }
-            PlayerEvent::PausedChanged(_) => {}
+            PlayerEvent::PipePlaybackStatus(status) => {
+                use mbv_core::ctrl::PipePlaybackPhase;
+                let message = match status.phase {
+                    PipePlaybackPhase::Resolving => "Resolving pipe playback target".to_string(),
+                    PipePlaybackPhase::PlayerOpening => "Opening player output".to_string(),
+                    PipePlaybackPhase::OutputStarted => {
+                        "Output started; downstream delay is unknown".to_string()
+                    }
+                    PipePlaybackPhase::OutputBuffering => {
+                        let remaining = status.estimated_remaining_ms.unwrap_or_default();
+                        format!(
+                            "Output started; estimated output buffering (~{} ms remaining)",
+                            remaining
+                        )
+                    }
+                };
+                // These statuses only originate from a direct pipe-output
+                // daemon. Local, attached-Emby, and ordinary daemon routes
+                // never receive the event, so their presentation is unchanged.
+                self.flash_status(message);
+            }
+            PlayerEvent::PausedChanged(_) | PlayerEvent::OutputStarted => {}
             PlayerEvent::RemoteDisconnected(reason) => {
                 self.restore_local_mode(&reason);
                 self.refresh_after_stop();
