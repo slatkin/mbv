@@ -163,7 +163,7 @@ impl App {
 
     /// Common guard for kicking off `spawn_feed_home_video_aggregate` (or the
     /// podcast equivalent) once a grouped library's root folder listing has
-    /// fully paginated: Power View is showing this library's tab, it's a
+    /// fully paginated: mbv is showing this library's tab, it's a
     /// feed-home-video or podcast library, and its root nav level has loaded
     /// every item. `extra_ok` carries the caller-specific condition (e.g.
     /// which event/level this check is reacting to).

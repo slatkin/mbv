@@ -30,7 +30,7 @@ pub(super) enum AlbumIndexState {
     Ready(Vec<AlbumSearchEntry>),
 }
 
-/// TV series detail data for inline rendering in Power View.
+/// TV series detail data for inline rendering.
 /// When a Series is selected, we proactively fetch seasons and episodes
 /// so the inline detail pane can render without drilling in.
 #[derive(Clone, Debug)]

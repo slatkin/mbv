@@ -8,13 +8,13 @@ pub(super) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(15
 const MAX_IMAGE_FETCHES: usize = 6;
 const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 
-/// Cache key under which the bundled Power View card placeholder is stored in
+/// Cache key under which the bundled queue card placeholder is stored in
 /// `card_image_states`. Never touches `card_image_loading`, so it never triggers
 /// the transient "Loading…" treatment — it is decoded synchronously from the
 /// bundled bytes the first time it's needed and then just sits in the cache.
 pub(super) const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
 
-/// Fixed steady-state placeholder shown in the Power View queue card when no
+/// Fixed steady-state placeholder shown in the queue card when no
 /// queue-card artwork is available.
 static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
     include_bytes!("../../assets/power-card-placeholder.webp");
@@ -64,7 +64,7 @@ impl App {
     }
 
     /// Proactively fetches TV series detail (seasons + episodes) so the
-    /// Power View inline series detail pane can render without the user
+    /// Inline series detail pane can render without the user
     /// drilling in first.
     pub(super) fn fetch_series_detail(&mut self, series_id: String) {
         if self.series_detail_loading.contains(&series_id)

@@ -454,7 +454,7 @@ pub fn start(
                     // Resolve the actual cached-art result (not just the raw
                     // item/album id) into the change-detection key: if art
                     // shows up in the cache after this track already started
-                    // publishing metadata (e.g. a Power View browse populates
+                    // publishing metadata (e.g. a library browse populates
                     // the cache mid-track), the resolved value flips from ""
                     // to a real path and `metadata_changed` fires, instead of
                     // silently staying stuck on the id-only key that never

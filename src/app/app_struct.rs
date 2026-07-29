@@ -92,7 +92,7 @@ pub struct App {
     pub(super) pending_remote_move_cursor: Option<usize>,
     pub(super) skip_intro_end_ticks: Option<i64>,
     pub(super) next_up_item: Option<MediaItem>,
-    // Power-view UI scalars. NOTE: this is NOT the whole of Power's state -- Power also
+    // Main UI scalars.
     // reuses shared self.libs.
     pub(super) panel_focus: PanelFocus,
     pub(super) library_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
@@ -221,14 +221,14 @@ pub struct App {
     pub(super) album_artist_loading: std::collections::HashSet<String>,
     pub(super) pending_album_artist_fetches: std::collections::VecDeque<String>,
     pub(super) album_artist_fetches_active: usize,
-    /// Track lists for the album currently highlighted in Power View's
+    /// Track lists for the album currently highlighted in the
     /// album-folder listing, fetched proactively so the inline album detail
     /// pane (#145) has data without requiring the user to drill in first.
     /// Keyed by album id, mirroring `album_artist_cache`'s never-evicted
     /// lifetime.
     pub(super) album_tracks_cache: std::collections::HashMap<String, Vec<MediaItem>>,
     pub(super) album_tracks_loading: std::collections::HashSet<String>,
-    /// TV series detail cache for inline rendering in Power View.
+    /// TV series detail cache for inline rendering.
     /// When a Series is selected, we proactively fetch seasons and episodes
     /// so the inline detail pane can render without drilling in.
     pub(super) series_detail_cache: std::collections::HashMap<String, SeriesDetail>,

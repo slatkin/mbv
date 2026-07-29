@@ -358,12 +358,12 @@ fn home_search_char_capture_wins_over_h_power_sidebar_toggle_via_handle_key() {
     );
     assert_eq!(
         app.queue_column_collapsed, collapsed_before,
-        "Power View sidebar must not toggle while home search captures 'h'"
+        "Sidebar must not toggle while home search captures 'h'"
     );
 }
 
 #[test]
-fn h_toggles_power_sidebar_in_power_view_via_handle_key() {
+fn h_toggles_sidebar_via_handle_key() {
     let mut app = make_app_stub();
     let before = app.queue_column_collapsed;
     app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
@@ -378,7 +378,7 @@ fn h_does_not_toggle_power_sidebar_while_context_menu_is_open_via_handle_key() {
     app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
     assert_eq!(
         app.queue_column_collapsed, before,
-        "Power View sidebar must not toggle while a context menu is open"
+        "Sidebar must not toggle while a context menu is open"
     );
 }
 

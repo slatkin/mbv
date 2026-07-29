@@ -261,7 +261,7 @@ fn refresh_while_album_index_loads_coalesces_one_replacement() {
 }
 
 #[test]
-fn power_recursive_activation_keeps_power_view_and_enters_inline_tracks() {
+fn recursive_activation_keeps_panel_focus_and_enters_inline_tracks() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = recursive_music_app();
     app.library_tab = 1;

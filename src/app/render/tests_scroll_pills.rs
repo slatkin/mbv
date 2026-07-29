@@ -5,7 +5,7 @@ use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibSearch, LibraryTab, QueueScope, RemoteSlotState};
 
 #[test]
-fn power_view_uses_triangle_resampling() {
+fn uses_triangle_resampling() {
     assert_eq!(POWER_RENDER_FILTER, ratatui_image::FilterType::Triangle);
 }
 

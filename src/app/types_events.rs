@@ -50,7 +50,7 @@ pub(super) enum LibEvent {
         album_id: String,
         artist: String,
     },
-    /// Track list for the album currently highlighted in Power View's
+    /// Track list for the album currently highlighted in the
     /// album-folder listing, fetched proactively (#145) so the inline album
     /// detail pane has data without a nav_stack drilldown.
     AlbumTracksFetched {
@@ -58,7 +58,7 @@ pub(super) enum LibEvent {
         tracks: Vec<MediaItem>,
     },
     /// TV series detail (seasons + episodes) fetched proactively for inline
-    /// rendering in Power View when a Series is selected.
+    /// rendering when a Series is selected.
     SeriesDetailFetched {
         series_id: String,
         seasons: Vec<MediaItem>,

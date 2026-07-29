@@ -45,7 +45,7 @@ impl App {
         {
             return None;
         }
-        // Let Power View's shared Tab/BackTab cycling path claim these keys.
+        // Let the shared Tab/BackTab cycling path claim these keys.
         if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
             return None;
         }
@@ -355,7 +355,7 @@ impl App {
         }
     }
 
-    /// Handle a key for the focused power-view home list (all groups: CW + library latest).
+    /// Handle a key for the focused home list (all groups: CW + library latest).
     /// Returns true if the key was consumed (others fall through to focus nav).
     pub(super) fn handle_power_cw_key(&mut self, key: KeyEvent) -> bool {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);

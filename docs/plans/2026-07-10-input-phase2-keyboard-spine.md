@@ -1,4 +1,4 @@
-# Input Phase 2: Keyboard Precedence Spine Implementation Plan
+$1**Note (2026-07-29):** This plan uses historical "Power View" terminology. There is now only one view (see ADR 0013 and [#402](https://github.com/slatkin/mbv/issues/402)).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers-optimized:subagent-driven-development (recommended) or superpowers-optimized:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

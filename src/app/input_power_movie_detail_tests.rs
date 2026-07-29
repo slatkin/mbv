@@ -104,7 +104,7 @@ fn shift(code: KeyCode) -> KeyEvent {
 }
 
 #[test]
-fn enter_on_power_view_movie_plays_without_opening_detail() {
+fn enter_on_movie_plays_without_opening_detail() {
     let mut app = make_power_movie_app();
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -146,7 +146,7 @@ fn down_always_moves_the_list_cursor_never_scrolls_the_banner() {
 }
 
 #[test]
-fn shift_right_resizes_power_view_without_switching_focus() {
+fn shift_right_resizes_without_switching_focus() {
     let mut app = make_power_movie_app();
     app.panel_focus = PanelFocus::Queue;
     app.terminal_width = 100;
@@ -172,10 +172,10 @@ fn left_does_not_focus_hidden_queue_when_power_left_column_is_collapsed() {
     assert_eq!(app.panel_focus, PanelFocus::Library);
 }
 
-// `shift_resize_is_ignored_outside_power_view` (deleted, #361): asserted
+// `shift_resize_is_ignored_outside_power_view` (deleted test, #361): asserted
 // Shift+Right resize does nothing on a plain `make_app_stub()` (i.e.
-// outside Power View / on the Home tab). "Outside Power View" no longer
-// exists as a state -- Power is the only view now, and the queue column
+// on the Home tab). That state no longer exists -- mbv has one view
+// now, and the queue column
 // it resizes is present on every tab including Home, so Shift+Right
 // correctly resizes it here too. The surviving resize guards (column
 // collapsed, overlay open) are still covered by
@@ -429,7 +429,7 @@ fn ctrl_a_enqueues_selected_from_library_view() {
 #[test]
 fn ctrl_z_while_power_library_panel_focused_does_not_leak_to_queue_undo() {
     // Preserved quirk from the pre-phase-3 `is_lib_key` mirror: while a
-    // library sub-panel has focus in Power View, an unmapped
+    // library sub-panel has focus, an unmapped
     // Ctrl/Alt-modified key (library has no Ctrl+z binding) must be
     // swallowed by the library routing, not fall through to the
     // queue's own Ctrl+z undo binding below it in `handle_queue_key`.
@@ -450,7 +450,7 @@ fn ctrl_z_while_power_library_panel_focused_does_not_leak_to_queue_undo() {
 }
 
 #[test]
-fn power_view_tab_cycles_from_right_panel_when_search_is_closed() {
+fn tab_cycles_from_right_panel_when_search_is_closed() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_power_tab_cycle_app();
 
@@ -462,7 +462,7 @@ fn power_view_tab_cycles_from_right_panel_when_search_is_closed() {
 }
 
 #[test]
-fn power_view_tab_cycles_from_right_panel_with_search_open() {
+fn tab_cycles_from_right_panel_with_search_open() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_power_tab_cycle_app();
     app.libs[0].search = Some(LibSearch {
@@ -489,7 +489,7 @@ fn power_view_tab_cycles_from_right_panel_with_search_open() {
 }
 
 #[test]
-fn power_view_backtab_cycles_from_right_panel_with_search_open() {
+fn backtab_cycles_from_right_panel_with_search_open() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_power_tab_cycle_app();
     app.library_tab = 2;
@@ -603,7 +603,7 @@ fn ctrl_z_while_power_queue_panel_focused_does_trigger_undo() {
     );
 }
 
-// ── #145 task 5: regression coverage for other Power View shortcuts ──
+// ── #145 task 5: regression coverage for other library shortcuts ──
 // These paths (queue-panel PageUp/PageDown and the movie context menu)
 // sit in the same functions the new track-focus interception lives in
 // (the power-left key dispatch match block and `open_context_menu`), but
@@ -683,7 +683,7 @@ fn power_queue_navigation_keeps_right_panel_gate_open_after_focus_moves_to_libra
 }
 
 #[test]
-fn power_view_movie_context_menu_offers_unaffected_non_folder_verbs() {
+fn movie_context_menu_offers_unaffected_non_folder_verbs() {
     let mut app = make_power_movie_app();
 
     app.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));

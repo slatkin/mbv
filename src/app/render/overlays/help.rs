@@ -86,8 +86,8 @@ impl App {
             mk("i", "Go to item in library"),
             mk("Del", "Remove from Queue"),
             mk("Ctrl+Z", "Undo removal"),
-            mk("h", "Collapse/expand Power View left column"),
-            mk("Shift+← / →", "Resize Power View left column"),
+            mk("h", "Collapse/expand queue column"),
+            mk("Shift+← / →", "Resize queue column"),
             mk("Ctrl+S", "Save playlist"),
             blank(),
         ];

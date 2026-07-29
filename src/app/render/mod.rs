@@ -42,8 +42,8 @@ use power_widgets::{
     render_power_count_label, render_power_placeholder, render_power_queue_panel_frame,
     render_power_right_scrollbar, render_power_right_scrollbar_with_viewport,
     render_power_scrollbar, render_selected_block_background, render_selected_block_borders,
-    selection_marker, selector_pill_style, PillBar, PillUnderlay, MUSIC_ALBUM_IMAGE_TYPES,
-    POWER_RENDER_FILTER, POWER_VIEW_GAP,
+    selection_marker, selector_pill_style, PillBar, PillUnderlay, COLUMN_GAP,
+    MUSIC_ALBUM_IMAGE_TYPES, POWER_RENDER_FILTER,
 };
 use sort_filter::{effective_sort_str, letter_bucket, parse_album_folder_name, strip_article};
 pub(crate) use sort_filter::{initial_group_artist_sort_key, LetterFilter, LIBRARY_PILL_THRESHOLD};
@@ -105,7 +105,7 @@ impl App {
         let active = self.player.status.lock().unwrap().active;
         let show_controls = active || self.connected_session_id.is_some();
         let playing_panel = show_controls;
-        // Power View always reserves the player rows (title + controls) so
+        // Always reserve the player rows (title + controls) so
         // that content doesn't shift when the player appears or disappears.
         let (seek_h, _gap_h, title_h, controls_h): (u16, u16, u16, u16) = (1, 0, 1, 2);
         let player_h = seek_h + title_h + controls_h;
@@ -268,9 +268,9 @@ impl App {
 
         // Full-column background for the right panel (tabs, player, library, queue, status).
         let right_full_area = Rect {
-            x: area.x + left_w + POWER_VIEW_GAP,
+            x: area.x + left_w + COLUMN_GAP,
             y: area.y,
-            width: right_w.saturating_sub(POWER_VIEW_GAP),
+            width: right_w.saturating_sub(COLUMN_GAP),
             height: area.height,
         };
         f.render_widget(
@@ -307,9 +307,9 @@ impl App {
 
         let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
         let right_area = Rect {
-            x: area.x + left_w + POWER_VIEW_GAP,
+            x: area.x + left_w + COLUMN_GAP,
             y: area.y + tab_h + player_h,
-            width: right_w.saturating_sub(POWER_VIEW_GAP),
+            width: right_w.saturating_sub(COLUMN_GAP),
             height: content_h
                 .saturating_sub(1)
                 .saturating_sub(tab_h)

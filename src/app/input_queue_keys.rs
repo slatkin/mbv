@@ -37,9 +37,9 @@ impl App {
         let normalized = Self::normalize_queue_column_width(next_width, self.terminal_width);
         if normalized == self.queue_column_width {
             let limit = if key.code == KeyCode::Left {
-                format!("Power view width already at minimum ({POWER_LEFT_WIDTH_DEFAULT} cols)")
+                format!("Queue column width already at minimum ({POWER_LEFT_WIDTH_DEFAULT} cols)")
             } else {
-                format!("Power view width already at maximum ({max_width} cols)")
+                format!("Queue column width already at maximum ({max_width} cols)")
             };
             self.flash_status(limit);
             return true;
@@ -48,7 +48,7 @@ impl App {
         self.queue_column_width = normalized;
         self.save_prefs();
         self.flash_status(format!(
-            "Power view width: {} cols",
+            "Queue column width: {} cols",
             self.queue_column_width
         ));
         true
@@ -266,7 +266,7 @@ impl App {
                     }
                 }
 
-                // Let Power View's shared Tab/BackTab cycling path run after this block.
+                // Let the shared Tab/BackTab cycling path run after this block.
                 if !is_power_nav && !matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
                     if let Some(quit) = self.handle_lib_key(lib_idx, key) {
                         return quit;

@@ -78,7 +78,7 @@ impl App {
     }
 
     /// Nav-context route resolution for library-scoped views (Library
-    /// tab, Power View, Album/Artist drill-down, in-library search) --
+    /// tab, Album/Artist drill-down, in-library search) --
     /// the active library is already known from navigation state
     /// (`LibraryTab::library`), so no network call is needed (#223).
     pub(super) fn route_for_active_library_view(
