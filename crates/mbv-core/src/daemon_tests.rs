@@ -509,6 +509,85 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
 }
 
 #[test]
+fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
+    // A direct mbv controller sends QueueRemove over the ctrl wire protocol
+    // after removing an item from its Remote-scope queue. The daemon's queue
+    // is authoritative: it must make the same removal and broadcast the
+    // resulting State so every controller reconciles to the same queue.
+    // Removing the QueueRemove receiver arm must make this fail.
+    let player = cold_player();
+    let player_cmd_rx = player.spy_on_commands();
+    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (_sender_id, sender_rx) = {
+        let mut clients = registry.lock().unwrap();
+        connect_client(&mut clients)
+    };
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let shared_queue = shared_queue_state();
+    let mut items = vec![
+        item("item-0", "Video", "Movie"),
+        item("item-1", "Video", "Movie"),
+        item("item-2", "Video", "Movie"),
+    ];
+    // Removing the selected item keeps the same index when its successor
+    // shifts into that position.
+    let mut cursor = 1;
+    let mut source = QueueSource::Remote;
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
+
+    handle_ctrl(
+        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueRemove(1))),
+        1,
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
+        &client,
+        &player,
+        false,
+        &mut items,
+        &mut cursor,
+        &mut source,
+        &shared_queue,
+        &registry,
+        &mut PlaybackIntentState::default(),
+        None,
+        &dummy_merged_tx,
+    );
+
+    assert!(matches!(
+        player_cmd_rx.try_recv(),
+        Ok(PlayerCommand::QueueRemove(1))
+    ));
+    assert_eq!(
+        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+        vec!["item-0", "item-2"]
+    );
+    assert_eq!(cursor, 1);
+    assert_eq!(
+        shared_queue
+            .items
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["item-0", "item-2"]
+    );
+    assert_eq!(*shared_queue.cursor.lock().unwrap(), 1);
+    match recv_event(&sender_rx) {
+        CtrlEvent::State(state) => {
+            assert_eq!(
+                state.items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+                vec!["item-0", "item-2"]
+            );
+            assert_eq!(state.cursor, 1);
+        }
+        _ => panic!("expected queue state update"),
+    }
+}
+
+#[test]
 fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
     let player = cold_player();
     let player_cmd_rx = player.spy_on_commands();

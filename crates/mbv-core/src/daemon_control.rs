@@ -182,6 +182,43 @@ fn handle_ctrl(
                     player.send_command(PlayerCommand::QueueMove(from, to));
                 }
             }
+            PlayerCommand::QueueRemove(index) => {
+                if index >= items.len() {
+                    send_to(
+                        request.reply_tx,
+                        &CtrlEvent::CommandRejected(
+                            "remote queue changed; remove skipped".to_string(),
+                        ),
+                    );
+                    send_to(
+                        request.reply_tx,
+                        &CtrlEvent::State(CtrlState {
+                            status: player.status.lock().unwrap().clone(),
+                            items: items.clone(),
+                            cursor: *cursor,
+                            source: source.clone(),
+                        }),
+                    );
+                } else {
+                    items.remove(index);
+                    if items.is_empty() {
+                        *cursor = 0;
+                    } else if index < *cursor {
+                        *cursor -= 1;
+                    } else {
+                        *cursor = (*cursor).min(items.len() - 1);
+                    }
+                    broadcast_queue_state(
+                        ctrl_clients,
+                        player,
+                        shared_queue,
+                        items,
+                        *cursor,
+                        source,
+                    );
+                    player.send_command(PlayerCommand::QueueRemove(index));
+                }
+            }
             other => {
                 player.send_command(other);
             }
