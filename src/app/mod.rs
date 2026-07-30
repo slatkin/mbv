@@ -387,7 +387,11 @@ impl App {
                 // below (#164). This only builds the cheap unresized protocol.
                 let state: Option<ratatui_image::thread::ThreadProtocol> =
                     img_opt.and_then(|dyn_img| {
-                        let picker = self.image_picker.clone()?;
+                        let picker = if item_id.ends_with(images::CAVA_HALFBLOCKS_CACHE_SUFFIX) {
+                            ratatui_image::picker::Picker::halfblocks()
+                        } else {
+                            self.image_picker.clone()?
+                        };
                         Some(self.new_thread_protocol(&picker, dyn_img, &item_id))
                     });
                 if state.is_some() {

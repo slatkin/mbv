@@ -1,11 +1,12 @@
 use super::POWER_RENDER_FILTER;
-use crate::app::images::QUEUE_CARD_PLACEHOLDER_KEY;
+use crate::app::images::{CAVA_HALFBLOCKS_CACHE_SUFFIX, QUEUE_CARD_PLACEHOLDER_KEY};
 use crate::app::{palette, App};
 use mbv_core::api::MediaItem;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
 use ratatui::widgets::Block;
 use ratatui::Frame;
+use unicode_width::UnicodeWidthChar;
 
 fn power_card_image_types(item_type: &str) -> &'static [&'static str] {
     match item_type {
@@ -16,11 +17,110 @@ fn power_card_image_types(item_type: &str) -> &'static [&'static str] {
     }
 }
 
-fn power_card_cache_key(item: &MediaItem) -> String {
-    if item.item_type == "Audio" && !item.album_id.is_empty() {
+fn power_card_cache_key(item: &MediaItem, halfblocks: bool) -> String {
+    let mut key = if item.item_type == "Audio" && !item.album_id.is_empty() {
         format!("{}:P", item.album_id)
     } else {
         format!("{}:P", item.id)
+    };
+    if halfblocks {
+        key.push_str(CAVA_HALFBLOCKS_CACHE_SUFFIX);
+    }
+    key
+}
+
+fn blend_toward_aqua(color: Color) -> Color {
+    const ALPHA: f32 = 0.5;
+    match color {
+        Color::Rgb(r, g, b) => {
+            let Color::Rgb(ar, ag, ab) = palette::AQUA else {
+                unreachable!();
+            };
+            Color::Rgb(
+                (r as f32 * (1.0 - ALPHA) + ar as f32 * ALPHA) as u8,
+                (g as f32 * (1.0 - ALPHA) + ag as f32 * ALPHA) as u8,
+                (b as f32 * (1.0 - ALPHA) + ab as f32 * ALPHA) as u8,
+            )
+        }
+        other => other,
+    }
+}
+
+fn grayscale(color: Color) -> Color {
+    match color {
+        Color::Rgb(r, g, b) => {
+            let luminance = (r as f32 * 0.2126 + g as f32 * 0.7152 + b as f32 * 0.0722) as u8;
+            Color::Rgb(luminance, luminance, luminance)
+        }
+        other => other,
+    }
+}
+
+fn grayscale_image(f: &mut Frame, area: Rect) {
+    let buf = f.buffer_mut();
+    for y in area.y..area.y + area.height {
+        for x in area.x..area.x + area.width {
+            if let Some(cell) = buf.cell_mut((x, y)) {
+                cell.fg = grayscale(cell.fg);
+                cell.bg = grayscale(cell.bg);
+            }
+        }
+    }
+}
+
+fn overlay_cava_bars(f: &mut Frame, area: Rect, bars: &[f32]) {
+    if area.is_empty() || bars.is_empty() {
+        return;
+    }
+    let bar_columns = area.width.div_ceil(2) as usize;
+    let max_halves = area.height as usize * 2;
+    let buf = f.buffer_mut();
+    for column in (0..area.width).step_by(2) {
+        let bar_index = column as usize / 2 * bars.len() / bar_columns;
+        let filled_halves = (bars[bar_index.min(bars.len() - 1)].clamp(0.0, 1.0)
+            * max_halves as f32)
+            .round() as usize;
+        for row in 0..area.height {
+            let halves_below = (area.height - row - 1) as usize * 2;
+            let Some(cell) = buf.cell_mut((area.x + column, area.y + row)) else {
+                continue;
+            };
+            if filled_halves > halves_below {
+                cell.bg = blend_toward_aqua(cell.bg);
+            }
+            if filled_halves > halves_below + 1 {
+                cell.fg = blend_toward_aqua(cell.fg);
+            }
+        }
+    }
+}
+
+fn overlay_now_playing(f: &mut Frame, area: Rect, title: &str) {
+    if area.is_empty() {
+        return;
+    }
+    let text = format!("Now Playing: {title}");
+    let mut x = area.x;
+    let right = area.x + area.width;
+    for ch in text.chars() {
+        let width = ch.width().unwrap_or(0) as u16;
+        if width == 0 || x + width > right {
+            if width > 0 {
+                break;
+            }
+            continue;
+        }
+        for cell_x in x..x + width {
+            if let Some(cell) = f.buffer_mut().cell_mut((cell_x, area.y)) {
+                cell.bg = match cell.bg {
+                    Color::Rgb(r, g, b) => Color::Rgb(r / 2, g / 2, b / 2),
+                    other => other,
+                };
+                cell.fg = palette::WHITE;
+                cell.set_char(if cell_x == x { ch } else { ' ' });
+            }
+        }
+        x += width;
     }
 }
 
@@ -31,6 +131,7 @@ impl App {
         area: Rect,
         cache_key: &str,
         max_h: u16,
+        now_playing_title: Option<&str>,
     ) -> (u16, bool) {
         // On short terminals (<= 30 rows) cap the card image at 12 rows so the queue
         // list keeps adequate space; taller terminals cap at 18 rows.
@@ -63,6 +164,13 @@ impl App {
                     img_rect,
                     state,
                 );
+                if self.visualizer_enabled {
+                    grayscale_image(f, img_rect);
+                    overlay_cava_bars(f, img_rect, &self.visualizer_frame);
+                    if let Some(title) = now_playing_title {
+                        overlay_now_playing(f, img_rect, title);
+                    }
+                }
                 self.last_card_height = actual.height;
                 return (actual.height, false);
             }
@@ -97,8 +205,13 @@ impl App {
 
     fn render_power_card_placeholder(&mut self, f: &mut Frame, area: Rect) -> (u16, bool) {
         self.ensure_placeholder_card_image();
-        let rendered =
-            self.render_card_image(f, area, QUEUE_CARD_PLACEHOLDER_KEY, area.height.min(24));
+        let rendered = self.render_card_image(
+            f,
+            area,
+            QUEUE_CARD_PLACEHOLDER_KEY,
+            area.height.min(24),
+            None,
+        );
         if rendered == (0, false) {
             (
                 area.height
@@ -135,7 +248,7 @@ impl App {
         let item = &items[cursor];
         let img_types = power_card_image_types(&item.item_type);
         let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
-        let cache_key = power_card_cache_key(item);
+        let cache_key = power_card_cache_key(item, self.visualizer_enabled);
         let is_music_item = matches!(img_types, &["Primary"] | &["AudioChild"]);
         if self.images_enabled() || is_music_item {
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
@@ -155,7 +268,7 @@ impl App {
             .filter(|(i, _)| start + i != cursor)
             .map(|(_, p)| {
                 (
-                    power_card_cache_key(p),
+                    power_card_cache_key(p, self.visualizer_enabled),
                     p.id.clone(),
                     p.series_id.clone(),
                     p.item_type.clone(),
@@ -172,7 +285,9 @@ impl App {
         if use_placeholder {
             return self.render_power_card_placeholder(f, area);
         }
-        self.render_card_image(f, area, &cache_key, area.height)
+        let now_playing_title =
+            (playback.active && self.visualizer_enabled).then_some(item.name.as_str());
+        self.render_card_image(f, area, &cache_key, area.height, now_playing_title)
     }
 }
 

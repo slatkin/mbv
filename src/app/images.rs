@@ -1,5 +1,7 @@
 use super::{App, LibEvent, PAGE_SIZE};
 use ratatui_image::picker::Picker;
+
+pub(super) const CAVA_HALFBLOCKS_CACHE_SUFFIX: &str = ":cava-halfblocks";
 use std::io::Read as IoRead;
 use std::time::{Duration, Instant};
 
@@ -340,8 +342,11 @@ impl App {
             let cache_key_outer = cache_key.clone();
             let tx_outer = tx.clone();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let disk_cache_key = cache_key
+                    .strip_suffix(CAVA_HALFBLOCKS_CACHE_SUFFIX)
+                    .unwrap_or(&cache_key);
                 let bytes: Option<Vec<u8>> = if let Some(cached) =
-                    crate::config::read_image_disk_cache(&cache_key)
+                    crate::config::read_image_disk_cache(disk_cache_key)
                 {
                     Some(cached)
                 } else {
@@ -402,7 +407,7 @@ impl App {
                     // (maxHeight=400&quality=80); no client-side re-encode, so quality
                     // is unchanged and the cache stays small for fast decode.
                     if let Some(ref b) = fetched {
-                        crate::config::write_image_disk_cache(&cache_key, b);
+                        crate::config::write_image_disk_cache(disk_cache_key, b);
                     }
                     fetched
                 };
