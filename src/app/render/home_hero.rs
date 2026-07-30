@@ -9,6 +9,7 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
+use tui_big_text::{BigText, PixelSize};
 
 /// Pre-wrapped content for the Keep Watching hero panel's metadata column,
 /// plus the total row count it needs. Computed once (mirroring
@@ -51,7 +52,8 @@ impl App {
                 height: 0,
             };
         }
-        let title_lines: Vec<String> = wrap(&item.name, text_w)
+        let big_text_w = (text_w / 4).max(1);
+        let title_lines: Vec<String> = wrap(&item.name, big_text_w)
             .into_iter()
             .map(|s| s.into_owned())
             .collect();
@@ -68,7 +70,7 @@ impl App {
                 .map(|s| s.into_owned())
                 .collect()
         };
-        let height = title_lines.len() as u16 // title
+        let height = title_lines.len() as u16 * 2 // title (2 rows per octant line)
             + 1 // show name row
             + 1 // duration / progress row
             + 1 // blank separator row
@@ -152,26 +154,34 @@ impl App {
         let mut row = area.y;
         let max_y = area.y + area.height;
 
-        for line in &layout.title_lines {
-            if row >= max_y {
-                break;
-            }
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    line.clone(),
+        let title_height = (layout.title_lines.len() as u16) * 2;
+        if !layout.title_lines.is_empty() && row + title_height <= max_y {
+            let big_text = BigText::builder()
+                .pixel_size(PixelSize::Octant)
+                .style(
                     Style::default()
                         .fg(palette::YELLOW)
                         .add_modifier(Modifier::BOLD),
-                )),
+                )
+                .lines(
+                    layout
+                        .title_lines
+                        .iter()
+                        .map(|l| Line::from(l.as_str()))
+                        .collect::<Vec<Line>>(),
+                )
+                .build();
+            f.render_widget(
+                big_text,
                 Rect {
                     x: area.x,
                     y: row,
                     width: area.width,
-                    height: 1,
+                    height: title_height,
                 },
             );
-            row += 1;
         }
+        row += title_height;
 
         if row < max_y {
             if !layout.show_name.is_empty() {
