@@ -244,7 +244,7 @@ impl App {
             pills_area
         };
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::DARK_BG)),
+            Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
             pill_section_area,
         );
         self.render_power_home_section_pills_row(f, pills_area, layout);
@@ -284,27 +284,6 @@ impl App {
                 height: list_area.height.saturating_sub(2),
                 ..list_area
             };
-            let border_style = Style::default().fg(palette::SOFT_WHITE);
-            for y in list_area.y..list_area.bottom() {
-                f.render_widget(
-                    Paragraph::new(Span::styled("▏", border_style)),
-                    Rect {
-                        y,
-                        height: 1,
-                        width: 1,
-                        ..interior_area
-                    },
-                );
-                f.render_widget(
-                    Paragraph::new(Span::styled("▕", border_style)),
-                    Rect {
-                        x: interior_area.right().saturating_sub(1),
-                        y,
-                        width: 1,
-                        height: 1,
-                    },
-                );
-            }
             Rect {
                 x: interior_area.x + RIGHT_COLUMN_INNER_INSET,
                 width: interior_area
