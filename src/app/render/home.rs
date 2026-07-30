@@ -119,8 +119,8 @@ impl App {
             let hero_col_width = ((area.width as u32 * 2 / 5) as u16)
                 .max(12)
                 .min(area.width.saturating_sub(12));
-            // The right column reserves its first two rows for the pills and
-            // spacer. The left hero must start at the panel's top instead.
+            // The right column reserves three rows for the pill row and its
+            // dark top/bottom padding. The left hero starts at the panel top.
             let hero_col_height = area.height;
 
             hero_data = hero_item.and_then(|item| {
@@ -157,9 +157,9 @@ impl App {
             list_area = if hero_data.is_some() {
                 Rect {
                     x: content_area.x + hero_col_width + 1,
-                    y: content_area.y,
+                    y: area.y.saturating_add(3),
                     width: content_area.width.saturating_sub(hero_col_width + 1),
-                    height: content_area.height,
+                    height: area.height.saturating_sub(3),
                 }
             } else {
                 // No hero item: list takes full width
@@ -218,10 +218,11 @@ impl App {
             };
         }
 
-        let pills_area = if two_column && hero_data.is_some() {
+        let wide_pill_section = two_column && hero_data.is_some();
+        let pills_area = if wide_pill_section {
             Rect {
                 x: list_area.x,
-                y: area.y,
+                y: area.y.saturating_add(1),
                 width: list_area.width,
                 height: 1,
             }
@@ -233,7 +234,87 @@ impl App {
                 height: 1,
             }
         };
+        let pill_section_area = if wide_pill_section {
+            Rect {
+                y: area.y,
+                height: 3,
+                ..pills_area
+            }
+        } else {
+            pills_area
+        };
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::DARK_BG)),
+            pill_section_area,
+        );
         self.render_power_home_section_pills_row(f, pills_area, layout);
+        if wide_pill_section {
+            if let Some((selected_pill, _)) = layout
+                .selector_tabs
+                .iter()
+                .find(|(_, section)| *section == self.home.section)
+            {
+                for y in [
+                    pill_section_area.y,
+                    pill_section_area.bottom().saturating_sub(1),
+                ] {
+                    f.render_widget(
+                        Block::default().style(Style::default().bg(palette::YELLOW)),
+                        Rect {
+                            y,
+                            height: 1,
+                            ..*selected_pill
+                        },
+                    );
+                }
+            }
+        }
+
+        // In the wide Home layout, the list body is a separate right-column
+        // green surface. The pill section stays outside it. Keep one blank
+        // green row at its top and bottom, then inset its list content.
+        let list_area = if two_column && hero_data.is_some() {
+            const RIGHT_COLUMN_INNER_INSET: u16 = 2;
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::GREEN)),
+                list_area,
+            );
+            let interior_area = Rect {
+                y: list_area.y.saturating_add(1),
+                height: list_area.height.saturating_sub(2),
+                ..list_area
+            };
+            let border_style = Style::default().fg(palette::SOFT_WHITE);
+            for y in list_area.y..list_area.bottom() {
+                f.render_widget(
+                    Paragraph::new(Span::styled("▏", border_style)),
+                    Rect {
+                        y,
+                        height: 1,
+                        width: 1,
+                        ..interior_area
+                    },
+                );
+                f.render_widget(
+                    Paragraph::new(Span::styled("▕", border_style)),
+                    Rect {
+                        x: interior_area.right().saturating_sub(1),
+                        y,
+                        width: 1,
+                        height: 1,
+                    },
+                );
+            }
+            Rect {
+                x: interior_area.x + RIGHT_COLUMN_INNER_INSET,
+                width: interior_area
+                    .width
+                    .saturating_sub(2 * RIGHT_COLUMN_INNER_INSET),
+                ..interior_area
+            }
+        } else {
+            list_area
+        };
 
         layout.left_area = list_area;
 

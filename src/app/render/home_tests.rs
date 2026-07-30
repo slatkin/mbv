@@ -182,8 +182,8 @@ fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
         "wide Continue Watching pills belong at the top of the right panel"
     );
     assert!(
-        lines[2].contains("Hero Episode"),
-        "the right-panel list should follow the pills' blank spacer row"
+        lines[4].contains("Hero Episode"),
+        "the right-panel list should follow the pills and panel top inset"
     );
     assert_eq!(
         hero_text_y, 15,

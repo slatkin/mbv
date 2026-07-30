@@ -317,9 +317,7 @@ pub(super) fn selector_pill_style(selected: bool) -> Style {
     if selected {
         Style::default().fg(palette::PILL_DARK).bg(palette::YELLOW)
     } else {
-        Style::default()
-            .fg(palette::YELLOW)
-            .bg(palette::LIBRARY_SIDE_BG)
+        Style::default().fg(palette::YELLOW).bg(palette::DARK_BG)
     }
 }
 
