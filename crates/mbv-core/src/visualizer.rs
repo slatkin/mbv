@@ -29,7 +29,6 @@ enum Startup {
 
 /// Local-only CAVA input uses system audio (PulseAudio).
 /// The FIFO-based daemon spectrum path has been removed.
-
 /// Owns one CAVA child, its private raw-output FIFO, and the bounded frame queue.
 pub struct CavaWorker {
     stop_tx: mpsc::Sender<()>,
@@ -63,13 +62,13 @@ impl CavaWorker {
         }
     }
 
-    pub fn take_latest_frame(&self) -> Result<Option<Vec<f32>>, ()> {
+    pub fn take_latest_frame(&self) -> Result<Option<Vec<f32>>, TryRecvError> {
         let mut latest = None;
         loop {
             match self.frames_rx.try_recv() {
                 Ok(frame) => latest = Some(frame),
                 Err(TryRecvError::Empty) => return Ok(latest),
-                Err(TryRecvError::Disconnected) => return Err(()),
+                Err(error @ TryRecvError::Disconnected) => return Err(error),
             }
         }
     }

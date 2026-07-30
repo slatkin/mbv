@@ -1,8 +1,5 @@
 use super::test_helpers::*;
 use super::*;
-use crate::app::layout::{AppLayout, LayoutPlayback, LibraryRowTarget};
-use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibSearch, LibraryTab, QueueScope, RemoteSlotState};
 
 #[test]
 fn uses_triangle_resampling() {

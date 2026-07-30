@@ -1,8 +1,6 @@
 use super::test_helpers::*;
 use super::*;
-use crate::app::layout::{AppLayout, LayoutPlayback, LibraryRowTarget};
-use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibSearch, LibraryTab, QueueScope, RemoteSlotState};
+use crate::app::layout::LayoutPlayback;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
@@ -83,7 +81,6 @@ fn music_group_pills_render_on_row_below_title_marker() {
     };
 
     let right_col_x = app.queue_column_width + COLUMN_GAP;
-    let buf = term.backend().buffer();
     assert!(
         row3.chars().take(right_col_x as usize).all(|c| c == ' '),
         "expected the pill row to be confined to the right library column:\n{out}"
@@ -142,11 +139,6 @@ fn music_group_pills_scroll_within_reserved_space_when_overflowing() {
     let out = buffer_to_string(&term);
 
     let row3 = out.lines().nth(3).unwrap();
-
-    let rchar_x = |line: &str, needle: &str| -> u16 {
-        let byte_idx = line.rfind(needle).expect("needle not found");
-        line[..byte_idx].chars().count() as u16
-    };
 
     let right_col_x = (app.queue_column_width + COLUMN_GAP) as usize;
     assert!(

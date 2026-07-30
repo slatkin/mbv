@@ -1,8 +1,6 @@
 use super::test_helpers::*;
 use super::*;
-use crate::app::layout::{AppLayout, LayoutPlayback, LibraryRowTarget};
-use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibSearch, LibraryTab, QueueScope, RemoteSlotState};
+use crate::app::tests::make_item;
 
 #[test]
 fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {

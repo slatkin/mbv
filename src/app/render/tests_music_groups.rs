@@ -1,11 +1,8 @@
 use super::album_plan::GroupedAlbumDisplayRow;
 use super::test_helpers::*;
 use super::*;
-use crate::app::layout::{AppLayout, LayoutPlayback, LibraryRowTarget};
-use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibSearch, LibraryTab, QueueScope, RemoteSlotState};
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
+use crate::app::layout::LibraryRowTarget;
+use crate::app::tests::make_item;
 
 #[test]
 fn selectable_artist_headers_are_typed_row_targets() {

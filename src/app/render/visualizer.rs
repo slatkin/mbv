@@ -60,7 +60,7 @@ impl App {
                                 0.0
                             } else {
                                 let bar_index = (column / 2) as usize * bars.len()
-                                    / ((inner.width + 1) / 2) as usize;
+                                    / inner.width.div_ceil(2) as usize;
                                 let raw = bars[bar_index.min(bars.len() - 1)];
                                 raw.min(1.0)
                             };

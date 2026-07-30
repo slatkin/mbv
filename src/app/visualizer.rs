@@ -7,7 +7,7 @@ impl App {
             match worker.take_latest_frame() {
                 Ok(Some(frame)) => self.visualizer_frame = frame,
                 Ok(None) => {}
-                Err(()) => {
+                Err(_) => {
                     log::warn!(target: "visualizer", "CAVA worker stopped; visualizer disabled for this playback");
                     self.visualizer_failed = true;
                     self.stop_visualizer_worker();
