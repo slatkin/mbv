@@ -1,7 +1,7 @@
 ---
 name: openspec-propose
 description: Propose a new change with all artifacts generated in one step. Use when the user wants to quickly describe what they want to build and get a complete proposal with design, specs, and tasks ready for implementation.
-allowed-tools: Bash(openspec:*), Write, Read, Edit, Glob, Grep
+allowed-tools: Bash(openspec:*)
 license: MIT
 compatibility: Requires openspec CLI.
 metadata:
@@ -18,8 +18,6 @@ I'll create a change with artifacts:
 - tasks.md (implementation steps)
 
 When ready to implement, run /opsx-apply
-
-**Agent routing**: The orchestrator should delegate artifact creation to the `plan` subagent, not `general` or `writer`. The plan agent has edit permissions for `openspec/**` and is purpose-built for this work.
 
 ---
 
