@@ -6,4 +6,5 @@ include!("daemon_ws.rs");
 #[cfg(test)]
 mod tests {
     include!("daemon_tests.rs");
+    include!("daemon_tests_playback_intent.rs");
 }
