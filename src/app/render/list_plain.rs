@@ -2,7 +2,7 @@ use super::super::ui_util::*;
 use super::list_rows::{
     build_list_row_spans, focused_or_subtle, push_selected_detail_fillers_after,
     push_selected_detail_fillers_before, render_series_detail_background,
-    selected_detail_lower_bound, DisplayRow, ListRenderCtx, COMPACT_BANNER_INDENT,
+    selected_detail_lower_bound, DisplayRow, ListRenderCtx, COMPACT_MOVIE_BANNER_INDENT,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
@@ -179,7 +179,8 @@ impl App {
                     let avail = if selected_has_banner {
                         // 2-col left pad + 2-col right pad inside the
                         // colored block: title+dur share area.width - 4.
-                        (area.width as usize).saturating_sub(2 + 2 * COMPACT_BANNER_INDENT as usize)
+                        (area.width as usize)
+                            .saturating_sub(2 + 2 * COMPACT_MOVIE_BANNER_INDENT as usize)
                     } else if selected {
                         (area.width as usize).saturating_sub(1)
                     } else {
@@ -233,15 +234,17 @@ impl App {
             let banner_h = (banner_content_rows as u16).min(bottom.saturating_sub(banner_y));
             if banner_h > 0 {
                 // The banner content sits inside the colored block with
-                // `COMPACT_BANNER_INDENT` cols of external side padding on
+                // `COMPACT_MOVIE_BANNER_INDENT` cols of external side padding on
                 // each side (and render_power_compact_detail's own
                 // internal 1-col pad), so the poster image — right-anchored
                 // inside `banner_rect` — never renders under the scrollbar
                 // (which is drawn on the rightmost col afterwards).
                 let banner_rect = Rect {
-                    x: content_area.x + COMPACT_BANNER_INDENT,
+                    x: content_area.x + COMPACT_MOVIE_BANNER_INDENT,
                     y: banner_y,
-                    width: content_area.width.saturating_sub(2 * COMPACT_BANNER_INDENT),
+                    width: content_area
+                        .width
+                        .saturating_sub(2 * COMPACT_MOVIE_BANNER_INDENT),
                     height: banner_h,
                 };
                 // render_power_compact_detail overwrites layout.cursor_screen_y with

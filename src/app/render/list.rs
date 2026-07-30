@@ -1,6 +1,7 @@
 use super::detail::compact_banner_image_cache_key;
 use super::list_rows::{
     ListRenderCtx, COMPACT_BANNER_GAP_ROWS, COMPACT_BANNER_INDENT, COMPACT_BANNER_RULE_ROWS,
+    COMPACT_MOVIE_BANNER_INDENT, SELECTED_BLOCK_SIDE_PADDING,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
@@ -67,9 +68,11 @@ impl App {
         self.render_series_inline_detail(
             f,
             Rect {
-                x: content_area.x + COMPACT_BANNER_INDENT,
+                x: content_area.x + SELECTED_BLOCK_SIDE_PADDING,
                 y: detail_y,
-                width: content_area.width.saturating_sub(2 * COMPACT_BANNER_INDENT),
+                width: content_area
+                    .width
+                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
                 height: detail_h,
             },
             lib_idx,
@@ -179,7 +182,7 @@ impl App {
             let banner_panel_width = content_area
                 .width
                 .saturating_sub(1)
-                .saturating_sub(COMPACT_BANNER_INDENT);
+                .saturating_sub(COMPACT_MOVIE_BANNER_INDENT);
             self.compact_banner_rows(self.library_tab - 1, banner_panel_width)
         } else {
             0

@@ -82,8 +82,7 @@ impl App {
     }
 
     /// Renders the Keep Watching hero panel's image column into `area`,
-    /// top-aligned (with a one-row pad so it isn't flush against the top of
-    /// the panel) and right-aligned against the panel's right edge. The column is a fixed reserved
+    /// top-aligned and, in wide two-column layouts, horizontally centered. The column is a fixed reserved
     /// box (unlike the queue card's growing/shrinking slot), so a dim
     /// placeholder simply fills it while no artwork is ready yet.
     pub(super) fn render_keep_watching_hero_image(
@@ -91,17 +90,12 @@ impl App {
         f: &mut Frame,
         area: Rect,
         cache_key: &str,
+        centered: bool,
     ) {
         if area.width == 0 || area.height == 0 {
             return;
         }
-        let top_pad = 1u16.min(area.height.saturating_sub(1));
-        let img_area = Rect {
-            x: area.x,
-            y: area.y + top_pad,
-            width: area.width,
-            height: area.height - top_pad,
-        };
+        let img_area = area;
         if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             let avail = Size {
@@ -113,7 +107,11 @@ impl App {
                 avail,
             ) {
                 let img_rect = Rect {
-                    x: img_area.x + img_area.width.saturating_sub(actual.width),
+                    x: if centered {
+                        img_area.x + img_area.width.saturating_sub(actual.width) / 2
+                    } else {
+                        img_area.x + img_area.width.saturating_sub(actual.width)
+                    },
                     y: img_area.y,
                     width: actual.width,
                     height: actual.height,

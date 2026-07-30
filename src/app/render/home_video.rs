@@ -1,5 +1,6 @@
 use super::super::ui_util::*;
 use super::list_rows::focused_or_subtle;
+use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use ratatui::layout::*;
@@ -88,9 +89,9 @@ pub(super) fn render_home_video_item(
         f.render_widget(
             Block::default().style(Style::default().bg(bg)),
             Rect {
-                x: content_area.x,
+                x: content_area.x + SELECTED_BLOCK_SIDE_PADDING,
                 y: row_y + 1,
-                width: text_w as u16,
+                width: (text_w as u16).saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
                 height: item_h.saturating_sub(2),
             },
         );
@@ -107,8 +108,8 @@ pub(super) fn render_home_video_item(
         },
     );
 
-    let tx = content_area.x + 1;
-    let tw = (text_w.saturating_sub(1)) as u16;
+    let tx = content_area.x + SELECTED_BLOCK_SIDE_PADDING;
+    let tw = (text_w as u16).saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
     let title_color = if expanded {
         palette::YELLOW
     } else if selected && focused {
@@ -170,9 +171,11 @@ impl App {
         self.render_power_compact_detail(
             f,
             Rect {
-                x: content_area.x + 1,
+                x: content_area.x + SELECTED_BLOCK_SIDE_PADDING,
                 y: row_y + 3,
-                width: content_area.width.saturating_sub(2),
+                width: content_area
+                    .width
+                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
                 height: detail_height,
             },
             lib_idx,
@@ -226,7 +229,8 @@ impl App {
         // calculations, then recheck once we know the real total height.
         let text_w_with_sb = (content_area.width as usize).saturating_sub(1);
         let mut item_heights = vec![1; n];
-        let selected_panel_width = text_w_with_sb.saturating_sub(2) as u16;
+        let selected_panel_width =
+            text_w_with_sb.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING as usize) as u16;
         let selected_height = self
             .compact_banner_layout_with_overview(&items[current_pos], selected_panel_width, true)
             .content_rows()

@@ -67,16 +67,6 @@ impl App {
             .iter()
             .find(|section| section.section_idx == self.home.section);
 
-        self.render_power_home_section_pills_row(
-            f,
-            Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
-                height: 1,
-            },
-            layout,
-        );
         let content_area = Rect {
             y: area.y.saturating_add(2),
             height: area.height.saturating_sub(2),
@@ -129,7 +119,9 @@ impl App {
             let hero_col_width = ((area.width as u32 * 2 / 5) as u16)
                 .max(12)
                 .min(area.width.saturating_sub(12));
-            let hero_col_height = content_area.height;
+            // The right column reserves its first two rows for the pills and
+            // spacer. The left hero must start at the panel's top instead.
+            let hero_col_height = area.height;
 
             hero_data = hero_item.and_then(|item| {
                 let meta_w = hero_col_width as usize;
@@ -137,20 +129,26 @@ impl App {
                 // Cap metadata to leave at least 4 rows for the image
                 let max_meta = hero_col_height.saturating_sub(4);
                 meta_layout.height = meta_layout.height.min(max_meta);
-                if meta_layout.height < 4 || hero_col_height < 5 {
+                // Terminal cells are roughly twice as tall as they are wide, so a
+                // 16:9 image needs 9 rows for every 32 columns. Keep the artwork
+                // at its natural display height, then leave one row before metadata.
+                let image_height = (hero_col_width.saturating_mul(9).saturating_add(31) / 32)
+                    .max(1)
+                    .min(hero_col_height.saturating_sub(meta_layout.height + 1));
+                if meta_layout.height < 4 || image_height == 0 {
                     None
                 } else {
+                    let img_area = Rect {
+                        x: area.x,
+                        y: area.y,
+                        width: hero_col_width,
+                        height: image_height,
+                    };
                     let meta_area = Rect {
-                        x: content_area.x,
-                        y: content_area.y,
+                        x: area.x,
+                        y: area.y + img_area.height + 1,
                         width: hero_col_width,
                         height: meta_layout.height,
-                    };
-                    let img_area = Rect {
-                        x: content_area.x,
-                        y: content_area.y + meta_layout.height,
-                        width: hero_col_width,
-                        height: hero_col_height.saturating_sub(meta_layout.height),
                     };
                     Some((item, meta_area, img_area, meta_layout))
                 }
@@ -169,25 +167,19 @@ impl App {
             };
         } else {
             // Vertical layout: hero on top, list below (unchanged behavior)
-            // Row budget for the hero image is the primary size control: an
-            // independent, terminal-height-aware target computed up front, not
-            // derived from how long a given item's overview text happens to be.
-            // Mirrors render_card_image's terminal-height-aware cap.
             let max_allowed = content_area.height.saturating_sub(7);
-            let hero_img_rows = max_allowed
-                .min(if self.terminal_height <= 30 { 12 } else { 24 })
-                .max(10.min(max_allowed));
 
             hero_data = if area.width < 24 {
                 None
             } else {
                 hero_item.and_then(|item| {
-                    let img_w = ((area.width as u32 * 2 / 5) as u16)
-                        .max(12)
-                        .min(area.width.saturating_sub(12));
+                    let img_w = area.width / 2;
                     let meta_w = area.width.saturating_sub(img_w + 1) as usize;
                     let mut meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
-                    meta_layout.height = meta_layout.height.min(hero_img_rows);
+                    meta_layout.height = meta_layout.height.min(max_allowed);
+                    let image_rows =
+                        (img_w.saturating_mul(9).saturating_add(31) / 32).min(max_allowed);
+                    let hero_height = image_rows.max(meta_layout.height);
                     if meta_layout.height < 4 {
                         None
                     } else {
@@ -195,36 +187,53 @@ impl App {
                             x: content_area.x,
                             y: content_area.y,
                             width: content_area.width,
-                            height: hero_img_rows,
+                            height: hero_height,
                         };
                         let meta_area = Rect {
                             x: hero_area.x,
                             y: hero_area.y,
                             width: hero_area.width.saturating_sub(img_w + 1),
-                            height: hero_img_rows,
+                            height: hero_height,
                         };
                         let img_area = Rect {
                             x: hero_area.x + hero_area.width.saturating_sub(img_w),
                             y: hero_area.y,
                             width: img_w,
-                            height: hero_img_rows,
+                            height: hero_height,
                         };
                         Some((item, meta_area, img_area, meta_layout))
                     }
                 })
             };
 
-            let hero_h: u16 = if hero_data.is_some() {
-                hero_img_rows
-            } else {
-                0
-            };
+            let hero_h = hero_data
+                .as_ref()
+                .map(|(_, meta_area, _, _)| meta_area.height)
+                .unwrap_or(0);
+            let list_gap = if hero_data.is_some() { 1 } else { 2 };
             list_area = Rect {
-                y: content_area.y + hero_h + 2,
-                height: content_area.height.saturating_sub(hero_h + 2),
+                y: content_area.y + hero_h + list_gap,
+                height: content_area.height.saturating_sub(hero_h + list_gap),
                 ..content_area
             };
         }
+
+        let pills_area = if two_column && hero_data.is_some() {
+            Rect {
+                x: list_area.x,
+                y: area.y,
+                width: list_area.width,
+                height: 1,
+            }
+        } else {
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            }
+        };
+        self.render_power_home_section_pills_row(f, pills_area, layout);
 
         layout.left_area = list_area;
 
@@ -240,7 +249,7 @@ impl App {
                     img_types,
                 );
             }
-            self.render_keep_watching_hero_image(f, *img_area, &cache_key);
+            self.render_keep_watching_hero_image(f, *img_area, &cache_key, two_column);
             self.render_keep_watching_hero_meta(f, *meta_area, item, meta_layout, focused);
         }
 
