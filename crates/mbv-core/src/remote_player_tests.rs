@@ -2,6 +2,7 @@ use super::*;
 use crate::config::QueueSource;
 use crate::ctrl::CtrlState;
 use crate::ctrl::WireCommand;
+use crate::player::PlayerCommand;
 
 fn make_media_item(id: &str) -> MediaItem {
     MediaItem {
