@@ -27,7 +27,7 @@ fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
             f,
             Rect::new(0, 0, 60, 1),
             "Title",
-            palette::GREEN,
+            palette::BG_GREEN,
             &mut layout,
         );
     })
@@ -62,7 +62,7 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
             f,
             Rect::new(0, 0, 60, 1),
             "Title",
-            palette::GREEN,
+            palette::BG_GREEN,
             &mut layout,
         );
     })

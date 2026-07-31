@@ -1,4 +1,5 @@
 include!("config_types_paths.rs");
+include!("config_paths.rs");
 include!("config_parse.rs");
 include!("config_save.rs");
 

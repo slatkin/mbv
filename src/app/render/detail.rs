@@ -423,7 +423,7 @@ impl App {
                 Paragraph::new(Line::from(Span::styled(
                     "Playing",
                     Style::default()
-                        .fg(palette::GREEN)
+                        .fg(palette::BG_GREEN)
                         .add_modifier(Modifier::BOLD),
                 ))),
                 Rect {

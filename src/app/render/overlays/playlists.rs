@@ -91,7 +91,7 @@ impl App {
             let fg = if selected {
                 palette::IRIS
             } else if is_loaded {
-                palette::GREEN
+                palette::BG_GREEN
             } else {
                 palette::TEXT
             };

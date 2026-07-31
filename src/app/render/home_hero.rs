@@ -63,16 +63,21 @@ impl App {
         let overview_lines: Vec<String> = if item.overview.is_empty() {
             Vec::new()
         } else {
-            wrap(&clean_overview(&item.overview), text_w)
+            let ov_w = text_w.saturating_sub(4); // 2-col padding each side
+            wrap(&clean_overview(&item.overview), ov_w)
                 .into_iter()
                 .map(|s| s.into_owned())
                 .collect()
         };
         let height = title_lines.len() as u16 // title
-            + 1 // show name row
+            + if show_name.is_empty() { 0 } else { 1 } // show name row (only for episodes)
             + 1 // duration / progress row
             + 1 // blank separator row
-            + overview_lines.len() as u16; // overview
+            + if overview_lines.is_empty() {
+                0
+            } else {
+                1 + overview_lines.len() as u16 + 1 // overview block: top pad + lines + bottom pad
+            };
         KeepWatchingHeroLayout {
             title_lines,
             show_name,
@@ -158,7 +163,7 @@ impl App {
                 Paragraph::new(Span::styled(
                     line.clone(),
                     Style::default()
-                        .fg(palette::YELLOW)
+                        .fg(palette::ORANGE)
                         .add_modifier(Modifier::BOLD),
                 )),
                 Rect {
@@ -176,7 +181,7 @@ impl App {
                 f.render_widget(
                     Paragraph::new(Span::styled(
                         trunc_str(&layout.show_name, text_w),
-                        Style::default().fg(palette::AQUA),
+                        Style::default().fg(palette::GREEN),
                     )),
                     Rect {
                         x: area.x,
@@ -185,8 +190,8 @@ impl App {
                         height: 1,
                     },
                 );
+                row += 1;
             }
-            row += 1;
         }
 
         if row < max_y {
@@ -206,7 +211,7 @@ impl App {
                         (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
                     Some(Span::styled(
                         format!("{}% watched", pct),
-                        Style::default().fg(palette::GREEN),
+                        Style::default().fg(palette::BG_GREEN),
                     ))
                 } else if !item.played {
                     Some(Span::styled(
@@ -255,25 +260,34 @@ impl App {
 
         row += 1; // blank separator row
 
-        let ov_color = if focused {
-            palette::WHITE
-        } else {
-            palette::MUTED
-        };
-        for line in &layout.overview_lines {
-            if row >= max_y {
-                break;
-            }
-            f.render_widget(
-                Paragraph::new(Span::styled(line.clone(), Style::default().fg(ov_color))),
-                Rect {
-                    x: area.x,
-                    y: row,
-                    width: area.width,
-                    height: 1,
-                },
-            );
-            row += 1;
+        if !layout.overview_lines.is_empty() && row < max_y {
+            let ov_color = if focused {
+                palette::WHITE
+            } else {
+                palette::MUTED
+            };
+            let block = Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG));
+            // 2-col horizontal padding, 1-row top padding
+            let block_h = 1 + layout.overview_lines.len() as u16 + 1; // top pad + lines + bottom pad
+            let block_area = Rect {
+                x: area.x,
+                y: row,
+                width: area.width,
+                height: block_h,
+            };
+            f.render_widget(block, block_area);
+            let inner = Rect {
+                x: block_area.x + 2,
+                y: block_area.y + 1,
+                width: block_area.width.saturating_sub(4),
+                height: block_area.height.saturating_sub(2),
+            };
+            let overview_text: Vec<Line> = layout
+                .overview_lines
+                .iter()
+                .map(|line| Line::from(Span::styled(line.clone(), Style::default().fg(ov_color))))
+                .collect();
+            f.render_widget(Paragraph::new(overview_text), inner);
         }
     }
 }

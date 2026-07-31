@@ -315,7 +315,7 @@ impl App {
                 f.render_widget(
                     Paragraph::new(Span::styled(
                         input_text,
-                        Style::default().fg(palette::GREEN),
+                        Style::default().fg(palette::BG_GREEN),
                     ))
                     .block(
                         Block::default()

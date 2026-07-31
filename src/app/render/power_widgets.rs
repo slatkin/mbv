@@ -473,7 +473,7 @@ pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(R
     }
     if has_left {
         let chunk = "\u{2039} ";
-        spans.push(Span::styled(chunk, Style::default().fg(palette::GREEN)));
+        spans.push(Span::styled(chunk, Style::default().fg(palette::BG_GREEN)));
         x_cursor += chunk.width() as u16;
     }
     for (offset, (label, &id)) in bar.labels[scroll_start..scroll_end]
@@ -505,7 +505,7 @@ pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(R
     }
     if has_right {
         let chunk = " \u{203a}";
-        spans.push(Span::styled(chunk, Style::default().fg(palette::GREEN)));
+        spans.push(Span::styled(chunk, Style::default().fg(palette::BG_GREEN)));
         x_cursor += chunk.width() as u16;
     }
 
