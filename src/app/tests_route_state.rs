@@ -370,6 +370,61 @@ fn remote_slot_state_is_local_daemon_for_thin_client_mode() {
 }
 
 #[test]
+fn announced_shutdown_of_current_remote_target_does_not_quit_local_daemon_home() {
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    fn reconnect_local(
+        _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        _auth_token: &str,
+    ) -> Result<
+        (
+            mbv_core::remote_player::RemotePlayer,
+            std::sync::mpsc::Receiver<PlayerEvent>,
+        ),
+        String,
+    > {
+        Ok(mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0))
+    }
+
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local);
+    QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+    let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+    let mut app = App::new_remote(
+        mbv_core::api::EmbyClient::new(crate::config::Config::default()),
+        remote,
+        player_rx,
+        true,
+    );
+    // The app was launched against the local daemon, but playback has since
+    // moved to a genuinely remote route. Disconnect handling must use this
+    // live target flag, not the launch-time home flag.
+    app.is_local_daemon = false;
+
+    app.handle_player_event(PlayerEvent::DaemonShutdownAnnounced);
+
+    assert!(!QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
+    assert!(app.daemon_lost_modal.is_none());
+    assert!(
+        app.is_local_daemon,
+        "restore should reconnect the home daemon"
+    );
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+    QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[test]
+fn resetting_local_daemon_queue_view_drops_stale_remote_queue_and_scope() {
+    let mut app = make_local_daemon_app_stub(make_items(1));
+    app.remote_player_tab = Some(PlayerTab::new(make_items(2), 1));
+    app.queue_scope = QueueScope::Remote;
+
+    app.reset_local_daemon_queue_view();
+
+    assert!(app.remote_player_tab.is_none());
+    assert_eq!(app.queue_scope, QueueScope::Local);
+    assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+}
+
+#[test]
 fn attached_session_state_wins_over_local_daemon_indicator() {
     let mut app = make_local_daemon_app_stub(make_items(3));
     app.connected_session_id = Some("session-1".into());

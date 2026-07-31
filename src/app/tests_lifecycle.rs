@@ -145,6 +145,37 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
 }
 
 #[test]
+fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let old_items = make_items(1);
+    crate::config::save_queue_state(&crate::config::QueueState {
+        source: crate::config::QueueSource::Album,
+        items: old_items.clone(),
+        cursor: 0,
+        last_played_item_id: None,
+        last_played_completed: false,
+        positions: Default::default(),
+    });
+
+    let mut app = make_local_daemon_app_stub(make_items(2));
+    app.player_tab.items = make_items(3);
+    app.teardown(Duration::from_secs(1));
+
+    let state = crate::config::load_queue_state().expect("existing daemon snapshot");
+    assert_eq!(
+        state
+            .items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        old_items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn wants_terminal_render_true_when_due() {
     let app = make_app_stub();
     let stale = Instant::now() - Duration::from_secs(10);

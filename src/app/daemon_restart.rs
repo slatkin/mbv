@@ -1,9 +1,15 @@
 use super::bootstrap::bootstrap_local_daemon_queue;
-use super::App;
+use super::{App, QueueScope};
 use mbv_core::player::PlayerProxy;
 use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
 
 impl App {
+    pub(super) fn reset_local_daemon_queue_view(&mut self) {
+        self.remote_player_tab = None;
+        self.remote_queue_undo_stack.clear();
+        self.set_queue_scope(QueueScope::Local);
+    }
+
     /// Ensure-daemon-then-attach, run from inside an already-running app
     /// (task 7.3): mirrors `main.rs`'s `Resolution::Fresh`/`Resolution::Attach`
     /// startup branches, but as an in-process reconnect rather than a fresh
@@ -82,6 +88,7 @@ impl App {
         }
 
         self.player_tab = bootstrap.player_tab;
+        self.reset_local_daemon_queue_view();
         self.queue_source = bootstrap.queue_source;
         self.last_played_item_id = bootstrap.last_played_item_id;
         self.last_played_completed = bootstrap.last_played_completed;

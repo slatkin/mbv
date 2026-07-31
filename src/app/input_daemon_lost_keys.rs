@@ -25,7 +25,7 @@ impl App {
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => {
                 self.daemon_lost_modal = None;
-                Some(true)
+                Some(self.try_quit())
             }
             _ => Some(false),
         }

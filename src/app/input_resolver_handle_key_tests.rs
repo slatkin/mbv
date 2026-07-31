@@ -16,6 +16,33 @@ fn help_f1_closes_help_via_handle_key() {
 }
 
 #[test]
+fn daemon_lost_q_runs_normal_quit_cleanup() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = crate::app::tests::make_local_daemon_app_stub(Vec::new());
+    app.daemon_lost_modal = Some(crate::app::DaemonLostModal {
+        last_playing_title: None,
+        daemon_log_path: "daemon.log".into(),
+        restart_error: None,
+    });
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("playlist-id".into()),
+        name: "Saved".into(),
+    };
+    app.queue_dirty = true;
+    app.client.lock().unwrap().config.save_playlist_on_quit = false;
+    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+
+    assert!(app.handle_key(ev(KeyCode::Char('q'), KeyModifiers::NONE)));
+    assert!(app.daemon_lost_modal.is_none());
+    assert!(
+        !app.queue_dirty,
+        "normal quit cleanup must discard dirty state"
+    );
+
+    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[test]
 fn help_swallows_unbound_key_via_handle_key() {
     let mut app = make_app_stub();
     app.show_help = true;

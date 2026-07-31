@@ -576,6 +576,10 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     .lock()
                     .unwrap()
                     .notify_disconnected_all(DisconnectReason::DaemonShutdown);
+                ctrl_clients
+                    .lock()
+                    .unwrap()
+                    .flush_writers(std::time::Duration::from_secs(1));
                 player.stop();
                 player.join_or_timeout(std::time::Duration::from_secs(5));
                 let _ = std::fs::remove_file(pid_file());

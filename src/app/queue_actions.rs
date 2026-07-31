@@ -238,6 +238,12 @@ impl App {
                     self.replace_direct_remote_queue(Vec::new(), 0);
                 } else if self.queue_scope_is_playback(scope) {
                     self.player.stop();
+                    if self.is_local_daemon {
+                        self.player.send_command(PlayerCommand::ReplaceQueue {
+                            items: Vec::new(),
+                            start_idx: 0,
+                        });
+                    }
                 }
                 if scope != QueueScope::Remote {
                     let queue = self.queue_for_scope_mut(scope);

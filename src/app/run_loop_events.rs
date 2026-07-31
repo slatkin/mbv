@@ -256,7 +256,14 @@ impl App {
                 self.last_played_item_id = Some(item.id.clone());
             }
         }
-        self.save_queue_state_no_clear();
+        if self.home_is_local_daemon {
+            log::info!(
+                target: "queue",
+                "teardown persistence skipped: local daemon owns the authoritative queue"
+            );
+        } else {
+            self.save_queue_state_no_clear();
+        }
         if !self.player.is_remote() {
             self.player.stop_for_shutdown(quit_timeout);
             // The two nested bounded calls inside the player thread's own

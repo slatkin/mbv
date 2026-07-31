@@ -121,7 +121,35 @@ fn cold_player() -> Player {
 fn recv_event(rx: &mpsc::Receiver<CtrlOutbound>) -> CtrlEvent {
     match rx.recv().unwrap() {
         CtrlOutbound::Event(json) => serde_json::from_str(&json).unwrap(),
+        CtrlOutbound::Flush(_) => panic!("expected a control event"),
     }
+}
+
+#[test]
+fn shutdown_notification_is_flushed_before_writers_are_released() {
+    let mut clients = CtrlClients::default();
+    let (_client_id, rx) = connect_client(&mut clients);
+    let writer = std::thread::spawn(move || {
+        match rx.recv().unwrap() {
+            CtrlOutbound::Event(json) => {
+                assert!(matches!(
+                    serde_json::from_str::<CtrlEvent>(&json).unwrap(),
+                    CtrlEvent::Disconnected {
+                        reason: DisconnectReason::DaemonShutdown
+                    }
+                ));
+            }
+            CtrlOutbound::Flush(_) => panic!("shutdown event must precede the flush barrier"),
+        }
+        match rx.recv().unwrap() {
+            CtrlOutbound::Flush(ack) => ack.send(()).unwrap(),
+            CtrlOutbound::Event(_) => panic!("flush barrier must follow the shutdown event"),
+        }
+    });
+
+    clients.notify_disconnected_all(DisconnectReason::DaemonShutdown);
+    clients.flush_writers(Duration::from_secs(1));
+    writer.join().unwrap();
 }
 
 #[test]

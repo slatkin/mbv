@@ -2,6 +2,7 @@ use super::*;
 use crate::app::tests::*;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::api::device_name;
+use mbv_core::ctrl::{CtrlCmd, WireCommand};
 use unicode_width::UnicodeWidthStr;
 
 #[test]
@@ -368,6 +369,30 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
         crate::config::QueueSource::Album
     ));
     assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
+}
+
+#[test]
+fn clearing_a_local_daemon_queue_replaces_the_daemon_queue_with_empty() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (remote, player_rx, cmd_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(make_items(2), 0);
+    let mut app = App::new_remote(
+        mbv_core::api::EmbyClient::new(crate::config::Config::default()),
+        remote,
+        player_rx,
+        true,
+    );
+
+    app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
+
+    assert!(app.player_tab.items.is_empty());
+    assert!(cmd_rx.try_iter().any(|cmd| {
+        matches!(
+            cmd,
+            CtrlCmd::PlayerCmd(WireCommand::ReplaceQueue { items, start_idx: 0 })
+                if items.is_empty()
+        )
+    }));
 }
 
 #[test]
