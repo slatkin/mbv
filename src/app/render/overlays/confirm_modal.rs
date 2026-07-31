@@ -92,7 +92,7 @@ impl App {
             ))
             .title_alignment(Alignment::Center)
             .borders(Borders::NONE)
-            .style(Style::default().bg(palette::GREEN));
+            .style(Style::default().bg(palette::BG_GREEN));
         let inner = block.inner(rect);
         f.render_widget(block, rect);
         let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;

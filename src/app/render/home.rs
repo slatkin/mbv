@@ -1,7 +1,7 @@
 use super::super::ui_util::*;
 use super::home_hero::KeepWatchingHeroLayout;
 use super::home_video::power_home_panel_scroll;
-use super::list_rows::focused_or_subtle;
+
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -125,10 +125,7 @@ impl App {
 
             hero_data = hero_item.and_then(|item| {
                 let meta_w = hero_col_width as usize;
-                let mut meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
-                // Cap metadata to leave at least 4 rows for the image
-                let max_meta = hero_col_height.saturating_sub(4);
-                meta_layout.height = meta_layout.height.min(max_meta);
+                let meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
                 // Terminal cells are roughly twice as tall as they are wide, so a
                 // 16:9 image needs 9 rows for every 32 columns. Keep the artwork
                 // at its natural display height, then leave one row before metadata.
@@ -175,8 +172,7 @@ impl App {
                 hero_item.and_then(|item| {
                     let img_w = area.width / 2;
                     let meta_w = area.width.saturating_sub(img_w + 1) as usize;
-                    let mut meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
-                    meta_layout.height = meta_layout.height.min(max_allowed);
+                    let meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
                     let image_rows =
                         (img_w.saturating_mul(9).saturating_add(31) / 32).min(max_allowed);
                     let hero_height = image_rows.max(meta_layout.height);
@@ -280,7 +276,7 @@ impl App {
             const RIGHT_COLUMN_INNER_INSET: u16 = 2;
             green_panel_full = Some(list_area);
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::GREEN)),
+                Block::default().style(Style::default().bg(palette::BG_GREEN)),
                 list_area,
             );
             let interior_area = Rect {
@@ -368,10 +364,10 @@ impl App {
                     } else {
                         String::new()
                     };
-                    let avail = (row_rect.width as usize).saturating_sub(1);
-                    // Reserve a 6-column gap before the duration column so the title
-                    // truncates well before running up against it, plus a 1-column
-                    // pad after the duration so it isn't flush against the right edge.
+                    let avail = (row_rect.width as usize).saturating_sub(2); // 2-col gutter (marker/icon)
+                                                                             // Reserve a 6-column gap before the duration column so the title
+                                                                             // truncates well before running up against it, plus a 1-column
+                                                                             // pad after the duration so it isn't flush against the right edge.
                     const DUR_GAP: usize = 6;
                     let dur_reserve = if dur_str.is_empty() {
                         0
@@ -383,7 +379,7 @@ impl App {
                     let title_width: usize;
 
                     let mut spans: Vec<Span> = if is_episode {
-                        // Episode: show name in soft white, episode title in white.
+                        // Episode: show name in orange, episode title in white.
                         let show_w = name_w * 2 / 5;
                         let show = trunc_str(&item.series_name, show_w);
                         let show_actual_w = show.width();
@@ -410,14 +406,15 @@ impl App {
                             }
                         }
                         vec![
-                            if selected_row && focused && green_panel_full.is_none() {
-                                super::selection_marker(true)
+                            if selected_row && focused {
+                                Span::styled("\u{1F7CA}", Style::default().fg(palette::AQUA))
                             } else {
                                 Span::raw(" ")
                             },
+                            Span::raw(" "),
                             Span::styled(
                                 show,
-                                Style::default().fg(palette::SOFT_WHITE).add_modifier(bold),
+                                Style::default().fg(palette::ORANGE).add_modifier(bold),
                             ),
                             Span::raw(" "),
                             Span::styled(
@@ -429,7 +426,6 @@ impl App {
                         // Non-episode: single title span.
                         let title = trunc_str(&item.display_name(), name_w);
                         title_width = title.width();
-                        let fg = focused_or_subtle(focused);
                         if selected_row && focused {
                             if let Some(full) = green_panel_full {
                                 f.render_widget(
@@ -443,27 +439,33 @@ impl App {
                                     },
                                 );
                                 vec![
+                                    Span::styled("\u{1F7CA}", Style::default().fg(palette::AQUA)),
                                     Span::raw(" "),
                                     Span::styled(
                                         title,
                                         Style::default()
-                                            .fg(palette::YELLOW)
+                                            .fg(palette::WHITE)
                                             .add_modifier(Modifier::BOLD),
                                     ),
                                 ]
                             } else {
                                 vec![
-                                    super::selection_marker(true),
+                                    Span::styled("\u{1F7CA}", Style::default().fg(palette::AQUA)),
+                                    Span::raw(" "),
                                     Span::styled(
                                         title,
                                         Style::default()
-                                            .fg(palette::IRIS)
+                                            .fg(palette::WHITE)
                                             .add_modifier(Modifier::BOLD),
                                     ),
                                 ]
                             }
                         } else {
-                            vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
+                            vec![
+                                Span::raw(" "),
+                                Span::raw(" "),
+                                Span::styled(title, Style::default().fg(palette::WHITE)),
+                            ]
                         }
                     };
                     let pad = avail.saturating_sub(title_width + dur_str.width() + 1);

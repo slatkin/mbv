@@ -231,7 +231,7 @@ impl App {
                     if scroll_end < n_tabs {
                         spans.push(Span::styled(
                             " \u{203a}",
-                            Style::default().fg(palette::GREEN),
+                            Style::default().fg(palette::BG_GREEN),
                         ));
                     }
                 } else {

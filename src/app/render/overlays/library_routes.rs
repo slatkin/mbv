@@ -332,7 +332,7 @@ impl App {
                             Span::raw(arrow),
                             Span::styled(name.clone(), name_style),
                             Span::raw(" -> "),
-                            Span::styled(value, Style::default().fg(palette::GREEN)),
+                            Span::styled(value, Style::default().fg(palette::BG_GREEN)),
                         ])
                     })
                     .collect();
