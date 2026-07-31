@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod local_daemon;
 mod login;
 mod mpris;
 mod relay;
@@ -196,12 +197,15 @@ fn print_usage() {
     println!("Usage: mbv [OPTIONS]");
     println!();
     println!("Options:");
-    println!("  -a, --alive               Stay alive: keep playing in the background after the");
-    println!("                             terminal detaches, and reattach to it later by running");
-    println!("                             `mbv` again in a terminal.");
-    println!("  -q                        Quit a running mbv session (foreground or stay-alive).");
+    println!("  -d                         Stay alive: ensure a local daemon owns playback and");
+    println!("                             attach to it as a client, so playback continues after");
+    println!("                             this terminal closes. Any number of terminals may");
+    println!("                             attach at once. No-op if `stay_alive = true` is already");
+    println!("                             configured.");
+    println!("  -q                        Stop the running Player owner (bare mbv, or the local");
+    println!("                             daemon in stay-alive mode).");
     println!("      --connect-daemon <endpoint>");
-    println!("                             Connect as a thin client to a running mbvd daemon at");
+    println!("                             Attach as a client to a running mbvd daemon at");
     println!("                             <endpoint> instead of owning a local Player.");
     println!("  -V, --version              Print the version and exit.");
     println!("  -h, --help                 Print this help message and exit.");
@@ -226,6 +230,14 @@ fn main() {
         relay::run_relay_main(socket_path, inferior);
     }
 
+    // Hidden local-daemon self-spawn subcommand (T2, design.md decision 1):
+    // `mbv --__local-daemon` re-execs itself to run the local daemon in this
+    // process and never returns. Checked early, alongside the relay
+    // self-spawn form, before any other CLI parsing.
+    if has_flag(&args, "--__local-daemon") {
+        local_daemon::run_local_daemon_main();
+    }
+
     let cli_daemon_endpoint = match connect_daemon_arg(&args) {
         Ok(endpoint) => endpoint,
         Err(e) => {
@@ -239,11 +251,10 @@ fn main() {
         return;
     }
 
-    // `mbv -q`: quit a running alive session (ADR 0006). Repurposed from the
-    // retired `-d` local daemon: reads the PID out of the single-instance
-    // lock file and SIGTERMs it for a graceful, non-interactive shutdown
-    // (T3) -- works for both a bare foreground session and a stay-alive
-    // inferior (its tray Quit does the exact same thing).
+    // `mbv -q`: stop the running Player owner (bare `mbv`, or the local
+    // daemon in stay-alive mode) (ADR 0006). Reads the PID out of the
+    // single-instance lock file and SIGTERMs it for a graceful,
+    // non-interactive shutdown -- the tray's Quit item does the same thing.
     if has_flag(&args, "-q") {
         let lock = single_instance::lock_path();
         match single_instance::read_pid(&lock) {
@@ -260,20 +271,12 @@ fn main() {
                 }
             }
             None => {
-                // Relay may be gated on first attach; check socket connectability
-                // before reporting "no running instance".
-                if std::os::unix::net::UnixStream::connect(single_instance::socket_path()).is_ok() {
-                    eprintln!("mbv: stay-alive relay is starting up but not yet attachable; try again in a moment");
-                    std::process::exit(1);
-                }
-                eprintln!("mbv: no running instance found");
+                eprintln!("mbv: no running instance found; if one just started, try again in a moment");
                 std::process::exit(1);
             }
         }
         return;
     }
-
-    let alive_requested = has_flag(&args, "-a") || has_flag(&args, "--alive");
 
     applog::init(
         config::is_system_instance(),
@@ -311,10 +314,8 @@ fn main() {
     log::info!(target: "startup", "mbv starting");
 
     // Construction only (no network I/O) so `client.config` can be read by
-    // the branches below regardless of whether this process ends up
-    // authenticating at all (bug: double-authentication on paths that
-    // discard `client` without ever needing a live session -- Reattach, and
-    // the stay-alive launcher-becomes-terminal-client branch).
+    // the branches below before any of them decide whether/when to
+    // authenticate.
     let client = EmbyClient::new(config);
 
     // Explicit endpoint (`--connect-daemon` / config `daemon_client_endpoint`)
@@ -338,88 +339,80 @@ fn main() {
         }
     }
 
-    // Single-instance resolution (ADR 0006): advisory flock + relay-socket
+    // Single-instance resolution (ADR 0006): advisory flock + control-socket
     // connectability. Independent of stay-alive; always on.
     let lock_path = single_instance::lock_path();
     let socket_path = single_instance::socket_path();
 
     match single_instance::resolve(&socket_path, &lock_path) {
-        Ok(single_instance::Resolution::Reattach) => {
-            // A live alive session exists: attach as a terminal-client.
-            // Same code path whether this is the very first attach after
-            // `mbv -a` spawned the relay moments ago, or a later reattach
-            // (ADR 0005 "uniform attach topology").
-            log::info!(target: "startup", "alive session detected; attaching");
-            let code = terminal_client::run_terminal_client(&socket_path.to_string_lossy());
-            std::process::exit(code);
+        Ok(single_instance::Resolution::Attach) => {
+            // A live local daemon exists: attach as a client alongside any
+            // others already attached. Clients take no lock -- that is what
+            // permits any number of them.
+            log::info!(target: "startup", "local daemon detected; attaching");
+            let client = authenticate_or_login(client, &ui_config);
+            let auth_token = client.token.clone();
+            match remote_player::RemotePlayer::connect_endpoint(
+                &remote_player::DaemonEndpoint::Local,
+                &auth_token,
+            ) {
+                Ok((remote, player_rx)) => {
+                    run_remote_app(client, remote, player_rx, true);
+                    return;
+                }
+                Err(e) => {
+                    eprintln!("mbv: failed to attach to local daemon: {e}");
+                    std::process::exit(1);
+                }
+            }
         }
         Ok(single_instance::Resolution::Refuse) => {
-            eprintln!(
-                "mbv: another mbv instance is already running in a foreground terminal (no relay to attach to)."
-            );
+            eprintln!("mbv: another mbv instance already owns playback in a foreground terminal.");
             match single_instance::read_pid(&lock_path) {
                 Some(pid) => eprintln!("mbv: that instance's PID is {pid} (per {lock_path:?})."),
                 None => {
                     eprintln!("mbv: could not determine that instance's PID from {lock_path:?}.")
                 }
             }
-            eprintln!("mbv: only one mbv instance may run at a time. Close it, or use `mbv -q` to stop it.");
+            eprintln!(
+                "mbv: only one process can own playback at a time. Close it, stop it with \
+                 `mbv -q`, or use `mbv -d` to run several terminals against a local daemon."
+            );
             std::process::exit(1);
         }
         Ok(single_instance::Resolution::Fresh(mut guard)) => {
-            // Are we already the gated inferior a relay is hosting on a pty
-            // slave? Only `relay::start_inferior` ever sets this env var, on
-            // the actual inferior it execs -- so its presence is a reliable
-            // "I must not spawn a relay of my own" signal, independent of
-            // what `client.config.stay_alive` says (bug: without this check,
-            // an inferior launched because of a *config* `stay_alive = true`
-            // -- as opposed to `-a`, which is stripped from its argv -- would
-            // see the same config value, take this same branch again, and
-            // spawn an unbounded chain of nested relays).
-            let is_inferior = std::env::var(relay::CTRL_FD_ENV).is_ok();
-            let stay_alive = !is_inferior && (alive_requested || client.config.stay_alive);
+            let stay_alive = has_flag(&args, "-d") || client.config.stay_alive;
+
+            // Authenticate first: a detached local daemon has no terminal
+            // and cannot prompt, so it must be able to pick up an
+            // already-valid cached token (design.md decision 5).
+            let client = authenticate_or_login(client, &ui_config);
+
             if stay_alive {
                 // This process was just a liveness probe: release the lock
-                // immediately (the inferior below reacquires it for real,
-                // becoming the actual Player-owning app) and become a
-                // terminal-client ourselves. We never needed a live Emby
-                // session for this -- `client` is discarded here, not
-                // handed to the inferior -- so skip authentication entirely.
+                // immediately (the local daemon reacquires it for real,
+                // becoming the actual Player-owning process) and attach to
+                // it as a client ourselves.
                 drop(guard);
-                let exe = match std::env::current_exe() {
-                    Ok(p) => p,
-                    Err(e) => {
-                        eprintln!("mbv: cannot locate binary: {e}");
-                        std::process::exit(1);
-                    }
-                };
-                // Inferior argv = this same invocation, minus -a/--alive (it
-                // must not try to spawn a second relay). No --connect-daemon
-                // can be present here: that always returns above, before
-                // this branch is reached, so stay-alive never applies to
-                // thin clients.
-                let inferior_argv: Vec<String> =
-                    std::iter::once(exe.to_string_lossy().into_owned())
-                        .chain(
-                            args.iter()
-                                .filter(|a| a.as_str() != "-a" && a.as_str() != "--alive")
-                                .cloned(),
-                        )
-                        .collect();
-                if let Err(e) = relay::spawn_detached(&socket_path.to_string_lossy(), inferior_argv)
-                {
-                    eprintln!("mbv: failed to start stay-alive session: {e}");
+                if let Err(e) = local_daemon::spawn_detached(&socket_path.to_string_lossy()) {
+                    eprintln!("mbv: failed to start local daemon: {e}");
                     std::process::exit(1);
                 }
-                let code = terminal_client::run_terminal_client(&socket_path.to_string_lossy());
-                std::process::exit(code);
+                let auth_token = client.token.clone();
+                match remote_player::RemotePlayer::connect_endpoint(
+                    &remote_player::DaemonEndpoint::Local,
+                    &auth_token,
+                ) {
+                    Ok((remote, player_rx)) => {
+                        run_remote_app(client, remote, player_rx, true);
+                        return;
+                    }
+                    Err(e) => {
+                        eprintln!("mbv: failed to attach to local daemon: {e}");
+                        std::process::exit(1);
+                    }
+                }
             }
-
-            // Only reached by a bare fresh launch, or by the inferior itself
-            // (which must always fall through here rather than re-evaluate
-            // the stay-alive branch above) -- both actually need a live,
-            // Player-owning `EmbyClient`, so authenticate now.
-            let client = authenticate_or_login(client, &ui_config);
 
             if let Err(e) = guard.write_pid() {
                 log::warn!(target: "startup", "failed to write pid into lock file: {e}");

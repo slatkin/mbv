@@ -32,17 +32,17 @@ is deleted only afterwards (group 8), so there is a working stay-alive path at e
 
 ## 2. Local daemon bootstrap
 
-- [ ] 2.1 Add a hidden self-spawn subcommand to `src/main.rs` that runs the local daemon in this
+- [x] 2.1 Add a hidden self-spawn subcommand to `src/main.rs` that runs the local daemon in this
       process (name it for the daemon, e.g. `--__local-daemon`; do not reuse `--__relay`). It parses
       its own argv, initialises logging to a daemon log under `state_dir()`, and calls
       `mbv_core::daemon::run_with_options`.
-- [ ] 2.2 Add a `spawn_detached`-equivalent for the daemon: fork, `setsid()`, ignore `SIGHUP`,
+- [x] 2.2 Add a `spawn_detached`-equivalent for the daemon: fork, `setsid()`, ignore `SIGHUP`,
       redirect stdio away from the terminal, and exec `mbv --__local-daemon ...`. Model it on
       `relay::spawn_detached` but drop everything pty-related. Put it in a new small module (e.g.
       `src/local_daemon.rs`); do not add it to `src/relay.rs`, which is being deleted.
-- [ ] 2.3 Have the daemon acquire the single-instance lock and call `LockGuard::write_pid()` as part
+- [x] 2.3 Have the daemon acquire the single-instance lock and call `LockGuard::write_pid()` as part
       of its startup, before binding the control socket, so `mbv -q` can find it.
-- [ ] 2.4 Have the daemon fail fast with a clear message when `EmbyClient::authenticate` fails on the
+- [x] 2.4 Have the daemon fail fast with a clear message when `EmbyClient::authenticate` fails on the
       cached token (mirror `crates/mbvd/src/main.rs`'s "no cached credentials" behavior), and make
       that reason reach the launching terminal — the spawning client is still on a terminal and must
       report it rather than exiting silently on a connect timeout.
@@ -52,40 +52,40 @@ is deleted only afterwards (group 8), so there is a working stay-alive path at e
 
 ## 3. Single-instance repoint
 
-- [ ] 3.1 In `src/single_instance.rs`, change `socket_path()` to return
+- [x] 3.1 In `src/single_instance.rs`, change `socket_path()` to return
       `mbv_core::config::control_socket_path()` rather than `runtime_dir().join("mbv-relay.sock")`,
       so the probe and `DaemonEndpoint::Local` agree by construction. Keep this module's own
       `lock_path()` and `runtime_dir()` as they are.
-- [ ] 3.2 Rename `Resolution::Reattach` to `Resolution::Attach` and update its doc comment: a live
+- [x] 3.2 Rename `Resolution::Reattach` to `Resolution::Attach` and update its doc comment: a live
       local daemon exists, attach as a client alongside any others. Update the module header, which
       currently describes relays and pty slaves.
-- [ ] 3.3 Update the existing `single_instance` tests for the rename; keep both existing cases
+- [x] 3.3 Update the existing `single_instance` tests for the rename; keep both existing cases
       (fresh-when-unlocked, refuse-when-locked-without-socket) — they are the ones that protect the
       trichotomy.
-- [ ] 3.4 Add one test for the third branch: lock held plus a *bound and listening* socket resolves
+- [x] 3.4 Add one test for the third branch: lock held plus a *bound and listening* socket resolves
       to `Attach`. This is the branch the whole change hinges on and no existing test covers it,
       because binding a real listener was pointless when the socket meant "relay".
-- [ ] 3.5 Rewrite the `Refuse` message in `src/main.rs` per the spec: name the owning PID, say why
+- [x] 3.5 Rewrite the `Refuse` message in `src/main.rs` per the spec: name the owning PID, say why
       only one process can own playback, and give both remedies (stop it, or use `mbv -d` for
       several terminals).
-- [ ] 3.6 In the `mbv -q` branch of `src/main.rs`, replace the "stay-alive relay is starting up but
+- [x] 3.6 In the `mbv -q` branch of `src/main.rs`, replace the "stay-alive relay is starting up but
       not yet attachable" fallback message with a plain retry hint — a local daemon writes its PID
       as part of startup and has no attach gate.
 
 ## 4. Startup rewiring in `src/main.rs`
 
-- [ ] 4.1 Replace `alive_requested` (`has_flag(&args, "-a") || has_flag(&args, "--alive")`) with
+- [x] 4.1 Replace `alive_requested` (`has_flag(&args, "-a") || has_flag(&args, "--alive")`) with
       `has_flag(&args, "-d")`. Remove the `-a`/`--alive` filtering from the argv-forwarding code.
-- [ ] 4.2 Rewrite `print_usage`: document `-d`, delete the `-a, --alive` entry, and describe `-q` as
+- [x] 4.2 Rewrite `print_usage`: document `-d`, delete the `-a, --alive` entry, and describe `-q` as
       stopping the running Player owner.
-- [ ] 4.3 Rewrite the `Resolution::Fresh` stay-alive branch: **authenticate first**
+- [x] 4.3 Rewrite the `Resolution::Fresh` stay-alive branch: **authenticate first**
       (`authenticate_or_login`), then drop the lock guard, then spawn the daemon, then connect via
       `DaemonEndpoint::Local` and run `run_remote_app(client, remote, player_rx, true)`. This
       inverts today's deliberate skip-authentication behavior — the comment there explaining why
       authentication is skipped is now wrong and must go.
-- [ ] 4.4 Rewrite the `Resolution::Attach` branch the same way: authenticate, connect to
+- [x] 4.4 Rewrite the `Resolution::Attach` branch the same way: authenticate, connect to
       `DaemonEndpoint::Local`, run as a client. It must not spawn a daemon and must not take a lock.
-- [ ] 4.5 Delete the `is_inferior` / `relay::CTRL_FD_ENV` guard and its comment. The recursion it
+- [x] 4.5 Delete the `is_inferior` / `relay::CTRL_FD_ENV` guard and its comment. The recursion it
       defended against cannot occur: the hidden daemon subcommand returns before any stay-alive
       branch is evaluated.
 - [ ] 4.6 Verify by hand, in this order: `mbv -d` in terminal A starts playback; terminal B `mbv`

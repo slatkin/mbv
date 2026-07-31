@@ -438,6 +438,10 @@ impl App {
             PlayerEvent::QueueDesynced(reason) => {
                 self.flash_status(reason);
             }
+            // Placeholder: task 7.2 wires this into the announced-shutdown
+            // clean exit (vs. the unannounced-loss modal for
+            // PlayerEvent::Stopped via is_remote_disconnected()).
+            PlayerEvent::DaemonShutdownAnnounced => {}
         }
         false
     }
