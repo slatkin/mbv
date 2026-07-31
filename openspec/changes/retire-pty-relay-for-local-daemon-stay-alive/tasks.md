@@ -3,26 +3,26 @@ is deleted only afterwards (group 8), so there is a working stay-alive path at e
 
 ## 1. Ctrl protocol: shutdown disconnect reason
 
-- [ ] 1.1 In `crates/mbv-core/src/ctrl.rs`, add a `DaemonShutdown` variant to `DisconnectReason`
+- [x] 1.1 In `crates/mbv-core/src/ctrl.rs`, add a `DaemonShutdown` variant to `DisconnectReason`
       (the enum at the bottom of the file, alongside `TakenOverByEmbyRemote`), with an explicit
       `#[serde(rename = "DaemonShutdown")]` matching the existing variant's style.
-- [ ] 1.2 In `crates/mbv-core/src/ctrl.rs`, bump `CTRL_PROTOCOL_VERSION` from `6` to `7`. Note it is
+- [x] 1.2 In `crates/mbv-core/src/ctrl.rs`, bump `CTRL_PROTOCOL_VERSION` from `6` to `7`. Note it is
       currently `6`, not `4` as `openspec/specs/ctrl-protocol/spec.md` claims — the spec was stale
       and this change's delta corrects it. Do not change `CtrlCompatibility::for_peer`'s
       exact-match-or-reject logic.
-- [ ] 1.3 Update protocol-version fixtures in `crates/mbv-core/src/remote_player_tests.rs` and any
+- [x] 1.3 Update protocol-version fixtures in `crates/mbv-core/src/remote_player_tests.rs` and any
       handshake/serialization test that hard-codes a version number.
-- [ ] 1.4 In `crates/mbv-core/src/remote_player.rs`, extend `disconnect_reason_message` and the
+- [x] 1.4 In `crates/mbv-core/src/remote_player.rs`, extend `disconnect_reason_message` and the
       `apply_ctrl_event` `CtrlEvent::Disconnected` match arm for the new variant. Its message is a
       plain "the daemon was stopped" line, not an Emby-authority message.
-- [ ] 1.5 In `crates/mbv-core/src/remote_player.rs`, in the reader thread's `is_structured_disconnect`
+- [x] 1.5 In `crates/mbv-core/src/remote_player.rs`, in the reader thread's `is_structured_disconnect`
       match (around the "Under multi-connection (v5)" comment), return `true` for `DaemonShutdown`
       so the following close is treated as expected and no synthetic `PlayerEvent::Stopped` is
       emitted. Fix that stale `(v5)` comment while you are in it.
-- [ ] 1.6 Expose the expected-disconnect distinction to the app layer: `RemotePlayer` must let a
+- [x] 1.6 Expose the expected-disconnect distinction to the app layer: `RemotePlayer` must let a
       caller tell "closed after an announced shutdown" from "closed with no warning". Add whatever
       minimal accessor or `PlayerEvent` this needs; `App` consumes it in task 7.2.
-- [ ] 1.7 In `crates/mbv-core/src/daemon_core.rs`, broadcast
+- [x] 1.7 In `crates/mbv-core/src/daemon_core.rs`, broadcast
       `CtrlEvent::Disconnected { reason: DaemonShutdown }` to all clients on the explicit-shutdown
       path (the `DaemonEvent::Shutdown` handling reached from `shutdown_signal_rx`), before closing
       connections. Reuse `notify_disconnected_all`.

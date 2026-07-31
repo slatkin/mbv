@@ -225,6 +225,12 @@ pub enum PlayerEvent {
     /// for Emby remote authority takeover. Unlike `RemoteDisconnected`, this is
     /// an authority-change notification — the connection stays open.
     EmbyAuthorityTaken(String),
+    /// Emitted by RemotePlayer when its connection closes after the daemon
+    /// announced a deliberate shutdown (`DisconnectReason::DaemonShutdown`).
+    /// Unlike `RemoteDisconnected`, this is not a crash: the client SHALL
+    /// print one line, restore the terminal, and exit rather than offer
+    /// recovery.
+    DaemonShutdownAnnounced,
     /// Emitted when an external tool modifies mpv's playlist outside of mbv's
     /// control (e.g. by writing to the mpv IPC socket), causing mbv's queue
     /// mirror to become stale. The detail describes what was detected. The UI

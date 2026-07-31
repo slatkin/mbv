@@ -4,7 +4,7 @@ use crate::api::MediaItem;
 use crate::config::QueueSource;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
-pub const CTRL_PROTOCOL_VERSION: u32 = 6;
+pub const CTRL_PROTOCOL_VERSION: u32 = 7;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
@@ -381,6 +381,11 @@ pub enum PlaybackIntentRejection {
 pub enum DisconnectReason {
     #[serde(rename = "TakenOverByEmbyRemote")]
     TakenOverByEmbyRemote,
+    /// The daemon is shutting down deliberately (`mbv -q`, tray Quit).
+    /// Unlike `TakenOverByEmbyRemote`, this reason means the connection is
+    /// about to close, and it is not an Emby-authority notification.
+    #[serde(rename = "DaemonShutdown")]
+    DaemonShutdown,
 }
 
 #[derive(Serialize, Deserialize)]

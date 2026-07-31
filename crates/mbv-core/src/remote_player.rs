@@ -41,6 +41,11 @@ pub struct RemotePlayer {
     pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
     cmd_tx: mpsc::Sender<CtrlCmd>,
     disconnected: Arc<AtomicBool>,
+    /// Set when the connection closed after the daemon announced a
+    /// deliberate shutdown (`DisconnectReason::DaemonShutdown`), as opposed
+    /// to closing with no warning. Lets a caller (the App layer) tell the
+    /// two apart without re-deriving it from the disconnect reason itself.
+    shutdown_announced: Arc<AtomicBool>,
     ctrl_compatibility: CtrlCompatibility,
     /// A kept clone of the control socket, used only by `disconnect()`
     /// (#233) to shut the connection down on demand rather than relying
@@ -358,6 +363,11 @@ fn apply_ctrl_event(
                     DisconnectReason::TakenOverByEmbyRemote => {
                         let _ = event_tx.send(PlayerEvent::EmbyAuthorityTaken(msg));
                     }
+                    // Handled by the reader thread's end-of-loop logic below
+                    // (`is_structured_disconnect`), which sends
+                    // `PlayerEvent::DaemonShutdownAnnounced` once the
+                    // connection actually closes; nothing to do here.
+                    DisconnectReason::DaemonShutdown => {}
                 }
             }
         }
@@ -369,6 +379,7 @@ fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
         DisconnectReason::TakenOverByEmbyRemote => {
             "Emby remote control took over — returned to local mode"
         }
+        DisconnectReason::DaemonShutdown => "the daemon was stopped",
     }
 }
 
@@ -389,6 +400,7 @@ impl RemotePlayer {
         let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
         let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
+        let shutdown_announced = Arc::new(AtomicBool::new(false));
         let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
         let pending_playback = Arc::new(Mutex::new(HashMap::new()));
 
@@ -423,6 +435,7 @@ impl RemotePlayer {
         let queue_source_r = queue_source.clone();
         let pending_playback_r = pending_playback.clone();
         let disconnected_r = disconnected.clone();
+        let shutdown_announced_r = shutdown_announced.clone();
         let event_tx_r = event_tx;
         std::thread::spawn(move || {
             let mut expected_disconnect = false;
@@ -435,13 +448,15 @@ impl RemotePlayer {
                             log::warn!(target: "remote", "unrecognized event from daemon: {l}");
                             continue;
                         };
-                        // Under multi-connection (v5), `Disconnected { TakenOverByEmbyRemote }` is
-                        // a notification — the connection stays open. Only set expected_disconnect
-                        // for events that actually close the connection. Exhaustive match ensures
-                        // new DisconnectReason variants are evaluated.
+                        // `Disconnected { TakenOverByEmbyRemote }` is a
+                        // notification — the connection stays open. Only set
+                        // expected_disconnect for events that actually close
+                        // the connection. Exhaustive match ensures new
+                        // DisconnectReason variants are evaluated.
                         let is_structured_disconnect = match &ev {
                             CtrlEvent::Disconnected { reason } => match reason {
                                 DisconnectReason::TakenOverByEmbyRemote => false,
+                                DisconnectReason::DaemonShutdown => true,
                             },
                             _ => false,
                         };
@@ -472,17 +487,23 @@ impl RemotePlayer {
                 });
             } else {
                 // An "expected"/structured disconnect (e.g. an Emby Remote
-                // takeover) never sends a Stopped PlayerEvent, so nothing
-                // else clears `status`. Clear it here, at the source, so
-                // every consumer of `status` (not just MPRIS's separate
-                // `disconnected_flag()` check in src/mpris.rs) sees an
-                // inactive/no-track player immediately rather than stale
-                // "still playing" data.
+                // takeover, or a deliberate daemon shutdown) never sends a
+                // Stopped PlayerEvent, so nothing else clears `status`.
+                // Clear it here, at the source, so every consumer of
+                // `status` (not just MPRIS's separate `disconnected_flag()`
+                // check in src/mpris.rs) sees an inactive/no-track player
+                // immediately rather than stale "still playing" data.
                 if let Ok(mut s) = status_r.lock() {
                     s.active = false;
                     s.paused = false;
                     s.clear_current_item_metadata();
                 }
+                // `TakenOverByEmbyRemote` never reaches this branch (it
+                // doesn't close the connection, see the match above), so an
+                // expected/structured disconnect here is always a
+                // deliberate daemon shutdown.
+                shutdown_announced_r.store(true, Ordering::SeqCst);
+                let _ = event_tx_r.send(PlayerEvent::DaemonShutdownAnnounced);
             }
         });
 
@@ -507,6 +528,7 @@ impl RemotePlayer {
                 queue_source,
                 cmd_tx,
                 disconnected,
+                shutdown_announced,
                 ctrl_compatibility,
                 control_stream: Arc::new(Mutex::new(Some(disconnect_stream))),
                 next_playback_id,
@@ -518,6 +540,13 @@ impl RemotePlayer {
 
     pub fn is_disconnected(&self) -> bool {
         self.disconnected.load(Ordering::SeqCst)
+    }
+
+    /// Whether the connection closed after the daemon announced a
+    /// deliberate shutdown, as opposed to closing with no warning. Only
+    /// meaningful once `is_disconnected()` is true.
+    pub fn is_shutdown_announced(&self) -> bool {
+        self.shutdown_announced.load(Ordering::SeqCst)
     }
 
     /// Shared handle to the disconnect flag, cloneable independent of the
@@ -703,6 +732,7 @@ impl RemotePlayer {
         let items = Arc::new(Mutex::new(items));
         let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
+        let shutdown_announced = Arc::new(AtomicBool::new(false));
         let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
         let pending_playback = Arc::new(Mutex::new(HashMap::new()));
         let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
@@ -716,6 +746,7 @@ impl RemotePlayer {
                 queue_source,
                 cmd_tx,
                 disconnected,
+                shutdown_announced,
                 ctrl_compatibility: compat,
                 control_stream: Arc::new(Mutex::new(None)),
                 next_playback_id,
