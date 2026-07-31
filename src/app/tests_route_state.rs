@@ -567,6 +567,89 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
 }
 
 #[test]
+fn restore_local_mode_reconnects_local_daemon_when_no_suspended_local_player_exists() {
+    // Regression guard: an `App::new_remote(..., is_local_daemon = true)`
+    // instance (local-daemon home, e.g. `mbv -d` auto-detected at startup)
+    // has no genuinely local in-process `Player` to suspend when it routes
+    // away via `switch_to_library_route`'s already-remote branch --
+    // `suspended_local` stays `None` for its whole life. Before this fix,
+    // `restore_local_mode` did nothing in that case, leaving the player
+    // disconnected instead of reconnected to the local daemon.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    fn route_connect_success(
+        _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        _auth_token: &str,
+    ) -> Result<
+        (
+            mbv_core::remote_player::RemotePlayer,
+            mpsc::Receiver<PlayerEvent>,
+        ),
+        String,
+    > {
+        Ok(mbv_core::remote_player::RemotePlayer::stub(
+            make_items(1),
+            0,
+        ))
+    }
+
+    let mut app = make_local_daemon_app_stub(make_items(2));
+    assert!(app.home_is_local_daemon);
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+    app.switch_to_library_route("music", remote, remote_rx, false);
+    assert!(app.suspended_local.is_none());
+
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
+    app.restore_local_mode("test: route no longer resolves");
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+    assert!(app.player.is_remote());
+    assert!(app.is_local_daemon);
+    assert!(app.active_route.is_none());
+}
+
+#[test]
+fn restore_local_mode_flashes_combined_status_when_local_daemon_reconnect_fails() {
+    // Same starting scenario as above, but the local-daemon reconnect
+    // attempt itself fails -- confirms `restore_local_mode` folds that
+    // failure into the flashed status instead of panicking or silently
+    // dropping it.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    fn route_connect_failure(
+        _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        _auth_token: &str,
+    ) -> Result<
+        (
+            mbv_core::remote_player::RemotePlayer,
+            mpsc::Receiver<PlayerEvent>,
+        ),
+        String,
+    > {
+        Err("connection refused".to_string())
+    }
+
+    let mut app = make_local_daemon_app_stub(make_items(2));
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+    app.switch_to_library_route("music", remote, remote_rx, false);
+
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
+    app.restore_local_mode("test: route no longer resolves");
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+    // `disconnect_remote` tears down the old remote's socket but doesn't
+    // change `PlayerProxy`'s inner variant, so the stale remote player is
+    // still what `is_remote()` reports here -- there was nothing to swap it
+    // for since the reconnect failed. This mirrors `restore_local_mode`'s
+    // pre-existing behavior for any other failure path: no invented
+    // recovery UX, just the same left-disconnected player plus a status
+    // flash.
+    assert!(app.player.is_remote());
+    assert!(app.status.contains("test: route no longer resolves"));
+    assert!(app.status.contains("unreachable"));
+}
+
+#[test]
 fn displayed_queue_playback_state_is_inactive_for_non_playback_scope() {
     let mut app = make_remote_app_stub(make_items(2), make_items(3));
     app.connected_session_state = Some(make_session("remote-host", "Emby"));

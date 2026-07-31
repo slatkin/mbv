@@ -300,6 +300,7 @@ pub(crate) fn make_app_stub() -> App {
         stay_alive_ctrl: None,
         attached: true,
         is_local_daemon: false,
+        home_is_local_daemon: false,
     }
 }
 

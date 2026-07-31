@@ -189,6 +189,7 @@ impl App {
             attached: true,
             launched_as_remote: false,
             is_local_daemon: false,
+            home_is_local_daemon: false,
         }
     }
 
@@ -437,6 +438,7 @@ impl App {
         app.mpris = Some(mpris_handle);
         app.launched_as_remote = true;
         app.is_local_daemon = is_local_daemon;
+        app.home_is_local_daemon = is_local_daemon;
         if is_local_daemon {
             let bootstrap = local_daemon_bootstrap.unwrap();
             app.queue_source = bootstrap.queue_source;

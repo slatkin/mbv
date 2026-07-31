@@ -63,6 +63,18 @@ pub struct App {
     /// discarded) so later code can tell "my Player owner is on this
     /// machine" from "my Player owner is elsewhere".
     pub(super) is_local_daemon: bool,
+    /// The one-time, launch-time value of `is_local_daemon`: `true` only for
+    /// `App::new_remote` instances whose `is_local_daemon` constructor
+    /// argument was `true`, and never updated afterward -- unlike
+    /// `is_local_daemon` itself, which `switch_to_direct_remote` and
+    /// `switch_to_library_route` update on every route switch to track the
+    /// *current* player target. Kept fixed at its construction-time value so
+    /// `restore_local_mode` can tell whether this app's baseline (the state
+    /// to return to when a route switch is undone) was a genuinely local
+    /// in-process player (nothing to do here) or a connection to the local
+    /// daemon (which must be reconnected, since there's no suspended local
+    /// player to restore in that case).
+    pub(super) home_is_local_daemon: bool,
     pub(super) hidden_libraries: Vec<String>,
     pub(super) hidden_latest: Vec<String>,
     /// `Config.library_routes` at startup (#256). Values are resolved
