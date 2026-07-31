@@ -380,16 +380,16 @@ fn render_inline_album_detail_uses_track_focus_as_cursor() {
     term.draw(|f| app.render(f)).unwrap();
     let out = buffer_to_string(&term);
 
-    // Track-focus mode reuses the inline album-detail cursor, so the
-    // focused track keeps the selected-row gutter.
+    // Track-focus mode retains the standard spacing, while the old green
+    // marker glyph is absent.
     let track_line = out
         .lines()
         .find(|l| l.contains("Track 2"))
         .unwrap_or_else(|| panic!("no 'Track 2' row found in rendered output:\n{out}"));
     assert!(
-            track_line.contains('\u{258c}'),
-            "expected focused track row to keep the selected-row marker, got: {track_line:?}\nfull output:\n{out}"
-        );
+        !track_line.contains('\u{258c}'),
+        "expected focused track row to omit the selected-row marker, got: {track_line:?}\nfull output:\n{out}"
+    );
 }
 
 // ── Task 4: scope-correct actions (#145) ─────────────────────────────

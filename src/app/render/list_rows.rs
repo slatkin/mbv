@@ -20,6 +20,11 @@ use ratatui::Frame;
 /// visible side padding is `INDENT + 1` columns on each side).
 pub(super) const COMPACT_BANNER_RULE_ROWS: usize = 1;
 pub(super) const COMPACT_BANNER_GAP_ROWS: usize = 1;
+/// Standard inset for every selected detail block.
+pub(super) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
+/// External side padding for the selected movie block.
+pub(super) const COMPACT_MOVIE_BANNER_INDENT: u16 = SELECTED_BLOCK_SIDE_PADDING;
+/// External side padding for inline series detail.
 pub(super) const COMPACT_BANNER_INDENT: u16 = 1;
 
 /// Returns `palette::WHITE` when `focused`, `palette::SUBTLE` otherwise.
@@ -150,7 +155,7 @@ pub(super) fn build_list_row_spans(
 ) -> Vec<Span<'static>> {
     let mut spans: Vec<Span> = if selected {
         if selected_has_banner {
-            // Colored-block look: 1-col leading pad inside the
+            // Colored-block look: 2-col leading pad inside the
             // MEDIA_SELECTED_BG block, no green `▌` gutter. Title is Emby
             // green (BOLD when focused) and the row omits the duration --
             // it lives in the banner's metadata row below.
@@ -161,7 +166,7 @@ pub(super) fn build_list_row_spans(
             } else {
                 Style::default().fg(palette::YELLOW)
             };
-            vec![Span::raw(" "), Span::styled(title, title_style)]
+            vec![Span::raw("  "), Span::styled(title, title_style)]
         } else if is_series {
             // Series inline detail: title is yellow when selected.
             let title_style = if focused {
@@ -171,10 +176,12 @@ pub(super) fn build_list_row_spans(
             } else {
                 Style::default().fg(palette::YELLOW)
             };
-            vec![Span::raw(" "), Span::styled(title, title_style)]
+            vec![
+                Span::raw(" ".repeat(SELECTED_BLOCK_SIDE_PADDING as usize)),
+                Span::styled(title, title_style),
+            ]
         } else {
-            // Otherwise keep the green gutter for selected list rows
-            // without an inline banner.
+            // Keep standard alignment without an inline banner.
             let title_style = if focused {
                 Style::default()
                     .fg(palette::IRIS)

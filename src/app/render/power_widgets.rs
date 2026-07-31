@@ -319,7 +319,7 @@ pub(super) fn selector_pill_style(selected: bool) -> Style {
     } else {
         Style::default()
             .fg(palette::YELLOW)
-            .bg(palette::LIBRARY_SIDE_BG)
+            .bg(palette::PLAYBACK_PANEL_BG)
     }
 }
 
@@ -347,16 +347,20 @@ pub(super) fn render_power_count_label(f: &mut Frame, area: Rect, count: usize) 
     }
 }
 
-/// The shared left cursor marker span used by every list row.
-/// `active` (row is both selected and focused) renders the AQUA half-block
-/// `▌`; otherwise a single blank space so unselected rows stay aligned.
-/// Only the marker glyph is unified here -- each renderer keeps its own
-/// row *text* coloring, which varies by tab.
-pub(super) fn selection_marker(active: bool) -> Span<'static> {
-    if active {
-        Span::styled("\u{258c}", Style::default().fg(palette::AQUA))
-    } else {
-        Span::raw(" ")
+/// The shared left alignment span used by every list row.
+/// Selection remains visible through each renderer's row text styling; the
+/// leading column stays blank so rows keep their standard alignment.
+pub(super) fn selection_marker(_active: bool) -> Span<'static> {
+    Span::raw(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::selection_marker;
+
+    #[test]
+    fn selected_rows_reserve_alignment_without_a_gutter_marker() {
+        assert_eq!(selection_marker(true).content, " ");
     }
 }
 

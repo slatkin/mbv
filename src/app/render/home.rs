@@ -67,16 +67,6 @@ impl App {
             .iter()
             .find(|section| section.section_idx == self.home.section);
 
-        self.render_power_home_section_pills_row(
-            f,
-            Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
-                height: 1,
-            },
-            layout,
-        );
         let content_area = Rect {
             y: area.y.saturating_add(2),
             height: area.height.saturating_sub(2),
@@ -129,7 +119,9 @@ impl App {
             let hero_col_width = ((area.width as u32 * 2 / 5) as u16)
                 .max(12)
                 .min(area.width.saturating_sub(12));
-            let hero_col_height = content_area.height;
+            // The right column reserves three rows for the pill row and its
+            // dark top/bottom padding. The left hero starts at the panel top.
+            let hero_col_height = area.height;
 
             hero_data = hero_item.and_then(|item| {
                 let meta_w = hero_col_width as usize;
@@ -137,20 +129,26 @@ impl App {
                 // Cap metadata to leave at least 4 rows for the image
                 let max_meta = hero_col_height.saturating_sub(4);
                 meta_layout.height = meta_layout.height.min(max_meta);
-                if meta_layout.height < 4 || hero_col_height < 5 {
+                // Terminal cells are roughly twice as tall as they are wide, so a
+                // 16:9 image needs 9 rows for every 32 columns. Keep the artwork
+                // at its natural display height, then leave one row before metadata.
+                let image_height = (hero_col_width.saturating_mul(9).saturating_add(31) / 32)
+                    .max(1)
+                    .min(hero_col_height.saturating_sub(meta_layout.height + 1));
+                if meta_layout.height < 4 || image_height == 0 {
                     None
                 } else {
+                    let img_area = Rect {
+                        x: area.x,
+                        y: area.y,
+                        width: hero_col_width,
+                        height: image_height,
+                    };
                     let meta_area = Rect {
-                        x: content_area.x,
-                        y: content_area.y,
+                        x: area.x,
+                        y: area.y + img_area.height + 1,
                         width: hero_col_width,
                         height: meta_layout.height,
-                    };
-                    let img_area = Rect {
-                        x: content_area.x,
-                        y: content_area.y + meta_layout.height,
-                        width: hero_col_width,
-                        height: hero_col_height.saturating_sub(meta_layout.height),
                     };
                     Some((item, meta_area, img_area, meta_layout))
                 }
@@ -158,10 +156,10 @@ impl App {
 
             list_area = if hero_data.is_some() {
                 Rect {
-                    x: content_area.x + hero_col_width + 1,
-                    y: content_area.y,
-                    width: content_area.width.saturating_sub(hero_col_width + 1),
-                    height: content_area.height,
+                    x: content_area.x + hero_col_width + 2,
+                    y: area.y.saturating_add(3),
+                    width: content_area.width.saturating_sub(hero_col_width + 2),
+                    height: area.height.saturating_sub(3),
                 }
             } else {
                 // No hero item: list takes full width
@@ -169,25 +167,19 @@ impl App {
             };
         } else {
             // Vertical layout: hero on top, list below (unchanged behavior)
-            // Row budget for the hero image is the primary size control: an
-            // independent, terminal-height-aware target computed up front, not
-            // derived from how long a given item's overview text happens to be.
-            // Mirrors render_card_image's terminal-height-aware cap.
             let max_allowed = content_area.height.saturating_sub(7);
-            let hero_img_rows = max_allowed
-                .min(if self.terminal_height <= 30 { 12 } else { 24 })
-                .max(10.min(max_allowed));
 
             hero_data = if area.width < 24 {
                 None
             } else {
                 hero_item.and_then(|item| {
-                    let img_w = ((area.width as u32 * 2 / 5) as u16)
-                        .max(12)
-                        .min(area.width.saturating_sub(12));
+                    let img_w = area.width / 2;
                     let meta_w = area.width.saturating_sub(img_w + 1) as usize;
                     let mut meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
-                    meta_layout.height = meta_layout.height.min(hero_img_rows);
+                    meta_layout.height = meta_layout.height.min(max_allowed);
+                    let image_rows =
+                        (img_w.saturating_mul(9).saturating_add(31) / 32).min(max_allowed);
+                    let hero_height = image_rows.max(meta_layout.height);
                     if meta_layout.height < 4 {
                         None
                     } else {
@@ -195,36 +187,118 @@ impl App {
                             x: content_area.x,
                             y: content_area.y,
                             width: content_area.width,
-                            height: hero_img_rows,
+                            height: hero_height,
                         };
                         let meta_area = Rect {
                             x: hero_area.x,
                             y: hero_area.y,
                             width: hero_area.width.saturating_sub(img_w + 1),
-                            height: hero_img_rows,
+                            height: hero_height,
                         };
                         let img_area = Rect {
                             x: hero_area.x + hero_area.width.saturating_sub(img_w),
                             y: hero_area.y,
                             width: img_w,
-                            height: hero_img_rows,
+                            height: hero_height,
                         };
                         Some((item, meta_area, img_area, meta_layout))
                     }
                 })
             };
 
-            let hero_h: u16 = if hero_data.is_some() {
-                hero_img_rows
-            } else {
-                0
-            };
+            let hero_h = hero_data
+                .as_ref()
+                .map(|(_, meta_area, _, _)| meta_area.height)
+                .unwrap_or(0);
+            let list_gap = if hero_data.is_some() { 1 } else { 2 };
             list_area = Rect {
-                y: content_area.y + hero_h + 2,
-                height: content_area.height.saturating_sub(hero_h + 2),
+                y: content_area.y + hero_h + list_gap,
+                height: content_area.height.saturating_sub(hero_h + list_gap),
                 ..content_area
             };
         }
+
+        let wide_pill_section = two_column && hero_data.is_some();
+        let pills_area = if wide_pill_section {
+            Rect {
+                x: list_area.x,
+                y: area.y.saturating_add(1),
+                width: list_area.width,
+                height: 1,
+            }
+        } else {
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            }
+        };
+        let pill_section_area = if wide_pill_section {
+            Rect {
+                y: area.y,
+                height: 3,
+                ..pills_area
+            }
+        } else {
+            pills_area
+        };
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+            pill_section_area,
+        );
+        self.render_power_home_section_pills_row(f, pills_area, layout);
+        if wide_pill_section {
+            if let Some((selected_pill, _)) = layout
+                .selector_tabs
+                .iter()
+                .find(|(_, section)| *section == self.home.section)
+            {
+                for y in [
+                    pill_section_area.y,
+                    pill_section_area.bottom().saturating_sub(1),
+                ] {
+                    f.render_widget(
+                        Block::default().style(Style::default().bg(palette::YELLOW)),
+                        Rect {
+                            y,
+                            height: 1,
+                            ..*selected_pill
+                        },
+                    );
+                }
+            }
+        }
+
+        // In the wide Home layout, the list body is a separate right-column
+        // green surface. The pill section stays outside it. Keep one blank
+        // green row at its top and bottom, then inset its list content.
+        // `green_panel_full` tracks the full green panel rect (before inset)
+        // so focused rows can span its entire width.
+        let green_panel_full: Option<Rect>;
+        let list_area = if two_column && hero_data.is_some() {
+            const RIGHT_COLUMN_INNER_INSET: u16 = 2;
+            green_panel_full = Some(list_area);
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::GREEN)),
+                list_area,
+            );
+            let interior_area = Rect {
+                y: list_area.y.saturating_add(1),
+                height: list_area.height.saturating_sub(2),
+                ..list_area
+            };
+            Rect {
+                x: interior_area.x + RIGHT_COLUMN_INNER_INSET,
+                width: interior_area
+                    .width
+                    .saturating_sub(2 * RIGHT_COLUMN_INNER_INSET),
+                ..interior_area
+            }
+        } else {
+            green_panel_full = None;
+            list_area
+        };
 
         layout.left_area = list_area;
 
@@ -240,7 +314,7 @@ impl App {
                     img_types,
                 );
             }
-            self.render_keep_watching_hero_image(f, *img_area, &cache_key);
+            self.render_keep_watching_hero_image(f, *img_area, &cache_key, two_column);
             self.render_keep_watching_hero_meta(f, *meta_area, item, meta_layout, focused);
         }
 
@@ -305,27 +379,94 @@ impl App {
                         dur_str.width() + DUR_GAP + 1
                     };
                     let name_w = avail.saturating_sub(dur_reserve);
-                    let title = trunc_str(&item.display_name(), name_w);
-                    // The gap between title and duration grows to fill whatever
-                    // `name_w` didn't need, so it's just what's left of `avail`
-                    // after the title and duration (DUR_GAP only sets where
-                    // truncation kicks in, above).
-                    let pad = avail.saturating_sub(title.width() + dur_str.width() + 1);
+                    let is_episode = item.item_type == "Episode" && !item.series_name.is_empty();
+                    let title_width: usize;
 
-                    let fg = focused_or_subtle(focused);
-                    let mut spans: Vec<Span> = if selected_row && focused {
+                    let mut spans: Vec<Span> = if is_episode {
+                        // Episode: show name in soft white, episode title in white.
+                        let show_w = name_w * 2 / 5;
+                        let show = trunc_str(&item.series_name, show_w);
+                        let show_actual_w = show.width();
+                        let ep_title =
+                            trunc_str(&item.name, name_w.saturating_sub(show_actual_w + 1));
+                        title_width = show_actual_w + 1 + ep_title.width();
+                        let bold = if selected_row && focused {
+                            Modifier::BOLD
+                        } else {
+                            Modifier::empty()
+                        };
+                        if selected_row && focused {
+                            if let Some(full) = green_panel_full {
+                                f.render_widget(
+                                    Block::default()
+                                        .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                                    Rect {
+                                        x: full.x,
+                                        y: sy,
+                                        width: full.width,
+                                        height: 1,
+                                    },
+                                );
+                            }
+                        }
                         vec![
-                            super::selection_marker(true),
+                            if selected_row && focused && green_panel_full.is_none() {
+                                super::selection_marker(true)
+                            } else {
+                                Span::raw(" ")
+                            },
                             Span::styled(
-                                title,
-                                Style::default()
-                                    .fg(palette::IRIS)
-                                    .add_modifier(Modifier::BOLD),
+                                show,
+                                Style::default().fg(palette::SOFT_WHITE).add_modifier(bold),
+                            ),
+                            Span::raw(" "),
+                            Span::styled(
+                                ep_title,
+                                Style::default().fg(palette::WHITE).add_modifier(bold),
                             ),
                         ]
                     } else {
-                        vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
+                        // Non-episode: single title span.
+                        let title = trunc_str(&item.display_name(), name_w);
+                        title_width = title.width();
+                        let fg = focused_or_subtle(focused);
+                        if selected_row && focused {
+                            if let Some(full) = green_panel_full {
+                                f.render_widget(
+                                    Block::default()
+                                        .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                                    Rect {
+                                        x: full.x,
+                                        y: sy,
+                                        width: full.width,
+                                        height: 1,
+                                    },
+                                );
+                                vec![
+                                    Span::raw(" "),
+                                    Span::styled(
+                                        title,
+                                        Style::default()
+                                            .fg(palette::YELLOW)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
+                                ]
+                            } else {
+                                vec![
+                                    super::selection_marker(true),
+                                    Span::styled(
+                                        title,
+                                        Style::default()
+                                            .fg(palette::IRIS)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
+                                ]
+                            }
+                        } else {
+                            vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
+                        }
                     };
+                    let pad = avail.saturating_sub(title_width + dur_str.width() + 1);
                     if !dur_str.is_empty() {
                         spans.push(Span::raw(" ".repeat(pad)));
                         spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));

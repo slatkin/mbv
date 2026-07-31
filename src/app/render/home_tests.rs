@@ -154,6 +154,69 @@ fn renders_home_pills_and_only_selected_section() {
 }
 
 #[test]
+fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
+    let mut app = make_app_stub();
+    let mut item = make_item("Hero Episode", "Episode");
+    item.series_name = "Hero Show".into();
+    item.runtime_ticks = 45 * 60 * TICKS_PER_SECOND;
+    item.overview = "The selected episode metadata belongs below its artwork.".into();
+    app.home.continue_items = vec![item];
+
+    let backend = TestBackend::new(120, 30);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = AppLayout::default();
+    term.draw(|f| {
+        app.render_power_home_list(f, Rect::new(0, 0, 120, 30), true, &mut layout.main);
+    })
+    .unwrap();
+
+    let output = buffer_to_string(&term);
+    let lines: Vec<_> = output.lines().collect();
+    let hero_text_y = lines
+        .iter()
+        .position(|line| line[..32].contains("Hero Episode"))
+        .expect("hero metadata should render in the left column");
+
+    assert!(
+        layout.main.selector_tabs.iter().all(|tab| tab.0.x >= 33),
+        "wide Continue Watching pills belong at the top of the right panel"
+    );
+    assert!(
+        lines[4].contains("Hero Episode"),
+        "the right-panel list should follow the pills and panel top inset"
+    );
+    assert_eq!(
+        hero_text_y, 15,
+        "the left hero metadata should follow the top-aligned image after one blank row"
+    );
+}
+
+#[test]
+fn row_continue_watching_places_list_one_row_after_hero() {
+    let mut app = make_app_stub();
+    let mut item = make_item("Row Hero Episode", "Episode");
+    item.series_name = "Row Hero Show".into();
+    item.runtime_ticks = 45 * 60 * TICKS_PER_SECOND;
+    item.overview = "Row-mode hero metadata.".into();
+    app.home.continue_items = vec![item];
+
+    let backend = TestBackend::new(60, 30);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = AppLayout::default();
+    term.draw(|f| {
+        app.render_power_home_list(f, Rect::new(0, 0, 60, 30), true, &mut layout.main);
+    })
+    .unwrap();
+
+    let output = buffer_to_string(&term);
+    let lines: Vec<_> = output.lines().collect();
+    assert!(
+        lines[12].contains("Row Hero Episode"),
+        "the list should begin one row after the row-mode hero"
+    );
+}
+
+#[test]
 fn selected_regular_home_video_keeps_detail_below_title() {
     let mut app = make_home_video_panel_app();
     app.libs[0].feed_home_video = None;

@@ -159,7 +159,7 @@ impl App {
 
         // — Scrollable track list —
         let track_indent = if flush_left {
-            2
+            0
         } else if selected_region_gutter {
             0
         } else {
