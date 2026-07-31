@@ -21,6 +21,22 @@ fn build_restores_panel_focus_from_prefs_for_both_values() {
 }
 
 #[test]
+fn build_always_starts_on_home_without_affecting_saved_queue_state() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    std::fs::write(
+        crate::config::prefs_path(),
+        serde_json::json!({ "library_tab": 3 }).to_string(),
+    )
+    .expect("write prefs");
+
+    let app = make_built_app();
+
+    assert_eq!(app.library_tab, 0);
+    assert_eq!(app.library_tab_pending, 0);
+    assert!(app.player_tab.items.is_empty());
+}
+
+#[test]
 fn save_prefs_persists_panel_focus_for_both_values() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();

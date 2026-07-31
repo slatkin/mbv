@@ -304,7 +304,7 @@ impl App {
                     let is_cursor = i == cursor && focused;
 
                     let fg = if is_cursor {
-                        palette::QUEUE_FOCUS_FG
+                        palette::WHITE
                     } else if focused {
                         palette::WHITE
                     } else {
@@ -358,7 +358,7 @@ impl App {
                         + (if pct_visible { pct_str.width() } else { 0 })
                         + metadata_gap;
                     let extra = metadata_w;
-                    let now_playing_icon = super::play_icon(self.use_nerd_fonts);
+                    let now_playing_icon = super::LIST_PLAY_ICON;
                     let now_playing_icon_w = if is_active {
                         now_playing_icon.width() + 1
                     } else {
@@ -368,6 +368,18 @@ impl App {
                         indent + now_playing_icon_w + extra + QUEUE_TITLE_QUIET_COLUMNS,
                     );
                     let title = trunc_str(&label, title_w);
+
+                    if is_cursor {
+                        f.render_widget(
+                            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                            Rect {
+                                x: area.x,
+                                y: area.y + line_offset,
+                                width: area.width,
+                                height: 1,
+                            },
+                        );
+                    }
 
                     // Inactive rows (not the now-playing item) match the
                     // dimmed index-number/duration color when the queue
@@ -579,5 +591,50 @@ mod tests {
         // indent, the "N. " prefix, and the now-playing icon + space.
         let now_playing_title_color = buf[(7, 0)].fg;
         assert_eq!(now_playing_title_color, palette::AQUA);
+    }
+
+    #[test]
+    fn focused_queue_cursor_row_matches_home_active_row_style_across_panel() {
+        let mut app = make_app_stub();
+        app.panel_focus = crate::app::PanelFocus::Queue;
+        app.player_tab
+            .set_items(vec![make_item("Selected Track", "Audio")], 0);
+
+        let backend = TestBackend::new(40, 3);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutMain::default();
+        term.draw(|f| {
+            app.render_power_queue(f, Rect::new(0, 0, 40, 3), true, &mut layout);
+        })
+        .unwrap();
+
+        let buf = term.backend().buffer();
+        assert_eq!(buf[(39, 0)].bg, palette::LIBRARY_SIDE_BG);
+        assert_eq!(buf[(5, 0)].bg, palette::LIBRARY_SIDE_BG);
+        assert_eq!(buf[(5, 0)].fg, palette::WHITE);
+    }
+
+    #[test]
+    fn queue_scrollbar_uses_soft_white() {
+        let mut app = make_app_stub();
+        app.panel_focus = crate::app::PanelFocus::Queue;
+        app.player_tab.set_items(
+            vec![
+                make_item("Track 1", "Audio"),
+                make_item("Track 2", "Audio"),
+                make_item("Track 3", "Audio"),
+            ],
+            0,
+        );
+
+        let backend = TestBackend::new(20, 2);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutMain::default();
+        term.draw(|f| {
+            app.render_power_queue(f, Rect::new(0, 0, 20, 2), true, &mut layout);
+        })
+        .unwrap();
+
+        assert_eq!(term.backend().buffer()[(19, 0)].fg, palette::SOFT_WHITE);
     }
 }

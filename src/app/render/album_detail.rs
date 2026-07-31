@@ -227,7 +227,7 @@ impl App {
                     title_spans.push(Span::raw(" "));
                 }
                 let num_w = track_num.chars().count();
-                let play_icon = super::play_icon(self.use_nerd_fonts);
+                let play_icon = super::LIST_PLAY_ICON;
                 let play_icon_w = if is_playing { play_icon.width() + 1 } else { 0 };
                 let title_width = title_col_w.saturating_sub(num_w + play_icon_w).max(1);
                 let title_lines = wrap(&item.name, title_width);

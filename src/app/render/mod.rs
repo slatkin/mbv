@@ -36,7 +36,7 @@ mod visualizer;
 // src/app/actions.rs); the rest are referenced via `super::X` from render's
 // sibling submodules (album, card, detail, home, list, music, pills, queue)
 // and/or `use super::*` in render/tests.rs.
-use chrome::play_icon;
+use chrome::LIST_PLAY_ICON;
 use power_widgets::{
     build_power_queue_rows, power_content_width, power_right_panel_content_area, render_pill_bar,
     render_power_count_label, render_power_placeholder, render_power_queue_panel_frame,

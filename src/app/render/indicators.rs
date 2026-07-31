@@ -1,7 +1,7 @@
 //! Status-indicator cluster treatments (resolution · audio · subtitles).
 //!
 //! Six interchangeable looks selected by config; the default is reverse-video
-//! chips. Colors map onto the mbv palette: resolution = green (IRIS),
+//! chips. Colors map onto the mbv palette: resolution = orange,
 //! audio = blue (FOAM), subtitles = yellow (YELLOW) when on / dim when off.
 
 use crate::app::palette;
@@ -55,14 +55,14 @@ impl IndicatorData {
         if self.res_dim {
             palette::MUTED
         } else {
-            palette::IRIS
+            palette::ORANGE
         }
     }
     fn audio_color(&self) -> Color {
         if self.audio_dim {
             palette::MUTED
         } else {
-            palette::AQUA
+            palette::PRUPLE
         }
     }
     fn sub_color(&self) -> Color {
@@ -305,4 +305,46 @@ fn powerline(d: &IndicatorData) -> Vec<Span<'static>> {
         out.push(Span::styled(ARROW, arrow));
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{indicator_spans, IndicatorData, IndicatorStyle};
+    use crate::app::palette;
+
+    #[test]
+    fn resolution_value_uses_orange_in_playback_indicators() {
+        let spans = indicator_spans(
+            IndicatorStyle::KeyValue,
+            &IndicatorData {
+                res_label: "720p".into(),
+                res_dim: false,
+                audio_label: "en".into(),
+                audio_dim: false,
+                audio_only: false,
+                sub_label: String::new(),
+            },
+            false,
+        );
+
+        assert_eq!(spans[1].style.fg, Some(palette::ORANGE));
+    }
+
+    #[test]
+    fn audio_value_uses_pruple_in_playback_indicators() {
+        let spans = indicator_spans(
+            IndicatorStyle::KeyValue,
+            &IndicatorData {
+                res_label: "720p".into(),
+                res_dim: false,
+                audio_label: "en".into(),
+                audio_dim: false,
+                audio_only: false,
+                sub_label: String::new(),
+            },
+            false,
+        );
+
+        assert_eq!(spans[4].style.fg, Some(palette::PRUPLE));
+    }
 }

@@ -134,7 +134,6 @@ impl App {
             })
         }
         .flatten();
-        let use_nerd_fonts = self.use_nerd_fonts;
         let selected_detail_rows = |tracks: &[mbv_core::api::MediaItem], show_hint: bool| {
             let Some((full_width, artwork_width)) = wrap_widths else {
                 return if show_hint {
@@ -169,7 +168,7 @@ impl App {
                         format!("{}. ", i + 1)
                     };
                     let play_width = if playing_track_id.as_deref() == Some(track.id.as_str()) {
-                        super::play_icon(use_nerd_fonts).width() + 1
+                        super::LIST_PLAY_ICON.width() + 1
                     } else {
                         0
                     };

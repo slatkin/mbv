@@ -315,6 +315,7 @@ impl App {
         }
 
         let content_h = rows.len().max(1) as u16;
+        let wide_home_panel_unfocused = two_column && hero_data.is_some() && !focused;
         let needs_scrollbar = content_h > list_area.height;
         let list_w = super::power_content_width(list_area.width, needs_scrollbar) as u16;
         let cursor_row = rows
@@ -329,6 +330,19 @@ impl App {
             list_area.height,
         );
         self.home.home_scroll = scroll_y as usize;
+
+        let playing_item_id = {
+            let playback = self.effective_playback_state();
+            playback
+                .active
+                .then(|| {
+                    self.playback_queue()
+                        .items
+                        .get(playback.active_idx)
+                        .map(|item| item.id.clone())
+                })
+                .flatten()
+        };
 
         let mut hitmap: Vec<(Rect, usize)> = Vec::new();
 
@@ -354,6 +368,7 @@ impl App {
                 }
                 DisplayRow::Item(flat_idx, item) => {
                     let selected_row = *flat_idx == cursor;
+                    let is_playing = playing_item_id.as_deref() == Some(item.id.as_str());
                     if selected_row {
                         layout.cursor_screen_y = Some(sy);
                     }
@@ -379,7 +394,7 @@ impl App {
                     let title_width: usize;
 
                     let mut spans: Vec<Span> = if is_episode {
-                        // Episode: show name in orange, episode title in white.
+                        // Episode: show name in yellow, episode title in white.
                         let show_w = name_w * 2 / 5;
                         let show = trunc_str(&item.series_name, show_w);
                         let show_actual_w = show.width();
@@ -406,20 +421,31 @@ impl App {
                             }
                         }
                         vec![
-                            if selected_row && focused {
-                                Span::styled("\u{1F7CA}", Style::default().fg(palette::AQUA))
+                            if is_playing {
+                                Span::styled(
+                                    super::LIST_PLAY_ICON,
+                                    Style::default().fg(palette::AQUA),
+                                )
+                            } else if selected_row && focused {
+                                Span::styled("■", Style::default().fg(palette::RED))
                             } else {
                                 Span::raw(" ")
                             },
                             Span::raw(" "),
                             Span::styled(
                                 show,
-                                Style::default().fg(palette::ORANGE).add_modifier(bold),
+                                Style::default().fg(palette::YELLOW).add_modifier(bold),
                             ),
                             Span::raw(" "),
                             Span::styled(
                                 ep_title,
-                                Style::default().fg(palette::WHITE).add_modifier(bold),
+                                Style::default()
+                                    .fg(if wide_home_panel_unfocused {
+                                        palette::MUTED
+                                    } else {
+                                        palette::WHITE
+                                    })
+                                    .add_modifier(bold),
                             ),
                         ]
                     } else {
@@ -439,18 +465,36 @@ impl App {
                                     },
                                 );
                                 vec![
-                                    Span::styled("\u{1F7CA}", Style::default().fg(palette::AQUA)),
+                                    if is_playing {
+                                        Span::styled(
+                                            super::LIST_PLAY_ICON,
+                                            Style::default().fg(palette::AQUA),
+                                        )
+                                    } else {
+                                        Span::styled("■", Style::default().fg(palette::RED))
+                                    },
                                     Span::raw(" "),
                                     Span::styled(
                                         title,
                                         Style::default()
-                                            .fg(palette::WHITE)
+                                            .fg(if wide_home_panel_unfocused {
+                                                palette::MUTED
+                                            } else {
+                                                palette::WHITE
+                                            })
                                             .add_modifier(Modifier::BOLD),
                                     ),
                                 ]
                             } else {
                                 vec![
-                                    Span::styled("\u{1F7CA}", Style::default().fg(palette::AQUA)),
+                                    if is_playing {
+                                        Span::styled(
+                                            super::LIST_PLAY_ICON,
+                                            Style::default().fg(palette::AQUA),
+                                        )
+                                    } else {
+                                        Span::styled("■", Style::default().fg(palette::RED))
+                                    },
                                     Span::raw(" "),
                                     Span::styled(
                                         title,
@@ -462,9 +506,23 @@ impl App {
                             }
                         } else {
                             vec![
+                                if is_playing {
+                                    Span::styled(
+                                        super::LIST_PLAY_ICON,
+                                        Style::default().fg(palette::AQUA),
+                                    )
+                                } else {
+                                    Span::raw(" ")
+                                },
                                 Span::raw(" "),
-                                Span::raw(" "),
-                                Span::styled(title, Style::default().fg(palette::WHITE)),
+                                Span::styled(
+                                    title,
+                                    Style::default().fg(if wide_home_panel_unfocused {
+                                        palette::MUTED
+                                    } else {
+                                        palette::WHITE
+                                    }),
+                                ),
                             ]
                         }
                     };

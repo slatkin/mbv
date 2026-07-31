@@ -191,6 +191,89 @@ fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
         hero_text_y, 15,
         "the left hero metadata should follow the top-aligned image after one blank row"
     );
+    assert_eq!(
+        term.backend().buffer()[(64, 4)].fg,
+        crate::app::palette::WHITE,
+        "wide Home right-panel titles should remain white when the panel is focused"
+    );
+    assert_eq!(
+        term.backend().buffer()[(54, 4)].fg,
+        crate::app::palette::YELLOW,
+        "wide Home show labels should use the yellow accent"
+    );
+    assert_eq!(
+        term.backend().buffer()[(0, 15)].fg,
+        crate::app::palette::YELLOW,
+        "wide Home hero titles should use the yellow accent"
+    );
+
+    let backend = TestBackend::new(120, 30);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = AppLayout::default();
+    term.draw(|f| {
+        app.render_power_home_list(f, Rect::new(0, 0, 120, 30), false, &mut layout.main);
+    })
+    .unwrap();
+
+    assert_eq!(
+        term.backend().buffer()[(64, 4)].fg,
+        crate::app::palette::MUTED,
+        "wide Home right-panel titles should dim when the panel is unfocused"
+    );
+}
+
+#[test]
+fn playing_home_video_uses_aqua_play_icon_in_the_icon_column() {
+    let mut app = make_app_stub();
+    let mut item = make_item("Playing Home Video", "Video");
+    item.id = "playing-home-video".into();
+    app.home.continue_items = vec![item.clone()];
+    app.player_tab.set_items(vec![item], 0);
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 0;
+    }
+
+    let backend = TestBackend::new(120, 30);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = AppLayout::default();
+    term.draw(|f| {
+        app.render_power_home_list(f, Rect::new(0, 0, 120, 30), true, &mut layout.main);
+    })
+    .unwrap();
+
+    let cell = &term.backend().buffer()[(0, 2)];
+    assert_eq!(
+        cell.symbol(),
+        "▶",
+        "rendered Home panel:\n{}",
+        buffer_to_string(&term)
+    );
+    assert_eq!(cell.fg, crate::app::palette::AQUA);
+}
+
+#[test]
+fn selected_home_row_uses_red_square_marker() {
+    let mut app = make_app_stub();
+    app.home.continue_items = vec![make_item("Selected Home Item", "Video")];
+
+    let backend = TestBackend::new(60, 20);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = AppLayout::default();
+    term.draw(|f| {
+        app.render_power_home_list(f, Rect::new(0, 0, 60, 20), true, &mut layout.main);
+    })
+    .unwrap();
+
+    let cell = &term.backend().buffer()[(0, 4)];
+    assert_eq!(
+        cell.symbol(),
+        "■",
+        "rendered Home panel:\n{}",
+        buffer_to_string(&term)
+    );
+    assert_eq!(cell.fg, crate::app::palette::RED);
 }
 
 #[test]

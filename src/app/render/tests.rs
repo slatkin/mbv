@@ -1,7 +1,7 @@
 use super::test_helpers::*;
 use super::*;
 use crate::app::layout::LayoutPlayback;
-use crate::app::tests::make_app_stub;
+use crate::app::tests::{make_app_stub, make_item};
 use crate::app::RemoteSlotState;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -39,6 +39,63 @@ fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
 
     assert_eq!(layout.next_area.x, next_x);
     assert_eq!(layout.next_area.width, next_glyph.width() as u16);
+}
+
+#[test]
+fn playback_title_is_rendered_in_uppercase() {
+    let mut app = make_app_stub();
+    app.use_nerd_fonts = false;
+
+    let backend = TestBackend::new(60, 1);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = LayoutPlayback::default();
+    term.draw(|f| {
+        app.render_title_row(
+            f,
+            Rect::new(0, 0, 60, 1),
+            "Mixed Title",
+            palette::BG_GREEN,
+            &mut layout,
+        );
+    })
+    .unwrap();
+
+    let output = buffer_to_string(&term);
+    let line = output.lines().next().unwrap();
+    assert!(line.contains("MIXED TITLE"));
+}
+
+#[test]
+fn playback_episode_title_colors_show_yellow_and_episode_green() {
+    let mut app = make_app_stub();
+    app.use_nerd_fonts = false;
+    let mut episode = make_item("Episode Name", "Episode");
+    episode.series_name = "Show Name".into();
+    app.player_tab.set_items(vec![episode], 0);
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 0;
+        status.paused = false;
+    }
+
+    let backend = TestBackend::new(80, 1);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = LayoutPlayback::default();
+    term.draw(|f| {
+        app.render_title_row(
+            f,
+            Rect::new(0, 0, 80, 1),
+            "Show Name Episode Name",
+            palette::PLAYBACK_CONTENT_FG,
+            &mut layout,
+        );
+    })
+    .unwrap();
+
+    let buffer = term.backend().buffer();
+    assert_eq!(buffer[(8, 0)].fg, palette::YELLOW);
+    assert_eq!(buffer[(17, 0)].fg, palette::GREEN);
 }
 
 #[test]

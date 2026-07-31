@@ -16,6 +16,10 @@ use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
+fn uppercase_playback_span(span: Span<'static>) -> Span<'static> {
+    Span::styled(span.content.to_uppercase(), span.style)
+}
+
 impl App {
     pub(super) fn render_player_panel(
         &mut self,
@@ -169,6 +173,7 @@ impl App {
             .unwrap_or_default()
             .into_iter()
             .map(|span| {
+                let span = uppercase_playback_span(span);
                 let is_caption =
                     matches!(span.content.as_ref(), "CODEC " | "RES " | "AUD " | "SUB ");
                 let is_codec_caption = span.content.as_ref() == "CODEC ";
@@ -253,12 +258,7 @@ impl App {
             + post_time_gap.width()
             + right_w as usize;
         let title_w = (area.width as usize).saturating_sub(fixed_w);
-        let title_text = if title_w == 0 {
-            String::new()
-        } else {
-            trunc_str(title, title_w)
-        };
-        left.push(Span::styled(title_text, Style::default().fg(title_color)));
+        left.extend(self.playback_title_spans(title, title_color, title_w));
 
         left.push(Span::styled(
             sep_text,
@@ -304,5 +304,57 @@ impl App {
             let s = self.player.status.lock().unwrap();
             (s.position_ticks, s.runtime_ticks, s.paused)
         }
+    }
+
+    fn playback_title_spans(
+        &self,
+        title: &str,
+        title_color: Color,
+        max_width: usize,
+    ) -> Vec<Span<'static>> {
+        let playback = self.effective_playback_state();
+        let parts = playback
+            .active
+            .then(|| self.playback_queue().items.get(playback.active_idx))
+            .flatten()
+            .filter(|item| item.item_type == "Episode" && !item.series_name.is_empty())
+            .filter(|item| item.display_name() == title)
+            .map(|item| {
+                vec![
+                    (item.series_name.clone(), palette::YELLOW),
+                    (format!(" {}", item.name), palette::GREEN),
+                ]
+            })
+            .unwrap_or_else(|| vec![(title.to_string(), title_color)]);
+
+        let mut remaining = max_width;
+        let mut spans = Vec::new();
+        for (text, color) in parts {
+            if remaining == 0 {
+                break;
+            }
+            let uppercase = text.to_uppercase();
+            let clipped = trunc_str(&uppercase, remaining);
+            let width = clipped.width();
+            spans.push(Span::styled(clipped, Style::default().fg(color)));
+            remaining = remaining.saturating_sub(width);
+            if width < uppercase.width() {
+                break;
+            }
+        }
+        spans
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::uppercase_playback_span;
+    use ratatui::text::Span;
+
+    #[test]
+    fn playback_indicator_span_text_is_rendered_in_uppercase() {
+        let span = uppercase_playback_span(Span::raw("720p en"));
+
+        assert_eq!(span.content, "720P EN");
     }
 }

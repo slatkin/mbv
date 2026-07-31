@@ -309,7 +309,7 @@ impl App {
                                 format!("{:>ep_num_w$}. ", i + 1)
                             };
                             let label_w = ep_label.chars().count();
-                            let play_icon = super::play_icon(self.use_nerd_fonts);
+                            let play_icon = super::LIST_PLAY_ICON;
                             let play_icon_w = if is_playing { play_icon.width() + 1 } else { 0 };
                             let title = trunc_str(
                                 &ep.name,

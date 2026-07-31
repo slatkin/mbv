@@ -78,7 +78,7 @@ pub(super) fn render_power_scrollbar_with_viewport(
         offset,
         area.x + area.width.saturating_sub(1),
         thin_vertical_thumb(GlyphSet::minimal()),
-        palette::SCROLLBAR,
+        palette::SOFT_WHITE,
     );
 }
 

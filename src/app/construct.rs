@@ -105,10 +105,9 @@ impl App {
                 .map(|v| (v as u16).max(POWER_LEFT_WIDTH_DEFAULT))
                 .unwrap_or(POWER_LEFT_WIDTH_DEFAULT),
             queue_column_collapsed: false,
-            library_tab_pending: prefs["library_tab"]
-                .as_u64()
-                .or_else(|| prefs["power_left_tab"].as_u64())
-                .unwrap_or(0) as usize,
+            // Always start on Home. The saved queue is restored independently;
+            // the saved library tab remains available for runtime persistence.
+            library_tab_pending: 0,
             queue_scroll: 0,
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
             pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),

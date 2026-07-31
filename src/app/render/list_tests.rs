@@ -432,7 +432,7 @@ fn series_inline_detail_has_no_stray_banner_border_in_plain_list_branch() {
         .find(|line| line.contains("Episode 2"))
         .copied()
         .expect("active episode row should render");
-    let icon = crate::app::render::play_icon(app.use_nerd_fonts);
+    let icon = crate::app::render::LIST_PLAY_ICON;
     assert!(
         active_episode_line.contains(&format!("2. {icon} Episode 2")),
         "expected the active episode icon and following space after its number:\n{out}"

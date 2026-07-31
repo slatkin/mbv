@@ -22,6 +22,7 @@ pub(super) fn thin_vertical_thumb(mut glyphs: GlyphSet) -> GlyphSet {
 }
 
 pub(super) const PLAY_ICON: &str = "\u{f04b}";
+pub(super) const LIST_PLAY_ICON: &str = "▶";
 const PLAY_ICON_FALLBACK: &str = ">";
 
 pub(super) fn play_icon(use_nerd_fonts: bool) -> &'static str {

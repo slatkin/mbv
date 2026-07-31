@@ -39,7 +39,7 @@ fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {
         .find(|line| line.contains("Openi"))
         .copied()
         .expect("expected active music track row");
-    let icon = super::play_icon(app.use_nerd_fonts);
+    let icon = super::LIST_PLAY_ICON;
     assert!(
         playing_line.contains(&format!("1. {icon} Openi")),
         "expected the active track icon and following space after its number:\n{out}"

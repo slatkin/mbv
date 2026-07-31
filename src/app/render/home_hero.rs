@@ -163,7 +163,7 @@ impl App {
                 Paragraph::new(Span::styled(
                     line.clone(),
                     Style::default()
-                        .fg(palette::ORANGE)
+                        .fg(palette::YELLOW)
                         .add_modifier(Modifier::BOLD),
                 )),
                 Rect {
