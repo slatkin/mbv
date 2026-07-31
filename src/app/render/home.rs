@@ -115,12 +115,10 @@ impl App {
         let list_area: Rect;
 
         if two_column {
-            // Two-column layout: hero on left, list on right
+            // Two-column layout: hero on left, list on right.
             let hero_col_width = ((area.width as u32 * 2 / 5) as u16)
                 .max(12)
                 .min(area.width.saturating_sub(12));
-            // The right column reserves three rows for the pill row and its
-            // dark top/bottom padding. The left hero starts at the panel top.
             let hero_col_height = area.height;
 
             hero_data = hero_item.and_then(|item| {
@@ -154,9 +152,9 @@ impl App {
             list_area = if hero_data.is_some() {
                 Rect {
                     x: content_area.x + hero_col_width + 2,
-                    y: area.y.saturating_add(3),
+                    y: area.y.saturating_add(1),
                     width: content_area.width.saturating_sub(hero_col_width + 2),
-                    height: area.height.saturating_sub(3),
+                    height: area.height.saturating_sub(1),
                 }
             } else {
                 // No hero item: list takes full width
@@ -218,7 +216,7 @@ impl App {
         let pills_area = if wide_pill_section {
             Rect {
                 x: list_area.x,
-                y: area.y.saturating_add(1),
+                y: area.y,
                 width: list_area.width,
                 height: 1,
             }
@@ -230,45 +228,15 @@ impl App {
                 height: 1,
             }
         };
-        let pill_section_area = if wide_pill_section {
-            Rect {
-                y: area.y,
-                height: 3,
-                ..pills_area
-            }
-        } else {
-            pills_area
-        };
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
-            pill_section_area,
+            Block::default().style(Style::default().bg(palette::HOME_PILL_ROW_BG)),
+            pills_area,
         );
         self.render_power_home_section_pills_row(f, pills_area, layout);
-        if wide_pill_section {
-            if let Some((selected_pill, _)) = layout
-                .selector_tabs
-                .iter()
-                .find(|(_, section)| *section == self.home.section)
-            {
-                for y in [
-                    pill_section_area.y,
-                    pill_section_area.bottom().saturating_sub(1),
-                ] {
-                    f.render_widget(
-                        Block::default().style(Style::default().bg(palette::YELLOW)),
-                        Rect {
-                            y,
-                            height: 1,
-                            ..*selected_pill
-                        },
-                    );
-                }
-            }
-        }
 
         // In the wide Home layout, the list body is a separate right-column
-        // green surface. The pill section stays outside it. Keep one blank
-        // green row at its top and bottom, then inset its list content.
+        // green surface directly below the pill row. Keep one blank green row
+        // at its top and bottom.
         // `green_panel_full` tracks the full green panel rect (before inset)
         // so focused rows can span its entire width.
         let green_panel_full: Option<Rect>;
@@ -581,14 +549,14 @@ impl App {
             .map(|(_, label)| trunc_str(label, MAX_LABEL).to_string())
             .collect();
         let ids: Vec<usize> = labels.iter().map(|(section_idx, _)| *section_idx).collect();
-        layout.selector_tabs = super::render_pill_bar(
+        layout.selector_tabs = super::render_home_pill_bar(
             f,
             area,
             super::PillBar {
                 labels: &label_strs,
                 ids: &ids,
                 selected_pos,
-                prefix: None,
+                prefix: Some(" ⌂ "),
                 underlay: super::PillUnderlay::Blank { fill: false },
             },
         );

@@ -323,6 +323,18 @@ pub(super) fn selector_pill_style(selected: bool) -> Style {
     }
 }
 
+fn home_selector_pill_style(selected: bool) -> Style {
+    if selected {
+        Style::default()
+            .fg(palette::HOME_PILL_FOCUSED_FG)
+            .bg(palette::GREEN)
+    } else {
+        Style::default()
+            .fg(palette::HOME_PILL_FG)
+            .bg(palette::HOME_PILL_BG)
+    }
+}
+
 /// Draws the shared " {count} items" header (SUBTLE) on the first row of
 /// `area` and returns `area` shrunk by that one row, so callers can render
 /// their list into the remaining space. Used by the home-video tab to keep
@@ -405,6 +417,20 @@ pub(super) struct PillBar<'a> {
 /// stays on screen with `‹`/`›` chevrons when the pills overflow, and returns
 /// the on-screen hitboxes as `(rect, id)` pairs for `layout.selector_tabs`.
 pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(Rect, usize)> {
+    render_pill_bar_with_style(f, area, bar, selector_pill_style, true)
+}
+
+pub(super) fn render_home_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(Rect, usize)> {
+    render_pill_bar_with_style(f, area, bar, home_selector_pill_style, false)
+}
+
+fn render_pill_bar_with_style(
+    f: &mut Frame,
+    area: Rect,
+    bar: PillBar,
+    style_for: fn(bool) -> Style,
+    gap_between_pills: bool,
+) -> Vec<(Rect, usize)> {
     // `ids` runs parallel to `labels`; a mismatch would panic on the slice
     // below, so assert the contract up front rather than fail cryptically.
     debug_assert_eq!(
@@ -419,16 +445,25 @@ pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(R
     let n = bar.labels.len();
     let bar_w = area.width as usize;
     let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);
-    // Display width of each pill is " label " = label width + 2.
-    let pill_widths: Vec<usize> = bar.labels.iter().map(|l| l.width() + 2).collect();
+    // Display width of each pill is " label " = label width + 2. Home pills
+    // also include their leading and trailing edge glyphs.
+    let pill_widths: Vec<usize> = bar
+        .labels
+        .iter()
+        .map(|l| l.width() + 2 + if gap_between_pills { 0 } else { 2 })
+        .collect();
 
-    // Greedy: how many pills fit starting at `start` within `avail` columns
-    // (1-column gap between consecutive pills).
+    // Greedy: how many pills fit starting at `start` within `avail` columns.
     let count_fitting = |start: usize, avail: usize| -> usize {
         let mut used = 0usize;
         let mut count = 0usize;
+        let gap_width = if gap_between_pills { 1 } else { 0 };
         for width in pill_widths.iter().skip(start) {
-            let need = if count == 0 { *width } else { 1 + *width };
+            let need = if count == 0 {
+                *width
+            } else {
+                gap_width + *width
+            };
             if used + need > avail {
                 break;
             }
@@ -464,11 +499,19 @@ pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(R
     let mut spans: Vec<Span> = Vec::new();
     let mut x_cursor = area.x;
     if let Some(prefix) = bar.prefix {
-        // White label, no background, so an underlay rule shows around it.
-        spans.push(Span::styled(
-            prefix.to_string(),
-            Style::default().fg(Color::White),
-        ));
+        if !gap_between_pills && prefix == " ⌂ " {
+            spans.push(Span::styled(
+                " ⌂ ",
+                Style::default()
+                    .fg(palette::GREEN)
+                    .bg(palette::HOME_PILL_ROW_BG),
+            ));
+        } else {
+            spans.push(Span::styled(
+                prefix.to_string(),
+                Style::default().fg(Color::White),
+            ));
+        }
         x_cursor += prefix_w as u16;
     }
     if has_left {
@@ -481,16 +524,24 @@ pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(R
         .zip(bar.ids[scroll_start..scroll_end].iter())
         .enumerate()
     {
-        if offset > 0 {
+        if gap_between_pills && offset > 0 {
             // Single blank gap so the pills float free rather than sitting on
             // a continuous divider.
             spans.push(Span::raw(" "));
             x_cursor += 1;
         }
         let abs_idx = scroll_start + offset;
-        let style = selector_pill_style(abs_idx == bar.selected_pos);
+        let selected = abs_idx == bar.selected_pos;
+        let is_last_pill = abs_idx + 1 == n;
+        let style = style_for(selected);
+        let home_marker = !gap_between_pills;
         let pill = format!(" {} ", label);
-        let pill_w = pill.width() as u16;
+        let marker_w = if home_marker {
+            "◢◤".width() as u16
+        } else {
+            0
+        };
+        let pill_w = pill.width() as u16 + marker_w;
         selector_tabs.push((
             Rect {
                 x: x_cursor,
@@ -500,7 +551,39 @@ pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(R
             },
             id,
         ));
+        if home_marker {
+            spans.push(Span::styled(
+                "◢",
+                Style::default()
+                    .fg(if selected {
+                        palette::GREEN
+                    } else {
+                        palette::HOME_PILL_BG
+                    })
+                    .bg(if abs_idx == 0 {
+                        palette::HOME_PILL_ROW_BG
+                    } else {
+                        palette::HOME_PILL_BG
+                    }),
+            ));
+        }
         spans.push(Span::styled(pill, style));
+        if home_marker {
+            spans.push(Span::styled(
+                "◤",
+                Style::default()
+                    .fg(if selected {
+                        palette::GREEN
+                    } else {
+                        palette::HOME_PILL_BG
+                    })
+                    .bg(if is_last_pill {
+                        palette::HOME_PILL_ROW_BG
+                    } else {
+                        palette::HOME_PILL_BG
+                    }),
+            ));
+        }
         x_cursor += pill_w;
     }
     if has_right {

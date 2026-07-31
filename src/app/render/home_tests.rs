@@ -132,6 +132,10 @@ fn renders_home_pills_and_only_selected_section() {
     assert!(!out.contains("1h"));
     assert_eq!(layout.main.home.hitmap.len(), 3);
     assert_eq!(layout.main.selector_tabs.len(), 3);
+    let unselected_pill = layout.main.selector_tabs[1];
+    let unselected_cell = &term.backend().buffer()[(unselected_pill.0.x, unselected_pill.0.y)];
+    assert_eq!(unselected_cell.bg, crate::app::palette::HOME_PILL_BG);
+    assert_eq!(unselected_cell.fg, crate::app::palette::HOME_PILL_FG);
 
     app.power_home_select_section(1);
     let backend = TestBackend::new(80, 30);
@@ -206,6 +210,14 @@ fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
         crate::app::palette::YELLOW,
         "wide Home hero titles should use the yellow accent"
     );
+    let selected_pill = layout.main.selector_tabs[0].0;
+    assert_eq!(
+        selected_pill.y, 0,
+        "wide Home pills should start on the top row"
+    );
+    let selected_cell = &term.backend().buffer()[(selected_pill.x, selected_pill.y)];
+    assert_eq!(selected_cell.bg, crate::app::palette::GREEN);
+    assert_eq!(selected_cell.fg, crate::app::palette::HOME_PILL_FOCUSED_FG);
 
     let backend = TestBackend::new(120, 30);
     let mut term = Terminal::new(backend).unwrap();

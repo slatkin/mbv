@@ -136,10 +136,8 @@ impl App {
     /// Cycle the selected home section, wrapping at the ends. `dir` = -1 previous,
     /// +1 next.
     pub(super) fn power_home_move_section(&mut self, dir: i64) {
-        let sections = self.power_home_new_sections();
-        if sections.is_empty() {
-            return;
-        }
+        let mut sections = vec![0];
+        sections.extend(self.power_home_new_sections());
         let pos = sections
             .iter()
             .position(|&section_idx| section_idx == self.home.section);
