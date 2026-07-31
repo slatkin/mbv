@@ -131,17 +131,17 @@ is deleted only afterwards (group 8), so there is a working stay-alive path at e
 
 ## 7. Disconnect handling
 
-- [ ] 7.1 Add a blocking modal for unannounced loss of a local daemon, offering
+- [x] 7.1 Add a blocking modal for unannounced loss of a local daemon, offering
       `[R] Restart and resume`, `[S] Restart, don't resume`, `[Q] Quit`, plus the last known playing
       title and the daemon log path. Follow the existing modal/overlay pattern in `src/app/render`
       and the existing input-blocking convention.
-- [ ] 7.2 Wire the two branches: on the announced shutdown reason (task 1.6) print one line, restore
+- [x] 7.2 Wire the two branches: on the announced shutdown reason (task 1.6) print one line, restore
       the terminal, and exit; otherwise raise the modal. Only clients of a local daemon get the
       modal — a client of a remote endpoint cannot restart that daemon.
-- [ ] 7.3 Implement `[R]`: re-run the ensure-daemon-then-attach path from group 2/4 and let the
+- [x] 7.3 Implement `[R]`: re-run the ensure-daemon-then-attach path from group 2/4 and let the
       normal saved-queue restore happen. Implement `[S]`: same, but suppress the resume so the new
       daemon comes up idle. Implement `[Q]`: restore the terminal and exit.
-- [ ] 7.4 Add a test for the announced-versus-unannounced branch, at the level where the decision is
+- [x] 7.4 Add a test for the announced-versus-unannounced branch, at the level where the decision is
       made (`crates/mbv-core/src/remote_player.rs` reader thread, alongside
       `crates/mbv-core/src/daemon_tests.rs`'s existing `DisconnectReason` cases). It protects a
       boundary where getting it backwards means either a spurious crash modal on every clean quit or

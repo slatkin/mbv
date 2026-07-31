@@ -524,10 +524,16 @@ fn context_stack_order_is_pinned() {
     // at the topmost rank of the ranks it replaces (`save_modal`'s), per
     // design.md decision 2. The visualizer is a global action and therefore
     // sits after modal/context-menu handlers but before playback dispatch.
+    //
+    // Updated for the retire-pty-relay-for-local-daemon-stay-alive change
+    // (group 7): `daemon_lost_modal` sits above every other entry, including
+    // `confirm_modal` -- an unannounced local-daemon loss must block input
+    // even if some other confirmation happened to be showing when it hit.
     let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
     assert_eq!(
         names,
         vec![
+            "daemon_lost_modal",
             "confirm_modal",
             "save_playlist",
             "settings",

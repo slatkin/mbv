@@ -1,7 +1,8 @@
 use super::types_playback::UndoEntry;
-use super::App;
+use super::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_core::playback_queue::RemoveSlotResult;
 use mbv_core::player::{PlayerCommand, PlayerEvent};
+use std::sync::atomic::Ordering;
 
 impl App {
     /// Mirror mpv's actual volume into `ui_volume` and persist it, so volume
@@ -49,7 +50,24 @@ impl App {
                 if self.player.is_remote_disconnected() {
                     self.next_up_item = None;
                     self.skip_intro_end_ticks = None;
-                    self.restore_local_mode("Daemon disconnected — returned to local mode");
+                    // An announced shutdown never reaches here: the reader
+                    // thread sends PlayerEvent::DaemonShutdownAnnounced
+                    // instead of a synthetic Stopped for that case (see the
+                    // arm below). Assert the invariant rather than silently
+                    // trusting it -- getting it backwards is exactly the
+                    // spurious-modal-vs-silent-exit boundary task 7.4 tests.
+                    debug_assert!(
+                        !self.player.is_shutdown_announced(),
+                        "an announced daemon shutdown must never surface as PlayerEvent::Stopped"
+                    );
+                    // A client of a local daemon can offer to restart it; a
+                    // client of a genuinely remote daemon cannot, and keeps
+                    // today's silent-fallback behavior (task 7.2).
+                    if self.home_is_local_daemon {
+                        self.raise_daemon_lost_modal();
+                    } else {
+                        self.restore_local_mode("Daemon disconnected — returned to local mode");
+                    }
                     self.refresh_after_stop();
                     return true;
                 }
@@ -438,11 +456,43 @@ impl App {
             PlayerEvent::QueueDesynced(reason) => {
                 self.flash_status(reason);
             }
-            // Placeholder: task 7.2 wires this into the announced-shutdown
-            // clean exit (vs. the unannounced-loss modal for
-            // PlayerEvent::Stopped via is_remote_disconnected()).
-            PlayerEvent::DaemonShutdownAnnounced => {}
+            // The announced-shutdown counterpart to the unannounced-loss
+            // modal raised from PlayerEvent::Stopped above (task 7.2): a
+            // local-daemon client prints one line and exits cleanly; a
+            // client of a genuinely remote daemon keeps today's behavior.
+            PlayerEvent::DaemonShutdownAnnounced => {
+                if self.home_is_local_daemon {
+                    self.pending_exit_message =
+                        Some("mbv: the local daemon was stopped — exiting.".to_string());
+                    QUIT_REQUESTED.store(true, Ordering::Relaxed);
+                } else {
+                    self.restore_local_mode("Daemon disconnected — returned to local mode");
+                    self.refresh_after_stop();
+                }
+            }
         }
         false
+    }
+
+    /// Raises the blocking daemon-lost modal (task 7.1), replacing whatever
+    /// other blocking overlay was showing -- only one is ever active.
+    fn raise_daemon_lost_modal(&mut self) {
+        self.confirm_modal = None;
+        self.save_playlist_dialog = None;
+        let last_playing_title = {
+            let idx = self.player.status.lock().unwrap().current_idx;
+            self.playback_queue()
+                .items
+                .get(idx)
+                .map(|item| item.playback_label())
+        };
+        self.daemon_lost_modal = Some(DaemonLostModal {
+            last_playing_title,
+            daemon_log_path: crate::state_dir()
+                .join("local-daemon.log")
+                .display()
+                .to_string(),
+            restart_error: None,
+        });
     }
 }

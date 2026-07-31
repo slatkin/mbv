@@ -276,6 +276,17 @@ impl PlayerProxy {
         }
     }
 
+    /// Whether the remote disconnect (if any) followed an announced daemon
+    /// shutdown, as opposed to an unannounced loss (crash). `Local` has no
+    /// daemon connection to lose, so it is always `false`. Mirrors
+    /// `is_remote_disconnected()`.
+    pub fn is_shutdown_announced(&self) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.is_shutdown_announced(),
+        }
+    }
+
     /// Shared disconnect flag for the current inner target, or `None` for a
     /// local `Player` (which has no daemon connection to lose). Mirrors
     /// `RemotePlayer::disconnected_flag()` -- used by callers (MPRIS

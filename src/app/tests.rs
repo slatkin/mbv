@@ -188,6 +188,8 @@ pub(crate) fn make_app_stub() -> App {
         last_esc_press: None,
         last_click_pos: (u16::MAX, u16::MAX),
         confirm_modal: None,
+        daemon_lost_modal: None,
+        pending_exit_message: None,
         pending_delete_idx: None,
         pending_queue_removal: None,
         queue_undo_stack: Vec::new(),

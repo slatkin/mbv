@@ -8,11 +8,13 @@ mod browse_level_actions;
 mod construct;
 mod consume_quit_actions;
 mod context_menu_actions;
+mod daemon_restart;
 mod feed_actions;
 pub(crate) mod images;
 mod input;
 mod input_confirm_keys;
 mod input_context_menu;
+mod input_daemon_lost_keys;
 mod input_home_search_keys;
 mod input_lib_power_keys;
 mod input_mouse;
@@ -57,6 +59,7 @@ pub(crate) mod stay_alive;
 mod types_browse;
 mod types_confirm;
 mod types_context_menu;
+mod types_daemon_lost;
 mod types_events;
 mod types_feed;
 mod types_library_tab;
@@ -81,6 +84,7 @@ use self::types_context_menu::{
     ContextAction, ContextMenu, ContextMenuEntry, LibraryRoutePopup, LibraryRouteStage,
     MultiSelectKind, MultiSelectPopup,
 };
+use self::types_daemon_lost::DaemonLostModal;
 use self::types_events::{LibEvent, SessionEvent};
 use self::types_feed::{
     FeedHomeVideoGroup, FeedHomeVideoState, SavePlaylistDialog, SavePlaylistStage,
@@ -554,6 +558,12 @@ impl App {
 
         self.teardown(quit_timeout);
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
+                                            // Printed only after the terminal is restored (task 7.2): anything
+                                            // written while still in the alternate screen would never be
+                                            // visible once it's left.
+        if let Some(msg) = self.pending_exit_message.take() {
+            println!("{msg}");
+        }
         Ok(())
     }
 

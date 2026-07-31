@@ -353,6 +353,133 @@ fn disconnect_is_idempotent() {
     remote.disconnect();
 }
 
+fn spawn_test_daemon_up_to_state(
+    listener: std::net::TcpListener,
+    after_state: impl FnOnce(&mut TcpStream) + Send + 'static,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        let mut reader = BufReader::new(stream);
+
+        let hello = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap();
+        writeln!(writer, "{hello}").unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+
+        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
+            status: PlayerStatus::default(),
+            items: Vec::new(),
+            cursor: 0,
+            source: crate::config::QueueSource::Unknown,
+        }))
+        .unwrap();
+        writeln!(writer, "{initial_state}").unwrap();
+
+        after_state(&mut writer);
+    })
+}
+
+#[test]
+fn announced_daemon_shutdown_sets_is_shutdown_announced_and_emits_no_stopped_event() {
+    // Task 7.4: the reader thread's `is_structured_disconnect` branch (task
+    // 1.5) must route an announced `DaemonShutdown` to `is_shutdown_announced()`
+    // and `PlayerEvent::DaemonShutdownAnnounced`, never a synthetic `Stopped`
+    // -- getting this backwards means a spurious crash modal on every clean
+    // `mbv -q` shutdown (see `player_event.rs`'s `DaemonShutdownAnnounced` arm).
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let daemon = spawn_test_daemon_up_to_state(listener, |writer| {
+        let disconnected = serde_json::to_string(&CtrlEvent::Disconnected {
+            reason: DisconnectReason::DaemonShutdown,
+        })
+        .unwrap();
+        writeln!(writer, "{disconnected}").unwrap();
+        // Stream closes as `writer` (and the accepted `stream`) drop here.
+    });
+
+    let (remote, event_rx) =
+        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while !remote.is_disconnected() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(remote.is_disconnected());
+    assert!(
+        remote.is_shutdown_announced(),
+        "an announced DaemonShutdown must mark is_shutdown_announced()"
+    );
+
+    let events: Vec<_> = event_rx.try_iter().collect();
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, PlayerEvent::DaemonShutdownAnnounced)),
+        "expected a DaemonShutdownAnnounced event, got {} events",
+        events.len()
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, PlayerEvent::Stopped { .. })),
+        "an announced shutdown must never emit a synthetic Stopped event, got {} events",
+        events.len()
+    );
+
+    daemon.join().unwrap();
+}
+
+#[test]
+fn unannounced_disconnect_leaves_is_shutdown_announced_false_and_emits_stopped() {
+    // The other half of the boundary: a daemon that vanishes with no
+    // `Disconnected` event (a crash) must not be mistaken for a clean
+    // shutdown -- getting this backwards means a silent exit on a real
+    // crash instead of the unannounced-loss modal (`player_event.rs`'s
+    // `Stopped` arm).
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let daemon = spawn_test_daemon_up_to_state(listener, |_writer| {
+        // Drop the connection with no `Disconnected` event -- a crash, not
+        // a deliberate shutdown.
+    });
+
+    let (remote, event_rx) =
+        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while !remote.is_disconnected() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(remote.is_disconnected());
+    assert!(
+        !remote.is_shutdown_announced(),
+        "a bare, unannounced disconnect must not be mistaken for an announced shutdown"
+    );
+
+    let events: Vec<_> = event_rx.try_iter().collect();
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, PlayerEvent::Stopped { .. })),
+        "expected a synthetic Stopped event, got {} events",
+        events.len()
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, PlayerEvent::DaemonShutdownAnnounced)),
+        "an unannounced disconnect must never emit DaemonShutdownAnnounced, got {} events",
+        events.len()
+    );
+
+    daemon.join().unwrap();
+}
+
 #[test]
 fn connect_endpoint_propagates_active_remote_playback_status() {
     // #175: a local `mbv` connected as the ctrl client of a remote
