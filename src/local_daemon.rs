@@ -129,12 +129,25 @@ pub fn run_local_daemon_main() -> ! {
         std::process::exit(1);
     }
 
+    let show_systray_icon = client.config.show_systray_icon;
+    let player_handle: std::sync::Arc<std::sync::Mutex<Option<daemon::DaemonPlayerHandle>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
+    let player_handle_for_tray = player_handle.clone();
+
     daemon::run_with_options(
         client,
         false,
         daemon::DaemonRuntimeHooks {
-            on_player_ready: Box::new(|_| {}),
-            on_tray_ready: Box::new(|_| None),
+            on_player_ready: Box::new(move |handle| {
+                *player_handle.lock().unwrap() = Some(handle);
+            }),
+            on_tray_ready: Box::new(move |shutdown_tx| {
+                if !show_systray_icon {
+                    return None;
+                }
+                let handle = player_handle_for_tray.lock().unwrap().take()?;
+                crate::tray::spawn(shutdown_tx, handle.status, handle.command_tx)
+            }),
         },
     );
 }

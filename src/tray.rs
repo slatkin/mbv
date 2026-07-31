@@ -157,13 +157,11 @@ impl ksni::Tray for MbvTray {
 ///
 /// `status`/`cmd_tx` must come from the in-process `Player` (see
 /// `PlayerProxy::local_cmd_tx`), never from a `RemotePlayer` -- the tray
-/// must stay on the stay-alive side of the architecture and must not become
-/// a ctrl-socket client. `shutdown_tx` keeps the existing Phase 1 real-quit
-/// behavior (equivalent to `mbv -q` / graceful shutdown).
-///
-/// Temporarily unused between this change's group 8 (relay deletion) and
-/// group 9, which wires this into the local daemon's own tray hook.
-#[allow(dead_code)]
+/// must stay on the local-daemon side of the architecture and must not
+/// become a ctrl-socket client. `shutdown_tx` keeps the existing real-quit
+/// behavior (equivalent to `mbv -q` / graceful shutdown), now driven by the
+/// local daemon's own `shutdown_signal_tx` (see `local_daemon.rs`'s
+/// `on_tray_ready` hook) rather than a self-SIGTERM inside `App`.
 pub fn spawn(
     shutdown_tx: SyncSender<()>,
     status: Arc<Mutex<PlayerStatus>>,

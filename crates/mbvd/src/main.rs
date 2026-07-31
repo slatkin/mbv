@@ -116,6 +116,8 @@ fn run() -> Result<(), String> {
         has_flag(&args, "--audio-only", None),
         daemon::DaemonRuntimeHooks {
             on_player_ready: Box::new(|_| {}),
+            // Deliberately a stub: mbvd runs as a system service with no
+            // user session, so there's no tray to spawn into.
             on_tray_ready: Box::new(|_| None),
         },
     );

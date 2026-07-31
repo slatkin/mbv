@@ -170,16 +170,16 @@ is deleted only afterwards (group 8), so there is a working stay-alive path at e
 
 ## 9. Tray moves into the local daemon
 
-- [ ] 9.1 In the hidden local-daemon subcommand (task 2.1), supply real `DaemonRuntimeHooks`: the
+- [x] 9.1 In the hidden local-daemon subcommand (task 2.1), supply real `DaemonRuntimeHooks`: the
       `on_player_ready` closure stashes the `DaemonPlayerHandle` in a shared cell, and the
       `on_tray_ready` closure reads it and calls `crate::tray::spawn(shutdown_tx, handle.status,
       handle.command_tx)`. `daemon_run.rs` calls the two hooks in that order, and `tray::spawn`'s
       return type already matches `OnTrayReady`, so no hook signature changes.
-- [ ] 9.2 Gate the tray on `show_systray_icon`, and log-and-continue when `tray::spawn` returns
+- [x] 9.2 Gate the tray on `show_systray_icon`, and log-and-continue when `tray::spawn` returns
       `None`. Emit no terminal warning on either the daemon or the client side.
-- [ ] 9.3 Confirm the tray's quit action still reaches the same graceful shutdown as `mbv -q`, now
+- [x] 9.3 Confirm the tray's quit action still reaches the same graceful shutdown as `mbv -q`, now
       via the daemon's own `shutdown_signal_tx` rather than a self-`SIGTERM` inside `App`.
-- [ ] 9.4 Leave `crates/mbvd/src/main.rs`'s `on_tray_ready: Box::new(|_| None)` as-is, and add a
+- [x] 9.4 Leave `crates/mbvd/src/main.rs`'s `on_tray_ready: Box::new(|_| None)` as-is, and add a
       one-line comment saying the stub is deliberate because `mbvd` runs as a system service with no
       user session.
 - [ ] 9.5 Verify: with `mbv -d` running and every client closed, the tray is present, its transport
