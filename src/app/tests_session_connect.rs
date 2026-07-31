@@ -143,7 +143,7 @@ fn connect_to_session_tears_down_an_active_library_route_via_restore_local_mode(
     // field, so `suspended_local` is populated the way it is in
     // production and `restore_local_mode` has real state to restore.
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
-    app.switch_to_library_route("music", remote, remote_rx);
+    app.switch_to_library_route("music", remote, remote_rx, false);
     assert_eq!(app.active_route.as_deref(), Some("music"));
     assert!(app.player.is_remote());
 

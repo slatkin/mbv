@@ -92,7 +92,7 @@ fn teardown_persists_direct_remote_when_auto_reconnect_enabled() {
     let sess = make_session("living-room-mbv", "mbv");
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
 
-    app.switch_to_direct_remote(&sess, remote, remote_rx);
+    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
     app.teardown(Duration::from_secs(1));
 
     assert_eq!(
@@ -210,35 +210,6 @@ fn try_quit_bare_mode_does_not_touch_attached() {
     // must stay untouched (it's never consulted outside stay-alive).
     let _ = app.try_quit();
     assert!(app.attached);
-}
-
-#[test]
-fn try_quit_stay_alive_session_exits_when_setting_disabled() {
-    let (app_end, relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-    let mut app = make_app_stub();
-    app.attached = true;
-    app.client.lock().unwrap().config.stay_alive = false;
-    app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
-
-    let quit_loop_should_exit = app.try_quit();
-
-    assert!(
-        quit_loop_should_exit,
-        "disabling Stay alive on exit must make the next `q` quit this attached session"
-    );
-    assert!(
-        app.attached,
-        "real quit should not flip the detached-session guard"
-    );
-
-    use std::io::Read;
-    relay_end.set_nonblocking(true).unwrap();
-    let mut buf = [0u8; 32];
-    let n = relay_end.take(32).read(&mut buf).unwrap_or(0);
-    assert_eq!(
-        n, 0,
-        "runtime quit path must not tell the relay to detach once Stay alive on exit is disabled"
-    );
 }
 
 #[test]

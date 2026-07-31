@@ -52,7 +52,7 @@ fn direct_remote_connect_keeps_local_scope_when_remote_queue_is_empty() {
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
     let sess = make_session("remote-host", "mbv");
 
-    app.switch_to_direct_remote(&sess, remote, remote_rx);
+    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
 
     assert_eq!(app.queue_scope, QueueScope::Local);
     assert_eq!(app.visible_queue_scope(), QueueScope::Local);
@@ -68,7 +68,7 @@ fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() 
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items.clone(), 0);
     let sess = make_session("remote-host", "mbv");
 
-    app.switch_to_direct_remote(&sess, remote, remote_rx);
+    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
 
     assert_eq!(app.queue_scope, QueueScope::Remote);
     assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
@@ -102,7 +102,7 @@ fn switch_to_direct_remote_rebinds_mpris_to_the_new_remote_status() {
     let remote_status = remote.status.clone();
     let sess = make_session("remote-host", "mbv");
 
-    app.switch_to_direct_remote(&sess, remote, remote_rx);
+    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
 
     let handle = app.mpris.as_ref().expect("mpris handle still present");
     let bound_status = crate::mpris::test_status(handle);
@@ -140,12 +140,12 @@ fn switch_to_direct_remote_disconnects_the_previous_remote_on_a_remote_to_remote
     let sess_a = make_session("daemon-a", "mbv");
     let (remote_a, remote_a_rx) =
         RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_a), "token").unwrap();
-    app.switch_to_direct_remote(&sess_a, remote_a, remote_a_rx);
+    app.switch_to_direct_remote(&sess_a, remote_a, remote_a_rx, false);
 
     let sess_b = make_session("daemon-b", "mbv");
     let (remote_b, remote_b_rx) =
         RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_b), "token").unwrap();
-    app.switch_to_direct_remote(&sess_b, remote_b, remote_b_rx);
+    app.switch_to_direct_remote(&sess_b, remote_b, remote_b_rx, false);
 
     let mut daemon_a_stream = daemon_a.join().unwrap();
     daemon_a_stream
@@ -167,7 +167,7 @@ fn switch_to_library_route_sets_active_route_and_suspends_local() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
 
-    app.switch_to_library_route("music", remote, remote_rx);
+    app.switch_to_library_route("music", remote, remote_rx, false);
 
     assert_eq!(app.active_route.as_deref(), Some("music"));
     assert!(app.player.is_remote());
@@ -183,7 +183,7 @@ fn route_owned_transport_is_not_sessions_panel_disconnectable() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
 
-    app.switch_to_library_route("music", remote, remote_rx);
+    app.switch_to_library_route("music", remote, remote_rx, false);
     app.status.clear();
 
     assert_eq!(app.remote_slot_state(), RemoteSlotState::DirectRemote);
@@ -207,7 +207,7 @@ fn switch_to_library_route_sets_remote_queue_scope_when_daemon_has_items() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(2), 0);
 
-    app.switch_to_library_route("music", remote, remote_rx);
+    app.switch_to_library_route("music", remote, remote_rx, false);
 
     assert!(app.has_direct_remote_queue());
 }
@@ -242,12 +242,12 @@ fn switch_to_library_route_disconnects_the_previous_remote_on_a_route_to_route_s
     let mut app = make_app_stub();
     let (remote_a, remote_a_rx) =
         RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_a), "token").unwrap();
-    app.switch_to_library_route("music", remote_a, remote_a_rx);
+    app.switch_to_library_route("music", remote_a, remote_a_rx, false);
     assert!(!app.player.is_remote_disconnected());
 
     let (remote_b, remote_b_rx) =
         RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_b), "token").unwrap();
-    app.switch_to_library_route("movies", remote_b, remote_b_rx);
+    app.switch_to_library_route("movies", remote_b, remote_b_rx, false);
 
     // The OLD (music) connection's daemon-side accept handle should
     // see its client hang up shortly after the swap -- proof the
@@ -285,7 +285,7 @@ fn restore_local_mode_rebinds_mpris_back_to_the_suspended_local_status() {
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
     let remote_status = remote.status.clone();
     let sess = make_session("remote-host", "mbv");
-    app.switch_to_direct_remote(&sess, remote, remote_rx);
+    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
 
     app.restore_local_mode("test: ending direct remote session");
 
@@ -302,7 +302,7 @@ fn restore_local_mode_rebinds_mpris_back_to_the_suspended_local_status() {
 fn restore_local_mode_clears_active_route() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
-    app.switch_to_library_route("music", remote, remote_rx);
+    app.switch_to_library_route("music", remote, remote_rx, false);
     assert_eq!(app.active_route.as_deref(), Some("music"));
 
     app.restore_local_mode("Local playback restored");
@@ -337,7 +337,7 @@ fn restore_local_mode_disconnects_the_remote_before_restoring_local() {
     let mut app = make_app_stub();
     let (remote, remote_rx) =
         RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
-    app.switch_to_library_route("music", remote, remote_rx);
+    app.switch_to_library_route("music", remote, remote_rx, false);
     assert!(!app.player.is_remote_disconnected());
 
     app.restore_local_mode("test: ending library route session");
@@ -414,7 +414,7 @@ fn disconnect_remote_restores_local_for_sessions_panel_direct_remote() {
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
     let sess = make_session("music", "mbv");
 
-    app.switch_to_direct_remote(&sess, remote, remote_rx);
+    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
 
     assert_eq!(app.direct_remote_label.as_deref(), Some("music"));
     assert!(app.can_disconnect_remote());
@@ -434,7 +434,7 @@ fn disconnecting_attached_session_preserves_sessions_panel_direct_remote() {
     let direct_session = make_session("music", "mbv");
     let attached_session = make_session("living-room", "Emby");
 
-    app.switch_to_direct_remote(&direct_session, remote, remote_rx);
+    app.switch_to_direct_remote(&direct_session, remote, remote_rx, false);
     app.connect_to_session(&attached_session);
 
     assert!(app.direct_remote_connected);

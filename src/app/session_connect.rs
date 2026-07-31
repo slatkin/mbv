@@ -200,7 +200,7 @@ impl App {
                 };
                 match self.try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
-                        self.switch_to_library_route(&name, remote, remote_rx)
+                        self.switch_to_library_route(&name, remote, remote_rx, endpoint.is_local())
                     }
                     Err(message) => self.flash_status_high(message),
                 }
@@ -251,8 +251,14 @@ impl App {
         sess: &mbv_core::api::SessionInfo,
         remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
+        is_local: bool,
     ) {
         self.stop_visualizer_worker();
+        // `is_local_daemon` must track the *current* player target, not
+        // just the app's launch-time attachment, or the visualizer gate
+        // (which reads it directly) keeps capturing this machine's system
+        // audio after swapping to a genuinely different remote target.
+        self.is_local_daemon = is_local;
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
@@ -337,8 +343,14 @@ impl App {
         library_name: &str,
         remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
+        is_local: bool,
     ) {
         self.stop_visualizer_worker();
+        // See the matching comment in `switch_to_direct_remote`: this must
+        // reflect the route just connected to, not the app's original
+        // attachment, so the visualizer gate doesn't lie after routing away
+        // from (or back to) the local daemon.
+        self.is_local_daemon = is_local;
         let previous_route = self.active_route.clone();
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
@@ -472,7 +484,7 @@ impl App {
             (Some((name, endpoint)), was_routed) => {
                 match self.try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
-                        self.switch_to_library_route(&name, remote, remote_rx);
+                        self.switch_to_library_route(&name, remote, remote_rx, endpoint.is_local());
                     }
                     Err(message) => {
                         log::warn!(
@@ -519,7 +531,7 @@ impl App {
                 let auth_token = self.client.lock().unwrap().token.clone();
                 match self.connect_direct_endpoint(&endpoint, &auth_token) {
                     Ok((remote, remote_rx)) => {
-                        self.switch_to_direct_remote(sess, remote, remote_rx);
+                        self.switch_to_direct_remote(sess, remote, remote_rx, endpoint.is_local());
                         return;
                     }
                     Err(e) => {
