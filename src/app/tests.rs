@@ -188,6 +188,8 @@ pub(crate) fn make_app_stub() -> App {
         last_esc_press: None,
         last_click_pos: (u16::MAX, u16::MAX),
         confirm_modal: None,
+        daemon_lost_modal: None,
+        pending_exit_message: None,
         pending_delete_idx: None,
         pending_queue_removal: None,
         queue_undo_stack: Vec::new(),
@@ -297,8 +299,8 @@ pub(crate) fn make_app_stub() -> App {
         image_protocol_enabled: false,
         library_position_state: crate::config::LibraryPositionState::default(),
         queue_scope: QueueScope::Local,
-        stay_alive_ctrl: None,
-        attached: true,
+        is_local_daemon: false,
+        home_is_local_daemon: false,
     }
 }
 
@@ -354,7 +356,6 @@ pub(crate) fn make_built_app() -> App {
         notif_action_rx,
         search_tx,
         search_rx,
-        stay_alive_ctrl: None,
     })
 }
 

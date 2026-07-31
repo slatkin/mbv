@@ -569,6 +569,17 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
             }
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");
+                // Announce the deliberate shutdown to every connected client
+                // before closing their connections, so they exit cleanly
+                // instead of treating this as an unannounced crash.
+                ctrl_clients
+                    .lock()
+                    .unwrap()
+                    .notify_disconnected_all(DisconnectReason::DaemonShutdown);
+                ctrl_clients
+                    .lock()
+                    .unwrap()
+                    .flush_writers(std::time::Duration::from_secs(1));
                 player.stop();
                 player.join_or_timeout(std::time::Duration::from_secs(5));
                 let _ = std::fs::remove_file(pid_file());

@@ -3,10 +3,10 @@ use super::layout;
 use super::render;
 use super::resize::{ResizeRegisterTx, ResizeResponseRx};
 use super::search::SearchSubsystem;
-use super::stay_alive;
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_confirm::ConfirmModal;
 use super::types_context_menu::{ContextMenu, LibraryRoutePopup, MultiSelectPopup};
+use super::types_daemon_lost::DaemonLostModal;
 use super::types_events::{LibEvent, SessionEvent};
 use super::types_feed::SavePlaylistDialog;
 use super::types_library_tab::LibraryTab;
@@ -55,6 +55,26 @@ pub struct App {
     /// entirely rather than compute (and save) a bogus `None` record that
     /// would wipe out a real record saved by a different `App::new` session.
     pub(super) launched_as_remote: bool,
+    /// `true` only for `App::new_remote` instances whose `is_local_daemon`
+    /// constructor argument was `true` -- a thin client attached to the
+    /// same-machine local daemon (`DaemonEndpoint::Local`), as opposed to a
+    /// genuinely remote/network daemon. Retained from that constructor
+    /// argument (which used to be consumed during construction and
+    /// discarded) so later code can tell "my Player owner is on this
+    /// machine" from "my Player owner is elsewhere".
+    pub(super) is_local_daemon: bool,
+    /// The one-time, launch-time value of `is_local_daemon`: `true` only for
+    /// `App::new_remote` instances whose `is_local_daemon` constructor
+    /// argument was `true`, and never updated afterward -- unlike
+    /// `is_local_daemon` itself, which `switch_to_direct_remote` and
+    /// `switch_to_library_route` update on every route switch to track the
+    /// *current* player target. Kept fixed at its construction-time value so
+    /// `restore_local_mode` can tell whether this app's baseline (the state
+    /// to return to when a route switch is undone) was a genuinely local
+    /// in-process player (nothing to do here) or a connection to the local
+    /// daemon (which must be reconnected, since there's no suspended local
+    /// player to restore in that case).
+    pub(super) home_is_local_daemon: bool,
     pub(super) hidden_libraries: Vec<String>,
     pub(super) hidden_latest: Vec<String>,
     /// `Config.library_routes` at startup (#256). Values are resolved
@@ -85,6 +105,17 @@ pub struct App {
     /// now-playing item, rescan library, save-playlist overwrite/discard),
     /// rendered and dispatched by the shared confirmation-modal component.
     pub(super) confirm_modal: Option<ConfirmModal>,
+    /// The blocking modal raised on an unannounced local-daemon disconnect
+    /// (task 7.1-7.3). Distinct from `confirm_modal`/`save_playlist_dialog`:
+    /// it has three named choices, not yes/no, and its own diagnostics.
+    /// `raise_daemon_lost_modal` clears the other two when it sets this, so
+    /// only one blocking overlay is ever active.
+    pub(super) daemon_lost_modal: Option<DaemonLostModal>,
+    /// Set right before requesting a clean exit on an announced daemon
+    /// shutdown (task 7.2); printed once by `run()` after the terminal is
+    /// restored, since anything written while still in the alternate screen
+    /// would never be visible. `None` on every other exit path.
+    pub(super) pending_exit_message: Option<String>,
     pub(super) pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
     pub(super) pending_queue_removal: Option<(QueueSlotId, bool)>, // deferred removal (slot, is_audio) after TrackChanged index-shifts
     pub(super) queue_undo_stack: Vec<UndoEntry>,
@@ -237,28 +268,6 @@ pub struct App {
     pub(super) image_protocol_enabled: bool,
     pub(super) library_position_state: crate::config::LibraryPositionState,
     pub(super) queue_scope: QueueScope,
-    /// The relay's out-of-band control channel (ADR 0005), present only
-    /// when running as a stay-alive inferior under a relay. `None` in bare
-    /// mode and for `new_remote` (thin client to `mbvd`).
-    pub(super) stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>,
-    /// Whether a terminal-client is currently attached to the pty. Always
-    /// `true` outside stay-alive mode (`stay_alive_ctrl` is `None` there, so
-    /// this field is never consulted). Set `false` by `try_quit`'s detach
-    /// path right after a successful `send_detach()`, and back to `true` by
-    /// the T5 reattach-refresh (`take_attach_pending()`).
-    ///
-    /// Exists because `Terminal::clear()` unconditionally queries the
-    /// cursor position over the pty (crossterm `get_cursor_position()`,
-    /// a blocking DSR round-trip) even for a fullscreen viewport. The
-    /// run loop keeps ticking and taking input while detached (that's the
-    /// point of stay-alive), so without this guard, the very next
-    /// `force_clear` — triggered by any number of ordinary UI actions,
-    /// unrelated to detach — blocks for several seconds with no
-    /// terminal-client left to answer, then errors out and kills the whole
-    /// process: a silent `exit(1)` if idle, or a SIGSEGV if it races a live
-    /// mpv Vulkan render thread during the resulting early-return teardown
-    /// (issue #156).
-    pub(super) attached: bool,
     #[cfg(test)]
     pub(super) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
@@ -292,5 +301,4 @@ pub(super) struct AppInit {
     pub(super) notif_action_rx: mpsc::Receiver<String>,
     pub(super) search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
     pub(super) search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
-    pub(super) stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>,
 }

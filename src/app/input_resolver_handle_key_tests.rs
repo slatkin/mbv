@@ -16,6 +16,33 @@ fn help_f1_closes_help_via_handle_key() {
 }
 
 #[test]
+fn daemon_lost_q_runs_normal_quit_cleanup() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = crate::app::tests::make_local_daemon_app_stub(Vec::new());
+    app.daemon_lost_modal = Some(crate::app::DaemonLostModal {
+        last_playing_title: None,
+        daemon_log_path: "daemon.log".into(),
+        restart_error: None,
+    });
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("playlist-id".into()),
+        name: "Saved".into(),
+    };
+    app.queue_dirty = true;
+    app.client.lock().unwrap().config.save_playlist_on_quit = false;
+    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+
+    assert!(app.handle_key(ev(KeyCode::Char('q'), KeyModifiers::NONE)));
+    assert!(app.daemon_lost_modal.is_none());
+    assert!(
+        !app.queue_dirty,
+        "normal quit cleanup must discard dirty state"
+    );
+
+    crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[test]
 fn help_swallows_unbound_key_via_handle_key() {
     let mut app = make_app_stub();
     app.show_help = true;
@@ -524,10 +551,16 @@ fn context_stack_order_is_pinned() {
     // at the topmost rank of the ranks it replaces (`save_modal`'s), per
     // design.md decision 2. The visualizer is a global action and therefore
     // sits after modal/context-menu handlers but before playback dispatch.
+    //
+    // Updated for the retire-pty-relay-for-local-daemon-stay-alive change
+    // (group 7): `daemon_lost_modal` sits above every other entry, including
+    // `confirm_modal` -- an unannounced local-daemon loss must block input
+    // even if some other confirmation happened to be showing when it hit.
     let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
     assert_eq!(
         names,
         vec![
+            "daemon_lost_modal",
             "confirm_modal",
             "save_playlist",
             "settings",

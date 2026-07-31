@@ -14,6 +14,9 @@ pub struct RemotePlayer {
     pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
+    /// Set when the connection closed after the daemon announced a
+    /// deliberate shutdown, as opposed to closing with no warning.
+    pub(crate) shutdown_announced: Arc<AtomicBool>,
     pub(crate) ctrl_compatibility: CtrlCompatibility,
     /// A kept clone of the control socket, used only by `disconnect()`
     /// (#233) to shut the connection down on demand rather than relying
@@ -41,6 +44,13 @@ impl RemotePlayer {
 
     pub fn is_disconnected(&self) -> bool {
         self.disconnected.load(Ordering::SeqCst)
+    }
+
+    /// Whether the connection closed after the daemon announced a deliberate
+    /// shutdown, as opposed to closing with no warning. Only meaningful once
+    /// `is_disconnected()` is true.
+    pub fn is_shutdown_announced(&self) -> bool {
+        self.shutdown_announced.load(Ordering::SeqCst)
     }
 
     /// Shared handle to the disconnect flag, cloneable independent of the
@@ -226,6 +236,7 @@ impl RemotePlayer {
         let items = Arc::new(Mutex::new(items));
         let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
+        let shutdown_announced = Arc::new(AtomicBool::new(false));
         let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
         let pending_playback = Arc::new(Mutex::new(HashMap::new()));
         let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
@@ -239,6 +250,7 @@ impl RemotePlayer {
                 queue_source,
                 cmd_tx,
                 disconnected,
+                shutdown_announced,
                 ctrl_compatibility: compat,
                 control_stream: Arc::new(Mutex::new(None)),
                 next_playback_id,

@@ -1,5 +1,14 @@
 # Owned pty relay for stay-alive mode
 
+> **Superseded (2026-07-31):** The owned pty relay described below has been
+> removed by the `retire-pty-relay-for-local-daemon-stay-alive` change.
+> Stay-alive is now ensure-daemon-then-attach against the existing local
+> daemon, with no pty, no byte-pipe terminal client, and no single-slot
+> eviction. See [ADR 0015](0015-local-daemon-for-stay-alive.md) for the
+> current design, including how the crash-isolation and graphics-passthrough
+> rationale below is preserved rather than dropped. This document is kept for
+> historical context.
+
 ## Decision
 
 Stay-alive mode (mbv surviving its controlling terminal closing while still

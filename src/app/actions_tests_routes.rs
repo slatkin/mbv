@@ -369,7 +369,7 @@ fn play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel
         .insert("music".to_string(), "living-room-pc".to_string());
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
     let sess = crate::app::tests::make_session("other-mbv", "mbv");
-    app.switch_to_direct_remote(&sess, remote, remote_rx);
+    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
     assert!(app.player.is_remote());
     assert!(app.active_route.is_none());
 

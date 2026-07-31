@@ -156,6 +156,31 @@ fn local_daemon_bootstrap_prefers_existing_daemon_queue_state() {
 // `render/library/table/context.rs`.
 
 #[test]
+fn local_daemon_app_keeps_live_queue_over_stale_disk_snapshot() {
+    // Once every attach goes through `bootstrap_local_daemon_queue`, this
+    // is a realistic data-loss path: an already-adopted live daemon queue
+    // must survive the startup disk restore, not be overwritten by
+    // whatever `queue_state.json` happens to hold.
+    let remote_items = make_items(2);
+    let mut app = make_local_daemon_app_stub(remote_items.clone());
+    assert_eq!(app.player_tab.items.len(), 2);
+
+    crate::config::save_queue_state(&crate::config::QueueState {
+        source: crate::config::QueueSource::Unknown,
+        items: make_items(5),
+        cursor: 0,
+        last_played_item_id: None,
+        last_played_completed: false,
+        positions: Default::default(),
+    });
+
+    app.maybe_restore_queue_state();
+
+    assert_eq!(app.player_tab.items.len(), 2);
+    assert_eq!(app.player_tab.items[0].id, remote_items[0].id);
+}
+
+#[test]
 fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
     let items = make_items(3);
     let cursor = super::actions::queue_restore_cursor(&items, 2, None, false);

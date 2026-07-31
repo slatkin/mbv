@@ -77,36 +77,6 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
 }
 
 #[test]
-fn status_bar_remote_hitbox_tracks_visible_pill_after_alive_marker() {
-    let mut app = make_app_stub();
-    let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-    app.stay_alive_ctrl = Some(crate::app::stay_alive::StayAliveCtrl::for_test(app_end));
-
-    let backend = TestBackend::new(80, 1);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutPlayback::default();
-    term.draw(|f| {
-        app.render_status_bar(f, Rect::new(0, 0, 80, 1), &mut layout, true, true);
-    })
-    .unwrap();
-
-    let line = buffer_to_string(&term).lines().next().unwrap().to_string();
-    let heart_byte = line.find('\u{2665}').unwrap();
-    let remote_byte = line.find('\u{1F5A7}').unwrap();
-    let heart_x = line[..heart_byte].width() as u16;
-    let remote_x = line[..remote_byte].width() as u16;
-
-    assert!(
-        layout.ind_rc.contains((remote_x, 0).into()),
-        "expected the remote hitbox to cover the rendered remote pill:\n{line}"
-    );
-    assert!(
-        !layout.ind_rc.contains((heart_x, 0).into()),
-        "expected the stay-alive heart to stay outside the sessions hitbox:\n{line}"
-    );
-}
-
-#[test]
 fn remote_status_spans_prefers_active_route_label_over_daemon_endpoint() {
     let mut app = make_app_stub();
     app.active_route = Some("music".to_string());
@@ -165,7 +135,7 @@ fn remote_status_spans_keeps_direct_upgrade_session_name_after_state_is_cleared(
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
     let sess = crate::app::tests::make_session("music", "mbv");
 
-    app.switch_to_direct_remote(&sess, remote, remote_rx);
+    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
     assert!(app.connected_session_id.is_none());
     assert!(app.connected_session_state.is_none());
 

@@ -92,7 +92,7 @@ fn teardown_persists_direct_remote_when_auto_reconnect_enabled() {
     let sess = make_session("living-room-mbv", "mbv");
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
 
-    app.switch_to_direct_remote(&sess, remote, remote_rx);
+    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
     app.teardown(Duration::from_secs(1));
 
     assert_eq!(
@@ -144,38 +144,42 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
     );
 }
 
-// ── wants_terminal_render (#156: detached stay-alive must not touch
-// the terminal — Terminal::clear() blocks on a cursor-position DSR
-// query nobody answers once the terminal-client has detached) ────────
+#[test]
+fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let old_items = make_items(1);
+    crate::config::save_queue_state(&crate::config::QueueState {
+        source: crate::config::QueueSource::Album,
+        items: old_items.clone(),
+        cursor: 0,
+        last_played_item_id: None,
+        last_played_completed: false,
+        positions: Default::default(),
+    });
+
+    let mut app = make_local_daemon_app_stub(make_items(2));
+    app.player_tab.items = make_items(3);
+    app.teardown(Duration::from_secs(1));
+
+    let state = crate::config::load_queue_state().expect("existing daemon snapshot");
+    assert_eq!(
+        state
+            .items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        old_items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>()
+    );
+}
 
 #[test]
-fn wants_terminal_render_true_when_attached_and_due() {
-    let mut app = make_app_stub();
-    app.attached = true;
+fn wants_terminal_render_true_when_due() {
+    let app = make_app_stub();
     let stale = Instant::now() - Duration::from_secs(10);
     assert!(app.wants_terminal_render(false, stale, Duration::from_secs(1)));
-}
-
-#[test]
-fn wants_terminal_render_false_when_detached_even_with_events_and_force_clear() {
-    let mut app = make_app_stub();
-    app.attached = false;
-    app.force_clear = true;
-    let stale = Instant::now() - Duration::from_secs(10);
-    // had_events, force_clear, and an elapsed render_interval would all
-    // independently demand a render while attached -- none of them may
-    // override `attached == false`, or the run loop calls
-    // Terminal::clear()/draw() with nobody left to answer the pty.
-    assert!(!app.wants_terminal_render(true, stale, Duration::from_secs(1)));
-}
-
-#[test]
-fn wants_terminal_render_false_when_detached_and_idle() {
-    let app = make_app_stub();
-    let mut app = app;
-    app.attached = false;
-    let recent = Instant::now();
-    assert!(!app.wants_terminal_render(false, recent, Duration::from_secs(1)));
 }
 
 // A compact-banner poster fetch (or any list-image prefetch) can easily
@@ -200,112 +204,6 @@ fn render_interval_is_fast_while_a_card_image_fetch_is_in_flight() {
 fn render_interval_is_slow_when_idle_with_no_fetches_in_flight() {
     let app = make_app_stub();
     assert_eq!(app.render_interval(), Duration::from_secs(1));
-}
-
-#[test]
-fn try_quit_bare_mode_does_not_touch_attached() {
-    let mut app = make_app_stub();
-    app.attached = true;
-    // No `stay_alive_ctrl` -> bare mode -> `attached` is irrelevant and
-    // must stay untouched (it's never consulted outside stay-alive).
-    let _ = app.try_quit();
-    assert!(app.attached);
-}
-
-#[test]
-fn try_quit_stay_alive_detach_clears_attached_and_notifies_relay() {
-    let (app_end, relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-    let mut app = make_app_stub();
-    app.attached = true;
-    app.client.lock().unwrap().config.stay_alive = true;
-    app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
-
-    let quit_loop_should_exit = app.try_quit();
-
-    assert!(
-        !quit_loop_should_exit,
-        "stay-alive `q` must detach, never quit the run loop"
-    );
-    assert!(
-        !app.attached,
-        "detach must clear `attached` so the run loop skips terminal I/O \
-             until the next reattach (#156)"
-    );
-
-    // And it must have actually told the relay to detach, not just
-    // flipped local state.
-    use std::io::Read;
-    relay_end.set_nonblocking(true).unwrap();
-    let mut buf = [0u8; 32];
-    let n = relay_end.take(32).read(&mut buf).unwrap_or(0);
-    assert_eq!(&buf[..n], b"DETACH\n");
-}
-
-#[test]
-fn try_quit_stay_alive_session_exits_when_setting_disabled() {
-    let (app_end, relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-    let mut app = make_app_stub();
-    app.attached = true;
-    app.client.lock().unwrap().config.stay_alive = false;
-    app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
-
-    let quit_loop_should_exit = app.try_quit();
-
-    assert!(
-        quit_loop_should_exit,
-        "disabling Stay alive on exit must make the next `q` quit this attached session"
-    );
-    assert!(
-        app.attached,
-        "real quit should not flip the detached-session guard"
-    );
-
-    use std::io::Read;
-    relay_end.set_nonblocking(true).unwrap();
-    let mut buf = [0u8; 32];
-    let n = relay_end.take(32).read(&mut buf).unwrap_or(0);
-    assert_eq!(
-        n, 0,
-        "runtime quit path must not tell the relay to detach once Stay alive on exit is disabled"
-    );
-}
-
-#[test]
-fn stay_alive_settings_toggle_changes_current_session_q_behavior_both_ways() {
-    let (app_end, relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-    let mut app = make_app_stub();
-    app.client.lock().unwrap().config.stay_alive = true;
-    app.attached = true;
-    app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
-    app.settings_cursor = (0..settings::settings_total_rows())
-        .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::StayAlive)
-        .expect("StayAlive setting row must exist");
-
-    app.handle_settings_activate();
-    assert!(
-        !app.client.lock().unwrap().config.stay_alive,
-        "settings toggle should disable Stay alive on exit for the current session too"
-    );
-    assert!(
-        app.try_quit(),
-        "disabling Stay alive on exit should make q quit even while a relay control channel exists"
-    );
-
-    app.handle_settings_activate();
-    assert!(
-        app.client.lock().unwrap().config.stay_alive,
-        "re-enabling Stay alive on exit should restore detach-on-q in the same stay-alive session"
-    );
-    assert!(
-        !app.try_quit(),
-        "re-enabling Stay alive on exit should restore detach-on-q in the same stay-alive session"
-    );
-
-    use std::io::Read;
-    relay_end.set_nonblocking(true).unwrap();
-    let mut buf = [0u8; 32];
-    let n = relay_end.take(32).read(&mut buf).unwrap_or(0);
-    assert_eq!(&buf[..n], b"DETACH\n");
 }
 
 #[test]

@@ -206,31 +206,6 @@ fn status_bar_hides_mute_indicator_when_not_muted() {
 }
 
 #[test]
-fn status_bar_stay_alive_heart_uses_row_background_not_pill_background() {
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-    app.set_queue_scope(QueueScope::Remote);
-    app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
-    let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-    app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
-    app.use_nerd_fonts = false;
-
-    let term = render_app_to_terminal(&mut app, 80, 24);
-    let buf = term.backend().buffer();
-    let last_y = buf.area().height - 1;
-    let heart_x = (0..buf.area().width)
-        .find(|&x| buf[(x, last_y)].symbol() == "\u{2665}")
-        .unwrap();
-
-    assert_eq!(
-        buf[(heart_x, last_y)].bg,
-        // The status row itself renders on DARK_BG (not the old
-        // transparent BAR_BG) -- see render_status_bar's `bar_style`.
-        palette::DARK_BG,
-        "expected the stay-alive heart to stay on the row background, not a pill background"
-    );
-}
-
-#[test]
 fn status_bar_has_no_session_or_daemon_label_when_remote_slot_is_off() {
     let mut app = make_app_stub();
 
@@ -315,25 +290,6 @@ fn status_bar_shows_unsaved_marker_on_any_tab_when_queue_is_dirty() {
             last_line.contains("UNSAVED"),
             "expected an UNSAVED marker regardless of the active tab when the queue is dirty:\n{last_line}"
         );
-}
-
-#[test]
-fn status_bar_right_unsaved_does_not_touch_left_segment_when_space_is_tight() {
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-    app.mute_on = false;
-    app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
-    app.set_queue_scope(QueueScope::Remote);
-    let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-    app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
-    app.queue_dirty = true;
-
-    let rendered = render_app_to_string(&mut app, 39, 24);
-    let last_line = rendered.lines().last().unwrap();
-
-    assert!(
-        !last_line.contains("aliveUNSAVED"),
-        "right-side UNSAVED must not attach to the left status cluster:\n{last_line}"
-    );
 }
 
 #[test]

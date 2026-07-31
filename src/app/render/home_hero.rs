@@ -282,12 +282,12 @@ impl App {
                 width: block_area.width.saturating_sub(4),
                 height: block_area.height.saturating_sub(2),
             };
-            let overview_text: String = layout.overview_lines.join("\n");
-            f.render_widget(
-                Paragraph::new(Span::styled(overview_text, Style::default().fg(ov_color)))
-                    .wrap(ratatui::widgets::Wrap { trim: false }),
-                inner,
-            );
+            let overview_text: Vec<Line> = layout
+                .overview_lines
+                .iter()
+                .map(|line| Line::from(Span::styled(line.clone(), Style::default().fg(ov_color))))
+                .collect();
+            f.render_widget(Paragraph::new(overview_text), inner);
         }
     }
 }

@@ -200,7 +200,7 @@ impl App {
                 };
                 match self.try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
-                        self.switch_to_library_route(&name, remote, remote_rx)
+                        self.switch_to_library_route(&name, remote, remote_rx, endpoint.is_local())
                     }
                     Err(message) => self.flash_status_high(message),
                 }
@@ -251,8 +251,14 @@ impl App {
         sess: &mbv_core::api::SessionInfo,
         remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
+        is_local: bool,
     ) {
         self.stop_visualizer_worker();
+        // `is_local_daemon` must track the *current* player target, not
+        // just the app's launch-time attachment, or the visualizer gate
+        // (which reads it directly) keeps capturing this machine's system
+        // audio after swapping to a genuinely different remote target.
+        self.is_local_daemon = is_local;
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
@@ -337,8 +343,14 @@ impl App {
         library_name: &str,
         remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
+        is_local: bool,
     ) {
         self.stop_visualizer_worker();
+        // See the matching comment in `switch_to_direct_remote`: this must
+        // reflect the route just connected to, not the app's original
+        // attachment, so the visualizer gate doesn't lie after routing away
+        // from (or back to) the local daemon.
+        self.is_local_daemon = is_local;
         let previous_route = self.active_route.clone();
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
@@ -418,6 +430,12 @@ impl App {
         // remote-to-remote swap sites (#233). No-op if `self.player` is
         // already local.
         self.player.disconnect_remote();
+        let mut status = status.to_string();
+        // Populated only when the local-daemon reconnect branch below
+        // succeeds, so the tail can restore `remote_player_tab` / queue
+        // scope from the reconnected route instead of the plain-local
+        // defaults.
+        let mut reconnected_local_daemon = None;
         if let Some(suspended) = self.suspended_local.take() {
             self.player = suspended.player;
             self.player_rx = suspended.player_rx;
@@ -436,8 +454,62 @@ impl App {
                     self.player.disconnected_flag(),
                 );
             }
+        } else if self.home_is_local_daemon {
+            // This app's baseline was never a genuinely local in-process
+            // player -- it was an `App::new_remote` thin client attached to
+            // the local daemon (`home_is_local_daemon`), so nothing was ever
+            // suspended above. Reconnect to the local daemon directly so
+            // "restore local mode" actually lands back on this app's real
+            // baseline instead of leaving the player disconnected.
+            match self.try_daemon_route_connect(
+                &mbv_core::remote_player::DaemonEndpoint::Local,
+                "local daemon",
+            ) {
+                Ok((remote, remote_rx)) => {
+                    let initial_items = remote.items.lock().unwrap().clone();
+                    let has_initial_items = !initial_items.is_empty();
+                    let initial_cursor = remote.status.lock().unwrap().current_idx;
+                    let always_play_next = self.client.lock().unwrap().config.always_play_next;
+                    // Cloned before `remote` is moved into `PlayerProxy::remote`
+                    // below, mirroring `switch_to_library_route`'s #175 MPRIS
+                    // rebind.
+                    let mpris_remote = remote.clone();
+                    self.player = PlayerProxy::remote(remote, always_play_next);
+                    self.player_rx = remote_rx;
+                    if let Some(handle) = &self.mpris {
+                        let disconnected = mpris_remote.disconnected_flag();
+                        crate::mpris::rebind(
+                            handle,
+                            mpris_remote.status.clone(),
+                            move |cmd| {
+                                mpris_remote.send_command(cmd);
+                            },
+                            Some(disconnected),
+                        );
+                    }
+                    self.is_local_daemon = true;
+                    reconnected_local_daemon =
+                        Some((initial_items, initial_cursor, has_initial_items));
+                }
+                Err(message) => {
+                    status = format!("{status}; {message}");
+                }
+            }
         }
-        self.remote_player_tab = None;
+        match reconnected_local_daemon {
+            Some((initial_items, initial_cursor, has_initial_items)) => {
+                self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
+                if has_initial_items {
+                    self.set_queue_scope(QueueScope::Remote);
+                } else {
+                    self.set_queue_scope(QueueScope::Local);
+                }
+            }
+            None => {
+                self.remote_player_tab = None;
+                self.set_queue_scope(QueueScope::Local);
+            }
+        }
         self.connected_session_id = None;
         self.connected_session_state = None;
         self.direct_remote_connected = false;
@@ -447,8 +519,7 @@ impl App {
         self.remote_pos_s = 0;
         self.next_up_item = None;
         self.skip_intro_end_ticks = None;
-        self.set_queue_scope(QueueScope::Local);
-        self.flash_status_high(status.to_string());
+        self.flash_status_high(status);
     }
 
     /// Applies the route resolved by `resolve_route_for_play` before a
@@ -472,7 +543,7 @@ impl App {
             (Some((name, endpoint)), was_routed) => {
                 match self.try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
-                        self.switch_to_library_route(&name, remote, remote_rx);
+                        self.switch_to_library_route(&name, remote, remote_rx, endpoint.is_local());
                     }
                     Err(message) => {
                         log::warn!(
@@ -519,7 +590,7 @@ impl App {
                 let auth_token = self.client.lock().unwrap().token.clone();
                 match self.connect_direct_endpoint(&endpoint, &auth_token) {
                     Ok((remote, remote_rx)) => {
-                        self.switch_to_direct_remote(sess, remote, remote_rx);
+                        self.switch_to_direct_remote(sess, remote, remote_rx, endpoint.is_local());
                         return;
                     }
                     Err(e) => {

@@ -191,6 +191,9 @@ impl App {
         if self.confirm_modal.is_some() {
             self.render_confirm_modal(f);
         }
+        if self.daemon_lost_modal.is_some() {
+            self.render_daemon_lost_modal(f);
+        }
 
         // One atomic replace, reached only once the full pass above has
         // completed -- `self.layout` never observes a half-updated frame.

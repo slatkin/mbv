@@ -147,7 +147,9 @@ fn renders_home_pills_and_only_selected_section() {
 
     assert!(!out.contains("Taskmaster"));
     assert!(out.contains("King Of America"));
-    assert!(out.contains("Newest metadata overview appears"));
+    assert!(out.contains("Newest metadata overview"));
+    assert!(out.contains("appears in the shared Home"));
+    assert!(out.contains("hero."));
     assert!(out.contains("Either/Or"));
     assert!(!out.contains("NXL Not-E3 Showcase"));
     assert_eq!(layout.main.home.hitmap.len(), 3);

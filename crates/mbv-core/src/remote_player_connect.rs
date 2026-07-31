@@ -338,6 +338,11 @@ fn apply_ctrl_event(
                     DisconnectReason::TakenOverByEmbyRemote => {
                         let _ = event_tx.send(PlayerEvent::EmbyAuthorityTaken(msg));
                     }
+                    // Handled by the reader thread's end-of-loop logic below
+                    // (`is_structured_disconnect`), which sends
+                    // `PlayerEvent::DaemonShutdownAnnounced` once the
+                    // connection actually closes; nothing to do here.
+                    DisconnectReason::DaemonShutdown => {}
                 }
             }
         }
@@ -349,6 +354,7 @@ fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
         DisconnectReason::TakenOverByEmbyRemote => {
             "Emby remote control took over — returned to local mode"
         }
+        DisconnectReason::DaemonShutdown => "the daemon was stopped",
     }
 }
 
@@ -368,6 +374,7 @@ pub(crate) fn connect_endpoint(
     let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
     let disconnected = Arc::new(AtomicBool::new(false));
+    let shutdown_announced = Arc::new(AtomicBool::new(false));
     let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
     let pending_playback = Arc::new(Mutex::new(HashMap::new()));
 
@@ -402,6 +409,7 @@ pub(crate) fn connect_endpoint(
     let queue_source_r = queue_source.clone();
     let pending_playback_r = pending_playback.clone();
     let disconnected_r = disconnected.clone();
+    let shutdown_announced_r = shutdown_announced.clone();
     let event_tx_r = event_tx;
     std::thread::spawn(move || {
         let mut expected_disconnect = false;
@@ -421,6 +429,7 @@ pub(crate) fn connect_endpoint(
                     let is_structured_disconnect = match &ev {
                         CtrlEvent::Disconnected { reason } => match reason {
                             DisconnectReason::TakenOverByEmbyRemote => false,
+                            DisconnectReason::DaemonShutdown => true,
                         },
                         _ => false,
                     };
@@ -451,8 +460,9 @@ pub(crate) fn connect_endpoint(
             });
         } else {
             // An "expected"/structured disconnect (e.g. an Emby Remote
-            // takeover) never sends a Stopped PlayerEvent, so nothing
-            // else clears `status`. Clear it here, at the source, so
+            // takeover, or a deliberate daemon shutdown) never sends a
+            // Stopped PlayerEvent, so nothing else clears `status`.
+            // Clear it here, at the source, so
             // every consumer of `status` (not just MPRIS's separate
             // `disconnected_flag()` check in src/mpris.rs) sees an
             // inactive/no-track player immediately rather than stale
@@ -462,6 +472,11 @@ pub(crate) fn connect_endpoint(
                 s.paused = false;
                 s.clear_current_item_metadata();
             }
+            // `TakenOverByEmbyRemote` never reaches this branch (it does not
+            // close the connection), so this structured disconnect is a
+            // deliberate daemon shutdown.
+            shutdown_announced_r.store(true, Ordering::SeqCst);
+            let _ = event_tx_r.send(PlayerEvent::DaemonShutdownAnnounced);
         }
     });
 
@@ -486,6 +501,7 @@ pub(crate) fn connect_endpoint(
             queue_source,
             cmd_tx,
             disconnected,
+            shutdown_announced,
             ctrl_compatibility,
             control_stream: Arc::new(Mutex::new(Some(disconnect_stream))),
             next_playback_id,

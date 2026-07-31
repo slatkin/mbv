@@ -64,6 +64,10 @@ type CtrlSender = mpsc::Sender<CtrlOutbound>;
 
 enum CtrlOutbound {
     Event(String),
+    /// Writer-thread barrier used during daemon shutdown. The ack is sent
+    /// only after all earlier events have been written and flushed to the
+    /// socket, so process exit cannot discard a queued shutdown notice.
+    Flush(mpsc::Sender<()>),
 }
 
 trait CtrlStream: std::io::Read + Write + Send + Sized + 'static {
@@ -497,6 +501,30 @@ impl CtrlClients {
         }
     }
 
+    /// Wait until every currently connected writer has drained the events
+    /// queued before its barrier. A single deadline bounds the whole client
+    /// set; a broken or non-reading socket must not hold daemon shutdown
+    /// forever.
+    fn flush_writers(&self, timeout: Duration) {
+        let acks: Vec<_> = self
+            .connection
+            .iter()
+            .filter_map(|client| {
+                let (ack_tx, ack_rx) = mpsc::channel();
+                client
+                    .tx
+                    .send(CtrlOutbound::Flush(ack_tx))
+                    .ok()
+                    .map(|_| ack_rx)
+            })
+            .collect();
+        let deadline = Instant::now() + timeout;
+        for ack_rx in acks {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let _ = ack_rx.recv_timeout(remaining);
+        }
+    }
+
     fn take_authority_for_emby_remote(&mut self) {
         self.notify_disconnected_all(DisconnectReason::TakenOverByEmbyRemote);
         self.authority = AuthorityHolder::EmbyRemote;
@@ -552,6 +580,10 @@ fn spawn_ctrl_client<S>(
                     if writeln!(w, "{line}").is_err() {
                         break;
                     }
+                }
+                CtrlOutbound::Flush(ack) => {
+                    let _ = w.flush();
+                    let _ = ack.send(());
                 }
             }
         }

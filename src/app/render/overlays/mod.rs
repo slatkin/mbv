@@ -1,6 +1,7 @@
 mod backdrop;
 mod confirm_modal;
 mod context_menu;
+mod daemon_lost_modal;
 mod help;
 mod library_routes;
 mod multiselect;

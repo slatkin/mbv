@@ -80,6 +80,8 @@ impl App {
             last_esc_press: None,
             last_click_pos: (u16::MAX, u16::MAX),
             confirm_modal: None,
+            daemon_lost_modal: None,
+            pending_exit_message: None,
             pending_delete_idx: None,
             pending_queue_removal: None,
             queue_undo_stack: Vec::new(),
@@ -185,9 +187,9 @@ impl App {
             pending_image_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,
             queue_scope: init.initial_queue_scope,
-            stay_alive_ctrl: init.stay_alive_ctrl,
-            attached: true,
             launched_as_remote: false,
+            is_local_daemon: false,
+            home_is_local_daemon: false,
         }
     }
 
@@ -295,7 +297,6 @@ impl App {
             notif_action_rx,
             search_tx,
             search_rx,
-            stay_alive_ctrl: super::stay_alive::StayAliveCtrl::from_env(),
         });
         app.mpris = Some(mpris_handle);
         app.try_auto_reconnect();
@@ -431,10 +432,11 @@ impl App {
             notif_action_rx,
             search_tx,
             search_rx,
-            stay_alive_ctrl: None,
         });
         app.mpris = Some(mpris_handle);
         app.launched_as_remote = true;
+        app.is_local_daemon = is_local_daemon;
+        app.home_is_local_daemon = is_local_daemon;
         if is_local_daemon {
             let bootstrap = local_daemon_bootstrap.unwrap();
             app.queue_source = bootstrap.queue_source;
@@ -466,11 +468,7 @@ impl App {
     /// Query the terminal for its image protocol (sixel/kitty/iterm2/etc,
     /// via `Picker::from_query_stdio`, falling back to halfblocks), then
     /// apply `self.image_protocol`'s override if it names one of the known
-    /// protocols. Shared by the startup init in `run` and the reattach
-    /// -refresh handler (T5) below, which both need to (re)detect the
-    /// attached terminal's capabilities the same way -- at startup, and
-    /// again on every stay-alive reattach since a different terminal may
-    /// now be attached.
+    /// protocols. Called once at startup by `run`.
     pub(super) fn build_image_picker(&self) -> Picker {
         use ratatui_image::picker::ProtocolType;
         let protocol_override = self.image_protocol.clone();

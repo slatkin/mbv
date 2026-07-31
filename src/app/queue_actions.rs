@@ -238,6 +238,12 @@ impl App {
                     self.replace_direct_remote_queue(Vec::new(), 0);
                 } else if self.queue_scope_is_playback(scope) {
                     self.player.stop();
+                    if self.is_local_daemon {
+                        self.player.send_command(PlayerCommand::ReplaceQueue {
+                            items: Vec::new(),
+                            start_idx: 0,
+                        });
+                    }
                 }
                 if scope != QueueScope::Remote {
                     let queue = self.queue_for_scope_mut(scope);
@@ -333,6 +339,20 @@ impl App {
         if !state.items.is_empty() {
             crate::config::save_queue_state(&state);
         }
+    }
+
+    /// Wraps `restore_queue_state` with the guard startup needs: a local-
+    /// daemon `App::new_remote` instance already had its queue populated
+    /// during construction (`bootstrap_local_daemon_queue`, live-adopted
+    /// from the daemon or loaded from disk for a cold daemon), so reading
+    /// `queue_state.json` again here would clobber a live daemon queue with
+    /// a stale disk snapshot on every new attach, and is simply redundant
+    /// in the cold case.
+    pub(super) fn maybe_restore_queue_state(&mut self) {
+        if self.is_local_daemon {
+            return;
+        }
+        self.restore_queue_state();
     }
 
     /// Restore the queue from disk immediately and synchronously — the file

@@ -148,6 +148,10 @@ pub(super) struct ContextEntry {
 /// `docs/adr/0002-centralized-input-handling.md`.
 pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
+        name: "daemon_lost_modal",
+        handler: App::handle_key_daemon_lost_modal,
+    },
+    ContextEntry {
         name: "confirm_modal",
         handler: App::handle_key_confirm_modal,
     },
