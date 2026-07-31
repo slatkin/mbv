@@ -264,7 +264,7 @@ impl App {
         let (continue_items, all_views, user_views) = {
             let client = self.client.lock().unwrap();
             (
-                client.get_continue_watching(10).unwrap_or_default(),
+                client.get_continue_watching(20).unwrap_or_default(),
                 client.get_views()?,
                 client.get_user_views().unwrap_or_default(),
             )
@@ -293,9 +293,9 @@ impl App {
         }) {
             let title = v.name.clone();
             let items = if v.collection_type == "tvshows" {
-                client.get_latest_episodes(&v.id, 15).unwrap_or_default()
+                client.get_latest_episodes(&v.id, 30).unwrap_or_default()
             } else {
-                client.get_latest(&v.id, 15).unwrap_or_default()
+                client.get_latest(&v.id, 30).unwrap_or_default()
             };
             let cursor = old_cursors
                 .get(&v.id)
