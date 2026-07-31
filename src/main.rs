@@ -186,7 +186,9 @@ fn print_usage() {
     println!("  -d                         Stay alive: ensure a local daemon owns playback and");
     println!("                             attach to it as a client, so playback continues after");
     println!("                             this terminal closes. Any number of terminals may");
-    println!("                             attach at once. No-op if `stay_alive = true` is already");
+    println!(
+        "                             attach at once. No-op if `stay_alive = true` is already"
+    );
     println!("                             configured.");
     println!("  -q                        Stop the running Player owner (bare mbv, or the local");
     println!("                             daemon in stay-alive mode).");
@@ -249,7 +251,9 @@ fn main() {
                 }
             }
             None => {
-                eprintln!("mbv: no running instance found; if one just started, try again in a moment");
+                eprintln!(
+                    "mbv: no running instance found; if one just started, try again in a moment"
+                );
                 std::process::exit(1);
             }
         }
@@ -336,7 +340,6 @@ fn main() {
             ) {
                 Ok((remote, player_rx)) => {
                     run_remote_app(client, remote, player_rx, true);
-                    return;
                 }
                 Err(e) => {
                     eprintln!("mbv: failed to attach to local daemon: {e}");

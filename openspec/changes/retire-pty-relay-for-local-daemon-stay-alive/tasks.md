@@ -212,8 +212,8 @@ is deleted only afterwards (group 8), so there is a working stay-alive path at e
 
 ## 11. Final verification
 
-- [ ] 11.1 `cargo fmt --all -- --check` and `cargo clippy` clean.
-- [ ] 11.2 Run the test modules touched by this change (`single_instance`, `app::tests_daemon_bootstrap`,
+- [x] 11.1 `cargo fmt --all -- --check` and `cargo clippy` clean.
+- [x] 11.2 Run the test modules touched by this change (`single_instance`, `app::tests_daemon_bootstrap`,
       `mbv_core::daemon_tests`, `mbv_core::remote_player_tests`) rather than the whole suite.
 - [ ] 11.3 Walk the manual matrix once: bare mode unchanged (one process, quit stops playback,
       second launch refused with the new message); stay-alive with two clients attached and each
