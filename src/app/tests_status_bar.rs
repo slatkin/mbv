@@ -212,6 +212,7 @@ fn status_bar_stay_alive_heart_uses_row_background_not_pill_background() {
     app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
     let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
     app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+    app.is_local_daemon = true;
     app.use_nerd_fonts = false;
 
     let term = render_app_to_terminal(&mut app, 80, 24);
@@ -325,6 +326,7 @@ fn status_bar_right_unsaved_does_not_touch_left_segment_when_space_is_tight() {
     app.set_queue_scope(QueueScope::Remote);
     let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
     app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+    app.is_local_daemon = true;
     app.queue_dirty = true;
 
     let rendered = render_app_to_string(&mut app, 39, 24);

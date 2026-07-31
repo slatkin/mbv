@@ -195,13 +195,16 @@ impl App {
         // `restore_local_mode` and `connect_to_session` never let both be
         // set at once). Gated on `auto_reconnect` so the file is
         // never written (or read) at all when the feature is off. Also
-        // gated on `!launched_as_remote`: `App::new_remote` instances never
-        // populate `active_route`/`connected_session_state` (those are set
-        // only by `App::new`'s runtime library-route-switch / session-attach
-        // mechanisms), so running this block for them would always compute
-        // `None` and wipe out a real record saved by a different `App::new`
-        // session (per ADR 0010, `new_remote`'s path is unaffected by #236).
-        if self.launched_as_remote {
+        // gated on `launched_as_remote && !is_local_daemon`: `App::new_remote`
+        // instances never populate `active_route`/`connected_session_state`
+        // (those are set only by `App::new`'s runtime library-route-switch /
+        // session-attach mechanisms), so running this block for a genuinely
+        // remote daemon would always compute `None` and wipe out a real
+        // record saved by a different `App::new` session (per ADR 0010,
+        // `new_remote`'s path is unaffected by #236). A same-host local
+        // daemon is meant to behave exactly like a local session (see the
+        // `new_remote` doc comment), so it must not be skipped here.
+        if self.launched_as_remote && !self.is_local_daemon {
             log::info!(target: "auto_reconnect", "teardown persistence skipped: launched as remote");
         } else if !self.client.lock().unwrap().config.auto_reconnect {
             log::info!(target: "auto_reconnect", "teardown persistence skipped: auto-reconnect disabled");

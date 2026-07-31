@@ -270,7 +270,7 @@ impl App {
             Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
         self.home_loading = false;
-        self.restore_queue_state();
+        self.maybe_restore_queue_state();
         terminal.draw(|f| self.render(f))?;
 
         // Installed unconditionally, even when this process is a stay-alive

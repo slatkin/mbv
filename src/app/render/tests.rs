@@ -81,6 +81,7 @@ fn status_bar_remote_hitbox_tracks_visible_pill_after_alive_marker() {
     let mut app = make_app_stub();
     let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
     app.stay_alive_ctrl = Some(crate::app::stay_alive::StayAliveCtrl::for_test(app_end));
+    app.is_local_daemon = true;
 
     let backend = TestBackend::new(80, 1);
     let mut term = Terminal::new(backend).unwrap();

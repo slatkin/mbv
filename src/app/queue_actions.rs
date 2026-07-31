@@ -335,6 +335,20 @@ impl App {
         }
     }
 
+    /// Wraps `restore_queue_state` with the guard startup needs: a local-
+    /// daemon `App::new_remote` instance already had its queue populated
+    /// during construction (`bootstrap_local_daemon_queue`, live-adopted
+    /// from the daemon or loaded from disk for a cold daemon), so reading
+    /// `queue_state.json` again here would clobber a live daemon queue with
+    /// a stale disk snapshot on every new attach, and is simply redundant
+    /// in the cold case.
+    pub(super) fn maybe_restore_queue_state(&mut self) {
+        if self.is_local_daemon {
+            return;
+        }
+        self.restore_queue_state();
+    }
+
     /// Restore the queue from disk immediately and synchronously — the file
     /// already holds full `MediaItem`s, so this is a local read, no network
     /// round-trip, no in-flight window where the queue could be superseded

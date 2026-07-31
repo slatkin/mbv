@@ -55,6 +55,14 @@ pub struct App {
     /// entirely rather than compute (and save) a bogus `None` record that
     /// would wipe out a real record saved by a different `App::new` session.
     pub(super) launched_as_remote: bool,
+    /// `true` only for `App::new_remote` instances whose `is_local_daemon`
+    /// constructor argument was `true` -- a thin client attached to the
+    /// same-machine local daemon (`DaemonEndpoint::Local`), as opposed to a
+    /// genuinely remote/network daemon. Retained from that constructor
+    /// argument (which used to be consumed during construction and
+    /// discarded) so later code can tell "my Player owner is on this
+    /// machine" from "my Player owner is elsewhere".
+    pub(super) is_local_daemon: bool,
     pub(super) hidden_libraries: Vec<String>,
     pub(super) hidden_latest: Vec<String>,
     /// `Config.library_routes` at startup (#256). Values are resolved

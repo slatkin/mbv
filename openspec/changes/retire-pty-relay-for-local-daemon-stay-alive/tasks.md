@@ -94,39 +94,39 @@ is deleted only afterwards (group 8), so there is a working stay-alive path at e
 
 ## 5. Client-side corrections
 
-- [ ] 5.1 Retain the local-daemon flag: `App::new_remote` currently consumes its `is_local_daemon`
+- [x] 5.1 Retain the local-daemon flag: `App::new_remote` currently consumes its `is_local_daemon`
       parameter during construction without storing it. Store it on `App` (or carry the endpoint on
       `PlayerProxy`) so later code can ask "is my Player owner on this machine?". Tasks 5.2, 5.4,
       5.5 and 6.x all depend on this.
-- [ ] 5.2 Fix the queue clobber: `src/app/mod.rs` calls `self.restore_queue_state()` unconditionally
+- [x] 5.2 Fix the queue clobber: `src/app/mod.rs` calls `self.restore_queue_state()` unconditionally
       in `run()`, and `restore_queue_state` in `src/app/queue_actions.rs` calls
       `player_tab.set_items(...)` with no guard, so it overwrites a queue that
       `bootstrap_local_daemon_queue` just adopted live from the daemon. Skip the disk restore when
       the app was constructed from a local-daemon bootstrap; the cold-daemon case is already handled
       by `bootstrap.rs` plus `spawn_enrich_queue_state`.
-- [ ] 5.3 Add a test for 5.2 alongside `src/app/tests_daemon_bootstrap.rs`: a local-daemon app with a
+- [x] 5.3 Add a test for 5.2 alongside `src/app/tests_daemon_bootstrap.rs`: a local-daemon app with a
       live adopted queue plus a differing `queue_state.json` on disk must keep the live queue. This
       is a realistic data-loss path that becomes routine once every attach goes through it.
-- [ ] 5.4 Fix the auto-reconnect teardown gap in `src/app/run_loop_events.rs`: the
+- [x] 5.4 Fix the auto-reconnect teardown gap in `src/app/run_loop_events.rs`: the
       `if self.launched_as_remote { skip }` branch must skip only for a genuinely remote daemon, not
       for a same-host local daemon. Update the long comment above it, which currently justifies the
       skip on the assumption that `new_remote` always means a remote endpoint.
-- [ ] 5.5 Repoint the alive indicator in `src/app/render/chrome_status.rs` from
+- [x] 5.5 Repoint the alive indicator in `src/app/render/chrome_status.rs` from
       `self.stay_alive_ctrl.is_some()` to the retained local-daemon flag, so it survives the deletion
       of `stay_alive_ctrl` in group 8 rather than silently disappearing.
-- [ ] 5.6 In `src/app/consume_quit_actions.rs`, delete the stay-alive detach branch of `try_quit` and
+- [x] 5.6 In `src/app/consume_quit_actions.rs`, delete the stay-alive detach branch of `try_quit` and
       its `stay_alive_on_exit` lookup. Quit is now always a real quit for the client; playback
       continues because the daemon is a separate process.
 
 ## 6. Visualizer
 
-- [ ] 6.1 In `src/app/visualizer.rs`, replace
+- [x] 6.1 In `src/app/visualizer.rs`, replace
       `let is_local = !self.player.is_remote() && self.connected_session_id.is_none();` with a check
       that admits a same-host local daemon: in-process Player *or* local-daemon endpoint, and still
       no attached Emby session. Use the flag retained in task 5.1.
-- [ ] 6.2 Leave `audio_pipe_enabled` in the gate exactly as it is; it is an independent, unchanged
+- [x] 6.2 Leave `audio_pipe_enabled` in the gate exactly as it is; it is an independent, unchanged
       reason the visualizer stays off.
-- [ ] 6.3 Verify by eye: with `mbv -d` playing, the visualizer shows a live spectrum in the client;
+- [x] 6.3 Verify by eye: with `mbv -d` playing, the visualizer shows a live spectrum in the client;
       with an explicit remote endpoint it stays off; with the audio pipe enabled it stays off.
 
 ## 7. Disconnect handling

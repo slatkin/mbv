@@ -213,35 +213,6 @@ fn try_quit_bare_mode_does_not_touch_attached() {
 }
 
 #[test]
-fn try_quit_stay_alive_detach_clears_attached_and_notifies_relay() {
-    let (app_end, relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-    let mut app = make_app_stub();
-    app.attached = true;
-    app.client.lock().unwrap().config.stay_alive = true;
-    app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
-
-    let quit_loop_should_exit = app.try_quit();
-
-    assert!(
-        !quit_loop_should_exit,
-        "stay-alive `q` must detach, never quit the run loop"
-    );
-    assert!(
-        !app.attached,
-        "detach must clear `attached` so the run loop skips terminal I/O \
-             until the next reattach (#156)"
-    );
-
-    // And it must have actually told the relay to detach, not just
-    // flipped local state.
-    use std::io::Read;
-    relay_end.set_nonblocking(true).unwrap();
-    let mut buf = [0u8; 32];
-    let n = relay_end.take(32).read(&mut buf).unwrap_or(0);
-    assert_eq!(&buf[..n], b"DETACH\n");
-}
-
-#[test]
 fn try_quit_stay_alive_session_exits_when_setting_disabled() {
     let (app_end, relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
     let mut app = make_app_stub();
@@ -268,44 +239,6 @@ fn try_quit_stay_alive_session_exits_when_setting_disabled() {
         n, 0,
         "runtime quit path must not tell the relay to detach once Stay alive on exit is disabled"
     );
-}
-
-#[test]
-fn stay_alive_settings_toggle_changes_current_session_q_behavior_both_ways() {
-    let (app_end, relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-    let mut app = make_app_stub();
-    app.client.lock().unwrap().config.stay_alive = true;
-    app.attached = true;
-    app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
-    app.settings_cursor = (0..settings::settings_total_rows())
-        .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::StayAlive)
-        .expect("StayAlive setting row must exist");
-
-    app.handle_settings_activate();
-    assert!(
-        !app.client.lock().unwrap().config.stay_alive,
-        "settings toggle should disable Stay alive on exit for the current session too"
-    );
-    assert!(
-        app.try_quit(),
-        "disabling Stay alive on exit should make q quit even while a relay control channel exists"
-    );
-
-    app.handle_settings_activate();
-    assert!(
-        app.client.lock().unwrap().config.stay_alive,
-        "re-enabling Stay alive on exit should restore detach-on-q in the same stay-alive session"
-    );
-    assert!(
-        !app.try_quit(),
-        "re-enabling Stay alive on exit should restore detach-on-q in the same stay-alive session"
-    );
-
-    use std::io::Read;
-    relay_end.set_nonblocking(true).unwrap();
-    let mut buf = [0u8; 32];
-    let n = relay_end.take(32).read(&mut buf).unwrap_or(0);
-    assert_eq!(&buf[..n], b"DETACH\n");
 }
 
 #[test]

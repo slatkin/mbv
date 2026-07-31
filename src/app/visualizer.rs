@@ -15,7 +15,12 @@ impl App {
             }
         }
 
-        let is_local = !self.player.is_remote() && self.connected_session_id.is_none();
+        // CAVA captures system audio, not mpv directly, so it works equally
+        // whether playback is in-process or hosted by a same-host local
+        // daemon -- only a genuinely remote daemon or an attached Emby
+        // session make this machine's audio the wrong thing to capture.
+        let is_local = (!self.player.is_remote() || self.is_local_daemon)
+            && self.connected_session_id.is_none();
         let audio_pipe_enabled = self.client.lock().unwrap().config.audio_pipe_enabled;
         let active = self.player.status.lock().unwrap().active;
 

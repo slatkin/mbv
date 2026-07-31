@@ -299,6 +299,7 @@ pub(crate) fn make_app_stub() -> App {
         queue_scope: QueueScope::Local,
         stay_alive_ctrl: None,
         attached: true,
+        is_local_daemon: false,
     }
 }
 
