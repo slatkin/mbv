@@ -55,7 +55,6 @@ mod session_command_actions;
 mod session_connect;
 mod settings;
 mod shuffle_folder_actions;
-pub(crate) mod stay_alive;
 mod types_browse;
 mod types_confirm;
 mod types_context_menu;
@@ -277,80 +276,10 @@ impl App {
         self.maybe_restore_queue_state();
         terminal.draw(|f| self.render(f))?;
 
-        // Installed unconditionally, even when this process is a stay-alive
-        // inferior under a relay (`self.stay_alive_ctrl.is_some()`). That is
-        // intentional, not incidental: the relay is the SIGHUP *firewall*
-        // for the launching shell (it ignores SIGHUP and setsid()s so
-        // closing the terminal that ran `mbv -a` can't kill it), but it is
-        // NOT a firewall against the relay process itself dying. The relay
-        // keeps its own extra fd on `pty.slave` open for its whole
-        // lifetime specifically so the pty master never EOFs during normal
-        // attach/detach/reattach cycling (`relay.rs::start_inferior`) --
-        // under that normal operation this inferior's tty fds (0/1/2, its
-        // controlling terminal per `become_pty_slave`'s setsid+TIOCSCTTY)
-        // never see a real HUP condition, so this watchdog is a no-op.
-        // But if the relay process itself crashes, every fd it held onto
-        // the pty master closes with it, and the kernel delivers a real
-        // SIGHUP to this inferior as the pty's session leader -- at that
-        // point nothing else is left to supervise the player, so falling
-        // back to this watchdog's normal "terminal is gone, stop and exit"
-        // behavior is the correct fail-safe rather than something to gate
-        // off for stay-alive.
         install_signal_handlers();
         let quit_timeout =
             Duration::from_secs(self.client.lock().unwrap().config.quit_timeout_secs);
         start_quit_watchdog(self.player.quit_handle(), quit_timeout);
-
-        // Stay-alive tray (T7, issue #156): the minimal head that makes an
-        // alive session attended. Driven over the existing in-process
-        // Player mpsc, not a ctrl socket -- ADR 0004's daemon-owned tray
-        // (mbvd's own tray, `mbv_core::daemon::run_with_options`) is a
-        // separate surface entirely. Only present when running as the
-        // inferior under a relay; persists across detach/reattach since it
-        // lives in the app, not the terminal-client. Kept alive for the
-        // whole function (dropped only when `run` returns, i.e. on real quit).
-        let _tray_handle = if self.stay_alive_ctrl.is_some() {
-            let show_systray_icon = self.client.lock().unwrap().config.show_systray_icon;
-            // `local_cmd_tx()` is `Some` here because a stay-alive session
-            // (`stay_alive_ctrl.is_some()`) is only ever constructed via
-            // `App::new`, which always builds `self.player` as
-            // `PlayerProxy::local`; the event loop that can later swap it
-            // to `PlayerProxy::remote` (`switch_to_direct_remote`,
-            // triggered by connecting to another session) hasn't started
-            // yet at this point in `run`. Capturing the `Arc` now, rather
-            // than reading `self.player` from inside the tray later, keeps
-            // tray transport controls targeting the in-process `Player`
-            // even if the user connects to a remote session afterwards --
-            // see `PlayerProxy::local_cmd_tx` for why that's safe.
-            if show_systray_icon {
-                if let Some(cmd_tx) = self.player.local_cmd_tx() {
-                    let (shutdown_tx, shutdown_rx) = std::sync::mpsc::sync_channel::<()>(1);
-                    let handle =
-                        crate::tray::spawn(shutdown_tx, self.player.status.clone(), cmd_tx);
-                    // Tray Quit -> the same graceful-quit path as `mbv -q` /
-                    // SIGTERM (T3): self-SIGTERM reuses all of QUIT_REQUESTED's
-                    // existing save/stop/exit plumbing instead of duplicating it.
-                    std::thread::spawn(move || {
-                        if shutdown_rx.recv().is_ok() {
-                            unsafe {
-                                libc::raise(libc::SIGTERM);
-                            }
-                        }
-                    });
-                    handle
-                } else {
-                    log::warn!(
-                        target: "tray",
-                        "stay-alive session has no local player command channel; skipping tray"
-                    );
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            None
-        };
 
         let mut last_render = Instant::now() - Duration::from_secs(2);
 
@@ -490,14 +419,10 @@ impl App {
                     }
                     // Terminal resize (SIGWINCH via pty winsize, or a real
                     // terminal resize in bare mode): reflow + re-emit images
-                    // only. Distinct from the `client attached` handler
-                    // below — a resize must not re-detect capabilities or
-                    // re-capture the mouse, and (unlike attach) only fires
-                    // when the size actually changed. Also fixes the
-                    // standalone (non-stay-alive) resize-corruption bug:
-                    // ratatui's diffing alone left stale content on-screen
-                    // after a size change, since raw image escape sequences
-                    // aren't tracked in its buffer.
+                    // only. Fixes a resize-corruption bug: ratatui's diffing
+                    // alone left stale content on-screen after a size
+                    // change, since raw image escape sequences aren't
+                    // tracked in its buffer.
                     Event::Resize(_, _) => {
                         self.force_clear = true;
                         self.card_image_states.clear();
@@ -507,33 +432,6 @@ impl App {
                     Event::FocusLost => self.note_focus_lost(),
                     _ => {}
                 }
-            }
-
-            // `client attached` (T5 reattach-refresh, ADR 0005): the
-            // superset of a resize, fired on EVERY attach regardless of
-            // size — a stay-alive reattach in a different terminal (e.g.
-            // kitty -> foot) must show correct art with no manual resize.
-            // Re-run capability detection (DA1/XTGETTCAP round-trips
-            // through the pty to whatever real terminal is now attached),
-            // rebuild the image picker, re-capture the mouse (capture is
-            // otherwise only ever set once, at `init_terminal`), and force
-            // a full repaint with every visible image re-emitted.
-            if stay_alive::StayAliveCtrl::take_attach_pending() {
-                had_events = true;
-                self.attached = true;
-                // build_image_picker runs Picker::from_query_stdio() on the run-loop thread
-                // and relies on being the sole stdin consumer at this moment; the kitty→foot
-                // reattach case in the manual test matrix exercises this.
-                self.image_picker = Some(self.build_image_picker());
-                self.card_image_states.clear();
-                self.card_image_loading.clear();
-                let _ = crossterm::execute!(
-                    terminal.backend_mut(),
-                    crossterm::event::EnableMouseCapture,
-                    crossterm::event::EnableFocusChange
-                );
-                self.force_clear = true;
-                log::info!(target: "stay_alive", "reattach-refresh: capabilities re-detected, images invalidated");
             }
 
             self.sync_volume_from_player();

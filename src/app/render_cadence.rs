@@ -24,20 +24,14 @@ impl App {
         }
     }
 
-    /// Whether the run loop should touch the terminal this tick. `false`
-    /// only while a stay-alive session is detached (`self.attached ==
-    /// false`) — see the `attached` field doc for why `Terminal::clear()`
-    /// must never be called in that state (issue #156). Skipping renders
-    /// while detached loses nothing: the next attach's reattach-refresh
-    /// (`take_attach_pending()`) forces `force_clear` and a full repaint.
+    /// Whether the run loop should touch the terminal this tick.
     pub(super) fn wants_terminal_render(
         &self,
         had_events: bool,
         last_render: Instant,
         render_interval: Duration,
     ) -> bool {
-        self.attached
-            && (had_events || self.force_clear || last_render.elapsed() >= render_interval)
+        had_events || self.force_clear || last_render.elapsed() >= render_interval
     }
 
     /// How often the run loop should repaint while otherwise idle (no key

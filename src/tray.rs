@@ -160,6 +160,10 @@ impl ksni::Tray for MbvTray {
 /// must stay on the stay-alive side of the architecture and must not become
 /// a ctrl-socket client. `shutdown_tx` keeps the existing Phase 1 real-quit
 /// behavior (equivalent to `mbv -q` / graceful shutdown).
+///
+/// Temporarily unused between this change's group 8 (relay deletion) and
+/// group 9, which wires this into the local daemon's own tray hook.
+#[allow(dead_code)]
 pub fn spawn(
     shutdown_tx: SyncSender<()>,
     status: Arc<Mutex<PlayerStatus>>,

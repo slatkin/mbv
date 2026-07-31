@@ -3,9 +3,7 @@ mod config;
 mod local_daemon;
 mod login;
 mod mpris;
-mod relay;
 mod single_instance;
-mod terminal_client;
 mod tray;
 
 use app::App;
@@ -180,18 +178,6 @@ extern "C" fn signal_handler(sig: libc::c_int) {
     }
 }
 
-/// Parses the hidden `--__relay <sock> -- <inferior argv...>` self-spawn
-/// form. Returns `None` if `--__relay` isn't present (the ordinary launch
-/// path). This must be checked before any other CLI parsing since its argv
-/// shape doesn't match the rest of mbv's flags.
-fn parse_relay_args(args: &[String]) -> Option<(String, Vec<String>)> {
-    let pos = args.iter().position(|a| a == "--__relay")?;
-    let socket_path = args.get(pos + 1)?.clone();
-    let sep = args.iter().position(|a| a == "--")?;
-    let inferior: Vec<String> = args[sep + 1..].to_vec();
-    Some((socket_path, inferior))
-}
-
 fn print_usage() {
     println!("mbv {}", env!("CARGO_PKG_VERSION"));
     println!("Usage: mbv [OPTIONS]");
@@ -222,18 +208,10 @@ fn main() {
         return;
     }
 
-    // Hidden relay self-spawn subcommand (T1, ADR 0005). Mirrors the
-    // retired `--daemon-inner` self-spawn pattern: `mbv` re-execs itself as
-    // `mbv --__relay <sock> -- <inferior argv...>` and never returns.
-    if let Some((socket_path, inferior)) = parse_relay_args(&args) {
-        applog::init(false, Some(state_dir().join("relay.log")));
-        relay::run_relay_main(socket_path, inferior);
-    }
-
     // Hidden local-daemon self-spawn subcommand (T2, design.md decision 1):
     // `mbv --__local-daemon` re-execs itself to run the local daemon in this
-    // process and never returns. Checked early, alongside the relay
-    // self-spawn form, before any other CLI parsing.
+    // process and never returns. Checked early, before any other CLI
+    // parsing.
     if has_flag(&args, "--__local-daemon") {
         local_daemon::run_local_daemon_main();
     }
@@ -463,23 +441,6 @@ mod tests {
             &["--audio-only=false".into(), "--audio".into()],
             "--audio-only"
         ));
-    }
-
-    #[test]
-    fn parse_relay_args_extracts_socket_and_inferior() {
-        let args: Vec<String> = ["--__relay", "/tmp/x.sock", "--", "mbv", "-a"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        let (sock, inferior) = parse_relay_args(&args).unwrap();
-        assert_eq!(sock, "/tmp/x.sock");
-        assert_eq!(inferior, vec!["mbv".to_string(), "-a".to_string()]);
-    }
-
-    #[test]
-    fn parse_relay_args_none_without_flag() {
-        let args: Vec<String> = vec!["-a".into()];
-        assert!(parse_relay_args(&args).is_none());
     }
 
     #[test]

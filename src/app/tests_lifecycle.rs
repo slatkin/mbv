@@ -144,38 +144,11 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
     );
 }
 
-// ── wants_terminal_render (#156: detached stay-alive must not touch
-// the terminal — Terminal::clear() blocks on a cursor-position DSR
-// query nobody answers once the terminal-client has detached) ────────
-
 #[test]
-fn wants_terminal_render_true_when_attached_and_due() {
-    let mut app = make_app_stub();
-    app.attached = true;
+fn wants_terminal_render_true_when_due() {
+    let app = make_app_stub();
     let stale = Instant::now() - Duration::from_secs(10);
     assert!(app.wants_terminal_render(false, stale, Duration::from_secs(1)));
-}
-
-#[test]
-fn wants_terminal_render_false_when_detached_even_with_events_and_force_clear() {
-    let mut app = make_app_stub();
-    app.attached = false;
-    app.force_clear = true;
-    let stale = Instant::now() - Duration::from_secs(10);
-    // had_events, force_clear, and an elapsed render_interval would all
-    // independently demand a render while attached -- none of them may
-    // override `attached == false`, or the run loop calls
-    // Terminal::clear()/draw() with nobody left to answer the pty.
-    assert!(!app.wants_terminal_render(true, stale, Duration::from_secs(1)));
-}
-
-#[test]
-fn wants_terminal_render_false_when_detached_and_idle() {
-    let app = make_app_stub();
-    let mut app = app;
-    app.attached = false;
-    let recent = Instant::now();
-    assert!(!app.wants_terminal_render(false, recent, Duration::from_secs(1)));
 }
 
 // A compact-banner poster fetch (or any list-image prefetch) can easily
@@ -200,16 +173,6 @@ fn render_interval_is_fast_while_a_card_image_fetch_is_in_flight() {
 fn render_interval_is_slow_when_idle_with_no_fetches_in_flight() {
     let app = make_app_stub();
     assert_eq!(app.render_interval(), Duration::from_secs(1));
-}
-
-#[test]
-fn try_quit_bare_mode_does_not_touch_attached() {
-    let mut app = make_app_stub();
-    app.attached = true;
-    // No `stay_alive_ctrl` -> bare mode -> `attached` is irrelevant and
-    // must stay untouched (it's never consulted outside stay-alive).
-    let _ = app.try_quit();
-    assert!(app.attached);
 }
 
 #[test]

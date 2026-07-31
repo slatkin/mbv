@@ -152,20 +152,20 @@ is deleted only afterwards (group 8), so there is a working stay-alive path at e
 
 ## 8. Delete the relay
 
-- [ ] 8.1 Delete `src/relay.rs` and `src/terminal_client.rs`, and remove their `mod` declarations.
-- [ ] 8.2 Delete `src/app/stay_alive.rs`, the `stay_alive_ctrl` fields in `src/app/app_struct.rs`
+- [x] 8.1 Delete `src/relay.rs` and `src/terminal_client.rs`, and remove their `mod` declarations.
+- [x] 8.2 Delete `src/app/stay_alive.rs`, the `stay_alive_ctrl` fields in `src/app/app_struct.rs`
       (both structs) and their initialisers in `src/app/construct.rs`, and the `App::attached` field
       and its handling in `src/app/render_cadence.rs`.
-- [ ] 8.3 Remove the `parse_relay_args` / `--__relay` branch from `src/main.rs`, and the
+- [x] 8.3 Remove the `parse_relay_args` / `--__relay` branch from `src/main.rs`, and the
       `take_attach_pending()` forced-repaint block in `src/app/mod.rs`'s run loop.
-- [ ] 8.4 Remove the stay-alive tray block from `App::run()` in `src/app/mod.rs`, and the long
+- [x] 8.4 Remove the stay-alive tray block from `App::run()` in `src/app/mod.rs`, and the long
       relay-SIGHUP comment above `install_signal_handlers()` there, which describes a process that no
       longer exists.
-- [ ] 8.5 Delete the tests that exercised relay detach behavior: the `StayAliveCtrl::for_test` cases
+- [x] 8.5 Delete the tests that exercised relay detach behavior: the `StayAliveCtrl::for_test` cases
       in `src/app/tests_lifecycle.rs`, `src/app/tests_status_bar.rs`, and `src/app/render/tests.rs`,
       plus the `stay_alive_ctrl: None` initialisers in `src/app/tests.rs`. Delete them rather than
       adapting them; the behavior they cover is gone.
-- [ ] 8.6 Verify: `cargo build` and `cargo clippy` are clean, and `rg -n 'relay|terminal_client|stay_alive_ctrl' src/ crates/`
+- [x] 8.6 Verify: `cargo build` and `cargo clippy` are clean, and `rg -n 'relay|terminal_client|stay_alive_ctrl' src/ crates/`
       returns nothing but incidental prose.
 
 ## 9. Tray moves into the local daemon

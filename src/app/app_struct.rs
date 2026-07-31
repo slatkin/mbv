@@ -3,7 +3,6 @@ use super::layout;
 use super::render;
 use super::resize::{ResizeRegisterTx, ResizeResponseRx};
 use super::search::SearchSubsystem;
-use super::stay_alive;
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_confirm::ConfirmModal;
 use super::types_context_menu::{ContextMenu, LibraryRoutePopup, MultiSelectPopup};
@@ -269,28 +268,6 @@ pub struct App {
     pub(super) image_protocol_enabled: bool,
     pub(super) library_position_state: crate::config::LibraryPositionState,
     pub(super) queue_scope: QueueScope,
-    /// The relay's out-of-band control channel (ADR 0005), present only
-    /// when running as a stay-alive inferior under a relay. `None` in bare
-    /// mode and for `new_remote` (thin client to `mbvd`).
-    pub(super) stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>,
-    /// Whether a terminal-client is currently attached to the pty. Always
-    /// `true` outside stay-alive mode (`stay_alive_ctrl` is `None` there, so
-    /// this field is never consulted). Set `false` by `try_quit`'s detach
-    /// path right after a successful `send_detach()`, and back to `true` by
-    /// the T5 reattach-refresh (`take_attach_pending()`).
-    ///
-    /// Exists because `Terminal::clear()` unconditionally queries the
-    /// cursor position over the pty (crossterm `get_cursor_position()`,
-    /// a blocking DSR round-trip) even for a fullscreen viewport. The
-    /// run loop keeps ticking and taking input while detached (that's the
-    /// point of stay-alive), so without this guard, the very next
-    /// `force_clear` — triggered by any number of ordinary UI actions,
-    /// unrelated to detach — blocks for several seconds with no
-    /// terminal-client left to answer, then errors out and kills the whole
-    /// process: a silent `exit(1)` if idle, or a SIGSEGV if it races a live
-    /// mpv Vulkan render thread during the resulting early-return teardown
-    /// (issue #156).
-    pub(super) attached: bool,
     #[cfg(test)]
     pub(super) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
@@ -324,5 +301,4 @@ pub(super) struct AppInit {
     pub(super) notif_action_rx: mpsc::Receiver<String>,
     pub(super) search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
     pub(super) search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
-    pub(super) stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>,
 }
