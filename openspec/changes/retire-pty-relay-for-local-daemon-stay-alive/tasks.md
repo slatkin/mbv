@@ -187,15 +187,15 @@ is deleted only afterwards (group 8), so there is a working stay-alive path at e
 
 ## 10. Documentation
 
-- [ ] 10.1 Add a supersession header to `docs/adr/0005-owned-pty-relay-for-stay-alive.md` in the
+- [x] 10.1 Add a supersession header to `docs/adr/0005-owned-pty-relay-for-stay-alive.md` in the
       style of `docs/adr/0008-*.md`'s `> **Superseded (date):**` blockquote, pointing at ADR 0015.
       Leave the body intact as historical context.
-- [ ] 10.2 Amend `docs/adr/0006-single-instance-flock-and-socket-detection.md` in place — do not
+- [x] 10.2 Amend `docs/adr/0006-single-instance-flock-and-socket-detection.md` in place — do not
       supersede it. Its core decision survives; only the probed socket (`mbv-ctrl.sock`) and the
       meaning of the second branch (attach to a local daemon, non-evicting) change. Its final
       consequence, that there is no implicit local-daemon auto-attach any more, is the one line that
       this change reverses.
-- [ ] 10.3 Write `docs/adr/0015-local-daemon-for-stay-alive.md` in the house style
+- [x] 10.3 Write `docs/adr/0015-local-daemon-for-stay-alive.md` in the house style
       (`## Decision`, `## Considered options`, `## Consequences`). It must record: stay-alive as
       ensure-daemon-then-attach; the rule that a client exiting never stops the daemon; the
       deliberate rejection of session continuity; and the rejected alternatives — keeping the pty
@@ -203,11 +203,11 @@ is deleted only afterwards (group 8), so there is a working stay-alive path at e
       contradicts the no-implicit-stop rule), and tmux/abduco/dtach. For the last one, note that ADR
       0005's graphics-passthrough objection **evaporates** here: each client is a full mbv on a real
       terminal doing its own capability detection, with no byte pipe to pass anything through.
-- [ ] 10.4 Record in ADR 0015 how ADR 0005's crash-isolation rationale is answered rather than
+- [x] 10.4 Record in ADR 0015 how ADR 0005's crash-isolation rationale is answered rather than
       dropped: libmpv moves out of the terminal-owning process into the daemon, and the client's
       panic hook (installed first thing in `src/main.rs`) restores the terminal exactly as in bare
       mode.
-- [ ] 10.5 Update any user-facing documentation or README text that mentions `-a`/`--alive`,
+- [x] 10.5 Update any user-facing documentation or README text that mentions `-a`/`--alive`,
       detaching, or reattaching, using the vocabulary in `CONTEXT.md`.
 
 ## 11. Final verification
