@@ -156,9 +156,9 @@ impl App {
 
             list_area = if hero_data.is_some() {
                 Rect {
-                    x: content_area.x + hero_col_width + 1,
+                    x: content_area.x + hero_col_width + 2,
                     y: area.y.saturating_add(3),
-                    width: content_area.width.saturating_sub(hero_col_width + 1),
+                    width: content_area.width.saturating_sub(hero_col_width + 2),
                     height: area.height.saturating_sub(3),
                 }
             } else {
@@ -273,8 +273,12 @@ impl App {
         // In the wide Home layout, the list body is a separate right-column
         // green surface. The pill section stays outside it. Keep one blank
         // green row at its top and bottom, then inset its list content.
+        // `green_panel_full` tracks the full green panel rect (before inset)
+        // so focused rows can span its entire width.
+        let green_panel_full: Option<Rect>;
         let list_area = if two_column && hero_data.is_some() {
             const RIGHT_COLUMN_INNER_INSET: u16 = 2;
+            green_panel_full = Some(list_area);
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::GREEN)),
                 list_area,
@@ -292,6 +296,7 @@ impl App {
                 ..interior_area
             }
         } else {
+            green_panel_full = None;
             list_area
         };
 
@@ -374,27 +379,94 @@ impl App {
                         dur_str.width() + DUR_GAP + 1
                     };
                     let name_w = avail.saturating_sub(dur_reserve);
-                    let title = trunc_str(&item.display_name(), name_w);
-                    // The gap between title and duration grows to fill whatever
-                    // `name_w` didn't need, so it's just what's left of `avail`
-                    // after the title and duration (DUR_GAP only sets where
-                    // truncation kicks in, above).
-                    let pad = avail.saturating_sub(title.width() + dur_str.width() + 1);
+                    let is_episode = item.item_type == "Episode" && !item.series_name.is_empty();
+                    let title_width: usize;
 
-                    let fg = focused_or_subtle(focused);
-                    let mut spans: Vec<Span> = if selected_row && focused {
+                    let mut spans: Vec<Span> = if is_episode {
+                        // Episode: show name in soft white, episode title in white.
+                        let show_w = name_w * 2 / 5;
+                        let show = trunc_str(&item.series_name, show_w);
+                        let show_actual_w = show.width();
+                        let ep_title =
+                            trunc_str(&item.name, name_w.saturating_sub(show_actual_w + 1));
+                        title_width = show_actual_w + 1 + ep_title.width();
+                        let bold = if selected_row && focused {
+                            Modifier::BOLD
+                        } else {
+                            Modifier::empty()
+                        };
+                        if selected_row && focused {
+                            if let Some(full) = green_panel_full {
+                                f.render_widget(
+                                    Block::default()
+                                        .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                                    Rect {
+                                        x: full.x,
+                                        y: sy,
+                                        width: full.width,
+                                        height: 1,
+                                    },
+                                );
+                            }
+                        }
                         vec![
-                            super::selection_marker(true),
+                            if selected_row && focused && green_panel_full.is_none() {
+                                super::selection_marker(true)
+                            } else {
+                                Span::raw(" ")
+                            },
                             Span::styled(
-                                title,
-                                Style::default()
-                                    .fg(palette::IRIS)
-                                    .add_modifier(Modifier::BOLD),
+                                show,
+                                Style::default().fg(palette::SOFT_WHITE).add_modifier(bold),
+                            ),
+                            Span::raw(" "),
+                            Span::styled(
+                                ep_title,
+                                Style::default().fg(palette::WHITE).add_modifier(bold),
                             ),
                         ]
                     } else {
-                        vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
+                        // Non-episode: single title span.
+                        let title = trunc_str(&item.display_name(), name_w);
+                        title_width = title.width();
+                        let fg = focused_or_subtle(focused);
+                        if selected_row && focused {
+                            if let Some(full) = green_panel_full {
+                                f.render_widget(
+                                    Block::default()
+                                        .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                                    Rect {
+                                        x: full.x,
+                                        y: sy,
+                                        width: full.width,
+                                        height: 1,
+                                    },
+                                );
+                                vec![
+                                    Span::raw(" "),
+                                    Span::styled(
+                                        title,
+                                        Style::default()
+                                            .fg(palette::YELLOW)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
+                                ]
+                            } else {
+                                vec![
+                                    super::selection_marker(true),
+                                    Span::styled(
+                                        title,
+                                        Style::default()
+                                            .fg(palette::IRIS)
+                                            .add_modifier(Modifier::BOLD),
+                                    ),
+                                ]
+                            }
+                        } else {
+                            vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
+                        }
                     };
+                    let pad = avail.saturating_sub(title_width + dur_str.width() + 1);
                     if !dur_str.is_empty() {
                         spans.push(Span::raw(" ".repeat(pad)));
                         spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
