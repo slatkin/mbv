@@ -292,11 +292,7 @@ impl App {
                 && !self.hidden_libraries.contains(&lower)
         }) {
             let title = v.name.clone();
-            let items = if v.collection_type == "tvshows" {
-                client.get_latest_episodes(&v.id, 30).unwrap_or_default()
-            } else {
-                client.get_latest(&v.id, 30).unwrap_or_default()
-            };
+            let items = client.get_latest(&v.id, 30).unwrap_or_default();
             let cursor = old_cursors
                 .get(&v.id)
                 .copied()
