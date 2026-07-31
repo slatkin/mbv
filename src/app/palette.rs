@@ -34,7 +34,6 @@ pub const HOME_PILL_ROW_BG: Color = Color::Rgb(30, 35, 38); // Home pill row bac
 pub const HOME_PILL_BG: Color = Color::Rgb(30, 35, 38); // Home pill background (#1e2326)
 pub const HOME_PILL_FG: Color = WHITE; // unselected Home pill foreground
 pub const HOME_PILL_FOCUSED_FG: Color = Color::Rgb(46, 55, 60); // focused Home pill foreground (#2e373c)
-pub const HOME_PILL_DIVIDER_FG: Color = Color::Rgb(157, 169, 160); // Home prefix divider (#9da9a0)
 pub const SCROLLBAR: Color = Color::Rgb(79, 91, 88); // library/chrome scrollbar track/thumb
 pub const ORANGE: Color = Color::Rgb(229, 152, 117); // warm orange (#e59875)
 pub const PRUPLE: Color = Color::Rgb(214, 153, 182); // muted purple (#d699b6)
