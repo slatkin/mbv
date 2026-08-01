@@ -10,6 +10,7 @@ mod consume_quit_actions;
 mod context_menu_actions;
 mod daemon_restart;
 mod feed_actions;
+mod feed_parse;
 pub(crate) mod images;
 mod input;
 mod input_confirm_keys;
