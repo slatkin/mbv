@@ -45,20 +45,17 @@ impl App {
                     self.trigger_lib_rescan(lib_idx);
                 }
             }
-            ConfirmAction::SaveOverwritePlaylist { existing_id } => match key.code {
+            ConfirmAction::SaveOverwritePlaylist { existing_id, name } => match key.code {
                 KeyCode::Char('y') => {
                     self.confirm_modal = None;
-                    self.do_overwrite_playlist(&existing_id);
+                    self.do_overwrite_playlist(&existing_id, &name);
                 }
                 KeyCode::Esc => {
                     self.confirm_modal = None;
-                    if let Some(input) = self.save_playlist_dialog.as_ref().map(|d| d.input.clone())
-                    {
-                        self.save_playlist_dialog = Some(SavePlaylistDialog {
-                            input,
-                            stage: SavePlaylistStage::EnterName,
-                        });
-                    }
+                    self.save_playlist_dialog = Some(SavePlaylistDialog {
+                        input: name,
+                        stage: SavePlaylistStage::EnterName,
+                    });
                 }
                 _ => {}
             },

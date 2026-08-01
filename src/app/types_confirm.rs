@@ -8,7 +8,7 @@ pub(super) enum ConfirmAction {
     ClearQueue,
     RemoveActiveQueueItem(usize),
     RescanLibrary(usize),
-    SaveOverwritePlaylist { existing_id: String },
+    SaveOverwritePlaylist { existing_id: String, name: String },
     DiscardOrSaveDirtyPlaylist,
     DeletePlaylist { id: String, name: String },
 }

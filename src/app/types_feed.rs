@@ -40,11 +40,6 @@ impl FeedHomeVideoState {
 
 pub(super) enum SavePlaylistStage {
     EnterName,
-    // The existing-playlist id itself now lives solely in
-    // `ConfirmAction::SaveOverwritePlaylist`, which drives the shared
-    // confirmation modal; this stage only marks "we're mid-overwrite-flow"
-    // so `handle_key_confirm_modal`'s Esc arm knows to return to `EnterName`.
-    ConfirmOverwrite,
     RenamePlaylist { id: String },
 }
 

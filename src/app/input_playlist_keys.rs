@@ -202,10 +202,9 @@ impl App {
         let Some(ref dialog) = self.save_playlist_dialog else {
             return false;
         };
-        // Only `EnterName` and `RenamePlaylist` are handled here -- once a
-        // name collides with an existing playlist, `ConfirmOverwrite` is
-        // driven entirely by the shared confirmation-modal dispatcher
-        // (`handle_key_confirm_modal`).
+        // Only `EnterName` and `RenamePlaylist` are handled here; once a name
+        // collides with an existing playlist, the shared confirmation-modal
+        // dispatcher handles the overwrite decision.
         if !matches!(
             dialog.stage,
             SavePlaylistStage::EnterName | SavePlaylistStage::RenamePlaylist { .. }
@@ -250,10 +249,7 @@ impl App {
                     .into_iter()
                     .find(|p| p.name.to_lowercase() == name.to_lowercase());
                 if let Some(existing) = existing {
-                    self.save_playlist_dialog = Some(SavePlaylistDialog {
-                        input: name.clone(),
-                        stage: SavePlaylistStage::ConfirmOverwrite,
-                    });
+                    self.save_playlist_dialog = None;
                     self.confirm_modal = Some(ConfirmModal {
                         title: " Overwrite Playlist ".into(),
                         message: format!(
@@ -263,6 +259,7 @@ impl App {
                         hint: "[y] Overwrite    [Esc] Back".into(),
                         on_confirm: ConfirmAction::SaveOverwritePlaylist {
                             existing_id: existing.id,
+                            name,
                         },
                     });
                 } else {
@@ -298,15 +295,12 @@ impl App {
     /// name with the current queue's items. Extracted from the old
     /// `SavePlaylistStage::ConfirmOverwrite` key handler so the shared
     /// confirmation-modal dispatcher can call it directly.
-    pub(super) fn do_overwrite_playlist(&mut self, existing_id: &str) {
-        let Some(name) = self.save_playlist_dialog.as_ref().map(|d| d.input.clone()) else {
-            return;
-        };
+    pub(super) fn do_overwrite_playlist(&mut self, existing_id: &str, name: &str) {
         let ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
         let result = {
             let c = self.client.lock().unwrap();
             c.delete_playlist(existing_id)
-                .and_then(|_| c.create_playlist(&name, &ids))
+                .and_then(|_| c.create_playlist(name, &ids))
         };
         self.save_playlist_dialog = None;
         self.force_clear = true;
@@ -314,7 +308,7 @@ impl App {
             Ok(id) => {
                 self.queue_source = crate::config::QueueSource::Playlist {
                     id: Some(id),
-                    name: name.clone(),
+                    name: name.to_string(),
                 };
                 self.queue_dirty = false;
                 self.flash_status(format!("Saved as playlist \"{name}\""));
