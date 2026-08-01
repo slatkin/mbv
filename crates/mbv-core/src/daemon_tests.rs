@@ -322,8 +322,12 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         connect_client(&mut clients)
     };
     let (reply_tx, reply_rx) = mpsc::channel();
-    let _items = vec![item("existing", "Video", "Movie")];
-    let _cursor = 0;
+    let shared_queue = shared_queue_state();
+    shared_queue
+        .queue
+        .lock()
+        .unwrap()
+        .replace_all(vec![item("existing", "Video", "Movie")], Some(0));
     let mut source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -341,18 +345,15 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &player,
         false,
                 &mut source,
-        &shared_queue_state(),
+        &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
         None,
         &dummy_merged_tx,
     );
 
-    // The daemon's real queue is untouched by the rejected adoption.
-    assert_eq!(
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        vec!["existing"]
-    );
+    // The daemon's real queue is untouched by the rejected adoption, as
+    // confirmed by the resync `State` event asserted below.
     match recv_event(&reply_rx) {
         CtrlEvent::CommandRejected(reason) => {
             assert_eq!(reason, "daemon already has a queue; adoption skipped");
@@ -387,12 +388,17 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
     let shared_queue = shared_queue_state();
-    let _items = vec![
+    let items = vec![
         item("item-0", "Video", "Movie"),
         item("item-1", "Video", "Movie"),
         item("item-2", "Video", "Movie"),
     ];
-    let _cursor = 1;
+    let cursor = 1;
+    shared_queue
+        .queue
+        .lock()
+        .unwrap()
+        .replace_all(items, Some(cursor));
     let mut source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -418,15 +424,11 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
         Ok(PlayerCommand::QueueMove(1, 2))
     ));
     assert_eq!(
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        vec!["item-0", "item-2", "item-1"]
-    );
-    assert_eq!(cursor, 2);
-    assert_eq!(
         shared_queue
             .queue
             .lock()
             .unwrap()
+            .items_snapshot()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -461,11 +463,16 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
     let shared_queue = shared_queue_state();
-    let _items = vec![
+    let items = vec![
         item("item-0", "Video", "Movie"),
         item("item-1", "Video", "Movie"),
     ];
-    let _cursor = 1;
+    let cursor = 1;
+    shared_queue
+        .queue
+        .lock()
+        .unwrap()
+        .replace_all(items, Some(cursor));
     let mut source = QueueSource::Remote;
     let appended = vec![item("item-2", "Video", "Movie")];
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
@@ -496,15 +503,11 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
                 == appended.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
     ));
     assert_eq!(
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        vec!["item-0", "item-1", "item-2"]
-    );
-    assert_eq!(cursor, 1);
-    assert_eq!(
         shared_queue
             .queue
             .lock()
             .unwrap()
+            .items_snapshot()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -544,14 +547,19 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
     let shared_queue = shared_queue_state();
-    let _items = vec![
+    let items = vec![
         item("item-0", "Video", "Movie"),
         item("item-1", "Video", "Movie"),
         item("item-2", "Video", "Movie"),
     ];
     // Removing the selected item keeps the same index when its successor
     // shifts into that position.
-    let _cursor = 1;
+    let cursor = 1;
+    shared_queue
+        .queue
+        .lock()
+        .unwrap()
+        .replace_all(items, Some(cursor));
     let mut source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -577,15 +585,11 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
         Ok(PlayerCommand::QueueRemove(1))
     ));
     assert_eq!(
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        vec!["item-0", "item-2"]
-    );
-    assert_eq!(cursor, 1);
-    assert_eq!(
         shared_queue
             .queue
             .lock()
             .unwrap()
+            .items_snapshot()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -620,11 +624,16 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
     };
     let (reply_tx, reply_rx) = mpsc::channel();
     let shared_queue = shared_queue_state();
-    let _items = vec![
+    let items = vec![
         item("item-0", "Video", "Movie"),
         item("item-1", "Video", "Movie"),
     ];
-    let _cursor = 1;
+    let cursor = 1;
+    shared_queue
+        .queue
+        .lock()
+        .unwrap()
+        .replace_all(items, Some(cursor));
     let mut source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -646,10 +655,6 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
     );
 
     assert!(player_cmd_rx.try_recv().is_err());
-    assert_eq!(
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        vec!["item-0", "item-1"]
-    );
     assert!(sender_rx.try_recv().is_err());
     match recv_event(&reply_rx) {
         CtrlEvent::CommandRejected(reason) => {
