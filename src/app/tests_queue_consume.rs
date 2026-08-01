@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::tests::*;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
 fn stopped_progress_updates_the_queue_model_not_just_the_shadow() {
@@ -86,12 +87,18 @@ fn stopped_consume_removes_the_right_slot_occurrence() {
 }
 
 #[test]
-fn stopped_delete_removes_the_active_now_playing_slot() {
-    // The confirmed "remove now-playing item and stop playback" flow:
-    // pending_delete_idx marks the active slot for removal, then a Stopped
-    // event drives it. Now that TrackChanged populates the model's
-    // active_slot_id in real playback, the gated remove_slot path would
-    // refuse the active slot — the confirmed delete must bypass that gate.
+fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
+    // The confirmed "remove now-playing item and stop playback" flow no
+    // longer defers the removal until PlayerEvent::Stopped arrives back from
+    // the player thread — that round trip is a real, user-visible delay.
+    // input_confirm_keys.rs's RemoveActiveQueueItem arm now removes the slot
+    // (and pushes the undo entry) as soon as the user confirms; the eventual
+    // Stopped event just has to recognize it as already-actioned via
+    // `pending_delete_slot` and tell the player session about the removal,
+    // without repeating any of the model mutation. Now that TrackChanged
+    // populates the model's active_slot_id in real playback, the gated
+    // remove_slot path would refuse the active slot — the confirmed delete
+    // must bypass that gate via remove_active_slot_confirmed.
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player_tab.items = make_items(3);
@@ -104,7 +111,29 @@ fn stopped_delete_removes_the_active_now_playing_slot() {
         st.active = true;
         st.current_idx = 0;
     }
-    app.pending_delete_idx = Some(0);
+    app.confirm_modal = Some(ConfirmModal {
+        title: String::new(),
+        message: String::new(),
+        hint: String::new(),
+        on_confirm: ConfirmAction::RemoveActiveQueueItem(0),
+    });
+
+    app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+
+    assert_eq!(
+        app.player_tab.items.len(),
+        2,
+        "confirming the delete must remove the active now-playing slot immediately"
+    );
+    assert_eq!(
+        app.queue_undo_stack.len(),
+        1,
+        "delete must push an undo entry immediately, not after Stopped"
+    );
+    assert!(
+        app.pending_delete_slot.is_some(),
+        "the pending delete must be recorded so the eventual Stopped event recognizes it"
+    );
 
     app.handle_player_event(PlayerEvent::Stopped {
         idx: 0,
@@ -118,12 +147,16 @@ fn stopped_delete_removes_the_active_now_playing_slot() {
     assert_eq!(
         app.player_tab.items.len(),
         2,
-        "the confirmed delete must remove the active now-playing slot"
+        "the Stopped event must not remove anything a second time"
     );
     assert_eq!(
         app.queue_undo_stack.len(),
         1,
-        "delete must push an undo entry"
+        "the Stopped event must not push a second undo entry"
+    );
+    assert!(
+        app.pending_delete_slot.is_none(),
+        "the Stopped event must clear the pending-delete marker"
     );
 }
 

@@ -1,6 +1,4 @@
-use super::types_playback::UndoEntry;
 use super::{App, DaemonLostModal, QUIT_REQUESTED};
-use mbv_core::playback_queue::RemoveSlotResult;
 use mbv_core::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
 
@@ -71,7 +69,7 @@ impl App {
                     self.refresh_after_stop();
                     return true;
                 }
-                let is_delete = self.pending_delete_idx.take() == Some(idx);
+                let is_delete = self.pending_delete_slot.take().is_some();
                 let preserve_local_state = !self.has_direct_remote_queue();
                 // Resolve the raw mpv index to a slot right away, against
                 // the queue exactly as it stands now (syncing the shadow
@@ -124,45 +122,14 @@ impl App {
                 self.skip_intro_end_ticks = None;
                 self.status.clear();
                 if is_delete {
-                    let allow_undo = !self.player.is_remote();
-                    // This IS the confirmed stop-and-remove of the now-playing
-                    // slot, so it must go through the model's confirmed-removal
-                    // API — the gated `remove_slot` (used by `remove_slot_at`)
-                    // now refuses the active slot, which TrackChanged marks
-                    // active in real playback. `remove_active_slot_confirmed`
-                    // removes by index lookup and also clears `active_slot_id`,
-                    // and is safe even if the slot happens to be non-active.
-                    let item = match slot_id {
-                        Some(slot_id) => {
-                            match self
-                                .playback_queue_mut()
-                                .queue
-                                .remove_active_slot_confirmed(slot_id)
-                            {
-                                RemoveSlotResult::Removed(slot) => {
-                                    self.playback_queue_mut().sync_items_from_queue_model();
-                                    self.player.send_command(PlayerCommand::QueueRemove(idx));
-                                    Some(slot.item)
-                                }
-                                RemoveSlotResult::RequiresActiveConfirmation(_)
-                                | RemoveSlotResult::NotFound => None,
-                            }
-                        }
-                        None => None,
-                    };
-                    if let Some(item) = item {
-                        let queue = self.playback_queue_mut();
-                        if queue.items.is_empty() {
-                            queue.queue_cursor = 0;
-                        } else {
-                            queue.queue_cursor =
-                                queue.queue_cursor.min(queue.items.len().saturating_sub(1));
-                        }
-                        if allow_undo {
-                            self.queue_undo_stack
-                                .push(UndoEntry::Remove(idx, Box::new(item)));
-                        }
-                    }
+                    // The removal, undo-push, and cursor-clamp already happened
+                    // immediately at confirm time (input_confirm_keys.rs), so
+                    // the visible list update isn't blocked on this round trip.
+                    // All that's left here is telling the player session to
+                    // drop the slot from its own internal queue mirror and
+                    // mpv's playlist — that still depends on this event, since
+                    // nothing told it about the removal until now.
+                    self.player.send_command(PlayerCommand::QueueRemove(idx));
                 } else {
                     let (should_consume, is_audio) = match slot_id {
                         Some(slot_id) => self.should_consume_slot(slot_id, consume),

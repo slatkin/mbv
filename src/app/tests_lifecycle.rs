@@ -202,7 +202,7 @@ fn render_interval_is_fast_while_a_card_image_fetch_is_in_flight() {
 
 #[test]
 fn render_interval_is_slow_when_idle_with_no_fetches_in_flight() {
-    let app = make_app_stub();
+    let mut app = make_app_stub();
     assert_eq!(app.render_interval(), Duration::from_secs(1));
 }
 

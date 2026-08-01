@@ -307,7 +307,7 @@ impl App {
     }
 
     fn playback_title_spans(
-        &self,
+        &mut self,
         title: &str,
         title_color: Color,
         max_width: usize,

@@ -28,6 +28,7 @@ impl App {
             });
             return;
         }
+        let cursor_before = self.queue_for_scope(scope).queue_cursor;
         let Some(item) = self.queue_for_scope_mut(scope).remove_slot_at(pos) else {
             return;
         };
@@ -37,6 +38,9 @@ impl App {
         self.undo_stack_for_scope_mut(scope)
             .push(UndoEntry::Remove(pos, Box::new(item)));
         self.persist_local_queue_state_if_needed(scope);
+        if controls_playback_queue && active && pos < current_idx {
+            self.pending_active_idx = Some(current_idx - 1);
+        }
         if controls_playback_queue && (active || scope == QueueScope::Remote) {
             self.player.send_command(PlayerCommand::QueueRemove(pos));
             // Player thread adjusts current_idx when it processes the command.
@@ -44,6 +48,14 @@ impl App {
             // and can cause index mismatches during rapid removals.
         }
         let queue = self.queue_for_scope_mut(scope);
+        if pos < cursor_before {
+            // Set directly from the pre-removal cursor rather than decrementing
+            // whatever `remove_slot_at`'s internal clamp left behind: that clamp
+            // only enforces bounds (min(cursor, len-1)), and when `cursor_before`
+            // was the last item, its bounds-clamp already shifts it down by one,
+            // so decrementing on top of it would double-shift.
+            queue.queue_cursor = cursor_before - 1;
+        }
         queue.clamp_cursor();
     }
 
@@ -113,7 +125,10 @@ impl App {
             return false;
         }
         let controls_playback_queue = self.queue_scope_is_playback(scope);
-        let active = self.player.status.lock().unwrap().active;
+        let (active, active_idx) = {
+            let s = self.player.status.lock().unwrap();
+            (s.active, s.current_idx)
+        };
         if !self.queue_for_scope_mut(scope).move_slot(slot_id, to) {
             return false;
         }
@@ -121,6 +136,22 @@ impl App {
             self.queue_dirty = true;
         }
         self.persist_local_queue_state_if_needed(scope);
+        if controls_playback_queue && active {
+            let new_active_idx = if active_idx == from {
+                Some(to)
+            } else if from < active_idx && active_idx <= to {
+                Some(active_idx - 1)
+            } else if to <= active_idx && active_idx < from {
+                Some(active_idx + 1)
+            } else {
+                None
+            };
+            if let Some(new_active_idx) = new_active_idx {
+                if new_active_idx != active_idx {
+                    self.pending_active_idx = Some(new_active_idx);
+                }
+            }
+        }
         if controls_playback_queue && (active || scope == QueueScope::Remote) {
             self.player.send_command(PlayerCommand::QueueMove(from, to));
         }

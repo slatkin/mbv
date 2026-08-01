@@ -43,7 +43,7 @@ impl App {
     /// between "just started" and "just finished" with nothing in between.
     /// Falls back to a slow 1 s cadence when nothing is changing, to avoid
     /// spinning the terminal for no reason.
-    pub(super) fn render_interval(&self) -> Duration {
+    pub(super) fn render_interval(&mut self) -> Duration {
         if self.visualizer.is_some() {
             return Duration::from_millis(12);
         }
