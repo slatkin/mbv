@@ -87,15 +87,15 @@ impl App {
                 // Idle state: show feed item title if available
                 if let Some(ref idle_feed) = self.idle_feed {
                     if let Some(item) = idle_feed.items.get(idle_feed.current_index) {
+                        let truncated_title = trunc_str(&item.title, title_area.width as usize);
                         let display_text = osc8_link(
                             item.link.as_deref().unwrap_or(""),
-                            &item.title,
+                            &truncated_title,
                             self.osc8_supported,
                         );
-                        let title_text = trunc_str(&display_text, title_area.width as usize);
                         f.render_widget(
                             Paragraph::new(Span::styled(
-                                title_text,
+                                display_text,
                                 Style::default().fg(palette::AQUA),
                             ))
                             .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
