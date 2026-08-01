@@ -505,6 +505,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     None,
                     &merged_tx,
                 );
+                persist_queue_state(&shared_queue);
             }
             DaemonEvent::PlaybackResolved {
                 command,
