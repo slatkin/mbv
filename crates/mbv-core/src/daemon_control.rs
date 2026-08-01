@@ -48,6 +48,39 @@ fn broadcast_queue_state(
     *shared_queue.source.lock().unwrap() = source_clone;
 }
 
+/// Sends a `CommandRejected` reply for `reason`, followed by the daemon's
+/// current authoritative queue state, so the rejected caller resyncs
+/// instead of drifting from the daemon's real queue.
+fn reject_and_resync(
+    reply_tx: &CtrlSender,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    source: &crate::config::QueueSource,
+    reason: &str,
+) {
+    send_to(reply_tx, &CtrlEvent::CommandRejected(reason.to_string()));
+    let q = shared_queue.queue.lock().unwrap();
+    let status = player.status.lock().unwrap().clone();
+    let items = q.items_snapshot();
+    let cursor = q.current_index().unwrap_or(0);
+    let sids = q.slot_ids();
+    let rev = q.revision();
+    let a_sid = q.active_slot_id();
+    drop(q);
+    send_to(
+        reply_tx,
+        &CtrlEvent::State(CtrlState {
+            status,
+            items,
+            cursor,
+            source: source.clone(),
+            slot_ids: sids,
+            revision: rev,
+            active_slot_id: a_sid,
+        }),
+    );
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_ctrl(
     cmd: CtrlCmd,
@@ -124,19 +157,7 @@ fn handle_ctrl(
                     let current_rev = shared_queue.queue.lock().unwrap().revision();
                     if *revision != current_rev {
                         log::warn!(target: "daemon", "QueueRemoveBySlot: stale revision (client={}, daemon={})", revision.raw(), current_rev.raw());
-                        send_to(request.reply_tx, &CtrlEvent::CommandRejected("stale revision".to_string()));
-                        let q = shared_queue.queue.lock().unwrap();
-                        let status = player.status.lock().unwrap().clone();
-                        let items = q.items_snapshot();
-                        let cursor = q.current_index().unwrap_or(0);
-                        let sids = q.slot_ids();
-                        let rev = q.revision();
-                        let a_sid = q.active_slot_id();
-                        drop(q);
-                        send_to(request.reply_tx, &CtrlEvent::State(CtrlState {
-                            status, items, cursor, source: source.clone(),
-                            slot_ids: sids, revision: rev, active_slot_id: a_sid,
-                        }));
+                        reject_and_resync(request.reply_tx, player, shared_queue, source, "stale revision");
                         return;
                     }
                     let mut q = shared_queue.queue.lock().unwrap();
@@ -149,6 +170,8 @@ fn handle_ctrl(
                         }
                         crate::playback_queue::RemoveSlotResult::NotFound => {
                             log::warn!(target: "daemon", "QueueRemoveBySlot: slot {:?} not found", sid);
+                            drop(q);
+                            reject_and_resync(request.reply_tx, player, shared_queue, source, "slot not found");
                             return;
                         }
                     }
@@ -161,27 +184,23 @@ fn handle_ctrl(
                     let current_rev = shared_queue.queue.lock().unwrap().revision();
                     if *revision != current_rev {
                         log::warn!(target: "daemon", "QueueMoveBySlot: stale revision");
-                        send_to(request.reply_tx, &CtrlEvent::CommandRejected("stale revision".to_string()));
-                        let q = shared_queue.queue.lock().unwrap();
-                        let status = player.status.lock().unwrap().clone();
-                        let items = q.items_snapshot();
-                        let cursor = q.current_index().unwrap_or(0);
-                        let sids = q.slot_ids();
-                        let rev = q.revision();
-                        let a_sid = q.active_slot_id();
-                        drop(q);
-                        send_to(request.reply_tx, &CtrlEvent::State(CtrlState {
-                            status, items, cursor, source: source.clone(),
-                            slot_ids: sids, revision: rev, active_slot_id: a_sid,
-                        }));
+                        reject_and_resync(request.reply_tx, player, shared_queue, source, "stale revision");
                         return;
                     }
                     let mut q = shared_queue.queue.lock().unwrap();
-                    let from_idx = q.slot_index(*slot_id).unwrap_or(0);
-                    let _ = q.move_slot(*slot_id, *to_position);
+                    let from_idx = q.slot_index(*slot_id);
+                    let move_result = q.move_slot(*slot_id, *to_position);
                     drop(q);
-                    broadcast_queue_state(ctrl_clients, player, shared_queue, source);
-                    player.send_command(PlayerCommand::QueueMove(from_idx, *to_position));
+                    match (from_idx, move_result) {
+                        (Some(from_idx), crate::playback_queue::QueueMutationResult::Applied(())) => {
+                            broadcast_queue_state(ctrl_clients, player, shared_queue, source);
+                            player.send_command(PlayerCommand::QueueMove(from_idx, *to_position));
+                        }
+                        _ => {
+                            log::warn!(target: "daemon", "QueueMoveBySlot: slot {:?} not found", slot_id);
+                            reject_and_resync(request.reply_tx, player, shared_queue, source, "slot not found");
+                        }
+                    }
                     return;
                 }
                 WireCommand::JumpToSlot { slot_id } => {
@@ -195,19 +214,7 @@ fn handle_ctrl(
                     let current_rev = shared_queue.queue.lock().unwrap().revision();
                     if *revision != current_rev {
                         log::warn!(target: "daemon", "QueueInsertAt: stale revision");
-                        send_to(request.reply_tx, &CtrlEvent::CommandRejected("stale revision".to_string()));
-                        let q = shared_queue.queue.lock().unwrap();
-                        let status = player.status.lock().unwrap().clone();
-                        let items = q.items_snapshot();
-                        let cursor = q.current_index().unwrap_or(0);
-                        let sids = q.slot_ids();
-                        let rev = q.revision();
-                        let a_sid = q.active_slot_id();
-                        drop(q);
-                        send_to(request.reply_tx, &CtrlEvent::State(CtrlState {
-                            status, items, cursor, source: source.clone(),
-                            slot_ids: sids, revision: rev, active_slot_id: a_sid,
-                        }));
+                        reject_and_resync(request.reply_tx, player, shared_queue, source, "stale revision");
                         return;
                     }
                     let mut q = shared_queue.queue.lock().unwrap();
@@ -221,26 +228,9 @@ fn handle_ctrl(
                     let current_rev = shared_queue.queue.lock().unwrap().revision();
                     if *revision != current_rev {
                         log::warn!(target: "daemon", "QueueRemoveActive: stale revision");
-                        send_to(request.reply_tx, &CtrlEvent::CommandRejected("stale revision".to_string()));
-                        let q = shared_queue.queue.lock().unwrap();
-                        let status = player.status.lock().unwrap().clone();
-                        let items = q.items_snapshot();
-                        let cursor = q.current_index().unwrap_or(0);
-                        let sids = q.slot_ids();
-                        let rev = q.revision();
-                        let a_sid = q.active_slot_id();
-                        drop(q);
-                        send_to(request.reply_tx, &CtrlEvent::State(CtrlState {
-                            status, items, cursor, source: source.clone(),
-                            slot_ids: sids, revision: rev, active_slot_id: a_sid,
-                        }));
+                        reject_and_resync(request.reply_tx, player, shared_queue, source, "stale revision");
                         return;
                     }
-                    // Capture progress context from active slot before removal
-                    let _progress_ctx = {
-                        let q = shared_queue.queue.lock().unwrap();
-                        q.active_slot().map(|slot| slot.slot_id)
-                    };
                     // Remove active slot and clear active marker
                     {
                         let mut q = shared_queue.queue.lock().unwrap();

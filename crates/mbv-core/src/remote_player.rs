@@ -212,7 +212,7 @@ impl RemotePlayer {
     }
 
     /// Send QueueRemoveActive to the daemon (task 7.1). The daemon
-    /// transactionally removes the active slot and drives async finalization.
+    /// transactionally removes the active slot and stops playback.
     pub fn send_queue_remove_active(&self, revision: QueueRevision) -> bool {
         if revision.0 == 0 {
             return false;
