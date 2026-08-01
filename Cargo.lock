@@ -1557,6 +1557,7 @@ dependencies = [
  "libmpv2-sys",
  "log",
  "mbv-core",
+ "native-tls",
  "nix 0.31.3",
  "rand 0.10.2",
  "ratatui",

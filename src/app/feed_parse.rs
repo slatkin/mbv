@@ -1,8 +1,19 @@
 use super::types_feed::IdleFeedItem;
+use std::sync::Arc;
 
-/// Fetch an RSS/Atom feed and parse `<item>`/`<entry>` titles and links.
+/// Fetch an RSS/Atom feed and parse `<item>`/`<entry>` titles.
 pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
-    let body = ureq::get(url)
+    // `ureq::get` never picks up the `native-tls` feature on its own — it only
+    // activates when a connector is configured explicitly on the agent — so
+    // plain shortcut calls fail every `https://` feed with "no TLS backend is
+    // configured". Build an agent with the connector wired up instead.
+    let connector =
+        native_tls::TlsConnector::new().map_err(|e| format!("Failed to initialize TLS: {e}"))?;
+    let agent = ureq::AgentBuilder::new()
+        .tls_connector(Arc::new(connector))
+        .build();
+    let body = agent
+        .get(url)
         .call()
         .map_err(|e| format!("HTTP request failed: {e}"))?
         .into_string()
@@ -14,10 +25,8 @@ pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String
     if let Some(start) = body.find("<item>") {
         let rest = &body[start..];
         for item_match in rest.split("<item>").skip(1) {
-            let title = extract_tag(item_match, "title");
-            let link = extract_tag(item_match, "link");
-            if let Some(title) = title {
-                items.push(IdleFeedItem { title, link });
+            if let Some(title) = extract_tag(item_match, "title") {
+                items.push(IdleFeedItem { title });
             }
         }
     }
@@ -27,10 +36,8 @@ pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String
         if let Some(start) = body.find("<entry>") {
             let rest = &body[start..];
             for entry_match in rest.split("<entry>").skip(1) {
-                let title = extract_tag(entry_match, "title");
-                let link = extract_atom_link(entry_match);
-                if let Some(title) = title {
-                    items.push(IdleFeedItem { title, link });
+                if let Some(title) = extract_tag(entry_match, "title") {
+                    items.push(IdleFeedItem { title });
                 }
             }
         }
@@ -51,19 +58,6 @@ fn extract_tag(text: &str, tag: &str) -> Option<String> {
     // reintroduce, before finally trimming.
     let stripped = strip_tags(content);
     let decoded = decode_xml_entities(&stripped);
-    let sanitized = strip_control_chars(&decoded);
-    Some(sanitized.trim().to_string())
-}
-
-/// Extract the `href` attribute from the first `<link` element in Atom format.
-fn extract_atom_link(text: &str) -> Option<String> {
-    let link_start = text.find("<link")?;
-    let link_end = text[link_start..].find('>')?;
-    let link_tag = &text[link_start..link_start + link_end + 1];
-    let href_start = link_tag.find("href=\"")? + 6;
-    let href_end = link_tag[href_start..].find('"')?;
-    let href = &link_tag[href_start..href_start + href_end];
-    let decoded = decode_xml_entities(href);
     let sanitized = strip_control_chars(&decoded);
     Some(sanitized.trim().to_string())
 }

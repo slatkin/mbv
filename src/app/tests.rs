@@ -303,7 +303,6 @@ pub(crate) fn make_app_stub() -> App {
         is_local_daemon: false,
         home_is_local_daemon: false,
         idle_feed: None,
-        osc8_supported: false,
     }
 }
 
@@ -360,7 +359,6 @@ pub(crate) fn make_built_app() -> App {
         search_tx,
         search_rx,
         idle_feed: None,
-        osc8_supported: false,
     })
 }
 

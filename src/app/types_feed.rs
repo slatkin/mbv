@@ -52,7 +52,6 @@ pub(super) struct SavePlaylistDialog {
 
 pub(super) struct IdleFeedItem {
     pub(super) title: String,
-    pub(super) link: Option<String>,
 }
 
 pub(super) struct IdleFeed {

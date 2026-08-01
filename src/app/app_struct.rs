@@ -271,7 +271,6 @@ pub struct App {
     pub(super) library_position_state: crate::config::LibraryPositionState,
     pub(super) queue_scope: QueueScope,
     pub(super) idle_feed: Option<IdleFeed>,
-    pub(super) osc8_supported: bool,
     #[cfg(test)]
     pub(super) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
@@ -306,5 +305,4 @@ pub(super) struct AppInit {
     pub(super) search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
     pub(super) search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
     pub(super) idle_feed: Option<IdleFeed>,
-    pub(super) osc8_supported: bool,
 }

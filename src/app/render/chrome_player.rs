@@ -20,14 +20,6 @@ fn uppercase_playback_span(span: Span<'static>) -> Span<'static> {
     Span::styled(span.content.to_uppercase(), span.style)
 }
 
-/// Wrap text in OSC 8 hyperlink escape sequences if the terminal supports it.
-fn osc8_link(url: &str, text: &str, osc8_supported: bool) -> String {
-    if !osc8_supported || url.is_empty() {
-        return text.to_string();
-    }
-    format!("\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\")
-}
-
 impl App {
     pub(super) fn render_player_panel(
         &mut self,
@@ -88,14 +80,9 @@ impl App {
                 if let Some(ref idle_feed) = self.idle_feed {
                     if let Some(item) = idle_feed.items.get(idle_feed.current_index) {
                         let truncated_title = trunc_str(&item.title, title_area.width as usize);
-                        let display_text = osc8_link(
-                            item.link.as_deref().unwrap_or(""),
-                            &truncated_title,
-                            self.osc8_supported,
-                        );
                         f.render_widget(
                             Paragraph::new(Span::styled(
-                                display_text,
+                                truncated_title,
                                 Style::default().fg(palette::AQUA),
                             ))
                             .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
