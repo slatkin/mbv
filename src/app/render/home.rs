@@ -556,7 +556,7 @@ impl App {
                 labels: &label_strs,
                 ids: &ids,
                 selected_pos,
-                prefix: Some(" ⌂ "),
+                prefix: Some("  "),
                 underlay: super::PillUnderlay::Blank { fill: false },
             },
         );
