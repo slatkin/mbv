@@ -10,6 +10,7 @@ mod consume_quit_actions;
 mod context_menu_actions;
 mod daemon_restart;
 mod feed_actions;
+mod feed_parse;
 pub(crate) mod images;
 mod input;
 mod input_confirm_keys;
@@ -87,7 +88,7 @@ use self::types_context_menu::{
 use self::types_daemon_lost::DaemonLostModal;
 use self::types_events::{LibEvent, SessionEvent};
 use self::types_feed::{
-    FeedHomeVideoGroup, FeedHomeVideoState, SavePlaylistDialog, SavePlaylistStage,
+    FeedHomeVideoGroup, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
 };
 use self::types_library_tab::LibraryTab;
 #[cfg(test)]
@@ -274,6 +275,30 @@ impl App {
         }
         self.home_loading = false;
         self.maybe_restore_queue_state();
+
+        // Initialize idle feed if configured
+        if self
+            .client
+            .lock()
+            .unwrap()
+            .config
+            .idle_feed_rss_url
+            .is_empty()
+        {
+            // No RSS URL configured, skip idle feed
+        } else {
+            let (items_tx, items_rx) = std::sync::mpsc::channel();
+            self.idle_feed = Some(IdleFeed {
+                items: Vec::new(),
+                current_index: 0,
+                last_rotation: Instant::now(),
+                last_fetch: Instant::now(),
+                items_tx,
+                items_rx,
+            });
+            self.spawn_idle_feed_fetch();
+        }
+
         terminal.draw(|f| self.render(f))?;
 
         install_signal_handlers();
@@ -352,6 +377,20 @@ impl App {
             while let Ok(ev) = self.ws_rx.try_recv() {
                 had_events = true;
                 self.handle_ws_event(ev);
+            }
+
+            // Drain idle feed items
+            if let Some(ref mut idle_feed) = self.idle_feed {
+                while let Ok(items) = idle_feed.items_rx.try_recv() {
+                    had_events = true;
+                    idle_feed.items = items;
+                    idle_feed.current_index = 0;
+                }
+                // Re-fetch every 30 minutes
+                if idle_feed.last_fetch.elapsed() >= Duration::from_secs(1800) {
+                    idle_feed.last_fetch = Instant::now();
+                    self.spawn_idle_feed_fetch();
+                }
             }
 
             self.sync_visualizer();
@@ -435,6 +474,9 @@ impl App {
             }
 
             self.sync_volume_from_player();
+
+            // Advance idle feed rotation
+            self.advance_idle_feed_rotation();
 
             // See `render_interval`'s doc comment for the fast/slow cadence rules.
             let render_interval = self.render_interval();

@@ -1,6 +1,8 @@
+use super::feed_parse::fetch_and_parse_rss;
 use super::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_core::api::MediaItem;
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 impl App {
     pub(super) fn log_feed_home_video_state(&self, lib_idx: usize, context: &str) {
@@ -585,6 +587,40 @@ impl App {
             self.log_feed_home_video_state(lib_idx, "refreshed_before_aggregate");
             self.spawn_feed_home_video_aggregate(lib_idx);
             self.spawn_podcast_aggregate(lib_idx);
+        }
+    }
+
+    /// Spawn a background thread to fetch and parse the idle RSS feed.
+    pub(super) fn spawn_idle_feed_fetch(&self) {
+        let Some(ref idle_feed) = self.idle_feed else {
+            return;
+        };
+        let rss_url = self.client.lock().unwrap().config.idle_feed_rss_url.clone();
+        let tx = idle_feed.items_tx.clone();
+        std::thread::spawn(move || {
+            let items = match fetch_and_parse_rss(&rss_url) {
+                Ok(items) => items,
+                Err(e) => {
+                    log::warn!(target: "idle_feed", "Failed to fetch RSS feed: {e}");
+                    Vec::new()
+                }
+            };
+            let _ = tx.send(items);
+        });
+    }
+
+    /// Advance the idle feed rotation if enough time has elapsed.
+    pub(super) fn advance_idle_feed_rotation(&mut self) {
+        let Some(ref mut idle_feed) = self.idle_feed else {
+            return;
+        };
+        if idle_feed.items.is_empty() {
+            return;
+        }
+        let rotation_secs = self.client.lock().unwrap().config.idle_feed_rotation_secs;
+        if idle_feed.last_rotation.elapsed() >= std::time::Duration::from_secs(rotation_secs) {
+            idle_feed.current_index = (idle_feed.current_index + 1) % idle_feed.items.len();
+            idle_feed.last_rotation = Instant::now();
         }
     }
 }

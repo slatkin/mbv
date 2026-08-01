@@ -1,4 +1,6 @@
 use mbv_core::api::MediaItem;
+use std::sync::mpsc;
+use std::time::Instant;
 
 #[derive(Clone)]
 pub(super) struct FeedHomeVideoGroup {
@@ -46,4 +48,18 @@ pub(super) enum SavePlaylistStage {
 pub(super) struct SavePlaylistDialog {
     pub(super) input: String,
     pub(super) stage: SavePlaylistStage,
+}
+
+pub(super) struct IdleFeedItem {
+    pub(super) title: String,
+    pub(super) link: Option<String>,
+}
+
+pub(super) struct IdleFeed {
+    pub(super) items: Vec<IdleFeedItem>,
+    pub(super) current_index: usize,
+    pub(super) last_rotation: Instant,
+    pub(super) last_fetch: Instant,
+    pub(super) items_tx: mpsc::Sender<Vec<IdleFeedItem>>,
+    pub(super) items_rx: mpsc::Receiver<Vec<IdleFeedItem>>,
 }

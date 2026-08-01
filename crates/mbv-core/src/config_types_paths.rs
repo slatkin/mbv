@@ -74,6 +74,10 @@ pub struct Config {
     /// this is a routing/reconnect *preference*, not daemon configuration.
     /// Default off; editable from config.toml or the F2 Settings panel.
     pub auto_reconnect: bool,
+    /// RSS feed URL displayed in the playback panel when idle.
+    pub idle_feed_rss_url: String,
+    /// Seconds between idle feed item rotations (minimum 1).
+    pub idle_feed_rotation_secs: u64,
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
@@ -119,6 +123,8 @@ impl Default for Config {
             daemon_client_endpoint: String::new(),
             daemon_server_tcp_listen: String::new(),
             auto_reconnect: false,
+            idle_feed_rss_url: "https://novaramedia.com/feed/".to_string(),
+            idle_feed_rotation_secs: 10,
         }
     }
 }

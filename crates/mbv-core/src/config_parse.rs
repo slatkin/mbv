@@ -255,6 +255,18 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         })
         .unwrap_or_default();
 
+    let idle_feed = doc.get("idle_feed");
+    let idle_feed_rss_url = idle_feed
+        .and_then(|s| s.get("rss_url"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("https://novaramedia.com/feed/")
+        .to_string();
+    let idle_feed_rotation_secs = idle_feed
+        .and_then(|s| s.get("rotation_interval_secs"))
+        .and_then(|v| v.as_integer())
+        .map(|v| v.max(1) as u64)
+        .unwrap_or(10);
+
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -294,5 +306,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         daemon_client_endpoint,
         daemon_server_tcp_listen,
         auto_reconnect,
+        idle_feed_rss_url,
+        idle_feed_rotation_secs,
     })
 }

@@ -301,6 +301,8 @@ pub(crate) fn make_app_stub() -> App {
         queue_scope: QueueScope::Local,
         is_local_daemon: false,
         home_is_local_daemon: false,
+        idle_feed: None,
+        osc8_supported: false,
     }
 }
 
@@ -356,6 +358,8 @@ pub(crate) fn make_built_app() -> App {
         notif_action_rx,
         search_tx,
         search_rx,
+        idle_feed: None,
+        osc8_supported: false,
     })
 }
 
