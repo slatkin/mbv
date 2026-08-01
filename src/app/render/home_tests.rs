@@ -133,7 +133,7 @@ fn renders_home_pills_and_only_selected_section() {
     assert_eq!(layout.main.home.hitmap.len(), 3);
     assert_eq!(layout.main.selector_tabs.len(), 3);
     let unselected_pill = layout.main.selector_tabs[1];
-    let unselected_cell = &term.backend().buffer()[(unselected_pill.0.x, unselected_pill.0.y)];
+    let unselected_cell = &term.backend().buffer()[(unselected_pill.0.x + 1, unselected_pill.0.y)];
     assert_eq!(unselected_cell.bg, crate::app::palette::HOME_PILL_BG);
     assert_eq!(unselected_cell.fg, crate::app::palette::HOME_PILL_FG);
 
@@ -188,7 +188,7 @@ fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
         "wide Continue Watching pills belong at the top of the right panel"
     );
     assert!(
-        lines[4].contains("Hero Episode"),
+        lines[2].contains("Hero Episode"),
         "the right-panel list should follow the pills and panel top inset"
     );
     assert_eq!(
@@ -196,12 +196,12 @@ fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
         "the left hero metadata should follow the top-aligned image after one blank row"
     );
     assert_eq!(
-        term.backend().buffer()[(64, 4)].fg,
+        term.backend().buffer()[(64, 2)].fg,
         crate::app::palette::WHITE,
         "wide Home right-panel titles should remain white when the panel is focused"
     );
     assert_eq!(
-        term.backend().buffer()[(54, 4)].fg,
+        term.backend().buffer()[(54, 2)].fg,
         crate::app::palette::YELLOW,
         "wide Home show labels should use the yellow accent"
     );
@@ -215,9 +215,9 @@ fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
         selected_pill.y, 0,
         "wide Home pills should start on the top row"
     );
-    let selected_cell = &term.backend().buffer()[(selected_pill.x, selected_pill.y)];
-    assert_eq!(selected_cell.bg, crate::app::palette::GREEN);
-    assert_eq!(selected_cell.fg, crate::app::palette::HOME_PILL_FOCUSED_FG);
+    let selected_cell = &term.backend().buffer()[(selected_pill.x + 1, selected_pill.y)];
+    assert_eq!(selected_cell.bg, crate::app::palette::BG_GREEN);
+    assert_eq!(selected_cell.fg, crate::app::palette::WHITE);
 
     let backend = TestBackend::new(120, 30);
     let mut term = Terminal::new(backend).unwrap();
@@ -228,7 +228,7 @@ fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
     .unwrap();
 
     assert_eq!(
-        term.backend().buffer()[(64, 4)].fg,
+        term.backend().buffer()[(64, 2)].fg,
         crate::app::palette::MUTED,
         "wide Home right-panel titles should dim when the panel is unfocused"
     );
