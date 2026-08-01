@@ -145,6 +145,61 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
 }
 
 #[test]
+fn teardown_persists_a_reconnected_target_for_a_local_daemon_launch_that_moved_remote() {
+    // Regression guard for design.md's Decision 2 walk-through: a client
+    // launched attached to the local daemon (`home_is_local_daemon = true`)
+    // that has since reconnected to a genuinely remote target
+    // (`is_local_daemon` flipped to `false` at runtime) must still have
+    // that connection persisted at teardown -- the old gate, keyed on the
+    // mutable `is_local_daemon`, would have wrongly skipped this.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.launched_as_remote = true;
+    app.home_is_local_daemon = true;
+    app.is_local_daemon = false;
+    app.active_route = Some("music".to_string());
+
+    app.teardown(Duration::from_secs(1));
+
+    assert_eq!(
+        crate::config::load_last_remote_connection().unwrap(),
+        Some(crate::config::LastRemoteConnection::LibraryRoute {
+            library: "music".to_string()
+        })
+    );
+}
+
+#[test]
+fn teardown_skips_persistence_for_an_explicit_remote_daemon_launch() {
+    // The existing skip case, unaffected by rebasing the gate onto
+    // `home_is_local_daemon`: an explicit `--connect-daemon` launch has
+    // `home_is_local_daemon = false` for its entire lifetime, so it must
+    // still be skipped and must not overwrite an existing saved record.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _ = crate::config::save_last_remote_connection(Some(
+        &crate::config::LastRemoteConnection::LibraryRoute {
+            library: "music".to_string(),
+        },
+    ));
+    let mut app = make_app_stub();
+    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.launched_as_remote = true;
+    app.home_is_local_daemon = false;
+    app.is_local_daemon = false;
+    app.active_route = None;
+
+    app.teardown(Duration::from_secs(1));
+
+    assert_eq!(
+        crate::config::load_last_remote_connection().unwrap(),
+        Some(crate::config::LastRemoteConnection::LibraryRoute {
+            library: "music".to_string()
+        })
+    );
+}
+
+#[test]
 fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
     let _guard = crate::config::TestStateDirGuard::new();
     let old_items = make_items(1);
