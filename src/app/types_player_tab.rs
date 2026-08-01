@@ -1,7 +1,7 @@
 use mbv_core::api::MediaItem;
 use mbv_core::playback_queue::{
-    PlaybackQueue, QueueMutationResult, QueueRevision, QueueSlot, QueueSlotId,
-    RefreshMergeResult, RemoveSlotResult,
+    PlaybackQueue, QueueMutationResult, QueueRevision, QueueSlot, QueueSlotId, RefreshMergeResult,
+    RemoveSlotResult,
 };
 
 #[derive(Clone, Default)]
@@ -40,17 +40,8 @@ impl PlayerTab {
             .zip(items.iter())
             .map(|(slot_id, item)| QueueSlot::new(slot_id, item.clone()))
             .collect();
-        let max_id = slots
-            .iter()
-            .map(|s| s.slot_id.raw())
-            .max()
-            .unwrap_or(0);
-        let queue = PlaybackQueue::from_slot_snapshot(
-            slots,
-            active_slot_id,
-            revision,
-            max_id + 1,
-        );
+        let max_id = slots.iter().map(|s| s.slot_id.raw()).max().unwrap_or(0);
+        let queue = PlaybackQueue::from_slot_snapshot(slots, active_slot_id, revision, max_id + 1);
         Self {
             items,
             queue_cursor,

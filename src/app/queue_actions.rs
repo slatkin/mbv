@@ -39,12 +39,13 @@ impl App {
         let revision = self.queue_for_scope(scope).queue.revision();
         self.undo_stack_for_scope_mut(scope)
             .push(UndoEntry::Remove {
-            removed_slot_id: removed_slot_id.unwrap_or(mbv_core::playback_queue::QueueSlotId(0)),
-            item: Box::new(item),
-            position: pos,
-            revision,
-            was_active,
-        });
+                removed_slot_id: removed_slot_id
+                    .unwrap_or(mbv_core::playback_queue::QueueSlotId(0)),
+                item: Box::new(item),
+                position: pos,
+                revision,
+                was_active,
+            });
         self.persist_local_queue_state_if_needed(scope);
         if controls_playback_queue && (active || scope == QueueScope::Remote) {
             self.player.send_command(PlayerCommand::QueueRemove(pos));
@@ -93,8 +94,7 @@ impl App {
                 self.pending_remote_move_cursor = Some(to);
             }
             let move_revision = self.queue_for_scope(scope).queue.revision();
-            self.undo_stack_for_scope_mut(scope)
-                .push(UndoEntry::Move {
+            self.undo_stack_for_scope_mut(scope).push(UndoEntry::Move {
                 from,
                 to,
                 slot_id,
@@ -150,14 +150,21 @@ impl App {
             return;
         };
         match entry {
-            UndoEntry::Remove { removed_slot_id: _, item, position, revision, was_active: _ } => {
+            UndoEntry::Remove {
+                removed_slot_id: _,
+                item,
+                position,
+                revision,
+                was_active: _,
+            } => {
                 let current_revision = self.queue_for_scope(scope).queue.revision();
                 if current_revision != revision {
                     self.flash_status_high("Can't undo: queue has changed since then".into());
                     return;
                 }
                 let position = position.min(self.queue_for_scope(scope).items.len());
-                self.queue_for_scope_mut(scope).insert_item_at(position, *item);
+                self.queue_for_scope_mut(scope)
+                    .insert_item_at(position, *item);
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
@@ -170,7 +177,12 @@ impl App {
                     );
                 }
             }
-            UndoEntry::Move { from, to, slot_id, revision } => {
+            UndoEntry::Move {
+                from,
+                to,
+                slot_id,
+                revision,
+            } => {
                 let current_revision = self.queue_for_scope(scope).queue.revision();
                 if current_revision != revision {
                     self.flash_status_high("Can't undo move: queue has changed since then".into());

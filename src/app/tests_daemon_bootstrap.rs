@@ -20,10 +20,10 @@ fn local_daemon_bootstrap_adopts_saved_local_queue_and_source() {
             last_played_completed: false,
             positions: Default::default(),
             slot_ids: None,
-        revision: None,
-        active_slot_id: None,
-        next_slot_id: None,
-    }),
+            revision: None,
+            active_slot_id: None,
+            next_slot_id: None,
+        }),
     );
 
     assert_eq!(bootstrap.player_tab.items.len(), 2);
@@ -86,10 +86,10 @@ fn local_daemon_bootstrap_carries_saved_positions_for_enrichment() {
             last_played_item_id: None,
             last_played_completed: false,
             positions: positions.clone(),
-        slot_ids: None,
-        revision: None,
-        active_slot_id: None,
-        next_slot_id: None,
+            slot_ids: None,
+            revision: None,
+            active_slot_id: None,
+            next_slot_id: None,
         }),
     );
 
@@ -119,10 +119,10 @@ fn local_daemon_bootstrap_uses_restore_cursor_and_carries_last_played_state() {
             last_played_completed: true,
             positions: Default::default(),
             slot_ids: None,
-        revision: None,
-        active_slot_id: None,
-        next_slot_id: None,
-    }),
+            revision: None,
+            active_slot_id: None,
+            next_slot_id: None,
+        }),
     );
 
     assert_eq!(bootstrap.player_tab.queue_cursor, 2);
@@ -154,10 +154,10 @@ fn local_daemon_bootstrap_prefers_existing_daemon_queue_state() {
             last_played_completed: false,
             positions: Default::default(),
             slot_ids: None,
-        revision: None,
-        active_slot_id: None,
-        next_slot_id: None,
-    }),
+            revision: None,
+            active_slot_id: None,
+            next_slot_id: None,
+        }),
     );
 
     assert_eq!(bootstrap.player_tab.items.len(), 2);
@@ -336,12 +336,8 @@ fn warm_daemon_bootstrap_defaults_selection_to_first_slot() {
 fn reconnect_clears_adopt_queue() {
     // Warm daemon with non-empty items: adopt_queue is None
     let remote_items = make_items(2);
-    let bootstrap = bootstrap_local_daemon_queue(
-        remote_items,
-        0,
-        crate::config::QueueSource::Unknown,
-        None,
-    );
+    let bootstrap =
+        bootstrap_local_daemon_queue(remote_items, 0, crate::config::QueueSource::Unknown, None);
     // Reconnect (warm) should have no adoption.
     assert!(bootstrap.adopt_queue.is_none());
     assert_eq!(bootstrap.player_tab.items.len(), 2);
@@ -389,4 +385,3 @@ fn from_slot_snapshot_without_active_falls_back_to_first_slot() {
     assert_eq!(tab.selected_slot_id, Some(QueueSlotId(5)));
     assert_eq!(tab.queue_cursor, 0);
 }
-

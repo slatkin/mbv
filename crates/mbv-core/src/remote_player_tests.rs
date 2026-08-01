@@ -2,10 +2,9 @@ use super::*;
 use crate::config::QueueSource;
 use crate::ctrl::CtrlState;
 use crate::ctrl::WireCommand;
-use crate::player::PlayerCommand;
 use crate::playback_queue::{QueueRevision, QueueSlotId};
+use crate::player::PlayerCommand;
 use std::sync::atomic::AtomicBool;
-
 
 fn make_media_item(id: &str) -> MediaItem {
     MediaItem {
@@ -128,7 +127,12 @@ fn state_uses_cursor_as_current_index() {
     let pending_mutation = Arc::new(AtomicBool::new(false));
 
     apply_ctrl_event(
-        CtrlEvent::State(CtrlState::v7(status_with_idx(5), Vec::new(), 3, QueueSource::Unknown)),
+        CtrlEvent::State(CtrlState::v7(
+            status_with_idx(5),
+            Vec::new(),
+            3,
+            QueueSource::Unknown,
+        )),
         &status,
         &items,
         &queue_source,
@@ -345,7 +349,12 @@ fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
 
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(PlayerStatus::default(), Vec::new(), 0, crate::config::QueueSource::Unknown)))
+        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(
+            PlayerStatus::default(),
+            Vec::new(),
+            0,
+            crate::config::QueueSource::Unknown,
+        )))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
@@ -397,7 +406,12 @@ fn spawn_test_daemon_up_to_state(
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
 
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(PlayerStatus::default(), Vec::new(), 0, crate::config::QueueSource::Unknown)))
+        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(
+            PlayerStatus::default(),
+            Vec::new(),
+            0,
+            crate::config::QueueSource::Unknown,
+        )))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
@@ -536,7 +550,12 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
         reader.read_line(&mut client_hello).unwrap();
 
         // Initial baseline state: idle, nothing playing yet.
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(PlayerStatus::default(), Vec::new(), 0, crate::config::QueueSource::Unknown)))
+        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(
+            PlayerStatus::default(),
+            Vec::new(),
+            0,
+            crate::config::QueueSource::Unknown,
+        )))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
@@ -638,7 +657,12 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
 
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(PlayerStatus::default(), Vec::new(), 0, crate::config::QueueSource::Unknown)))
+        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(
+            PlayerStatus::default(),
+            Vec::new(),
+            0,
+            crate::config::QueueSource::Unknown,
+        )))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
     });

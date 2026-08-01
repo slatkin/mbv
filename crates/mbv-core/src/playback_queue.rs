@@ -15,7 +15,9 @@ impl QueueSlotId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize,
+)]
 pub struct QueueRevision(pub u64);
 
 impl QueueRevision {
@@ -214,7 +216,6 @@ impl PlaybackQueue {
         }
         Self::from_items(items, None)
     }
-
 
     pub fn revision(&self) -> QueueRevision {
         self.revision

@@ -128,7 +128,10 @@ impl RemotePlayer {
                             let revision = self.queue_revision.lock().unwrap();
                             match slot_ids.get(idx) {
                                 Some(&slot_id) if revision.0 > 0 => {
-                                    Some(WireCommand::QueueRemoveBySlot { slot_id, revision: *revision })
+                                    Some(WireCommand::QueueRemoveBySlot {
+                                        slot_id,
+                                        revision: *revision,
+                                    })
                                 }
                                 _ => {
                                     log::warn!(target: "remote", "v8 QueueRemove: no slot at idx={idx} or revision=0");
@@ -188,18 +191,17 @@ impl RemotePlayer {
                     PlayerCommand::JumpTo(idx) => {
                         let slot_ids = self.slot_ids.lock().unwrap();
                         match slot_ids.get(idx) {
-                            Some(&slot_id) => {
-                                WireCommand::JumpToSlot { slot_id }
-                            }
+                            Some(&slot_id) => WireCommand::JumpToSlot { slot_id },
                             _ => {
                                 log::warn!(target: "remote", "v8 JumpTo: no slot at idx={idx}");
                                 return false;
                             }
                         }
                     }
-                    PlayerCommand::ReplaceQueue { items: _, start_idx: _ }
-                        if !self.ctrl_compatibility.supports_queue_append =>
-                    {
+                    PlayerCommand::ReplaceQueue {
+                        items: _,
+                        start_idx: _,
+                    } if !self.ctrl_compatibility.supports_queue_append => {
                         log::warn!(target: "remote", "v8 ReplaceQueue not supported");
                         return false;
                     }
@@ -221,7 +223,13 @@ impl RemotePlayer {
             log::debug!(target: "remote", "QueueRemoveActive dropped: prior mutation in flight");
             return false;
         }
-        if self.cmd_tx.send(CtrlCmd::PlayerCmd(WireCommand::QueueRemoveActive { revision })).is_err() {
+        if self
+            .cmd_tx
+            .send(CtrlCmd::PlayerCmd(WireCommand::QueueRemoveActive {
+                revision,
+            }))
+            .is_err()
+        {
             self.pending_mutation.store(false, Ordering::SeqCst);
             false
         } else {
@@ -245,7 +253,15 @@ impl RemotePlayer {
             log::debug!(target: "remote", "QueueInsertAt dropped: prior mutation in flight");
             return false;
         }
-        if self.cmd_tx.send(CtrlCmd::PlayerCmd(WireCommand::QueueInsertAt { item, position, revision })).is_err() {
+        if self
+            .cmd_tx
+            .send(CtrlCmd::PlayerCmd(WireCommand::QueueInsertAt {
+                item,
+                position,
+                revision,
+            }))
+            .is_err()
+        {
             self.pending_mutation.store(false, Ordering::SeqCst);
             false
         } else {
@@ -261,11 +277,7 @@ impl RemotePlayer {
 
     /// Populate slot_ids and revision from a client-side PlayerTab
     /// (used by tests and bootstrap to seed the translation layer).
-    pub(crate) fn set_slot_state(
-        &self,
-        slot_ids: Vec<QueueSlotId>,
-        revision: QueueRevision,
-    ) {
+    pub(crate) fn set_slot_state(&self, slot_ids: Vec<QueueSlotId>, revision: QueueRevision) {
         *self.slot_ids.lock().unwrap() = slot_ids;
         *self.queue_revision.lock().unwrap() = revision;
     }

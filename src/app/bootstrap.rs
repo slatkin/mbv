@@ -52,7 +52,13 @@ pub(super) fn bootstrap_local_daemon_queue(
         let slot_ids = pq.slot_ids();
         let active_slot_id = pq.active_slot_id();
         let revision = pq.revision();
-        let tab = PlayerTab::from_slot_snapshot(items.clone(), slot_ids, active_slot_id, revision, cursor);
+        let tab = PlayerTab::from_slot_snapshot(
+            items.clone(),
+            slot_ids,
+            active_slot_id,
+            revision,
+            cursor,
+        );
         (tab, items, cursor)
     } else {
         let cursor = super::actions::queue_restore_cursor(

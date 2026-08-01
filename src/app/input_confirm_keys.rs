@@ -36,20 +36,20 @@ impl App {
                         // Resolve the active slot and daemon revision.
                         let (active_slot_id, revision) = {
                             let queue = self.queue_for_scope(scope);
-                            (
-                                queue.queue.active_slot_id(),
-                                queue.queue.revision(),
-                            )
+                            (queue.queue.active_slot_id(), queue.queue.revision())
                         };
                         if let Some(slot_id) = active_slot_id {
                             // Optimistically remove the active slot from the
                             // local projection (task 7.1). The daemon's next
                             // full snapshot will reconcile if rejected.
                             if let Some(queue) = self.remote_player_tab.as_mut() {
-                                let removed = match queue.queue.remove_active_slot_confirmed(slot_id) {
-                                    mbv_core::playback_queue::RemoveSlotResult::Removed(slot) => Some(slot.item),
-                                    _ => None,
-                                };
+                                let removed =
+                                    match queue.queue.remove_active_slot_confirmed(slot_id) {
+                                        mbv_core::playback_queue::RemoveSlotResult::Removed(
+                                            slot,
+                                        ) => Some(slot.item),
+                                        _ => None,
+                                    };
                                 if removed.is_some() {
                                     queue.sync_items_from_queue_model();
                                 }
@@ -69,8 +69,12 @@ impl App {
                             queue.queue.active_slot_id()
                         };
                         if let Some(slot_id) = slot_id {
-                            let removed = self.player_tab.queue.remove_active_slot_confirmed(slot_id);
-                            if matches!(removed, mbv_core::playback_queue::RemoveSlotResult::Removed(_)) {
+                            let removed =
+                                self.player_tab.queue.remove_active_slot_confirmed(slot_id);
+                            if matches!(
+                                removed,
+                                mbv_core::playback_queue::RemoveSlotResult::Removed(_)
+                            ) {
                                 self.player_tab.sync_items_from_queue_model();
                             }
                         }

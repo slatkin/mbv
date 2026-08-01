@@ -1,5 +1,5 @@
-use super::types_player_tab::PlayerTab;
 use super::types_playback::UndoEntry;
+use super::types_player_tab::PlayerTab;
 use super::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_core::playback_queue::RemoveSlotResult;
 use mbv_core::player::{PlayerCommand, PlayerEvent};
@@ -162,9 +162,9 @@ impl App {
                         if allow_undo {
                             let removed_slot_id = slot_id;
                             let revision = self.playback_queue().queue.revision();
-                            self.queue_undo_stack
-                                .push(UndoEntry::Remove {
-                                removed_slot_id: removed_slot_id.unwrap_or(mbv_core::playback_queue::QueueSlotId(0)),
+                            self.queue_undo_stack.push(UndoEntry::Remove {
+                                removed_slot_id: removed_slot_id
+                                    .unwrap_or(mbv_core::playback_queue::QueueSlotId(0)),
                                 item: Box::new(item),
                                 position: idx,
                                 revision,
@@ -405,8 +405,13 @@ impl App {
                             Some(old_sid)
                         } else {
                             // Select successor at former visual position, else predecessor
-                            slot_ids.get(cursor).copied()
-                                .or_else(|| if cursor > 0 { slot_ids.get(cursor - 1).copied() } else { None })
+                            slot_ids.get(cursor).copied().or_else(|| {
+                                if cursor > 0 {
+                                    slot_ids.get(cursor - 1).copied()
+                                } else {
+                                    None
+                                }
+                            })
                         }
                     } else {
                         None
@@ -415,7 +420,11 @@ impl App {
                         super::QueueScope::Remote => {
                             if let Some(queue) = self.remote_player_tab.as_mut() {
                                 *queue = PlayerTab::from_slot_snapshot(
-                                    items, slot_ids, active_slot_id, revision, cursor,
+                                    items,
+                                    slot_ids,
+                                    active_slot_id,
+                                    revision,
+                                    cursor,
                                 );
                                 // Task 8.2: preserve selection
                                 queue.selected_slot_id = fallback_selection;
@@ -424,7 +433,11 @@ impl App {
                         }
                         super::QueueScope::Local => {
                             self.player_tab = PlayerTab::from_slot_snapshot(
-                                items, slot_ids, active_slot_id, revision, cursor,
+                                items,
+                                slot_ids,
+                                active_slot_id,
+                                revision,
+                                cursor,
                             );
                             // Task 8.2: preserve selection
                             self.player_tab.selected_slot_id = fallback_selection;

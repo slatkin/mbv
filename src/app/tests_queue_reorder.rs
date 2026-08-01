@@ -141,7 +141,13 @@ fn undo_of_move_does_not_disturb_prior_removal_undo_history() {
     assert_eq!(app.queue_undo_stack.len(), 1);
     assert!(matches!(
         app.queue_undo_stack.last(),
-        Some(UndoEntry::Remove { removed_slot_id: _, item: _, position: _, revision: _, was_active: _ })
+        Some(UndoEntry::Remove {
+            removed_slot_id: _,
+            item: _,
+            position: _,
+            revision: _,
+            was_active: _
+        })
     ));
 }
 
@@ -287,10 +293,9 @@ fn move_queue_item_for_remote_scope_sends_move_command_and_preserves_local_queue
     assert_eq!(app.remote_queue_undo_stack.len(), 1);
     let cmd = cmd_rx.try_recv().unwrap();
     assert!(
-        matches!(&cmd,
-            mbv_core::ctrl::CtrlCmd::PlayerCmd(
-                mbv_core::ctrl::WireCommand::QueueMoveBySlot { .. }
-            )
+        matches!(
+            &cmd,
+            mbv_core::ctrl::CtrlCmd::PlayerCmd(mbv_core::ctrl::WireCommand::QueueMoveBySlot { .. })
         ),
         "expected QueueMoveBySlot (v8), got {cmd:?}"
     );
