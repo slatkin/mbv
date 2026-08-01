@@ -105,18 +105,20 @@ pub struct App {
     /// now-playing item, rescan library, save-playlist overwrite/discard),
     /// rendered and dispatched by the shared confirmation-modal component.
     pub(super) confirm_modal: Option<ConfirmModal>,
-    /// The blocking modal raised on an unannounced local-daemon disconnect
-    /// (task 7.1-7.3). Distinct from `confirm_modal`/`save_playlist_dialog`:
+    /// The blocking modal raised on an unannounced local-daemon disconnect.
+    /// Distinct from `confirm_modal`/`save_playlist_dialog`:
     /// it has three named choices, not yes/no, and its own diagnostics.
     /// `raise_daemon_lost_modal` clears the other two when it sets this, so
     /// only one blocking overlay is ever active.
     pub(super) daemon_lost_modal: Option<DaemonLostModal>,
     /// Set right before requesting a clean exit on an announced daemon
-    /// shutdown (task 7.2); printed once by `run()` after the terminal is
+    /// shutdown; printed once by `run()` after the terminal is
     /// restored, since anything written while still in the alternate screen
     /// would never be visible. `None` on every other exit path.
     pub(super) pending_exit_message: Option<String>,
-    pub(super) pending_optimistic_delete: Option<QueueSlotId>, // slot optimistically removed for QueueRemoveActive (task 7.3)
+    // Slot optimistically removed for a confirmed active-item removal, kept
+    // until the corresponding daemon snapshot or Stopped event resolves it.
+    pub(super) pending_optimistic_delete: Option<QueueSlotId>,
     pub(super) pending_queue_removal: Option<(QueueSlotId, bool)>, // deferred removal (slot, is_audio) after TrackChanged index-shifts
     pub(super) queue_undo_stack: Vec<UndoEntry>,
     pub(super) remote_queue_undo_stack: Vec<UndoEntry>,

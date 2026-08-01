@@ -24,9 +24,9 @@ impl PlayerTab {
         }
     }
 
-    /// Build a `PlayerTab` from a daemon-assigned slot snapshot (task 6.2).
-    /// Preserves the daemon's slot identities, revision, and active slot
-    /// rather than allocating fresh local slot IDs.
+    /// Build a `PlayerTab` from a daemon-assigned slot snapshot. Preserves
+    /// the daemon's slot identities, revision, and active slot rather than
+    /// allocating fresh local slot IDs.
     pub(super) fn from_slot_snapshot(
         items: Vec<MediaItem>,
         slot_ids: Vec<QueueSlotId>,
@@ -34,6 +34,12 @@ impl PlayerTab {
         revision: QueueRevision,
         queue_cursor: usize,
     ) -> Self {
+        if slot_ids.len() != items.len() {
+            log::warn!(target: "player",
+                "from_slot_snapshot: slot_ids len={} != items len={}, falling back to \
+                 fresh local slot allocation", slot_ids.len(), items.len());
+            return Self::new(items, queue_cursor);
+        }
         let queue_cursor = queue_cursor.min(items.len().saturating_sub(1));
         let slots: Vec<QueueSlot> = slot_ids
             .into_iter()
@@ -77,7 +83,23 @@ impl PlayerTab {
                 let _ = self.queue.update_slot_item(slot_id, item);
             }
         } else {
-            self.queue = PlaybackQueue::from_items(self.items.clone(), None);
+            // Rebuild the slots to match `items`, but carry the existing
+            // revision and next_slot_id forward instead of resetting them —
+            // resetting revision to 0 would make the client's mutation
+            // translation (gated on revision > 0) silently stop working.
+            let revision = self.queue.revision();
+            let mut next_slot_id = self.queue.next_slot_id();
+            let slots: Vec<QueueSlot> = self
+                .items
+                .iter()
+                .cloned()
+                .map(|item| {
+                    let slot_id = QueueSlotId::new(next_slot_id);
+                    next_slot_id = next_slot_id.saturating_add(1);
+                    QueueSlot::new(slot_id, item)
+                })
+                .collect();
+            self.queue = PlaybackQueue::from_slot_snapshot(slots, None, revision, next_slot_id);
         }
     }
 
@@ -113,24 +135,22 @@ impl PlayerTab {
             self.queue_cursor = 0;
             self.selected_slot_id = None;
         } else {
-            // Task 8.4: bare mode - resolve stale selected_slot_id from cursor
-            if let Some(sid) = self.selected_slot_id {
-                if self.resolve_slot_at(self.queue_cursor) != Some(sid) {
-                    self.selected_slot_id = self.resolve_slot_at(self.queue_cursor);
+            // Derive the cursor from the identity-based selection when the
+            // selected slot still exists, so selection survives a reorder
+            // instead of always being overwritten by the raw cursor index.
+            match self.selected_slot_id {
+                Some(sid) => {
+                    if let Some(idx) = self.queue.slot_index(sid) {
+                        self.queue_cursor = idx.min(self.items.len().saturating_sub(1));
+                    } else {
+                        self.queue_cursor = self.queue_cursor.min(self.items.len() - 1);
+                        self.selected_slot_id = self.resolve_slot_at(self.queue_cursor);
+                    }
                 }
-            } else {
-                self.selected_slot_id = self.resolve_slot_at(self.queue_cursor);
-            }
-            // Task 8.1: derive cursor from identity-based selection
-            if let Some(sid) = self.selected_slot_id {
-                if let Some(idx) = self.queue.slot_index(sid) {
-                    self.queue_cursor = idx.min(self.items.len().saturating_sub(1));
-                } else {
+                None => {
                     self.queue_cursor = self.queue_cursor.min(self.items.len() - 1);
                     self.selected_slot_id = self.resolve_slot_at(self.queue_cursor);
                 }
-            } else {
-                self.queue_cursor = self.queue_cursor.min(self.items.len() - 1);
             }
         }
     }

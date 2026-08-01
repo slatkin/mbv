@@ -56,14 +56,14 @@ impl App {
                     // instead of a synthetic Stopped for that case (see the
                     // arm below). Assert the invariant rather than silently
                     // trusting it -- getting it backwards is exactly the
-                    // spurious-modal-vs-silent-exit boundary task 7.4 tests.
+                    // spurious-modal-vs-silent-exit boundary this guards.
                     debug_assert!(
                         !self.player.is_shutdown_announced(),
                         "an announced daemon shutdown must never surface as PlayerEvent::Stopped"
                     );
                     // A client of a local daemon can offer to restart it; a
                     // client of a genuinely remote daemon cannot, and keeps
-                    // today's silent-fallback behavior (task 7.2).
+                    // today's silent-fallback behavior.
                     if self.is_local_daemon {
                         self.raise_daemon_lost_modal();
                     } else {
@@ -72,7 +72,6 @@ impl App {
                     self.refresh_after_stop();
                     return true;
                 }
-                let is_delete = false; // task 7.2: optimistic removal replaces deferred stop-delete path
                 let preserve_local_state = !self.has_direct_remote_queue();
                 // Resolve the raw mpv index to a slot right away, against
                 // the queue exactly as it stands now (syncing the shadow
@@ -81,6 +80,12 @@ impl App {
                 self.playback_queue_mut()
                     .sync_queue_model_from_items_if_needed();
                 let slot_id = self.playback_queue().resolve_slot_at(idx);
+                // The confirmed-remove-active-item flow (see
+                // `input_confirm_keys.rs`) stashes the slot it wants removed
+                // here before stopping playback; if this Stopped event
+                // resolves to that same slot, this is the deferred delete.
+                let is_delete =
+                    slot_id.is_some() && self.pending_optimistic_delete.take() == slot_id;
                 match slot_id {
                     Some(slot_id) => {
                         if !is_delete {
@@ -164,7 +169,7 @@ impl App {
                             let revision = self.playback_queue().queue.revision();
                             self.queue_undo_stack.push(UndoEntry::Remove {
                                 removed_slot_id: removed_slot_id
-                                    .unwrap_or(mbv_core::playback_queue::QueueSlotId(0)),
+                                    .unwrap_or(mbv_core::playback_queue::QueueSlotId::new(0)),
                                 item: Box::new(item),
                                 position: idx,
                                 revision,
@@ -382,22 +387,22 @@ impl App {
                 };
                 // Build PlayerTab from daemon-assigned slot identities when
                 // the snapshot carries them (v8+); fall back to local slot
-                // allocation for v7 peers (task 6.2 / 6.5).
+                // allocation for v7 peers.
                 let has_direct = self.has_direct_remote_queue();
                 if !slot_ids.is_empty() && has_direct {
                     // ── v8 authoritative snapshot ────────────────────
                     // Reconcile any optimistic deletion: if the slot was
                     // removed optimistically and the daemon confirms it's
                     // gone, the projection already matches. If it's still
-                    // present (rejected removal), restore it (task 7.3).
+                    // present (rejected removal), restore it.
                     if let Some(opt_slot) = self.pending_optimistic_delete.take() {
                         if slot_ids.contains(&opt_slot) {
                             log::warn!(target: "player",
-                                "QueueUpdated: optimistic delete of slot_id={opt_slot:?}                                  rejected by daemon, restoring authoritative state");
+                                "QueueUpdated: optimistic delete of slot_id={opt_slot:?} rejected by daemon, restoring authoritative state");
                         }
                         // Always accept the authoritative snapshot.
                     }
-                    // Task 8.2: capture selection info before consuming slot_ids
+                    // Capture selection info before consuming slot_ids below.
                     let scope = self.playback_target_queue_scope();
                     let old_selected = self.queue_for_scope(scope).selected_slot_id;
                     let fallback_selection = if let Some(old_sid) = old_selected {
@@ -426,7 +431,7 @@ impl App {
                                     revision,
                                     cursor,
                                 );
-                                // Task 8.2: preserve selection
+                                // Preserve selection across the snapshot.
                                 queue.selected_slot_id = fallback_selection;
                                 queue.clamp_cursor();
                             }
@@ -439,7 +444,7 @@ impl App {
                                 revision,
                                 cursor,
                             );
-                            // Task 8.2: preserve selection
+                            // Preserve selection across the snapshot.
                             self.player_tab.selected_slot_id = fallback_selection;
                             self.player_tab.clamp_cursor();
                         }
@@ -535,7 +540,7 @@ impl App {
                 self.flash_status(reason);
             }
             // The announced-shutdown counterpart to the unannounced-loss
-            // modal raised from PlayerEvent::Stopped above (task 7.2): a
+            // modal raised from PlayerEvent::Stopped above: a
             // local-daemon client prints one line and exits cleanly; a
             // client of a genuinely remote daemon keeps today's behavior.
             PlayerEvent::DaemonShutdownAnnounced => {
@@ -552,7 +557,7 @@ impl App {
         false
     }
 
-    /// Raises the blocking daemon-lost modal (task 7.1), replacing whatever
+    /// Raises the blocking daemon-lost modal, replacing whatever
     /// other blocking overlay was showing -- only one is ever active.
     fn raise_daemon_lost_modal(&mut self) {
         self.confirm_modal = None;

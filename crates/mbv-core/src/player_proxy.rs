@@ -198,7 +198,7 @@ impl PlayerProxy {
         }
     }
 
-    /// Send QueueRemoveActive to the daemon (task 7.1). Only valid for
+    /// Send QueueRemoveActive to the daemon. Only valid for
     /// v8+ remote connections; returns false for local or v7 peers.
     pub fn send_queue_remove_active(&self, revision: crate::playback_queue::QueueRevision) -> bool {
         match &self.inner {
@@ -207,7 +207,7 @@ impl PlayerProxy {
         }
     }
 
-    /// Send QueueInsertAt to the daemon for undo restoration (task 9.3).
+    /// Send QueueInsertAt to the daemon for undo restoration.
     /// Only valid for v8+ remote connections; returns false for local or v7 peers.
     pub fn send_queue_insert_at(
         &self,
@@ -223,6 +223,7 @@ impl PlayerProxy {
 
     /// Populate slot state for v8 command translation (test helper).
     /// No-op for local players.
+    #[cfg(any(test, feature = "test-support"))]
     pub fn set_slot_state(
         &self,
         slot_ids: Vec<crate::playback_queue::QueueSlotId>,

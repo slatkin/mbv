@@ -180,22 +180,22 @@
         // v8 slot-aware queue command tags
         assert_eq!(
             wire_tag(&WireCommand::QueueRemoveBySlot {
-                slot_id: QueueSlotId(1),
-                revision: QueueRevision(5),
+                slot_id: QueueSlotId::new(1),
+                revision: QueueRevision::new(5),
             }),
             "QueueRemoveBySlot"
         );
         assert_eq!(
             wire_tag(&WireCommand::QueueMoveBySlot {
-                slot_id: QueueSlotId(2),
+                slot_id: QueueSlotId::new(2),
                 to_position: 1,
-                revision: QueueRevision(6),
+                revision: QueueRevision::new(6),
             }),
             "QueueMoveBySlot"
         );
         assert_eq!(
             wire_tag(&WireCommand::JumpToSlot {
-                slot_id: QueueSlotId(3),
+                slot_id: QueueSlotId::new(3),
             }),
             "JumpToSlot"
         );
@@ -203,13 +203,13 @@
             wire_tag(&WireCommand::QueueInsertAt {
                 item: stub_media_item(),
                 position: 1,
-                revision: QueueRevision(7),
+                revision: QueueRevision::new(7),
             }),
             "QueueInsertAt"
         );
         assert_eq!(
             wire_tag(&WireCommand::QueueRemoveActive {
-                revision: QueueRevision(8),
+                revision: QueueRevision::new(8),
             }),
             "QueueRemoveActive"
         );
@@ -299,7 +299,7 @@
     fn wire_command_round_trips_through_json() {
         let json = serde_json::to_string(&WireCommand::SetVolume(77)).unwrap();
         let decoded: WireCommand = serde_json::from_str(&json).unwrap();
-        match PlayerCommand::from(decoded) {
+        match PlayerCommand::try_from(decoded).unwrap() {
             PlayerCommand::SetVolume(v) => assert_eq!(v, 77),
             _ => panic!("expected SetVolume"),
         }
@@ -310,7 +310,7 @@
         let wire: WireCommand = PlayerCommand::SeekAbsolute(12.5).into();
         let json = serde_json::to_string(&wire).unwrap();
         let decoded: WireCommand = serde_json::from_str(&json).unwrap();
-        match PlayerCommand::from(decoded) {
+        match PlayerCommand::try_from(decoded).unwrap() {
             PlayerCommand::SeekAbsolute(s) => assert_eq!(s, 12.5),
             _ => panic!("expected SeekAbsolute"),
         }
@@ -322,7 +322,7 @@
             .unwrap();
         let cmd: CtrlCmd = serde_json::from_str(&json).unwrap();
         match cmd {
-            CtrlCmd::PlayerCmd(wire) => match PlayerCommand::from(wire) {
+            CtrlCmd::PlayerCmd(wire) => match PlayerCommand::try_from(wire).unwrap() {
                 PlayerCommand::SetMute(m) => assert!(m),
                 _ => panic!("expected SetMute"),
             },
@@ -419,103 +419,73 @@
     }
 
     #[test]
-    fn legacy_wire_command_tags_match_wire_tags() {
-        // Verify LegacyWireCommand serializes with the same pinned tags
-        // as the current v7 WireCommand index-based variants.
-        let json = serde_json::to_string(&LegacyWireCommand::QueueRemove(0)).unwrap();
-        assert_eq!(json, "{\"PlaylistRemove\":0}");
-        let json = serde_json::to_string(&LegacyWireCommand::QueueMove(1, 2)).unwrap();
-        assert_eq!(json, "{\"PlaylistMove\":[1,2]}");
-        let json = serde_json::to_string(&LegacyWireCommand::JumpTo(3)).unwrap();
-        assert_eq!(json, "{\"JumpTo\":3}");
-    }
-
-    #[test]
-    fn legacy_wire_command_round_trips_through_json() {
-        let json = serde_json::to_string(&LegacyWireCommand::QueueRemove(5)).unwrap();
-        let decoded: LegacyWireCommand = serde_json::from_str(&json).unwrap();
-        assert!(matches!(decoded, LegacyWireCommand::QueueRemove(5)));
-    }
-
-    #[test]
-    fn legacy_wire_command_converts_to_wire_command() {
-        let wire: WireCommand = LegacyWireCommand::QueueRemove(7).into();
-        let json = serde_json::to_string(&wire).unwrap();
-        assert_eq!(json, "{\"PlaylistRemove\":7}");
-
-        let wire: WireCommand = LegacyWireCommand::QueueMove(2, 4).into();
-        let json = serde_json::to_string(&wire).unwrap();
-        assert_eq!(json, "{\"PlaylistMove\":[2,4]}");
-
-        let wire: WireCommand = LegacyWireCommand::JumpTo(0).into();
-        let json = serde_json::to_string(&wire).unwrap();
-        assert_eq!(json, "{\"JumpTo\":0}");
-    }
-
-    #[test]
     fn v8_wire_command_round_trips_through_json() {
         let cmd = WireCommand::QueueRemoveBySlot {
-            slot_id: QueueSlotId(42),
-            revision: QueueRevision(3),
+            slot_id: QueueSlotId::new(42),
+            revision: QueueRevision::new(3),
         };
         let json = serde_json::to_string(&cmd).unwrap();
         let decoded: WireCommand = serde_json::from_str(&json).unwrap();
-        assert!(matches!(
-            decoded,
-            WireCommand::QueueRemoveBySlot {
-                slot_id: QueueSlotId(42),
-                revision: QueueRevision(3),
+        match decoded {
+            WireCommand::QueueRemoveBySlot { slot_id, revision } => {
+                assert_eq!(slot_id, QueueSlotId::new(42));
+                assert_eq!(revision, QueueRevision::new(3));
             }
-        ));
+            other => panic!("unexpected decoded variant: {other:?}"),
+        }
 
         let cmd = WireCommand::QueueMoveBySlot {
-            slot_id: QueueSlotId(1),
+            slot_id: QueueSlotId::new(1),
             to_position: 2,
-            revision: QueueRevision(4),
+            revision: QueueRevision::new(4),
         };
         let json = serde_json::to_string(&cmd).unwrap();
         let decoded: WireCommand = serde_json::from_str(&json).unwrap();
-        assert!(matches!(
-            decoded,
+        match decoded {
             WireCommand::QueueMoveBySlot {
-                slot_id: QueueSlotId(1),
-                to_position: 2,
-                revision: QueueRevision(4),
+                slot_id,
+                to_position,
+                revision,
+            } => {
+                assert_eq!(slot_id, QueueSlotId::new(1));
+                assert_eq!(to_position, 2);
+                assert_eq!(revision, QueueRevision::new(4));
             }
-        ));
+            other => panic!("unexpected decoded variant: {other:?}"),
+        }
 
         let cmd = WireCommand::JumpToSlot {
-            slot_id: QueueSlotId(99),
+            slot_id: QueueSlotId::new(99),
         };
         let json = serde_json::to_string(&cmd).unwrap();
         let decoded: WireCommand = serde_json::from_str(&json).unwrap();
-        assert!(matches!(
-            decoded,
-            WireCommand::JumpToSlot {
-                slot_id: QueueSlotId(99),
+        match decoded {
+            WireCommand::JumpToSlot { slot_id } => {
+                assert_eq!(slot_id, QueueSlotId::new(99));
             }
-        ));
+            other => panic!("unexpected decoded variant: {other:?}"),
+        }
 
         let cmd = WireCommand::QueueInsertAt {
             item: stub_media_item(),
             position: 0,
-            revision: QueueRevision(1),
+            revision: QueueRevision::new(1),
         };
         let json = serde_json::to_string(&cmd).unwrap();
         let decoded: WireCommand = serde_json::from_str(&json).unwrap();
         assert!(matches!(decoded, WireCommand::QueueInsertAt { position: 0, .. }));
 
         let cmd = WireCommand::QueueRemoveActive {
-            revision: QueueRevision(2),
+            revision: QueueRevision::new(2),
         };
         let json = serde_json::to_string(&cmd).unwrap();
         let decoded: WireCommand = serde_json::from_str(&json).unwrap();
-        assert!(matches!(
-            decoded,
-            WireCommand::QueueRemoveActive {
-                revision: QueueRevision(2),
+        match decoded {
+            WireCommand::QueueRemoveActive { revision } => {
+                assert_eq!(revision, QueueRevision::new(2));
             }
-        ));
+            other => panic!("unexpected decoded variant: {other:?}"),
+        }
     }
 
     #[test]
@@ -545,15 +515,15 @@
             items: vec![],
             cursor: 0,
             source: QueueSource::Album,
-            slot_ids: vec![QueueSlotId(1), QueueSlotId(2)],
-            revision: QueueRevision(5),
-            active_slot_id: Some(QueueSlotId(1)),
+            slot_ids: vec![QueueSlotId::new(1), QueueSlotId::new(2)],
+            revision: QueueRevision::new(5),
+            active_slot_id: Some(QueueSlotId::new(1)),
         };
         let json = serde_json::to_string(&state).unwrap();
         let decoded: CtrlState = serde_json::from_str(&json).unwrap();
-        assert_eq!(decoded.slot_ids, vec![QueueSlotId(1), QueueSlotId(2)]);
-        assert_eq!(decoded.revision, QueueRevision(5));
-        assert_eq!(decoded.active_slot_id, Some(QueueSlotId(1)));
+        assert_eq!(decoded.slot_ids, vec![QueueSlotId::new(1), QueueSlotId::new(2)]);
+        assert_eq!(decoded.revision, QueueRevision::new(5));
+        assert_eq!(decoded.active_slot_id, Some(QueueSlotId::new(1)));
     }
 
     #[test]

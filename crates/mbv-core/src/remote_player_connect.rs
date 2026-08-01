@@ -287,11 +287,11 @@ fn apply_ctrl_event(
             *status.lock().unwrap() = next_status;
             *items.lock().unwrap() = s.items.clone();
             *queue_source.lock().unwrap() = s.source.clone();
-            // Store v8 slot-aware state for command translation (6.1).
+            // Store v8 slot-aware state for command translation.
             *slot_ids.lock().unwrap() = s.slot_ids.clone();
             *queue_revision.lock().unwrap() = s.revision;
             // Full authoritative snapshot received: clear the in-flight
-            // mutation flag (6.4) so the next mutation is not dropped.
+            // mutation flag so the next mutation is not dropped.
             pending_mutation.store(false, Ordering::SeqCst);
             // The very first State snapshot read synchronously during connect()
             // establishes baseline state before the App (and its event loop)

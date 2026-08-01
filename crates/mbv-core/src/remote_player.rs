@@ -119,7 +119,7 @@ impl RemotePlayer {
             }
             // ── v8 slot-aware translation ───────────────────────────
             // Structural mutations (remove/move) are gated by the one-
-            // in-flight policy (task 6.4). JumpTo is not structural.
+            // in-flight policy. JumpTo is not structural.
             _ if self.ctrl_compatibility.peer_protocol_version >= 8 => {
                 match cmd {
                     PlayerCommand::QueueRemove(idx) => {
@@ -127,7 +127,7 @@ impl RemotePlayer {
                             let slot_ids = self.slot_ids.lock().unwrap();
                             let revision = self.queue_revision.lock().unwrap();
                             match slot_ids.get(idx) {
-                                Some(&slot_id) if revision.0 > 0 => {
+                                Some(&slot_id) if revision.raw() > 0 => {
                                     Some(WireCommand::QueueRemoveBySlot {
                                         slot_id,
                                         revision: *revision,
@@ -160,7 +160,7 @@ impl RemotePlayer {
                             let slot_ids = self.slot_ids.lock().unwrap();
                             let revision = self.queue_revision.lock().unwrap();
                             match slot_ids.get(from) {
-                                Some(&slot_id) if revision.0 > 0 => {
+                                Some(&slot_id) if revision.raw() > 0 => {
                                     Some(WireCommand::QueueMoveBySlot {
                                         slot_id,
                                         to_position: to,
@@ -213,10 +213,10 @@ impl RemotePlayer {
         self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()
     }
 
-    /// Send QueueRemoveActive to the daemon (task 7.1). The daemon
+    /// Send QueueRemoveActive to the daemon. The daemon
     /// transactionally removes the active slot and stops playback.
     pub fn send_queue_remove_active(&self, revision: QueueRevision) -> bool {
-        if revision.0 == 0 {
+        if revision.raw() == 0 {
             return false;
         }
         if self.pending_mutation.swap(true, Ordering::SeqCst) {
@@ -237,7 +237,7 @@ impl RemotePlayer {
         }
     }
 
-    /// Send QueueInsertAt to the daemon for undo restoration (task 9.3).
+    /// Send QueueInsertAt to the daemon for undo restoration.
     /// The daemon inserts the item at the given position and broadcasts
     /// the updated snapshot with a newly assigned slot ID.
     pub fn send_queue_insert_at(
@@ -246,7 +246,7 @@ impl RemotePlayer {
         position: usize,
         revision: QueueRevision,
     ) -> bool {
-        if revision.0 == 0 {
+        if revision.raw() == 0 {
             return false;
         }
         if self.pending_mutation.swap(true, Ordering::SeqCst) {

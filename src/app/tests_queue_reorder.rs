@@ -251,12 +251,12 @@ fn move_queue_item_for_remote_scope_sends_move_command_and_preserves_local_queue
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
 
     // Populate the RemotePlayer stub's slot state so the v8 translation
-    // layer can resolve slot IDs (task 6.1).
+    // layer can resolve slot IDs.
     {
         let tab = app.remote_player_tab.as_ref().unwrap();
         app.player.set_slot_state(
             tab.queue.slot_ids(),
-            mbv_core::playback_queue::QueueRevision(1), // non-zero rev
+            mbv_core::playback_queue::QueueRevision::new(1), // non-zero rev
         );
     }
 
@@ -360,12 +360,12 @@ fn remote_queue_update_after_move_keeps_cursor_on_moved_item() {
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
 
     // Populate the RemotePlayer stub's slot state so the v8 translation
-    // layer can resolve slot IDs (task 6.1).
+    // layer can resolve slot IDs.
     {
         let tab = app.remote_player_tab.as_ref().unwrap();
         app.player.set_slot_state(
             tab.queue.slot_ids(),
-            mbv_core::playback_queue::QueueRevision(1), // non-zero rev
+            mbv_core::playback_queue::QueueRevision::new(1), // non-zero rev
         );
     }
 
@@ -436,6 +436,38 @@ fn remote_queue_update_after_move_tracks_duplicate_item_by_position() {
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn remote_queue_v8_snapshot_preserves_selection_across_reorder() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let local_items = make_items(2);
+    let remote_items = make_items(3);
+    let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
+    app.set_queue_scope(QueueScope::Remote);
+
+    let slot_ids = app.remote_player_tab.as_ref().unwrap().queue.slot_ids();
+    // Select the item currently at index 1; the daemon snapshot below moves
+    // that same slot to index 0.
+    let selected = slot_ids[1];
+    app.remote_player_tab.as_mut().unwrap().selected_slot_id = Some(selected);
+
+    app.handle_player_event(PlayerEvent::QueueUpdated {
+        items: vec![
+            remote_items[1].clone(),
+            remote_items[0].clone(),
+            remote_items[2].clone(),
+        ],
+        cursor: 0,
+        source: crate::config::QueueSource::Remote,
+        slot_ids: vec![slot_ids[1], slot_ids[0], slot_ids[2]],
+        revision: mbv_core::playback_queue::QueueRevision::new(1),
+        active_slot_id: None,
+    });
+
+    let tab = app.remote_player_tab.as_ref().unwrap();
+    assert_eq!(tab.selected_slot_id, Some(selected));
+    assert_eq!(tab.queue_cursor, 0);
 }
 
 #[test]

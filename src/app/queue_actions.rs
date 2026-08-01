@@ -24,7 +24,7 @@ impl App {
                 title: " Remove Item ".into(),
                 message: "Remove now-playing item and stop playback?".into(),
                 hint: "[y] Confirm    [Esc] Cancel".into(),
-                on_confirm: ConfirmAction::RemoveActiveQueueItem(pos),
+                on_confirm: ConfirmAction::RemoveActiveQueueItem,
             });
             return;
         }
@@ -40,7 +40,7 @@ impl App {
         self.undo_stack_for_scope_mut(scope)
             .push(UndoEntry::Remove {
                 removed_slot_id: removed_slot_id
-                    .unwrap_or(mbv_core::playback_queue::QueueSlotId(0)),
+                    .unwrap_or(mbv_core::playback_queue::QueueSlotId::new(0)),
                 item: Box::new(item),
                 position: pos,
                 revision,

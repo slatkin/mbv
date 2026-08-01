@@ -259,6 +259,11 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
     app.panel_focus = PanelFocus::Queue;
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
+    // Keep identity-based selection in sync with the cursor move above, as
+    // real navigation does, so clamp_cursor below clamps this selection
+    // into range rather than following a stale one from construction time.
+    let cursor_slot = app.remote_player_tab.as_ref().unwrap().resolve_slot_at(2);
+    app.remote_player_tab.as_mut().unwrap().selected_slot_id = cursor_slot;
 
     app.open_context_menu();
 

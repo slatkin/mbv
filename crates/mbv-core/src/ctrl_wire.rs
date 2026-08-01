@@ -192,9 +192,15 @@ impl From<PlayerCommand> for WireCommand {
     }
 }
 
-impl From<WireCommand> for PlayerCommand {
-    fn from(cmd: WireCommand) -> Self {
-        match cmd {
+impl TryFrom<WireCommand> for PlayerCommand {
+    type Error = WireCommand;
+
+    /// Converts a wire command to its in-process `PlayerCommand` equivalent.
+    /// Returns `Err(cmd)` (the original command, unmodified) for the v8
+    /// slot-aware variants, which the daemon control layer must intercept
+    /// and handle directly instead of converting -- see `daemon_control.rs`.
+    fn try_from(cmd: WireCommand) -> Result<Self, Self::Error> {
+        Ok(match cmd {
             WireCommand::TogglePause => PlayerCommand::TogglePause,
             WireCommand::JumpTo(idx) => PlayerCommand::JumpTo(idx),
             WireCommand::QueueAppend { items } => PlayerCommand::QueueAppend { items },
@@ -240,24 +246,17 @@ impl From<WireCommand> for PlayerCommand {
             WireCommand::ReplaceQueue { items, start_idx } => {
                 PlayerCommand::ReplaceQueue { items, start_idx }
             }
-            // v8 slot-aware commands have no `PlayerCommand` equivalent.
-            // The daemon control layer handles them directly on `WireCommand`
-            // (see `daemon_control.rs` task 4.x) instead of converting first.
-            WireCommand::QueueRemoveBySlot { .. } => {
-                unreachable!("v8 QueueRemoveBySlot handled directly by daemon control layer")
-            }
-            WireCommand::QueueMoveBySlot { .. } => {
-                unreachable!("v8 QueueMoveBySlot handled directly by daemon control layer")
-            }
-            WireCommand::JumpToSlot { .. } => {
-                unreachable!("v8 JumpToSlot handled directly by daemon control layer")
-            }
-            WireCommand::QueueInsertAt { .. } => {
-                unreachable!("v8 QueueInsertAt handled directly by daemon control layer")
-            }
-            WireCommand::QueueRemoveActive { .. } => {
-                unreachable!("v8 QueueRemoveActive handled directly by daemon control layer")
-            }
-        }
+            // v8 slot-aware commands have no `PlayerCommand` equivalent; the
+            // daemon control layer must intercept and handle them directly
+            // on `WireCommand` instead of converting first (see
+            // `daemon_control.rs`). Grouped into one arm below rather than
+            // returned as `Err` per-arm here, since that needs the whole
+            // (unconsumed) `cmd`.
+            cmd @ (WireCommand::QueueRemoveBySlot { .. }
+            | WireCommand::QueueMoveBySlot { .. }
+            | WireCommand::JumpToSlot { .. }
+            | WireCommand::QueueInsertAt { .. }
+            | WireCommand::QueueRemoveActive { .. }) => return Err(cmd),
+        })
     }
 }

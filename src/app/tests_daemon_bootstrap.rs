@@ -208,7 +208,7 @@ fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
     assert_eq!(cursor, 2);
 }
 
-// ── slot-aware bootstrap tests (task 10.3) ──────────────────────────
+// ── slot-aware bootstrap tests ────────────────────────────────────────
 
 #[test]
 fn cold_adoption_learns_slot_ids_from_persisted_state() {
@@ -242,26 +242,26 @@ fn cold_adoption_learns_slot_ids_from_persisted_state() {
     assert_eq!(bootstrap.player_tab.queue.slots().len(), 3);
     assert_eq!(
         bootstrap.player_tab.queue.slots()[0].slot_id,
-        QueueSlotId(100)
+        QueueSlotId::new(100)
     );
     assert_eq!(
         bootstrap.player_tab.queue.slots()[1].slot_id,
-        QueueSlotId(200)
+        QueueSlotId::new(200)
     );
     assert_eq!(
         bootstrap.player_tab.queue.slots()[2].slot_id,
-        QueueSlotId(300)
+        QueueSlotId::new(300)
     );
     assert_eq!(
         bootstrap.player_tab.queue.active_slot_id(),
-        Some(QueueSlotId(200))
+        Some(QueueSlotId::new(200))
     );
-    assert_eq!(bootstrap.player_tab.queue.revision(), QueueRevision(5));
+    assert_eq!(bootstrap.player_tab.queue.revision(), QueueRevision::new(5));
 
     // Active slot is selected by default.
     assert_eq!(
         bootstrap.player_tab.selected_slot_id,
-        Some(QueueSlotId(200))
+        Some(QueueSlotId::new(200))
     );
 
     // Cursor points to the active slot.
@@ -302,8 +302,8 @@ fn cold_adoption_allocates_fresh_slot_ids_when_persisted_has_no_slot_data() {
     let slots = bootstrap.player_tab.queue.slots();
     assert_eq!(slots.len(), 2);
     // default next_slot_id starts at 1 so first allocated is id=1
-    assert_eq!(slots[0].slot_id, QueueSlotId(1));
-    assert_eq!(slots[1].slot_id, QueueSlotId(2));
+    assert_eq!(slots[0].slot_id, QueueSlotId::new(1));
+    assert_eq!(slots[1].slot_id, QueueSlotId::new(2));
     assert!(bootstrap.player_tab.queue.active_slot_id().is_none());
 }
 
@@ -346,42 +346,46 @@ fn reconnect_clears_adopt_queue() {
 #[test]
 fn from_slot_snapshot_preserves_daemon_assigned_slot_ids_and_active_selection() {
     let items = make_items(3);
-    let slot_ids = vec![QueueSlotId(10), QueueSlotId(20), QueueSlotId(30)];
+    let slot_ids = vec![
+        QueueSlotId::new(10),
+        QueueSlotId::new(20),
+        QueueSlotId::new(30),
+    ];
     let tab = PlayerTab::from_slot_snapshot(
         items.clone(),
         slot_ids.clone(),
-        Some(QueueSlotId(20)), // active slot
-        QueueRevision(3),
+        Some(QueueSlotId::new(20)), // active slot
+        QueueRevision::new(3),
         1, // cursor at position 1 (the active slot)
     );
 
     assert_eq!(tab.items.len(), 3);
     assert_eq!(tab.queue.slots().len(), 3);
-    assert_eq!(tab.queue.slots()[0].slot_id, QueueSlotId(10));
-    assert_eq!(tab.queue.slots()[1].slot_id, QueueSlotId(20));
-    assert_eq!(tab.queue.slots()[2].slot_id, QueueSlotId(30));
-    assert_eq!(tab.queue.active_slot_id(), Some(QueueSlotId(20)));
-    assert_eq!(tab.queue.revision(), QueueRevision(3));
+    assert_eq!(tab.queue.slots()[0].slot_id, QueueSlotId::new(10));
+    assert_eq!(tab.queue.slots()[1].slot_id, QueueSlotId::new(20));
+    assert_eq!(tab.queue.slots()[2].slot_id, QueueSlotId::new(30));
+    assert_eq!(tab.queue.active_slot_id(), Some(QueueSlotId::new(20)));
+    assert_eq!(tab.queue.revision(), QueueRevision::new(3));
     assert_eq!(tab.queue_cursor, 1);
     // Selection defaults to the active slot on initial load.
-    assert_eq!(tab.selected_slot_id, Some(QueueSlotId(20)));
+    assert_eq!(tab.selected_slot_id, Some(QueueSlotId::new(20)));
 }
 
 #[test]
 fn from_slot_snapshot_without_active_falls_back_to_first_slot() {
     let items = make_items(2);
-    let slot_ids = vec![QueueSlotId(5), QueueSlotId(6)];
+    let slot_ids = vec![QueueSlotId::new(5), QueueSlotId::new(6)];
     let tab = PlayerTab::from_slot_snapshot(
         items.clone(),
         slot_ids.clone(),
         None, // no active slot
-        QueueRevision(0),
+        QueueRevision::new(0),
         0,
     );
 
     assert_eq!(tab.items.len(), 2);
     assert!(tab.queue.active_slot_id().is_none());
     // Falls back to first slot.
-    assert_eq!(tab.selected_slot_id, Some(QueueSlotId(5)));
+    assert_eq!(tab.selected_slot_id, Some(QueueSlotId::new(5)));
     assert_eq!(tab.queue_cursor, 0);
 }

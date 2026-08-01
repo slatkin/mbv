@@ -435,7 +435,7 @@ fn ctrl_z_while_power_library_panel_focused_does_not_leak_to_queue_undo() {
     // queue's own Ctrl+z undo binding below it in `handle_queue_key`.
     let mut app = make_power_movie_app();
     app.queue_undo_stack.push(crate::app::UndoEntry::Remove {
-        removed_slot_id: mbv_core::playback_queue::QueueSlotId(0),
+        removed_slot_id: mbv_core::playback_queue::QueueSlotId::new(0),
         item: Box::new(crate::app::tests::make_item("removed", "Movie")),
         position: 0,
         was_active: false,
@@ -594,7 +594,7 @@ fn ctrl_z_while_power_queue_panel_focused_does_trigger_undo() {
     let mut app = make_power_movie_app();
     app.panel_focus = PanelFocus::Queue;
     app.queue_undo_stack.push(crate::app::UndoEntry::Remove {
-        removed_slot_id: mbv_core::playback_queue::QueueSlotId(0),
+        removed_slot_id: mbv_core::playback_queue::QueueSlotId::new(0),
         item: Box::new(crate::app::tests::make_item("removed", "Movie")),
         position: 0,
         was_active: false,

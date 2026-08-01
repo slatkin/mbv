@@ -15,7 +15,6 @@ pub type PlaybackGeneration = u64;
 
 include!("ctrl_compat.rs");
 include!("ctrl_wire.rs");
-include!("ctrl_legacy.rs");
 include!("ctrl_event.rs");
 
 #[cfg(test)]

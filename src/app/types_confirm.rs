@@ -6,7 +6,7 @@
 #[derive(Clone)]
 pub(super) enum ConfirmAction {
     ClearQueue,
-    RemoveActiveQueueItem(usize),
+    RemoveActiveQueueItem,
     RescanLibrary(usize),
     SaveOverwritePlaylist { existing_id: String, name: String },
     DiscardOrSaveDirtyPlaylist,

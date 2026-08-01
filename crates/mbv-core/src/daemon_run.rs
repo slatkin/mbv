@@ -249,20 +249,31 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     let mut playback_intents = PlaybackIntentState::default();
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
+    // Revision last written to disk, so a full JSON queue write isn't
+    // triggered by every ctrl command (volume, seek, pause, ...) that
+    // doesn't actually mutate the queue's structure.
+    let mut last_persisted_revision: Option<u64> = None;
 
     /// Serialize the current queue state (including slot metadata) to the
-    /// daemon-owned queue_state.json on disk. Called after every structural
-    /// mutation and during graceful shutdown.
+    /// daemon-owned queue_state.json on disk. Called from the event loop
+    /// whenever the queue revision has changed since the last write (see
+    /// `last_persisted_revision` below), and during graceful shutdown.
     fn persist_queue_state(shared_queue: &SharedQueueState) {
         let q = shared_queue.queue.lock().unwrap();
         let source = shared_queue.source.lock().unwrap().clone();
+        // Carry forward the on-disk resume-position map: the daemon's
+        // in-memory queue doesn't track it, so overwriting with an empty
+        // map here would silently wipe it on every persist.
+        let positions = crate::config::load_queue_state()
+            .map(|prior| prior.positions)
+            .unwrap_or_default();
         let state = crate::config::QueueState {
             source,
             items: q.items_snapshot(),
             cursor: q.current_index().unwrap_or(0),
             last_played_item_id: q.active_slot().map(|s| s.item.id.clone()),
             last_played_completed: q.active_slot().map(|s| s.item.played).unwrap_or(false),
-            positions: Default::default(),
+            positions,
             slot_ids: Some(q.slot_ids().into_iter().map(|sid| sid.raw()).collect()),
             revision: Some(q.revision().raw()),
             active_slot_id: q.active_slot_id().map(|sid| sid.raw()),
@@ -271,6 +282,21 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         crate::config::save_queue_state(&state);
     }
 
+    /// Persists only when the queue's revision has actually changed since
+    /// the last write, so per-command daemon events (volume, seek, pause,
+    /// ...) that leave the queue's structure untouched don't each trigger a
+    /// full JSON queue write.
+    fn persist_queue_state_if_changed(
+        shared_queue: &SharedQueueState,
+        last_persisted_revision: &mut Option<u64>,
+    ) {
+        let current = shared_queue.queue.lock().unwrap().revision().raw();
+        if *last_persisted_revision == Some(current) {
+            return;
+        }
+        persist_queue_state(shared_queue);
+        *last_persisted_revision = Some(current);
+    }
 
     loop {
         if last_keepalive.elapsed() >= Duration::from_secs(30) {
@@ -505,7 +531,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     None,
                     &merged_tx,
                 );
-                persist_queue_state(&shared_queue);
+                persist_queue_state_if_changed(&shared_queue, &mut last_persisted_revision);
             }
             DaemonEvent::PlaybackResolved {
                 command,
@@ -581,7 +607,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     Some(fetched),
                     &merged_tx,
                 );
-                persist_queue_state(&shared_queue);
+                persist_queue_state_if_changed(&shared_queue, &mut last_persisted_revision);
             }
             DaemonEvent::CtrlDisconnected(client_id) => {
                 ctrl_clients.lock().unwrap().remove(client_id);

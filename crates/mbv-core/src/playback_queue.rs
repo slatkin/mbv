@@ -7,9 +7,13 @@ use crate::api::{MediaItem, TICKS_PER_SECOND};
 const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct QueueSlotId(pub u64);
+pub struct QueueSlotId(u64);
 
 impl QueueSlotId {
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
+
     pub fn raw(self) -> u64 {
         self.0
     }
@@ -18,9 +22,13 @@ impl QueueSlotId {
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize,
 )]
-pub struct QueueRevision(pub u64);
+pub struct QueueRevision(u64);
 
 impl QueueRevision {
+    pub fn new(revision: u64) -> Self {
+        Self(revision)
+    }
+
     pub fn raw(self) -> u64 {
         self.0
     }
@@ -199,8 +207,9 @@ impl PlaybackQueue {
     ) -> Self {
         if let Some(slot_ids) = slot_ids {
             if slot_ids.len() == items.len() && !items.is_empty() {
-                let q_slot_ids: Vec<QueueSlotId> = slot_ids.into_iter().map(QueueSlotId).collect();
-                let active = active_slot_id.map(QueueSlotId);
+                let q_slot_ids: Vec<QueueSlotId> =
+                    slot_ids.into_iter().map(QueueSlotId::new).collect();
+                let active = active_slot_id.map(QueueSlotId::new);
                 let slots: Vec<QueueSlot> = q_slot_ids
                     .into_iter()
                     .zip(items)
@@ -209,7 +218,7 @@ impl PlaybackQueue {
                 return Self::from_slot_snapshot(
                     slots,
                     active,
-                    QueueRevision(revision.unwrap_or(0)),
+                    QueueRevision::new(revision.unwrap_or(0)),
                     next_slot_id.unwrap_or(1),
                 );
             }
@@ -229,10 +238,9 @@ impl PlaybackQueue {
         self.active_slot_id
     }
 
-    // ── Phase 1 helpers: positional-index adapters needed by the daemon
-    //     control layer while the wire protocol still carries positional
-    //     indices. These will narrow or disappear once v8 slot-based
-    //     commands replace the legacy index-based handlers.
+    // ── Positional-index adapters needed by the daemon control layer for
+    //     the legacy v7 wire protocol, which carries positional indices
+    //     rather than slot IDs.
 
     pub fn len(&self) -> usize {
         self.slots.len()
@@ -264,10 +272,20 @@ impl PlaybackQueue {
         self.slots.get(index).map(|s| &s.item)
     }
 
-    /// Atomically replace the entire queue; new slot identities are
-    /// allocated from scratch (no identity is carried over).
+    /// Atomically replace the entire queue's items; slot identities for the
+    /// new items are freshly allocated, but `next_slot_id` keeps counting up
+    /// from wherever it was (never resets), and `revision` is bumped once
+    /// rather than reset to zero, so clients that only translate mutations
+    /// once they've seen a non-zero revision keep working after a replace.
     pub fn replace_all(&mut self, items: Vec<MediaItem>, active_index: Option<usize>) {
-        *self = Self::from_items(items, active_index);
+        self.slots = Vec::with_capacity(items.len());
+        for item in items {
+            let slot_id = self.allocate_slot_id();
+            self.slots.push(QueueSlot::new(slot_id, item));
+        }
+        self.active_slot_id =
+            active_index.and_then(|index| self.slots.get(index).map(|s| s.slot_id));
+        self.revision.bump();
     }
 
     /// Append multiple items at the tail, bumping revision once per item.
@@ -487,7 +505,7 @@ impl PlaybackQueue {
     }
 
     fn allocate_slot_id(&mut self) -> QueueSlotId {
-        let slot_id = QueueSlotId(self.next_slot_id);
+        let slot_id = QueueSlotId::new(self.next_slot_id);
         self.next_slot_id = self.next_slot_id.saturating_add(1);
         slot_id
     }

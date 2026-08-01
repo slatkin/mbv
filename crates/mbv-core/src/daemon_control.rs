@@ -8,6 +8,19 @@ fn broadcast_queue_state(
     shared_queue: &SharedQueueState,
     source: &crate::config::QueueSource,
 ) {
+    let (has_v7_peer, has_v8_peer) = {
+        let clients = ctrl_clients.lock().unwrap();
+        (
+            clients.connection.iter().any(|c| c.peer_version < 8),
+            clients.connection.iter().any(|c| c.peer_version >= 8),
+        )
+    };
+    let source_clone = source.clone();
+    if !has_v7_peer && !has_v8_peer {
+        *shared_queue.source.lock().unwrap() = source_clone;
+        return;
+    }
+
     let q = shared_queue.queue.lock().unwrap();
     let status = player.status.lock().unwrap().clone();
     let items = q.items_snapshot();
@@ -17,33 +30,45 @@ fn broadcast_queue_state(
     let active_slot_id = q.active_slot_id();
     drop(q);
 
-    let source_clone = source.clone();
-    let v7_event = CtrlEvent::State(CtrlState::v7(
-        status.clone(),
-        items.clone(),
-        cursor,
-        source_clone.clone(),
-    ));
-    let v7_json = serialize_ctrl_event(&v7_event);
-
-    let v8_event = CtrlEvent::State(CtrlState {
-        status: status.clone(),
-        items: items.clone(),
-        cursor,
-        source: source_clone.clone(),
-        slot_ids: slot_ids.clone(),
-        revision,
-        active_slot_id,
+    // Only serialize each payload variant when a peer of that version is
+    // actually connected, instead of unconditionally building both (and
+    // cloning `items` into each) on every mutation.
+    let v7_json = has_v7_peer.then(|| {
+        let v7_event = CtrlEvent::State(CtrlState::v7(
+            status.clone(),
+            items.clone(),
+            cursor,
+            source_clone.clone(),
+        ));
+        serialize_ctrl_event(&v7_event)
     });
-    let v8_json = serialize_ctrl_event(&v8_event);
+    let v8_json = has_v8_peer.then(|| {
+        let v8_event = CtrlEvent::State(CtrlState {
+            status,
+            items,
+            cursor,
+            source: source_clone.clone(),
+            slot_ids,
+            revision,
+            active_slot_id,
+        });
+        serialize_ctrl_event(&v8_event)
+    });
 
+    // Inlined rather than routed through `broadcast()`/`broadcast_to_all()`
+    // because those send one shared payload to every client; here each
+    // client needs a different (version-gated) payload. `retain` still
+    // drops any client whose send fails, matching their disconnect
+    // bookkeeping.
     let mut clients = ctrl_clients.lock().unwrap();
     clients.connection.retain(|c| {
         let json = if c.peer_version >= 8 { &v8_json } else { &v7_json };
         json.as_ref()
+            .and_then(|j| j.as_ref())
             .map(|j| c.tx.send(CtrlOutbound::Event(j.clone())).is_ok())
             .unwrap_or(false)
     });
+    drop(clients);
 
     *shared_queue.source.lock().unwrap() = source_clone;
 }
@@ -166,7 +191,16 @@ fn handle_ctrl(
                     match q.remove_slot(sid) {
                         crate::playback_queue::RemoveSlotResult::Removed(_) => {}
                         crate::playback_queue::RemoveSlotResult::RequiresActiveConfirmation(_) => {
-                            let _ = q.remove_active_slot_confirmed(sid);
+                            log::warn!(target: "daemon", "QueueRemoveBySlot: {sid:?} is active");
+                            drop(q);
+                            reject_and_resync(
+                                request.reply_tx,
+                                player,
+                                shared_queue,
+                                source,
+                                "cannot remove active slot; use QueueRemoveActive",
+                            );
+                            return;
                         }
                         crate::playback_queue::RemoveSlotResult::NotFound => {
                             log::warn!(target: "daemon", "QueueRemoveBySlot: slot {:?} not found", sid);
@@ -205,8 +239,19 @@ fn handle_ctrl(
                 }
                 WireCommand::JumpToSlot { slot_id } => {
                     let q = shared_queue.queue.lock().unwrap();
-                    let idx = q.slot_index(*slot_id).unwrap_or(0);
+                    let idx = q.slot_index(*slot_id);
                     drop(q);
+                    let Some(idx) = idx else {
+                        log::warn!(target: "daemon", "JumpToSlot: slot {slot_id:?} not found");
+                        reject_and_resync(
+                            request.reply_tx,
+                            player,
+                            shared_queue,
+                            source,
+                            "slot not found",
+                        );
+                        return;
+                    };
                     player.send_command(PlayerCommand::JumpTo(idx));
                     return;
                 }
@@ -219,9 +264,18 @@ fn handle_ctrl(
                     }
                     let mut q = shared_queue.queue.lock().unwrap();
                     let _new_sid = q.insert(*position, item.clone());
+                    // Sent as a full ReplaceQueue rather than QueueAppend so
+                    // the item lands at `position` in mpv's playlist too,
+                    // instead of always at the tail; the player has no
+                    // insert-at-position command.
+                    let replace_items = q.items_snapshot();
+                    let replace_start_idx = q.current_index().unwrap_or(0);
                     drop(q);
                     broadcast_queue_state(ctrl_clients, player, shared_queue, source);
-                    player.send_command(PlayerCommand::QueueAppend { items: vec![item.clone()] });
+                    player.send_command(PlayerCommand::ReplaceQueue {
+                        items: replace_items,
+                        start_idx: replace_start_idx,
+                    });
                     return;
                 }
                 WireCommand::QueueRemoveActive { revision } => {
@@ -232,13 +286,20 @@ fn handle_ctrl(
                         return;
                     }
                     // Remove active slot and clear active marker
-                    {
+                    let removed_idx = {
                         let mut q = shared_queue.queue.lock().unwrap();
                         if let Some(active_id) = q.active_slot_id() {
+                            let idx = q.slot_index(active_id);
                             let _ = q.remove_active_slot_confirmed(active_id);
+                            idx
+                        } else {
+                            None
                         }
-                    }
+                    };
                     broadcast_queue_state(ctrl_clients, player, shared_queue, source);
+                    if let Some(idx) = removed_idx {
+                        player.send_command(PlayerCommand::QueueRemove(idx));
+                    }
                     player.stop();
                     log::info!(target: "daemon", "QueueRemoveActive: removed active slot, stopping player");
                     return;
@@ -247,7 +308,24 @@ fn handle_ctrl(
                     // Fall through to legacy v7 PlayerCommand handling
                 }
             }
-            match PlayerCommand::from(pc) {
+            let pc = match PlayerCommand::try_from(pc) {
+                Ok(pc) => pc,
+                Err(unsupported) => {
+                    // Every v8 variant is intercepted and returned above, so
+                    // this should be unreachable in practice -- reject
+                    // rather than panic if that invariant is ever violated.
+                    log::warn!(target: "daemon", "unhandled v8 command: {unsupported:?}");
+                    reject_and_resync(
+                        request.reply_tx,
+                        player,
+                        shared_queue,
+                        source,
+                        "unsupported command",
+                    );
+                    return;
+                }
+            };
+            match pc {
                 PlayerCommand::ReplaceQueue {
                     items: new_items,
                     start_idx,
