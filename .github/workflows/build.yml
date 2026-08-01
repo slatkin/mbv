@@ -11,9 +11,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: archlinux/archlinux:base-devel
+    # Pin a dated snapshot of the Arch base-devel builder image instead of the
+    # floating `base-devel` tag. Arch is rolling, so bump this periodically
+    # (dated archlinux tags are retained ~18 months on Docker Hub) and keep the
+    # base-devel-... literal in the cargo cache key below in sync.
+    container: archlinux/archlinux:base-devel-20260801.0.566255
     permissions:
       contents: write
+      actions: write
 
     steps:
       - uses: actions/checkout@v7
@@ -31,6 +36,9 @@ jobs:
           pacman_retry pacman -Syu --noconfirm
           pacman_retry pacman -S --noconfirm --needed rust nasm mpv cava openssl github-cli git openssh
 
+      - name: Record Rust toolchain version
+        run: echo "RUSTC_VER=$(rustc --version | tr ' ' '_')" >> "$GITHUB_ENV"
+
       - name: Cache Rust build
         uses: actions/cache@v6
         with:
@@ -39,7 +47,10 @@ jobs:
             ~/.cargo/git
             ~/.cargo/bin/cargo-deb
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          # Key covers: pinned builder image + rustc toolchain (build
+          # environment), the dependency lockfile, and all workspace manifests.
+          # The base-devel-... literal must match the `container:` image above.
+          key: ${{ runner.os }}-cargo-${{ env.RUSTC_VER }}-base-devel-20260801.0.566255-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -95,34 +106,16 @@ jobs:
           gh release upload "v${PKGVER}" "${MBVD_DEB}" --clobber
           gh release edit "v${PKGVER}" --draft=false
 
-      - name: Prepare PKGBUILD for AUR
+      - name: Trigger AUR publish
+        # Fire-and-forget: AUR publishing runs in its own workflow (aur.yml)
+        # from the published release, so an AUR failure can never fail this
+        # build, and publishing can be retried by dispatching aur.yml manually.
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-        run: |
-          SHA256=$(sha256sum "${TARBALL}" | cut -d' ' -f1)
-          sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" PKGBUILD
-          sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
-
-      - name: Push to AUR
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
         env:
-          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
-        run: |
-          mkdir -p /root/.ssh
-          echo "$AUR_SSH_KEY" | tr -d '\r' > /root/.ssh/aur
-          chmod 600 /root/.ssh/aur
-          export GIT_SSH_COMMAND="ssh -i /root/.ssh/aur -o StrictHostKeyChecking=accept-new"
-          git config --global --add safe.directory '*'
-          git clone ssh://aur@aur.archlinux.org/mbv.git /tmp/aur-mbv
-          cp PKGBUILD /tmp/aur-mbv/PKGBUILD
-          useradd -m aurbuild
-          chown -R aurbuild /tmp/aur-mbv
-          su -c 'cd /tmp/aur-mbv && makepkg --printsrcinfo' aurbuild > /tmp/aur-mbv/.SRCINFO
-          cd /tmp/aur-mbv
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add PKGBUILD .SRCINFO
-          git diff --staged --quiet || git commit -m "Release v${PKGVER}"
-          git push
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run aur.yml -f version="${PKGVER}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
