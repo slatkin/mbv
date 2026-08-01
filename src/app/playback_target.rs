@@ -97,20 +97,10 @@ impl PlaybackTarget {
 impl App {
     pub(super) fn effective_playback_state(&self) -> super::PlaybackState {
         if let Some(ref remote) = self.connected_session_state {
-            // For direct remote playback, look up the active item in the
-            // remote queue (the playback authority), not the unrelated local
-            // queue.  Moving an active item doesn't change queue length, so
-            // a length-based reconciliation would clear the optimistic index
-            // before the asynchronous move is acknowledged.
-            let remote_queue = self
-                .remote_player_tab
-                .as_ref()
-                .map(|tab| &tab.items)
-                .unwrap_or(&self.player_tab.items);
             let maybe_active_idx = remote
                 .now_playing_item_id
                 .as_ref()
-                .and_then(|id| remote_queue.iter().position(|it| &it.id == id));
+                .and_then(|id| self.player_tab.items.iter().position(|it| &it.id == id));
             let active_idx = maybe_active_idx.unwrap_or(0);
             let pos_ticks = {
                 let elapsed_s = if remote.is_paused {

@@ -71,6 +71,8 @@ impl App {
                     self.refresh_after_stop();
                     return true;
                 }
+                let is_delete = self.pending_delete_idx.take() == Some(idx);
+                let preserve_local_state = !self.has_direct_remote_queue();
                 // Resolve the raw mpv index to a slot right away, against
                 // the queue exactly as it stands now (syncing the shadow
                 // first for callers — tests, mainly — that assign `items`
@@ -78,23 +80,6 @@ impl App {
                 self.playback_queue_mut()
                     .sync_queue_model_from_items_if_needed();
                 let slot_id = self.playback_queue().resolve_slot_at(idx);
-                // Match the pending delete by slot identity, not raw index.
-                // Between the stop request and the Stopped event, other
-                // queue mutations (non-active removals, remote updates)
-                // can shift the slot's index, so the raw idx no longer
-                // matches the original position.  Identity is stable.
-                let pending_slot = self.pending_delete_slot.take();
-                let is_delete = match (pending_slot, slot_id) {
-                    (Some(pending), Some(resolved)) if pending == resolved => true,
-                    (Some(pending), _) => {
-                        log::warn!(target: "player", "Stopped: pending delete slot {pending:?} \
-                            does not map to the stopped idx {idx} (resolved {slot_id:?}); \
-                            discarding stale pending delete");
-                        false
-                    }
-                    (None, _) => false,
-                };
-                let preserve_local_state = !self.has_direct_remote_queue();
                 match slot_id {
                     Some(slot_id) => {
                         if !is_delete {
@@ -376,30 +361,10 @@ impl App {
                 source,
             } => {
                 let cursor = if self.has_direct_remote_queue() {
-                    match self.pending_remote_move.take() {
-                        Some(pending)
-                            if items.get(pending.target_idx).is_some_and(|item| {
-                                item.id == pending.item_id
-                                    && item.playlist_item_id == pending.playlist_item_id
-                            }) =>
-                        {
-                            // Move confirmed: the item we moved is at the
-                            // expected position in the authoritative queue.
-                            pending.target_idx
-                        }
-                        Some(pending) => {
-                            // Move not yet reflected (or superseded by
-                            // another change); keep it pending so a later
-                            // QueueUpdated can still match.  CommandRejected
-                            // clears it unconditionally if the remote rejects.
-                            let moved = pending.target_idx;
-                            self.pending_remote_move = Some(pending);
-                            log::debug!(target: "player", "QueueUpdated: pending move to {moved} \
-                                not yet reflected; keeping pending");
-                            cursor
-                        }
-                        None => cursor,
-                    }
+                    self.pending_remote_move_cursor
+                        .take()
+                        .filter(|pending_cursor| *pending_cursor < items.len())
+                        .unwrap_or(cursor)
                 } else {
                     cursor
                 };
@@ -441,7 +406,7 @@ impl App {
                 self.refresh_after_stop();
             }
             PlayerEvent::CommandRejected(reason) => {
-                self.pending_remote_move = None;
+                self.pending_remote_move_cursor = None;
                 self.flash_status(reason);
             }
             PlayerEvent::PlaybackIntent(event) => {
