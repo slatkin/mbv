@@ -161,6 +161,25 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
 }
 
 #[test]
+fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.items = make_items(1);
+    app.confirm_modal = Some(ConfirmModal {
+        title: String::new(),
+        message: String::new(),
+        hint: String::new(),
+        on_confirm: ConfirmAction::RemoveActiveQueueItem(1),
+    });
+
+    app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+
+    assert_eq!(app.player_tab.items.len(), 1);
+    assert!(app.pending_delete_slot.is_none());
+    assert!(!app.queue_dirty);
+}
+
+#[test]
 fn stopped_path_consumes_the_last_audio_item_in_the_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     // When the last item in the queue finishes, the player thread sends a

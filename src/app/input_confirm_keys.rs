@@ -36,7 +36,8 @@ impl App {
                     // ordinary removals) refuses the active slot, so this goes
                     // through remove_active_slot_confirmed directly, same as
                     // the Stopped handler used to do.
-                    let slot_id = self.playback_queue_mut().slot_id_at(pos);
+                    let scope = self.visible_queue_scope();
+                    let slot_id = self.queue_for_scope_mut(scope).slot_id_at(pos);
                     if let Some(slot_id) = slot_id {
                         let item = match self
                             .playback_queue_mut()
@@ -62,16 +63,18 @@ impl App {
                                 self.queue_undo_stack
                                     .push(UndoEntry::Remove(pos, Box::new(item)));
                             }
+
+                            // Only stop playback and record the deferred
+                            // player-side removal if the app model actually
+                            // removed the requested slot. The confirmation
+                            // can outlive a queue refresh, making the slot
+                            // stale by the time the user confirms it.
+                            self.pending_delete_slot = Some(slot_id);
+                            self.player.stop();
+                            if self.local_queue_metadata_applies(scope) {
+                                self.queue_dirty = true;
+                            }
                         }
-                    }
-                    // Recorded so the eventual Stopped event (still needed to
-                    // drive the real mpv-level stop and the player session's
-                    // own advance-to-next machinery) can recognize this as an
-                    // already-actioned delete instead of re-deriving it.
-                    self.pending_delete_slot = slot_id;
-                    self.player.stop();
-                    if self.local_queue_metadata_applies(self.visible_queue_scope()) {
-                        self.queue_dirty = true;
                     }
                 }
             }
