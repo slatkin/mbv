@@ -8,6 +8,7 @@ use super::types_confirm::ConfirmModal;
 use super::types_context_menu::{ContextMenu, LibraryRoutePopup, MultiSelectPopup};
 use super::types_daemon_lost::DaemonLostModal;
 use super::types_events::{LibEvent, SessionEvent};
+use super::types_feed::IdleFeed;
 use super::types_feed::SavePlaylistDialog;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
@@ -268,6 +269,8 @@ pub struct App {
     pub(super) image_protocol_enabled: bool,
     pub(super) library_position_state: crate::config::LibraryPositionState,
     pub(super) queue_scope: QueueScope,
+    pub(super) idle_feed: Option<IdleFeed>,
+    pub(super) osc8_supported: bool,
     #[cfg(test)]
     pub(super) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
@@ -301,4 +304,6 @@ pub(super) struct AppInit {
     pub(super) notif_action_rx: mpsc::Receiver<String>,
     pub(super) search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
     pub(super) search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
+    pub(super) idle_feed: Option<IdleFeed>,
+    pub(super) osc8_supported: bool,
 }

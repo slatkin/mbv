@@ -1,6 +1,8 @@
+use super::types_feed::IdleFeedItem;
 use super::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_core::api::MediaItem;
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 impl App {
     pub(super) fn log_feed_home_video_state(&self, lib_idx: usize, context: &str) {
@@ -587,4 +589,113 @@ impl App {
             self.spawn_podcast_aggregate(lib_idx);
         }
     }
+
+    /// Spawn a background thread to fetch and parse the idle RSS feed.
+    pub(super) fn spawn_idle_feed_fetch(&self) {
+        let Some(ref idle_feed) = self.idle_feed else {
+            return;
+        };
+        let rss_url = self.client.lock().unwrap().config.idle_feed_rss_url.clone();
+        let tx = idle_feed.items_tx.clone();
+        std::thread::spawn(move || {
+            let items = match fetch_and_parse_rss(&rss_url) {
+                Ok(items) => items,
+                Err(e) => {
+                    log::warn!(target: "idle_feed", "Failed to fetch RSS feed: {e}");
+                    Vec::new()
+                }
+            };
+            let _ = tx.send(items);
+        });
+    }
+
+    /// Advance the idle feed rotation if enough time has elapsed.
+    pub(super) fn advance_idle_feed_rotation(&mut self) {
+        let Some(ref mut idle_feed) = self.idle_feed else {
+            return;
+        };
+        if idle_feed.items.is_empty() {
+            return;
+        }
+        let rotation_secs = self.client.lock().unwrap().config.idle_feed_rotation_secs;
+        if idle_feed.last_rotation.elapsed() >= std::time::Duration::from_secs(rotation_secs) {
+            idle_feed.current_index = (idle_feed.current_index + 1) % idle_feed.items.len();
+            idle_feed.last_rotation = Instant::now();
+        }
+    }
+}
+
+/// Fetch an RSS/Atom feed and parse `<item>`/`<entry>` titles and links.
+fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
+    let body = ureq::get(url)
+        .call()
+        .map_err(|e| format!("HTTP request failed: {e}"))?
+        .into_string()
+        .map_err(|e| format!("Failed to read response body: {e}"))?;
+
+    let mut items = Vec::new();
+
+    // Try RSS `<item>` blocks first
+    if let Some(start) = body.find("<item>") {
+        let rest = &body[start..];
+        for item_match in rest.split("<item>").skip(1) {
+            let title = extract_tag(item_match, "title");
+            let link = extract_tag(item_match, "link");
+            if let Some(title) = title {
+                items.push(IdleFeedItem { title, link });
+            }
+        }
+    }
+
+    // If no RSS items found, try Atom `<entry>` blocks
+    if items.is_empty() {
+        if let Some(start) = body.find("<entry>") {
+            let rest = &body[start..];
+            for entry_match in rest.split("<entry>").skip(1) {
+                let title = extract_tag(entry_match, "title");
+                let link = extract_atom_link(entry_match);
+                if let Some(title) = title {
+                    items.push(IdleFeedItem { title, link });
+                }
+            }
+        }
+    }
+
+    Ok(items)
+}
+
+/// Extract the first `<tag>...</tag>` content from text.
+fn extract_tag(text: &str, tag: &str) -> Option<String> {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let start = text.find(&open)? + open.len();
+    let end = text[start..].find(&close)?;
+    let content = &text[start..start + end];
+    // Strip any nested tags (e.g. CDATA wrappers)
+    Some(strip_tags(content).trim().to_string())
+}
+
+/// Extract the `href` attribute from the first `<link` element in Atom format.
+fn extract_atom_link(text: &str) -> Option<String> {
+    let link_start = text.find("<link")?;
+    let link_end = text[link_start..].find('>')?;
+    let link_tag = &text[link_start..link_start + link_end + 1];
+    let href_start = link_tag.find("href=\"")? + 6;
+    let href_end = link_tag[href_start..].find('"')?;
+    Some(link_tag[href_start..href_start + href_end].to_string())
+}
+
+/// Strip XML/HTML tags from text.
+fn strip_tags(text: &str) -> String {
+    let mut result = String::new();
+    let mut in_tag = false;
+    for ch in text.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => result.push(ch),
+            _ => {}
+        }
+    }
+    result
 }

@@ -22,3 +22,8 @@ show_systray_icon = true
 # F2 is the normal way to select a friendly device and save its routable endpoint.
 # [library_routes]
 # music = "tcp://192.0.2.10:17831"
+
+[idle_feed]
+# RSS feed displayed in the playback panel when nothing is playing.
+# rss_url = "https://novaramedia.com/feed/"
+# rotation_interval_secs = 10

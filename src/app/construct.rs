@@ -189,6 +189,8 @@ impl App {
             launched_as_remote: false,
             is_local_daemon: false,
             home_is_local_daemon: false,
+            idle_feed: init.idle_feed,
+            osc8_supported: init.osc8_supported,
         }
     }
 
@@ -296,6 +298,8 @@ impl App {
             notif_action_rx,
             search_tx,
             search_rx,
+            idle_feed: None,
+            osc8_supported: detect_osc8_support(),
         });
         app.mpris = Some(mpris_handle);
         app.try_auto_reconnect();
@@ -431,6 +435,8 @@ impl App {
             notif_action_rx,
             search_tx,
             search_rx,
+            idle_feed: None,
+            osc8_supported: detect_osc8_support(),
         });
         app.mpris = Some(mpris_handle);
         app.launched_as_remote = true;
@@ -486,4 +492,24 @@ impl App {
         }
         picker
     }
+}
+
+/// Detect OSC 8 hyperlink support based on `$TERM` and known terminal names.
+fn detect_osc8_support() -> bool {
+    let term = std::env::var("TERM_PROGRAM")
+        .or_else(|_| std::env::var("TERM"))
+        .unwrap_or_default();
+    let term_lower = term.to_lowercase();
+    // Known terminals with OSC 8 support
+    [
+        "kitty",
+        "foot",
+        "wezterm",
+        "iterm",
+        "windows terminal",
+        "alacritty",
+        "tmux",
+    ]
+    .iter()
+    .any(|t| term_lower.contains(t))
 }

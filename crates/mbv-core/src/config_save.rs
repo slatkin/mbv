@@ -158,6 +158,16 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
     );
     mpv.insert("autoload".to_string(), toml::Value::Boolean(cfg.autoload));
 
+    let idle_feed = section!("idle_feed");
+    idle_feed.insert(
+        "rss_url".to_string(),
+        toml::Value::String(cfg.idle_feed_rss_url.clone()),
+    );
+    idle_feed.insert(
+        "rotation_interval_secs".to_string(),
+        toml::Value::Integer(cfg.idle_feed_rotation_secs as i64),
+    );
+
     let mbvd = section!("mbvd");
     mbvd.insert(
         "broadcast_ms".to_string(),
