@@ -457,6 +457,9 @@ impl App {
         if local_daemon_adoption_failed {
             app.handle_failed_local_daemon_adoption();
         }
+        if is_local_daemon {
+            app.try_auto_reconnect();
+        }
         app
     }
 
