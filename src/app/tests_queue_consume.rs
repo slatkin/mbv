@@ -88,7 +88,7 @@ fn stopped_consume_removes_the_right_slot_occurrence() {
 #[test]
 fn stopped_delete_removes_the_active_now_playing_slot() {
     // The confirmed "remove now-playing item and stop playback" flow:
-    // pending_delete_idx marks the active slot for removal, then a Stopped
+    // pending_delete_slot marks the active slot for removal, then a Stopped
     // event drives it. Now that TrackChanged populates the model's
     // active_slot_id in real playback, the gated remove_slot path would
     // refuse the active slot — the confirmed delete must bypass that gate.
@@ -104,7 +104,8 @@ fn stopped_delete_removes_the_active_now_playing_slot() {
         st.active = true;
         st.current_idx = 0;
     }
-    app.pending_delete_idx = Some(0);
+    let slot_0 = app.player_tab.queue.slots()[0].slot_id;
+    app.pending_delete_slot = Some(slot_0);
 
     app.handle_player_event(PlayerEvent::Stopped {
         idx: 0,
@@ -553,5 +554,85 @@ fn consume_audio_flag_does_not_consume_video_items() {
         app.player_tab.items.len(),
         2,
         "consume_audio must not remove a video item; consume_videos is off"
+    );
+}
+
+// ── P1 fix: active-delete race ───────────────────────────────────────────
+
+#[test]
+fn pending_delete_slot_matches_by_identity_even_after_index_shift() {
+    // P3 scenario: queue [A, B(active), C, D], confirm delete of B,
+    // then remove A (non-active) before Stopped arrives.  B's index
+    // shifts from 1 → 0 in both queues, but the slot identity is stable.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.items = make_items(4);
+    app.player_tab.sync_queue_model_from_items_if_needed();
+    let slot_b = app.player_tab.queue.slots()[1].slot_id;
+    app.handle_player_event(PlayerEvent::TrackChanged(1));
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.current_idx = 1;
+    }
+    // User confirms delete of B at index 1
+    app.pending_delete_slot = Some(slot_b);
+
+    // Before Stopped arrives, remove A (index 0) — B shifts to index 0
+    let removed = app.player_tab.remove_slot_at(0);
+    assert!(removed.is_some(), "A should be removed");
+
+    // Player stops with B at its new index 0
+    app.handle_player_event(PlayerEvent::Stopped {
+        idx: 0,
+        position_ticks: 0,
+        played: false,
+        consume: false,
+        progress_report_accepted: false,
+        error: None,
+    });
+
+    assert_eq!(
+        app.player_tab.items.len(),
+        2,
+        "B should have been deleted (slot matched by identity despite index shift)"
+    );
+    // Verify C and D remain
+    assert_eq!(app.player_tab.items[0].id, "id2");
+    assert_eq!(app.player_tab.items[1].id, "id3");
+}
+
+#[test]
+fn stale_pending_delete_slot_is_discarded_when_slot_does_not_match() {
+    // If a pending delete slot doesn't resolve to the stopped idx
+    // (e.g., the item was already consumed or the queue diverged),
+    // the stale pending is discarded and normal stop handling applies.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.items = make_items(3);
+    app.player_tab.sync_queue_model_from_items_if_needed();
+    let slot_0 = app.player_tab.queue.slots()[0].slot_id;
+    // Pending targets slot 0
+    app.pending_delete_slot = Some(slot_0);
+
+    // Stopped reports idx 2 — a completely different slot
+    app.handle_player_event(PlayerEvent::Stopped {
+        idx: 2,
+        position_ticks: 600_000_000,
+        played: false,
+        consume: false,
+        progress_report_accepted: false,
+        error: None,
+    });
+
+    // Slot 0 was not deleted; normal stop path applied progress to slot 2
+    assert_eq!(
+        app.player_tab.items.len(),
+        3,
+        "stale pending delete should be discarded, not applied to the wrong slot"
+    );
+    assert!(
+        app.pending_delete_slot.is_none(),
+        "stale pending should have been consumed"
     );
 }

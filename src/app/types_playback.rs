@@ -139,3 +139,17 @@ pub(super) enum PendingQueueAction {
     },
     ClearQueue,
 }
+
+/// Pending remote queue move awaiting acknowledgement via `QueueUpdated`.
+///
+/// After an optimistic move in the remote queue shadow, the handler waits for
+/// the next `QueueUpdated` event and checks that the item at `target_idx`
+/// actually matches the moved item (by `id` + `playlist_item_id`). This
+/// prevents an unrelated `QueueUpdated` from consuming the optimistic cursor,
+/// which would silently drop the user's intended cursor position.
+#[derive(Clone, Debug)]
+pub(super) struct PendingRemoteMove {
+    pub(super) item_id: String,
+    pub(super) playlist_item_id: String,
+    pub(super) target_idx: usize,
+}
