@@ -81,7 +81,16 @@ impl App {
         };
         if self.apply_queue_move_by_slot(scope, slot_id, from, to) {
             if scope == QueueScope::Remote {
-                self.pending_remote_move_cursor = Some(to);
+                // Store the moved item's identity so QueueUpdated can verify
+                // the move was actually applied before consuming the
+                // optimistic cursor.
+                if let Some(item) = self.queue_for_scope(scope).items.get(to) {
+                    self.pending_remote_move = Some(super::types_playback::PendingRemoteMove {
+                        item_id: item.id.clone(),
+                        playlist_item_id: item.playlist_item_id.clone(),
+                        target_idx: to,
+                    });
+                }
             }
             self.undo_stack_for_scope_mut(scope)
                 .push(UndoEntry::Move { from, to, slot_id });

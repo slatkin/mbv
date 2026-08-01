@@ -116,11 +116,17 @@ pub struct App {
     /// restored, since anything written while still in the alternate screen
     /// would never be visible. `None` on every other exit path.
     pub(super) pending_exit_message: Option<String>,
-    pub(super) pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
+    pub(super) pending_delete_slot: Option<QueueSlotId>, // deferred removal of now-playing item after Stopped event (slot identity, immune to index shifts)
     pub(super) pending_queue_removal: Option<(QueueSlotId, bool)>, // deferred removal (slot, is_audio) after TrackChanged index-shifts
     pub(super) queue_undo_stack: Vec<UndoEntry>,
     pub(super) remote_queue_undo_stack: Vec<UndoEntry>,
-    pub(super) pending_remote_move_cursor: Option<usize>,
+    /// Pending remote queue move awaiting acknowledgement via `QueueUpdated`.
+    /// Stores the moved item's identity and expected target position so the
+    /// handler can verify the move was actually applied before consuming the
+    /// optimistic cursor — a bare index check is vacuously true for moves
+    /// (they don't change queue length) and would let an unrelated
+    /// `QueueUpdated` consume the pending cursor prematurely.
+    pub(super) pending_remote_move: Option<super::types_playback::PendingRemoteMove>,
     pub(super) skip_intro_end_ticks: Option<i64>,
     pub(super) next_up_item: Option<MediaItem>,
     // Main UI scalars.

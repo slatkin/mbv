@@ -26,13 +26,27 @@ impl App {
             ConfirmAction::RemoveActiveQueueItem(pos) => {
                 self.confirm_modal = None;
                 if matches!(key.code, KeyCode::Char('y')) {
-                    // Defer the actual removal until PlayerEvent::Stopped arrives so the
-                    // Stopped handler finds the correct item at index `pos`, not the next
-                    // item (which would have its playback_position_ticks corrupted otherwise).
-                    self.pending_delete_idx = Some(pos);
-                    self.player.stop();
-                    if self.local_queue_metadata_applies(self.visible_queue_scope()) {
-                        self.queue_dirty = true;
+                    // Reject if a delete is already pending — the one-shot
+                    // stop sender has already been consumed, so a second
+                    // stop() would be a no-op and the second delete's slot
+                    // would overwrite the first, desynchronizing the app
+                    // queue from the player queue.
+                    if self.pending_delete_slot.is_some() {
+                        self.flash_status_high(
+                            "A delete is already in progress — wait for it to finish".into(),
+                        );
+                        return Some(false);
+                    }
+                    // Store slot identity (not raw index) so the Stopped
+                    // handler can match by identity even if intermediate
+                    // queue mutations shift the slot's index position.
+                    let scope = self.visible_queue_scope();
+                    if let Some(slot_id) = self.queue_for_scope_mut(scope).slot_id_at(pos) {
+                        self.pending_delete_slot = Some(slot_id);
+                        self.player.stop();
+                        if self.local_queue_metadata_applies(self.visible_queue_scope()) {
+                            self.queue_dirty = true;
+                        }
                     }
                 }
             }
