@@ -325,9 +325,7 @@ pub(super) fn selector_pill_style(selected: bool) -> Style {
 
 fn home_selector_pill_style(selected: bool) -> Style {
     if selected {
-        Style::default()
-            .fg(palette::HOME_PILL_FOCUSED_FG)
-            .bg(palette::GREEN)
+        Style::default().fg(palette::WHITE).bg(palette::BG_GREEN)
     } else {
         Style::default()
             .fg(palette::HOME_PILL_FG)
@@ -499,9 +497,9 @@ fn render_pill_bar_with_style(
     let mut spans: Vec<Span> = Vec::new();
     let mut x_cursor = area.x;
     if let Some(prefix) = bar.prefix {
-        if !gap_between_pills && prefix == " ⌂ " {
+        if !gap_between_pills && prefix == "  " {
             spans.push(Span::styled(
-                " ⌂ ",
+                "  ",
                 Style::default()
                     .fg(palette::GREEN)
                     .bg(palette::HOME_PILL_ROW_BG),
@@ -556,7 +554,7 @@ fn render_pill_bar_with_style(
                 "◢",
                 Style::default()
                     .fg(if selected {
-                        palette::GREEN
+                        palette::BG_GREEN
                     } else {
                         palette::HOME_PILL_BG
                     })
@@ -573,7 +571,7 @@ fn render_pill_bar_with_style(
                 "◤",
                 Style::default()
                     .fg(if selected {
-                        palette::GREEN
+                        palette::BG_GREEN
                     } else {
                         palette::HOME_PILL_BG
                     })
