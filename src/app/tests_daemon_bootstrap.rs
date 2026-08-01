@@ -39,6 +39,7 @@ fn failed_local_daemon_adoption_routes_through_remote_disconnected() {
     // leave the app silently sitting on optimistic queue state the
     // daemon never received — it routes through the same handling a
     // live `PlayerEvent::RemoteDisconnected` uses.
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     let mut app = make_local_daemon_app_stub(Vec::new());
     assert_eq!(app.queue_scope, QueueScope::Local);
 
