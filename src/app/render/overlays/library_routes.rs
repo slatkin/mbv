@@ -1,10 +1,11 @@
 use super::super::super::palette;
 use super::super::super::App;
 use super::super::super::{LibraryRoutePopup, LibraryRouteStage};
+use super::modal_frame::render_modal_frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 const LOCAL_NO_ROUTE: &str = "Local (no route)";
@@ -313,7 +314,6 @@ impl App {
         let Some(ref popup) = self.library_routes_popup else {
             return;
         };
-        self.render_backdrop_dim(f);
         let (title, lines): (&str, Vec<Line>) = match &popup.stage {
             LibraryRouteStage::PickLibrary { items } => {
                 let lines = items
@@ -392,30 +392,9 @@ impl App {
         let inner_w = ((max_w + 6) as u16).clamp(36, 60);
         let width = inner_w + 2;
         let content_h = lines.len() as u16 + 1;
-        let area = f.area();
-        let height = (content_h + 2).min(area.height.saturating_sub(2));
-        let x = area.x + area.width.saturating_sub(width) / 2;
-        let y = area.y + area.height.saturating_sub(height) / 2;
-        let rect = Rect {
-            x,
-            y,
-            width,
-            height,
-        };
+        let height = content_h + 2;
 
-        f.render_widget(Clear, rect);
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(palette::IRIS))
-            .title(Span::styled(
-                title,
-                Style::default()
-                    .fg(palette::WHITE)
-                    .add_modifier(Modifier::BOLD),
-            ));
-        let inner = block.inner(rect);
-        f.render_widget(block, rect);
+        let inner = render_modal_frame(f, title, width, height);
 
         let hint = "Enter select  ·  Esc back/close";
         f.render_widget(

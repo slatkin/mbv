@@ -2,10 +2,11 @@ use super::super::super::palette;
 use super::super::super::ui_util::trunc_str;
 use super::super::super::App;
 use super::super::super::{SavePlaylistStage, PLAYLISTS_PANEL_W};
-use ratatui::layout::{Alignment, Rect};
+use super::modal_frame::render_modal_frame;
+use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 impl App {
@@ -262,42 +263,11 @@ impl App {
         let Some(ref dialog) = self.save_playlist_dialog else {
             return;
         };
-        // Only `EnterName` and `RenamePlaylist` render here -- once a name
-        // collides with an existing playlist, the shared confirmation modal
-        // takes over (`ConfirmOverwrite` / `ConfirmAction::SaveOverwritePlaylist`).
-        if matches!(dialog.stage, SavePlaylistStage::ConfirmOverwrite) {
-            return;
-        }
-        self.render_backdrop_dim(f);
-        let full = f.area();
-        let w: u16 = 52;
-        let h: u16 = 7;
-        let x = full.x + full.width.saturating_sub(w) / 2;
-        let y = full.y + full.height.saturating_sub(h) / 2;
-        let rect = Rect {
-            x,
-            y,
-            width: w,
-            height: h,
-        };
-        f.render_widget(Clear, rect);
         let title_text = match dialog.stage {
             SavePlaylistStage::RenamePlaylist { .. } => " Rename Playlist ",
             _ => " Save as Playlist ",
         };
-        let block = Block::default()
-            .title(Span::styled(
-                title_text,
-                Style::default()
-                    .fg(palette::IRIS)
-                    .add_modifier(Modifier::BOLD),
-            ))
-            .title_alignment(Alignment::Center)
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(palette::IRIS));
-        let inner = block.inner(rect);
-        f.render_widget(block, rect);
+        let inner = render_modal_frame(f, title_text, 52, 7);
         let label = "Name: ";
         let cursor = "▏";
         let max_input = inner.width as usize - label.len() - cursor.len() - 2;

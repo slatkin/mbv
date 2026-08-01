@@ -1,4 +1,3 @@
-use super::super::super::App;
 use ratatui::style::Color;
 use ratatui::Frame;
 
@@ -22,22 +21,18 @@ fn dim(color: Color) -> Color {
     }
 }
 
-impl App {
-    /// Darkens every cell already rendered into the frame, across the full
-    /// terminal area. Blocking modal overlays (confirm modal, save-playlist
-    /// dialog, multiselect popup, library-routes popup) call this first,
-    /// then draw their own `Clear` + bordered content on top -- so the
-    /// background reads as dimmed while the modal itself stays at full
-    /// brightness.
-    pub(in crate::app::render) fn render_backdrop_dim(&self, f: &mut Frame) {
-        let area = f.area();
-        let buf = f.buffer_mut();
-        for y in area.y..area.y + area.height {
-            for x in area.x..area.x + area.width {
-                if let Some(cell) = buf.cell_mut((x, y)) {
-                    cell.fg = dim(cell.fg);
-                    cell.bg = dim(cell.bg);
-                }
+/// Darkens every cell already rendered into the frame, across the full
+/// terminal area. Call this before drawing any blocking modal overlay so
+/// the background reads as dimmed while the modal itself stays at full
+/// brightness.
+pub fn dim_backdrop(f: &mut Frame) {
+    let area = f.area();
+    let buf = f.buffer_mut();
+    for y in area.y..area.y + area.height {
+        for x in area.x..area.x + area.width {
+            if let Some(cell) = buf.cell_mut((x, y)) {
+                cell.fg = dim(cell.fg);
+                cell.bg = dim(cell.bg);
             }
         }
     }

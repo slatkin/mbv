@@ -4,6 +4,7 @@ mod context_menu;
 mod daemon_lost_modal;
 mod help;
 mod library_routes;
+mod modal_frame;
 mod multiselect;
 mod playlists;
 mod sessions;
