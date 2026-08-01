@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::api::{MediaItem, TICKS_PER_SECOND};
 
 const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct QueueSlotId(u64);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct QueueSlotId(pub u64);
 
 impl QueueSlotId {
     pub fn raw(self) -> u64 {
@@ -13,12 +15,19 @@ impl QueueSlotId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
-pub struct QueueRevision(u64);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default, Serialize, Deserialize)]
+pub struct QueueRevision(pub u64);
 
 impl QueueRevision {
     pub fn raw(self) -> u64 {
         self.0
+    }
+
+    /// Returns true if this is the zero / default revision. Used by
+    /// `serde(skip_serializing_if = "QueueRevision::is_default")` so
+    /// v7 peers never see the field.
+    pub fn is_default(&self) -> bool {
+        self.0 == 0
     }
 
     fn bump(&mut self) {
@@ -75,7 +84,7 @@ pub struct QueueSlot {
 }
 
 impl QueueSlot {
-    fn new(slot_id: QueueSlotId, item: MediaItem) -> Self {
+    pub fn new(slot_id: QueueSlotId, item: MediaItem) -> Self {
         let progress_state = ProgressState::from_item(&item);
         Self {
             slot_id,
@@ -140,6 +149,73 @@ impl PlaybackQueue {
         queue
     }
 
+    pub fn from_slot_snapshot(
+        slots: Vec<QueueSlot>,
+        active_slot_id: Option<QueueSlotId>,
+        revision: QueueRevision,
+        next_slot_id: u64,
+    ) -> Self {
+        debug_assert!(
+            {
+                let mut seen: Vec<QueueSlotId> = slots.iter().map(|s| s.slot_id).collect();
+                let len = seen.len();
+                seen.sort();
+                seen.dedup();
+                seen.len() == len
+            },
+            "from_slot_snapshot: duplicate slot IDs detected"
+        );
+        debug_assert!(
+            slots.iter().all(|s| s.slot_id.raw() < next_slot_id),
+            "from_slot_snapshot: all slot IDs must be < next_slot_id"
+        );
+        debug_assert!(
+            active_slot_id.is_none()
+                || active_slot_id
+                    .map(|id| slots.iter().any(|s| s.slot_id == id))
+                    .unwrap_or(false),
+            "from_slot_snapshot: active_slot_id not found in slots"
+        );
+
+        Self {
+            slots,
+            active_slot_id,
+            revision,
+            next_slot_id,
+        }
+    }
+
+    /// Construct from persisted QueueState fields. When slot_ids are present and
+    /// match the items count, restores exact slot identities. Otherwise falls
+    /// back to legacy from_items (allocating fresh slot IDs).
+    pub fn from_persisted(
+        items: Vec<MediaItem>,
+        slot_ids: Option<Vec<u64>>,
+        active_slot_id: Option<u64>,
+        revision: Option<u64>,
+        next_slot_id: Option<u64>,
+    ) -> Self {
+        if let Some(slot_ids) = slot_ids {
+            if slot_ids.len() == items.len() && !items.is_empty() {
+                let q_slot_ids: Vec<QueueSlotId> = slot_ids.into_iter().map(QueueSlotId).collect();
+                let active = active_slot_id.map(QueueSlotId);
+                let slots: Vec<QueueSlot> = q_slot_ids
+                    .into_iter()
+                    .zip(items)
+                    .map(|(slot_id, item)| QueueSlot::new(slot_id, item))
+                    .collect();
+                return Self::from_slot_snapshot(
+                    slots,
+                    active,
+                    QueueRevision(revision.unwrap_or(0)),
+                    next_slot_id.unwrap_or(1),
+                );
+            }
+        }
+        Self::from_items(items, None)
+    }
+
+
     pub fn revision(&self) -> QueueRevision {
         self.revision
     }
@@ -150,6 +226,107 @@ impl PlaybackQueue {
 
     pub fn active_slot_id(&self) -> Option<QueueSlotId> {
         self.active_slot_id
+    }
+
+    // ── Phase 1 helpers: positional-index adapters needed by the daemon
+    //     control layer while the wire protocol still carries positional
+    //     indices. These will narrow or disappear once v8 slot-based
+    //     commands replace the legacy index-based handlers.
+
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
+    /// Ordered snapshot of every item in the queue, for v7 `CtrlState`.
+    pub fn items_snapshot(&self) -> Vec<MediaItem> {
+        self.slots.iter().map(|s| s.item.clone()).collect()
+    }
+
+    /// Positional index of the active slot, or `None` when nothing is
+    /// active. Used to derive the v7 `cursor` field in `CtrlState`.
+    pub fn current_index(&self) -> Option<usize> {
+        self.active_slot_id
+            .and_then(|slot_id| self.slot_index(slot_id))
+    }
+
+    /// The `QueueSlotId` at a positional index.
+    pub fn slot_id_at(&self, index: usize) -> Option<QueueSlotId> {
+        self.slots.get(index).map(|s| s.slot_id)
+    }
+
+    /// Borrow the `MediaItem` at a positional index.
+    pub fn item_at(&self, index: usize) -> Option<&MediaItem> {
+        self.slots.get(index).map(|s| &s.item)
+    }
+
+    /// Atomically replace the entire queue; new slot identities are
+    /// allocated from scratch (no identity is carried over).
+    pub fn replace_all(&mut self, items: Vec<MediaItem>, active_index: Option<usize>) {
+        *self = Self::from_items(items, active_index);
+    }
+
+    /// Append multiple items at the tail, bumping revision once per item.
+    pub fn append_items(&mut self, new_items: Vec<MediaItem>) {
+        if new_items.is_empty() {
+            return;
+        }
+        for item in new_items {
+            let slot_id = self.allocate_slot_id();
+            self.slots.push(QueueSlot::new(slot_id, item));
+        }
+        self.revision.bump();
+    }
+
+    /// Remove the slot at a positional index. Bypasses the active-
+    /// confirmation guard: this is the daemon's index-based adapter
+    /// (v7 wire), where the client has already decided to remove.
+    pub fn remove_at(&mut self, index: usize) -> Option<QueueSlot> {
+        if index >= self.slots.len() {
+            return None;
+        }
+        let slot = self.slots.remove(index);
+        let slot_id = slot.slot_id;
+        self.revision.bump();
+        if self.active_slot_id == Some(slot_id) {
+            self.active_slot_id = self
+                .slots
+                .get(index)
+                .or_else(|| self.slots.last())
+                .map(|s| s.slot_id);
+        }
+        Some(slot)
+    }
+
+    /// Move the slot at `from` to positional index `to`.
+    pub fn move_item(&mut self, from: usize, to: usize) -> QueueMutationResult<()> {
+        if from >= self.slots.len() || to >= self.slots.len() {
+            return QueueMutationResult::NotFound;
+        }
+        if from == to {
+            return QueueMutationResult::Applied(());
+        }
+        let slot_id = self.slots[from].slot_id;
+        self.move_slot(slot_id, to)
+    }
+
+    /// Set the active slot by positional index.
+    pub fn set_active_at(&mut self, index: usize) -> QueueMutationResult<()> {
+        match self.slot_id_at(index) {
+            Some(id) => self.set_active_slot(id),
+            None => QueueMutationResult::NotFound,
+        }
+    }
+
+    pub fn next_slot_id(&self) -> u64 {
+        self.next_slot_id
+    }
+
+    pub fn slot_ids(&self) -> Vec<QueueSlotId> {
+        self.slots.iter().map(|s| s.slot_id).collect()
     }
 
     pub fn active_slot(&self) -> Option<&QueueSlot> {

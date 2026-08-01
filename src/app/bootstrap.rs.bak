@@ -8,6 +8,11 @@ pub(super) struct LocalDaemonBootstrap {
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
     pub(super) adopt_queue: Option<(Vec<MediaItem>, usize, crate::config::QueueSource)>,
+    /// Per-item resume positions carried over from the saved queue snapshot
+    /// (see `QueueState::positions`), so the same best-effort enrichment that
+    /// `restore_queue_state` performs for plain local playback also happens
+    /// for a cold daemon adopting a saved queue. Empty when there's nothing
+    /// to enrich (remote-populated queue, or no saved state).
     pub(super) positions: std::collections::HashMap<String, i64>,
 }
 
@@ -39,7 +44,10 @@ pub(super) fn bootstrap_local_daemon_queue(
         };
     };
 
-    let (player_tab, adopt_items, adopt_cursor) = if state.slot_ids.is_some() {
+    let (items, cursor) = if state.slot_ids.is_some() {
+        // Slot-aware restore: build a temporary PlaybackQueue via
+        // from_persisted to preserve slot ordering, then extract the
+        // ordered item snapshot for PlayerTab.
         let pq = PlaybackQueue::from_persisted(
             state.items.clone(),
             state.slot_ids.clone(),
@@ -48,29 +56,23 @@ pub(super) fn bootstrap_local_daemon_queue(
             state.next_slot_id,
         );
         let cursor = pq.current_index().unwrap_or(0);
-        let items = pq.items_snapshot();
-        let slot_ids = pq.slot_ids();
-        let active_slot_id = pq.active_slot_id();
-        let revision = pq.revision();
-        let tab = PlayerTab::from_slot_snapshot(items.clone(), slot_ids, active_slot_id, revision, cursor);
-        (tab, items, cursor)
+        (pq.items_snapshot(), cursor)
     } else {
+        // Legacy state without slot IDs: compute cursor as before
         let cursor = super::actions::queue_restore_cursor(
             &state.items,
             state.cursor,
             state.last_played_item_id.as_deref(),
             state.last_played_completed,
         );
-        let items = state.items.clone();
-        let tab = PlayerTab::new(items.clone(), cursor);
-        (tab, items, cursor)
+        (state.items.clone(), cursor)
     };
     LocalDaemonBootstrap {
-        player_tab,
+        player_tab: PlayerTab::new(items.clone(), cursor),
         queue_source: state.source.clone(),
         last_played_item_id: state.last_played_item_id.clone(),
         last_played_completed: state.last_played_completed,
-        adopt_queue: Some((adopt_items, adopt_cursor, state.source)),
+        adopt_queue: Some((items, cursor, state.source)),
         positions: state.positions,
     }
 }

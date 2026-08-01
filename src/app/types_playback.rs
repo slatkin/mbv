@@ -1,5 +1,5 @@
 use mbv_core::api::MediaItem;
-use mbv_core::playback_queue::QueueSlotId;
+use mbv_core::playback_queue::{QueueRevision, QueueSlotId};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
 use std::sync::mpsc;
@@ -91,11 +91,18 @@ impl QueueScopeResolution {
 /// made after the move is refused instead of swapping the wrong items.
 #[derive(Debug)]
 pub(super) enum UndoEntry {
-    Remove(usize, Box<MediaItem>),
+    Remove {
+        removed_slot_id: QueueSlotId,
+        item: Box<MediaItem>,
+        position: usize,
+        revision: QueueRevision,
+        was_active: bool,
+    },
     Move {
         from: usize,
         to: usize,
         slot_id: QueueSlotId,
+        revision: QueueRevision,
     },
 }
 

@@ -1,29 +1,51 @@
 /// Applies a freshly-decided queue snapshot to the cross-thread shared state
 /// (used to seed newly-connecting ctrl-socket clients) and broadcasts it to
-/// every already-connected client. Centralizes what `CtrlState`'s fields
-/// must always carry together, so a future field addition (like `source` in
-/// #113) can't land in only some of the call sites — previously this exact
-/// shape was hand-rolled inline at five separate command branches.
+/// every already-connected client. Emits slot-aware v8 state to v8 peers
+/// and legacy positional state to v7 peers.
 fn broadcast_queue_state(
     ctrl_clients: &ClientRegistry,
     player: &Player,
     shared_queue: &SharedQueueState,
-    items: &[MediaItem],
-    cursor: usize,
     source: &crate::config::QueueSource,
 ) {
-    let event = CtrlEvent::State(CtrlState {
-        status: player.status.lock().unwrap().clone(),
-        items: items.to_vec(),
+    let q = shared_queue.queue.lock().unwrap();
+    let status = player.status.lock().unwrap().clone();
+    let items = q.items_snapshot();
+    let cursor = q.current_index().unwrap_or(0);
+    let slot_ids = q.slot_ids();
+    let revision = q.revision();
+    let active_slot_id = q.active_slot_id();
+    drop(q);
+
+    let source_clone = source.clone();
+    let v7_event = CtrlEvent::State(CtrlState::v7(
+        status.clone(),
+        items.clone(),
         cursor,
-        source: source.clone(),
+        source_clone.clone(),
+    ));
+    let v7_json = serialize_ctrl_event(&v7_event);
+
+    let v8_event = CtrlEvent::State(CtrlState {
+        status: status.clone(),
+        items: items.clone(),
+        cursor,
+        source: source_clone.clone(),
+        slot_ids: slot_ids.clone(),
+        revision,
+        active_slot_id,
     });
-    broadcast(ctrl_clients, &event);
-    *shared_queue.cursor.lock().unwrap() = cursor;
-    *shared_queue.source.lock().unwrap() = source.clone();
-    if let CtrlEvent::State(state) = event {
-        *shared_queue.items.lock().unwrap() = state.items;
-    }
+    let v8_json = serialize_ctrl_event(&v8_event);
+
+    let mut clients = ctrl_clients.lock().unwrap();
+    clients.connection.retain(|c| {
+        let json = if c.peer_version >= 8 { &v8_json } else { &v7_json };
+        json.as_ref()
+            .map(|j| c.tx.send(CtrlOutbound::Event(j.clone())).is_ok())
+            .unwrap_or(false)
+    });
+
+    *shared_queue.source.lock().unwrap() = source_clone;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -34,8 +56,6 @@ fn handle_ctrl(
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
     audio_only: bool,
-    items: &mut Vec<MediaItem>,
-    cursor: &mut usize,
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
@@ -60,13 +80,11 @@ fn handle_ctrl(
             cursor: new_cursor,
             source: new_source,
         } => {
-            // Adoption only ever applies to a Cold daemon (see CONTEXT.md's
-            // "Cold daemon" entry) — one with no queue yet. If another
-            // client's command already gave this daemon a queue by the time
-            // this one arrives (a concurrent first-connect race), the daemon
-            // is no longer cold, and a stale saved snapshot must not be
-            // allowed to silently clobber whatever is already authoritative.
-            if !items.is_empty() {
+            if !shared_queue.queue.lock().unwrap().is_empty() {
+                let q = shared_queue.queue.lock().unwrap();
+                let items = q.items_snapshot();
+                let cursor = q.current_index().unwrap_or(0);
+                drop(q);
                 log::warn!(
                     target: "daemon",
                     "ignoring AdoptQueue: daemon already has a queue ({} item(s))",
@@ -78,18 +96,14 @@ fn handle_ctrl(
                         "daemon already has a queue; adoption skipped".to_string(),
                     ),
                 );
-                // With multiple concurrent connections, reconciliation
-                // pushes the daemon's authoritative State so the sending
-                // client overwrites its optimistic mutation instead of
-                // lingering diverged from what the daemon holds.
                 send_to(
                     request.reply_tx,
-                    &CtrlEvent::State(CtrlState {
-                        status: player.status.lock().unwrap().clone(),
-                        items: items.clone(),
-                        cursor: *cursor,
-                        source: source.clone(),
-                    }),
+                    &CtrlEvent::State(CtrlState::v7(
+                        player.status.lock().unwrap().clone(),
+                        items,
+                        cursor,
+                        source.clone(),
+                    )),
                 );
                 return;
             }
@@ -99,130 +113,235 @@ fn handle_ctrl(
                 new_cursor.min(new_items.len().saturating_sub(1))
             };
             player.set_initial_queue(&new_items, next_cursor);
-            broadcast_queue_state(
-                ctrl_clients,
-                player,
-                shared_queue,
-                &new_items,
-                next_cursor,
-                &new_source,
-            );
-            *items = new_items;
-            *cursor = next_cursor;
+            shared_queue.queue.lock().unwrap().replace_all(new_items, Some(next_cursor));
+            broadcast_queue_state(ctrl_clients, player, shared_queue, &new_source);
             *source = new_source;
         }
-        CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
-            PlayerCommand::ReplaceQueue {
-                items: new_items,
-                start_idx,
-            } => {
-                let next_cursor = if new_items.is_empty() {
-                    0
-                } else {
-                    start_idx.min(new_items.len().saturating_sub(1))
-                };
-                *items = new_items.clone();
-                *cursor = next_cursor;
-                broadcast_queue_state(
-                    ctrl_clients,
-                    player,
-                    shared_queue,
-                    &new_items,
-                    next_cursor,
-                    source,
-                );
-                player.send_command(PlayerCommand::ReplaceQueue {
+        CtrlCmd::PlayerCmd(pc) => {
+            // v8 slot-aware queue commands (handled before PlayerCommand conversion)
+            match &pc {
+                WireCommand::QueueRemoveBySlot { slot_id, revision } => {
+                    let current_rev = shared_queue.queue.lock().unwrap().revision();
+                    if *revision != current_rev {
+                        log::warn!(target: "daemon", "QueueRemoveBySlot: stale revision (client={}, daemon={})", revision.raw(), current_rev.raw());
+                        send_to(request.reply_tx, &CtrlEvent::CommandRejected("stale revision".to_string()));
+                        let q = shared_queue.queue.lock().unwrap();
+                        let status = player.status.lock().unwrap().clone();
+                        let items = q.items_snapshot();
+                        let cursor = q.current_index().unwrap_or(0);
+                        let sids = q.slot_ids();
+                        let rev = q.revision();
+                        let a_sid = q.active_slot_id();
+                        drop(q);
+                        send_to(request.reply_tx, &CtrlEvent::State(CtrlState {
+                            status, items, cursor, source: source.clone(),
+                            slot_ids: sids, revision: rev, active_slot_id: a_sid,
+                        }));
+                        return;
+                    }
+                    let mut q = shared_queue.queue.lock().unwrap();
+                    let sid = *slot_id;
+                    let idx = q.slot_index(sid).unwrap_or(0);
+                    match q.remove_slot(sid) {
+                        crate::playback_queue::RemoveSlotResult::Removed(_) => {}
+                        crate::playback_queue::RemoveSlotResult::RequiresActiveConfirmation(_) => {
+                            let _ = q.remove_active_slot_confirmed(sid);
+                        }
+                        crate::playback_queue::RemoveSlotResult::NotFound => {
+                            log::warn!(target: "daemon", "QueueRemoveBySlot: slot {:?} not found", sid);
+                            return;
+                        }
+                    }
+                    drop(q);
+                    broadcast_queue_state(ctrl_clients, player, shared_queue, source);
+                    player.send_command(PlayerCommand::QueueRemove(idx));
+                    return;
+                }
+                WireCommand::QueueMoveBySlot { slot_id, to_position, revision } => {
+                    let current_rev = shared_queue.queue.lock().unwrap().revision();
+                    if *revision != current_rev {
+                        log::warn!(target: "daemon", "QueueMoveBySlot: stale revision");
+                        send_to(request.reply_tx, &CtrlEvent::CommandRejected("stale revision".to_string()));
+                        let q = shared_queue.queue.lock().unwrap();
+                        let status = player.status.lock().unwrap().clone();
+                        let items = q.items_snapshot();
+                        let cursor = q.current_index().unwrap_or(0);
+                        let sids = q.slot_ids();
+                        let rev = q.revision();
+                        let a_sid = q.active_slot_id();
+                        drop(q);
+                        send_to(request.reply_tx, &CtrlEvent::State(CtrlState {
+                            status, items, cursor, source: source.clone(),
+                            slot_ids: sids, revision: rev, active_slot_id: a_sid,
+                        }));
+                        return;
+                    }
+                    let mut q = shared_queue.queue.lock().unwrap();
+                    let from_idx = q.slot_index(*slot_id).unwrap_or(0);
+                    let _ = q.move_slot(*slot_id, *to_position);
+                    drop(q);
+                    broadcast_queue_state(ctrl_clients, player, shared_queue, source);
+                    player.send_command(PlayerCommand::QueueMove(from_idx, *to_position));
+                    return;
+                }
+                WireCommand::JumpToSlot { slot_id } => {
+                    let q = shared_queue.queue.lock().unwrap();
+                    let idx = q.slot_index(*slot_id).unwrap_or(0);
+                    drop(q);
+                    player.send_command(PlayerCommand::JumpTo(idx));
+                    return;
+                }
+                WireCommand::QueueInsertAt { item, position, revision } => {
+                    let current_rev = shared_queue.queue.lock().unwrap().revision();
+                    if *revision != current_rev {
+                        log::warn!(target: "daemon", "QueueInsertAt: stale revision");
+                        send_to(request.reply_tx, &CtrlEvent::CommandRejected("stale revision".to_string()));
+                        let q = shared_queue.queue.lock().unwrap();
+                        let status = player.status.lock().unwrap().clone();
+                        let items = q.items_snapshot();
+                        let cursor = q.current_index().unwrap_or(0);
+                        let sids = q.slot_ids();
+                        let rev = q.revision();
+                        let a_sid = q.active_slot_id();
+                        drop(q);
+                        send_to(request.reply_tx, &CtrlEvent::State(CtrlState {
+                            status, items, cursor, source: source.clone(),
+                            slot_ids: sids, revision: rev, active_slot_id: a_sid,
+                        }));
+                        return;
+                    }
+                    let mut q = shared_queue.queue.lock().unwrap();
+                    let _new_sid = q.insert(*position, item.clone());
+                    drop(q);
+                    broadcast_queue_state(ctrl_clients, player, shared_queue, source);
+                    player.send_command(PlayerCommand::QueueAppend { items: vec![item.clone()] });
+                    return;
+                }
+                WireCommand::QueueRemoveActive { revision } => {
+                    let current_rev = shared_queue.queue.lock().unwrap().revision();
+                    if *revision != current_rev {
+                        log::warn!(target: "daemon", "QueueRemoveActive: stale revision");
+                        send_to(request.reply_tx, &CtrlEvent::CommandRejected("stale revision".to_string()));
+                        let q = shared_queue.queue.lock().unwrap();
+                        let status = player.status.lock().unwrap().clone();
+                        let items = q.items_snapshot();
+                        let cursor = q.current_index().unwrap_or(0);
+                        let sids = q.slot_ids();
+                        let rev = q.revision();
+                        let a_sid = q.active_slot_id();
+                        drop(q);
+                        send_to(request.reply_tx, &CtrlEvent::State(CtrlState {
+                            status, items, cursor, source: source.clone(),
+                            slot_ids: sids, revision: rev, active_slot_id: a_sid,
+                        }));
+                        return;
+                    }
+                    // Capture progress context from active slot before removal
+                    let _progress_ctx = {
+                        let q = shared_queue.queue.lock().unwrap();
+                        q.active_slot().map(|slot| slot.slot_id)
+                    };
+                    // Remove active slot and clear active marker
+                    {
+                        let mut q = shared_queue.queue.lock().unwrap();
+                        if let Some(active_id) = q.active_slot_id() {
+                            let _ = q.remove_active_slot_confirmed(active_id);
+                        }
+                    }
+                    broadcast_queue_state(ctrl_clients, player, shared_queue, source);
+                    player.stop();
+                    log::info!(target: "daemon", "QueueRemoveActive: removed active slot, stopping player");
+                    return;
+                }
+                _ => {
+                    // Fall through to legacy v7 PlayerCommand handling
+                }
+            }
+            match PlayerCommand::from(pc) {
+                PlayerCommand::ReplaceQueue {
                     items: new_items,
                     start_idx,
-                });
-            }
-            PlayerCommand::QueueAppend { items: new_items } => {
-                if !new_items.is_empty() {
-                    items.extend(new_items.clone());
-                    broadcast_queue_state(
-                        ctrl_clients,
-                        player,
-                        shared_queue,
-                        items,
-                        *cursor,
-                        source,
-                    );
-                    player.send_command(PlayerCommand::QueueAppend { items: new_items });
-                }
-            }
-            PlayerCommand::QueueMove(from, to) => {
-                if from >= items.len() || to >= items.len() {
-                    send_to(
-                        request.reply_tx,
-                        &CtrlEvent::CommandRejected(
-                            "remote queue changed; move skipped".to_string(),
-                        ),
-                    );
-                    send_to(
-                        request.reply_tx,
-                        &CtrlEvent::State(CtrlState {
-                            status: player.status.lock().unwrap().clone(),
-                            items: items.clone(),
-                            cursor: *cursor,
-                            source: source.clone(),
-                        }),
-                    );
-                } else if from != to {
-                    let item = items.remove(from);
-                    items.insert(to, item);
-                    *cursor = crate::player::shift_index_for_move(*cursor, from, to);
-                    broadcast_queue_state(
-                        ctrl_clients,
-                        player,
-                        shared_queue,
-                        items,
-                        *cursor,
-                        source,
-                    );
-                    player.send_command(PlayerCommand::QueueMove(from, to));
-                }
-            }
-            PlayerCommand::QueueRemove(index) => {
-                if index >= items.len() {
-                    send_to(
-                        request.reply_tx,
-                        &CtrlEvent::CommandRejected(
-                            "remote queue changed; remove skipped".to_string(),
-                        ),
-                    );
-                    send_to(
-                        request.reply_tx,
-                        &CtrlEvent::State(CtrlState {
-                            status: player.status.lock().unwrap().clone(),
-                            items: items.clone(),
-                            cursor: *cursor,
-                            source: source.clone(),
-                        }),
-                    );
-                } else {
-                    items.remove(index);
-                    if items.is_empty() {
-                        *cursor = 0;
-                    } else if index < *cursor {
-                        *cursor -= 1;
+                } => {
+                    let next_cursor = if new_items.is_empty() {
+                        0
                     } else {
-                        *cursor = (*cursor).min(items.len() - 1);
+                        start_idx.min(new_items.len().saturating_sub(1))
+                    };
+                    shared_queue.queue.lock().unwrap().replace_all(new_items.clone(), Some(next_cursor));
+                    broadcast_queue_state(ctrl_clients, player, shared_queue, source);
+                    player.send_command(PlayerCommand::ReplaceQueue {
+                        items: new_items,
+                        start_idx,
+                    });
+                }
+                PlayerCommand::QueueAppend { items: new_items } => {
+                    if !new_items.is_empty() {
+                        shared_queue.queue.lock().unwrap().append_items(new_items.clone());
+                        broadcast_queue_state(ctrl_clients, player, shared_queue, source);
+                        player.send_command(PlayerCommand::QueueAppend { items: new_items });
                     }
-                    broadcast_queue_state(
-                        ctrl_clients,
-                        player,
-                        shared_queue,
-                        items,
-                        *cursor,
-                        source,
-                    );
-                    player.send_command(PlayerCommand::QueueRemove(index));
+                }
+                PlayerCommand::QueueMove(from, to) => {
+                    let queue_len = shared_queue.queue.lock().unwrap().len();
+                    if from >= queue_len || to >= queue_len {
+                        let q = shared_queue.queue.lock().unwrap();
+                        let items = q.items_snapshot();
+                        let cursor = q.current_index().unwrap_or(0);
+                        drop(q);
+                        send_to(
+                            request.reply_tx,
+                            &CtrlEvent::CommandRejected(
+                                "remote queue changed; move skipped".to_string(),
+                            ),
+                        );
+                        send_to(
+                            request.reply_tx,
+                            &CtrlEvent::State(CtrlState::v7(
+                                player.status.lock().unwrap().clone(),
+                                items,
+                                cursor,
+                                source.clone(),
+                            )),
+                        );
+                    } else if from != to {
+                        shared_queue.queue.lock().unwrap().move_item(from, to);
+                        broadcast_queue_state(ctrl_clients, player, shared_queue, source);
+                        player.send_command(PlayerCommand::QueueMove(from, to));
+                    }
+                }
+                PlayerCommand::QueueRemove(index) => {
+                    let queue_len = shared_queue.queue.lock().unwrap().len();
+                    if index >= queue_len {
+                        let q = shared_queue.queue.lock().unwrap();
+                        let items = q.items_snapshot();
+                        let cursor = q.current_index().unwrap_or(0);
+                        drop(q);
+                        send_to(
+                            request.reply_tx,
+                            &CtrlEvent::CommandRejected(
+                                "remote queue changed; remove skipped".to_string(),
+                            ),
+                        );
+                        send_to(
+                            request.reply_tx,
+                            &CtrlEvent::State(CtrlState::v7(
+                                player.status.lock().unwrap().clone(),
+                                items,
+                                cursor,
+                                source.clone(),
+                            )),
+                        );
+                    } else {
+                        shared_queue.queue.lock().unwrap().remove_at(index);
+                        broadcast_queue_state(ctrl_clients, player, shared_queue, source);
+                        player.send_command(PlayerCommand::QueueRemove(index));
+                    }
+                }
+                other => {
+                    player.send_command(other);
                 }
             }
-            other => {
-                player.send_command(other);
-            }
-        },
+        }
         CtrlCmd::PlayItems {
             item_ids,
             start_idx,
@@ -267,26 +386,17 @@ fn handle_ctrl(
                         .unwrap()
                         .get_episodes_from(&item.series_id, &item.id);
                     if queue.len() > 1 {
-                        *items = queue.clone();
-                        *cursor = 0;
+                        shared_queue.queue.lock().unwrap().replace_all(queue.clone(), Some(0));
                         *source = new_source;
-                        broadcast_queue_state(
-                            ctrl_clients,
-                            player,
-                            shared_queue,
-                            &queue,
-                            0,
-                            source,
-                        );
+                        broadcast_queue_state(ctrl_clients, player, shared_queue, source);
                         let c = Arc::new(client.lock().unwrap().clone());
                         player.play_queue(queue, 0, c, 100);
                         return;
                     }
                 }
-                *items = vec![item.clone()];
-                *cursor = 0;
+                shared_queue.queue.lock().unwrap().replace_all(vec![item.clone()], Some(0));
                 *source = new_source;
-                broadcast_queue_state(ctrl_clients, player, shared_queue, items, 0, source);
+                broadcast_queue_state(ctrl_clients, player, shared_queue, source);
                 let mut play_item = item;
                 if start_ticks > 0 {
                     play_item.playback_position_ticks = start_ticks;
@@ -299,17 +409,9 @@ fn handle_ctrl(
                 if start_ticks > 0 {
                     play_items[start_idx].playback_position_ticks = start_ticks;
                 }
-                *items = play_items.clone();
-                *cursor = start_idx;
+                shared_queue.queue.lock().unwrap().replace_all(play_items.clone(), Some(start_idx));
                 *source = new_source;
-                broadcast_queue_state(
-                    ctrl_clients,
-                    player,
-                    shared_queue,
-                    &play_items,
-                    start_idx,
-                    source,
-                );
+                broadcast_queue_state(ctrl_clients, player, shared_queue, source);
                 let c = Arc::new(client.lock().unwrap().clone());
                 player.play_queue(play_items, start_idx, c, 100);
             }

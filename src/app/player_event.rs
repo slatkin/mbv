@@ -1,3 +1,4 @@
+use super::types_player_tab::PlayerTab;
 use super::types_playback::UndoEntry;
 use super::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_core::playback_queue::RemoveSlotResult;
@@ -71,7 +72,7 @@ impl App {
                     self.refresh_after_stop();
                     return true;
                 }
-                let is_delete = self.pending_delete_idx.take() == Some(idx);
+                let is_delete = false; // task 7.2: optimistic removal replaces deferred stop-delete path
                 let preserve_local_state = !self.has_direct_remote_queue();
                 // Resolve the raw mpv index to a slot right away, against
                 // the queue exactly as it stands now (syncing the shadow
@@ -159,8 +160,16 @@ impl App {
                                 queue.queue_cursor.min(queue.items.len().saturating_sub(1));
                         }
                         if allow_undo {
+                            let removed_slot_id = slot_id;
+                            let revision = self.playback_queue().queue.revision();
                             self.queue_undo_stack
-                                .push(UndoEntry::Remove(idx, Box::new(item)));
+                                .push(UndoEntry::Remove {
+                                removed_slot_id: removed_slot_id.unwrap_or(mbv_core::playback_queue::QueueSlotId(0)),
+                                item: Box::new(item),
+                                position: idx,
+                                revision,
+                                was_active: true,
+                            });
                         }
                     }
                 } else {
@@ -359,6 +368,9 @@ impl App {
                 items,
                 cursor,
                 source,
+                slot_ids,
+                revision,
+                active_slot_id,
             } => {
                 let cursor = if self.has_direct_remote_queue() {
                     self.pending_remote_move_cursor
@@ -368,8 +380,61 @@ impl App {
                 } else {
                     cursor
                 };
-                let queue = self.playback_queue_mut();
-                queue.set_items(items, cursor);
+                // Build PlayerTab from daemon-assigned slot identities when
+                // the snapshot carries them (v8+); fall back to local slot
+                // allocation for v7 peers (task 6.2 / 6.5).
+                let has_direct = self.has_direct_remote_queue();
+                if !slot_ids.is_empty() && has_direct {
+                    // ── v8 authoritative snapshot ────────────────────
+                    // Reconcile any optimistic deletion: if the slot was
+                    // removed optimistically and the daemon confirms it's
+                    // gone, the projection already matches. If it's still
+                    // present (rejected removal), restore it (task 7.3).
+                    if let Some(opt_slot) = self.pending_optimistic_delete.take() {
+                        if slot_ids.contains(&opt_slot) {
+                            log::warn!(target: "player",
+                                "QueueUpdated: optimistic delete of slot_id={opt_slot:?}                                  rejected by daemon, restoring authoritative state");
+                        }
+                        // Always accept the authoritative snapshot.
+                    }
+                    // Task 8.2: capture selection info before consuming slot_ids
+                    let scope = self.playback_target_queue_scope();
+                    let old_selected = self.queue_for_scope(scope).selected_slot_id;
+                    let fallback_selection = if let Some(old_sid) = old_selected {
+                        if slot_ids.contains(&old_sid) {
+                            Some(old_sid)
+                        } else {
+                            // Select successor at former visual position, else predecessor
+                            slot_ids.get(cursor).copied()
+                                .or_else(|| if cursor > 0 { slot_ids.get(cursor - 1).copied() } else { None })
+                        }
+                    } else {
+                        None
+                    };
+                    match scope {
+                        super::QueueScope::Remote => {
+                            if let Some(queue) = self.remote_player_tab.as_mut() {
+                                *queue = PlayerTab::from_slot_snapshot(
+                                    items, slot_ids, active_slot_id, revision, cursor,
+                                );
+                                // Task 8.2: preserve selection
+                                queue.selected_slot_id = fallback_selection;
+                                queue.clamp_cursor();
+                            }
+                        }
+                        super::QueueScope::Local => {
+                            self.player_tab = PlayerTab::from_slot_snapshot(
+                                items, slot_ids, active_slot_id, revision, cursor,
+                            );
+                            // Task 8.2: preserve selection
+                            self.player_tab.selected_slot_id = fallback_selection;
+                            self.player_tab.clamp_cursor();
+                        }
+                    }
+                } else {
+                    let queue = self.playback_queue_mut();
+                    queue.set_items(items, cursor);
+                }
                 if !self.has_direct_remote_queue() {
                     self.queue_source = source;
                 }

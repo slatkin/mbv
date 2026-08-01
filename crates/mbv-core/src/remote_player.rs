@@ -3,7 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
 use crate::api::{EmbyClient, MediaItem};
-use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent};
+use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
+use crate::playback_queue::{QueueRevision, QueueSlotId};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 #[derive(Clone)]
@@ -14,6 +15,14 @@ pub struct RemotePlayer {
     pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
+    /// Daemon-assigned slot IDs, parallel to `items`. Populated from v8
+    /// CtrlState snapshots; empty for v7 peers.
+    pub(crate) slot_ids: Arc<Mutex<Vec<QueueSlotId>>>,
+    /// Daemon queue revision from the last-received CtrlState snapshot.
+    pub(crate) queue_revision: Arc<Mutex<QueueRevision>>,
+    /// True while a structural mutation (remove/move) has been sent but
+    /// not yet acknowledged by a fresh snapshot from the daemon.
+    pub(crate) pending_mutation: Arc<AtomicBool>,
     /// Set when the connection closed after the daemon announced a
     /// deliberate shutdown, as opposed to closing with no warning.
     pub(crate) shutdown_announced: Arc<AtomicBool>,
@@ -108,9 +117,157 @@ impl RemotePlayer {
                 );
                 return false;
             }
+            // ── v8 slot-aware translation ───────────────────────────
+            // Structural mutations (remove/move) are gated by the one-
+            // in-flight policy (task 6.4). JumpTo is not structural.
+            _ if self.ctrl_compatibility.peer_protocol_version >= 8 => {
+                match cmd {
+                    PlayerCommand::QueueRemove(idx) => {
+                        let wire = {
+                            let slot_ids = self.slot_ids.lock().unwrap();
+                            let revision = self.queue_revision.lock().unwrap();
+                            match slot_ids.get(idx) {
+                                Some(&slot_id) if revision.0 > 0 => {
+                                    Some(WireCommand::QueueRemoveBySlot { slot_id, revision: *revision })
+                                }
+                                _ => {
+                                    log::warn!(target: "remote", "v8 QueueRemove: no slot at idx={idx} or revision=0");
+                                    None
+                                }
+                            }
+                        };
+                        match wire {
+                            Some(w) => {
+                                // One-in-flight check
+                                if self.pending_mutation.swap(true, Ordering::SeqCst) {
+                                    log::debug!(target: "remote", "v8 QueueRemove dropped: prior mutation in flight");
+                                    return false;
+                                }
+                                if self.cmd_tx.send(CtrlCmd::PlayerCmd(w)).is_err() {
+                                    self.pending_mutation.store(false, Ordering::SeqCst);
+                                    return false;
+                                }
+                                return true;
+                            }
+                            None => return false,
+                        }
+                    }
+                    PlayerCommand::QueueMove(from, to) => {
+                        let wire = {
+                            let slot_ids = self.slot_ids.lock().unwrap();
+                            let revision = self.queue_revision.lock().unwrap();
+                            match slot_ids.get(from) {
+                                Some(&slot_id) if revision.0 > 0 => {
+                                    Some(WireCommand::QueueMoveBySlot {
+                                        slot_id,
+                                        to_position: to,
+                                        revision: *revision,
+                                    })
+                                }
+                                _ => {
+                                    log::warn!(target: "remote", "v8 QueueMove: no slot at idx={from} or revision=0");
+                                    None
+                                }
+                            }
+                        };
+                        match wire {
+                            Some(w) => {
+                                if self.pending_mutation.swap(true, Ordering::SeqCst) {
+                                    log::debug!(target: "remote", "v8 QueueMove dropped: prior mutation in flight");
+                                    return false;
+                                }
+                                if self.cmd_tx.send(CtrlCmd::PlayerCmd(w)).is_err() {
+                                    self.pending_mutation.store(false, Ordering::SeqCst);
+                                    return false;
+                                }
+                                return true;
+                            }
+                            None => return false,
+                        }
+                    }
+                    PlayerCommand::JumpTo(idx) => {
+                        let slot_ids = self.slot_ids.lock().unwrap();
+                        match slot_ids.get(idx) {
+                            Some(&slot_id) => {
+                                WireCommand::JumpToSlot { slot_id }
+                            }
+                            _ => {
+                                log::warn!(target: "remote", "v8 JumpTo: no slot at idx={idx}");
+                                return false;
+                            }
+                        }
+                    }
+                    PlayerCommand::ReplaceQueue { items: _, start_idx: _ }
+                        if !self.ctrl_compatibility.supports_queue_append =>
+                    {
+                        log::warn!(target: "remote", "v8 ReplaceQueue not supported");
+                        return false;
+                    }
+                    other => other.into(),
+                }
+            }
             cmd => cmd.into(),
         };
         self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()
+    }
+
+    /// Send QueueRemoveActive to the daemon (task 7.1). The daemon
+    /// transactionally removes the active slot and drives async finalization.
+    pub fn send_queue_remove_active(&self, revision: QueueRevision) -> bool {
+        if revision.0 == 0 {
+            return false;
+        }
+        if self.pending_mutation.swap(true, Ordering::SeqCst) {
+            log::debug!(target: "remote", "QueueRemoveActive dropped: prior mutation in flight");
+            return false;
+        }
+        if self.cmd_tx.send(CtrlCmd::PlayerCmd(WireCommand::QueueRemoveActive { revision })).is_err() {
+            self.pending_mutation.store(false, Ordering::SeqCst);
+            false
+        } else {
+            true
+        }
+    }
+
+    /// Send QueueInsertAt to the daemon for undo restoration (task 9.3).
+    /// The daemon inserts the item at the given position and broadcasts
+    /// the updated snapshot with a newly assigned slot ID.
+    pub fn send_queue_insert_at(
+        &self,
+        item: MediaItem,
+        position: usize,
+        revision: QueueRevision,
+    ) -> bool {
+        if revision.0 == 0 {
+            return false;
+        }
+        if self.pending_mutation.swap(true, Ordering::SeqCst) {
+            log::debug!(target: "remote", "QueueInsertAt dropped: prior mutation in flight");
+            return false;
+        }
+        if self.cmd_tx.send(CtrlCmd::PlayerCmd(WireCommand::QueueInsertAt { item, position, revision })).is_err() {
+            self.pending_mutation.store(false, Ordering::SeqCst);
+            false
+        } else {
+            true
+        }
+    }
+
+    /// Called from apply_ctrl_event when a full v8 snapshot arrives;
+    /// clears the in-flight flag so the next mutation can proceed.
+    pub(crate) fn clear_pending_mutation(&self) {
+        self.pending_mutation.store(false, Ordering::SeqCst);
+    }
+
+    /// Populate slot_ids and revision from a client-side PlayerTab
+    /// (used by tests and bootstrap to seed the translation layer).
+    pub(crate) fn set_slot_state(
+        &self,
+        slot_ids: Vec<QueueSlotId>,
+        revision: QueueRevision,
+    ) {
+        *self.slot_ids.lock().unwrap() = slot_ids;
+        *self.queue_revision.lock().unwrap() = revision;
     }
 
     pub fn adopt_queue(
@@ -239,6 +396,9 @@ impl RemotePlayer {
         let shutdown_announced = Arc::new(AtomicBool::new(false));
         let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
         let pending_playback = Arc::new(Mutex::new(HashMap::new()));
+        let slot_ids = Arc::new(Mutex::new(Vec::new()));
+        let queue_revision = Arc::new(Mutex::new(QueueRevision::default()));
+        let pending_mutation = Arc::new(AtomicBool::new(false));
         let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
         let (_event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
         let compat = CtrlCompatibility::current();
@@ -251,6 +411,9 @@ impl RemotePlayer {
                 cmd_tx,
                 disconnected,
                 shutdown_announced,
+                slot_ids,
+                queue_revision,
+                pending_mutation,
                 ctrl_compatibility: compat,
                 control_stream: Arc::new(Mutex::new(None)),
                 next_playback_id,

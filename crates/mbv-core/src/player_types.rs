@@ -5,7 +5,7 @@ pub struct SubtitlePrefs {
     pub audio_lang: String, // full language name, e.g. "English"
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PlayerStatus {
     pub position_ticks: i64,
     #[serde(default)]
@@ -151,7 +151,7 @@ impl Default for PlayerStatus {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum PlayerEvent {
     Stopped {
         idx: usize,
@@ -196,6 +196,17 @@ pub enum PlayerEvent {
         items: Vec<crate::api::MediaItem>,
         cursor: usize,
         source: crate::config::QueueSource,
+        /// Daemon-assigned slot IDs (parallel to `items`). Present for v8+
+        /// peers; empty for v7 peers.
+        #[serde(default)]
+        slot_ids: Vec<crate::playback_queue::QueueSlotId>,
+        /// Daemon queue revision; zero when no mutations have occurred or
+        /// the peer is v7.
+        #[serde(default)]
+        revision: crate::playback_queue::QueueRevision,
+        /// The daemon's active (playing) slot, if any.
+        #[serde(default)]
+        active_slot_id: Option<crate::playback_queue::QueueSlotId>,
     },
     /// Chapter API: playback entered the intro window.
     IntroStarted {
@@ -238,7 +249,7 @@ pub enum PlayerEvent {
     QueueDesynced(String),
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),

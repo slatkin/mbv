@@ -3,8 +3,6 @@ fn handle_ws(
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
     audio_only: bool,
-    items: &mut Vec<MediaItem>,
-    cursor: &mut usize,
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
@@ -40,18 +38,10 @@ fn handle_ws(
             }
             // Clamp start_index in case the server sends an out-of-range value
             let start_idx = start_index.min(fetched.len().saturating_sub(1));
-            *items = fetched.clone();
-            *cursor = start_idx;
+            shared_queue.queue.lock().unwrap().replace_all(fetched.clone(), Some(start_idx));
             *source = crate::config::QueueSource::Remote;
             take_authority_for_emby_remote(ctrl_clients);
-            broadcast_queue_state(
-                ctrl_clients,
-                player,
-                shared_queue,
-                &fetched,
-                start_idx,
-                source,
-            );
+            broadcast_queue_state(ctrl_clients, player, shared_queue, source);
             if fetched.len() == 1 {
                 let mut play_item = fetched[0].clone();
                 if start_position_ticks > 0 {
@@ -73,7 +63,7 @@ fn handle_ws(
         }
         WsEvent::Stop => {
             player.stop();
-            if !items.is_empty() {
+            if !shared_queue.queue.lock().unwrap().is_empty() {
                 take_authority_for_emby_remote(ctrl_clients);
             }
         }

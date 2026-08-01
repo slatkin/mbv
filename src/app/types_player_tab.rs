@@ -1,12 +1,14 @@
 use mbv_core::api::MediaItem;
 use mbv_core::playback_queue::{
-    PlaybackQueue, QueueMutationResult, QueueSlotId, RefreshMergeResult, RemoveSlotResult,
+    PlaybackQueue, QueueMutationResult, QueueRevision, QueueSlot, QueueSlotId,
+    RefreshMergeResult, RemoveSlotResult,
 };
 
 #[derive(Clone, Default)]
 pub(super) struct PlayerTab {
     pub(super) items: Vec<MediaItem>,
     pub(super) queue_cursor: usize,
+    pub(super) selected_slot_id: Option<QueueSlotId>,
     pub(super) queue: PlaybackQueue,
 }
 
@@ -17,6 +19,42 @@ impl PlayerTab {
         Self {
             items,
             queue_cursor,
+            selected_slot_id: queue.slot_id_at(queue_cursor),
+            queue,
+        }
+    }
+
+    /// Build a `PlayerTab` from a daemon-assigned slot snapshot (task 6.2).
+    /// Preserves the daemon's slot identities, revision, and active slot
+    /// rather than allocating fresh local slot IDs.
+    pub(super) fn from_slot_snapshot(
+        items: Vec<MediaItem>,
+        slot_ids: Vec<QueueSlotId>,
+        active_slot_id: Option<QueueSlotId>,
+        revision: QueueRevision,
+        queue_cursor: usize,
+    ) -> Self {
+        let queue_cursor = queue_cursor.min(items.len().saturating_sub(1));
+        let slots: Vec<QueueSlot> = slot_ids
+            .into_iter()
+            .zip(items.iter())
+            .map(|(slot_id, item)| QueueSlot::new(slot_id, item.clone()))
+            .collect();
+        let max_id = slots
+            .iter()
+            .map(|s| s.slot_id.raw())
+            .max()
+            .unwrap_or(0);
+        let queue = PlaybackQueue::from_slot_snapshot(
+            slots,
+            active_slot_id,
+            revision,
+            max_id + 1,
+        );
+        Self {
+            items,
+            queue_cursor,
+            selected_slot_id: active_slot_id.or_else(|| queue.slots().first().map(|s| s.slot_id)),
             queue,
         }
     }
@@ -82,8 +120,27 @@ impl PlayerTab {
     pub(super) fn clamp_cursor(&mut self) {
         if self.items.is_empty() {
             self.queue_cursor = 0;
+            self.selected_slot_id = None;
         } else {
-            self.queue_cursor = self.queue_cursor.min(self.items.len() - 1);
+            // Task 8.4: bare mode - resolve stale selected_slot_id from cursor
+            if let Some(sid) = self.selected_slot_id {
+                if self.resolve_slot_at(self.queue_cursor) != Some(sid) {
+                    self.selected_slot_id = self.resolve_slot_at(self.queue_cursor);
+                }
+            } else {
+                self.selected_slot_id = self.resolve_slot_at(self.queue_cursor);
+            }
+            // Task 8.1: derive cursor from identity-based selection
+            if let Some(sid) = self.selected_slot_id {
+                if let Some(idx) = self.queue.slot_index(sid) {
+                    self.queue_cursor = idx.min(self.items.len().saturating_sub(1));
+                } else {
+                    self.queue_cursor = self.queue_cursor.min(self.items.len() - 1);
+                    self.selected_slot_id = self.resolve_slot_at(self.queue_cursor);
+                }
+            } else {
+                self.queue_cursor = self.queue_cursor.min(self.items.len() - 1);
+            }
         }
     }
 
@@ -122,9 +179,10 @@ impl PlayerTab {
 
     pub(super) fn insert_item_at(&mut self, index: usize, item: MediaItem) {
         self.sync_queue_model_from_items_if_needed();
-        self.queue.insert(index, item);
+        let new_slot_id = self.queue.insert(index, item);
         self.sync_items_from_queue_model();
         self.queue_cursor = index.min(self.items.len().saturating_sub(1));
+        self.selected_slot_id = Some(new_slot_id);
     }
 
     pub(super) fn append_item(&mut self, item: MediaItem) {
@@ -151,10 +209,12 @@ impl PlayerTab {
         }
         self.sync_items_from_queue_model();
         self.queue_cursor = to.min(self.items.len().saturating_sub(1));
+        self.selected_slot_id = Some(slot_id);
         true
     }
 
     pub(super) fn clear(&mut self) {
+        self.selected_slot_id = None;
         self.set_items(Vec::new(), 0);
     }
 }

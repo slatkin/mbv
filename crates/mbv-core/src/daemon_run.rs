@@ -109,8 +109,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
 
     // Shared state for ctrl socket initial-state snapshots
     let shared_queue = SharedQueueState {
-        items: Arc::new(Mutex::new(Vec::new())),
-        cursor: Arc::new(Mutex::new(0)),
+        queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
     };
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
@@ -246,12 +245,32 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         });
     }
 
-    let mut items: Vec<MediaItem> = Vec::new();
-    let mut cursor: usize = 0;
     let mut source = crate::config::QueueSource::Unknown;
     let mut playback_intents = PlaybackIntentState::default();
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
+
+    /// Serialize the current queue state (including slot metadata) to the
+    /// daemon-owned queue_state.json on disk. Called after every structural
+    /// mutation and during graceful shutdown.
+    fn persist_queue_state(shared_queue: &SharedQueueState) {
+        let q = shared_queue.queue.lock().unwrap();
+        let source = shared_queue.source.lock().unwrap().clone();
+        let state = crate::config::QueueState {
+            source,
+            items: q.items_snapshot(),
+            cursor: q.current_index().unwrap_or(0),
+            last_played_item_id: q.active_slot().map(|s| s.item.id.clone()),
+            last_played_completed: q.active_slot().map(|s| s.item.played).unwrap_or(false),
+            positions: Default::default(),
+            slot_ids: Some(q.slot_ids().into_iter().map(|sid| sid.raw()).collect()),
+            revision: Some(q.revision().raw()),
+            active_slot_id: q.active_slot_id().map(|sid| sid.raw()),
+            next_slot_id: Some(q.next_slot_id()),
+        };
+        crate::config::save_queue_state(&state);
+    }
+
 
     loop {
         if last_keepalive.elapsed() >= Duration::from_secs(30) {
@@ -289,18 +308,18 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
 
         match ev {
             DaemonEvent::Player(PlayerEvent::TrackChanged(idx)) => {
-                cursor = idx;
-                *shared_queue.cursor.lock().unwrap() = idx;
+                shared_queue.queue.lock().unwrap().set_active_at(idx);
                 broadcast(
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::TrackChanged(idx)),
                 );
+                let item_at_idx = shared_queue.queue.lock().unwrap().item_at(idx).cloned();
                 if let Some((connection_id, request_id, generation)) = playback_intents
                     .current
                     .as_ref()
                     .filter(|current| match &current.action {
-                        PlaybackIntentAction::Play { item_ids, .. } => items
-                            .get(idx)
+                        PlaybackIntentAction::Play { item_ids, .. } => item_at_idx
+                            .as_ref()
                             .is_some_and(|item| item_ids.iter().any(|id| id == &item.id)),
                         PlaybackIntentAction::Next | PlaybackIntentAction::Previous => {
                             current.target_idx.is_some_and(|target| target == idx)
@@ -315,7 +334,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                         )
                     })
                 {
-                    if items.get(idx).is_some() {
+                    if item_at_idx.is_some() {
                         if let Some(event) = playback_intents.applied_if_current(
                             connection_id,
                             request_id,
@@ -334,7 +353,11 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 season,
                 episode,
             }) => {
-                if let Some(item) = items.get(cursor + 1) {
+                let next_item = {
+                    let q = shared_queue.queue.lock().unwrap();
+                    q.current_index().and_then(|ci| q.item_at(ci + 1).cloned())
+                };
+                if let Some(item) = next_item {
                     player.send_command(PlayerCommand::NextUpShow {
                         item_id: item.id.clone(),
                         show_title: item.series_name.clone(),
@@ -352,7 +375,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 );
             }
             DaemonEvent::Player(PlayerEvent::QueueNextUp { next_idx }) => {
-                if let Some(item) = items.get(next_idx) {
+                let item = shared_queue.queue.lock().unwrap().item_at(next_idx).cloned();
+                if let Some(item) = item {
                     player.send_command(PlayerCommand::NextUpShow {
                         item_id: item.id.clone(),
                         show_title: item.series_name.clone(),
@@ -456,8 +480,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &client,
                     &player,
                     audio_only,
-                    &mut items,
-                    &mut cursor,
                     &mut source,
                     &shared_queue,
                     &ctrl_clients,
@@ -476,8 +498,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &client,
                     &player,
                     audio_only,
-                    &mut items,
-                    &mut cursor,
                     &mut source,
                     &shared_queue,
                     &ctrl_clients,
@@ -553,8 +573,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &client,
                     &player,
                     audio_only,
-                    &mut items,
-                    &mut cursor,
                     &mut source,
                     &shared_queue,
                     &ctrl_clients,
@@ -562,6 +580,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     Some(fetched),
                     &merged_tx,
                 );
+                persist_queue_state(&shared_queue);
             }
             DaemonEvent::CtrlDisconnected(client_id) => {
                 ctrl_clients.lock().unwrap().remove(client_id);
@@ -569,6 +588,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
             }
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");
+                persist_queue_state(&shared_queue);
                 // Announce the deliberate shutdown to every connected client
                 // before closing their connections, so they exit cleanly
                 // instead of treating this as an unannounced crash.

@@ -28,14 +28,23 @@ impl App {
             });
             return;
         }
+        let removed_slot_id = self.queue_for_scope(scope).resolve_slot_at(pos);
+        let was_active = controls_playback_queue && active && current_idx == pos;
         let Some(item) = self.queue_for_scope_mut(scope).remove_slot_at(pos) else {
             return;
         };
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
+        let revision = self.queue_for_scope(scope).queue.revision();
         self.undo_stack_for_scope_mut(scope)
-            .push(UndoEntry::Remove(pos, Box::new(item)));
+            .push(UndoEntry::Remove {
+            removed_slot_id: removed_slot_id.unwrap_or(mbv_core::playback_queue::QueueSlotId(0)),
+            item: Box::new(item),
+            position: pos,
+            revision,
+            was_active,
+        });
         self.persist_local_queue_state_if_needed(scope);
         if controls_playback_queue && (active || scope == QueueScope::Remote) {
             self.player.send_command(PlayerCommand::QueueRemove(pos));
@@ -83,8 +92,14 @@ impl App {
             if scope == QueueScope::Remote {
                 self.pending_remote_move_cursor = Some(to);
             }
+            let move_revision = self.queue_for_scope(scope).queue.revision();
             self.undo_stack_for_scope_mut(scope)
-                .push(UndoEntry::Move { from, to, slot_id });
+                .push(UndoEntry::Move {
+                from,
+                to,
+                slot_id,
+                revision: move_revision,
+            });
         }
     }
 
@@ -135,16 +150,32 @@ impl App {
             return;
         };
         match entry {
-            UndoEntry::Remove(idx, item) => {
-                let queue = self.queue_for_scope_mut(scope);
-                let idx = idx.min(queue.items.len());
-                queue.insert_item_at(idx, *item);
+            UndoEntry::Remove { removed_slot_id: _, item, position, revision, was_active: _ } => {
+                let current_revision = self.queue_for_scope(scope).queue.revision();
+                if current_revision != revision {
+                    self.flash_status_high("Can't undo: queue has changed since then".into());
+                    return;
+                }
+                let position = position.min(self.queue_for_scope(scope).items.len());
+                self.queue_for_scope_mut(scope).insert_item_at(position, *item);
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
                 self.persist_local_queue_state_if_needed(scope);
+                if self.has_direct_remote_queue() && scope == QueueScope::Remote {
+                    self.player.send_queue_insert_at(
+                        self.queue_for_scope(scope).items[position].clone(),
+                        position,
+                        revision,
+                    );
+                }
             }
-            UndoEntry::Move { from, to, slot_id } => {
+            UndoEntry::Move { from, to, slot_id, revision } => {
+                let current_revision = self.queue_for_scope(scope).queue.revision();
+                if current_revision != revision {
+                    self.flash_status_high("Can't undo move: queue has changed since then".into());
+                    return;
+                }
                 let still_in_place = self.queue_for_scope(scope).slot_id_matches_at(to, slot_id);
                 if !still_in_place || !self.apply_queue_move(scope, to, from) {
                     self.flash_status_high("Can't undo move: queue changed since then".into());
@@ -310,10 +341,20 @@ impl App {
             last_played_item_id: self.last_played_item_id.clone(),
             last_played_completed: self.last_played_completed,
             positions,
+            slot_ids: None,
+            revision: None,
+            active_slot_id: None,
+            next_slot_id: None,
         }
     }
 
     pub(super) fn save_queue_state(&self) {
+        // Daemon-owned persistence: when connected to a daemon (local or
+        // direct-remote), the daemon owns the queue snapshot on disk.
+        // The client must not race the daemon as an additional writer.
+        if self.is_local_daemon || self.has_direct_remote_queue() {
+            return;
+        }
         let state = self.build_queue_state();
         if state.items.is_empty() {
             // Don't nuke the on-disk queue just because the local tab happens to be
@@ -335,6 +376,9 @@ impl App {
     /// session with no recovery path. Only an explicit `ClearQueue` action (which
     /// goes through `save_queue_state`) should ever delete the file.
     pub(super) fn save_queue_state_no_clear(&self) {
+        if self.is_local_daemon || self.has_direct_remote_queue() {
+            return;
+        }
         let state = self.build_queue_state();
         if !state.items.is_empty() {
             crate::config::save_queue_state(&state);

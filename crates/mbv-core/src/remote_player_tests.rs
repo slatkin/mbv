@@ -3,6 +3,9 @@ use crate::config::QueueSource;
 use crate::ctrl::CtrlState;
 use crate::ctrl::WireCommand;
 use crate::player::PlayerCommand;
+use crate::playback_queue::{QueueRevision, QueueSlotId};
+use std::sync::atomic::AtomicBool;
+
 
 fn make_media_item(id: &str) -> MediaItem {
     MediaItem {
@@ -94,12 +97,18 @@ fn status_only_preserves_event_confirmed_current_index() {
     let items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
+    let slot_ids = Arc::new(Mutex::new(Vec::new()));
+    let queue_revision = Arc::new(Mutex::new(QueueRevision::default()));
+    let pending_mutation = Arc::new(AtomicBool::new(false));
 
     apply_ctrl_event(
         CtrlEvent::StatusOnly(status_with_idx(5)),
         &status,
         &items,
         &queue_source,
+        &slot_ids,
+        &queue_revision,
+        &pending_mutation,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
@@ -114,17 +123,18 @@ fn state_uses_cursor_as_current_index() {
     let items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, rx) = mpsc::channel();
+    let slot_ids = Arc::new(Mutex::new(Vec::new()));
+    let queue_revision = Arc::new(Mutex::new(QueueRevision::default()));
+    let pending_mutation = Arc::new(AtomicBool::new(false));
 
     apply_ctrl_event(
-        CtrlEvent::State(CtrlState {
-            status: status_with_idx(5),
-            items: Vec::new(),
-            cursor: 3,
-            source: QueueSource::Unknown,
-        }),
+        CtrlEvent::State(CtrlState::v7(status_with_idx(5), Vec::new(), 3, QueueSource::Unknown)),
         &status,
         &items,
         &queue_source,
+        &slot_ids,
+        &queue_revision,
+        &pending_mutation,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
@@ -143,12 +153,18 @@ fn status_only_preserves_current_idx_and_queue_len() {
     let items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
+    let slot_ids = Arc::new(Mutex::new(Vec::new()));
+    let queue_revision = Arc::new(Mutex::new(QueueRevision::default()));
+    let pending_mutation = Arc::new(AtomicBool::new(false));
 
     apply_ctrl_event(
         CtrlEvent::StatusOnly(status_with_idx_and_len(5, 2)),
         &status,
         &items,
         &queue_source,
+        &slot_ids,
+        &queue_revision,
+        &pending_mutation,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
@@ -165,20 +181,26 @@ fn state_derives_queue_len_from_items_not_status() {
     let items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
+    let slot_ids = Arc::new(Mutex::new(Vec::new()));
+    let queue_revision = Arc::new(Mutex::new(QueueRevision::default()));
+    let pending_mutation = Arc::new(AtomicBool::new(false));
 
     // s.status.queue_len (99) is stale relative to s.items.len() (2) — the
     // daemon broadcasts CtrlState before calling play_queue(...), so
     // items/cursor are authoritative over status at broadcast time.
     apply_ctrl_event(
-        CtrlEvent::State(CtrlState {
-            status: status_with_idx_and_len(5, 99),
-            items: vec![make_media_item("a"), make_media_item("b")],
-            cursor: 1,
-            source: QueueSource::Unknown,
-        }),
+        CtrlEvent::State(CtrlState::v7(
+            status_with_idx_and_len(5, 99),
+            vec![make_media_item("a"), make_media_item("b")],
+            1,
+            QueueSource::Unknown,
+        )),
         &status,
         &items,
         &queue_source,
+        &slot_ids,
+        &queue_revision,
+        &pending_mutation,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
@@ -193,12 +215,18 @@ fn track_changed_updates_current_idx_but_not_queue_len() {
     let items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
+    let slot_ids = Arc::new(Mutex::new(Vec::new()));
+    let queue_revision = Arc::new(Mutex::new(QueueRevision::default()));
+    let pending_mutation = Arc::new(AtomicBool::new(false));
 
     apply_ctrl_event(
         CtrlEvent::Player(PlayerEvent::TrackChanged(2)),
         &status,
         &items,
         &queue_source,
+        &slot_ids,
+        &queue_revision,
+        &pending_mutation,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
@@ -215,12 +243,18 @@ fn command_rejected_forwards_reason_as_player_event() {
     let items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, rx) = mpsc::channel();
+    let slot_ids = Arc::new(Mutex::new(Vec::new()));
+    let queue_revision = Arc::new(Mutex::new(QueueRevision::default()));
+    let pending_mutation = Arc::new(AtomicBool::new(false));
 
     apply_ctrl_event(
         CtrlEvent::CommandRejected("daemon is audio-only".to_string()),
         &status,
         &items,
         &queue_source,
+        &slot_ids,
+        &queue_revision,
+        &pending_mutation,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
         true,
@@ -311,12 +345,7 @@ fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
 
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
-            source: crate::config::QueueSource::Unknown,
-        }))
+        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(PlayerStatus::default(), Vec::new(), 0, crate::config::QueueSource::Unknown)))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
@@ -368,12 +397,7 @@ fn spawn_test_daemon_up_to_state(
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
 
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
-            source: crate::config::QueueSource::Unknown,
-        }))
+        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(PlayerStatus::default(), Vec::new(), 0, crate::config::QueueSource::Unknown)))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
@@ -512,12 +536,7 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
         reader.read_line(&mut client_hello).unwrap();
 
         // Initial baseline state: idle, nothing playing yet.
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
-            source: crate::config::QueueSource::Unknown,
-        }))
+        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(PlayerStatus::default(), Vec::new(), 0, crate::config::QueueSource::Unknown)))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
@@ -619,12 +638,7 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
 
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
-            source: crate::config::QueueSource::Unknown,
-        }))
+        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState::v7(PlayerStatus::default(), Vec::new(), 0, crate::config::QueueSource::Unknown)))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
     });

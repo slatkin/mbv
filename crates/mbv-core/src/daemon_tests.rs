@@ -90,14 +90,13 @@ fn non_audio_only_daemon_never_rejects() {
 /// the driver — there is no separate "pending" step.
 fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(tx);
+    let id = clients.connect(tx, 7);  // v7 peer in tests
     (id, rx)
 }
 
 fn shared_queue_state() -> SharedQueueState {
     SharedQueueState {
-        items: Arc::new(Mutex::new(Vec::new())),
-        cursor: Arc::new(Mutex::new(0)),
+        queue: Arc::new(Mutex::new(crate::playback_queue::PlaybackQueue::default())),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
     }
 }
@@ -279,8 +278,8 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         connect_client(&mut clients)
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut items = Vec::new();
-    let mut cursor = 0;
+    let mut _items: Vec<MediaItem> = Vec::new();
+    let _cursor = 0;
     let mut source = QueueSource::Unknown;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -293,9 +292,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
-        &mut source,
+                &mut source,
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
@@ -325,8 +322,8 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         connect_client(&mut clients)
     };
     let (reply_tx, reply_rx) = mpsc::channel();
-    let mut items = vec![item("existing", "Video", "Movie")];
-    let mut cursor = 0;
+    let _items = vec![item("existing", "Video", "Movie")];
+    let _cursor = 0;
     let mut source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -343,9 +340,7 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
-        &mut source,
+                &mut source,
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
@@ -392,12 +387,12 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
     let shared_queue = shared_queue_state();
-    let mut items = vec![
+    let _items = vec![
         item("item-0", "Video", "Movie"),
         item("item-1", "Video", "Movie"),
         item("item-2", "Video", "Movie"),
     ];
-    let mut cursor = 1;
+    let _cursor = 1;
     let mut source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -410,9 +405,7 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
-        &mut source,
+                &mut source,
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
@@ -431,7 +424,7 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
     assert_eq!(cursor, 2);
     assert_eq!(
         shared_queue
-            .items
+            .queue
             .lock()
             .unwrap()
             .iter()
@@ -439,7 +432,7 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
             .collect::<Vec<_>>(),
         vec!["item-0", "item-2", "item-1"]
     );
-    assert_eq!(*shared_queue.cursor.lock().unwrap(), 2);
+    assert_eq!(shared_queue.queue.lock().unwrap().current_index().unwrap_or(0), 2);
     match recv_event(&sender_rx) {
         CtrlEvent::State(state) => {
             assert_eq!(
@@ -468,11 +461,11 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
     let shared_queue = shared_queue_state();
-    let mut items = vec![
+    let _items = vec![
         item("item-0", "Video", "Movie"),
         item("item-1", "Video", "Movie"),
     ];
-    let mut cursor = 1;
+    let _cursor = 1;
     let mut source = QueueSource::Remote;
     let appended = vec![item("item-2", "Video", "Movie")];
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
@@ -488,9 +481,7 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
-        &mut source,
+                &mut source,
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
@@ -511,7 +502,7 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
     assert_eq!(cursor, 1);
     assert_eq!(
         shared_queue
-            .items
+            .queue
             .lock()
             .unwrap()
             .iter()
@@ -519,7 +510,7 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
             .collect::<Vec<_>>(),
         vec!["item-0", "item-1", "item-2"]
     );
-    assert_eq!(*shared_queue.cursor.lock().unwrap(), 1);
+    assert_eq!(shared_queue.queue.lock().unwrap().current_index().unwrap_or(0), 1);
     match recv_event(&sender_rx) {
         CtrlEvent::State(state) => {
             assert_eq!(
@@ -553,14 +544,14 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
     let shared_queue = shared_queue_state();
-    let mut items = vec![
+    let _items = vec![
         item("item-0", "Video", "Movie"),
         item("item-1", "Video", "Movie"),
         item("item-2", "Video", "Movie"),
     ];
     // Removing the selected item keeps the same index when its successor
     // shifts into that position.
-    let mut cursor = 1;
+    let _cursor = 1;
     let mut source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -573,9 +564,7 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
-        &mut source,
+                &mut source,
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
@@ -594,7 +583,7 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
     assert_eq!(cursor, 1);
     assert_eq!(
         shared_queue
-            .items
+            .queue
             .lock()
             .unwrap()
             .iter()
@@ -602,7 +591,7 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
             .collect::<Vec<_>>(),
         vec!["item-0", "item-2"]
     );
-    assert_eq!(*shared_queue.cursor.lock().unwrap(), 1);
+    assert_eq!(shared_queue.queue.lock().unwrap().current_index().unwrap_or(0), 1);
     match recv_event(&sender_rx) {
         CtrlEvent::State(state) => {
             assert_eq!(
@@ -631,11 +620,11 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
     };
     let (reply_tx, reply_rx) = mpsc::channel();
     let shared_queue = shared_queue_state();
-    let mut items = vec![
+    let _items = vec![
         item("item-0", "Video", "Movie"),
         item("item-1", "Video", "Movie"),
     ];
-    let mut cursor = 1;
+    let _cursor = 1;
     let mut source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -648,9 +637,7 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
-        &mut source,
+                &mut source,
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
@@ -695,8 +682,8 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
         let mut clients = registry.lock().unwrap();
         connect_client(&mut clients)
     };
-    let mut items = Vec::new();
-    let mut cursor = 0;
+    let mut _items: Vec<MediaItem> = Vec::new();
+    let _cursor = 0;
     let mut source = QueueSource::Unknown;
 
     handle_ws(
@@ -704,9 +691,7 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
-        &mut source,
+                &mut source,
         &shared_queue_state(),
         &registry,
     );

@@ -2,9 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::MediaItem;
 use crate::config::QueueSource;
+use crate::playback_queue::{QueueRevision, QueueSlotId};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
-pub const CTRL_PROTOCOL_VERSION: u32 = 7;
+pub const CTRL_PROTOCOL_VERSION: u32 = 8;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
@@ -81,9 +82,14 @@ pub struct CtrlCompatibility {
 impl CtrlCompatibility {
     pub fn for_peer(peer_protocol_version: u32) -> Result<Self, String> {
         match peer_protocol_version {
-            CTRL_PROTOCOL_VERSION => Ok(Self {
-                peer_protocol_version,
-                client_protocol_version: CTRL_PROTOCOL_VERSION,
+            7 => Ok(Self {
+                peer_protocol_version: 7,
+                client_protocol_version: 7,
+                supports_queue_append: true,
+            }),
+            8 => Ok(Self {
+                peer_protocol_version: 8,
+                client_protocol_version: 8,
                 supports_queue_append: true,
             }),
             _ => Err(format!(
@@ -97,7 +103,7 @@ impl CtrlCompatibility {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum CtrlCmd {
     Hello(CtrlHello),
     PlayerCmd(WireCommand),
@@ -142,6 +148,31 @@ pub enum PlaybackIntentAction {
     Previous,
 }
 
+/// Legacy v7 positional-index command variants, preserved for gated
+/// deserialization when a v8 daemon accepts a v7 peer. These variants map
+/// directly to the v7 wire tags and are only used during the one-release
+/// compatibility window; after that window closes they will be deleted
+/// along with the v7 acceptance path.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum LegacyWireCommand {
+    #[serde(rename = "PlaylistRemove")]
+    QueueRemove(usize),
+    #[serde(rename = "PlaylistMove")]
+    QueueMove(usize, usize),
+    #[serde(rename = "JumpTo")]
+    JumpTo(usize),
+}
+
+impl From<LegacyWireCommand> for WireCommand {
+    fn from(cmd: LegacyWireCommand) -> Self {
+        match cmd {
+            LegacyWireCommand::QueueRemove(idx) => WireCommand::QueueRemove(idx),
+            LegacyWireCommand::QueueMove(from, to) => WireCommand::QueueMove(from, to),
+            LegacyWireCommand::JumpTo(idx) => WireCommand::JumpTo(idx),
+        }
+    }
+}
+
 /// Wire-stable representation of a `PlayerCommand`, serialized across the
 /// daemon/TUI process seam. Kept as a distinct type (rather than serializing
 /// `PlayerCommand` directly) so that renaming or restructuring in-process
@@ -150,7 +181,7 @@ pub enum PlaybackIntentAction {
 /// to/from `PlayerCommand` are exhaustive matches with no wildcard arm, so
 /// adding a new `PlayerCommand` variant is a compile error until this type
 /// (and its conversions) are updated too.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum WireCommand {
     #[serde(rename = "TogglePause")]
     TogglePause,
@@ -201,6 +232,42 @@ pub enum WireCommand {
     ReplaceQueue {
         items: Vec<MediaItem>,
         start_idx: usize,
+    },
+    // ── v8 slot-aware queue commands ──────────────────────────────────────
+    /// Remove the item identified by `slot_id`. The client's last-known
+    /// `revision` must match the daemon's current revision.
+    #[serde(rename = "QueueRemoveBySlot")]
+    QueueRemoveBySlot {
+        slot_id: QueueSlotId,
+        revision: QueueRevision,
+    },
+    /// Move the slot `slot_id` to the positional index `to_position`.
+    #[serde(rename = "QueueMoveBySlot")]
+    QueueMoveBySlot {
+        slot_id: QueueSlotId,
+        to_position: usize,
+        revision: QueueRevision,
+    },
+    /// Jump playback to the slot identified by `slot_id`.
+    #[serde(rename = "JumpToSlot")]
+    JumpToSlot {
+        slot_id: QueueSlotId,
+    },
+    /// Insert `item` at the given `position` for undo restoration. The
+    /// daemon assigns a new slot ID and broadcasts it in the next full
+    /// state snapshot.
+    #[serde(rename = "QueueInsertAt")]
+    QueueInsertAt {
+        item: MediaItem,
+        position: usize,
+        revision: QueueRevision,
+    },
+    /// Transactionally remove the active slot and advance the active
+    /// marker. The daemon captures progress state before removal for
+    /// async finalization.
+    #[serde(rename = "QueueRemoveActive")]
+    QueueRemoveActive {
+        revision: QueueRevision,
     },
 }
 
@@ -304,11 +371,29 @@ impl From<WireCommand> for PlayerCommand {
             WireCommand::ReplaceQueue { items, start_idx } => {
                 PlayerCommand::ReplaceQueue { items, start_idx }
             }
+            // v8 slot-aware commands have no `PlayerCommand` equivalent.
+            // The daemon control layer handles them directly on `WireCommand`
+            // (see `daemon_control.rs` task 4.x) instead of converting first.
+            WireCommand::QueueRemoveBySlot { .. } => {
+                unreachable!("v8 QueueRemoveBySlot handled directly by daemon control layer")
+            }
+            WireCommand::QueueMoveBySlot { .. } => {
+                unreachable!("v8 QueueMoveBySlot handled directly by daemon control layer")
+            }
+            WireCommand::JumpToSlot { .. } => {
+                unreachable!("v8 JumpToSlot handled directly by daemon control layer")
+            }
+            WireCommand::QueueInsertAt { .. } => {
+                unreachable!("v8 QueueInsertAt handled directly by daemon control layer")
+            }
+            WireCommand::QueueRemoveActive { .. } => {
+                unreachable!("v8 QueueRemoveActive handled directly by daemon control layer")
+            }
         }
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum CtrlEvent {
     Hello(CtrlHello),
     Player(PlayerEvent),
@@ -388,12 +473,41 @@ pub enum DisconnectReason {
     DaemonShutdown,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CtrlState {
     pub status: PlayerStatus,
     pub items: Vec<MediaItem>,
     pub cursor: usize,
     pub source: QueueSource,
+    /// Parallel to `items`: the daemon-assigned slot ID for each entry.
+    /// Present for v8 peers, omitted for v7 peers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub slot_ids: Vec<QueueSlotId>,
+    /// Monotonic daemon queue revision; bumped on every structural mutation.
+    /// Omitted when zero (v7 peers, before any mutation).
+    #[serde(default, skip_serializing_if = "QueueRevision::is_default")]
+    pub revision: QueueRevision,
+    /// The daemon's active (playing) slot, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_slot_id: Option<QueueSlotId>,
+}
+
+impl CtrlState {
+    /// Construct a `CtrlState` from v7-compatible fields, filling the new
+    /// v8 slot-aware fields with their defaults. Callers that need to
+    /// populate `slot_ids`, `revision`, and `active_slot_id` should use
+    /// the struct literal directly.
+    pub fn v7(status: PlayerStatus, items: Vec<MediaItem>, cursor: usize, source: QueueSource) -> Self {
+        Self {
+            status,
+            items,
+            cursor,
+            source,
+            slot_ids: Vec::new(),
+            revision: QueueRevision::default(),
+            active_slot_id: None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -577,6 +691,42 @@ mod tests {
             }),
             "NextUpShow"
         );
+        // v8 slot-aware queue command tags
+        assert_eq!(
+            wire_tag(&WireCommand::QueueRemoveBySlot {
+                slot_id: QueueSlotId(1),
+                revision: QueueRevision(5),
+            }),
+            "QueueRemoveBySlot"
+        );
+        assert_eq!(
+            wire_tag(&WireCommand::QueueMoveBySlot {
+                slot_id: QueueSlotId(2),
+                to_position: 1,
+                revision: QueueRevision(6),
+            }),
+            "QueueMoveBySlot"
+        );
+        assert_eq!(
+            wire_tag(&WireCommand::JumpToSlot {
+                slot_id: QueueSlotId(3),
+            }),
+            "JumpToSlot"
+        );
+        assert_eq!(
+            wire_tag(&WireCommand::QueueInsertAt {
+                item: stub_media_item(),
+                position: 1,
+                revision: QueueRevision(7),
+            }),
+            "QueueInsertAt"
+        );
+        assert_eq!(
+            wire_tag(&WireCommand::QueueRemoveActive {
+                revision: QueueRevision(8),
+            }),
+            "QueueRemoveActive"
+        );
     }
 
     #[test]
@@ -735,5 +885,199 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn hello_accepts_v7_peer() {
+        let mut hello = CtrlHello::current();
+        hello.protocol_version = 7;
+        assert!(hello.validate_peer().is_ok());
+    }
+
+    #[test]
+    fn hello_accepts_v8_peer() {
+        let mut hello = CtrlHello::current();
+        hello.protocol_version = 8;
+        assert!(hello.validate_peer().is_ok());
+    }
+
+    #[test]
+    fn hello_rejects_v6_peer() {
+        let mut hello = CtrlHello::current();
+        hello.protocol_version = 6;
+        assert!(hello.validate_peer().is_err());
+    }
+
+    #[test]
+    fn v7_compatibility_returns_v7_client_version() {
+        let compat = CtrlCompatibility::for_peer(7).unwrap();
+        assert_eq!(compat.peer_protocol_version, 7);
+        assert_eq!(compat.client_protocol_version, 7);
+        assert!(compat.supports_queue_append);
+    }
+
+    #[test]
+    fn v8_compatibility_returns_v8_client_version() {
+        let compat = CtrlCompatibility::for_peer(8).unwrap();
+        assert_eq!(compat.peer_protocol_version, 8);
+        assert_eq!(compat.client_protocol_version, 8);
+        assert!(compat.supports_queue_append);
+    }
+
+    #[test]
+    fn compatible_client_uses_explicit_compat_version() {
+        let compat = CtrlCompatibility::for_peer(7).unwrap();
+        let hello = CtrlHello::compatible_client("tok".into(), compat);
+        assert_eq!(hello.protocol_version, 7);
+        assert_eq!(hello.auth_token.as_deref(), Some("tok"));
+    }
+
+    #[test]
+    fn legacy_wire_command_tags_match_wire_tags() {
+        // Verify LegacyWireCommand serializes with the same pinned tags
+        // as the current v7 WireCommand index-based variants.
+        let json = serde_json::to_string(&LegacyWireCommand::QueueRemove(0)).unwrap();
+        assert_eq!(json, "{\"PlaylistRemove\":0}");
+        let json = serde_json::to_string(&LegacyWireCommand::QueueMove(1, 2)).unwrap();
+        assert_eq!(json, "{\"PlaylistMove\":[1,2]}");
+        let json = serde_json::to_string(&LegacyWireCommand::JumpTo(3)).unwrap();
+        assert_eq!(json, "{\"JumpTo\":3}");
+    }
+
+    #[test]
+    fn legacy_wire_command_round_trips_through_json() {
+        let json = serde_json::to_string(&LegacyWireCommand::QueueRemove(5)).unwrap();
+        let decoded: LegacyWireCommand = serde_json::from_str(&json).unwrap();
+        assert!(matches!(decoded, LegacyWireCommand::QueueRemove(5)));
+    }
+
+    #[test]
+    fn legacy_wire_command_converts_to_wire_command() {
+        let wire: WireCommand = LegacyWireCommand::QueueRemove(7).into();
+        let json = serde_json::to_string(&wire).unwrap();
+        assert_eq!(json, "{\"PlaylistRemove\":7}");
+
+        let wire: WireCommand = LegacyWireCommand::QueueMove(2, 4).into();
+        let json = serde_json::to_string(&wire).unwrap();
+        assert_eq!(json, "{\"PlaylistMove\":[2,4]}");
+
+        let wire: WireCommand = LegacyWireCommand::JumpTo(0).into();
+        let json = serde_json::to_string(&wire).unwrap();
+        assert_eq!(json, "{\"JumpTo\":0}");
+    }
+
+    #[test]
+    fn v8_wire_command_round_trips_through_json() {
+        let cmd = WireCommand::QueueRemoveBySlot {
+            slot_id: QueueSlotId(42),
+            revision: QueueRevision(3),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let decoded: WireCommand = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            decoded,
+            WireCommand::QueueRemoveBySlot {
+                slot_id: QueueSlotId(42),
+                revision: QueueRevision(3),
+            }
+        ));
+
+        let cmd = WireCommand::QueueMoveBySlot {
+            slot_id: QueueSlotId(1),
+            to_position: 2,
+            revision: QueueRevision(4),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let decoded: WireCommand = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            decoded,
+            WireCommand::QueueMoveBySlot {
+                slot_id: QueueSlotId(1),
+                to_position: 2,
+                revision: QueueRevision(4),
+            }
+        ));
+
+        let cmd = WireCommand::JumpToSlot {
+            slot_id: QueueSlotId(99),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let decoded: WireCommand = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            decoded,
+            WireCommand::JumpToSlot {
+                slot_id: QueueSlotId(99),
+            }
+        ));
+
+        let cmd = WireCommand::QueueInsertAt {
+            item: stub_media_item(),
+            position: 0,
+            revision: QueueRevision(1),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let decoded: WireCommand = serde_json::from_str(&json).unwrap();
+        assert!(matches!(decoded, WireCommand::QueueInsertAt { position: 0, .. }));
+
+        let cmd = WireCommand::QueueRemoveActive {
+            revision: QueueRevision(2),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let decoded: WireCommand = serde_json::from_str(&json).unwrap();
+        assert!(matches!(
+            decoded,
+            WireCommand::QueueRemoveActive {
+                revision: QueueRevision(2),
+            }
+        ));
+    }
+
+    #[test]
+    fn ctrl_state_omits_slot_fields_when_default() {
+        let state = CtrlState {
+            status: PlayerStatus::default(),
+            items: vec![],
+            cursor: 0,
+            source: QueueSource::Album,
+            slot_ids: vec![],
+            revision: QueueRevision::default(),
+            active_slot_id: None,
+        };
+        let json = serde_json::to_string(&state).unwrap();
+        // Verify the new fields are absent (skip_serializing_if)
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let obj = value.as_object().unwrap();
+        assert!(!obj.contains_key("slot_ids"));
+        assert!(!obj.contains_key("revision"));
+        assert!(!obj.contains_key("active_slot_id"));
+    }
+
+    #[test]
+    fn ctrl_state_includes_slot_fields_when_present() {
+        let state = CtrlState {
+            status: PlayerStatus::default(),
+            items: vec![],
+            cursor: 0,
+            source: QueueSource::Album,
+            slot_ids: vec![QueueSlotId(1), QueueSlotId(2)],
+            revision: QueueRevision(5),
+            active_slot_id: Some(QueueSlotId(1)),
+        };
+        let json = serde_json::to_string(&state).unwrap();
+        let decoded: CtrlState = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.slot_ids, vec![QueueSlotId(1), QueueSlotId(2)]);
+        assert_eq!(decoded.revision, QueueRevision(5));
+        assert_eq!(decoded.active_slot_id, Some(QueueSlotId(1)));
+    }
+
+    #[test]
+    fn ctrl_state_deserializes_with_missing_slot_fields() {
+        // A v7 daemon or client won't send slot_ids/revision/active_slot_id.
+        // serde(default) must fill them in.
+        let json = r#"{"status":{"position_ticks":0,"last_valid_pos":0,"runtime_ticks":0,"paused":false,"volume":100,"volume_max":130,"current_idx":0,"queue_len":0,"active":false,"title":"","artist":"","album":"","art_item_id":"","art_album_id":"","audio_tracks":[],"sub_tracks":[],"sub_track_stream_indexes":[],"audio_id":0,"audio_lang":"","sub_id":0,"sub_lang":"","muted":false,"video_height":0,"audio_codec":"","video_is_image":false},"items":[],"cursor":0,"source":{"type":"unknown"}}"#;
+        let state: CtrlState = serde_json::from_str(json).unwrap();
+        assert!(state.slot_ids.is_empty());
+        assert_eq!(state.revision, QueueRevision::default());
+        assert_eq!(state.active_slot_id, None);
     }
 }

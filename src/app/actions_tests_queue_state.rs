@@ -148,6 +148,10 @@ fn restore_queue_state_with_no_items_does_nothing() {
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
+        slot_ids: None,
+        revision: None,
+        active_slot_id: None,
+        next_slot_id: None,
     });
 
     let mut app = crate::app::tests::make_app_stub();
@@ -169,6 +173,10 @@ fn restore_queue_state_populates_queue_synchronously_from_disk() {
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
+        slot_ids: None,
+        revision: None,
+        active_slot_id: None,
+        next_slot_id: None,
     });
 
     let mut app = crate::app::tests::make_app_stub();
@@ -192,6 +200,10 @@ fn restore_queue_state_clears_a_stale_dirty_flag() {
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
+        slot_ids: None,
+        revision: None,
+        active_slot_id: None,
+        next_slot_id: None,
     });
 
     let mut app = crate::app::tests::make_app_stub();
@@ -600,6 +612,10 @@ fn save_queue_state_does_not_delete_file_while_attached_to_remote_session() {
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
+        slot_ids: None,
+        revision: None,
+        active_slot_id: None,
+        next_slot_id: None,
     });
 
     let mut app = crate::app::tests::make_app_stub();
@@ -628,6 +644,10 @@ fn save_queue_state_still_clears_file_when_locally_empty_and_not_attached() {
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
+        slot_ids: None,
+        revision: None,
+        active_slot_id: None,
+        next_slot_id: None,
     });
 
     let mut app = crate::app::tests::make_app_stub();
@@ -656,6 +676,10 @@ fn save_queue_state_no_clear_preserves_file_when_locally_empty_and_not_attached(
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
+        slot_ids: None,
+        revision: None,
+        active_slot_id: None,
+        next_slot_id: None,
     });
 
     let mut app = crate::app::tests::make_app_stub();

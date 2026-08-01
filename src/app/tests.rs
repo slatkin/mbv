@@ -89,6 +89,9 @@ pub(crate) fn run_stub_daemon_handshake(stream: std::net::TcpStream) -> std::net
             items: Vec::new(),
             cursor: 0,
             source: crate::config::QueueSource::Unknown,
+            slot_ids: vec![],
+            revision: Default::default(),
+            active_slot_id: None,
         },
     ))
     .unwrap();
@@ -190,7 +193,7 @@ pub(crate) fn make_app_stub() -> App {
         confirm_modal: None,
         daemon_lost_modal: None,
         pending_exit_message: None,
-        pending_delete_idx: None,
+        pending_optimistic_delete: None,
         pending_queue_removal: None,
         queue_undo_stack: Vec::new(),
         remote_queue_undo_stack: Vec::new(),

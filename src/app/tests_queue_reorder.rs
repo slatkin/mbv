@@ -141,7 +141,7 @@ fn undo_of_move_does_not_disturb_prior_removal_undo_history() {
     assert_eq!(app.queue_undo_stack.len(), 1);
     assert!(matches!(
         app.queue_undo_stack.last(),
-        Some(UndoEntry::Remove(0, _))
+        Some(UndoEntry::Remove { removed_slot_id: _, item: _, position: _, revision: _, was_active: _ })
     ));
 }
 
@@ -244,6 +244,16 @@ fn move_queue_item_for_remote_scope_sends_move_command_and_preserves_local_queue
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
 
+    // Populate the RemotePlayer stub's slot state so the v8 translation
+    // layer can resolve slot IDs (task 6.1).
+    {
+        let tab = app.remote_player_tab.as_ref().unwrap();
+        app.player.set_slot_state(
+            tab.queue.slot_ids(),
+            mbv_core::playback_queue::QueueRevision(1), // non-zero rev
+        );
+    }
+
     app.move_queue_item_up();
 
     assert_eq!(
@@ -275,12 +285,15 @@ fn move_queue_item_for_remote_scope_sends_move_command_and_preserves_local_queue
     assert!(!app.queue_dirty);
     assert_eq!(app.queue_undo_stack.len(), 0);
     assert_eq!(app.remote_queue_undo_stack.len(), 1);
-    assert!(matches!(
-        cmd_rx.try_recv(),
-        Ok(mbv_core::ctrl::CtrlCmd::PlayerCmd(
-            mbv_core::ctrl::WireCommand::QueueMove(1, 0)
-        ))
-    ));
+    let cmd = cmd_rx.try_recv().unwrap();
+    assert!(
+        matches!(&cmd,
+            mbv_core::ctrl::CtrlCmd::PlayerCmd(
+                mbv_core::ctrl::WireCommand::QueueMoveBySlot { .. }
+            )
+        ),
+        "expected QueueMoveBySlot (v8), got {cmd:?}"
+    );
 }
 
 #[test]
@@ -299,6 +312,9 @@ fn remote_queue_update_reconciles_remote_queue_without_touching_local_queue() {
         items: updated_remote.clone(),
         cursor: 2,
         source: crate::config::QueueSource::Remote,
+        slot_ids: vec![],
+        revision: Default::default(),
+        active_slot_id: None,
     });
 
     assert_eq!(
@@ -338,6 +354,16 @@ fn remote_queue_update_after_move_keeps_cursor_on_moved_item() {
     app.set_queue_scope(QueueScope::Remote);
     app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
 
+    // Populate the RemotePlayer stub's slot state so the v8 translation
+    // layer can resolve slot IDs (task 6.1).
+    {
+        let tab = app.remote_player_tab.as_ref().unwrap();
+        app.player.set_slot_state(
+            tab.queue.slot_ids(),
+            mbv_core::playback_queue::QueueRevision(1), // non-zero rev
+        );
+    }
+
     app.move_queue_item_up();
 
     app.handle_player_event(PlayerEvent::QueueUpdated {
@@ -348,6 +374,9 @@ fn remote_queue_update_after_move_keeps_cursor_on_moved_item() {
         ],
         cursor: 1,
         source: crate::config::QueueSource::Remote,
+        slot_ids: vec![],
+        revision: Default::default(),
+        active_slot_id: None,
     });
 
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
@@ -385,6 +414,9 @@ fn remote_queue_update_after_move_tracks_duplicate_item_by_position() {
         ],
         cursor: 0,
         source: crate::config::QueueSource::Remote,
+        slot_ids: vec![],
+        revision: Default::default(),
+        active_slot_id: None,
     });
 
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);

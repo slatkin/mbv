@@ -23,14 +23,59 @@ impl App {
                     self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
                 }
             }
-            ConfirmAction::RemoveActiveQueueItem(pos) => {
+            ConfirmAction::RemoveActiveQueueItem(_pos) => {
+                // Task 7.1: on confirmation, close the modal, optimistically
+                // remove the active slot from the local projection, choose
+                // a local successor, and send QueueRemoveActive{revision}
+                // to the daemon in the same input handling cycle.
                 self.confirm_modal = None;
                 if matches!(key.code, KeyCode::Char('y')) {
-                    // Defer the actual removal until PlayerEvent::Stopped arrives so the
-                    // Stopped handler finds the correct item at index `pos`, not the next
-                    // item (which would have its playback_position_ticks corrupted otherwise).
-                    self.pending_delete_idx = Some(pos);
-                    self.player.stop();
+                    let scope = self.visible_queue_scope();
+                    let has_direct = self.has_direct_remote_queue();
+                    if has_direct && scope == QueueScope::Remote {
+                        // Resolve the active slot and daemon revision.
+                        let (active_slot_id, revision) = {
+                            let queue = self.queue_for_scope(scope);
+                            (
+                                queue.queue.active_slot_id(),
+                                queue.queue.revision(),
+                            )
+                        };
+                        if let Some(slot_id) = active_slot_id {
+                            // Optimistically remove the active slot from the
+                            // local projection (task 7.1). The daemon's next
+                            // full snapshot will reconcile if rejected.
+                            if let Some(queue) = self.remote_player_tab.as_mut() {
+                                let removed = match queue.queue.remove_active_slot_confirmed(slot_id) {
+                                    mbv_core::playback_queue::RemoveSlotResult::Removed(slot) => Some(slot.item),
+                                    _ => None,
+                                };
+                                if removed.is_some() {
+                                    queue.sync_items_from_queue_model();
+                                }
+                            }
+                            // Track this slot for reconciliation (task 7.3).
+                            self.pending_optimistic_delete = Some(slot_id);
+                            // Send to daemon.
+                            self.player.send_queue_remove_active(revision);
+                        }
+                    } else {
+                        // Local path: optimistically remove the active slot
+                        // from the local projection, then stop playback.
+                        // The Stopped handler will find the item already gone
+                        // and skip removal (task 7.2).
+                        let slot_id = {
+                            let queue = &self.player_tab;
+                            queue.queue.active_slot_id()
+                        };
+                        if let Some(slot_id) = slot_id {
+                            let removed = self.player_tab.queue.remove_active_slot_confirmed(slot_id);
+                            if matches!(removed, mbv_core::playback_queue::RemoveSlotResult::Removed(_)) {
+                                self.player_tab.sync_items_from_queue_model();
+                            }
+                        }
+                        self.player.stop();
+                    }
                     if self.local_queue_metadata_applies(self.visible_queue_scope()) {
                         self.queue_dirty = true;
                     }

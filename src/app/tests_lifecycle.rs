@@ -155,6 +155,10 @@ fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
+        slot_ids: None,
+        revision: None,
+        active_slot_id: None,
+        next_slot_id: None,
     });
 
     let mut app = make_local_daemon_app_stub(make_items(2));

@@ -396,6 +396,14 @@ pub struct QueueState {
     // UserData when a fresh launch races with Emby's async position write.
     #[serde(default)]
     pub positions: std::collections::HashMap<String, i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slot_ids: Option<Vec<u64>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_slot_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_slot_id: Option<u64>,
 }
 
 /// One library position per library (#361 collapsed the old two-scope

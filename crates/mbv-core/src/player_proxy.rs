@@ -198,6 +198,42 @@ impl PlayerProxy {
         }
     }
 
+    /// Send QueueRemoveActive to the daemon (task 7.1). Only valid for
+    /// v8+ remote connections; returns false for local or v7 peers.
+    pub fn send_queue_remove_active(&self, revision: crate::playback_queue::QueueRevision) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.send_queue_remove_active(revision),
+        }
+    }
+
+    /// Send QueueInsertAt to the daemon for undo restoration (task 9.3).
+    /// Only valid for v8+ remote connections; returns false for local or v7 peers.
+    pub fn send_queue_insert_at(
+        &self,
+        item: crate::api::MediaItem,
+        position: usize,
+        revision: crate::playback_queue::QueueRevision,
+    ) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.send_queue_insert_at(item, position, revision),
+        }
+    }
+
+    /// Populate slot state for v8 command translation (test helper).
+    /// No-op for local players.
+    pub fn set_slot_state(
+        &self,
+        slot_ids: Vec<crate::playback_queue::QueueSlotId>,
+        revision: crate::playback_queue::QueueRevision,
+    ) {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => {}
+            PlayerProxyInner::Remote(r) => r.set_slot_state(slot_ids, revision),
+        }
+    }
+
     pub fn supports_queue_append(&self) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => true,

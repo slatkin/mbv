@@ -82,7 +82,7 @@ impl App {
             confirm_modal: None,
             daemon_lost_modal: None,
             pending_exit_message: None,
-            pending_delete_idx: None,
+            pending_optimistic_delete: None,
             pending_queue_removal: None,
             queue_undo_stack: Vec::new(),
             remote_queue_undo_stack: Vec::new(),

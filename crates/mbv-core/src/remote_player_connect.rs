@@ -15,6 +15,7 @@ use crate::api::MediaItem;
 use crate::ctrl::{
     CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
 };
+use crate::playback_queue::{QueueRevision, QueueSlotId};
 use crate::player::{PlayerEvent, PlayerStatus};
 
 use crate::remote_player::RemotePlayer;
@@ -260,6 +261,9 @@ fn apply_ctrl_event(
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<MediaItem>>>,
     queue_source: &Arc<Mutex<crate::config::QueueSource>>,
+    slot_ids: &Arc<Mutex<Vec<QueueSlotId>>>,
+    queue_revision: &Arc<Mutex<QueueRevision>>,
+    pending_mutation: &Arc<AtomicBool>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     notify: bool,
@@ -283,6 +287,12 @@ fn apply_ctrl_event(
             *status.lock().unwrap() = next_status;
             *items.lock().unwrap() = s.items.clone();
             *queue_source.lock().unwrap() = s.source.clone();
+            // Store v8 slot-aware state for command translation (6.1).
+            *slot_ids.lock().unwrap() = s.slot_ids.clone();
+            *queue_revision.lock().unwrap() = s.revision;
+            // Full authoritative snapshot received: clear the in-flight
+            // mutation flag (6.4) so the next mutation is not dropped.
+            pending_mutation.store(false, Ordering::SeqCst);
             // The very first State snapshot read synchronously during connect()
             // establishes baseline state before the App (and its event loop)
             // exists; it must not be queued, or it would be applied *after* a
@@ -293,6 +303,9 @@ fn apply_ctrl_event(
                     items: s.items,
                     cursor: s.cursor,
                     source: s.source,
+                    slot_ids: s.slot_ids,
+                    revision: s.revision,
+                    active_slot_id: s.active_slot_id,
                 });
             }
         }
@@ -373,6 +386,9 @@ pub(crate) fn connect_endpoint(
     let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
     let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
+    let slot_ids: Arc<Mutex<Vec<QueueSlotId>>> = Arc::new(Mutex::new(Vec::new()));
+    let queue_revision: Arc<Mutex<QueueRevision>> = Arc::new(Mutex::new(QueueRevision::default()));
+    let pending_mutation = Arc::new(AtomicBool::new(false));
     let disconnected = Arc::new(AtomicBool::new(false));
     let shutdown_announced = Arc::new(AtomicBool::new(false));
     let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
@@ -398,6 +414,9 @@ pub(crate) fn connect_endpoint(
         &status,
         &items,
         &queue_source,
+        &slot_ids,
+        &queue_revision,
+        &pending_mutation,
         &event_tx,
         &pending_playback,
         false,
@@ -407,6 +426,9 @@ pub(crate) fn connect_endpoint(
     let status_r = status.clone();
     let items_r = items.clone();
     let queue_source_r = queue_source.clone();
+    let slot_ids_r = slot_ids.clone();
+    let queue_revision_r = queue_revision.clone();
+    let pending_mutation_r = pending_mutation.clone();
     let pending_playback_r = pending_playback.clone();
     let disconnected_r = disconnected.clone();
     let shutdown_announced_r = shutdown_announced.clone();
@@ -438,6 +460,9 @@ pub(crate) fn connect_endpoint(
                         &status_r,
                         &items_r,
                         &queue_source_r,
+                        &slot_ids_r,
+                        &queue_revision_r,
+                        &pending_mutation_r,
                         &event_tx_r,
                         &pending_playback_r,
                         true,
@@ -502,6 +527,9 @@ pub(crate) fn connect_endpoint(
             cmd_tx,
             disconnected,
             shutdown_announced,
+            slot_ids,
+            queue_revision,
+            pending_mutation,
             ctrl_compatibility,
             control_stream: Arc::new(Mutex::new(Some(disconnect_stream))),
             next_playback_id,

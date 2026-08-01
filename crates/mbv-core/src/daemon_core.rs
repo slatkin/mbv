@@ -8,10 +8,12 @@ use crate::api::{mbv_direct_tcp_port_command, EmbyClient, MediaItem};
 use crate::ctrl::{
     CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason, PlaybackGeneration, PlaybackIntent,
     PlaybackIntentAction, PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
+    WireCommand,
 };
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 
+use crate::playback_queue::PlaybackQueue;
 /// Shared by the startup registration and the periodic 10-minute
 /// re-registration in the main loop below.
 fn register_capabilities(client: &EmbyClient, direct_commands: &[String], audio_only: bool) {
@@ -113,6 +115,7 @@ struct CtrlClients {
 struct CtrlClient {
     id: CtrlClientId,
     tx: CtrlSender,
+    peer_version: u32,
 }
 
 type ClientRegistry = Arc<Mutex<CtrlClients>>;
@@ -399,8 +402,7 @@ impl PlaybackIntentState {
 
 #[derive(Clone)]
 struct SharedQueueState {
-    items: Arc<Mutex<Vec<MediaItem>>>,
-    cursor: Arc<Mutex<usize>>,
+    queue: Arc<Mutex<crate::playback_queue::PlaybackQueue>>,
     source: Arc<Mutex<crate::config::QueueSource>>,
 }
 
@@ -449,10 +451,10 @@ impl CtrlClients {
     /// Does NOT override authority if it is currently `EmbyRemote` — the new
     /// client receives broadcasts but its commands are rejected until
     /// authority returns to `Ctrl`.
-    fn connect(&mut self, tx: CtrlSender) -> CtrlClientId {
+    fn connect(&mut self, tx: CtrlSender, peer_version: u32) -> CtrlClientId {
         let id = self.next_id;
         self.next_id += 1;
-        self.connection.push(CtrlClient { id, tx });
+        self.connection.push(CtrlClient { id, tx, peer_version });
         if self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
         }
@@ -596,7 +598,7 @@ fn spawn_ctrl_client<S>(
         let Some(Ok(line)) = lines.next() else {
             return;
         };
-        match serde_json::from_str::<CtrlCmd>(&line) {
+        let peer_version = match serde_json::from_str::<CtrlCmd>(&line) {
             Ok(CtrlCmd::Hello(info)) => {
                 if let Err(e) = info.validate_peer() {
                     log::warn!(target: "daemon", "rejecting ctrl client: {e}");
@@ -614,6 +616,7 @@ fn spawn_ctrl_client<S>(
                     );
                     return;
                 }
+                info.protocol_version
             }
             Ok(_) => {
                 log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
@@ -623,18 +626,33 @@ fn spawn_ctrl_client<S>(
                 log::warn!(target: "daemon", "rejecting ctrl client: invalid protocol hello: {e}");
                 return;
             }
-        }
+        };
 
-        if let Ok(init_json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: player_status.lock().unwrap().clone(),
-            items: shared_queue.items.lock().unwrap().clone(),
-            cursor: *shared_queue.cursor.lock().unwrap(),
-            source: shared_queue.source.lock().unwrap().clone(),
-        })) {
+        let init_state = {
+            let q = shared_queue.queue.lock().unwrap();
+            let status = player_status.lock().unwrap().clone();
+            let items = q.items_snapshot();
+            let cursor = q.current_index().unwrap_or(0);
+            let src = shared_queue.source.lock().unwrap().clone();
+            if peer_version >= 8 {
+                CtrlState {
+                    status,
+                    items,
+                    cursor,
+                    source: src,
+                    slot_ids: q.slot_ids(),
+                    revision: q.revision(),
+                    active_slot_id: q.active_slot_id(),
+                }
+            } else {
+                CtrlState::v7(status, items, cursor, src)
+            }
+        };
+        if let Ok(init_json) = serde_json::to_string(&CtrlEvent::State(init_state)) {
             ev_tx.send(CtrlOutbound::Event(init_json)).ok();
         }
         let reply_tx = ev_tx.clone();
-        let client_id = ctrl_clients.lock().unwrap().connect(ev_tx);
+        let client_id = ctrl_clients.lock().unwrap().connect(ev_tx, peer_version);
 
         for line in lines {
             let Ok(line) = line else { break };
