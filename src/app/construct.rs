@@ -82,11 +82,12 @@ impl App {
             confirm_modal: None,
             daemon_lost_modal: None,
             pending_exit_message: None,
-            pending_delete_idx: None,
+            pending_delete_slot: None,
             pending_queue_removal: None,
             queue_undo_stack: Vec::new(),
             remote_queue_undo_stack: Vec::new(),
             pending_remote_move_cursor: None,
+            pending_active_idx: None,
             skip_intro_end_ticks: None,
             next_up_item: None,
             // #361: read the new prefs key, falling back to the pre-#361 one

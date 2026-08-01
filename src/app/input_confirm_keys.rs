@@ -1,8 +1,9 @@
 use super::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
-    SavePlaylistDialog, SavePlaylistStage,
+    SavePlaylistDialog, SavePlaylistStage, UndoEntry,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::playback_queue::RemoveSlotResult;
 use mbv_core::player::PlayerCommand;
 
 impl App {
@@ -26,13 +27,54 @@ impl App {
             ConfirmAction::RemoveActiveQueueItem(pos) => {
                 self.confirm_modal = None;
                 if matches!(key.code, KeyCode::Char('y')) {
-                    // Defer the actual removal until PlayerEvent::Stopped arrives so the
-                    // Stopped handler finds the correct item at index `pos`, not the next
-                    // item (which would have its playback_position_ticks corrupted otherwise).
-                    self.pending_delete_idx = Some(pos);
-                    self.player.stop();
-                    if self.local_queue_metadata_applies(self.visible_queue_scope()) {
-                        self.queue_dirty = true;
+                    // Remove the slot from the queue model immediately, rather
+                    // than deferring it until PlayerEvent::Stopped arrives back
+                    // from the player thread — that round trip (send stop() ->
+                    // mpv actually stops -> event travels back) is a real,
+                    // noticeable delay for something the user should see happen
+                    // right away. The gated remove_slot/remove_slot_at (used by
+                    // ordinary removals) refuses the active slot, so this goes
+                    // through remove_active_slot_confirmed directly, same as
+                    // the Stopped handler used to do.
+                    let scope = self.visible_queue_scope();
+                    let slot_id = self.queue_for_scope_mut(scope).slot_id_at(pos);
+                    if let Some(slot_id) = slot_id {
+                        let item = match self
+                            .playback_queue_mut()
+                            .queue
+                            .remove_active_slot_confirmed(slot_id)
+                        {
+                            RemoveSlotResult::Removed(slot) => {
+                                self.playback_queue_mut().sync_items_from_queue_model();
+                                Some(slot.item)
+                            }
+                            RemoveSlotResult::RequiresActiveConfirmation(_)
+                            | RemoveSlotResult::NotFound => None,
+                        };
+                        if let Some(item) = item {
+                            let queue = self.playback_queue_mut();
+                            if queue.items.is_empty() {
+                                queue.queue_cursor = 0;
+                            } else {
+                                queue.queue_cursor =
+                                    queue.queue_cursor.min(queue.items.len().saturating_sub(1));
+                            }
+                            if !self.player.is_remote() {
+                                self.queue_undo_stack
+                                    .push(UndoEntry::Remove(pos, Box::new(item)));
+                            }
+
+                            // Only stop playback and record the deferred
+                            // player-side removal if the app model actually
+                            // removed the requested slot. The confirmation
+                            // can outlive a queue refresh, making the slot
+                            // stale by the time the user confirms it.
+                            self.pending_delete_slot = Some(slot_id);
+                            self.player.stop();
+                            if self.local_queue_metadata_applies(scope) {
+                                self.queue_dirty = true;
+                            }
+                        }
                     }
                 }
             }

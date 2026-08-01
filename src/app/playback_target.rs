@@ -95,7 +95,11 @@ impl PlaybackTarget {
 }
 
 impl App {
-    pub(super) fn effective_playback_state(&self) -> super::PlaybackState {
+    /// Returns playback state for rendering, consuming an optimistic active
+    /// index only after the player status matches the locally edited queue.
+    /// The mutable receiver is intentional: reconciliation clears the pending
+    /// prediction once the player thread catches up.
+    pub(super) fn effective_playback_state(&mut self) -> super::PlaybackState {
         if let Some(ref remote) = self.connected_session_state {
             let maybe_active_idx = remote
                 .now_playing_item_id
@@ -120,9 +124,20 @@ impl App {
             }
         } else {
             let s = self.player.status.lock().unwrap();
+            let active_idx = match self.pending_active_idx {
+                Some(predicted_idx)
+                    if s.current_idx == predicted_idx
+                        && s.queue_len == self.player_tab.items.len() =>
+                {
+                    self.pending_active_idx = None;
+                    s.current_idx
+                }
+                Some(predicted_idx) => predicted_idx,
+                None => s.current_idx,
+            };
             super::PlaybackState {
                 active: s.active,
-                active_idx: s.current_idx,
+                active_idx,
                 position_ticks: s.position_ticks,
                 runtime_ticks: s.runtime_ticks,
                 paused: s.paused,
@@ -130,7 +145,7 @@ impl App {
         }
     }
 
-    pub(super) fn displayed_queue_playback_state(&self) -> super::PlaybackState {
+    pub(super) fn displayed_queue_playback_state(&mut self) -> super::PlaybackState {
         if self.queue_scope_is_playback(self.visible_queue_scope()) {
             self.effective_playback_state()
         } else {

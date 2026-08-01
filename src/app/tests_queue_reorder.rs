@@ -210,6 +210,31 @@ fn undo_of_move_is_refused_when_duplicate_id_masks_changed_queue() {
 }
 
 #[test]
+fn active_index_prediction_survives_same_length_move_until_player_ack() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.items = make_items(5);
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 2;
+        status.queue_len = 5;
+    }
+
+    // Move the item immediately before the active one past it. The queue
+    // length is unchanged, but the active row's predicted index is now 1.
+    assert!(app.apply_queue_move(QueueScope::Local, 1, 2));
+    assert_eq!(app.effective_playback_state().active_idx, 1);
+    assert_eq!(app.pending_active_idx, Some(1));
+
+    // Once the player status catches up, retain the same displayed index and
+    // consume the prediction.
+    app.player.status.lock().unwrap().current_idx = 1;
+    assert_eq!(app.effective_playback_state().active_idx, 1);
+    assert_eq!(app.pending_active_idx, None);
+}
+
+#[test]
 fn resolve_slot_at_maps_index_to_slot_and_rejects_out_of_range() {
     let tab = PlayerTab::new(make_items(3), 0);
     let s0 = tab.queue.slots()[0].slot_id;
