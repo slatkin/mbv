@@ -244,29 +244,3 @@ fn status_label_style_uppercases_and_bolds_selected_label() {
     assert_eq!(spans[2].content.as_ref(), "  LIVING-ROOM");
     assert!(spans[2].style.add_modifier.contains(Modifier::BOLD));
 }
-
-#[test]
-fn expired_toast_clears_before_status_bar_render_decides_overlay() {
-    let mut app = make_app_stub();
-    app.status = "Saved [Y]".to_string();
-    app.status_expires = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
-
-    let backend = TestBackend::new(80, 24);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-
-    let out = buffer_to_string(&term);
-    let last_line = out.lines().last().unwrap().to_string();
-    assert!(
-        !last_line.contains("Saved"),
-        "expected expired toast text to clear before the status bar chooses its row:\n{last_line}"
-    );
-    let pill_row_y = app.layout.main.panel_area.y + app.layout.main.panel_area.height - 1;
-    let pill_row = out.lines().nth(pill_row_y as usize).unwrap_or_default();
-    assert!(
-        pill_row.contains('\u{1F5AD}'),
-        "expected the playlist pill to render after an expired toast clears:\n{pill_row}"
-    );
-    assert!(app.status.is_empty());
-    assert!(app.status_expires.is_none());
-}

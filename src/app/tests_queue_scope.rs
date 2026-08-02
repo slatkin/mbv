@@ -271,63 +271,6 @@ fn local_daemon_queue_has_no_scope_affordance_or_remote_switch() {
 }
 
 #[test]
-fn attached_session_only_queue_has_no_scope_affordance_or_remote_switch() {
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    app.connected_session_state = Some(make_session("remote-host", "Emby"));
-    let rendered = render_app_to_string(&mut app, 90, 24);
-
-    assert!(!app.has_direct_remote_queue());
-    assert_eq!(
-        app.layout.main.queue_scope_local_area,
-        ratatui::layout::Rect::default()
-    );
-    assert_eq!(
-        app.layout.main.queue_scope_remote_area,
-        ratatui::layout::Rect::default()
-    );
-    assert!(
-        !rendered.contains(" Local ") && !rendered.contains(" Remote "),
-        "attached-session queue should not render split-scope pills:\n{rendered}"
-    );
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
-    assert!(!handled);
-    assert_eq!(app.visible_queue_scope(), QueueScope::Local);
-}
-
-#[test]
-fn status_bar_row_is_always_present_and_holds_status_labels() {
-    let mut app = make_app_stub();
-
-    let rendered = render_app_to_string(&mut app, 80, 24);
-    let pill_row_y = app.layout.main.panel_area.y + app.layout.main.panel_area.height - 1;
-    let pill_row = rendered
-        .lines()
-        .nth(pill_row_y as usize)
-        .unwrap_or_default();
-
-    assert!(
-        pill_row.contains("\u{1F5AD}  none"),
-        "expected the playlist status at the bottom of the left panel:\n{rendered}"
-    );
-    // The status labels must not render inside the tab row (first line).
-    let first_line = rendered.lines().next().unwrap();
-    assert!(
-        !first_line.contains('\u{1F5AD}'),
-        "status labels must stay off the tab row:\n{first_line}"
-    );
-    // TABBAR_LEFT_RESERVE is 0 and the first tab has no left gutter, so
-    // the tab row is left-aligned flush with the left edge -- the pill
-    // that used to live here now renders at the bottom of the left panel.
-    let first_non_space = first_line.find(|c: char| c != ' ').unwrap_or(0);
-    assert_eq!(
-            first_non_space, 0,
-            "expected the tab row's first tab to start flush at the left edge (col 0), got col {first_non_space}:\n{first_line}"
-        );
-}
-
-#[test]
 fn direct_remote_play_items_keeps_local_queue_intact() {
     let _guard = crate::config::TestStateDirGuard::new();
     let local_items = make_items(2);

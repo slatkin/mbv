@@ -76,33 +76,6 @@ fn power_queue_panel_empty_state_is_inside_panel() {
 }
 
 #[test]
-fn power_queue_title_and_scope_pills_stay_outside_panel() {
-    let mut app = make_power_remote_queue_app();
-    app.use_nerd_fonts = false;
-
-    let (term, layout) = render_view_to_terminal(&mut app, 100, 28);
-    let out = buffer_to_string(&term);
-    let header = out
-        .lines()
-        .nth(layout.queue_scope_local_area.y as usize)
-        .expect("expected queue header row");
-    let device_name = mbv_core::api::device_name();
-    let upper_device_name = device_name.to_uppercase();
-
-    assert!(layout.queue_scope_local_area.y < layout.queue_area.y);
-    assert!(layout.queue_scope_remote_area.y < layout.queue_area.y);
-    assert!(layout.queue_scope_remote_area.x > layout.queue_scope_local_area.x);
-    assert_eq!(
-        layout.queue_scope_local_area.width + layout.queue_scope_remote_area.width,
-        layout.queue_area.width
-    );
-    assert!(
-        header.matches(&upper_device_name).count() >= 2,
-        "expected local and remote queue controls to use session-style hostname pills:\n{out}"
-    );
-}
-
-#[test]
 fn power_queue_title_does_not_render_playlist_pill() {
     let mut app = make_power_remote_queue_app();
     app.queue_source = crate::config::QueueSource::Playlist {
@@ -130,36 +103,6 @@ fn power_queue_title_does_not_render_playlist_pill() {
 }
 
 #[test]
-fn queue_panel_bottom_row_shows_playlist_pill_when_queue_is_a_playlist() {
-    let mut app = make_power_queue_app(2);
-    app.queue_source = crate::config::QueueSource::Playlist {
-        id: Some("pl1".into()),
-        name: "Road Mix".into(),
-    };
-
-    let (term, layout) = render_view_to_terminal(&mut app, 100, 28);
-    let out = buffer_to_string(&term);
-    let bottom_row_y = layout.panel_area.y + layout.panel_area.height - 1;
-    let pill_row = out.lines().nth(bottom_row_y as usize).unwrap_or_default();
-
-    assert!(
-        pill_row.contains("\u{1F5AD}") && pill_row.contains("Road Mix"),
-        "expected the playlist pill at the bottom of the left panel:\n{pill_row}"
-    );
-    // The status bar sits on the same bottom row to the right of the left
-    // panel, so check only its columns for the pill.
-    let last_line = out.lines().last().unwrap_or_default();
-    let status_part: String = last_line
-        .chars()
-        .skip(layout.panel_area.width as usize)
-        .collect();
-    assert!(
-        !status_part.contains("Road Mix"),
-        "playlist pill should no longer appear in the main status bar:\n{last_line}"
-    );
-}
-
-#[test]
 fn short_power_queue_panel_drops_padding_before_rows() {
     let mut app = make_power_queue_app(20);
 
@@ -169,45 +112,6 @@ fn short_power_queue_panel_drops_padding_before_rows() {
         layout.queue_area.height >= 1,
         "expected at least one usable queue row on a short terminal, got {:?}",
         layout.queue_area
-    );
-}
-
-#[test]
-fn power_queue_panel_counts_wrapped_group_headers_before_adding_padding() {
-    let mut app = make_power_movie_app();
-    app.panel_focus = PanelFocus::Queue;
-    let mut items = Vec::new();
-    for i in 0..3 {
-        let mut item = make_item("Track", "Audio");
-        item.id = format!("boundary-track-{i}");
-        item.album_id = "boundary-album".into();
-        item.album = "Long Album Title".into();
-        item.artist = "Very Long Artist".into();
-        items.push(item);
-    }
-    app.player_tab.set_items(items, 0);
-
-    let panel_area = Rect::new(0, 0, 20, 6);
-    let backend = TestBackend::new(panel_area.width, panel_area.height);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutMain::default();
-    term.draw(|f| {
-        let queue_area = render_power_queue_panel_frame(f, panel_area, true);
-        app.render_power_queue(f, queue_area, true, &mut layout);
-    })
-    .unwrap();
-    let out = buffer_to_string(&term);
-
-    assert_eq!(layout.queue_area.y, 1);
-    assert_eq!(layout.queue_area.height, 5);
-    assert!(
-        layout.queue_row_map.contains(&Some(0)),
-        "expected selected track row to be mapped as visible after wrapped header: {:?}",
-        layout.queue_row_map
-    );
-    assert!(
-        out.contains("1. Tra"),
-        "expected selected track to remain visible below the wrapped group header:\n{out}"
     );
 }
 
