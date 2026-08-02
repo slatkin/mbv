@@ -342,6 +342,19 @@ fn selected_regular_home_video_keeps_detail_below_title() {
     );
     assert_eq!(layout.main.cursor_screen_y, Some(2));
     assert_eq!(layout.main.left_row_map[0], Some(0));
+    assert_eq!(
+        term.backend().buffer()[(0, 2)].bg,
+        crate::app::palette::MEDIA_SELECTED_BG,
+        "selected home-video block should retain its leading inset"
+    );
+    let other_line = out
+        .lines()
+        .find(|line| line.contains("Other Home Video"))
+        .expect("following home-video row should render");
+    assert!(
+        other_line.starts_with("Other Home Video"),
+        "unselected home-video rows should not be indented:\n{out}"
+    );
     let other_row = layout
         .main
         .left_row_map

@@ -89,9 +89,9 @@ pub(super) fn render_home_video_item(
         f.render_widget(
             Block::default().style(Style::default().bg(bg)),
             Rect {
-                x: content_area.x + SELECTED_BLOCK_SIDE_PADDING,
+                x: content_area.x,
                 y: row_y + 1,
-                width: (text_w as u16).saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
+                width: text_w as u16,
                 height: item_h.saturating_sub(2),
             },
         );
@@ -108,8 +108,13 @@ pub(super) fn render_home_video_item(
         },
     );
 
-    let tx = content_area.x + SELECTED_BLOCK_SIDE_PADDING;
-    let tw = (text_w as u16).saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
+    let text_inset = if selected {
+        SELECTED_BLOCK_SIDE_PADDING
+    } else {
+        0
+    };
+    let tx = content_area.x + text_inset;
+    let tw = (text_w as u16).saturating_sub(2 * text_inset);
     let title_color = if expanded {
         palette::YELLOW
     } else if selected && focused {

@@ -89,12 +89,9 @@ fn power_queue_title_does_not_render_playlist_pill() {
         .lines()
         .nth(layout.queue_scope_local_area.y as usize)
         .expect("expected queue header row");
-    let device_name = mbv_core::api::device_name();
-    let upper_device_name = device_name.to_uppercase();
-
     assert!(
-        header.contains(&upper_device_name),
-        "expected session hostname pill in queue header:\n{out}"
+        header.contains("CONNECTED:"),
+        "expected connected status in local queue pill:\n{out}"
     );
     assert!(
         !header.contains("Road Mix") && !header.contains("none"),

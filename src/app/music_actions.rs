@@ -162,6 +162,9 @@ impl App {
         if lib.library.collection_type == "music" {
             return false;
         }
+        if self.is_home_video_view(lib_idx) {
+            return false;
+        }
         if lib.search.is_some() {
             return false;
         }

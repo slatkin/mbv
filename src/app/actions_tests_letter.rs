@@ -173,6 +173,14 @@ fn should_show_letter_pills_excludes_music_search_and_drilldowns() {
         !app.should_show_letter_pills(1),
         "hidden below the top browse level"
     );
+
+    app.libs.push(lib_tab("homevideos"));
+    push_top_level(&mut app.libs[2], 10);
+    app.libs[2].library_total = Some(1000);
+    assert!(
+        !app.should_show_letter_pills(2),
+        "home video libraries use folder pills instead"
+    );
 }
 
 #[test]

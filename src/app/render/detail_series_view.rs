@@ -4,6 +4,7 @@ use super::detail_series::{
     SERIES_DETAIL_EPISODE_ROWS_ESTIMATE, SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS,
     SERIES_IMAGE_PLACEHOLDER_ROWS, SERIES_IMAGE_ROWS,
 };
+use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use super::POWER_RENDER_FILTER;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
@@ -380,13 +381,17 @@ impl App {
         if max_y > area.y {
             f.render_widget(
                 Paragraph::new(Span::styled(
-                    "\u{2594}".repeat(area.width.saturating_add(2) as usize),
+                    "\u{2594}".repeat(
+                        area.width
+                            .saturating_add(2 * SELECTED_BLOCK_SIDE_PADDING as u16)
+                            as usize,
+                    ),
                     Style::default().fg(palette::SEEK_TRACK),
                 )),
                 Rect {
-                    x: area.x.saturating_sub(1),
+                    x: area.x.saturating_sub(SELECTED_BLOCK_SIDE_PADDING),
                     y: max_y - 1,
-                    width: area.width.saturating_add(2),
+                    width: area.width.saturating_add(2 * SELECTED_BLOCK_SIDE_PADDING),
                     height: 1,
                 },
             );

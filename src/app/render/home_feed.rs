@@ -116,7 +116,9 @@ impl App {
         let current_pos = cursor.min(items.len().saturating_sub(1));
         let text_w_with_sb = (list_area.width as usize).saturating_sub(1);
         let mut item_heights = vec![1; items.len()];
-        let selected_panel_width = text_w_with_sb.saturating_sub(2) as u16;
+        let selected_panel_width = text_w_with_sb
+            .saturating_sub(2 * super::list_rows::SELECTED_BLOCK_SIDE_PADDING as usize)
+            as u16;
         let selected_height = self
             .compact_banner_layout_with_overview(&items[current_pos], selected_panel_width, true)
             .content_rows()

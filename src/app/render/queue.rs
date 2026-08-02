@@ -60,6 +60,12 @@ impl App {
         let show_split = has_remote || has_attached;
 
         let mut local_spans = self.remote_status_spans(crate::app::RemoteSlotState::Off, "");
+        if show_split {
+            if let Some(label) = local_spans.get_mut(2) {
+                let gap = if self.use_nerd_fonts { " " } else { "  " };
+                label.content = format!("{gap}Connected: ").into();
+            }
+        }
         if self.use_nerd_fonts {
             if let Some(icon) = local_spans.get_mut(1) {
                 icon.content = "\u{F0AFE}".into();
