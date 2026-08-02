@@ -61,9 +61,8 @@ impl App {
 
         let mut local_spans = self.remote_status_spans(crate::app::RemoteSlotState::Off, "");
         if show_split {
-            if let Some(label) = local_spans.get_mut(2) {
-                let gap = if self.use_nerd_fonts { " " } else { "  " };
-                label.content = format!("{gap}Connected: ").into();
+            if let Some(trailing) = local_spans.get_mut(3) {
+                trailing.content = "".into();
             }
         }
         if self.use_nerd_fonts {
@@ -82,6 +81,20 @@ impl App {
         } else {
             palette::YELLOW
         };
+        if show_split {
+            if let Some(label) = local_spans.get_mut(2) {
+                label.content = if local_active {
+                    "Connected: ".into()
+                } else {
+                    " Connected: ".into()
+                };
+            }
+        }
+        if local_active {
+            if let Some(icon) = local_spans.get_mut(1) {
+                icon.content = "".into();
+            }
+        }
         Self::set_status_pill_style(&mut local_spans, local_fg, local_bg);
         if let Some(icon) = local_spans.get_mut(1) {
             icon.style = icon.style.fg(local_fg);
@@ -109,6 +122,13 @@ impl App {
         if has_remote {
             let remote_x = area.x + local_w;
             let mut remote_spans = self.remote_status_spans(remote_state, &daemon_endpoint);
+            if let Some(leading) = remote_spans.get_mut(0) {
+                leading.content = "".into();
+            }
+            if let Some(label) = remote_spans.get_mut(2) {
+                let text = label.content.trim_start();
+                label.content = format!(" {text}").into();
+            }
             let remote_active = !local_selected;
             let remote_bg = if remote_active {
                 palette::AQUA
@@ -122,8 +142,7 @@ impl App {
             }
             Self::uppercase_status_label(&mut remote_spans);
             Self::set_status_label_bold(&mut remote_spans, remote_active);
-            let remote_content_w: usize = remote_spans.iter().map(|s| s.content.width()).sum();
-            let remote_w = (remote_content_w as u16).min(area.width.saturating_sub(local_w));
+            let remote_w = area.width.saturating_sub(local_w);
             let remote_area = Rect {
                 x: remote_x,
                 y: area.y,
@@ -144,15 +163,14 @@ impl App {
                 width: area.width.saturating_sub(local_w),
                 height: 1,
             };
-            let (icon, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
+            let (_icon, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
             let fg = palette::QUEUE_BUTTON_FOCUSED_BG;
             let bg = palette::YELLOW;
-            let icon_style = Style::default().fg(fg).bg(bg);
             let label_style = Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD);
-            let spans = vec![
-                Span::styled(format!(" {label}"), label_style),
-                Span::styled(format!(" {icon} "), icon_style),
-            ];
+            let spans = vec![Span::styled(
+                format!(" {}", label.trim_start()),
+                label_style,
+            )];
             f.render_widget(Block::default().style(Style::default().bg(bg)), remote_area);
             f.render_widget(Paragraph::new(Line::from(spans)), remote_area);
         }
@@ -369,7 +387,7 @@ impl App {
 
                     if is_cursor {
                         f.render_widget(
-                            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                            Block::default().style(Style::default().bg(palette::BG_GREEN)),
                             Rect {
                                 x: area.x,
                                 y: area.y + line_offset,
@@ -393,7 +411,12 @@ impl App {
 
                     let mut spans: Vec<Span> = Vec::new();
                     if indent > 0 {
-                        spans.push(Span::raw("  "));
+                        if is_cursor {
+                            spans.push(Span::styled("▍", Style::default().fg(palette::AQUA)));
+                            spans.push(Span::raw(" "));
+                        } else {
+                            spans.push(Span::raw("  "));
+                        }
                     }
                     // Prefix is "{n:>w}. " — render it dim.
                     let prefix_chars = format!("{:>num_w$}. ", queue_pos).chars().count();
@@ -607,8 +630,10 @@ mod tests {
         .unwrap();
 
         let buf = term.backend().buffer();
-        assert_eq!(buf[(39, 0)].bg, palette::LIBRARY_SIDE_BG);
-        assert_eq!(buf[(5, 0)].bg, palette::LIBRARY_SIDE_BG);
+        assert_eq!(buf[(0, 0)].symbol(), "▍");
+        assert_eq!(buf[(0, 0)].fg, palette::AQUA);
+        assert_eq!(buf[(39, 0)].bg, palette::BG_GREEN);
+        assert_eq!(buf[(5, 0)].bg, palette::BG_GREEN);
         assert_eq!(buf[(5, 0)].fg, palette::WHITE);
     }
 

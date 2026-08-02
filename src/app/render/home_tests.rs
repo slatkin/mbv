@@ -266,7 +266,7 @@ fn playing_home_video_uses_aqua_play_icon_in_the_icon_column() {
 }
 
 #[test]
-fn selected_home_row_uses_red_square_marker() {
+fn selected_home_row_uses_aqua_bar_marker() {
     let mut app = make_app_stub();
     app.home.continue_items = vec![make_item("Selected Home Item", "Video")];
 
@@ -281,11 +281,11 @@ fn selected_home_row_uses_red_square_marker() {
     let cell = &term.backend().buffer()[(0, 4)];
     assert_eq!(
         cell.symbol(),
-        "■",
+        "▍",
         "rendered Home panel:\n{}",
         buffer_to_string(&term)
     );
-    assert_eq!(cell.fg, crate::app::palette::RED);
+    assert_eq!(cell.fg, crate::app::palette::AQUA);
 }
 
 #[test]

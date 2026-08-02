@@ -1,6 +1,7 @@
 use super::test_helpers::*;
 use super::*;
 use crate::app::tests::make_item;
+use crate::app::QueueScope;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
@@ -96,6 +97,30 @@ fn power_queue_title_does_not_render_playlist_pill() {
     assert!(
         !header.contains("Road Mix") && !header.contains("none"),
         "expected playlist pill to stay out of queue header:\n{out}"
+    );
+}
+
+#[test]
+fn remote_queue_header_styles_scope_pills_by_connection_state() {
+    let mut app = make_power_remote_queue_app();
+    app.use_nerd_fonts = false;
+    app.queue_scope = QueueScope::Local;
+
+    let (term, layout) = render_view_to_terminal(&mut app, 100, 28);
+    let out = buffer_to_string(&term);
+    let header = out
+        .lines()
+        .nth(layout.queue_scope_local_area.y as usize)
+        .expect("expected queue header row");
+
+    assert!(
+        !header.contains("CONNECTED:  "),
+        "expected one space after Connected:\n{out}"
+    );
+    assert_eq!(
+        layout.queue_scope_remote_area.width,
+        layout.queue_area.width - layout.queue_scope_local_area.width,
+        "green remote pill should fill the remaining header width"
     );
 }
 

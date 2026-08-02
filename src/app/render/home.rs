@@ -330,10 +330,11 @@ impl App {
         for k in 0..visible {
             let row_idx = scroll_y as usize + k as usize;
             let sy = list_area.y + k;
+            let row_x = green_panel_full.map(|panel| panel.x).unwrap_or(list_area.x);
             let row_rect = Rect {
-                x: list_area.x,
+                x: row_x,
                 y: sy,
-                width: list_w,
+                width: list_w.saturating_add(list_area.x.saturating_sub(row_x)),
                 height: 1,
             };
             match &rows[row_idx] {
@@ -407,7 +408,7 @@ impl App {
                                     Style::default().fg(palette::AQUA),
                                 )
                             } else if selected_row && focused {
-                                Span::styled("■", Style::default().fg(palette::RED))
+                                Span::styled("▍", Style::default().fg(palette::AQUA))
                             } else {
                                 Span::raw(" ")
                             },
@@ -451,7 +452,7 @@ impl App {
                                             Style::default().fg(palette::AQUA),
                                         )
                                     } else {
-                                        Span::styled("■", Style::default().fg(palette::RED))
+                                        Span::styled("▍", Style::default().fg(palette::AQUA))
                                     },
                                     Span::raw(" "),
                                     Span::styled(
@@ -473,7 +474,7 @@ impl App {
                                             Style::default().fg(palette::AQUA),
                                         )
                                     } else {
-                                        Span::styled("■", Style::default().fg(palette::RED))
+                                        Span::styled("▍", Style::default().fg(palette::AQUA))
                                     },
                                     Span::raw(" "),
                                     Span::styled(
