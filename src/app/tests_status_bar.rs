@@ -109,7 +109,7 @@ fn home_section_cycle_includes_continue_watching_in_both_directions() {
 // coloring) exercised the status bar's own `remote_status_spans`
 // rendering with `show_session_pill: true` -- a mode only the deleted
 // Standard view's status-bar call site used. The main status bar
-// has always called `render_status_bar(.., false, true)` (unchanged by
+// has always called `render_status_bar(.., false)` (unchanged by
 // this diff -- confirmed via `git diff origin/main`), because Power
 // surfaces the same remote/session info via the queue column's
 // Local/Remote title pills instead (`render_power_queue_title` in
@@ -192,12 +192,8 @@ fn status_bar_shows_muted_text_without_mute_glyph() {
     // in the queue column's Local/Remote title pills instead -- see
     // `render_power_queue_title`), so "muted last among left-side
     // statuses" no longer has a remote pill to be last *after*.
-    let playlist_pos = last_line.find("\u{1F5AD}  none").unwrap();
-    let muted_pos = last_line.find("muted").unwrap();
-    assert!(
-            playlist_pos < muted_pos,
-            "muted should be the last left-side status so appearing/disappearing does not shift earlier statuses:\n{last_line}"
-        );
+    // The playlist pill has also moved out of the status bar into the
+    // left queue panel's bottom row, so it no longer orders against it.
 }
 
 #[test]
@@ -233,20 +229,20 @@ fn status_bar_has_no_session_or_daemon_label_when_remote_slot_is_off() {
 }
 
 #[test]
-fn status_bar_shows_playlist_status_when_none_is_active() {
+fn queue_panel_shows_playlist_status_when_none_is_active() {
     let mut app = make_app_stub();
 
     let rendered = render_app_to_string(&mut app, 80, 24);
-    let last_line = rendered.lines().last().unwrap();
+    let pill_row = left_panel_bottom_row(&app, &rendered);
 
     assert!(
-        last_line.contains("\u{1F5AD}  none"),
-        "expected playlist glyph as the playlist label prefix:\n{last_line}"
+        pill_row.contains("\u{1F5AD}  none"),
+        "expected playlist glyph as the playlist label prefix:\n{pill_row}"
     );
 }
 
 #[test]
-fn status_bar_shows_active_playlist_name_next_to_playlist_glyph() {
+fn queue_panel_shows_active_playlist_name_next_to_playlist_glyph() {
     let mut app = make_app_stub();
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("pl1".into()),
@@ -254,17 +250,20 @@ fn status_bar_shows_active_playlist_name_next_to_playlist_glyph() {
     };
 
     let rendered = render_app_to_string(&mut app, 80, 24);
-    let last_line = rendered.lines().last().unwrap();
+    let pill_row = left_panel_bottom_row(&app, &rendered);
 
     assert!(
-        last_line.contains("\u{1F5AD}  Road Trip"),
-        "expected playlist glyph as the active playlist label prefix:\n{last_line}"
+        pill_row.contains("\u{1F5AD}  Road Trip"),
+        "expected playlist glyph as the active playlist label prefix:\n{pill_row}"
     );
 }
 
 #[test]
 fn status_bar_has_surrounding_row_background_and_pill_cells() {
     let mut app = make_app_stub();
+    // The playlist pill moved into the left queue panel, so leave the status
+    // bar with a left-side pill (the mute indicator) to verify pill cells.
+    app.mute_on = true;
 
     let term = render_app_to_terminal(&mut app, 80, 24);
     let buf = term.backend().buffer();
@@ -407,12 +406,20 @@ fn status_bar_shows_normal_content_when_no_toast_is_active() {
     app.status = String::new();
 
     let rendered = render_app_to_string(&mut app, 80, 24);
-    let last_line = rendered.lines().last().unwrap();
+    let pill_row = left_panel_bottom_row(&app, &rendered);
 
     assert!(
-        last_line.contains("\u{1F5AD}  none"),
-        "expected status labels to still render when no toast is active:\n{last_line}"
+        pill_row.contains("\u{1F5AD}  none"),
+        "expected the playlist pill to still render when no toast is active:\n{pill_row}"
     );
+}
+
+fn left_panel_bottom_row<'a>(app: &App, rendered: &'a str) -> &'a str {
+    let panel = app.layout.main.panel_area;
+    rendered
+        .lines()
+        .nth((panel.y + panel.height - 1) as usize)
+        .unwrap_or_default()
 }
 
 // `status_bar_pill_click_regions_stay_populated_during_toast` (deleted):

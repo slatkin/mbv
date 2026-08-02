@@ -301,11 +301,15 @@ fn status_bar_row_is_always_present_and_holds_status_labels() {
     let mut app = make_app_stub();
 
     let rendered = render_app_to_string(&mut app, 80, 24);
-    let last_line = rendered.lines().last().unwrap();
+    let pill_row_y = app.layout.main.panel_area.y + app.layout.main.panel_area.height - 1;
+    let pill_row = rendered
+        .lines()
+        .nth(pill_row_y as usize)
+        .unwrap_or_default();
 
     assert!(
-        last_line.contains("\u{1F5AD}  none"),
-        "expected the playlist status on the final screen row:\n{rendered}"
+        pill_row.contains("\u{1F5AD}  none"),
+        "expected the playlist status at the bottom of the left panel:\n{rendered}"
     );
     // The status labels must not render inside the tab row (first line).
     let first_line = rendered.lines().next().unwrap();
@@ -315,7 +319,7 @@ fn status_bar_row_is_always_present_and_holds_status_labels() {
     );
     // TABBAR_LEFT_RESERVE is 0 and the first tab has no left gutter, so
     // the tab row is left-aligned flush with the left edge -- the pill
-    // that used to live here now renders in the status bar.
+    // that used to live here now renders at the bottom of the left panel.
     let first_non_space = first_line.find(|c: char| c != ' ').unwrap_or(0);
     assert_eq!(
             first_non_space, 0,

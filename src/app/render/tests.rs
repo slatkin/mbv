@@ -246,14 +246,17 @@ fn expired_toast_clears_before_status_bar_render_decides_overlay() {
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| app.render(f)).unwrap();
 
-    let last_line = buffer_to_string(&term).lines().last().unwrap().to_string();
+    let out = buffer_to_string(&term);
+    let last_line = out.lines().last().unwrap().to_string();
     assert!(
         !last_line.contains("Saved"),
         "expected expired toast text to clear before the status bar chooses its row:\n{last_line}"
     );
+    let pill_row_y = app.layout.main.panel_area.y + app.layout.main.panel_area.height - 1;
+    let pill_row = out.lines().nth(pill_row_y as usize).unwrap_or_default();
     assert!(
-        last_line.contains('\u{1F5AD}'),
-        "expected the persistent status bar to render after an expired toast clears:\n{last_line}"
+        pill_row.contains('\u{1F5AD}'),
+        "expected the playlist pill to render after an expired toast clears:\n{pill_row}"
     );
     assert!(app.status.is_empty());
     assert!(app.status_expires.is_none());
