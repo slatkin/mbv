@@ -79,6 +79,7 @@ impl App {
         // section can no longer silently drift from `playback_command_for_key`.
         let mut sec_playback = vec![section("Playback")];
         sec_playback.extend(PLAYBACK_HELP_BINDINGS.iter().map(|b| mk(b.keys, b.label)));
+        sec_playback.push(mk("o", "Open idle feed link"));
         sec_playback.push(blank());
         let sec_queue = vec![
             section("Queue"),

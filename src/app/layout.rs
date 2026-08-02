@@ -40,6 +40,8 @@ pub(crate) struct LayoutPlayback {
     /// Playback header next glyph; only wired to the action when
     /// `App::transport_prev_next_available().1` is true.
     pub next_area: Rect,
+    /// Idle-feed headline; only populated when its current item has a link.
+    pub idle_feed_link_area: Rect,
 }
 
 /// Geometry for the Home sub-tab,

@@ -609,6 +609,33 @@ impl App {
         });
     }
 
+    pub(super) fn idle_feed_link_available(&self) -> bool {
+        self.idle_feed
+            .as_ref()
+            .and_then(|feed| feed.items.get(feed.current_index))
+            .and_then(|item| item.link.as_deref())
+            .is_some_and(|link| !link.is_empty())
+    }
+
+    /// Open the currently displayed idle-feed item in the user's browser.
+    pub(super) fn open_idle_feed_link(&mut self) {
+        let Some(link) = self
+            .idle_feed
+            .as_ref()
+            .and_then(|feed| feed.items.get(feed.current_index))
+            .and_then(|item| item.link.as_deref())
+            .filter(|link| !link.is_empty())
+            .map(str::to_owned)
+        else {
+            return;
+        };
+
+        if let Err(error) = open_url(&link) {
+            log::warn!(target: "idle_feed", "Failed to open feed link {link:?}: {error}");
+            self.flash_status(format!("Unable to open feed link: {error}"));
+        }
+    }
+
     /// Advance the idle feed rotation if enough time has elapsed.
     pub(super) fn advance_idle_feed_rotation(&mut self) {
         let Some(ref mut idle_feed) = self.idle_feed else {
@@ -622,5 +649,31 @@ impl App {
             idle_feed.current_index = (idle_feed.current_index + 1) % idle_feed.items.len();
             idle_feed.last_rotation = Instant::now();
         }
+    }
+}
+
+fn open_url(url: &str) -> std::io::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+            .map(|_| ())
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
     }
 }

@@ -254,6 +254,15 @@ impl App {
                     }
                     return;
                 }
+                if self
+                    .layout
+                    .playback
+                    .idle_feed_link_area
+                    .contains((col, row).into())
+                {
+                    self.dispatch(Command::OpenIdleFeedLink);
+                    return;
+                }
                 // Header breadcrumb clicks.
                 if self.library_tab > 0 {
                     let crumbs = self.layout.main.breadcrumbs.clone();

@@ -316,6 +316,14 @@ impl App {
 
     pub(super) fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
         let snapshot = self.input_snapshot();
+        if let Some(command) = super::action::idle_feed_command_for_key(
+            super::input_resolver::KeyChord::from_key(key),
+            snapshot.player_active,
+            self.connected_session_id.is_some(),
+            self.idle_feed_link_available(),
+        ) {
+            return Some(self.dispatch(command));
+        }
         match super::input_resolver::resolve_key(
             super::input_resolver::InputContext::Playback,
             &snapshot,

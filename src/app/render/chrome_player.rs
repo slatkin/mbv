@@ -8,7 +8,7 @@ use crate::app::{
     palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE, TABBAR_RIGHT_RESERVE,
 };
 use mbv_core::api::TICKS_PER_SECOND;
-use ratatui::layout::Rect;
+use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
@@ -34,6 +34,7 @@ impl App {
         if player_h == 0 {
             return;
         }
+        layout.idle_feed_link_area = Rect::default();
         // Seekbar row (always present when player_h > 0).
         let seek_area = Rect { height: 1, ..area };
         if show_controls {
@@ -72,12 +73,16 @@ impl App {
                 if let Some(ref idle_feed) = self.idle_feed {
                     if let Some(item) = idle_feed.items.get(idle_feed.current_index) {
                         let truncated_title = trunc_str(&item.title, title_area.width as usize);
+                        if item.link.as_deref().is_some_and(|link| !link.is_empty()) {
+                            layout.idle_feed_link_area = title_area;
+                        }
                         f.render_widget(
                             Paragraph::new(Span::styled(
                                 truncated_title,
                                 Style::default().fg(palette::AQUA),
                             ))
-                            .style(Style::default().bg(panel_bg)),
+                            .style(Style::default().bg(panel_bg))
+                            .alignment(Alignment::Center),
                             title_area,
                         );
                     }

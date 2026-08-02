@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Command {
+    OpenIdleFeedLink,
     TogglePlayPause,
     Stop,
     /// Relative seek in seconds; negative rewinds, positive fast-forwards.
@@ -95,6 +96,29 @@ pub(super) enum Command {
     /// `h` in the queue column: collapse or expand the physical left column that
     /// contains the queue card and queue.
     TogglePowerSidebar,
+}
+
+/// Resolve the idle-feed link shortcut separately from transport bindings so
+/// `o` remains available to the view when no link is displayed. A daemon-backed
+/// player is still an idle feed view when no Emby session is connected, so the
+/// playback backend and connected-session gates stay separate here.
+pub(super) fn idle_feed_command_for_key(
+    chord: KeyChord,
+    player_active: bool,
+    has_connected_session: bool,
+    link_available: bool,
+) -> Option<Command> {
+    match chord.code {
+        KeyCode::Char('o')
+            if chord.mods.is_empty()
+                && !player_active
+                && !has_connected_session
+                && link_available =>
+        {
+            Some(Command::OpenIdleFeedLink)
+        }
+        _ => None,
+    }
 }
 
 /// Translate a key event into a playback `Command`, or `None` if this handler
@@ -370,6 +394,10 @@ impl App {
     pub(super) fn dispatch(&mut self, command: Command) -> bool {
         match command {
             Command::Quit => return self.try_quit(),
+
+            Command::OpenIdleFeedLink => {
+                self.open_idle_feed_link();
+            }
 
             Command::TogglePlayPause => {
                 self.playback_target().toggle_play_pause(self);
