@@ -19,8 +19,8 @@ impl App {
         // whether playback is in-process or hosted by a same-host local
         // daemon -- only a genuinely remote daemon or an attached Emby
         // session make this machine's audio the wrong thing to capture.
-        let is_local = (!self.player.is_remote() || self.is_local_daemon)
-            && self.connected_session_id.is_none();
+        let is_local =
+            self.player_owner_is_on_this_machine() && self.connected_session_id.is_none();
         let audio_pipe_enabled = self.client.lock().unwrap().config.audio_pipe_enabled;
         let active = self.player.status.lock().unwrap().active;
 

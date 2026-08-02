@@ -7,6 +7,7 @@ use super::{
 };
 use mbv_core::api::{EmbyClient, MediaItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
+use mbv_core::remote_player::DaemonEndpoint;
 use ratatui_image::picker::Picker;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -188,7 +189,7 @@ impl App {
             image_fetches_active: 0,
             queue_scope: init.initial_queue_scope,
             launched_as_remote: false,
-            is_local_daemon: false,
+            player_endpoint: None,
             home_is_local_daemon: false,
             idle_feed: init.idle_feed,
         }
@@ -305,23 +306,20 @@ impl App {
         app
     }
 
-    /// `is_local_daemon` distinguishes the two daemon-connection modes:
-    /// - `true`: this is the same-machine `mbv -d` daemon, auto-detected at
-    ///   startup (`DaemonEndpoint::Local`). This should behave exactly like
-    ///   a plain local session — one unified queue, normal queue-state
-    ///   persistence — the only difference is that the daemon owns mpv
-    ///   instead of an in-process `Player`. No Local/Remote split, no pill.
-    /// - `false`: a genuinely remote/network daemon (explicit
-    ///   `--daemon-endpoint`/`daemon_client_endpoint`). Here a separate
-    ///   `remote_player_tab` is kept so the user can browse locally while a
-    ///   daemon elsewhere plays something else, with the Local/Remote scope
-    ///   pill to switch between them (mirroring `switch_to_direct_remote`'s
-    ///   mid-session upgrade case).
+    /// `endpoint` is the daemon endpoint the remote player is connected to.
+    /// The endpoint's `is_local()` distinguishes local-daemon attach
+    /// (`DaemonEndpoint::Local`) from a genuinely remote daemon:
+    /// - `Local`: behaves like a plain local session — one unified queue,
+    ///   normal queue-state persistence — the only difference is that the
+    ///   daemon owns mpv instead of an in-process `Player`.
+    /// - `Tcp`/`Unix`: a separate `remote_player_tab` is kept so the user
+    ///   can browse locally while a daemon elsewhere plays something else,
+    ///   with the Local/Remote scope pill to switch between them.
     pub fn new_remote(
         client: EmbyClient,
         remote: mbv_core::remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
-        is_local_daemon: bool,
+        endpoint: DaemonEndpoint,
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<mbv_core::ws::WsEvent>();
         let (lib_tx, lib_rx) = mpsc::channel();
@@ -355,12 +353,12 @@ impl App {
         let remote_items = remote.items.lock().unwrap().clone();
         let remote_cursor = remote.status.lock().unwrap().current_idx;
         let remote_queue_source = remote.queue_source.lock().unwrap().clone();
-        let initial_queue_scope = if !is_local_daemon && !remote_items.is_empty() {
+        let initial_queue_scope = if !endpoint.is_local() && !remote_items.is_empty() {
             QueueScope::Remote
         } else {
             QueueScope::Local
         };
-        let local_daemon_bootstrap = is_local_daemon.then(|| {
+        let local_daemon_bootstrap = endpoint.is_local().then(|| {
             bootstrap_local_daemon_queue(
                 remote_items.clone(),
                 remote_cursor,
@@ -390,7 +388,7 @@ impl App {
             Some(remote.disconnected_flag()),
         );
         let player = PlayerProxy::remote(remote, always_play_next);
-        let (player_tab, remote_player_tab) = if is_local_daemon {
+        let (player_tab, remote_player_tab) = if endpoint.is_local() {
             // Local daemon: one unified queue, exactly like plain local
             // playback — no separate remote_player_tab, no scope pill.
             (
@@ -438,9 +436,14 @@ impl App {
         });
         app.mpris = Some(mpris_handle);
         app.launched_as_remote = true;
-        app.is_local_daemon = is_local_daemon;
-        app.home_is_local_daemon = is_local_daemon;
-        if is_local_daemon {
+        app.player_endpoint = Some(endpoint.clone());
+        app.home_is_local_daemon = endpoint.is_local();
+        debug_assert_eq!(
+            app.player.is_remote(),
+            app.player_endpoint.is_some(),
+            "player-endpoint invariant"
+        );
+        if endpoint.is_local() {
             let bootstrap = local_daemon_bootstrap.unwrap();
             app.queue_source = bootstrap.queue_source;
             app.last_played_item_id = bootstrap.last_played_item_id;
@@ -454,7 +457,7 @@ impl App {
         if local_daemon_adoption_failed {
             app.handle_failed_local_daemon_adoption();
         }
-        if is_local_daemon {
+        if endpoint.is_local() {
             app.try_auto_reconnect();
         }
         app

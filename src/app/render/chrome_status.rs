@@ -258,7 +258,7 @@ impl App {
         } else {
             Vec::new()
         };
-        let alive_status: Option<Vec<Span>> = self.is_local_daemon.then(|| {
+        let alive_status: Option<Vec<Span>> = self.is_local_daemon().then(|| {
             vec![
                 Span::raw(" "),
                 Span::styled(

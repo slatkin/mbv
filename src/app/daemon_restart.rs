@@ -15,7 +15,7 @@ impl App {
     /// startup branches, but as an in-process reconnect rather than a fresh
     /// process, since the whole daemon *process* may be gone, not just this
     /// client's socket. Only called for a `home_is_local_daemon` app, so
-    /// `is_local_daemon` is always the target after this succeeds.
+    /// `player_endpoint` is always the managed local daemon after this succeeds.
     ///
     /// `resume = false` suppresses the saved-queue adoption so the new
     /// daemon comes up idle -- the `[S]` choice on the daemon-lost modal,
@@ -95,7 +95,8 @@ impl App {
         if !bootstrap.positions.is_empty() {
             self.spawn_enrich_queue_state(bootstrap.positions);
         }
-        self.is_local_daemon = true;
+        self.player_endpoint = Some(DaemonEndpoint::Local);
+        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
         self.next_up_item = None;
         self.skip_intro_end_ticks = None;
         self.daemon_lost_modal = None;

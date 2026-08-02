@@ -251,7 +251,12 @@ fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
 fn apply_route_for_playback_restores_local_when_item_has_no_route() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
-    app.switch_to_library_route("music", remote, remote_rx, false);
+    app.switch_to_library_route(
+        "music",
+        remote,
+        remote_rx,
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
     let mut movies_item = make_item("Movies", "CollectionFolder");
     movies_item.id = "lib-movies".to_string();
     app.libs.push(LibraryTab {
@@ -306,7 +311,12 @@ fn apply_route_for_playback_restores_local_via_restore_local_mode_when_swap_to_a
     app.library_routes
         .insert("movies".to_string(), "tcp://127.0.0.1:9001".to_string());
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
-    app.switch_to_library_route("music", remote, remote_rx, false);
+    app.switch_to_library_route(
+        "music",
+        remote,
+        remote_rx,
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
     assert_eq!(app.active_route.as_deref(), Some("music"));
     assert!(app.player.is_remote());
 

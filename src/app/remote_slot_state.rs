@@ -1,6 +1,18 @@
 use super::{App, RemoteSlotState};
+use mbv_core::remote_player::DaemonEndpoint;
 
 impl App {
+    pub(super) fn is_local_daemon(&self) -> bool {
+        matches!(self.player_endpoint, Some(DaemonEndpoint::Local))
+    }
+
+    pub(super) fn player_owner_is_on_this_machine(&self) -> bool {
+        !matches!(
+            self.player_endpoint,
+            Some(DaemonEndpoint::Tcp(_) | DaemonEndpoint::Unix(_))
+        )
+    }
+
     pub(super) fn remote_slot_state(&self) -> RemoteSlotState {
         if self.connected_session_id.is_some() {
             RemoteSlotState::AttachedSession
