@@ -25,17 +25,17 @@ pub fn library_position_state_path() -> PathBuf {
     state_dir().join("library_position_state.json")
 }
 
-pub fn save_queue_state(state: &QueueState) {
+pub fn save_queue_state(state: &QueueState) -> Result<(), String> {
     let path = queue_state_path();
     if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("create directory {}: {e}", dir.display()))?;
     }
-    if let Ok(json) = serde_json::to_string(state) {
-        let tmp = path.with_extension("json.tmp");
-        if std::fs::write(&tmp, &json).is_ok() {
-            let _ = std::fs::rename(&tmp, &path);
-        }
-    }
+    let json = serde_json::to_string(state).map_err(|e| format!("serialize queue state: {e}"))?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &json).map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, &path)
+        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
 }
 
 pub fn load_queue_state() -> Option<QueueState> {

@@ -15,7 +15,7 @@ fn try_auto_reconnect_restores_a_persisted_library_route() {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        String,
+        mbv_core::ctrl::ConnectError,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(
             make_items(1),
@@ -158,7 +158,7 @@ fn new_remote_restores_a_persisted_route_when_attached_to_the_local_daemon() {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        String,
+        mbv_core::ctrl::ConnectError,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(
             make_items(1),

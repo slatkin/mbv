@@ -130,6 +130,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 let Ok(stream) = stream else { continue };
                 spawn_ctrl_client(
                     stream,
+                    CtrlTransport::Local,
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
                     client2.clone(),
@@ -219,6 +220,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 let Ok(stream) = stream else { continue };
                 spawn_ctrl_client(
                     stream,
+                    CtrlTransport::Tcp,
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
                     client2.clone(),
@@ -372,7 +374,9 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     .config
                     .audio_pipe_playout_delay_ms
                     .map(Duration::from_millis);
-                if let Some((connection_id, status)) = playback_intents.output_started_if_current(delay) {
+                if let Some((connection_id, status)) =
+                    playback_intents.output_started_if_current(delay)
+                {
                     log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
                     ctrl_clients
                         .lock()
@@ -391,7 +395,10 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                         }
                     }
                 }
-                broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::OutputStarted));
+                broadcast(
+                    &ctrl_clients,
+                    &CtrlEvent::Player(PlayerEvent::OutputStarted),
+                );
             }
             DaemonEvent::Player(pe) => {
                 if let PlayerEvent::PausedChanged(paused) = &pe {

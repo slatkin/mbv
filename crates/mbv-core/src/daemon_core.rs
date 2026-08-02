@@ -110,9 +110,19 @@ struct CtrlClients {
     authority: AuthorityHolder,
 }
 
+/// Transport identity for a ctrl client connection (task 3.1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CtrlTransport {
+    /// Local Unix socket listener.
+    Local,
+    /// TCP listener.
+    Tcp,
+}
+
 struct CtrlClient {
     id: CtrlClientId,
     tx: CtrlSender,
+    transport: CtrlTransport,
 }
 
 type ClientRegistry = Arc<Mutex<CtrlClients>>;
@@ -319,7 +329,9 @@ impl PlaybackIntentState {
     fn settle_buffering_if_due(&mut self) -> Option<(CtrlClientId, PlaybackIntentEvent)> {
         let current = self.current.as_mut()?;
         if current.phase != PlaybackIntentPhase::OutputBuffering
-            || current.buffering_deadline.is_none_or(|deadline| deadline > Instant::now())
+            || current
+                .buffering_deadline
+                .is_none_or(|deadline| deadline > Instant::now())
         {
             return None;
         }
@@ -449,10 +461,10 @@ impl CtrlClients {
     /// Does NOT override authority if it is currently `EmbyRemote` — the new
     /// client receives broadcasts but its commands are rejected until
     /// authority returns to `Ctrl`.
-    fn connect(&mut self, tx: CtrlSender) -> CtrlClientId {
+    fn connect(&mut self, tx: CtrlSender, transport: CtrlTransport) -> CtrlClientId {
         let id = self.next_id;
         self.next_id += 1;
-        self.connection.push(CtrlClient { id, tx });
+        self.connection.push(CtrlClient { id, tx, transport });
         if self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
         }
@@ -468,6 +480,12 @@ impl CtrlClients {
 
     fn has_client(&self, id: CtrlClientId) -> bool {
         self.connection.iter().any(|c| c.id == id)
+    }
+
+    fn is_local_client(&self, id: CtrlClientId) -> bool {
+        self.connection
+            .iter()
+            .any(|c| c.id == id && c.transport == CtrlTransport::Local)
     }
 
     fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
@@ -554,6 +572,7 @@ fn audio_only_rejection(audio_only: bool, fetched: &[MediaItem]) -> Option<Strin
 
 fn spawn_ctrl_client<S>(
     stream: S,
+    transport: CtrlTransport,
     merged_tx: mpsc::Sender<DaemonEvent>,
     ctrl_clients: ClientRegistry,
     client: Arc<Mutex<EmbyClient>>,
@@ -634,7 +653,7 @@ fn spawn_ctrl_client<S>(
             ev_tx.send(CtrlOutbound::Event(init_json)).ok();
         }
         let reply_tx = ev_tx.clone();
-        let client_id = ctrl_clients.lock().unwrap().connect(ev_tx);
+        let client_id = ctrl_clients.lock().unwrap().connect(ev_tx, transport);
 
         for line in lines {
             let Ok(line) = line else { break };

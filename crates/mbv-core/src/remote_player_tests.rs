@@ -585,7 +585,7 @@ fn perform_handshake_times_out_when_daemon_never_sends_hello() {
 
     let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
     let result = crate::bounded::run_with_hard_bound(
-        move || perform_handshake(stream, "token"),
+        move || perform_handshake(stream, "token").map_err(|e| e.to_string()),
         Duration::from_millis(50),
     );
 
@@ -631,7 +631,7 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
 
     let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
     let result = crate::bounded::run_with_hard_bound(
-        move || perform_handshake(stream, "token"),
+        move || perform_handshake(stream, "token").map_err(|e| e.to_string()),
         Duration::from_secs(5),
     );
 

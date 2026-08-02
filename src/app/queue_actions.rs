@@ -354,7 +354,9 @@ impl App {
                 crate::config::clear_queue_state();
             }
         } else {
-            crate::config::save_queue_state(&state);
+            if let Err(e) = crate::config::save_queue_state(&state) {
+                log::warn!(target: "queue", "failed to save queue state: {e}");
+            }
         }
     }
 
@@ -368,7 +370,9 @@ impl App {
     pub(super) fn save_queue_state_no_clear(&self) {
         let state = self.build_queue_state();
         if !state.items.is_empty() {
-            crate::config::save_queue_state(&state);
+            if let Err(e) = crate::config::save_queue_state(&state) {
+                log::warn!(target: "queue", "failed to save queue state (no-clear): {e}");
+            }
         }
     }
 

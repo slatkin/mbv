@@ -4,7 +4,7 @@ use crate::api::MediaItem;
 use crate::config::QueueSource;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
-pub const CTRL_PROTOCOL_VERSION: u32 = 7;
+pub const CTRL_PROTOCOL_VERSION: u32 = 8;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
@@ -46,12 +46,13 @@ impl CtrlHello {
         hello
     }
 
-    pub fn validate_peer(&self) -> Result<(), String> {
+    pub fn validate_peer(&self) -> Result<(), ConnectError> {
         self.compatibility()?;
         self.validate_required_capabilities()
+            .map_err(ConnectError::Other)
     }
 
-    pub fn compatibility(&self) -> Result<CtrlCompatibility, String> {
+    pub fn compatibility(&self) -> Result<CtrlCompatibility, ConnectError> {
         CtrlCompatibility::for_peer(self.protocol_version)
     }
 
@@ -79,16 +80,17 @@ pub struct CtrlCompatibility {
 }
 
 impl CtrlCompatibility {
-    pub fn for_peer(peer_protocol_version: u32) -> Result<Self, String> {
+    pub fn for_peer(peer_protocol_version: u32) -> Result<Self, ConnectError> {
         match peer_protocol_version {
             CTRL_PROTOCOL_VERSION => Ok(Self {
                 peer_protocol_version,
                 client_protocol_version: CTRL_PROTOCOL_VERSION,
                 supports_queue_append: true,
             }),
-            _ => Err(format!(
-                "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
-            )),
+            _ => Err(ConnectError::ProtocolMismatch {
+                peer_version: peer_protocol_version,
+                local_version: CTRL_PROTOCOL_VERSION,
+            }),
         }
     }
 
@@ -117,6 +119,10 @@ pub enum CtrlCmd {
     /// `PlayerCmd` so guarded actions cannot silently fall back to the old,
     /// unacknowledged command path.
     PlaybackIntent(PlaybackIntent),
+    /// Daemon lifecycle request: coordinated shutdown with durable queue
+    /// persistence. Distinct from the player `Stop` command. Only accepted
+    /// from local Unix ctrl connections (task 2.1).
+    RequestShutdown,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -327,6 +333,14 @@ pub enum CtrlEvent {
     /// Observed pipe-startup progress for a direct daemon client. The daemon
     /// owns this status; it never represents downstream audibility.
     PipePlaybackStatus(PipePlaybackStatus),
+    /// The daemon accepted a coordinated shutdown request after durably
+    /// persisting its authoritative queue (task 2.2).
+    ShutdownAccepted,
+    /// The daemon rejected a coordinated shutdown request. The reason
+    /// indicates why (e.g. TCP transport, persistence failure) (task 2.2).
+    ShutdownRejected {
+        reason: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -394,6 +408,82 @@ pub struct CtrlState {
     pub items: Vec<MediaItem>,
     pub cursor: usize,
     pub source: QueueSource,
+}
+
+/// Typed connection error distinguishing protocol mismatches from other
+/// failures so callers can format recovery guidance without inspecting
+/// formatted strings (task 2.4).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConnectError {
+    /// The peer reports a protocol version incompatible with ours.
+    ProtocolMismatch {
+        peer_version: u32,
+        local_version: u32,
+    },
+    /// Any other connection/handshake failure.
+    Other(String),
+}
+
+impl std::fmt::Display for ConnectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ProtocolMismatch {
+                peer_version,
+                local_version,
+            } => write!(
+                f,
+                "incompatible daemon protocol version: peer={peer_version} local={local_version}"
+            ),
+            Self::Other(msg) => write!(f, "{msg}"),
+        }
+    }
+}
+
+impl ConnectError {
+    /// Formats a connection error with endpoint-specific guidance (task 7.4).
+    /// For `DaemonEndpoint::Local` protocol mismatches, names `mbv -q` as the
+    /// recovery action. For TCP/Unix endpoints, keeps the error generic and
+    /// endpoint-specific (task 7.5).
+    pub fn format_with_endpoint_guidance(
+        &self,
+        endpoint: &super::remote_player_connect::DaemonEndpoint,
+    ) -> String {
+        match self {
+            Self::ProtocolMismatch {
+                peer_version,
+                local_version,
+            } => {
+                if matches!(
+                    endpoint,
+                    super::remote_player_connect::DaemonEndpoint::Local
+                ) {
+                    format!(
+                        "incompatible daemon protocol version: peer={peer_version} local={local_version}. \
+                         The local daemon may be an older version; run `mbv -q` to stop it, then restart."
+                    )
+                } else {
+                    format!(
+                        "incompatible daemon protocol version at {endpoint}: peer={peer_version} local={local_version}"
+                    )
+                }
+            }
+            Self::Other(msg) => msg.clone(),
+        }
+    }
+}
+
+impl std::error::Error for ConnectError {}
+
+impl From<String> for ConnectError {
+    fn from(msg: String) -> Self {
+        Self::Other(msg)
+    }
+}
+
+impl From<&str> for ConnectError {
+    fn from(msg: &str) -> Self {
+        Self::Other(msg.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -465,6 +555,72 @@ mod tests {
         let mut hello = CtrlHello::current();
         hello.protocol_version = 5;
         assert!(hello.validate_peer().is_err());
+    }
+
+    #[test]
+    fn hello_rejects_v7_protocol_version() {
+        let mut hello = CtrlHello::current();
+        hello.protocol_version = 7;
+        let result = hello.validate_peer();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ConnectError::ProtocolMismatch {
+                peer_version,
+                local_version,
+            } => {
+                assert_eq!(peer_version, 7);
+                assert_eq!(local_version, CTRL_PROTOCOL_VERSION);
+            }
+            _ => panic!("expected ProtocolMismatch error"),
+        }
+    }
+
+    #[test]
+    fn request_shutdown_round_trips() {
+        let cmd = CtrlCmd::RequestShutdown;
+        let json = serde_json::to_string(&cmd).unwrap();
+        let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+        assert!(matches!(decoded, CtrlCmd::RequestShutdown));
+    }
+
+    #[test]
+    fn shutdown_accepted_round_trips() {
+        let event = CtrlEvent::ShutdownAccepted;
+        let json = serde_json::to_string(&event).unwrap();
+        let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();
+        assert!(matches!(decoded, CtrlEvent::ShutdownAccepted));
+    }
+
+    #[test]
+    fn shutdown_rejected_round_trips() {
+        let event = CtrlEvent::ShutdownRejected {
+            reason: "test reason".to_string(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();
+        match decoded {
+            CtrlEvent::ShutdownRejected { reason } => {
+                assert_eq!(reason, "test reason");
+            }
+            _ => panic!("expected ShutdownRejected"),
+        }
+    }
+
+    #[test]
+    fn connect_error_protocol_mismatch_display() {
+        let err = ConnectError::ProtocolMismatch {
+            peer_version: 7,
+            local_version: 8,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("peer=7"));
+        assert!(msg.contains("local=8"));
+    }
+
+    #[test]
+    fn connect_error_other_display() {
+        let err = ConnectError::Other("test error".to_string());
+        assert_eq!(err.to_string(), "test error");
     }
 
     #[test]

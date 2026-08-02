@@ -13,7 +13,8 @@ use std::time::Duration;
 
 use crate::api::MediaItem;
 use crate::ctrl::{
-    CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
+    ConnectError, CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason,
+    PlaybackIntent,
 };
 use crate::player::{PlayerEvent, PlayerStatus};
 
@@ -81,12 +82,13 @@ const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 // tighter than `EmbyClient::AUTHENTICATE_HARD_BOUND`.
 const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
-// A local daemon that was *just* launched (`mbv -d`) may have written its
-// PID file (which is what makes it "detected") slightly before its ctrl
-// socket is bound. Retry briefly rather than immediately falling back to
-// standalone. Explicit remote endpoints (`Unix(path)` / `Tcp`) are not
-// retried this way — they represent an already-running, user-specified
-// target, not a same-machine process that might still be starting up.
+// A local daemon that was *just* launched (via `stay_alive` or auto-detect)
+// may have written its PID file (which is what makes it "detected") slightly
+// before its ctrl socket is bound. Retry briefly rather than immediately
+// falling back to standalone. Explicit remote endpoints (`Unix(path)` /
+// `Tcp`) are not retried this way — they represent an already-running,
+// user-specified target, not a same-machine process that might still be
+// starting up.
 const LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT: Duration = Duration::from_secs(1);
 const LOCAL_DAEMON_CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -201,17 +203,19 @@ impl std::fmt::Display for DaemonEndpoint {
 pub(crate) fn perform_handshake(
     stream: ControlStream,
     auth_token: &str,
-) -> Result<(BufReader<ControlStream>, CtrlEvent, CtrlCompatibility), String> {
+) -> Result<(BufReader<ControlStream>, CtrlEvent, CtrlCompatibility), ConnectError> {
     let mut reader = BufReader::new(stream);
     let mut first_line = String::new();
     reader
         .read_line(&mut first_line)
-        .map_err(|e| format!("failed to read daemon protocol hello: {e}"))?;
+        .map_err(|e| ConnectError::Other(format!("failed to read daemon protocol hello: {e}")))?;
     if first_line.trim().is_empty() {
-        return Err("daemon closed connection before protocol hello".to_string());
+        return Err(ConnectError::Other(
+            "daemon closed connection before protocol hello".to_string(),
+        ));
     }
     let hello = serde_json::from_str::<CtrlEvent>(first_line.trim_end())
-        .map_err(|e| format!("invalid daemon protocol hello: {e}"))?;
+        .map_err(|e| ConnectError::Other(format!("invalid daemon protocol hello: {e}")))?;
     let ctrl_compatibility = match hello {
         CtrlEvent::Hello(info) => {
             info.validate_peer()?;
@@ -226,31 +230,35 @@ pub(crate) fn perform_handshake(
             compatibility
         }
         _ => {
-            return Err("daemon did not send protocol hello".to_string());
+            return Err(ConnectError::Other(
+                "daemon did not send protocol hello".to_string(),
+            ));
         }
     };
     let client_hello = serde_json::to_string(&CtrlCmd::Hello(CtrlHello::compatible_client(
         auth_token.into(),
         ctrl_compatibility,
     )))
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| ConnectError::Other(e.to_string()))?;
     // Write via the same handle the `BufReader` wraps (`get_mut()`) rather
     // than a second `try_clone()`'d handle -- the handshake is strictly
     // sequential (read hello -> write client hello -> read state) with no
     // concurrent access from another thread during this phase, so there's
     // nothing a second handle buys here beyond an extra fallible call.
     writeln!(reader.get_mut(), "{client_hello}")
-        .map_err(|e| format!("failed to send daemon protocol hello: {e}"))?;
+        .map_err(|e| ConnectError::Other(format!("failed to send daemon protocol hello: {e}")))?;
 
     let mut state_line = String::new();
     reader
         .read_line(&mut state_line)
-        .map_err(|e| format!("failed to read daemon initial state: {e}"))?;
+        .map_err(|e| ConnectError::Other(format!("failed to read daemon initial state: {e}")))?;
     if state_line.trim().is_empty() {
-        return Err("daemon closed connection before initial state".to_string());
+        return Err(ConnectError::Other(
+            "daemon closed connection before initial state".to_string(),
+        ));
     }
     let state_event = serde_json::from_str::<CtrlEvent>(state_line.trim_end())
-        .map_err(|e| format!("invalid daemon initial state: {e}"))?;
+        .map_err(|e| ConnectError::Other(format!("invalid daemon initial state: {e}")))?;
 
     Ok((reader, state_event, ctrl_compatibility))
 }
@@ -331,6 +339,10 @@ fn apply_ctrl_event(
                 let _ = event_tx.send(PlayerEvent::PipePlaybackStatus(status_event));
             }
         }
+        CtrlEvent::ShutdownAccepted | CtrlEvent::ShutdownRejected { .. } => {
+            // Handled by the request-completion path in RemotePlayer
+            // (task 5.1), not by the general event loop.
+        }
         CtrlEvent::Disconnected { reason } => {
             if notify {
                 let msg = disconnect_reason_message(&reason).to_string();
@@ -361,13 +373,17 @@ fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
 pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
     auth_token: &str,
-) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
-    let stream = endpoint.connect_stream()?;
+) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::ctrl::ConnectError> {
+    let stream = endpoint
+        .connect_stream()
+        .map_err(crate::ctrl::ConnectError::Other)?;
     log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
 
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
     // moved into the writer thread below.
-    let disconnect_stream = stream.try_clone().map_err(|e| e.to_string())?;
+    let disconnect_stream = stream
+        .try_clone()
+        .map_err(|e| crate::ctrl::ConnectError::Other(e.to_string()))?;
 
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
@@ -377,6 +393,9 @@ pub(crate) fn connect_endpoint(
     let shutdown_announced = Arc::new(AtomicBool::new(false));
     let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
     let pending_playback = Arc::new(Mutex::new(HashMap::new()));
+    let shutdown_request_tx: Arc<
+        Mutex<Option<mpsc::Sender<crate::remote_player::ShutdownResponse>>>,
+    > = Arc::new(Mutex::new(None));
 
     let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
     let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
@@ -387,7 +406,9 @@ pub(crate) fn connect_endpoint(
     // TCP-level connect, not these blocking reads (issue #191 fix #5).
     // `stream` itself is kept untouched on this thread for the writer
     // thread spawned below; a clone goes to the worker thread instead.
-    let handshake_stream = stream.try_clone().map_err(|e| e.to_string())?;
+    let handshake_stream = stream
+        .try_clone()
+        .map_err(|e| crate::ctrl::ConnectError::Other(e.to_string()))?;
     let auth_token_owned = auth_token.to_string();
     let (reader, state_event, ctrl_compatibility) = crate::bounded::run_with_hard_bound(
         move || perform_handshake(handshake_stream, &auth_token_owned),
@@ -410,6 +431,7 @@ pub(crate) fn connect_endpoint(
     let pending_playback_r = pending_playback.clone();
     let disconnected_r = disconnected.clone();
     let shutdown_announced_r = shutdown_announced.clone();
+    let shutdown_request_r = shutdown_request_tx.clone();
     let event_tx_r = event_tx;
     std::thread::spawn(move || {
         let mut expected_disconnect = false;
@@ -422,6 +444,24 @@ pub(crate) fn connect_endpoint(
                         log::warn!(target: "remote", "unrecognized event from daemon: {l}");
                         continue;
                     };
+
+                    // Handle shutdown request responses directly (task 5.1).
+                    match &ev {
+                        CtrlEvent::ShutdownAccepted => {
+                            if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
+                                let _ = tx.send(crate::remote_player::ShutdownResponse::Accepted);
+                            }
+                        }
+                        CtrlEvent::ShutdownRejected { reason } => {
+                            if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
+                                let _ = tx.send(crate::remote_player::ShutdownResponse::Rejected {
+                                    reason: reason.clone(),
+                                });
+                            }
+                        }
+                        _ => {}
+                    }
+
                     // Under multi-connection (v5), `Disconnected { TakenOverByEmbyRemote }` is
                     // a notification — the connection stays open. Only set expected_disconnect
                     // for events that actually close the connection. Exhaustive match ensures
@@ -448,6 +488,12 @@ pub(crate) fn connect_endpoint(
         }
         disconnected_r.store(true, Ordering::SeqCst);
         pending_playback_r.lock().unwrap().clear();
+
+        // Resolve any pending shutdown request with Disconnected (task 5.1).
+        if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
+            let _ = tx.send(crate::remote_player::ShutdownResponse::Disconnected);
+        }
+
         log::info!(target: "remote", "daemon disconnected");
         if !expected_disconnect {
             let _ = event_tx_r.send(PlayerEvent::Stopped {
@@ -506,6 +552,7 @@ pub(crate) fn connect_endpoint(
             control_stream: Arc::new(Mutex::new(Some(disconnect_stream))),
             next_playback_id,
             pending_playback,
+            shutdown_request_tx: Arc::new(Mutex::new(None)),
         },
         event_rx,
     ))

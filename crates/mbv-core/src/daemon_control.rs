@@ -1,3 +1,42 @@
+/// Builds a `QueueState` from the daemon's authoritative queue state and player status.
+/// This is used for coordinated shutdown to persist the daemon's view of the queue,
+/// not the client's potentially stale shadow (task 4.1).
+fn project_queue_state(
+    items: &[MediaItem],
+    cursor: usize,
+    source: &crate::config::QueueSource,
+    player_status: &crate::player::PlayerStatus,
+) -> crate::config::QueueState {
+    use std::collections::HashMap;
+
+    let mut positions = HashMap::new();
+
+    // Task 4.2: Incorporate the latest valid position for the active non-audio item.
+    // Only persist positions for non-audio items (video requires resume).
+    if player_status.active && player_status.video_height > 0 {
+        if let Some(item) = items.get(player_status.current_idx) {
+            // Use last_valid_pos if available, otherwise position_ticks.
+            // last_valid_pos is updated as playback progresses and represents
+            // the most recent known-good position.
+            let position = if player_status.last_valid_pos > 0 {
+                player_status.last_valid_pos
+            } else {
+                player_status.position_ticks
+            };
+            positions.insert(item.id.clone(), position);
+        }
+    }
+
+    crate::config::QueueState {
+        source: source.clone(),
+        items: items.to_vec(),
+        cursor,
+        last_played_item_id: None,    // Not tracked by daemon event loop
+        last_played_completed: false, // Not tracked by daemon event loop
+        positions,
+    }
+}
+
 /// Applies a freshly-decided queue snapshot to the cross-thread shared state
 /// (used to seed newly-connecting ctrl-socket clients) and broadcasts it to
 /// every already-connected client. Centralizes what `CtrlState`'s fields
@@ -43,6 +82,55 @@ fn handle_ctrl(
     mut resolved_items: Option<Result<Vec<MediaItem>, String>>,
     _merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
+    // Handle lifecycle requests before the authority transition (task 3.4).
+    // RequestShutdown must be authorized by transport before any state changes.
+    if matches!(cmd, CtrlCmd::RequestShutdown) {
+        let is_local = ctrl_clients.lock().unwrap().is_local_client(_client_id);
+        if !is_local {
+            send_to(
+                request.reply_tx,
+                &CtrlEvent::ShutdownRejected {
+                    reason: "lifecycle requests require local transport".to_string(),
+                },
+            );
+            return;
+        }
+
+        // Task 4.1-4.3: Build authoritative queue state for persistence.
+        let player_status = player.status.lock().unwrap().clone();
+        let mut queue_state = project_queue_state(items, *cursor, source, &player_status);
+
+        // Task 4.3: Preserve existing non-empty snapshot when authoritative queue is empty.
+        // This matches the no-clear-on-quit rule: quitting is not an explicit Clear Queue action.
+        if queue_state.items.is_empty() {
+            if let Some(existing) = crate::config::load_queue_state() {
+                if !existing.items.is_empty() {
+                    queue_state = existing;
+                }
+            }
+        }
+
+        // Task 4.4-4.5: Persist before acceptance. On failure, reject and return.
+        if let Err(e) = crate::config::save_queue_state(&queue_state) {
+            log::error!(
+                target: "daemon",
+                "coordinated shutdown rejected: queue persistence failed: {e}"
+            );
+            send_to(
+                request.reply_tx,
+                &CtrlEvent::ShutdownRejected {
+                    reason: format!("queue persistence failed: {e}"),
+                },
+            );
+            return;
+        }
+
+        // Task 4.6: Send acceptance, then enqueue shutdown through merged event channel.
+        send_to(request.reply_tx, &CtrlEvent::ShutdownAccepted);
+        let _ = _merged_tx.send(DaemonEvent::Shutdown);
+        return;
+    }
+
     // Authority returns to Ctrl on the next ctrl command (not on connect).
     {
         let mut clients = ctrl_clients.lock().unwrap();
@@ -391,5 +479,8 @@ fn handle_ctrl(
                 }
             }
         }
+        // RequestShutdown is handled before the authority transition above,
+        // so this arm is unreachable in normal flow.
+        CtrlCmd::RequestShutdown => unreachable!(),
     }
 }

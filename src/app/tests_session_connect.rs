@@ -45,7 +45,7 @@ fn f3_direct_upgrade_with_empty_device_name_remains_disconnectable() {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        String,
+        mbv_core::ctrl::ConnectError,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(
             make_items(1),
@@ -85,9 +85,9 @@ fn connect_to_session_preserves_direct_upgrade_failure_status_after_fallback() {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        String,
+        mbv_core::ctrl::ConnectError,
     > {
-        Err("incompatible daemon protocol version: peer=1 local=3".to_string())
+        Err(mbv_core::ctrl::ConnectError::Other("incompatible daemon protocol version: peer=1 local=3".to_string()))
     }
 
     *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_failure);
@@ -129,7 +129,7 @@ fn connect_to_session_tears_down_an_active_library_route_via_restore_local_mode(
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        String,
+        mbv_core::ctrl::ConnectError,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(
             make_items(1),
@@ -182,7 +182,7 @@ fn connect_to_session_is_a_no_op_teardown_when_no_library_route_is_active() {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        String,
+        mbv_core::ctrl::ConnectError,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(
             make_items(1),

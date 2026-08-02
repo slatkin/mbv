@@ -391,7 +391,7 @@ fn announced_shutdown_of_current_remote_target_does_not_quit_local_daemon_home()
             mbv_core::remote_player::RemotePlayer,
             std::sync::mpsc::Receiver<PlayerEvent>,
         ),
-        String,
+        mbv_core::ctrl::ConnectError,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0))
     }
@@ -637,7 +637,7 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
 #[test]
 fn restore_local_mode_reconnects_local_daemon_when_no_suspended_local_player_exists() {
     // Regression guard: an `App::new_remote(..., is_local_daemon = true)`
-    // instance (local-daemon home, e.g. `mbv -d` auto-detected at startup)
+    // instance (local-daemon home, e.g. `stay_alive` auto-detected at startup)
     // has no genuinely local in-process `Player` to suspend when it routes
     // away via `switch_to_library_route`'s already-remote branch --
     // `suspended_local` stays `None` for its whole life. Before this fix,
@@ -653,7 +653,7 @@ fn restore_local_mode_reconnects_local_daemon_when_no_suspended_local_player_exi
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        String,
+        mbv_core::ctrl::ConnectError,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(
             make_items(1),
@@ -692,9 +692,11 @@ fn restore_local_mode_flashes_combined_status_when_local_daemon_reconnect_fails(
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        String,
+        mbv_core::ctrl::ConnectError,
     > {
-        Err("connection refused".to_string())
+        Err(mbv_core::ctrl::ConnectError::Other(
+            "test: connect failure".to_string(),
+        ))
     }
 
     let mut app = make_local_daemon_app_stub(make_items(2));
