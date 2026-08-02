@@ -168,8 +168,7 @@ impl App {
         if lib.nav_stack.len() != 1 {
             return false;
         }
-        lib.library_total
-            .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD)
+        lib.library_total.is_some()
     }
 
     /// Selects letter-range pill `pill_index` for `lib_idx`'s top level (a

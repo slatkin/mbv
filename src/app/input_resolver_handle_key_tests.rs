@@ -433,7 +433,7 @@ fn power_enter_on_series_search_result_starts_selection_without_drilldown() {
             total_count: 0,
             cursor: 0,
             scroll: 0,
-            item_types: None,
+            item_types: Some("Series".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),

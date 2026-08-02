@@ -160,6 +160,7 @@ impl App {
             let (item_types, unplayed_only, sort_by, sort_order) =
                 match self.libs[idx].library.collection_type.as_str() {
                     "movies" => (Some("Movie".to_string()), false, "SortName", "Ascending"),
+                    "tvshows" => (Some("Series".to_string()), false, "SortName", "Ascending"),
                     _ if is_feed_view => {
                         (Some("Video".to_string()), true, "DateCreated", "Ascending")
                     }

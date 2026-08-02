@@ -1,5 +1,7 @@
 use super::test_helpers::*;
 use super::*;
+use crate::app::tests::{make_app_stub, make_item};
+use crate::app::{BrowseLevel, LibraryTab};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
@@ -64,12 +66,9 @@ fn letter_filter_default_is_the_first_bucket() {
 }
 
 #[test]
-fn letter_pills_show_only_when_library_total_exceeds_threshold() {
-    let mut small = make_power_large_movie_library_app(LIBRARY_PILL_THRESHOLD);
-    assert!(
-        !small.should_show_letter_pills(0),
-        "exactly the threshold must not qualify"
-    );
+fn letter_pills_show_for_any_captured_library_total() {
+    let mut small = make_power_large_movie_library_app(5);
+    assert!(small.should_show_letter_pills(0));
 
     let mut large = make_power_large_movie_library_app(LIBRARY_PILL_THRESHOLD + 1);
     assert!(large.should_show_letter_pills(0));
@@ -120,5 +119,132 @@ fn letter_pills_show_only_when_library_total_exceeds_threshold() {
         })
         .unwrap();
     let out2 = buffer_to_string(&term2);
-    assert!(!out2.contains("A\u{2013}C"));
+    assert!(
+        out2.contains("A\u{2013}C"),
+        "any captured total shows pills:\n{out2}"
+    );
+}
+
+#[test]
+fn tv_letter_pills_render_for_large_tv_library() {
+    let mut large = make_power_large_tv_library_app(LIBRARY_PILL_THRESHOLD + 1);
+
+    let backend = TestBackend::new(60, 20);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = LayoutMain::default();
+    term.draw(|f| {
+        large.render_main(
+            f,
+            Rect::new(0, 0, 60, 20),
+            &mut layout,
+            &mut crate::app::layout::LayoutPlayback::default(),
+            &mut Rect::default(),
+            &mut Rect::default(),
+            0,
+            false,
+            &None,
+        );
+    })
+    .unwrap();
+    let out = buffer_to_string(&term);
+    assert!(
+        out.contains("A\u{2013}C"),
+        "expected A–C pill on large TV library:\n{out}"
+    );
+    assert!(
+        !layout.selector_tabs.is_empty(),
+        "expected TV pill hitboxes for click dispatch"
+    );
+}
+
+#[test]
+fn tv_letter_pills_render_also_for_small_tv_library() {
+    let mut small = make_power_large_tv_library_app(5);
+
+    let backend = TestBackend::new(60, 20);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = LayoutMain::default();
+    term.draw(|f| {
+        small.render_main(
+            f,
+            Rect::new(0, 0, 60, 20),
+            &mut layout,
+            &mut crate::app::layout::LayoutPlayback::default(),
+            &mut Rect::default(),
+            &mut Rect::default(),
+            0,
+            false,
+            &None,
+        );
+    })
+    .unwrap();
+    let out = buffer_to_string(&term);
+    assert!(
+        out.contains("A\u{2013}C"),
+        "TV pill row appears for any captured total:\n{out}"
+    );
+}
+
+#[test]
+fn tv_series_list_computes_sorted_indices_when_above_threshold() {
+    let mut app = make_app_stub();
+    app.library_tab = 1;
+
+    let mut library = make_item("Shows", "CollectionFolder");
+    library.id = "lib-shows".into();
+    library.is_folder = true;
+    library.collection_type = "tvshows".into();
+
+    let series: Vec<_> = (0..55)
+        .map(|i| {
+            let letter = (b'A' + (i % 26) as u8) as char;
+            let name = format!("{letter}alpha Series {i:02}");
+            let mut s = make_item(&name, "Series");
+            s.id = format!("series-{i}");
+            s
+        })
+        .collect();
+
+    app.libs.push(LibraryTab {
+        library,
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-shows".into(),
+            title: "Shows".into(),
+            items: series,
+            total_count: 55,
+            cursor: 0,
+            scroll: 0,
+            item_types: Some("Series".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+        }],
+        search: None,
+        feed_home_video: None,
+        album_track_focus: None,
+        artist_header_focus: None,
+        series_selection: None,
+        series_season_cursor: 0,
+        library_total: Some(55),
+    });
+
+    let mut layout = LayoutMain::default();
+    let _ = render_power_library_to_terminal(&mut app, &mut layout);
+
+    assert!(
+        !layout.left_sorted_indices.is_empty(),
+        "sorted indices should be computed for letter-grouped TV list"
+    );
+    // The first sorted index should map to the alphabetically-first A-series item
+    let first_idx = layout.left_sorted_indices[0];
+    assert!(
+        app.libs[0].nav_stack[0].items[first_idx]
+            .name
+            .starts_with('A'),
+        "first sorted item should start with A, got: {}",
+        app.libs[0].nav_stack[0].items[first_idx].name,
+    );
 }

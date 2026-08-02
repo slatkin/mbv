@@ -374,3 +374,41 @@ pub fn make_power_large_movie_library_app(library_total: usize) -> App {
 
     app
 }
+
+pub fn make_power_large_tv_library_app(library_total: usize) -> App {
+    let mut app = make_app_stub();
+    app.library_tab = 1;
+
+    let mut library = make_item("Shows", "CollectionFolder");
+    library.id = "lib-shows".into();
+    library.is_folder = true;
+    library.collection_type = "tvshows".into();
+
+    app.libs.push(LibraryTab {
+        library,
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-shows".into(),
+            title: "Shows".into(),
+            items: Vec::new(),
+            total_count: 0,
+            cursor: 0,
+            scroll: 0,
+            item_types: Some("Series".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+        }],
+        search: None,
+        feed_home_video: None,
+        album_track_focus: None,
+        artist_header_focus: None,
+        series_selection: None,
+        series_season_cursor: 0,
+        library_total: Some(library_total),
+    });
+
+    app
+}

@@ -87,6 +87,8 @@ impl App {
             rows.push(DisplayRow::Empty);
         }
 
+        let content_h = rows.len().max(1) as u16;
+
         let visible_flat_indices: Vec<usize> = rows
             .iter()
             .filter_map(|row| match row {
@@ -243,13 +245,19 @@ impl App {
         let list_area = if two_column && hero_data.is_some() {
             const RIGHT_COLUMN_INNER_INSET: u16 = 2;
             green_panel_full = Some(list_area);
+            let panel_h = (content_h + 1).min(list_area.height);
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::BG_GREEN)),
-                list_area,
+                Rect {
+                    x: list_area.x,
+                    y: list_area.y,
+                    width: list_area.width,
+                    height: panel_h,
+                },
             );
             let interior_area = Rect {
                 y: list_area.y.saturating_add(1),
-                height: list_area.height.saturating_sub(2),
+                height: panel_h.saturating_sub(2),
                 ..list_area
             };
             Rect {
@@ -282,7 +290,6 @@ impl App {
             self.render_keep_watching_hero_meta(f, *meta_area, item, meta_layout, focused);
         }
 
-        let content_h = rows.len().max(1) as u16;
         let wide_home_panel_unfocused = two_column && hero_data.is_some() && !focused;
         let needs_scrollbar = content_h > list_area.height;
         let list_w = super::power_content_width(list_area.width, needs_scrollbar) as u16;
