@@ -29,6 +29,7 @@ fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
             "Title",
             palette::BG_GREEN,
             &mut layout,
+            palette::PLAYBACK_PANEL_BG,
         );
     })
     .unwrap();
@@ -56,6 +57,7 @@ fn playback_title_is_rendered_with_original_casing() {
             "Mixed Title",
             palette::BG_GREEN,
             &mut layout,
+            palette::PLAYBACK_PANEL_BG,
         );
     })
     .unwrap();
@@ -89,6 +91,7 @@ fn playback_episode_title_colors_show_yellow_and_episode_green() {
             "Show Name Episode Name",
             palette::PLAYBACK_CONTENT_FG,
             &mut layout,
+            palette::PLAYBACK_PANEL_BG,
         );
     })
     .unwrap();
@@ -121,6 +124,7 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
             "Title",
             palette::BG_GREEN,
             &mut layout,
+            palette::PLAYBACK_PANEL_BG,
         );
     })
     .unwrap();

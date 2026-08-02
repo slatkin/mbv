@@ -23,6 +23,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         layout: &mut LayoutPlayback,
+        panel_bg: Color,
     ) {
         if area.height == 0 || area.width == 0 {
             layout.seekbar_area = Rect::default();
@@ -49,8 +50,7 @@ impl App {
             ),
         ];
         f.render_widget(
-            Paragraph::new(Line::from(spans))
-                .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+            Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
             area,
         );
     }

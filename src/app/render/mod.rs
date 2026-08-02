@@ -337,6 +337,11 @@ impl App {
                 width: right_area.width,
                 height: player_h,
             };
+            let playback_panel_bg = if queue_focused {
+                palette::BG_GREEN
+            } else {
+                palette::PLAYBACK_PANEL_BG
+            };
             self.render_player_panel(
                 f,
                 player_area,
@@ -344,6 +349,7 @@ impl App {
                 player_h,
                 show_controls,
                 now_playing_title,
+                playback_panel_bg,
             );
         }
 

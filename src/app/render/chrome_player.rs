@@ -29,6 +29,7 @@ impl App {
         player_h: u16,
         show_controls: bool,
         now_playing_title: &Option<(String, Color)>,
+        panel_bg: Color,
     ) {
         if player_h == 0 {
             return;
@@ -36,19 +37,18 @@ impl App {
         // Seekbar row (always present when player_h > 0).
         let seek_area = Rect { height: 1, ..area };
         if show_controls {
-            self.render_seekbar(f, seek_area, layout);
+            self.render_seekbar(f, seek_area, layout, panel_bg);
         } else {
             layout.seekbar_area = Rect::default();
             let bar = "\u{2594}".repeat(seek_area.width as usize);
             f.render_widget(
                 Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK)))
-                    .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                    .style(Style::default().bg(panel_bg)),
                 seek_area,
             );
         }
         // Title row (when panel is expanded).
         if player_h >= 2 {
-            const H_PAD: u16 = 2;
             let title_row_area = Rect {
                 y: area.y + 1,
                 height: 1,
@@ -56,25 +56,17 @@ impl App {
             };
             f.render_widget(
                 Paragraph::new(Span::raw(" ".repeat(title_row_area.width as usize)))
-                    .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                    .style(Style::default().bg(panel_bg)),
                 title_row_area,
             );
-            let title_area = if area.width > 2 * H_PAD {
-                Rect {
-                    x: area.x + H_PAD,
-                    width: area.width.saturating_sub(2 * H_PAD),
-                    y: area.y + 1,
-                    height: 1,
-                }
-            } else {
-                Rect {
-                    y: area.y + 1,
-                    height: 1,
-                    ..area
-                }
+            let title_area = Rect {
+                x: area.x,
+                width: area.width.saturating_sub(1),
+                y: area.y + 1,
+                height: 1,
             };
             if let Some((ref title, color)) = now_playing_title {
-                self.render_title_row(f, title_area, title, *color, layout);
+                self.render_title_row(f, title_area, title, *color, layout, panel_bg);
             } else if !show_controls {
                 // Idle state: show feed item title if available
                 if let Some(ref idle_feed) = self.idle_feed {
@@ -85,7 +77,7 @@ impl App {
                                 truncated_title,
                                 Style::default().fg(palette::AQUA),
                             ))
-                            .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                            .style(Style::default().bg(panel_bg)),
                             title_area,
                         );
                     }
@@ -101,7 +93,7 @@ impl App {
             };
             f.render_widget(
                 Paragraph::new(Span::raw(" ".repeat(blank_area.width as usize)))
-                    .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                    .style(Style::default().bg(panel_bg)),
                 blank_area,
             );
         }
@@ -136,6 +128,7 @@ impl App {
         title: &str,
         title_color: Color,
         layout: &mut LayoutPlayback,
+        panel_bg: Color,
     ) {
         if area.height == 0 || area.width == 0 {
             layout.play_pause_area = Rect::default();
@@ -275,7 +268,6 @@ impl App {
 
         left.push(Span::raw(next_gap));
 
-        let sep_text = " \u{2502} ";
         let time_text = format!("{pos_str} / {dur_str}");
         let post_time_gap = "  ";
         let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
@@ -284,17 +276,11 @@ impl App {
             + stop_gap.width()
             + next_w as usize
             + next_gap.width()
-            + sep_text.width()
             + time_text.width()
             + post_time_gap.width()
             + right_w as usize;
         let title_w = (area.width as usize).saturating_sub(fixed_w);
         left.extend(self.playback_title_spans(title, title_color, title_w));
-
-        left.push(Span::styled(
-            sep_text,
-            Style::default().fg(palette::OVERLAY),
-        ));
 
         left.push(Span::styled(
             time_text,
@@ -310,8 +296,7 @@ impl App {
         spans.push(Span::raw(" ".repeat(gap)));
         spans.extend(right);
         f.render_widget(
-            Paragraph::new(Line::from(spans))
-                .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+            Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
             area,
         );
     }
