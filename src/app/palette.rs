@@ -24,6 +24,7 @@ pub const QUEUE_COLUMN_FOCUSED_BG: Color = BG_GREEN;
 pub const DARK_BG: Color = Color::Rgb(30, 35, 38); // tab bar (Home, etc) background (#1e2326)
 pub const LIBRARY_SIDE_BG: Color = Color::Rgb(45, 53, 59); // library-side background, reused for the queue column's unfocused/dim state (#2d353b)
 pub const PLAYBACK_PANEL_BG: Color = Color::Rgb(51, 60, 67); // now-playing panel background (#333c43)
+pub const PLAYBACK_INDICATOR_BG: Color = Color::Rgb(45, 53, 59); // indicator block background (#2d353b)
 pub const PLAYBACK_CONTENT_FG: Color = Color::Rgb(131, 192, 146); // playback title/codec value (#83c092)
 pub const PLAYBACK_META_FG: Color = Color::Rgb(133, 146, 137); // playback metadata captions/time (#859289)
 pub const TOAST_BG: Color = RED; // toast background (#e57e80)

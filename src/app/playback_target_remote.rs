@@ -170,6 +170,11 @@ impl RemotePlaybackTarget {
                 .unwrap_or(&remote.media_info.video_label)
                 .to_string()
         };
+        let res_label = res_label
+            .strip_suffix('p')
+            .or_else(|| res_label.strip_suffix('P'))
+            .unwrap_or(&res_label)
+            .to_string();
         Some(IndicatorData {
             res_label: res_label.clone(),
             res_dim: res_label == "---",

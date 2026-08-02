@@ -163,7 +163,7 @@ impl LocalPlaybackTarget {
                 pst.audio_codec.to_uppercase()
             }
         } else {
-            format!("{}p", res_h)
+            res_h.to_string()
         };
         let res_dim = res_str == "--";
         let raw_lang = pst.audio_lang.to_lowercase();

@@ -247,7 +247,7 @@ fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
     out
 }
 
-// --- Labeled key·value: RES 720p  AUD en  SUB CC -------------------------
+// --- Labeled key·value: RES 720 ⧸ AUD en ⧸ SUB CC --------------------------
 fn keyval_group(key: &str, value: &str, color: Color, out: &mut Vec<Span<'static>>) {
     out.push(Span::styled(
         format!("{key} "),
@@ -261,9 +261,9 @@ fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     let res_key = if d.audio_only { "CODEC" } else { "RES" };
     keyval_group(res_key, &d.res_label, d.res_color(), &mut out);
     if !d.audio_only {
-        out.push(Span::raw("  "));
+        out.push(Span::styled(" ⧸ ", Style::default().fg(palette::OVERLAY)));
         keyval_group("AUD", &d.audio_label, d.audio_color(), &mut out);
-        out.push(Span::raw("  "));
+        out.push(Span::styled(" ⧸ ", Style::default().fg(palette::OVERLAY)));
         let sub_val = if d.sub_label.is_empty() {
             "\u{2014}".to_string()
         } else {

@@ -183,7 +183,7 @@ impl App {
             palette::MUTED
         };
         let mut codec_value_next = false;
-        let right = self
+        let mut right = self
             .build_status_indicator_spans()
             .unwrap_or_default()
             .into_iter()
@@ -213,7 +213,23 @@ impl App {
                     span
                 }
             })
+            .map(|span| {
+                Span::styled(
+                    span.content.to_string(),
+                    span.style.bg(palette::PLAYBACK_INDICATOR_BG),
+                )
+            })
             .collect::<Vec<_>>();
+        if !right.is_empty() {
+            right.insert(
+                0,
+                Span::styled(" ", Style::default().bg(palette::PLAYBACK_INDICATOR_BG)),
+            );
+            right.push(Span::styled(
+                " ",
+                Style::default().bg(palette::PLAYBACK_INDICATOR_BG),
+            ));
+        }
 
         // Left: glyph  stop  next  title  │  elapsed / total
         // A running `x` cursor tracks where each clickable glyph lands in the
@@ -348,12 +364,11 @@ impl App {
             if remaining == 0 {
                 break;
             }
-            let uppercase = text.to_uppercase();
-            let clipped = trunc_str(&uppercase, remaining);
+            let clipped = trunc_str(&text, remaining);
             let width = clipped.width();
             spans.push(Span::styled(clipped, Style::default().fg(color)));
             remaining = remaining.saturating_sub(width);
-            if width < uppercase.width() {
+            if width < text.width() {
                 break;
             }
         }

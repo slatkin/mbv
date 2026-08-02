@@ -42,7 +42,7 @@ fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
 }
 
 #[test]
-fn playback_title_is_rendered_in_uppercase() {
+fn playback_title_is_rendered_with_original_casing() {
     let mut app = make_app_stub();
     app.use_nerd_fonts = false;
 
@@ -62,7 +62,7 @@ fn playback_title_is_rendered_in_uppercase() {
 
     let output = buffer_to_string(&term);
     let line = output.lines().next().unwrap();
-    assert!(line.contains("MIXED TITLE"));
+    assert!(line.contains("Mixed Title"));
 }
 
 #[test]
