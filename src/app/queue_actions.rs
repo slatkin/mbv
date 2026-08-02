@@ -269,7 +269,7 @@ impl App {
                     self.replace_direct_remote_queue(Vec::new(), 0);
                 } else if self.queue_scope_is_playback(scope) {
                     self.player.stop();
-                    if self.is_local_daemon {
+                    if self.is_local_daemon() {
                         self.player.send_command(PlayerCommand::ReplaceQueue {
                             items: Vec::new(),
                             start_idx: 0,
@@ -380,7 +380,7 @@ impl App {
     /// a stale disk snapshot on every new attach, and is simply redundant
     /// in the cold case.
     pub(super) fn maybe_restore_queue_state(&mut self) {
-        if self.is_local_daemon {
+        if self.is_local_daemon() {
             return;
         }
         self.restore_queue_state();

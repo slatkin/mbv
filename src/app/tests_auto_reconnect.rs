@@ -182,7 +182,12 @@ fn new_remote_restores_a_persisted_route_when_attached_to_the_local_daemon() {
     let client = mbv_core::api::EmbyClient::new(config);
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
 
-    let app = App::new_remote(client, remote, player_rx, true);
+    let app = App::new_remote(
+        client,
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Local,
+    );
 
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
     assert_eq!(app.active_route.as_deref(), Some("music"));
@@ -212,7 +217,12 @@ fn new_remote_does_not_auto_reconnect_for_an_explicit_remote_daemon() {
     let client = mbv_core::api::EmbyClient::new(config);
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
 
-    let app = App::new_remote(client, remote, player_rx, false);
+    let app = App::new_remote(
+        client,
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
 
     assert!(app.active_route.is_none());
 }

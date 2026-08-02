@@ -92,7 +92,12 @@ fn teardown_persists_direct_remote_when_auto_reconnect_enabled() {
     let sess = make_session("living-room-mbv", "mbv");
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
 
-    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
+    app.switch_to_direct_remote(
+        &sess,
+        remote,
+        remote_rx,
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
     app.teardown(Duration::from_secs(1));
 
     assert_eq!(
@@ -149,7 +154,7 @@ fn teardown_persists_a_reconnected_target_for_a_local_daemon_launch_that_moved_r
     // Regression guard for design.md's Decision 2 walk-through: a client
     // launched attached to the local daemon (`home_is_local_daemon = true`)
     // that has since reconnected to a genuinely remote target
-    // (`is_local_daemon` flipped to `false` at runtime) must still have
+    // (`player_endpoint` set to a non-local endpoint) must still have
     // that connection persisted at teardown -- the old gate, keyed on the
     // mutable `is_local_daemon`, would have wrongly skipped this.
     let _guard = crate::config::TestStateDirGuard::new();
@@ -157,7 +162,9 @@ fn teardown_persists_a_reconnected_target_for_a_local_daemon_launch_that_moved_r
     app.client.lock().unwrap().config.auto_reconnect = true;
     app.launched_as_remote = true;
     app.home_is_local_daemon = true;
-    app.is_local_daemon = false;
+    app.player_endpoint = Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
+        "127.0.0.1:0".parse().unwrap(),
+    ));
     app.active_route = Some("music".to_string());
 
     app.teardown(Duration::from_secs(1));
@@ -186,7 +193,9 @@ fn teardown_skips_persistence_for_an_explicit_remote_daemon_launch() {
     app.client.lock().unwrap().config.auto_reconnect = true;
     app.launched_as_remote = true;
     app.home_is_local_daemon = false;
-    app.is_local_daemon = false;
+    app.player_endpoint = Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
+        "127.0.0.1:0".parse().unwrap(),
+    ));
     app.active_route = None;
 
     app.teardown(Duration::from_secs(1));

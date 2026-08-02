@@ -275,7 +275,12 @@ mod tests {
         remote_items: Vec<mbv_core::api::MediaItem>,
     ) -> App {
         let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-        let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
+        let mut app = App::new_remote(
+            EmbyClient::new(Config::default()),
+            remote,
+            player_rx,
+            mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        );
         app.player_tab.set_items(local_items, 0);
         app
     }

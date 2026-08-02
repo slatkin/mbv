@@ -384,7 +384,7 @@ fn clearing_a_local_daemon_queue_replaces_the_daemon_queue_with_empty() {
         mbv_core::api::EmbyClient::new(crate::config::Config::default()),
         remote,
         player_rx,
-        true,
+        mbv_core::remote_player::DaemonEndpoint::Local,
     );
 
     app.execute_pending_queue_action(PendingQueueAction::ClearQueue);

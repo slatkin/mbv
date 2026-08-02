@@ -300,7 +300,7 @@ pub(crate) fn make_app_stub() -> App {
         image_protocol_enabled: false,
         library_position_state: crate::config::LibraryPositionState::default(),
         queue_scope: QueueScope::Local,
-        is_local_daemon: false,
+        player_endpoint: None,
         home_is_local_daemon: false,
         idle_feed: None,
     }
@@ -407,7 +407,12 @@ pub(crate) fn make_remote_app_stub(
     use mbv_core::api::EmbyClient;
 
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
+    let mut app = App::new_remote(
+        EmbyClient::new(Config::default()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
     app.player_tab.items = local_items;
     app.player_tab.queue_cursor = 0;
     app
@@ -422,7 +427,12 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
 
     let (remote, player_rx, cmd_rx) =
         mbv_core::remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
-    let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
+    let mut app = App::new_remote(
+        EmbyClient::new(Config::default()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
     app.player_tab.items = local_items;
     app.player_tab.queue_cursor = 0;
     (app, cmd_rx)
@@ -433,7 +443,12 @@ pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<MediaItem>) -> App {
     use mbv_core::api::EmbyClient;
 
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, true)
+    App::new_remote(
+        EmbyClient::new(Config::default()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Local,
+    )
 }
 
 // ── cursor preservation during home refresh ──────────────────────────────

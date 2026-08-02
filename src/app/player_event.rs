@@ -61,7 +61,7 @@ impl App {
                     // A client of a local daemon can offer to restart it; a
                     // client of a genuinely remote daemon cannot, and keeps
                     // today's silent-fallback behavior (task 7.2).
-                    if self.is_local_daemon {
+                    if self.is_local_daemon() {
                         self.raise_daemon_lost_modal();
                     } else {
                         self.restore_local_mode("Daemon disconnected — returned to local mode");
@@ -428,9 +428,8 @@ impl App {
             // local-daemon client prints one line and exits cleanly; a
             // client of a genuinely remote daemon keeps today's behavior.
             PlayerEvent::DaemonShutdownAnnounced => {
-                if self.is_local_daemon {
-                    self.pending_exit_message =
-                        Some("mbv: the local daemon was stopped — exiting.".to_string());
+                if self.is_local_daemon() {
+                    Some("mbv: the local daemon was stopped — exiting.".to_string());
                     QUIT_REQUESTED.store(true, Ordering::Relaxed);
                 } else {
                     self.restore_local_mode("Daemon disconnected — returned to local mode");

@@ -200,7 +200,7 @@ impl App {
                 };
                 match self.try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
-                        self.switch_to_library_route(&name, remote, remote_rx, endpoint.is_local())
+                        self.switch_to_library_route(&name, remote, remote_rx, &endpoint)
                     }
                     Err(message) => self.flash_status_high(message),
                 }
@@ -251,14 +251,10 @@ impl App {
         sess: &mbv_core::api::SessionInfo,
         remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
-        is_local: bool,
+        endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) {
         self.stop_visualizer_worker();
-        // `is_local_daemon` must track the *current* player target, not
-        // just the app's launch-time attachment, or the visualizer gate
-        // (which reads it directly) keeps capturing this machine's system
-        // audio after swapping to a genuinely different remote target.
-        self.is_local_daemon = is_local;
+        self.player_endpoint = Some(endpoint.clone());
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
@@ -291,6 +287,7 @@ impl App {
             self.player = PlayerProxy::remote(remote, always_play_next);
             self.player_rx = remote_rx;
         }
+        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
 
         if let Some(handle) = &self.mpris {
             let disconnected = mpris_remote.disconnected_flag();
@@ -343,14 +340,10 @@ impl App {
         library_name: &str,
         remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
-        is_local: bool,
+        endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) {
         self.stop_visualizer_worker();
-        // See the matching comment in `switch_to_direct_remote`: this must
-        // reflect the route just connected to, not the app's original
-        // attachment, so the visualizer gate doesn't lie after routing away
-        // from (or back to) the local daemon.
-        self.is_local_daemon = is_local;
+        self.player_endpoint = Some(endpoint.clone());
         let previous_route = self.active_route.clone();
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
@@ -382,6 +375,7 @@ impl App {
             self.player = PlayerProxy::remote(remote, always_play_next);
             self.player_rx = remote_rx;
         }
+        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
 
         if let Some(handle) = &self.mpris {
             let disconnected = mpris_remote.disconnected_flag();
@@ -441,6 +435,8 @@ impl App {
             self.player_rx = suspended.player_rx;
             self.ws_rx = suspended.ws_rx;
             self.ws_send_tx = suspended.ws_send_tx;
+            self.player_endpoint = None;
+            debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
             // Mirror `switch_to_direct_remote`'s rebind (#175): the suspended
             // local `Player` is being restored as the ctrl-owning target
             // again, so MPRIS (if registered) must follow it back rather
@@ -487,7 +483,8 @@ impl App {
                             Some(disconnected),
                         );
                     }
-                    self.is_local_daemon = true;
+                    self.player_endpoint = Some(mbv_core::remote_player::DaemonEndpoint::Local);
+                    debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
                     reconnected_local_daemon =
                         Some((initial_items, initial_cursor, has_initial_items));
                 }
@@ -543,7 +540,7 @@ impl App {
             (Some((name, endpoint)), was_routed) => {
                 match self.try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
-                        self.switch_to_library_route(&name, remote, remote_rx, endpoint.is_local());
+                        self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
                     }
                     Err(message) => {
                         log::warn!(
@@ -582,18 +579,18 @@ impl App {
         }
         let mut direct_upgrade_error = None;
         // `player.is_remote()` alone can't gate this: a stay-alive thin
-        // client attached to its own local daemon (`is_local_daemon`) is
+        // client attached to its own local daemon (is_local_daemon()) is
         // already `is_remote() == true` despite never having left home
         // base, which used to skip the direct-upgrade attempt entirely and
         // strand the connection on the plain `AttachedSession` path with no
         // queue management. Only a genuinely different remote target
         // should skip this.
-        if !self.player.is_remote() || self.is_local_daemon {
+        if self.player_owner_is_on_this_machine() {
             if let Some(endpoint) = self.session_direct_endpoint(sess) {
                 let auth_token = self.client.lock().unwrap().token.clone();
                 match self.connect_direct_endpoint(&endpoint, &auth_token) {
                     Ok((remote, remote_rx)) => {
-                        self.switch_to_direct_remote(sess, remote, remote_rx, endpoint.is_local());
+                        self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);
                         return;
                     }
                     Err(e) => {

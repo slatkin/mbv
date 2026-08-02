@@ -56,20 +56,18 @@ pub struct App {
     /// entirely rather than compute (and save) a bogus `None` record that
     /// would wipe out a real record saved by a different `App::new` session.
     pub(super) launched_as_remote: bool,
-    /// `true` only for `App::new_remote` instances whose `is_local_daemon`
-    /// constructor argument was `true` -- a thin client attached to the
-    /// same-machine local daemon (`DaemonEndpoint::Local`), as opposed to a
-    /// genuinely remote/network daemon. Retained from that constructor
-    /// argument (which used to be consumed during construction and
-    /// discarded) so later code can tell "my Player owner is on this
-    /// machine" from "my Player owner is elsewhere".
-    pub(super) is_local_daemon: bool,
-    /// The one-time, launch-time value of `is_local_daemon`: `true` only for
-    /// `App::new_remote` instances whose `is_local_daemon` constructor
-    /// argument was `true`, and never updated afterward -- unlike
-    /// `is_local_daemon` itself, which `switch_to_direct_remote` and
-    /// `switch_to_library_route` update on every route switch to track the
-    /// *current* player target. Kept fixed at its construction-time value so
+    /// The daemon endpoint for the current player target. `None` means an
+    /// in-process player (bare mode). `Some(DaemonEndpoint::Local)` is this
+    /// machine's managed local daemon. `Some(Tcp | Unix)` is a different
+    /// daemon. Replaces the mutable `is_local_daemon` boolean so every
+    /// transition records its source of truth rather than projecting it
+    /// down to a bool that must be manually kept in sync.
+    pub(super) player_endpoint: Option<mbv_core::remote_player::DaemonEndpoint>,
+    /// The one-time, launch-time launch classification: `true` only for
+    /// `App::new_remote` instances constructed for the managed local
+    /// daemon, and never updated afterward. Kept independent of
+    /// `player_endpoint`, which tracks the *current* player target and can
+    /// change at runtime. Kept fixed at its construction-time value so
     /// `restore_local_mode` can tell whether this app's baseline (the state
     /// to return to when a route switch is undone) was a genuinely local
     /// in-process player (nothing to do here) or a connection to the local

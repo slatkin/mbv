@@ -211,7 +211,12 @@ pub fn make_power_remote_queue_app() -> App {
     let local_items = vec![make_item("Local Queue Item", "Movie")];
     let remote_items = vec![make_item("Remote Queue Item", "Movie")];
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
+    let mut app = App::new_remote(
+        EmbyClient::new(Config::default()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
     app.library_tab = 1;
     app.panel_focus = PanelFocus::Queue;
     app.queue_scope = QueueScope::Remote;

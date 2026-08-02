@@ -24,14 +24,14 @@ use mbv_core::{applog, player, remote_player};
 /// never claims `org.mpris.MediaPlayer2.mbv` itself (`on_player_ready` is
 /// wired to a no-op in `crates/mbvd/src/main.rs`), so this client is the
 /// only thing that will ever own the name for a daemon-connected session,
-/// whether the daemon is local (`is_local_daemon`) or genuinely remote.
+/// whether the daemon is local or genuinely remote.
 fn run_remote_app(
     client: EmbyClient,
     remote: remote_player::RemotePlayer,
     player_rx: std::sync::mpsc::Receiver<player::PlayerEvent>,
-    is_local_daemon: bool,
+    endpoint: remote_player::DaemonEndpoint,
 ) {
-    if let Err(e) = App::new_remote(client, remote, player_rx, is_local_daemon).run() {
+    if let Err(e) = App::new_remote(client, remote, player_rx, endpoint).run() {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
@@ -311,7 +311,7 @@ fn main() {
         match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon endpoint connected");
-                run_remote_app(client, remote, player_rx, endpoint.is_local());
+                run_remote_app(client, remote, player_rx, endpoint);
                 return;
             }
             Err(e) => {
@@ -339,7 +339,12 @@ fn main() {
                 &auth_token,
             ) {
                 Ok((remote, player_rx)) => {
-                    run_remote_app(client, remote, player_rx, true);
+                    run_remote_app(
+                        client,
+                        remote,
+                        player_rx,
+                        remote_player::DaemonEndpoint::Local,
+                    );
                 }
                 Err(e) => {
                     eprintln!("mbv: failed to attach to local daemon: {e}");
@@ -385,7 +390,12 @@ fn main() {
                     &auth_token,
                 ) {
                     Ok((remote, player_rx)) => {
-                        run_remote_app(client, remote, player_rx, true);
+                        run_remote_app(
+                            client,
+                            remote,
+                            player_rx,
+                            remote_player::DaemonEndpoint::Local,
+                        );
                         return;
                     }
                     Err(e) => {

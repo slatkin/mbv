@@ -196,7 +196,12 @@ fn remote_status_spans_keeps_direct_upgrade_session_name_after_state_is_cleared(
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
     let sess = crate::app::tests::make_session("music", "mbv");
 
-    app.switch_to_direct_remote(&sess, remote, remote_rx, false);
+    app.switch_to_direct_remote(
+        &sess,
+        remote,
+        remote_rx,
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
     assert!(app.connected_session_id.is_none());
     assert!(app.connected_session_state.is_none());
 
