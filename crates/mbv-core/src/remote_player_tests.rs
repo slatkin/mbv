@@ -649,6 +649,110 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
 }
 
 #[test]
+fn request_shutdown_returns_accepted_once_the_completer_and_reader_thread_share_the_same_arc() {
+    // Before the fix, the RemotePlayer returned by connect_endpoint held a
+    // different Arc<Mutex<Option<Sender<..>>>> than the reader thread wrote
+    // into, so the reader thread's take() could never find the caller's
+    // completer and request_shutdown always returned TimedOut even when the
+    // daemon replied immediately. Drive the real handshake and a real
+    // ShutdownAccepted reply through a real socket to prove they now share
+    // the same Arc.
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let daemon = spawn_test_daemon_up_to_state(listener, |writer| {
+        let mut reader = BufReader::new(writer.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        assert!(
+            line.contains("RequestShutdown"),
+            "expected RequestShutdown, got {line:?}"
+        );
+
+        let accepted = serde_json::to_string(&CtrlEvent::ShutdownAccepted).unwrap();
+        writeln!(writer, "{accepted}").unwrap();
+    });
+
+    let (remote, _event_rx) =
+        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+
+    let response = remote.request_shutdown(Duration::from_secs(2));
+    assert_eq!(response, crate::remote_player::ShutdownResponse::Accepted);
+
+    daemon.join().unwrap();
+}
+
+#[test]
+fn request_shutdown_is_unsupported_and_sends_nothing_when_daemon_lacks_capability() {
+    // The other half of the gate: a daemon that never advertises
+    // lifecycle-shutdown must get Unsupported without ever seeing a
+    // RequestShutdown command on the wire -- that's the whole point of
+    // negotiating the capability instead of sending a command into a
+    // timeout against an old daemon.
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let (received_tx, received_rx) = mpsc::channel::<String>();
+    let daemon = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        let mut reader = BufReader::new(stream);
+
+        let mut hello_info = CtrlHello::current();
+        hello_info
+            .capabilities
+            .retain(|c| c != crate::ctrl::CTRL_CAP_LIFECYCLE_SHUTDOWN);
+        let hello = serde_json::to_string(&CtrlEvent::Hello(hello_info)).unwrap();
+        writeln!(writer, "{hello}").unwrap();
+
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+
+        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
+            status: PlayerStatus::default(),
+            items: Vec::new(),
+            cursor: 0,
+            source: crate::config::QueueSource::Unknown,
+        }))
+        .unwrap();
+        writeln!(writer, "{initial_state}").unwrap();
+
+        // Whatever the client sends next (there should be nothing) is
+        // reported back to the test thread. A closed connection (no
+        // RequestShutdown ever sent) unblocks this read_line with EOF,
+        // i.e. an empty string.
+        let mut next_line = String::new();
+        let _ = reader.read_line(&mut next_line);
+        let _ = received_tx.send(next_line);
+    });
+
+    let (remote, _event_rx) =
+        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+
+    let response = remote.request_shutdown(Duration::from_secs(2));
+    assert_eq!(
+        response,
+        crate::remote_player::ShutdownResponse::Unsupported
+    );
+
+    // Close the connection so the daemon's blocking read_line unblocks with
+    // EOF instead of hanging forever waiting on a line that was never sent.
+    remote.disconnect();
+
+    let line = received_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("daemon thread should observe EOF and report back");
+    assert!(
+        line.is_empty(),
+        "expected no RequestShutdown line to be sent, got {line:?}"
+    );
+
+    daemon.join().unwrap();
+}
+
+#[test]
 fn v3_peer_sends_queue_append_wire_command() {
     let existing = vec![make_media_item("1")];
     let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(existing, 0);

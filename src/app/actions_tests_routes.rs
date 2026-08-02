@@ -290,7 +290,7 @@ fn play_item_swaps_to_library_route_before_replacing_queue() {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(
             make_items(1),

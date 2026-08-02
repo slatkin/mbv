@@ -16,11 +16,10 @@ use std::time::Duration;
 /// spawn/recv_timeout/abandon mechanics only need to be gotten right once,
 /// and so each caller's own timeout logic can be unit-tested directly with a
 /// closure -- no real socket or filesystem state required.
-pub(crate) fn run_with_hard_bound<T, E, F>(f: F, hard_bound: Duration) -> Result<T, E>
+pub(crate) fn run_with_hard_bound<T, F>(f: F, hard_bound: Duration) -> Result<T, String>
 where
     T: Send + 'static,
-    E: Send + 'static + From<String>,
-    F: FnOnce() -> Result<T, E> + Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
 {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -28,10 +27,7 @@ where
     });
     match rx.recv_timeout(hard_bound) {
         Ok(result) => result,
-        Err(_) => Err(E::from(format!(
-            "timed out after {}s",
-            hard_bound.as_secs()
-        ))),
+        Err(_) => Err(format!("timed out after {}s", hard_bound.as_secs())),
     }
 }
 

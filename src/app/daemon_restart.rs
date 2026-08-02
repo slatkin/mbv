@@ -47,12 +47,9 @@ impl App {
         }
 
         let auth_token = self.client.lock().unwrap().token.clone();
-        let endpoint = DaemonEndpoint::Local;
         let (remote, remote_rx) =
-            RemotePlayer::connect_endpoint(&endpoint, &auth_token).map_err(|e| {
-                let msg = e.format_with_endpoint_guidance(&endpoint);
-                format!("failed to attach to local daemon: {msg}")
-            })?;
+            RemotePlayer::connect_endpoint(&DaemonEndpoint::Local, &auth_token)
+                .map_err(|e| format!("failed to attach to local daemon: {e}"))?;
 
         let remote_items = remote.items.lock().unwrap().clone();
         let remote_cursor = remote.status.lock().unwrap().current_idx;

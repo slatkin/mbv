@@ -7,7 +7,7 @@ use crate::api::{EmbyClient, MediaItem};
 use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
-/// Response from a bounded shutdown request (task 5.2).
+/// Response from a bounded shutdown request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ShutdownResponse {
     /// The daemon accepted the request after persisting its queue.
@@ -18,6 +18,8 @@ pub enum ShutdownResponse {
     Disconnected,
     /// The bounded wait timed out without receiving a response.
     TimedOut,
+    /// The peer daemon does not advertise the lifecycle-shutdown capability.
+    Unsupported,
 }
 
 #[derive(Clone)]
@@ -43,7 +45,7 @@ pub struct RemotePlayer {
     pub(crate) control_stream: Arc<Mutex<Option<ControlStream>>>,
     pub(crate) next_playback_id: Arc<std::sync::atomic::AtomicU64>,
     pub(crate) pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
-    /// Completer for a pending shutdown request (task 5.1).
+    /// Completer for a pending shutdown request.
     pub(crate) shutdown_request_tx: Arc<Mutex<Option<mpsc::Sender<ShutdownResponse>>>>,
 }
 
@@ -54,7 +56,7 @@ impl RemotePlayer {
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
         auth_token: &str,
-    ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), crate::ctrl::ConnectError> {
+    ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
         super::remote_player_connect::connect_endpoint(endpoint, auth_token)
     }
 
@@ -85,13 +87,17 @@ impl RemotePlayer {
         self.cmd_tx.send(cmd).is_ok()
     }
 
-    /// Bounded lifecycle shutdown request (task 5.2).
+    /// Bounded lifecycle shutdown request.
     ///
     /// Sends `RequestShutdown` and waits for the daemon's response with a
     /// bounded timeout. Returns `Accepted` only when the daemon has durably
     /// persisted its queue and acknowledged the request; enqueue success
     /// alone is never returned as `Accepted`.
     pub fn request_shutdown(&self, timeout: Duration) -> ShutdownResponse {
+        if !self.supports_lifecycle_shutdown() {
+            return ShutdownResponse::Unsupported;
+        }
+
         let (response_tx, response_rx) = mpsc::channel();
 
         // Register the completer before sending the command so the reader
@@ -108,7 +114,7 @@ impl RemotePlayer {
         }
 
         // Send the request.
-        if !self.cmd_tx.send(CtrlCmd::RequestShutdown).is_ok() {
+        if self.cmd_tx.send(CtrlCmd::RequestShutdown).is_err() {
             // Channel closed; daemon is disconnected.
             let mut guard = self.shutdown_request_tx.lock().unwrap();
             *guard = None;
@@ -270,6 +276,10 @@ impl RemotePlayer {
 
     pub fn supports_queue_append(&self) -> bool {
         self.ctrl_compatibility.supports_queue_append
+    }
+
+    pub fn supports_lifecycle_shutdown(&self) -> bool {
+        self.ctrl_compatibility.supports_lifecycle_shutdown
     }
 
     pub(crate) fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {

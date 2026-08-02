@@ -253,7 +253,7 @@ fn main() {
         return;
     }
 
-    // Task 7.1: reject the legacy `-d` argument before startup side effects.
+    // Reject the legacy `-d` argument before startup side effects.
     // The `-d` flag has been removed; users should enable `stay_alive` in
     // config or the settings overlay instead.
     if has_flag(&args, "-d") {
@@ -336,8 +336,10 @@ fn main() {
             log::info!(target: "startup", "local daemon detected; attaching");
             let client = authenticate_or_login(client, &ui_config);
             let auth_token = client.token.clone();
-            let endpoint = remote_player::DaemonEndpoint::Local;
-            match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
+            match remote_player::RemotePlayer::connect_endpoint(
+                &remote_player::DaemonEndpoint::Local,
+                &auth_token,
+            ) {
                 Ok((remote, player_rx)) => {
                     run_remote_app(
                         client,
@@ -347,8 +349,7 @@ fn main() {
                     );
                 }
                 Err(e) => {
-                    let msg = e.format_with_endpoint_guidance(&endpoint);
-                    eprintln!("mbv: failed to attach to local daemon: {msg}");
+                    eprintln!("mbv: failed to attach to local daemon: {e}");
                     std::process::exit(1);
                 }
             }
@@ -386,8 +387,10 @@ fn main() {
                     std::process::exit(1);
                 }
                 let auth_token = client.token.clone();
-                let endpoint = remote_player::DaemonEndpoint::Local;
-                match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
+                match remote_player::RemotePlayer::connect_endpoint(
+                    &remote_player::DaemonEndpoint::Local,
+                    &auth_token,
+                ) {
                     Ok((remote, player_rx)) => {
                         run_remote_app(
                             client,
@@ -398,8 +401,7 @@ fn main() {
                         return;
                     }
                     Err(e) => {
-                        let msg = e.format_with_endpoint_guidance(&endpoint);
-                        eprintln!("mbv: failed to attach to local daemon: {msg}");
+                        eprintln!("mbv: failed to attach to local daemon: {e}");
                         std::process::exit(1);
                     }
                 }
@@ -458,7 +460,7 @@ mod tests {
 
     #[test]
     fn has_flag_detects_legacy_d_flag() {
-        // Task 7.6: prove that the `-d` flag is detected so it can be rejected
+        // Prove that the `-d` flag is detected so it can be rejected
         // with migration guidance before startup side effects.
         assert!(has_flag(&["-d".into()], "-d"));
         assert!(has_flag(&["-d".into(), "-q".into()], "-d"));

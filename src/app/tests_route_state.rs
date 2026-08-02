@@ -391,7 +391,7 @@ fn announced_shutdown_of_current_remote_target_does_not_quit_local_daemon_home()
             mbv_core::remote_player::RemotePlayer,
             std::sync::mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0))
     }
@@ -653,7 +653,7 @@ fn restore_local_mode_reconnects_local_daemon_when_no_suspended_local_player_exi
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(
             make_items(1),
@@ -692,11 +692,9 @@ fn restore_local_mode_flashes_combined_status_when_local_daemon_reconnect_fails(
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
-        Err(mbv_core::ctrl::ConnectError::Other(
-            "test: connect failure".to_string(),
-        ))
+        Err("test: connect failure".to_string())
     }
 
     let mut app = make_local_daemon_app_stub(make_items(2));

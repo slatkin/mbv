@@ -119,7 +119,7 @@ type DirectConnectFn = fn(
         mbv_core::remote_player::RemotePlayer,
         mpsc::Receiver<PlayerEvent>,
     ),
-    mbv_core::ctrl::ConnectError,
+    String,
 >;
 
 #[cfg(test)]

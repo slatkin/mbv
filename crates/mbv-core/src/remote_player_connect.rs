@@ -13,8 +13,7 @@ use std::time::Duration;
 
 use crate::api::MediaItem;
 use crate::ctrl::{
-    ConnectError, CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason,
-    PlaybackIntent,
+    CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
 };
 use crate::player::{PlayerEvent, PlayerStatus};
 
@@ -203,23 +202,22 @@ impl std::fmt::Display for DaemonEndpoint {
 pub(crate) fn perform_handshake(
     stream: ControlStream,
     auth_token: &str,
-) -> Result<(BufReader<ControlStream>, CtrlEvent, CtrlCompatibility), ConnectError> {
+) -> Result<(BufReader<ControlStream>, CtrlEvent, CtrlCompatibility), String> {
     let mut reader = BufReader::new(stream);
     let mut first_line = String::new();
     reader
         .read_line(&mut first_line)
-        .map_err(|e| ConnectError::Other(format!("failed to read daemon protocol hello: {e}")))?;
+        .map_err(|e| format!("failed to read daemon protocol hello: {e}"))?;
     if first_line.trim().is_empty() {
-        return Err(ConnectError::Other(
-            "daemon closed connection before protocol hello".to_string(),
-        ));
+        return Err("daemon closed connection before protocol hello".to_string());
     }
     let hello = serde_json::from_str::<CtrlEvent>(first_line.trim_end())
-        .map_err(|e| ConnectError::Other(format!("invalid daemon protocol hello: {e}")))?;
+        .map_err(|e| format!("invalid daemon protocol hello: {e}"))?;
     let ctrl_compatibility = match hello {
         CtrlEvent::Hello(info) => {
             info.validate_peer()?;
-            let compatibility = info.compatibility()?;
+            let mut compatibility = info.compatibility()?;
+            compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",
@@ -230,35 +228,31 @@ pub(crate) fn perform_handshake(
             compatibility
         }
         _ => {
-            return Err(ConnectError::Other(
-                "daemon did not send protocol hello".to_string(),
-            ));
+            return Err("daemon did not send protocol hello".to_string());
         }
     };
     let client_hello = serde_json::to_string(&CtrlCmd::Hello(CtrlHello::compatible_client(
         auth_token.into(),
         ctrl_compatibility,
     )))
-    .map_err(|e| ConnectError::Other(e.to_string()))?;
+    .map_err(|e| e.to_string())?;
     // Write via the same handle the `BufReader` wraps (`get_mut()`) rather
     // than a second `try_clone()`'d handle -- the handshake is strictly
     // sequential (read hello -> write client hello -> read state) with no
     // concurrent access from another thread during this phase, so there's
     // nothing a second handle buys here beyond an extra fallible call.
     writeln!(reader.get_mut(), "{client_hello}")
-        .map_err(|e| ConnectError::Other(format!("failed to send daemon protocol hello: {e}")))?;
+        .map_err(|e| format!("failed to send daemon protocol hello: {e}"))?;
 
     let mut state_line = String::new();
     reader
         .read_line(&mut state_line)
-        .map_err(|e| ConnectError::Other(format!("failed to read daemon initial state: {e}")))?;
+        .map_err(|e| format!("failed to read daemon initial state: {e}"))?;
     if state_line.trim().is_empty() {
-        return Err(ConnectError::Other(
-            "daemon closed connection before initial state".to_string(),
-        ));
+        return Err("daemon closed connection before initial state".to_string());
     }
     let state_event = serde_json::from_str::<CtrlEvent>(state_line.trim_end())
-        .map_err(|e| ConnectError::Other(format!("invalid daemon initial state: {e}")))?;
+        .map_err(|e| format!("invalid daemon initial state: {e}"))?;
 
     Ok((reader, state_event, ctrl_compatibility))
 }
@@ -341,7 +335,7 @@ fn apply_ctrl_event(
         }
         CtrlEvent::ShutdownAccepted | CtrlEvent::ShutdownRejected { .. } => {
             // Handled by the request-completion path in RemotePlayer
-            // (task 5.1), not by the general event loop.
+            //, not by the general event loop.
         }
         CtrlEvent::Disconnected { reason } => {
             if notify {
@@ -373,17 +367,13 @@ fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
 pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
     auth_token: &str,
-) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), crate::ctrl::ConnectError> {
-    let stream = endpoint
-        .connect_stream()
-        .map_err(crate::ctrl::ConnectError::Other)?;
+) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
+    let stream = endpoint.connect_stream()?;
     log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
 
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
     // moved into the writer thread below.
-    let disconnect_stream = stream
-        .try_clone()
-        .map_err(|e| crate::ctrl::ConnectError::Other(e.to_string()))?;
+    let disconnect_stream = stream.try_clone().map_err(|e| e.to_string())?;
 
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
@@ -406,9 +396,7 @@ pub(crate) fn connect_endpoint(
     // TCP-level connect, not these blocking reads (issue #191 fix #5).
     // `stream` itself is kept untouched on this thread for the writer
     // thread spawned below; a clone goes to the worker thread instead.
-    let handshake_stream = stream
-        .try_clone()
-        .map_err(|e| crate::ctrl::ConnectError::Other(e.to_string()))?;
+    let handshake_stream = stream.try_clone().map_err(|e| e.to_string())?;
     let auth_token_owned = auth_token.to_string();
     let (reader, state_event, ctrl_compatibility) = crate::bounded::run_with_hard_bound(
         move || perform_handshake(handshake_stream, &auth_token_owned),
@@ -445,7 +433,7 @@ pub(crate) fn connect_endpoint(
                         continue;
                     };
 
-                    // Handle shutdown request responses directly (task 5.1).
+                    // Handle shutdown request responses directly.
                     match &ev {
                         CtrlEvent::ShutdownAccepted => {
                             if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
@@ -489,7 +477,7 @@ pub(crate) fn connect_endpoint(
         disconnected_r.store(true, Ordering::SeqCst);
         pending_playback_r.lock().unwrap().clear();
 
-        // Resolve any pending shutdown request with Disconnected (task 5.1).
+        // Resolve any pending shutdown request with Disconnected.
         if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
             let _ = tx.send(crate::remote_player::ShutdownResponse::Disconnected);
         }
@@ -552,7 +540,7 @@ pub(crate) fn connect_endpoint(
             control_stream: Arc::new(Mutex::new(Some(disconnect_stream))),
             next_playback_id,
             pending_playback,
-            shutdown_request_tx: Arc::new(Mutex::new(None)),
+            shutdown_request_tx,
         },
         event_rx,
     ))

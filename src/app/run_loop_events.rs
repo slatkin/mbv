@@ -268,7 +268,7 @@ impl App {
         } else {
             self.save_queue_state_no_clear();
         }
-        // Coordinated daemon shutdown (task 6.1-6.7): when the policy gate
+        // Coordinated daemon shutdown: when the policy gate
         // is true (launched against the local daemon and stay_alive is off),
         // send a bounded RequestShutdown to the daemon. The daemon owns
         // queue persistence (persist-before-acceptance); this client only
@@ -276,7 +276,10 @@ impl App {
         // connection, use it directly; otherwise create a short-lived
         // DaemonEndpoint::Local connection without mutating self.player or
         // any route/queue-scope/MPRIS/auto-reconnect state.
-        let stay_alive = self.client.lock().unwrap().config.stay_alive;
+        let (stay_alive, auth_token) = {
+            let client = self.client.lock().unwrap();
+            (client.config.stay_alive, client.token.clone())
+        };
         let should_request_shutdown = self.home_is_local_daemon && !stay_alive;
         let mut shutdown_response: Option<mbv_core::remote_player::ShutdownResponse> = None;
         if should_request_shutdown {
@@ -287,18 +290,20 @@ impl App {
             let current_connected =
                 self.player.is_remote() && !self.player.is_remote_disconnected();
             if current_is_local && current_connected {
-                // Task 6.3: invoke through the current live Local connection.
+                // Invoke through the current live Local connection.
                 if let Some(remote) = self.player.as_remote() {
                     log::info!(target: "daemon_shutdown", "invoking request_shutdown through current Local connection");
                     shutdown_response = Some(remote.request_shutdown(quit_timeout));
                 } else {
                     log::warn!(target: "daemon_shutdown", "current player_endpoint is Local but as_remote() returned None; falling back to short-lived connection");
-                    shutdown_response = Self::invoke_shutdown_via_short_lived_local(quit_timeout);
+                    shutdown_response =
+                        Self::invoke_shutdown_via_short_lived_local(&auth_token, quit_timeout);
                 }
             } else {
-                // Task 6.4: create a short-lived Local connection.
+                // Create a short-lived Local connection.
                 log::info!(target: "daemon_shutdown", "current target is not a live Local connection; creating short-lived Local connection");
-                shutdown_response = Self::invoke_shutdown_via_short_lived_local(quit_timeout);
+                shutdown_response =
+                    Self::invoke_shutdown_via_short_lived_local(&auth_token, quit_timeout);
             }
         }
         if !self.player.is_remote() {
@@ -327,7 +332,7 @@ impl App {
             log::info!(target: "player", "quit: player join finished in {}ms (bound={}ms)",
                 elapsed.as_millis(), outer_bound.as_millis());
         }
-        // Task 6.7: after a failed shutdown request (Rejected, Disconnected,
+        // After a failed shutdown request (Rejected, Disconnected,
         // TimedOut, or failure to connect Local), set a post-terminal message
         // that the local daemon may still be running and names `mbv -q`.
         if should_request_shutdown {
@@ -356,6 +361,12 @@ impl App {
                             "Local daemon may still be running (did not respond within timeout). Use `mbv -q` to stop it.".to_string(),
                         );
                     }
+                    ShutdownResponse::Unsupported => {
+                        log::warn!(target: "daemon_shutdown", "peer daemon does not support lifecycle-shutdown");
+                        self.pending_exit_message = Some(
+                            "Local daemon is an older version and cannot be stopped remotely. Use `mbv -q` to stop it.".to_string(),
+                        );
+                    }
                 }
             } else {
                 // Failed to connect or invoke the request.
@@ -367,18 +378,16 @@ impl App {
         }
     }
 
-    /// Task 6.4: create a short-lived DaemonEndpoint::Local connection and
+    /// Creates a short-lived DaemonEndpoint::Local connection and
     /// invoke request_shutdown through it without replacing self.player or
     /// mutating route, queue-scope, MPRIS, or auto-reconnect state. Returns
     /// None if the connection cannot be established.
     fn invoke_shutdown_via_short_lived_local(
+        auth_token: &str,
         quit_timeout: Duration,
     ) -> Option<mbv_core::remote_player::ShutdownResponse> {
         use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
-        let endpoint = DaemonEndpoint::Local;
-        // Use a placeholder token; the local daemon does not require auth.
-        let token = String::new();
-        match RemotePlayer::connect_endpoint(&endpoint, &token) {
+        match RemotePlayer::connect_endpoint(&DaemonEndpoint::Local, auth_token) {
             Ok((remote, _event_rx)) => {
                 log::info!(target: "daemon_shutdown", "short-lived Local connection established");
                 let response = remote.request_shutdown(quit_timeout);
@@ -387,8 +396,7 @@ impl App {
                 Some(response)
             }
             Err(e) => {
-                let msg = e.format_with_endpoint_guidance(&endpoint);
-                log::warn!(target: "daemon_shutdown", "failed to establish short-lived Local connection: {msg}");
+                log::warn!(target: "daemon_shutdown", "failed to establish short-lived Local connection: {e}");
                 None
             }
         }

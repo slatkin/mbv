@@ -8,8 +8,6 @@ pub mod tests {
     #[cfg(test)]
     use super::*;
     #[cfg(test)]
-    use std::os::unix::fs::PermissionsExt;
-    #[cfg(test)]
     use std::time::{SystemTime, UNIX_EPOCH};
     include!("config_tests_parse.rs");
     include!("config_tests_paths.rs");

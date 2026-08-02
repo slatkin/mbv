@@ -248,7 +248,7 @@ impl PlayerProxy {
 
     /// Returns a clone of the underlying RemotePlayer if this proxy wraps
     /// one, or None for a local player. Used by the coordinated shutdown
-    /// path (task 6.3) to invoke request_shutdown on the current player
+    /// path to invoke request_shutdown on the current player
     /// when it is a live Local connection.
     pub fn as_remote(&self) -> Option<crate::remote_player::RemotePlayer> {
         match &self.inner {

@@ -13,7 +13,7 @@ fn try_daemon_route_connect_returns_remote_player_on_successful_connect() {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(
             make_items(1),
@@ -45,9 +45,9 @@ fn try_daemon_route_connect_returns_a_ready_to_display_warning_without_flashing_
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
-        Err(mbv_core::ctrl::ConnectError::Other("connection refused".to_string()))
+        Err("connection refused".to_string())
     }
 
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
@@ -100,7 +100,7 @@ fn app_construction_never_attempts_a_daemon_route_connect() {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
         CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0))
@@ -127,7 +127,7 @@ fn apply_route_for_playback_swaps_to_routed_daemon_on_success() {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
         Ok(mbv_core::remote_player::RemotePlayer::stub(
             make_items(1),
@@ -177,9 +177,9 @@ fn apply_route_for_playback_falls_back_to_local_with_warning_on_connect_failure(
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
-        Err(mbv_core::ctrl::ConnectError::Other("connection refused".to_string()))
+        Err("connection refused".to_string())
     }
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
 
@@ -300,9 +300,9 @@ fn apply_route_for_playback_restores_local_via_restore_local_mode_when_swap_to_a
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
-        Err(mbv_core::ctrl::ConnectError::Other("connection refused".to_string()))
+        Err("connection refused".to_string())
     }
 
     let mut app = make_app_stub();

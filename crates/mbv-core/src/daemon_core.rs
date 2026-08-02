@@ -110,7 +110,7 @@ struct CtrlClients {
     authority: AuthorityHolder,
 }
 
-/// Transport identity for a ctrl client connection (task 3.1).
+/// Transport identity for a ctrl client connection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CtrlTransport {
     /// Local Unix socket listener.

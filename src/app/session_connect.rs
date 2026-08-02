@@ -58,7 +58,7 @@ impl App {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
         #[cfg(test)]
         if let Some(connect) = *super::DIRECT_CONNECT_OVERRIDE.lock().unwrap() {
@@ -99,7 +99,7 @@ impl App {
             mbv_core::remote_player::RemotePlayer,
             mpsc::Receiver<PlayerEvent>,
         ),
-        mbv_core::ctrl::ConnectError,
+        String,
     > {
         #[cfg(test)]
         if let Some(connect) = *super::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
