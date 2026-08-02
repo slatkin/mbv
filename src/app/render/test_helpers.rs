@@ -298,6 +298,84 @@ pub fn make_power_music_group_app() -> App {
     app
 }
 
+/// Builds on `make_power_music_group_app` by adding a second sibling album
+/// ("Second Album", also by "Alpha") to the same nav level. Shared by the
+/// cache-miss/loading and cache-hit/rendered inline-detail tests, which
+/// both need a following album to assert framing around the selected one.
+pub fn make_power_music_group_app_with_second_album() -> App {
+    let mut app = make_power_music_group_app();
+    let mut second_album = make_item("Second Album", "MusicAlbum");
+    second_album.id = "album-2".into();
+    second_album.artist = "Alpha".into();
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .items
+        .push(second_album);
+    app
+}
+
+/// Shared row-map assertions for the inline album-detail tests: the
+/// selected album's inline detail (loading indicator or rendered tracks)
+/// must sit between the selected album title and the following sibling
+/// album, and every row in between must be non-selectable.
+pub fn assert_inline_detail_frames_between_albums(
+    lines: &[&str],
+    layout: &LayoutMain,
+    title_y: usize,
+    detail_y: usize,
+) {
+    assert!(
+        lines[title_y - 4].trim().is_empty(),
+        "expected the colored top-padding row above the artist header to be blank:\n{}",
+        lines.join("\n")
+    );
+    assert_eq!(
+        lines.iter().filter(|line| line.trim() == "Alpha").count(),
+        1,
+        "plain album framing must not duplicate the artist name:\n{}",
+        lines.join("\n")
+    );
+    assert!(
+        detail_y > title_y,
+        "expected the inline detail row to render below the selected album title:\n{}",
+        lines.join("\n")
+    );
+
+    let second_album_y = lines
+        .iter()
+        .position(|l| l.contains("Second Album"))
+        .expect("expected the following album row");
+    assert!(
+        second_album_y > detail_y,
+        "expected the inline detail to render before sibling albums:\n{}",
+        lines.join("\n")
+    );
+
+    let title_row_idx = layout
+        .left_row_map
+        .iter()
+        .position(|r| *r == Some(0))
+        .expect("expected the selected album (index 0) in the row map");
+    let second_row_idx = layout
+        .left_row_map
+        .iter()
+        .position(|r| *r == Some(1))
+        .expect("expected the following album (index 1) in the row map");
+    assert!(
+        second_row_idx > title_row_idx,
+        "expected the following album's row-map entry after the selected album's"
+    );
+    assert!(
+        layout.left_row_map[title_row_idx + 1..second_row_idx]
+            .iter()
+            .all(Option::is_none),
+        "expected every row between the two albums (borders, padding, detail) to be non-selectable:\n{:?}",
+        layout.left_row_map
+    );
+}
+
 pub fn make_power_home_video_app() -> App {
     let mut app = make_app_stub();
     app.library_tab = 1;
@@ -361,44 +439,6 @@ pub fn make_power_large_movie_library_app(library_total: usize) -> App {
             cursor: 0,
             scroll: 0,
             item_types: Some("Movie".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-        }],
-        search: None,
-        feed_home_video: None,
-        album_track_focus: None,
-        artist_header_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: Some(library_total),
-    });
-
-    app
-}
-
-pub fn make_power_large_tv_library_app(library_total: usize) -> App {
-    let mut app = make_app_stub();
-    app.library_tab = 1;
-
-    let mut library = make_item("Shows", "CollectionFolder");
-    library.id = "lib-shows".into();
-    library.is_folder = true;
-    library.collection_type = "tvshows".into();
-
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: vec![BrowseLevel {
-            parent_id: "lib-shows".into(),
-            title: "Shows".into(),
-            items: Vec::new(),
-            total_count: 0,
-            cursor: 0,
-            scroll: 0,
-            item_types: Some("Series".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
