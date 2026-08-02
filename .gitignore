@@ -6,7 +6,6 @@
 !assets/*.jpg
 
 # AI assistant artifacts
-.serena
 .claude/scratch/
 context-snapshot.json
 .worktrees/
