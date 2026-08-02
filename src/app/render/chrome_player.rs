@@ -60,8 +60,8 @@ impl App {
                 title_row_area,
             );
             let title_area = Rect {
-                x: area.x,
-                width: area.width.saturating_sub(1),
+                x: area.x + 1,
+                width: area.width.saturating_sub(2),
                 y: area.y + 1,
                 height: 1,
             };

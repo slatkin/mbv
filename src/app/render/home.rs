@@ -246,8 +246,13 @@ impl App {
             const RIGHT_COLUMN_INNER_INSET: u16 = 2;
             green_panel_full = Some(list_area);
             let panel_h = list_area.height.saturating_sub(1);
+            let green_bg = if focused {
+                palette::BG_GREEN
+            } else {
+                palette::PLAYBACK_PANEL_BG
+            };
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                Block::default().style(Style::default().bg(green_bg)),
                 Rect {
                     x: list_area.x,
                     y: list_area.y,
