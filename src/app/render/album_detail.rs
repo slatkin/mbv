@@ -36,6 +36,7 @@ impl App {
         flush_left: bool,
         show_hint: bool,
         art_reserved_w: u16,
+        active_marker_x: Option<u16>,
         layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
@@ -180,6 +181,21 @@ impl App {
             return;
         }
 
+        if focused {
+            if let Some(marker_x) = active_marker_x {
+                let scroll_offset = cursor.saturating_sub(table_area.height as usize - 1);
+                f.render_widget(
+                    Paragraph::new(Span::styled("\u{258D}", Style::default().fg(palette::AQUA))),
+                    Rect {
+                        x: marker_x,
+                        y: table_area.y + cursor.saturating_sub(scroll_offset) as u16,
+                        width: 1,
+                        height: 1,
+                    },
+                );
+            }
+        }
+
         let playback = self.effective_playback_state();
         let now_playing_id: Option<String> = if playback.active {
             self.playback_queue()
@@ -209,14 +225,17 @@ impl App {
                 let is_cursor = i == cursor;
                 let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
                 let row_style = if is_cursor && focused {
-                    Style::default().fg(palette::YELLOW)
+                    Style::default().fg(palette::YELLOW).bg(palette::BG_GREEN)
                 } else if focused {
                     Style::default().fg(palette::WHITE)
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker =
-                    super::selection_marker(selected_region_gutter || (is_cursor && focused));
+                let marker = if is_cursor && focused && active_marker_x.is_none() {
+                    Span::styled("\u{258D}", Style::default().fg(palette::AQUA))
+                } else {
+                    super::selection_marker(selected_region_gutter)
+                };
                 let track_num = if item.index_number > 0 {
                     format!("{:>width$}. ", item.index_number, width = track_num_width)
                 } else {

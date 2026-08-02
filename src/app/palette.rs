@@ -37,5 +37,5 @@ pub const HOME_PILL_FG: Color = PLAYBACK_META_FG; // unselected Home pill foregr
 pub const SCROLLBAR: Color = Color::Rgb(79, 91, 88); // library/chrome scrollbar track/thumb
 pub const ORANGE: Color = Color::Rgb(229, 152, 117); // warm orange (#e59875)
 pub const PRUPLE: Color = Color::Rgb(214, 153, 182); // muted purple (#d699b6)
-pub const TRACK_BLOCK_BG: Color = Color::Rgb(45, 53, 59); // track block background (#2d353b)
+pub const TRACK_BLOCK_BG: Color = Color::Rgb(79, 91, 88); // track block background (#4f5b58)
 pub const QUEUE_LIST_BG: Color = Color::Rgb(79, 91, 88); // queue list panel background (#4f5b58)

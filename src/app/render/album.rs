@@ -143,10 +143,10 @@ impl App {
             if vis_top <= vis_bot {
                 let block_y = area.y + (vis_top - offset) as u16;
                 let block_h = (vis_bot - vis_top + 1) as u16;
-                let block_x = area.x + 4;
+                let block_x = area.x + 2;
                 let block_w = area
                     .width
-                    .saturating_sub(6)
+                    .saturating_sub(4)
                     .saturating_sub(selected_art_reserved_w);
                 f.render_widget(
                     Block::default().style(Style::default().bg(palette::TRACK_BLOCK_BG)),
@@ -254,6 +254,21 @@ impl App {
                                 .saturating_sub(selected_art_reserved_w),
                             height,
                         };
+                        if detail_focused && height > 0 {
+                            let scroll_offset = cursor.saturating_sub(height as usize - 1);
+                            f.render_widget(
+                                Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                                Rect {
+                                    x: row_area.x + 2,
+                                    y: row_area.y + cursor.saturating_sub(scroll_offset) as u16,
+                                    width: row_area
+                                        .width
+                                        .saturating_sub(4)
+                                        .saturating_sub(selected_art_reserved_w),
+                                    height: 1,
+                                },
+                            );
+                        }
                         self.render_power_album_detail(
                             f,
                             track_area,
@@ -265,6 +280,7 @@ impl App {
                             true,
                             false, // show_hint: AlbumActionHint row at top already shows it
                             0,     // art_reserved_w: already accounted for in track_area
+                            Some(row_area.x + 2),
                             layout,
                         );
                     }
