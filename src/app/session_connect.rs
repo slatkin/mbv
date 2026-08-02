@@ -570,22 +570,25 @@ impl App {
 
     pub(super) fn connect_to_session(&mut self, sess: &mbv_core::api::SessionInfo) {
         // Tear down an active library route (#223) before a Sessions-panel
-        // connect: `switch_to_direct_remote`'s already-remote branch (the
-        // only one reachable when `self.player.is_remote()` is already
-        // `true`) is unreachable from here, since the direct-upgrade
-        // attempt below is itself gated on `!self.player.is_remote()` --
-        // so simply clearing `active_route` inline further down would be
-        // dead code for this scenario. Going through `restore_local_mode`
-        // instead runs the real teardown (restores the suspended local
-        // `Player`, clears `active_route`, MPRIS rebind) so the
-        // Sessions-panel path always starts from a clean slate, regardless
-        // of which internal branch this function or `switch_to_direct_remote`
-        // takes next. A no-op when no library route is active.
+        // connect, rather than simply clearing `active_route` inline
+        // further down: `restore_local_mode` runs the real teardown
+        // (restores the suspended local `Player`, clears `active_route`,
+        // MPRIS rebind) so the Sessions-panel path always starts from a
+        // clean slate, regardless of which internal branch this function or
+        // `switch_to_direct_remote` takes next. A no-op when no library
+        // route is active.
         if self.active_route.is_some() {
             self.restore_local_mode("Local playback restored before connecting to session");
         }
         let mut direct_upgrade_error = None;
-        if !self.player.is_remote() {
+        // `player.is_remote()` alone can't gate this: a stay-alive thin
+        // client attached to its own local daemon (`is_local_daemon`) is
+        // already `is_remote() == true` despite never having left home
+        // base, which used to skip the direct-upgrade attempt entirely and
+        // strand the connection on the plain `AttachedSession` path with no
+        // queue management. Only a genuinely different remote target
+        // should skip this.
+        if !self.player.is_remote() || self.is_local_daemon {
             if let Some(endpoint) = self.session_direct_endpoint(sess) {
                 let auth_token = self.client.lock().unwrap().token.clone();
                 match self.connect_direct_endpoint(&endpoint, &auth_token) {
