@@ -250,49 +250,13 @@ pub(super) fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, focused:
     }
 
     let bg = if focused {
-        palette::MEDIA_SELECTED_BG
+        palette::QUEUE_LIST_BG
     } else {
         palette::LIBRARY_SIDE_BG
     };
     f.render_widget(Block::default().style(Style::default().bg(bg)), area);
 
-    let border_style = Style::default().fg(palette::SEEK_TRACK);
-    if area.height > 0 {
-        // Top border
-        f.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                "\u{2594}".repeat(area.width as usize),
-                border_style,
-            ))),
-            Rect {
-                y: area.y,
-                height: 1,
-                ..area
-            },
-        );
-    }
-    if area.height > 0 {
-        // Bottom border
-        f.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                "\u{2581}".repeat(area.width as usize),
-                border_style,
-            ))),
-            Rect {
-                y: area.y + area.height - 1,
-                height: 1,
-                ..area
-            },
-        );
-    }
-
-    let border_rows = 2;
-
-    Rect {
-        y: area.y + 1,
-        height: area.height.saturating_sub(border_rows),
-        ..area
-    }
+    area
 }
 
 pub(super) fn build_power_queue_rows(items: &[MediaItem]) -> (Vec<QueueRow>, Vec<String>) {

@@ -33,6 +33,16 @@ impl App {
             return;
         }
 
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::DARK_BG)),
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            },
+        );
+
         layout.queue_scope_local_area = Rect::default();
         layout.queue_scope_remote_area = Rect::default();
 
@@ -48,23 +58,6 @@ impl App {
         let has_remote = matches!(remote_state, RemoteSlotState::DirectRemote);
         let has_attached = matches!(remote_state, RemoteSlotState::AttachedSession);
         let show_split = has_remote || has_attached;
-        let local_w = if show_split {
-            area.width / 2
-        } else {
-            area.width
-        };
-        let remote_w = area.width.saturating_sub(local_w);
-        let local_area = Rect {
-            x: area.x,
-            y: area.y,
-            width: local_w,
-            height: 1,
-        };
-        layout.queue_scope_local_area = if has_remote {
-            local_area
-        } else {
-            Rect::default()
-        };
 
         let mut local_spans = self.remote_status_spans(crate::app::RemoteSlotState::Off, "");
         if self.use_nerd_fonts {
@@ -89,6 +82,18 @@ impl App {
         }
         Self::uppercase_status_label(&mut local_spans);
         Self::set_status_label_bold(&mut local_spans, local_active);
+
+        let local_content_w: usize = local_spans.iter().map(|s| s.content.width()).sum();
+        let local_w = (local_content_w as u16).min(area.width);
+        let local_area = Rect {
+            x: area.x,
+            y: area.y,
+            width: local_w,
+            height: 1,
+        };
+        if show_split {
+            layout.queue_scope_local_area = local_area;
+        }
         f.render_widget(
             Block::default().style(Style::default().bg(local_bg)),
             local_area,
@@ -97,18 +102,6 @@ impl App {
 
         if has_remote {
             let remote_x = area.x + local_w;
-            let remote_area = Rect {
-                x: remote_x,
-                y: area.y,
-                width: remote_w,
-                height: 1,
-            };
-            layout.queue_scope_remote_area = Rect {
-                x: remote_x,
-                y: area.y,
-                width: remote_w,
-                height: 1,
-            };
             let mut remote_spans = self.remote_status_spans(remote_state, &daemon_endpoint);
             let remote_active = !local_selected;
             let remote_bg = if remote_active {
@@ -123,24 +116,26 @@ impl App {
             }
             Self::uppercase_status_label(&mut remote_spans);
             Self::set_status_label_bold(&mut remote_spans, remote_active);
-            if remote_spans.len() >= 4 {
-                remote_spans.swap(1, 2);
-                remote_spans[1].content = format!("{} ", remote_spans[1].content).into();
-            }
+            let remote_content_w: usize = remote_spans.iter().map(|s| s.content.width()).sum();
+            let remote_w = (remote_content_w as u16).min(area.width.saturating_sub(local_w));
+            let remote_area = Rect {
+                x: remote_x,
+                y: area.y,
+                width: remote_w,
+                height: 1,
+            };
+            layout.queue_scope_remote_area = remote_area;
             f.render_widget(
                 Block::default().style(Style::default().bg(remote_bg)),
                 remote_area,
             );
-            f.render_widget(
-                Paragraph::new(Line::from(remote_spans)).alignment(Alignment::Right),
-                remote_area,
-            );
+            f.render_widget(Paragraph::new(Line::from(remote_spans)), remote_area);
         } else if has_attached {
             let remote_x = area.x + local_w;
             let remote_area = Rect {
                 x: remote_x,
                 y: area.y,
-                width: remote_w,
+                width: area.width.saturating_sub(local_w),
                 height: 1,
             };
             let (icon, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
@@ -153,10 +148,7 @@ impl App {
                 Span::styled(format!(" {icon} "), icon_style),
             ];
             f.render_widget(Block::default().style(Style::default().bg(bg)), remote_area);
-            f.render_widget(
-                Paragraph::new(Line::from(spans)).alignment(Alignment::Right),
-                remote_area,
-            );
+            f.render_widget(Paragraph::new(Line::from(spans)), remote_area);
         }
     }
 

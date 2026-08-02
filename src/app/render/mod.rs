@@ -285,28 +285,15 @@ impl App {
         // Inner content area with padding inside the colored box (queue uses this).
         let left_content = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 2,
+            y: left_area.y + 1,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(3),
+            height: left_area.height.saturating_sub(2),
         };
-        // Queue title row, then card image.
-        if !self.queue_column_collapsed {
-            self.render_power_queue_title(
-                f,
-                Rect {
-                    x: left_area.x + 2,
-                    y: left_area.y + 1,
-                    width: left_area.width.saturating_sub(4),
-                    height: 1,
-                },
-                layout,
-            );
-        }
         let card_area = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 2,
+            y: left_area.y + 1,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(3),
+            height: left_area.height.saturating_sub(2),
         };
 
         let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
@@ -378,7 +365,9 @@ impl App {
             if self.visualizer_enabled && visualizer_h == 0 && left_remaining > 0 {
                 self.flash_status("Terminal too short for left visualizer".into());
             }
-            let queue_h = left_remaining.saturating_sub(visualizer_h);
+            let queue_h = left_remaining
+                .saturating_sub(visualizer_h)
+                .saturating_sub(1);
             (
                 right_area,
                 Rect {
@@ -438,7 +427,25 @@ impl App {
 
         if !self.queue_column_collapsed {
             let queue_list_area = render_power_queue_panel_frame(f, queue_area, queue_focused);
-            self.render_power_queue(f, queue_list_area, queue_focused, layout);
+            // Render title pills at the top of the queue list panel, replacing the border.
+            if queue_list_area.height > 0 {
+                self.render_power_queue_title(
+                    f,
+                    Rect {
+                        x: queue_list_area.x,
+                        y: queue_list_area.y,
+                        width: queue_list_area.width,
+                        height: 1,
+                    },
+                    layout,
+                );
+            }
+            let queue_content_area = Rect {
+                y: queue_list_area.y + 1,
+                height: queue_list_area.height.saturating_sub(1),
+                ..queue_list_area
+            };
+            self.render_power_queue(f, queue_content_area, queue_focused, layout);
             // Render visualizer at the bottom of the left panel (within queue panel bounds)
             if self.visualizer_enabled && visualizer_h >= 3 {
                 let left_viz_area = Rect {
@@ -469,15 +476,11 @@ impl App {
             // below the queue panel frame, on the queue panel background.
             let pill_row = Rect {
                 x: left_content.x,
-                y: left_area.y + left_area.height - 1,
+                y: left_area.y + left_area.height - 2,
                 width: left_content.width,
                 height: 1,
             };
-            let pill_bg = if queue_focused {
-                palette::MEDIA_SELECTED_BG
-            } else {
-                palette::LIBRARY_SIDE_BG
-            };
+            let pill_bg = palette::DARK_BG;
             f.render_widget(
                 Block::default().style(Style::default().bg(pill_bg)),
                 pill_row,
