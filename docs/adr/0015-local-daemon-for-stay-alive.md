@@ -12,10 +12,13 @@ full TUI as an ordinary client of `DaemonEndpoint::Local` — the same client
 path `--connect-daemon` already uses. There is no pty, no byte-pipe terminal
 client, and no eviction: any number of terminals may attach at once.
 
-- **A client exiting never stops the local daemon.** Stopping it is only ever
-  explicit — `mbv -q` or tray Quit — regardless of which invocation spawned
-  it, or whether any invocation did (a user may have started it by hand).
-  There is no reference counting and no "last client out" race.
+- **An ordinary disconnect never stops the local daemon.** Stopping it is
+  only ever explicit — `mbv -q`, tray Quit, or a client-requested shutdown
+  when `stay_alive` is off. A client-requested shutdown is a lifecycle
+  operation distinct from disconnect: the daemon persists its queue, sends an
+  `ShutdownAccepted` response, then shuts down through the existing
+  `DaemonEvent::Shutdown` sequence. There is no reference counting and no
+  "last client out" race.
 - **Session continuity is deliberately not offered.** Only *playback*
   continuity is guaranteed: what is playing, the queue, and position survive
   a client closing. On-screen state — cursor, scroll, open overlays,
@@ -25,9 +28,14 @@ client, and no eviction: any number of terminals may attach at once.
   in ADR 0005. Per-library browse position, `prefs.json` scalars, and
   `queue_state.json` continue to persist as before, independent of this.
 - **Bare mode is unchanged.** With `stay_alive` off, `mbv` is one process
-  owning an in-process Player, exactly as today. `mbv -d` is the ad-hoc
-  escape hatch for wanting several terminals; it is a no-op when
-  `stay_alive = true` is already configured.
+  owning an in-process Player, exactly as today.
+- **Client-requested shutdown is explicit and bounded.** When `stay_alive` is
+  off and the TUI launched against this machine's local daemon, quitting sends
+  an explicit `RequestShutdown` over the local Unix control connection. The
+  daemon persists its authoritative queue before acknowledging. A persistence
+  failure rejects the request and leaves the daemon running rather than
+  silently losing the queue. TCP ctrl clients cannot terminate a daemon
+  through this verb; only the local Unix transport is authorized.
 
 ## Considered options
 
@@ -85,3 +93,36 @@ client, and no eviction: any number of terminals may attach at once.
   of deleting the pty. Called out as a breaking change in release notes.
 - `src/relay.rs`, `src/terminal_client.rs`, the `--__relay` hidden
   subcommand, and `src/app/stay_alive.rs` are deleted along with it.
+
+## Amendment (stop-daemon-when-stay-alive-off)
+
+The original decision stated that a client exiting never stops the local
+daemon. This is amended as follows:
+
+**Exit with `stay_alive` off now performs an explicit, acknowledged,
+persist-before-stop request.** When the TUI launched against the local daemon
+quits with `stay_alive` false, it sends `RequestShutdown` over the local Unix
+control connection. The daemon persists its authoritative queue before sending
+`ShutdownAccepted`, then shuts down through the existing `DaemonEvent::Shutdown`
+sequence. A persistence failure sends `ShutdownRejected` and leaves the daemon
+running.
+
+**Ordinary disconnect still never stops the daemon.** A client that disconnects
+without sending `RequestShutdown` — whether due to a crash, signal, or ordinary
+quit with `stay_alive` true — leaves the daemon running. The amendment adds one
+new lifecycle path; it does not change the existing disconnect behavior.
+
+**There is still no reference counting or last-client-out race.** The shutdown
+request is a lifecycle operation from a single authorized client (the local
+Unix transport), not a vote or drain. The daemon shuts down unconditionally
+after accepting, regardless of how many other clients are attached. Every
+connected client receives the existing deliberate-shutdown announcement.
+
+**TCP clients cannot terminate a daemon.** The `RequestShutdown` verb is
+authorized only on the local Unix control connection. A TCP ctrl client
+attempting the request receives `ShutdownRejected` with no effect on authority,
+playback, queue state, or any connection.
+
+**The `-d` flag is removed.** A legacy `mbv -d` invocation fails with guidance
+to enable `stay_alive` in config or the settings overlay, rather than silently
+changing behavior.

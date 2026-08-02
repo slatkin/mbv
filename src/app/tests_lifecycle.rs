@@ -219,7 +219,8 @@ fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
-    });
+    })
+    .expect("save queue state");
 
     let mut app = make_local_daemon_app_stub(make_items(2));
     app.player_tab.items = make_items(3);

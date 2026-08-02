@@ -81,12 +81,13 @@ const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 // tighter than `EmbyClient::AUTHENTICATE_HARD_BOUND`.
 const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
-// A local daemon that was *just* launched (`mbv -d`) may have written its
-// PID file (which is what makes it "detected") slightly before its ctrl
-// socket is bound. Retry briefly rather than immediately falling back to
-// standalone. Explicit remote endpoints (`Unix(path)` / `Tcp`) are not
-// retried this way — they represent an already-running, user-specified
-// target, not a same-machine process that might still be starting up.
+// A local daemon that was *just* launched (via `stay_alive` or auto-detect)
+// may have written its PID file (which is what makes it "detected") slightly
+// before its ctrl socket is bound. Retry briefly rather than immediately
+// falling back to standalone. Explicit remote endpoints (`Unix(path)` /
+// `Tcp`) are not retried this way — they represent an already-running,
+// user-specified target, not a same-machine process that might still be
+// starting up.
 const LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT: Duration = Duration::from_secs(1);
 const LOCAL_DAEMON_CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -215,7 +216,8 @@ pub(crate) fn perform_handshake(
     let ctrl_compatibility = match hello {
         CtrlEvent::Hello(info) => {
             info.validate_peer()?;
-            let compatibility = info.compatibility()?;
+            let mut compatibility = info.compatibility()?;
+            compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",
@@ -331,6 +333,10 @@ fn apply_ctrl_event(
                 let _ = event_tx.send(PlayerEvent::PipePlaybackStatus(status_event));
             }
         }
+        CtrlEvent::ShutdownAccepted | CtrlEvent::ShutdownRejected { .. } => {
+            // Handled by the request-completion path in RemotePlayer
+            //, not by the general event loop.
+        }
         CtrlEvent::Disconnected { reason } => {
             if notify {
                 let msg = disconnect_reason_message(&reason).to_string();
@@ -377,6 +383,9 @@ pub(crate) fn connect_endpoint(
     let shutdown_announced = Arc::new(AtomicBool::new(false));
     let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
     let pending_playback = Arc::new(Mutex::new(HashMap::new()));
+    let shutdown_request_tx: Arc<
+        Mutex<Option<mpsc::Sender<crate::remote_player::ShutdownResponse>>>,
+    > = Arc::new(Mutex::new(None));
 
     let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
     let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
@@ -410,6 +419,7 @@ pub(crate) fn connect_endpoint(
     let pending_playback_r = pending_playback.clone();
     let disconnected_r = disconnected.clone();
     let shutdown_announced_r = shutdown_announced.clone();
+    let shutdown_request_r = shutdown_request_tx.clone();
     let event_tx_r = event_tx;
     std::thread::spawn(move || {
         let mut expected_disconnect = false;
@@ -422,6 +432,24 @@ pub(crate) fn connect_endpoint(
                         log::warn!(target: "remote", "unrecognized event from daemon: {l}");
                         continue;
                     };
+
+                    // Handle shutdown request responses directly.
+                    match &ev {
+                        CtrlEvent::ShutdownAccepted => {
+                            if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
+                                let _ = tx.send(crate::remote_player::ShutdownResponse::Accepted);
+                            }
+                        }
+                        CtrlEvent::ShutdownRejected { reason } => {
+                            if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
+                                let _ = tx.send(crate::remote_player::ShutdownResponse::Rejected {
+                                    reason: reason.clone(),
+                                });
+                            }
+                        }
+                        _ => {}
+                    }
+
                     // Under multi-connection (v5), `Disconnected { TakenOverByEmbyRemote }` is
                     // a notification — the connection stays open. Only set expected_disconnect
                     // for events that actually close the connection. Exhaustive match ensures
@@ -448,6 +476,12 @@ pub(crate) fn connect_endpoint(
         }
         disconnected_r.store(true, Ordering::SeqCst);
         pending_playback_r.lock().unwrap().clear();
+
+        // Resolve any pending shutdown request with Disconnected.
+        if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
+            let _ = tx.send(crate::remote_player::ShutdownResponse::Disconnected);
+        }
+
         log::info!(target: "remote", "daemon disconnected");
         if !expected_disconnect {
             let _ = event_tx_r.send(PlayerEvent::Stopped {
@@ -506,6 +540,7 @@ pub(crate) fn connect_endpoint(
             control_stream: Arc::new(Mutex::new(Some(disconnect_stream))),
             next_playback_id,
             pending_playback,
+            shutdown_request_tx,
         },
         event_rx,
     ))

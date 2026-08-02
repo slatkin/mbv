@@ -183,13 +183,6 @@ fn print_usage() {
     println!("Usage: mbv [OPTIONS]");
     println!();
     println!("Options:");
-    println!("  -d                         Stay alive: ensure a local daemon owns playback and");
-    println!("                             attach to it as a client, so playback continues after");
-    println!("                             this terminal closes. Any number of terminals may");
-    println!(
-        "                             attach at once. No-op if `stay_alive = true` is already"
-    );
-    println!("                             configured.");
     println!("  -q                        Stop the running Player owner (bare mbv, or the local");
     println!("                             daemon in stay-alive mode).");
     println!("      --connect-daemon <endpoint>");
@@ -258,6 +251,15 @@ fn main() {
             }
         }
         return;
+    }
+
+    // Reject the legacy `-d` argument before startup side effects.
+    // The `-d` flag has been removed; users should enable `stay_alive` in
+    // config or the settings overlay instead.
+    if has_flag(&args, "-d") {
+        eprintln!("mbv: the `-d` flag has been removed.");
+        eprintln!("mbv: to keep the local daemon running after quit, enable `stay_alive` in config or the settings overlay.");
+        std::process::exit(1);
     }
 
     applog::init(
@@ -362,12 +364,12 @@ fn main() {
             }
             eprintln!(
                 "mbv: only one process can own playback at a time. Close it, stop it with \
-                 `mbv -q`, or use `mbv -d` to run several terminals against a local daemon."
+                 `mbv -q`, or enable `stay_alive` in config to run several terminals against a local daemon."
             );
             std::process::exit(1);
         }
         Ok(single_instance::Resolution::Fresh(mut guard)) => {
-            let stay_alive = has_flag(&args, "-d") || client.config.stay_alive;
+            let stay_alive = client.config.stay_alive;
 
             // Authenticate first: a detached local daemon has no terminal
             // and cannot prompt, so it must be able to pick up an
@@ -454,6 +456,15 @@ mod tests {
             &["--audio-only=false".into(), "--audio".into()],
             "--audio-only"
         ));
+    }
+
+    #[test]
+    fn has_flag_detects_legacy_d_flag() {
+        // Prove that the `-d` flag is detected so it can be rejected
+        // with migration guidance before startup side effects.
+        assert!(has_flag(&["-d".into()], "-d"));
+        assert!(has_flag(&["-d".into(), "-q".into()], "-d"));
+        assert!(!has_flag(&["--daemon".into(), "-q".into()], "-d"));
     }
 
     #[test]

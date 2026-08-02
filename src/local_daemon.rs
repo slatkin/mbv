@@ -7,7 +7,7 @@
 //! any other `DaemonEndpoint::Local` client does.
 //!
 //! Roles:
-//! - The **launcher** (`mbv -d`, or bare `mbv` with `stay_alive` set) calls
+//! - The **launcher** (bare `mbv` with `stay_alive` set) calls
 //!   [`spawn_detached`] to fork+detach a local daemon, then attaches to it
 //!   as an ordinary client (`App::new_remote`).
 //! - The **local daemon** is `mbv --__local-daemon`, entered via

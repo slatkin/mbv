@@ -10,3 +10,6 @@
 - run_in_background for builds/tests.
 - If a unit test is flaky, delete it and write a new one. Do not troubleshoot unit tests.
 - Be conscious of actions which will explode your context — delegate to a subagent instead.
+
+# Ctrl protocol
+- Additive changes get a capability string, not a version bump. See the rule above `CTRL_PROTOCOL_VERSION` in `crates/mbv-core/src/ctrl.rs`.

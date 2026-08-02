@@ -173,7 +173,8 @@ fn local_daemon_app_keeps_live_queue_over_stale_disk_snapshot() {
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
-    });
+    })
+    .expect("save queue state");
 
     app.maybe_restore_queue_state();
 

@@ -1,3 +1,58 @@
+/// Builds a `QueueState` from the daemon's authoritative queue state and player status.
+/// This is used for coordinated shutdown to persist the daemon's view of the queue,
+/// not the client's potentially stale shadow.
+fn project_queue_state(
+    items: &[MediaItem],
+    cursor: usize,
+    source: &crate::config::QueueSource,
+    player_status: &crate::player::PlayerStatus,
+) -> crate::config::QueueState {
+    use std::collections::HashMap;
+
+    let mut positions: HashMap<String, i64> = items
+        .iter()
+        .filter(|i| i.playback_position_ticks > 0 && !i.is_audio())
+        .map(|i| (i.id.clone(), i.playback_position_ticks))
+        .collect();
+
+    // Incorporate the latest valid position for the active non-audio item.
+    // Only persist positions for non-audio items (video requires resume).
+    if player_status.active && player_status.video_height > 0 {
+        if let Some(item) = items.get(player_status.current_idx) {
+            // Use last_valid_pos if available, otherwise position_ticks.
+            // last_valid_pos is updated as playback progresses and represents
+            // the most recent known-good position.
+            let position = if player_status.last_valid_pos > 0 {
+                player_status.last_valid_pos
+            } else {
+                player_status.position_ticks
+            };
+            positions.insert(item.id.clone(), position);
+        }
+    }
+
+    let last_played_item_id = if player_status.active {
+        items
+            .get(player_status.current_idx)
+            .map(|item| item.id.clone())
+    } else {
+        None
+    };
+
+    crate::config::QueueState {
+        source: source.clone(),
+        items: items.to_vec(),
+        cursor,
+        last_played_item_id,
+        // Deliberately false: the daemon doesn't track completion, and
+        // `actions.rs` only advances the restore cursor past an item when
+        // this is true, so a false-but-wrong value merely restores onto the
+        // last-played item instead of incorrectly skipping past it.
+        last_played_completed: false,
+        positions,
+    }
+}
+
 /// Applies a freshly-decided queue snapshot to the cross-thread shared state
 /// (used to seed newly-connecting ctrl-socket clients) and broadcasts it to
 /// every already-connected client. Centralizes what `CtrlState`'s fields
@@ -29,7 +84,7 @@ fn broadcast_queue_state(
 #[allow(clippy::too_many_arguments)]
 fn handle_ctrl(
     cmd: CtrlCmd,
-    _client_id: CtrlClientId,
+    client_id: CtrlClientId,
     request: CtrlRequest<'_>,
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
@@ -41,8 +96,57 @@ fn handle_ctrl(
     ctrl_clients: &ClientRegistry,
     playback_intents: &mut PlaybackIntentState,
     mut resolved_items: Option<Result<Vec<MediaItem>, String>>,
-    _merged_tx: &mpsc::Sender<DaemonEvent>,
+    merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
+    // Handle lifecycle requests before the authority transition.
+    // RequestShutdown must be authorized by transport before any state changes.
+    if matches!(cmd, CtrlCmd::RequestShutdown) {
+        let is_local = ctrl_clients.lock().unwrap().is_local_client(client_id);
+        if !is_local {
+            send_to(
+                request.reply_tx,
+                &CtrlEvent::ShutdownRejected {
+                    reason: "lifecycle requests require local transport".to_string(),
+                },
+            );
+            return;
+        }
+
+        // Build authoritative queue state for persistence.
+        let player_status = player.status.lock().unwrap().clone();
+        let mut queue_state = project_queue_state(items, *cursor, source, &player_status);
+
+        // Preserve existing non-empty snapshot when authoritative queue is empty.
+        // This matches the no-clear-on-quit rule: quitting is not an explicit Clear Queue action.
+        if queue_state.items.is_empty() {
+            if let Some(existing) = crate::config::load_queue_state() {
+                if !existing.items.is_empty() {
+                    queue_state = existing;
+                }
+            }
+        }
+
+        // Persist before acceptance. On failure, reject and return.
+        if let Err(e) = crate::config::save_queue_state(&queue_state) {
+            log::error!(
+                target: "daemon",
+                "coordinated shutdown rejected: queue persistence failed: {e}"
+            );
+            send_to(
+                request.reply_tx,
+                &CtrlEvent::ShutdownRejected {
+                    reason: format!("queue persistence failed: {e}"),
+                },
+            );
+            return;
+        }
+
+        // Send acceptance, then enqueue shutdown through merged event channel.
+        send_to(request.reply_tx, &CtrlEvent::ShutdownAccepted);
+        let _ = merged_tx.send(DaemonEvent::Shutdown);
+        return;
+    }
+
     // Authority returns to Ctrl on the next ctrl command (not on connect).
     {
         let mut clients = ctrl_clients.lock().unwrap();
@@ -319,7 +423,7 @@ fn handle_ctrl(
         }
         CtrlCmd::PlaybackIntent(intent) => {
             let pipe_output = client.lock().unwrap().config.audio_pipe_enabled;
-            let accepted = playback_intents.accept(_client_id, intent.clone(), pipe_output);
+            let accepted = playback_intents.accept(client_id, intent.clone(), pipe_output);
             let coalesced = accepted.iter().any(|event| {
                 matches!(
                     event.outcome,
@@ -354,7 +458,7 @@ fn handle_ctrl(
                         start_ticks,
                         source: intent_source,
                     };
-                    let tx = _merged_tx.clone();
+                    let tx = merged_tx.clone();
                     let lookup_client = client.lock().unwrap().clone();
                     let request_id = intent.request_id;
                     let generation = intent.generation;
@@ -363,7 +467,7 @@ fn handle_ctrl(
                         let fetched = lookup_client.get_items_by_ids(&item_ids);
                         let _ = tx.send(DaemonEvent::PlaybackResolved {
                             command,
-                            client_id: _client_id,
+                            client_id,
                             reply_tx,
                             request_id,
                             generation,
@@ -390,6 +494,11 @@ fn handle_ctrl(
                     }
                 }
             }
+        }
+        // RequestShutdown is handled before the authority transition above,
+        // so this arm is unreachable in normal flow.
+        CtrlCmd::RequestShutdown => {
+            log::warn!(target: "daemon", "RequestShutdown reached the command match; handled earlier")
         }
     }
 }

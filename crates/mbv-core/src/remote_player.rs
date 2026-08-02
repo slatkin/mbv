@@ -1,10 +1,26 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 
 use crate::api::{EmbyClient, MediaItem};
 use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
+
+/// Response from a bounded shutdown request.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ShutdownResponse {
+    /// The daemon accepted the request after persisting its queue.
+    Accepted,
+    /// The daemon rejected the request (e.g. TCP transport, persistence failure).
+    Rejected { reason: String },
+    /// The connection closed before a response arrived.
+    Disconnected,
+    /// The bounded wait timed out without receiving a response.
+    TimedOut,
+    /// The peer daemon does not advertise the lifecycle-shutdown capability.
+    Unsupported,
+}
 
 #[derive(Clone)]
 pub struct RemotePlayer {
@@ -29,6 +45,8 @@ pub struct RemotePlayer {
     pub(crate) control_stream: Arc<Mutex<Option<ControlStream>>>,
     pub(crate) next_playback_id: Arc<std::sync::atomic::AtomicU64>,
     pub(crate) pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
+    /// Completer for a pending shutdown request.
+    pub(crate) shutdown_request_tx: Arc<Mutex<Option<mpsc::Sender<ShutdownResponse>>>>,
 }
 
 pub(crate) use crate::remote_player_connect::ControlStream;
@@ -67,6 +85,57 @@ impl RemotePlayer {
 
     pub fn send_ctrl_cmd(&self, cmd: CtrlCmd) -> bool {
         self.cmd_tx.send(cmd).is_ok()
+    }
+
+    /// Bounded lifecycle shutdown request.
+    ///
+    /// Sends `RequestShutdown` and waits for the daemon's response with a
+    /// bounded timeout. Returns `Accepted` only when the daemon has durably
+    /// persisted its queue and acknowledged the request; enqueue success
+    /// alone is never returned as `Accepted`.
+    pub fn request_shutdown(&self, timeout: Duration) -> ShutdownResponse {
+        if !self.supports_lifecycle_shutdown() {
+            return ShutdownResponse::Unsupported;
+        }
+
+        let (response_tx, response_rx) = mpsc::channel();
+
+        // Register the completer before sending the command so the reader
+        // thread can resolve it immediately when the response arrives.
+        {
+            let mut guard = self.shutdown_request_tx.lock().unwrap();
+            if guard.is_some() {
+                // Another request is already in flight; reject immediately.
+                return ShutdownResponse::Rejected {
+                    reason: "shutdown request already in flight".to_string(),
+                };
+            }
+            *guard = Some(response_tx);
+        }
+
+        // Send the request.
+        if self.cmd_tx.send(CtrlCmd::RequestShutdown).is_err() {
+            // Channel closed; daemon is disconnected.
+            let mut guard = self.shutdown_request_tx.lock().unwrap();
+            *guard = None;
+            return ShutdownResponse::Disconnected;
+        }
+
+        // Wait for the response with the bounded timeout.
+        match response_rx.recv_timeout(timeout) {
+            Ok(response) => response,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                let mut guard = self.shutdown_request_tx.lock().unwrap();
+                *guard = None;
+                ShutdownResponse::TimedOut
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                // Reader thread dropped the sender (disconnect).
+                let mut guard = self.shutdown_request_tx.lock().unwrap();
+                *guard = None;
+                ShutdownResponse::Disconnected
+            }
+        }
     }
 
     /// Send a guarded playback intent through its dedicated protocol
@@ -209,6 +278,10 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_queue_append
     }
 
+    pub fn supports_lifecycle_shutdown(&self) -> bool {
+        self.ctrl_compatibility.supports_lifecycle_shutdown
+    }
+
     pub(crate) fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
             current_idx,
@@ -255,6 +328,7 @@ impl RemotePlayer {
                 control_stream: Arc::new(Mutex::new(None)),
                 next_playback_id,
                 pending_playback,
+                shutdown_request_tx: Arc::new(Mutex::new(None)),
             },
             event_rx,
             cmd_rx,

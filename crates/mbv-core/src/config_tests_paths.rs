@@ -362,3 +362,89 @@
         assert!(error.contains(path.with_extension("toml.tmp").to_str().unwrap()));
         std::fs::remove_dir_all(dir).unwrap();
     }
+
+    #[test]
+    fn save_queue_state_round_trips_successfully() {
+        let _guard = TestStateDirGuard::new();
+        let state = QueueState {
+            source: QueueSource::Unknown,
+            items: vec![],
+            cursor: 0,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        };
+
+        assert!(save_queue_state(&state).is_ok());
+
+        let loaded = load_queue_state().expect("queue state should exist after save");
+        assert_eq!(loaded.source, QueueSource::Unknown);
+        assert!(loaded.items.is_empty());
+    }
+
+    #[test]
+    fn save_queue_state_atomic_replacement_preserves_valid_json() {
+        let _guard = TestStateDirGuard::new();
+        let state = QueueState {
+            source: QueueSource::Album,
+            items: vec![],
+            cursor: 0,
+            last_played_item_id: Some("item-1".into()),
+            last_played_completed: false,
+            positions: Default::default(),
+        };
+
+        assert!(save_queue_state(&state).is_ok());
+        assert!(save_queue_state(&state).is_ok());
+
+        let loaded = load_queue_state().expect("queue state should survive double save");
+        assert_eq!(loaded.source, QueueSource::Album);
+        assert_eq!(loaded.last_played_item_id.as_deref(), Some("item-1"));
+    }
+
+    #[test]
+    fn save_queue_state_preserves_previous_snapshot_on_write_failure() {
+        let _guard = TestStateDirGuard::new();
+        let original = QueueState {
+            source: QueueSource::Playlist {
+                id: Some("pl-1".into()),
+                name: "Test".into(),
+            },
+            items: vec![],
+            cursor: 0,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        };
+
+        assert!(save_queue_state(&original).is_ok());
+
+        // Make the tmp path a directory so the write will fail
+        let path = queue_state_path();
+        let tmp = path.with_extension("json.tmp");
+        std::fs::create_dir(&tmp).unwrap();
+
+        let modified = QueueState {
+            source: QueueSource::Unknown,
+            items: vec![],
+            cursor: 5,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        };
+        let result = save_queue_state(&modified);
+        assert!(result.is_err(), "write to directory should fail");
+
+        // Previous snapshot must survive
+        let loaded = load_queue_state().expect("previous snapshot should survive failed write");
+        assert_eq!(
+            loaded.source,
+            QueueSource::Playlist {
+                id: Some("pl-1".into()),
+                name: "Test".into(),
+            }
+        );
+
+        // Clean up the directory we created
+        std::fs::remove_dir(&tmp).unwrap();
+    }

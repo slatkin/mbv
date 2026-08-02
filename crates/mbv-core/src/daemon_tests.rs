@@ -1,7 +1,7 @@
 use super::{
     all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
-    CtrlRequest, DaemonEvent, PlaybackIntentState, SharedQueueState,
+    CtrlRequest, CtrlTransport, DaemonEvent, PlaybackIntentState, SharedQueueState,
 };
 use crate::api::MediaItem;
 use crate::config::{Config, QueueSource};
@@ -90,7 +90,7 @@ fn non_audio_only_daemon_never_rejects() {
 /// the driver — there is no separate "pending" step.
 fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(tx);
+    let id = clients.connect(tx, CtrlTransport::Local);
     (id, rx)
 }
 
