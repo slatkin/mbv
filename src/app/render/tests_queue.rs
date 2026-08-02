@@ -130,20 +130,32 @@ fn power_queue_title_does_not_render_playlist_pill() {
 }
 
 #[test]
-fn bottom_status_bar_shows_playlist_pill_when_queue_is_a_playlist() {
+fn queue_panel_bottom_row_shows_playlist_pill_when_queue_is_a_playlist() {
     let mut app = make_power_queue_app(2);
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("pl1".into()),
         name: "Road Mix".into(),
     };
 
-    let (term, _layout) = render_view_to_terminal(&mut app, 100, 28);
+    let (term, layout) = render_view_to_terminal(&mut app, 100, 28);
     let out = buffer_to_string(&term);
-    let last_line = out.lines().last().unwrap_or_default();
+    let bottom_row_y = layout.panel_area.y + layout.panel_area.height - 1;
+    let pill_row = out.lines().nth(bottom_row_y as usize).unwrap_or_default();
 
     assert!(
-        last_line.contains("Road Mix"),
-        "expected the playlist pill to appear in the main status bar:\n{last_line}"
+        pill_row.contains("\u{1F5AD}") && pill_row.contains("Road Mix"),
+        "expected the playlist pill at the bottom of the left panel:\n{pill_row}"
+    );
+    // The status bar sits on the same bottom row to the right of the left
+    // panel, so check only its columns for the pill.
+    let last_line = out.lines().last().unwrap_or_default();
+    let status_part: String = last_line
+        .chars()
+        .skip(layout.panel_area.width as usize)
+        .collect();
+    assert!(
+        !status_part.contains("Road Mix"),
+        "playlist pill should no longer appear in the main status bar:\n{last_line}"
     );
 }
 

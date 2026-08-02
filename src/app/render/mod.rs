@@ -459,6 +459,27 @@ impl App {
                 };
                 f.render_widget(Paragraph::new(vec![hr_line]), hr_area);
             }
+            // Playlist status pill floats at the bottom of the left panel,
+            // below the queue panel frame, on the queue panel background.
+            let pill_row = Rect {
+                x: left_content.x,
+                y: left_area.y + left_area.height - 1,
+                width: left_content.width,
+                height: 1,
+            };
+            let pill_bg = if queue_focused {
+                palette::MEDIA_SELECTED_BG
+            } else {
+                palette::LIBRARY_SIDE_BG
+            };
+            f.render_widget(
+                Block::default().style(Style::default().bg(pill_bg)),
+                pill_row,
+            );
+            f.render_widget(
+                Paragraph::new(Line::from(self.playlist_status_spans())),
+                pill_row,
+            );
         }
         let (library_area, visualizer_area) = self.split_visualizer_area(render_lib_area);
         self.render_visualizer(f, visualizer_area);
@@ -466,7 +487,7 @@ impl App {
 
         // Status bar + toast overlay at the bottom of the right panel.
         if status_area.width > 0 {
-            self.render_status_bar(f, status_area, playback, false, true);
+            self.render_status_bar(f, status_area, playback, false);
             let show_toast =
                 !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
             if show_toast {

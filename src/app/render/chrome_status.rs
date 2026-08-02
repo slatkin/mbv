@@ -229,15 +229,15 @@ impl App {
         }
     }
 
-    /// Persistent bottom status bar. Left side: connection, playlist, stay-alive,
-    /// and mute status groups. Right side: queue source/save-state/scope detail.
+    /// Persistent bottom status bar. Left side: connection, stay-alive, and
+    /// mute status groups. Right side: queue source/save-state/scope detail.
+    /// The playlist status pill renders in the left queue panel instead.
     pub(super) fn render_status_bar(
         &mut self,
         f: &mut Frame,
         area: Rect,
         layout: &mut LayoutPlayback,
         show_session_pill: bool,
-        show_playlist_pill: bool,
     ) {
         // Keep the row itself darker so the pills read as segments sitting on top of it.
         let bar_style = Style::default().bg(palette::DARK_BG);
@@ -258,12 +258,6 @@ impl App {
         } else {
             Vec::new()
         };
-        let playlist_status = if show_playlist_pill {
-            self.playlist_status_spans()
-        } else {
-            Vec::new()
-        };
-
         let alive_status: Option<Vec<Span>> = self.is_local_daemon.then(|| {
             vec![
                 Span::raw(" "),
@@ -280,9 +274,8 @@ impl App {
         let mute_status = self.mute_status_spans();
 
         // Left-segment overflow priority: mute drops first if the combined
-        // left segment wouldn't fit in the row, then playlist, then remote.
+        // left segment wouldn't fit in the row, then remote.
         let remote_w = Self::status_width(&remote_status);
-        let playlist_w = Self::status_width(&playlist_status);
         let alive_w: u16 = alive_status
             .as_ref()
             .map(|spans| Self::status_width(spans))
@@ -302,25 +295,14 @@ impl App {
             }
             total
         };
-        let fits_all = joined_width(&[remote_w, playlist_w, alive_w, mute_w]) <= available;
-        let fits_without_alive =
-            !fits_all && joined_width(&[remote_w, playlist_w, mute_w]) <= available;
+        let fits_all = joined_width(&[remote_w, alive_w, mute_w]) <= available;
+        let fits_without_alive = !fits_all && joined_width(&[remote_w, mute_w]) <= available;
         let fits_without_mute =
-            !fits_all && !fits_without_alive && joined_width(&[remote_w, playlist_w]) <= available;
-        let fits_without_remote = !fits_all
-            && !fits_without_alive
-            && !fits_without_mute
-            && joined_width(&[playlist_w, alive_w]) <= available;
+            !fits_all && !fits_without_alive && joined_width(&[remote_w, alive_w]) <= available;
+        let fits_without_remote =
+            !fits_all && !fits_without_alive && !fits_without_mute && alive_w <= available;
 
         let show_remote = remote_w > 0 && (fits_all || fits_without_alive || fits_without_mute);
-        // Playlist is present in every fit tier's width calculation (see
-        // `joined_width` calls above), so its visibility should follow the
-        // tiers directly rather than piggybacking on `show_remote` -- when the
-        // remote pill is suppressed entirely (`show_session_pill: false`,
-        // e.g. the main status bar), `show_remote` is always false and
-        // that previously hid the playlist pill even when it fit fine.
-        let show_playlist = playlist_w > 0
-            && (fits_all || fits_without_alive || fits_without_mute || fits_without_remote);
         let show_alive =
             alive_status.is_some() && (fits_all || fits_without_mute || fits_without_remote);
 
@@ -334,9 +316,6 @@ impl App {
             show_remote.then(|| area.x + Self::status_width(&spans) + u16::from(!spans.is_empty()));
         if show_remote {
             Self::append_status(&mut spans, remote_status);
-        }
-        if show_playlist {
-            Self::append_status(&mut spans, playlist_status);
         }
         self.render_remote_status_hitbox(layout, area, remote_x, remote_w);
         if fits_all || fits_without_alive {
