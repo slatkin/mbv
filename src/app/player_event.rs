@@ -429,7 +429,8 @@ impl App {
             // client of a genuinely remote daemon keeps today's behavior.
             PlayerEvent::DaemonShutdownAnnounced => {
                 if self.is_local_daemon() {
-                    Some("mbv: the local daemon was stopped — exiting.".to_string());
+                    self.pending_exit_message =
+                        Some("mbv: the local daemon was stopped — exiting.".to_string());
                     QUIT_REQUESTED.store(true, Ordering::Relaxed);
                 } else {
                     self.restore_local_mode("Daemon disconnected — returned to local mode");
