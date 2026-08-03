@@ -175,7 +175,13 @@ fn with_request_id(command: SharedDataCmd, request_id: u64) -> SharedDataCmd {
             expected_revision,
             value,
         },
-        SharedDataCmd::Hello { auth_token } => SharedDataCmd::Hello { auth_token },
+        SharedDataCmd::Hello {
+            auth_token,
+            user_id,
+        } => SharedDataCmd::Hello {
+            auth_token,
+            user_id,
+        },
         SharedDataCmd::Ping => SharedDataCmd::Ping,
     }
 }

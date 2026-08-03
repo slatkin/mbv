@@ -341,8 +341,11 @@ fn spawn_shared_client_handler<S>(
             }
         };
 
-        let auth_token = match cmd {
-            SharedDataCmd::Hello { auth_token } => auth_token,
+        let (auth_token, user_id) = match cmd {
+            SharedDataCmd::Hello {
+                auth_token,
+                user_id,
+            } => (auth_token, user_id),
             _ => {
                 let _ = ev_tx.send(
                     serde_json::to_string(&SharedDataEvent::Error {
@@ -354,18 +357,19 @@ fn spawn_shared_client_handler<S>(
             }
         };
 
-        // Validate the Emby token — /Users/Me only, no API-key fallback.
+        // Validate the Emby token without an API-key fallback.
         let validate_client = client.lock().unwrap().clone();
-        let user_id = match validate_client.validate_shared_data_token(&auth_token) {
-            Ok(uid) => uid,
-            Err(e) => {
-                let _ = ev_tx.send(
-                    serde_json::to_string(&SharedDataEvent::AuthFailed { reason: e })
-                        .unwrap_or_default(),
-                );
-                return;
-            }
-        };
+        let user_id =
+            match validate_client.validate_shared_data_token(&auth_token, user_id.as_deref()) {
+                Ok(uid) => uid,
+                Err(e) => {
+                    let _ = ev_tx.send(
+                        serde_json::to_string(&SharedDataEvent::AuthFailed { reason: e })
+                            .unwrap_or_default(),
+                    );
+                    return;
+                }
+            };
         // Token discarded here — never stored, logged, or persisted.
 
         let _ = ev_tx.send(

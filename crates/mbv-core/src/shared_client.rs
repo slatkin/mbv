@@ -153,7 +153,7 @@ impl SharedClient {
         let hello_line = read_line(&mut reader, "daemon hello")?;
         let hello: SharedDataEvent =
             serde_json::from_str(&hello_line).map_err(|e| format!("parse daemon hello: {e}"))?;
-        let heartbeat_supported = match hello {
+        let (heartbeat_supported, user_id_auth_supported) = match hello {
             SharedDataEvent::Hello(h) => {
                 if !h
                     .capabilities
@@ -162,9 +162,14 @@ impl SharedClient {
                 {
                     return Err("daemon does not support shared-mbv-state-v1".to_string());
                 }
-                h.capabilities
-                    .iter()
-                    .any(|cap| cap == crate::shared_protocol::SHARED_DATA_CAP_HEARTBEAT_V1)
+                (
+                    h.capabilities
+                        .iter()
+                        .any(|cap| cap == crate::shared_protocol::SHARED_DATA_CAP_HEARTBEAT_V1),
+                    h.capabilities
+                        .iter()
+                        .any(|cap| cap == crate::shared_protocol::SHARED_DATA_CAP_USER_ID_AUTH_V1),
+                )
             }
             other => {
                 let s = serde_json::to_string(&other).unwrap_or_default();
@@ -174,6 +179,7 @@ impl SharedClient {
 
         let hello_cmd = SharedDataCmd::Hello {
             auth_token: client.token.clone(),
+            user_id: user_id_auth_supported.then(|| client.user_id.clone()),
         };
         send_command(reader.get_mut(), &hello_cmd, "hello")?;
 

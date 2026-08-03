@@ -412,6 +412,37 @@ impl App {
     /// untested end-to-end (unchanged status quo, not a regression; it has
     /// never had test coverage since it unconditionally calls
     /// `enable_raw_mode()`).
+    fn current_auto_reconnect_target(&self) -> Option<mbv_core::config::LastRemoteConnection> {
+        if let Some(library) = self.active_route.clone() {
+            Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library })
+        } else if let Some(sess) = self.connected_session_state.as_ref() {
+            Some(mbv_core::config::LastRemoteConnection::DirectSession {
+                device_name: sess.device_name.clone(),
+            })
+        } else {
+            self.direct_remote_label.as_ref().map(|device_name| {
+                mbv_core::config::LastRemoteConnection::DirectSession {
+                    device_name: device_name.clone(),
+                }
+            })
+        }
+    }
+
+    pub(super) fn persist_current_auto_reconnect_target(&mut self) {
+        let Some(last) = self.current_auto_reconnect_target() else {
+            return;
+        };
+        if let Err(e) = mbv_core::config::save_last_remote_connection(Some(&last)) {
+            log::warn!(target: "auto_reconnect", "current target persistence failed: {e}");
+        }
+        if let Ok(value) = serde_json::to_value(&last) {
+            let _ = self.persist_shared_document(
+                mbv_core::shared_state::SharedDocumentKind::LastRemoteConnection,
+                value,
+            );
+        }
+    }
+
     pub(super) fn teardown(&mut self, quit_timeout: Duration) {
         self.stop_visualizer_worker();
         // #236: persist whichever remote connection (if any) is active
@@ -441,22 +472,18 @@ impl App {
         } else if !self.client.lock().unwrap().config.auto_reconnect {
             log::info!(target: "auto_reconnect", "teardown persistence skipped: auto-reconnect disabled");
         } else {
-            let last = if let Some(library) = self.active_route.clone() {
-                log::info!(target: "auto_reconnect", "teardown decision=save-library-route library={library:?}");
-                Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library })
-            } else if let Some(sess) = self.connected_session_state.as_ref() {
-                log::info!(target: "auto_reconnect", "teardown decision=save-direct-session device={:?}", sess.device_name);
-                Some(mbv_core::config::LastRemoteConnection::DirectSession {
-                    device_name: sess.device_name.clone(),
-                })
-            } else {
-                log::info!(target: "auto_reconnect", "teardown decision={}", if self.direct_remote_label.is_some() { "save-direct-session" } else { "clear" });
-                self.direct_remote_label.as_ref().map(|device_name| {
-                    mbv_core::config::LastRemoteConnection::DirectSession {
-                        device_name: device_name.clone(),
-                    }
-                })
-            };
+            let last = self.current_auto_reconnect_target();
+            log::info!(
+                target: "auto_reconnect",
+                "teardown decision={}",
+                match &last {
+                    Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library }) =>
+                        format!("save-library-route library={library:?}"),
+                    Some(mbv_core::config::LastRemoteConnection::DirectSession { device_name }) =>
+                        format!("save-direct-session device={device_name:?}"),
+                    None => "clear".to_string(),
+                }
+            );
             match mbv_core::config::save_last_remote_connection(last.as_ref()) {
                 Ok(()) => log::info!(target: "auto_reconnect", "state persistence succeeded"),
                 Err(e) => log::warn!(target: "auto_reconnect", "state persistence failed: {e}"),

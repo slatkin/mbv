@@ -134,6 +134,9 @@ impl App {
         }
         if key == SettingKey::AutoReconnect {
             self.persist_roaming_settings();
+            if self.client.lock().unwrap().config.auto_reconnect {
+                self.persist_current_auto_reconnect_target();
+            }
         }
         self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
     }

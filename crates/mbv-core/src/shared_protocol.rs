@@ -12,6 +12,9 @@ pub const SHARED_DATA_CAP_V1: &str = "shared-mbv-state-v1";
 /// Capability for application-level idle connection liveness checks.
 pub const SHARED_DATA_CAP_HEARTBEAT_V1: &str = "shared-mbv-state-heartbeat-v1";
 
+/// Capability for validating a client token against its explicit Emby user ID.
+pub const SHARED_DATA_CAP_USER_ID_AUTH_V1: &str = "shared-mbv-state-user-id-auth-v1";
+
 /// Hello message sent by the daemon immediately after connection.
 #[derive(Serialize, Deserialize)]
 pub struct SharedDataHello {
@@ -26,6 +29,7 @@ impl SharedDataHello {
             capabilities: vec![
                 SHARED_DATA_CAP_V1.to_string(),
                 SHARED_DATA_CAP_HEARTBEAT_V1.to_string(),
+                SHARED_DATA_CAP_USER_ID_AUTH_V1.to_string(),
             ],
         }
     }
@@ -35,8 +39,13 @@ impl SharedDataHello {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum SharedDataCmd {
-    /// Client hello with authentication token.
-    Hello { auth_token: String },
+    /// Client hello with authentication token and, when supported, its
+    /// already-authenticated Emby user ID.
+    Hello {
+        auth_token: String,
+        #[serde(default)]
+        user_id: Option<String>,
+    },
     /// Check that the daemon is still servicing this connection.
     Ping,
     /// Request a full snapshot of all four documents.

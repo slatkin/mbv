@@ -305,6 +305,25 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
     assert!(!app.client.lock().unwrap().config.auto_reconnect);
 }
 
+#[test]
+fn enabling_auto_reconnect_persists_the_active_remote_target() {
+    let mut app = make_app_stub();
+    app.client.lock().unwrap().config.auto_reconnect = false;
+    app.active_route = Some("music".to_string());
+    app.settings_cursor = (0..settings::settings_total_rows())
+        .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::AutoReconnect)
+        .expect("AutoReconnect setting row must exist");
+
+    app.handle_settings_activate();
+
+    assert_eq!(
+        crate::config::load_last_remote_connection().unwrap(),
+        Some(crate::config::LastRemoteConnection::LibraryRoute {
+            library: "music".to_string()
+        })
+    );
+}
+
 // ── transport_prev_next_available (issue #112) ─────────────────────────
 // Drives whether playback transport is currently available at the queue
 // boundaries. The header uses the `next` half directly, while the `P`/`N`

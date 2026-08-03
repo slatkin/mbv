@@ -276,12 +276,31 @@ impl EmbyClient {
     /// Validate a presented Emby token for shared-data access. Unlike
     /// `validate_presented_token`, this does NOT fall back to API-key user
     /// list validation — a successful `/Users/Me` response with a non-empty
-    /// user ID is required. The token is never persisted or logged.
-    pub fn validate_shared_data_token(&self, token: &str) -> Result<String, String> {
+    /// user ID is required unless the peer supplies an explicit user ID using
+    /// the shared-data user-id capability. The token is never persisted or
+    /// logged.
+    pub fn validate_shared_data_token(
+        &self,
+        token: &str,
+        expected_user_id: Option<&str>,
+    ) -> Result<String, String> {
         let token = token.trim();
         if token.is_empty() {
             return Err("missing Emby auth token".to_string());
         }
+
+        let user_path = match expected_user_id {
+            Some(user_id) if !user_id.trim().is_empty() => {
+                if !user_id
+                    .chars()
+                    .all(|ch| ch.is_ascii_hexdigit() || ch == '-')
+                {
+                    return Err("shared-data user ID contains invalid characters".to_string());
+                }
+                format!("/Users/{user_id}")
+            }
+            _ => "/Users/Me".to_string(),
+        };
 
         let auth_header = format!(
             "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"{}\"",
@@ -293,7 +312,7 @@ impl EmbyClient {
 
         let resp = self
             .agent
-            .get(&self.url("/Users/Me"))
+            .get(&self.url(&user_path))
             .set("Authorization", &auth_header)
             .set("X-Emby-Token", token)
             .call()
@@ -305,11 +324,15 @@ impl EmbyClient {
 
         let user_id = resp["Id"].as_str().unwrap_or("").trim();
         if user_id.is_empty() {
-            return Err(
-                "shared-data token validation: /Users/Me returned empty user ID; \
+            return Err("shared-data token validation returned empty user ID; \
                  API keys are not accepted for shared-data access"
-                    .to_string(),
-            );
+                .to_string());
+        }
+
+        if let Some(expected_user_id) = expected_user_id.filter(|id| !id.trim().is_empty()) {
+            if user_id != expected_user_id {
+                return Err("shared-data token validation returned a different user ID".to_string());
+            }
         }
 
         Ok(user_id.to_string())
