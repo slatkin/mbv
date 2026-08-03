@@ -176,22 +176,20 @@ impl App {
             row += 1;
         }
 
-        if row < max_y {
-            if !layout.show_name.is_empty() {
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        trunc_str(&layout.show_name, text_w),
-                        Style::default().fg(palette::GREEN),
-                    )),
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-                row += 1;
-            }
+        if row < max_y && !layout.show_name.is_empty() {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    trunc_str(&layout.show_name, text_w),
+                    Style::default().fg(palette::GREEN),
+                )),
+                Rect {
+                    x: area.x,
+                    y: row,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+            row += 1;
         }
 
         if row < max_y {

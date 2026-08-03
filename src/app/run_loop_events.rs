@@ -233,6 +233,12 @@ impl App {
                 Ok(()) => log::info!(target: "auto_reconnect", "state persistence succeeded"),
                 Err(e) => log::warn!(target: "auto_reconnect", "state persistence failed: {e}"),
             }
+            if let Ok(value) = serde_json::to_value(last.as_ref()) {
+                let _ = self.persist_shared_document(
+                    mbv_core::shared_state::SharedDocumentKind::LastRemoteConnection,
+                    value,
+                );
+            }
         }
         let quit_requested = QUIT_REQUESTED.load(Ordering::Relaxed);
         // Leave the daemon's player running when the TUI disconnects; only stop

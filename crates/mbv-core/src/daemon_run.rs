@@ -141,6 +141,37 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         });
     }
 
+    // Shared-data hosting is optional and starts only after the playback and
+    // local ctrl listener are operational. A database failure disables this
+    // feature without affecting daemon playback.
+    {
+        let shared_config = client.lock().unwrap().config.clone();
+        if shared_config.shared_data_enabled {
+            match crate::shared_store::open_shared_db() {
+                Ok(db) => {
+                    let store =
+                        crate::shared_worker::spawn_shared_store_worker(Arc::new(Mutex::new(db)));
+                    let _shared_sessions = crate::shared_service::start_shared_service(
+                        client.clone(),
+                        store,
+                        &shared_config,
+                    );
+                    if _shared_sessions.is_some() {
+                        log::info!(target: "shared_data", "shared-data hosting enabled");
+                    } else {
+                        log::warn!(target: "shared_data", "shared-data hosting unavailable; playback remains operational");
+                    }
+                }
+                Err(error) => {
+                    log::error!(
+                        target: "shared_data",
+                        "shared-data database unavailable; playback remains operational: {error}"
+                    );
+                }
+            }
+        }
+    }
+
     // --- From here on: network/Emby-session-visibility setup (protocol
     // negotiation metadata, capability registration, live subtitle-prefs
     // fetch). Local control is already up and serving connections above. ---

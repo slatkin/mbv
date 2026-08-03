@@ -29,3 +29,60 @@ You can browse libraries, build a queue, and play from your server. Playback sta
 - **Feed-library defaults** — chosen libraries behave like feeds, unplayed and date-sorted — good for YouTube-style libraries.
 - **Extra local control surfaces** — MPRIS lets desktop widgets, `playerctl`, and media keys control mbv.
 - **Desktop-integrated prompts** — with `system_notifications = true`, Skip Intro, Next Up, and queue prompts show as actionable desktop notifications.
+
+## Shared mbv State
+
+Shared state is disabled by default. On the canonical `mbvd`, enable the
+dedicated host and configure either a Unix socket or a loopback/private TCP
+listener. TLS is optional for TCP; WAN endpoints are rejected:
+
+```toml
+[shared_data]
+enabled = true
+listen = "/run/mbv/shared.sock"
+# Or: listen = "192.168.1.20:47789"
+# Optional TLS for TCP listeners:
+# tls_cert_path = "/etc/mbv/shared-cert.pem"
+# tls_key_path = "/etc/mbv/shared-key.pem"
+```
+
+On each participating client, opt in with an independent endpoint:
+
+```toml
+[shared_data]
+endpoint = "tcp://192.168.1.20:47789"
+```
+
+For a `tls://` endpoint, the client validates the TLS certificate before
+sending its Emby token. Shared queue, library-position, reconnect, and
+roaming-settings documents are mirrored locally. If `mbvd` is unavailable,
+browsing and playback continue from the local mirror and background reconnect
+attempts retry with bounded exponential backoff. Existing shared documents win
+when a client reconnects.
+
+To inspect an existing host database locally without starting the daemon, run
+`mbvd --export-shared-data`. Disabling either opt-in returns the client to
+local-only behavior; the database is preserved for later re-enablement or
+export.
+
+### First-time setup
+
+1. On the host that will run `mbvd`, run `mbv` once and authenticate to Emby so
+   `mbvd` has cached credentials for its current-user validation.
+2. Choose a private IP address on that host and allow the shared-data port only
+   from the intended LAN in the host firewall. Do not use `0.0.0.0`, a public
+   address, or a public DNS name; WAN endpoints are rejected.
+3. Add the `[shared_data]` host configuration above and restart `mbvd`.
+4. On each client, authenticate to the same Emby account normally, add the
+   separate `shared_data.endpoint`, and restart `mbv`.
+5. The first connected client initializes absent shared documents from its
+   local state. Later clients adopt the existing shared documents; shared
+   queue, library position, reconnect target, and roaming settings then become
+   authoritative while the local mirrors remain available for fallback.
+6. Confirm the setup by changing a queue or library position on one client and
+   checking that another connected client receives it. Use
+   `mbvd --export-shared-data` on the host if you need to inspect revisions or
+   recover the stored values.
+7. To roll back, remove `shared_data.endpoint` from clients and/or set host
+   `shared_data.enabled = false`; clients continue using their local mirrors
+   and the database is preserved.

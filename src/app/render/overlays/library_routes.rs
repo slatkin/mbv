@@ -223,6 +223,7 @@ impl App {
         if !self.finish_route_config_save(save_result) {
             return;
         }
+        self.persist_roaming_settings();
 
         // Return to the library list, refreshed with the new assignment.
         let refresh_result = { self.client.lock().unwrap().get_views() };

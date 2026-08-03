@@ -27,6 +27,18 @@ use std::time::Instant;
 
 pub struct App {
     pub(super) client: Arc<Mutex<EmbyClient>>,
+    pub(super) shared_client: Option<mbv_core::shared_client::SharedClient>,
+    pub(super) shared_reconnect_rx: Option<
+        mpsc::Receiver<
+            Result<
+                (
+                    mbv_core::shared_client::SharedClient,
+                    mbv_core::shared_state::SharedSnapshotResponse,
+                ),
+                String,
+            >,
+        >,
+    >,
     pub(super) player: PlayerProxy,
     /// Handle to the live MPRIS D-Bus registration, if one was started for
     /// this session (`App::new` / `App::new_remote` both start one; test

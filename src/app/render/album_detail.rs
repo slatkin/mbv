@@ -159,9 +159,7 @@ impl App {
         }
 
         // — Scrollable track list —
-        let track_indent = if flush_left {
-            0
-        } else if selected_region_gutter {
+        let track_indent = if flush_left || selected_region_gutter {
             0
         } else {
             INLINE_ALBUM_TRACK_EXTRA_INDENT

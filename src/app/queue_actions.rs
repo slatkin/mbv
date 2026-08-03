@@ -280,7 +280,9 @@ impl App {
                     let queue = self.queue_for_scope_mut(scope);
                     queue.clear();
                 }
-                self.persist_local_queue_state_if_needed(scope);
+                if self.local_queue_metadata_applies(scope) {
+                    self.save_queue_state_after_explicit_clear();
+                }
                 self.flash_status("Queue cleared".into());
             }
         }
@@ -344,7 +346,7 @@ impl App {
         }
     }
 
-    pub(super) fn save_queue_state(&self) {
+    pub(super) fn save_queue_state(&mut self) {
         let state = self.build_queue_state();
         if state.items.is_empty() {
             // Don't nuke the on-disk queue just because the local tab happens to be
@@ -358,6 +360,7 @@ impl App {
                 log::warn!(target: "queue", "failed to save queue state: {e}");
             }
         }
+        self.persist_shared_queue_state(&state, false);
     }
 
     /// Like `save_queue_state`, but never deletes the on-disk snapshot when the
@@ -367,12 +370,31 @@ impl App {
     /// deleting in that case wipes a perfectly valid snapshot from an earlier
     /// session with no recovery path. Only an explicit `ClearQueue` action (which
     /// goes through `save_queue_state`) should ever delete the file.
-    pub(super) fn save_queue_state_no_clear(&self) {
+    pub(super) fn save_queue_state_no_clear(&mut self) {
         let state = self.build_queue_state();
         if !state.items.is_empty() {
             if let Err(e) = crate::config::save_queue_state(&state) {
                 log::warn!(target: "queue", "failed to save queue state (no-clear): {e}");
             }
+        }
+        self.persist_shared_queue_state(&state, false);
+    }
+
+    fn save_queue_state_after_explicit_clear(&mut self) {
+        self.save_queue_state();
+        let state = self.build_queue_state();
+        self.persist_shared_queue_state(&state, true);
+    }
+
+    fn persist_shared_queue_state(&mut self, state: &crate::config::QueueState, allow_empty: bool) {
+        if state.items.is_empty() && !allow_empty {
+            return;
+        }
+        if let Ok(value) = serde_json::to_value(state) {
+            let _ = self.persist_shared_document(
+                mbv_core::shared_state::SharedDocumentKind::QueueState,
+                value,
+            );
         }
     }
 
@@ -385,6 +407,14 @@ impl App {
     /// in the cold case.
     pub(super) fn maybe_restore_queue_state(&mut self) {
         if self.is_local_daemon() {
+            return;
+        }
+        if self.shared_client.as_ref().is_some_and(|client| {
+            matches!(
+                client.state(),
+                mbv_core::shared_client::SharedClientState::Shared
+            )
+        }) {
             return;
         }
         self.restore_queue_state();

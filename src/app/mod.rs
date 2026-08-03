@@ -57,6 +57,7 @@ mod search;
 mod session_command_actions;
 mod session_connect;
 mod settings;
+mod shared_sync;
 mod shuffle_folder_actions;
 mod types_browse;
 mod types_confirm;
@@ -331,6 +332,8 @@ impl App {
             had_events |= self.drain_search_results();
 
             had_events |= self.drain_session_events();
+
+            had_events |= self.drain_shared_events();
 
             while let Ok((item_id, img_opt)) = self.card_image_rx.try_recv() {
                 had_events = true;
