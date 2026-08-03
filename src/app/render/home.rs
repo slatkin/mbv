@@ -436,7 +436,7 @@ impl App {
                         vec![
                             if is_playing {
                                 Span::styled(
-                                    super::LIST_PLAY_ICON,
+                                    format!(" {}", super::LIST_PLAY_ICON),
                                     Style::default().fg(palette::AQUA),
                                 )
                             } else if selected_row && focused {
@@ -444,7 +444,7 @@ impl App {
                             } else {
                                 Span::raw(" ")
                             },
-                            Span::raw(" "),
+                            Span::raw(if is_playing { "" } else { " " }),
                             Span::styled(
                                 show,
                                 Style::default().fg(palette::YELLOW).add_modifier(bold),
@@ -480,13 +480,13 @@ impl App {
                                 vec![
                                     if is_playing {
                                         Span::styled(
-                                            super::LIST_PLAY_ICON,
+                                            format!(" {}", super::LIST_PLAY_ICON),
                                             Style::default().fg(palette::AQUA),
                                         )
                                     } else {
                                         Span::styled("▍", Style::default().fg(palette::AQUA))
                                     },
-                                    Span::raw(" "),
+                                    Span::raw(if is_playing { "" } else { " " }),
                                     Span::styled(
                                         title,
                                         Style::default()
@@ -502,13 +502,13 @@ impl App {
                                 vec![
                                     if is_playing {
                                         Span::styled(
-                                            super::LIST_PLAY_ICON,
+                                            format!(" {}", super::LIST_PLAY_ICON),
                                             Style::default().fg(palette::AQUA),
                                         )
                                     } else {
                                         Span::styled("▍", Style::default().fg(palette::AQUA))
                                     },
-                                    Span::raw(" "),
+                                    Span::raw(if is_playing { "" } else { " " }),
                                     Span::styled(
                                         title,
                                         Style::default()
@@ -521,13 +521,13 @@ impl App {
                             vec![
                                 if is_playing {
                                     Span::styled(
-                                        super::LIST_PLAY_ICON,
+                                        format!(" {}", super::LIST_PLAY_ICON),
                                         Style::default().fg(palette::AQUA),
                                     )
                                 } else {
                                     Span::raw(" ")
                                 },
-                                Span::raw(" "),
+                                Span::raw(if is_playing { "" } else { " " }),
                                 Span::styled(
                                     title,
                                     Style::default().fg(if wide_home_panel_unfocused {
@@ -623,7 +623,7 @@ impl App {
                 labels: &label_strs,
                 ids: &ids,
                 selected_pos,
-                prefix: Some("  "),
+                prefix: Some(" ⌘ "),
             },
         );
     }

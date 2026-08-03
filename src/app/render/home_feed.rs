@@ -68,7 +68,7 @@ impl App {
                     labels: &labels,
                     ids: &ids,
                     selected_pos: selected_group,
-                    prefix: None,
+                    prefix: Some(" ⌘ "),
                 },
             );
         }

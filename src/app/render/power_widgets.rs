@@ -430,7 +430,7 @@ pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(R
         } else {
             spans.push(Span::styled(
                 prefix.to_string(),
-                Style::default().fg(Color::White),
+                Style::default().fg(palette::FOAM),
             ));
         }
         x_cursor += prefix_w as u16;

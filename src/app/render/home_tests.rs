@@ -277,7 +277,7 @@ fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
 }
 
 #[test]
-fn playing_home_video_uses_aqua_play_icon_in_the_icon_column() {
+fn playing_home_video_indents_aqua_play_icon_one_cell() {
     let mut app = make_app_stub();
     let mut item = make_item("Playing Home Video", "Video");
     item.id = "playing-home-video".into();
@@ -297,7 +297,7 @@ fn playing_home_video_uses_aqua_play_icon_in_the_icon_column() {
     })
     .unwrap();
 
-    let cell = &term.backend().buffer()[(0, 3)];
+    let cell = &term.backend().buffer()[(1, 3)];
     assert_eq!(
         cell.symbol(),
         "▶",

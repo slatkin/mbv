@@ -243,7 +243,7 @@ impl App {
                             labels: &tab_labels,
                             ids: &ids,
                             selected_pos: season_cursor,
-                            prefix: None,
+                            prefix: Some(" ⌘ "),
                         },
                     );
                     row += 1;

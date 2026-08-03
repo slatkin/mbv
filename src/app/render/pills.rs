@@ -37,7 +37,7 @@ impl App {
                 labels: &labels,
                 ids: &ids,
                 selected_pos,
-                prefix: None,
+                prefix: Some(" ⌘ "),
             },
         );
     }

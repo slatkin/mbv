@@ -59,7 +59,7 @@ impl App {
                 labels: &labels,
                 ids: &ids,
                 selected_pos: group_cursor,
-                prefix: None,
+                prefix: Some(" ⌘ "),
             },
         );
     }
