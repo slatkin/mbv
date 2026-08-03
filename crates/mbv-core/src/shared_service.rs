@@ -178,7 +178,7 @@ pub fn start_shared_service(
         sessions: Vec::new(),
     }));
 
-    let listen = config.shared_data_listen.trim();
+    let listen = crate::config::shared_tcp_address(config.shared_data_listen.trim());
     let is_unix = listen.starts_with('/') || listen.starts_with("unix://");
     let is_tcp = !is_unix;
 
@@ -426,6 +426,10 @@ fn spawn_shared_client_handler<S>(
                         })
                         .unwrap_or_default(),
                     );
+                }
+                SharedDataCmd::Ping => {
+                    let _ = ev_tx
+                        .send(serde_json::to_string(&SharedDataEvent::Pong).unwrap_or_default());
                 }
                 SharedDataCmd::Snapshot { request_id } => match store.read_all(&user_id) {
                     Ok((q, l, r, s)) => {

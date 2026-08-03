@@ -78,6 +78,12 @@ impl App {
     }
 
     fn apply_shared_queue(&mut self, record: &SharedRecord) -> Result<(), String> {
+        if self.is_local_daemon() {
+            // The daemon's queue is live playback state. A shared snapshot is
+            // only a persistence mirror here, not an authority that can
+            // replace the queue we just attached to.
+            return Ok(());
+        }
         let state: crate::config::QueueState = serde_json::from_value(record.value.clone())
             .map_err(|e| format!("parse shared queue state: {e}"))?;
         mirror_shared_document(SharedDocumentKind::QueueState, &record.value)?;
@@ -402,5 +408,43 @@ fn log_roaming_mismatches(settings: &RoamingSettings) {
                 settings.library_routes.get(&library.to_lowercase())
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_daemon_keeps_live_queue_when_shared_snapshot_arrives() {
+        let live_items = crate::app::tests::make_items(2);
+        let mut app = crate::app::tests::make_local_daemon_app_stub(live_items.clone());
+        let shared_state = crate::config::QueueState {
+            source: crate::config::QueueSource::Album,
+            items: crate::app::tests::make_items(5),
+            cursor: 4,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        };
+        let record = SharedRecord {
+            revision: 1,
+            value: serde_json::to_value(shared_state).unwrap(),
+        };
+
+        app.apply_shared_record(SharedDocumentKind::QueueState, &record)
+            .unwrap();
+
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            live_items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>()
+        );
     }
 }

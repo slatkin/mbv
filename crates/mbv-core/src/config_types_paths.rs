@@ -250,8 +250,7 @@ pub fn validate_shared_data_config(cfg: &Config) -> Result<(), String> {
 }
 
 fn validate_shared_tcp_address(address: &str, field: &str) -> Result<(), String> {
-    let addr = address.strip_prefix("tcp://").unwrap_or(address);
-    let addr = addr.strip_prefix("tls://").unwrap_or(addr);
+    let addr = shared_tcp_address(address);
     let is_localhost = addr
         .rsplit_once(':')
         .map(|(host, _)| host.eq_ignore_ascii_case("localhost"))
@@ -279,6 +278,13 @@ fn validate_shared_tcp_address(address: &str, field: &str) -> Result<(), String>
             "{field} must use a loopback/private-network address; WAN address rejected ({addr})"
         ))
     }
+}
+
+pub(crate) fn shared_tcp_address(address: &str) -> &str {
+    address
+        .strip_prefix("tcp://")
+        .or_else(|| address.strip_prefix("tls://"))
+        .unwrap_or(address)
 }
 
 /// Validates the client-side shared-data endpoint before any credentials are sent.
@@ -355,6 +361,17 @@ mod shared_data_endpoint_tests {
             ..config
         };
         assert!(validate_shared_data_config(&config).is_ok());
+    }
+
+    #[test]
+    fn shared_tcp_schemes_are_bindable_after_normalization() {
+        for address in ["tcp://127.0.0.1:0", "tls://127.0.0.1:0"] {
+            let listener = std::net::TcpListener::bind(super::shared_tcp_address(address)).unwrap();
+            assert_eq!(
+                listener.local_addr().unwrap().ip(),
+                "127.0.0.1".parse::<std::net::IpAddr>().unwrap()
+            );
+        }
     }
 }
 

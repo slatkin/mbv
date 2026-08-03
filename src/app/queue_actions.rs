@@ -280,7 +280,9 @@ impl App {
                     let queue = self.queue_for_scope_mut(scope);
                     queue.clear();
                 }
-                self.persist_local_queue_state_if_needed(scope);
+                if self.local_queue_metadata_applies(scope) {
+                    self.save_queue_state_after_explicit_clear();
+                }
                 self.flash_status("Queue cleared".into());
             }
         }
@@ -358,12 +360,7 @@ impl App {
                 log::warn!(target: "queue", "failed to save queue state: {e}");
             }
         }
-        if let Ok(value) = serde_json::to_value(&state) {
-            let _ = self.persist_shared_document(
-                mbv_core::shared_state::SharedDocumentKind::QueueState,
-                value,
-            );
-        }
+        self.persist_shared_queue_state(&state, false);
     }
 
     /// Like `save_queue_state`, but never deletes the on-disk snapshot when the
@@ -380,7 +377,20 @@ impl App {
                 log::warn!(target: "queue", "failed to save queue state (no-clear): {e}");
             }
         }
-        if let Ok(value) = serde_json::to_value(&state) {
+        self.persist_shared_queue_state(&state, false);
+    }
+
+    fn save_queue_state_after_explicit_clear(&mut self) {
+        self.save_queue_state();
+        let state = self.build_queue_state();
+        self.persist_shared_queue_state(&state, true);
+    }
+
+    fn persist_shared_queue_state(&mut self, state: &crate::config::QueueState, allow_empty: bool) {
+        if state.items.is_empty() && !allow_empty {
+            return;
+        }
+        if let Ok(value) = serde_json::to_value(state) {
             let _ = self.persist_shared_document(
                 mbv_core::shared_state::SharedDocumentKind::QueueState,
                 value,

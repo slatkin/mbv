@@ -9,6 +9,9 @@ pub const SHARED_DATA_PROTOCOL_VERSION: u32 = 1;
 /// Capability string advertised during the shared-data handshake.
 pub const SHARED_DATA_CAP_V1: &str = "shared-mbv-state-v1";
 
+/// Capability for application-level idle connection liveness checks.
+pub const SHARED_DATA_CAP_HEARTBEAT_V1: &str = "shared-mbv-state-heartbeat-v1";
+
 /// Hello message sent by the daemon immediately after connection.
 #[derive(Serialize, Deserialize)]
 pub struct SharedDataHello {
@@ -20,7 +23,10 @@ impl SharedDataHello {
     pub fn current() -> Self {
         Self {
             protocol_version: SHARED_DATA_PROTOCOL_VERSION,
-            capabilities: vec![SHARED_DATA_CAP_V1.to_string()],
+            capabilities: vec![
+                SHARED_DATA_CAP_V1.to_string(),
+                SHARED_DATA_CAP_HEARTBEAT_V1.to_string(),
+            ],
         }
     }
 }
@@ -31,6 +37,8 @@ impl SharedDataHello {
 pub enum SharedDataCmd {
     /// Client hello with authentication token.
     Hello { auth_token: String },
+    /// Check that the daemon is still servicing this connection.
+    Ping,
     /// Request a full snapshot of all four documents.
     Snapshot { request_id: u64 },
     /// Create a document that does not yet exist.
@@ -58,6 +66,8 @@ pub enum SharedDataEvent {
     AuthOk { user_id: String },
     /// Authentication failed.
     AuthFailed { reason: String },
+    /// Response to an idle connection liveness check.
+    Pong,
     /// Full snapshot response.
     Snapshot {
         request_id: u64,

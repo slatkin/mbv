@@ -93,6 +93,9 @@ fn run() -> Result<(), String> {
         return Ok(());
     }
     if has_flag(&args, "--export-shared-data", None) {
+        if daemon_running() {
+            return Err("mbvd: a daemon is already running".to_string());
+        }
         let db = mbv_core::shared_store::open_existing_shared_db()?;
         println!("{}", mbv_core::shared_worker::export_json_pretty(&db)?);
         return Ok(());

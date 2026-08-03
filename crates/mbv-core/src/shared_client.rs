@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc;
@@ -36,6 +36,8 @@ enum MaybeTls {
 }
 
 const SHARED_DATA_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
+const SHARED_DATA_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+const SHARED_DATA_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
 
 impl std::io::Read for MaybeTls {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
@@ -209,7 +211,7 @@ impl SharedClient {
         let hello_line = read_line(&mut reader, "daemon hello")?;
         let hello: SharedDataEvent =
             serde_json::from_str(&hello_line).map_err(|e| format!("parse daemon hello: {e}"))?;
-        match hello {
+        let heartbeat_supported = match hello {
             SharedDataEvent::Hello(h) => {
                 if !h
                     .capabilities
@@ -218,12 +220,15 @@ impl SharedClient {
                 {
                     return Err("daemon does not support shared-mbv-state-v1".to_string());
                 }
+                h.capabilities
+                    .iter()
+                    .any(|cap| cap == crate::shared_protocol::SHARED_DATA_CAP_HEARTBEAT_V1)
             }
             other => {
                 let s = serde_json::to_string(&other).unwrap_or_default();
                 return Err(format!("expected Hello, got: {s}"));
             }
-        }
+        };
 
         let hello_cmd = SharedDataCmd::Hello {
             auth_token: client.token.clone(),
@@ -299,54 +304,14 @@ impl SharedClient {
         let (cmd_tx, cmd_rx) = mpsc::channel::<SharedDataCmd>();
         let (ev_tx, ev_rx) = mpsc::channel::<SharedDataEvent>();
         std::thread::spawn(move || {
-            let mut reader = reader;
-            let mut line = String::new();
-            loop {
-                while let Ok(cmd) = cmd_rx.try_recv() {
-                    let Ok(json) = serde_json::to_string(&cmd) else {
-                        continue;
-                    };
-                    if writeln!(reader.get_mut(), "{json}").is_err() {
-                        let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
-                        return;
-                    }
-                }
-
-                match reader.read_line(&mut line) {
-                    Ok(0) => {
-                        let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
-                        return;
-                    }
-                    Ok(_) => {
-                        if let Ok(event) = serde_json::from_str::<SharedDataEvent>(line.trim()) {
-                            let _ = ev_tx.send(event);
-                        }
-                        line.clear();
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                    Err(_) => {
-                        let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
-                        return;
-                    }
-                }
-
-                match cmd_rx.recv_timeout(Duration::from_millis(20)) {
-                    Ok(cmd) => {
-                        let Ok(json) = serde_json::to_string(&cmd) else {
-                            continue;
-                        };
-                        if writeln!(reader.get_mut(), "{json}").is_err() {
-                            let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
-                            return;
-                        }
-                    }
-                    Err(mpsc::RecvTimeoutError::Timeout) => {}
-                    Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
-                        return;
-                    }
-                }
-            }
+            run_client_worker(
+                reader,
+                cmd_rx,
+                ev_tx,
+                heartbeat_supported,
+                SHARED_DATA_HEARTBEAT_INTERVAL,
+                SHARED_DATA_HEARTBEAT_TIMEOUT,
+            );
         });
 
         self.tx = Some(cmd_tx);
@@ -641,6 +606,90 @@ impl SharedClient {
     }
 }
 
+fn run_client_worker<S>(
+    mut reader: BufReader<S>,
+    cmd_rx: mpsc::Receiver<SharedDataCmd>,
+    ev_tx: mpsc::Sender<SharedDataEvent>,
+    heartbeat_supported: bool,
+    heartbeat_interval: Duration,
+    heartbeat_timeout: Duration,
+) where
+    S: Read + Write + Send + 'static,
+{
+    let mut line = String::new();
+    let mut last_heartbeat = Instant::now();
+    let mut awaiting_pong = false;
+
+    loop {
+        while let Ok(cmd) = cmd_rx.try_recv() {
+            if !send_worker_command(&mut reader, &cmd) {
+                let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
+                return;
+            }
+        }
+
+        let now = Instant::now();
+        if heartbeat_supported {
+            if awaiting_pong && now.duration_since(last_heartbeat) >= heartbeat_timeout {
+                let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
+                return;
+            }
+            if !awaiting_pong && now.duration_since(last_heartbeat) >= heartbeat_interval {
+                if !send_worker_command(&mut reader, &SharedDataCmd::Ping) {
+                    let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
+                    return;
+                }
+                last_heartbeat = now;
+                awaiting_pong = true;
+            }
+        }
+
+        match reader.read_line(&mut line) {
+            Ok(0) => {
+                let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
+                return;
+            }
+            Ok(_) => {
+                if let Ok(event) = serde_json::from_str::<SharedDataEvent>(line.trim()) {
+                    if matches!(event, SharedDataEvent::Pong) {
+                        awaiting_pong = false;
+                        last_heartbeat = Instant::now();
+                    } else {
+                        let _ = ev_tx.send(event);
+                    }
+                }
+                line.clear();
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(_) => {
+                let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
+                return;
+            }
+        }
+
+        match cmd_rx.recv_timeout(Duration::from_millis(20)) {
+            Ok(cmd) => {
+                if !send_worker_command(&mut reader, &cmd) {
+                    let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
+                    return;
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
+                return;
+            }
+        }
+    }
+}
+
+fn send_worker_command<S: Write>(writer: &mut BufReader<S>, command: &SharedDataCmd) -> bool {
+    let Ok(json) = serde_json::to_string(command) else {
+        return false;
+    };
+    writeln!(writer.get_mut(), "{json}").is_ok()
+}
+
 fn connect_tcp(addr: &str) -> Result<TcpStream, String> {
     let socket_addr = addr
         .to_socket_addrs()
@@ -671,6 +720,7 @@ fn with_request_id(command: SharedDataCmd, request_id: u64) -> SharedDataCmd {
             value,
         },
         SharedDataCmd::Hello { auth_token } => SharedDataCmd::Hello { auth_token },
+        SharedDataCmd::Ping => SharedDataCmd::Ping,
     }
 }
 
@@ -713,9 +763,56 @@ pub enum SharedWriteResult {
 
 #[cfg(test)]
 mod tests {
-    use super::{event_request_id, with_request_id};
+    use super::{event_request_id, run_client_worker, with_request_id};
     use crate::shared_protocol::{SharedDataCmd, SharedDataEvent};
     use crate::shared_state::{SharedDocumentKind, SharedRecord};
+    use std::io::{BufReader, Read, Write};
+    use std::sync::{mpsc, Arc, Mutex};
+    use std::time::Duration;
+
+    #[derive(Clone, Default)]
+    struct TestStream {
+        written: Arc<Mutex<Vec<u8>>>,
+        response: Option<Arc<Mutex<Vec<u8>>>>,
+    }
+
+    impl Read for TestStream {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let Some(response) = &self.response else {
+                return Err(std::io::ErrorKind::WouldBlock.into());
+            };
+            let mut response = response.lock().unwrap();
+            if response.is_empty() {
+                return Err(std::io::ErrorKind::WouldBlock.into());
+            }
+            let count = buf.len().min(response.len());
+            buf[..count].copy_from_slice(&response[..count]);
+            response.drain(..count);
+            Ok(count)
+        }
+    }
+
+    impl Write for TestStream {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.written.lock().unwrap().extend_from_slice(buf);
+            if buf
+                .windows(b"\"type\":\"ping\"".len())
+                .any(|window| window == b"\"type\":\"ping\"")
+            {
+                if let Some(response) = &self.response {
+                    response
+                        .lock()
+                        .unwrap()
+                        .extend_from_slice(b"{\"type\":\"pong\"}\n");
+                }
+            }
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
 
     #[test]
     fn request_ids_round_trip_through_commands_and_responses() {
@@ -749,5 +846,60 @@ mod tests {
             record: SharedRecord::default(),
         };
         assert_eq!(event_request_id(&notification), None);
+    }
+
+    #[test]
+    fn idle_peer_timeout_emits_connection_closed() {
+        let stream = TestStream::default();
+        let written = stream.written.clone();
+        let (cmd_tx, cmd_rx) = mpsc::channel();
+        let (event_tx, event_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            run_client_worker(
+                BufReader::new(stream),
+                cmd_rx,
+                event_tx,
+                true,
+                Duration::from_millis(10),
+                Duration::from_millis(30),
+            );
+        });
+
+        assert!(matches!(
+            event_rx.recv_timeout(Duration::from_millis(200)),
+            Ok(SharedDataEvent::ConnectionClosed)
+        ));
+        assert!(written
+            .lock()
+            .unwrap()
+            .windows(b"\"type\":\"ping\"".len())
+            .any(|window| { window == b"\"type\":\"ping\"" }));
+        drop(cmd_tx);
+    }
+
+    #[test]
+    fn healthy_idle_peer_answers_heartbeat() {
+        let stream = TestStream {
+            response: Some(Arc::new(Mutex::new(Vec::new()))),
+            ..TestStream::default()
+        };
+        let (cmd_tx, cmd_rx) = mpsc::channel();
+        let (event_tx, event_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            run_client_worker(
+                BufReader::new(stream),
+                cmd_rx,
+                event_tx,
+                true,
+                Duration::from_millis(10),
+                Duration::from_millis(30),
+            );
+        });
+
+        std::thread::sleep(Duration::from_millis(100));
+        assert!(event_rx
+            .try_iter()
+            .all(|event| { !matches!(event, SharedDataEvent::ConnectionClosed) }));
+        drop(cmd_tx);
     }
 }
