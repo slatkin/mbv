@@ -55,6 +55,9 @@ pub(super) struct BrowseLevel {
     /// Active letter-range pill scope for a large library's top browse level
     /// (`None` = unfiltered). See `render::LetterFilter`.
     pub(super) letter_filter: Option<crate::app::render::LetterFilter>,
+    /// Grouping lifecycle state for a music album level (candidate +
+    /// settled catalog). `None` for non-music or non-album levels.
+    pub(super) music_grouping: Option<super::music_grouping::MusicGroupingState>,
 }
 
 impl BrowseLevel {
@@ -92,6 +95,7 @@ impl BrowseLevel {
             letter_filter: saved
                 .letter_filter_index
                 .and_then(crate::app::render::LetterFilter::for_index),
+            music_grouping: None,
         }
     }
 

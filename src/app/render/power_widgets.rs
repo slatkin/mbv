@@ -1,6 +1,5 @@
 use super::super::ui_util::{build_queue_rows, QueueRow};
 use super::chrome::thin_vertical_thumb;
-use super::parse_album_folder_name;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use mbv_core::api::MediaItem;
@@ -590,28 +589,17 @@ impl App {
     }
 
     /// Resolves the display artist for an album item in the grouped power
-    /// music views. Priority order:
+    /// music views, synchronously (never schedules artist lookups). Priority
+    /// order:
     /// 1. `item.artist` (Emby's Album-entity metadata) if non-empty.
     /// 2. `album_artist_cache` entry if non-empty (fetched from the album's
     ///    first few tracks — see `fetch_album_artist` in `images.rs`).
-    /// 3. `parse_album_folder_name` heuristic as an interim guess — and if
-    ///    the cache has neither a value nor an empty-tombstone yet, and no
-    ///    fetch is already in flight, triggers `fetch_album_artist`.
+    /// 3. `parse_album_folder_name` heuristic.
     /// 4. Literal "Unknown Artist".
-    pub(super) fn resolve_group_album_artist(&mut self, item: &mbv_core::api::MediaItem) -> String {
-        if !item.artist.is_empty() {
-            return item.artist.clone();
-        }
-        if let Some(cached) = self.album_artist_cache.get(&item.id) {
-            if !cached.is_empty() {
-                return cached.clone();
-            }
-        } else if !self.album_artist_loading.contains(&item.id) {
-            self.fetch_album_artist(item.id.clone());
-        }
-        if let Some((artist, _, _)) = parse_album_folder_name(&item.name) {
-            return artist;
-        }
-        "Unknown Artist".to_string()
+    pub(super) fn resolve_group_album_artist(&self, item: &mbv_core::api::MediaItem) -> String {
+        crate::app::music_grouping::derive_album_artist(
+            item,
+            self.album_artist_cache.get(&item.id).map(String::as_str),
+        )
     }
 }

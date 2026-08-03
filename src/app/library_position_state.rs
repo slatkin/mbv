@@ -105,6 +105,7 @@ impl App {
                     scroll: 0,
                     all_items: None,
                     letter_filter: None,
+                    music_grouping: None,
                 };
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     if restore_feed_view {

@@ -161,6 +161,7 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: None,

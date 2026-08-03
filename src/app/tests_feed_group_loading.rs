@@ -28,6 +28,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -67,6 +68,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         },
     });
 
@@ -110,6 +112,7 @@ fn feed_home_video_root_filters_groups_from_all_video_paths() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -151,6 +154,7 @@ fn feed_home_video_root_filters_groups_from_all_video_paths() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         },
     });
 
@@ -233,6 +237,7 @@ fn refreshed_does_not_overwrite_feed_root_with_video_items() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -300,6 +305,7 @@ fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: None,

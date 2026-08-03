@@ -3,7 +3,7 @@ use super::super::ui_util::natural_sort_key;
 /// For folder-based music libraries where albums are stored as directories named
 /// "Artist (YYYY) Album Title", parse out the three components.
 /// Returns `(artist, year, album_title)` on success.
-pub(super) fn parse_album_folder_name(name: &str) -> Option<(String, u32, String)> {
+pub(crate) fn parse_album_folder_name(name: &str) -> Option<(String, u32, String)> {
     let mut search_from = 0;
     while let Some(rel) = name[search_from..].find(" (") {
         let sp_pos = search_from + rel; // position of the space before '('
@@ -28,7 +28,7 @@ pub(super) fn parse_album_folder_name(name: &str) -> Option<(String, u32, String
 
 /// Strips a leading article ("The ", "A ", "An ") from `s` (case-insensitive).
 /// Returns a slice of the original string starting after the article.
-pub(super) fn strip_article(s: &str) -> &str {
+pub(crate) fn strip_article(s: &str) -> &str {
     for prefix in &["the ", "a ", "an "] {
         // `s.get(..prefix.len())` returns `None` (rather than panicking, as a
         // byte-index slice would) when `prefix.len()` doesn't land on a UTF-8
@@ -47,11 +47,10 @@ pub(super) fn strip_article(s: &str) -> &str {
 /// synchronously (Emby tag or folder-name heuristic only — no network fetch,
 /// no cache lookup). Used to pick a sane initial cursor position when a
 /// music-group album level first loads (see `handle_lib_event`'s
-/// `LibEvent::Loaded` arm in `actions.rs`), before
-/// `App::resolve_group_album_artist`'s async fetch has had a chance to run.
-/// Mirrors that method's synchronous fallback chain (Emby tag →
-/// folder-name-parsed artist → literal "Unknown Artist"), minus the
-/// cache/fetch steps, since nothing is cached yet at initial load.
+/// `LibEvent::Loaded` arm in `actions.rs`), before its grouping candidate
+/// has settled. Mirrors `derive_album_artist`'s synchronous fallback chain
+/// (Emby tag → folder-name-parsed artist → literal "Unknown Artist"), minus
+/// the cache/fetch steps, since nothing is cached yet at initial load.
 pub(crate) fn initial_group_artist_sort_key(item: &mbv_core::api::MediaItem) -> String {
     let artist = if !item.artist.is_empty() {
         item.artist.clone()
@@ -65,7 +64,7 @@ pub(crate) fn initial_group_artist_sort_key(item: &mbv_core::api::MediaItem) -> 
 
 /// Returns the effective sort key for an item: `sort_name` when Emby provides it,
 /// otherwise the item's display name with any leading article stripped.
-pub(super) fn effective_sort_str(item: &mbv_core::api::MediaItem) -> &str {
+pub(crate) fn effective_sort_str(item: &mbv_core::api::MediaItem) -> &str {
     if !item.sort_name.is_empty() {
         &item.sort_name
     } else {
@@ -77,7 +76,7 @@ pub(super) fn effective_sort_str(item: &mbv_core::api::MediaItem) -> &str {
 /// Uses `sort_name` when available (so "The Wire" → 'W'), otherwise the article-stripped
 /// name. "#" for titles starting with a digit or non-letter; ranges for 50–999 items;
 /// individual letters for 250+ items.
-pub(super) fn letter_bucket(item: &mbv_core::api::MediaItem, total: usize) -> String {
+pub(crate) fn letter_bucket(item: &mbv_core::api::MediaItem, total: usize) -> String {
     let key = effective_sort_str(item);
     let first = key
         .chars()

@@ -105,6 +105,7 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
     });
 
@@ -186,6 +187,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
     });
 
@@ -270,6 +272,7 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
         loading: false,
         all_items: None,
         letter_filter: None,
+        music_grouping: None,
     }];
     let restored_position = crate::config::LibraryPosition {
         levels: vec![restored_nav[0].to_position_level()],
@@ -357,6 +360,7 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
     });
 
@@ -388,6 +392,7 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
             loading: true,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: None,
@@ -432,6 +437,7 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
     });
 

@@ -121,6 +121,7 @@ fn push_top_level(lib: &mut LibraryTab, item_count: usize) {
         loading: false,
         all_items: None,
         letter_filter: None,
+        music_grouping: None,
     });
 }
 
@@ -292,6 +293,7 @@ fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
         loading: false,
         all_items: None,
         letter_filter: None,
+        music_grouping: None,
     });
 }
 

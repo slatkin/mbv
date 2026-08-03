@@ -28,6 +28,7 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -77,6 +78,7 @@ fn feed_home_video_group_view_stays_enabled_with_cached_groups() {
                 scroll: 0,
                 all_items: None,
                 letter_filter: None,
+                music_grouping: None,
             },
             BrowseLevel {
                 parent_id: "folder-a".into(),
@@ -92,6 +94,7 @@ fn feed_home_video_group_view_stays_enabled_with_cached_groups() {
                 scroll: 0,
                 all_items: Some(vec![video.clone()]),
                 letter_filter: None,
+                music_grouping: None,
             },
         ],
         search: None,
@@ -147,6 +150,7 @@ fn fetch_home_preserves_feed_home_video_state() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -209,6 +213,7 @@ fn select_feed_folder_group_pushes_video_level_for_selected_folder() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -271,6 +276,7 @@ fn select_feed_folder_group_zero_pushes_all_videos_level() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -344,6 +350,7 @@ fn select_feed_folder_group_uses_client_side_all_items_cache() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -422,6 +429,7 @@ fn select_feed_folder_group_updates_feed_state_when_detail_level_exists() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -492,6 +500,7 @@ fn go_back_keeps_feed_home_video_group_view_intact() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -557,6 +566,7 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {
@@ -622,6 +632,7 @@ fn refresh_lib_targets_power_feed_selection() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {

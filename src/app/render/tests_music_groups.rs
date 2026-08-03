@@ -1,4 +1,4 @@
-use super::album_plan::GroupedAlbumDisplayRow;
+use super::album_plan::{sorted_group_album_order, GroupedAlbumDisplayRow};
 use super::test_helpers::*;
 use super::*;
 use crate::app::layout::LibraryRowTarget;
@@ -125,17 +125,36 @@ fn artist_and_album_focus_share_one_selected_group_bounds() {
         artist_label: "Alpha".into(),
     };
 
-    let album_plan =
-        app.build_grouped_album_display_plan(&albums, 0, false, true, None, false, Some((120, 0)));
-    let header_plan = app.build_grouped_album_display_plan(
-        &albums,
-        0,
-        false,
-        true,
-        Some(&header),
-        false,
-        Some((120, 0)),
-    );
+    let album_plan = {
+        let album_info = app.group_album_info(&albums, None);
+        let order = sorted_group_album_order(&album_info);
+        app.build_grouped_album_display_plan(
+            &albums,
+            &album_info,
+            &order,
+            0,
+            false,
+            true,
+            None,
+            false,
+            Some((120, 0)),
+        )
+    };
+    let header_plan = {
+        let album_info = app.group_album_info(&albums, None);
+        let order = sorted_group_album_order(&album_info);
+        app.build_grouped_album_display_plan(
+            &albums,
+            &album_info,
+            &order,
+            0,
+            false,
+            true,
+            Some(&header),
+            false,
+            Some((120, 0)),
+        )
+    };
 
     assert_eq!(
         album_plan.selected_block_bounds, header_plan.selected_block_bounds,

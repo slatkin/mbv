@@ -239,6 +239,7 @@ impl App {
                             scroll: lvl.scroll,
                             all_items: lvl.all_items.clone(),
                             letter_filter: lvl.letter_filter.clone(),
+                            music_grouping: lvl.music_grouping.clone(),
                         })
                         .collect()
                 })

@@ -280,6 +280,7 @@ fn recursive_activation_keeps_panel_focus_and_enters_inline_tracks() {
         scroll: 0,
         all_items: None,
         letter_filter: None,
+        music_grouping: None,
     });
     let default_position = app.libs[0].library_position_snapshot();
     app.library_position_state
@@ -307,6 +308,7 @@ fn recursive_activation_keeps_panel_focus_and_enters_inline_tracks() {
         scroll: 0,
         all_items: None,
         letter_filter: None,
+        music_grouping: None,
     };
 
     app.handle_lib_event(LibEvent::RecursiveAlbumActivated {
