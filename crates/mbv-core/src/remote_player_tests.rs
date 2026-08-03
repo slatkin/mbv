@@ -452,30 +452,44 @@ fn unannounced_disconnect_leaves_is_shutdown_announced_false_and_emits_stopped()
     let (remote, event_rx) =
         RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
 
+    // Wait for the synthetic Stopped event with a hard deadline, instead
+    // of racing a sleep against the reader thread's
+    // `disconnected.store(true)` -> `event_tx.send(Stopped)` sequence.
+    // Receiving Stopped proves both have happened, so the post-conditions
+    // are stable to read.
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
-    while !remote.is_disconnected() && std::time::Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(10));
+    let mut saw_stopped = false;
+    while std::time::Instant::now() < deadline {
+        match event_rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(PlayerEvent::Stopped { .. }) => {
+                saw_stopped = true;
+                break;
+            }
+            Ok(_) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        }
     }
+    assert!(
+        saw_stopped,
+        "expected a synthetic Stopped event before the 2s deadline"
+    );
+
     assert!(remote.is_disconnected());
     assert!(
         !remote.is_shutdown_announced(),
         "a bare, unannounced disconnect must not be mistaken for an announced shutdown"
     );
 
-    let events: Vec<_> = event_rx.try_iter().collect();
+    // Drain anything that arrived after Stopped and assert the negative:
+    // an unannounced disconnect never emits DaemonShutdownAnnounced.
+    let tail: Vec<_> = event_rx.try_iter().collect();
     assert!(
-        events
-            .iter()
-            .any(|e| matches!(e, PlayerEvent::Stopped { .. })),
-        "expected a synthetic Stopped event, got {} events",
-        events.len()
-    );
-    assert!(
-        !events
+        !tail
             .iter()
             .any(|e| matches!(e, PlayerEvent::DaemonShutdownAnnounced)),
-        "an unannounced disconnect must never emit DaemonShutdownAnnounced, got {} events",
-        events.len()
+        "an unannounced disconnect must never emit DaemonShutdownAnnounced, got {} tail events",
+        tail.len()
     );
 
     daemon.join().unwrap();

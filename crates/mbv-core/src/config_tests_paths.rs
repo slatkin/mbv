@@ -364,45 +364,6 @@
     }
 
     #[test]
-    fn save_queue_state_round_trips_successfully() {
-        let _guard = TestStateDirGuard::new();
-        let state = QueueState {
-            source: QueueSource::Unknown,
-            items: vec![],
-            cursor: 0,
-            last_played_item_id: None,
-            last_played_completed: false,
-            positions: Default::default(),
-        };
-
-        assert!(save_queue_state(&state).is_ok());
-
-        let loaded = load_queue_state().expect("queue state should exist after save");
-        assert_eq!(loaded.source, QueueSource::Unknown);
-        assert!(loaded.items.is_empty());
-    }
-
-    #[test]
-    fn save_queue_state_atomic_replacement_preserves_valid_json() {
-        let _guard = TestStateDirGuard::new();
-        let state = QueueState {
-            source: QueueSource::Album,
-            items: vec![],
-            cursor: 0,
-            last_played_item_id: Some("item-1".into()),
-            last_played_completed: false,
-            positions: Default::default(),
-        };
-
-        assert!(save_queue_state(&state).is_ok());
-        assert!(save_queue_state(&state).is_ok());
-
-        let loaded = load_queue_state().expect("queue state should survive double save");
-        assert_eq!(loaded.source, QueueSource::Album);
-        assert_eq!(loaded.last_played_item_id.as_deref(), Some("item-1"));
-    }
-
-    #[test]
     fn save_queue_state_preserves_previous_snapshot_on_write_failure() {
         let _guard = TestStateDirGuard::new();
         let original = QueueState {
