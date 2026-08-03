@@ -104,7 +104,25 @@ pub(super) enum LibEvent {
 }
 
 pub(super) enum SessionEvent {
-    Loaded(Vec<mbv_core::api::SessionInfo>),
+    Loaded {
+        sessions: Vec<mbv_core::api::SessionInfo>,
+        generation: u64,
+    },
     ItemRefreshed(String, Box<mbv_core::api::MediaItem>), // (item_id, fresh)
+    CommandError(String),
+    ConsumeValidated {
+        session_id: String,
+        epoch: u64,
+        occurrence_id: u64,
+        playlist_id: String,
+        entry_id: String,
+        result: Result<(), String>,
+    },
+    ConsumeOutcome {
+        session_id: String,
+        epoch: u64,
+        occurrence_id: u64,
+        result: Result<(), String>,
+    },
     Error(String),
 }

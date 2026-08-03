@@ -23,6 +23,7 @@ mod input_mouse_dispatch;
 mod input_mouse_panels;
 mod input_playlist_keys;
 mod input_queue_keys;
+mod input_remote_reanchor;
 mod input_resolver;
 mod input_settings_keys;
 pub(crate) mod layout;
@@ -96,9 +97,9 @@ use self::types_library_tab::LibraryTab;
 #[cfg(test)]
 use self::types_playback::HomePane;
 use self::types_playback::{
-    ArtistHeaderSelection, LocalPlaybackTarget, PendingQueueAction, PlaybackState, PlaybackTarget,
-    QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteSlotState, SuspendedLocalSession,
-    UndoEntry,
+    ArtistHeaderSelection, LocalPlaybackTarget, PendingQueueAction, PendingTrackingEdit,
+    PlaybackState, PlaybackTarget, QueueScope, QueueScopeResolution, RemotePlaybackTarget,
+    RemoteReanchorPopup, RemoteSlotState, SuspendedLocalSession, UndoEntry,
 };
 use self::types_player_tab::PlayerTab;
 use self::types_settings::{PanelFocus, SettingKey, SETTING_SECTIONS};
@@ -621,6 +622,10 @@ mod tests_queue_mutation;
 #[cfg(test)]
 #[path = "tests_queue_reorder.rs"]
 mod tests_queue_reorder;
+
+#[cfg(test)]
+#[path = "tests_remote_reconciliation.rs"]
+mod tests_remote_reconciliation;
 
 #[cfg(test)]
 #[path = "tests_route_state.rs"]

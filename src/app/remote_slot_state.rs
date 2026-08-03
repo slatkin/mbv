@@ -41,6 +41,7 @@ impl App {
         if self.connected_session_id.is_some() || self.connected_session_state.is_some() {
             self.connected_session_id = None;
             self.connected_session_state = None;
+            self.remote_tracker = None;
             self.session_miss_count = 0;
             self.remote_pos_s = 0;
             self.flash_status("Disconnected from remote session".to_string());

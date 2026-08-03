@@ -139,3 +139,20 @@ pub(super) enum PendingQueueAction {
     },
     ClearQueue,
 }
+
+pub(super) enum PendingTrackingEdit {
+    Remove(usize),
+    Move(isize),
+    Undo(QueueScope),
+    EnqueueSelected,
+    EnqueueFolder(Box<MediaItem>),
+    EnqueueArtistHeader {
+        lib_idx: usize,
+        selection: ArtistHeaderSelection,
+    },
+}
+
+pub(super) struct RemoteReanchorPopup {
+    pub(super) targets: Vec<(usize, String)>,
+    pub(super) cursor: usize,
+}

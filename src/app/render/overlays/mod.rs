@@ -7,5 +7,6 @@ mod library_routes;
 mod modal_frame;
 mod multiselect;
 mod playlists;
+mod remote_reanchor;
 mod sessions;
 mod settings;

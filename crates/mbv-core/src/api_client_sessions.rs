@@ -137,6 +137,8 @@ impl EmbyClient {
                                 .unwrap_or_default(),
                             now_playing: npi["Name"].as_str().map(str::to_string),
                             now_playing_item_id: npi["Id"].as_str().map(str::to_string),
+                            position_ticks: ps["PositionTicks"].as_i64().unwrap_or(0),
+                            runtime_ticks: npi["RunTimeTicks"].as_i64().unwrap_or(0),
                             position_s: ps["PositionTicks"].as_i64().unwrap_or(0)
                                 / TICKS_PER_SECOND,
                             runtime_s: npi["RunTimeTicks"].as_i64().unwrap_or(0) / TICKS_PER_SECOND,

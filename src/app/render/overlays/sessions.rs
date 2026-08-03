@@ -94,7 +94,15 @@ impl App {
             let text_x = ix + 2;
             let text_w = inner_w.saturating_sub(2) as usize;
 
-            let badge = if is_connected { " ✚" } else { "" };
+            let badge = if is_connected {
+                if self.remote_tracker.is_some() {
+                    " ✚ TRACKING"
+                } else {
+                    " ✚"
+                }
+            } else {
+                ""
+            };
             let name_max = text_w.saturating_sub(badge.len());
             let name_line = Line::from(vec![
                 Span::styled(

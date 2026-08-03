@@ -3,6 +3,19 @@ use crate::app::tests::*;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+fn tracking_stub() -> mbv_core::remote_reconciliation::ReconciliationTracker {
+    mbv_core::remote_reconciliation::ReconciliationTracker::new(
+        "session",
+        vec![
+            mbv_core::remote_reconciliation::SubmittedOccurrence::new(1, "id0"),
+            mbv_core::remote_reconciliation::SubmittedOccurrence::new(2, "id1"),
+        ],
+        0,
+        0,
+    )
+    .unwrap()
+}
+
 #[test]
 fn ctrl_a_enqueues_from_home_view() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -56,6 +69,54 @@ fn ctrl_a_appends_to_direct_remote_queue() {
         cmd_rx.try_recv().is_err(),
         "Ctrl+A append must not follow QueueAppend with ReplaceQueue"
     );
+}
+
+#[test]
+fn enqueue_requires_one_tracking_confirmation_and_applies_after_yes() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.home.section = 0;
+    app.home.continue_items = make_items(1);
+    app.home.continue_cursor = 0;
+    app.remote_tracker = Some(tracking_stub());
+
+    app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+    assert!(matches!(app.confirm_modal, Some(ConfirmModal { .. })));
+    assert!(app.player_tab.items.is_empty());
+
+    app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    assert!(app.confirm_modal.is_none());
+    assert!(app.remote_tracker.is_none());
+    assert_eq!(app.player_tab.items.len(), 1);
+}
+
+#[test]
+fn folder_and_artist_enqueue_routes_use_tracking_confirmation() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.remote_tracker = Some(tracking_stub());
+    let mut folder = make_item("Folder", "Folder");
+    folder.is_folder = true;
+    app.execute_context_action(Some(ContextAction::EnqueueFolder(Box::new(folder))));
+    assert!(matches!(
+        app.pending_tracking_edit,
+        Some(PendingTrackingEdit::EnqueueFolder(_))
+    ));
+
+    app.confirm_modal = None;
+    app.pending_tracking_edit = None;
+    app.remote_tracker = Some(tracking_stub());
+    app.enqueue_artist_header_selection(
+        0,
+        &ArtistHeaderSelection {
+            first_album_id: "album".into(),
+            artist_label: "Artist".into(),
+        },
+    );
+    assert!(matches!(
+        app.pending_tracking_edit,
+        Some(PendingTrackingEdit::EnqueueArtistHeader { .. })
+    ));
 }
 
 #[test]

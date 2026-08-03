@@ -8,6 +8,7 @@ use crate::app::{
 };
 use mbv_core::api::{MediaItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
+use mbv_core::remote_reconciliation::RemoteIntent;
 use ratatui::layout::Rect;
 use std::time::{Duration, Instant};
 impl App {
@@ -70,6 +71,7 @@ impl App {
             self.remote_pos_s = (fraction * runtime_s as f64) as i64;
             self.remote_pos_at = Instant::now();
             self.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);
+            self.issue_remote_intent(RemoteIntent::Seek);
             self.do_session_command(move |c| c.session_seek(&id, ticks));
             return;
         }

@@ -170,8 +170,42 @@ impl App {
             let fg = palette::QUEUE_BUTTON_FOCUSED_BG;
             let bg = palette::YELLOW;
             let label_style = Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD);
+            let tracking = self
+                .remote_tracker
+                .as_ref()
+                .map(|tracker| {
+                    let state = match tracker.state() {
+                        mbv_core::remote_reconciliation::TrackingState::Starting => "STARTING",
+                        mbv_core::remote_reconciliation::TrackingState::Tracking => "TRACKING",
+                        mbv_core::remote_reconciliation::TrackingState::Ambiguous => "AMBIGUOUS",
+                        mbv_core::remote_reconciliation::TrackingState::Invalid => "INVALID",
+                        mbv_core::remote_reconciliation::TrackingState::Suspended => "SUSPENDED",
+                    };
+                    if matches!(
+                        tracker.state(),
+                        mbv_core::remote_reconciliation::TrackingState::Ambiguous
+                            | mbv_core::remote_reconciliation::TrackingState::Invalid
+                            | mbv_core::remote_reconciliation::TrackingState::Suspended
+                    ) {
+                        let reason = match tracker.reason() {
+                            mbv_core::remote_reconciliation::TrackingReason::DuplicateCandidates => "duplicate",
+                            mbv_core::remote_reconciliation::TrackingReason::SessionUnavailable => "session unavailable",
+                            mbv_core::remote_reconciliation::TrackingReason::ReturningStateRequiresReanchor => "re-anchor required",
+                            _ => "sequence mismatch",
+                        };
+                        format!(" · {state} ({reason})")
+                    } else {
+                        format!(" · {state}")
+                    }
+                })
+                .unwrap_or_default();
+            let unresolved = if self.remote_unresolved_outcomes > 0 {
+                format!(" · !{}", self.remote_unresolved_outcomes)
+            } else {
+                String::new()
+            };
             let spans = vec![Span::styled(
-                format!(" {}", label.trim_start()),
+                format!(" {}{}{}", label.trim_start(), tracking, unresolved),
                 label_style,
             )];
             f.render_widget(Block::default().style(Style::default().bg(bg)), remote_area);

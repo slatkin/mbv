@@ -1,13 +1,49 @@
 use super::ui_util::is_playable;
 use super::{
-    App, ConfirmAction, ConfirmModal, LibEvent, PendingQueueAction, QueueScope, UndoEntry,
+    App, ConfirmAction, ConfirmModal, LibEvent, PendingQueueAction, PendingTrackingEdit,
+    QueueScope, UndoEntry,
 };
 use mbv_core::api::MediaItem;
 use mbv_core::player::PlayerCommand;
 use std::sync::Arc;
 
 impl App {
+    pub(super) fn guard_tracking_edit(&mut self, edit: PendingTrackingEdit) -> bool {
+        if self.remote_tracker.is_none() || self.tracking_edit_warning_shown {
+            return true;
+        }
+        self.pending_tracking_edit = Some(edit);
+        self.confirm_modal = Some(ConfirmModal {
+            title: " Stop Remote Tracking? ".into(),
+            message: "This queue edit will stop remote playback tracking.".into(),
+            hint: "[y] Confirm    [Esc] Cancel".into(),
+            on_confirm: ConfirmAction::StopTrackingForQueueEdit,
+        });
+        false
+    }
+
+    pub(super) fn apply_pending_tracking_edit(&mut self) {
+        self.remote_tracker = None;
+        self.tracking_edit_warning_shown = true;
+        let Some(edit) = self.pending_tracking_edit.take() else {
+            return;
+        };
+        match edit {
+            PendingTrackingEdit::Remove(pos) => self.remove_from_queue(pos),
+            PendingTrackingEdit::Move(delta) => self.move_queue_item_by(delta),
+            PendingTrackingEdit::Undo(scope) => self.undo_last_queue_edit(scope),
+            PendingTrackingEdit::EnqueueSelected => self.enqueue_selected(),
+            PendingTrackingEdit::EnqueueFolder(item) => self.do_enqueue_folder(*item),
+            PendingTrackingEdit::EnqueueArtistHeader { lib_idx, selection } => {
+                self.enqueue_artist_header_selection(lib_idx, &selection);
+            }
+        }
+    }
+
     pub(super) fn remove_from_queue(&mut self, pos: usize) {
+        if !self.guard_tracking_edit(PendingTrackingEdit::Remove(pos)) {
+            return;
+        }
         let scope = self.visible_queue_scope();
         let controls_playback_queue = self.queue_scope_is_playback(scope);
         let (active, current_idx) = {
@@ -72,6 +108,9 @@ impl App {
     }
 
     fn move_queue_item_by(&mut self, delta: isize) {
+        if !self.guard_tracking_edit(PendingTrackingEdit::Move(delta)) {
+            return;
+        }
         let scope = self.visible_queue_scope();
         let queue = self.queue_for_scope(scope);
         let from = queue.queue_cursor;
@@ -162,6 +201,9 @@ impl App {
     /// re-inserting a removed item, or swapping a moved item back to where it
     /// came from. No-op if the undo stack for that scope is empty.
     pub(super) fn undo_last_queue_edit(&mut self, scope: QueueScope) {
+        if !self.guard_tracking_edit(PendingTrackingEdit::Undo(scope)) {
+            return;
+        }
         let Some(entry) = self.undo_stack_for_scope_mut(scope).pop() else {
             return;
         };
@@ -230,18 +272,12 @@ impl App {
                 if let Some(ref conn_id) = self.connected_session_id.clone() {
                     self.clear_playback_overlays();
                     let id = conn_id.clone();
-                    let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
-                    let start_ticks = items
-                        .get(start_idx)
-                        .map_or(0, |i| i.playback_position_ticks);
                     let label = items
                         .get(start_idx)
                         .map(|i| i.playback_label())
                         .unwrap_or_default();
                     self.flash_status(format!("Playing on remote: {label}"));
-                    self.do_session_command(move |c| {
-                        c.session_play_items(&id, &item_ids, start_idx, start_ticks)
-                    });
+                    self.submit_attached_sequence(&id, &items, start_idx);
                 } else {
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     self.player.play_queue(
@@ -493,6 +529,9 @@ impl App {
     }
 
     pub(super) fn enqueue_selected(&mut self) {
+        if !self.guard_tracking_edit(PendingTrackingEdit::EnqueueSelected) {
+            return;
+        }
         if self.library_tab == 0 {
             let Some(item) = self.current_home_item() else {
                 return;

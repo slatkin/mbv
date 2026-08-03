@@ -193,6 +193,9 @@ impl App {
         if self.confirm_modal.is_some() {
             self.render_confirm_modal(f);
         }
+        if self.remote_reanchor_popup.is_some() {
+            self.render_remote_reanchor_popup(f);
+        }
         if self.daemon_lost_modal.is_some() {
             self.render_daemon_lost_modal(f);
         }
