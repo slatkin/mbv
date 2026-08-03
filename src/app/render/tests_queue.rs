@@ -160,9 +160,9 @@ fn power_queue_panel_preserves_group_aware_scrolling() {
         items.push(item);
     }
     app.player_tab.set_items(items, 4);
-    app.queue_scroll = 9;
+    app.queue_scroll = 8;
 
     let (_term, _layout) = render_view_to_terminal(&mut app, 100, 20);
 
-    assert_eq!(app.queue_scroll, 9);
+    assert_eq!(app.queue_scroll, 8);
 }

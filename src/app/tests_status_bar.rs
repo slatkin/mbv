@@ -144,11 +144,8 @@ fn status_bar_shows_emby_server_on_the_right_side() {
 }
 
 #[test]
-fn status_bar_right_side_separates_items_with_spaces_and_keeps_server_rightmost() {
+fn autosave_pill_appears_in_queue_panel_when_saved_playlist_with_autosave() {
     let mut app = make_app_stub();
-    // The AUTOSAVE/queue-source segment is only shown while the queue
-    // side is focused (see `render_status_bar`'s `source_label` /
-    // `autosave_on` gating) -- equivalent to the old "Queue tab" state.
     app.panel_focus = PanelFocus::Queue;
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("pl1".into()),
@@ -161,13 +158,11 @@ fn status_bar_right_side_separates_items_with_spaces_and_keeps_server_rightmost(
     }
 
     let rendered = render_app_to_string(&mut app, 80, 24);
-    let last_line = rendered.lines().last().unwrap();
+    let all_lines: String = rendered.lines().collect::<Vec<_>>().join("\n");
 
-    let autosave_pos = last_line.find("AUTOSAVE").unwrap();
-    let server_pos = last_line.find("emby.local").unwrap();
     assert!(
-        autosave_pos < server_pos,
-        "expected AUTOSAVE to remain left of the server pill:\n{last_line}"
+        all_lines.contains("AUTOSAVE"),
+        "expected AUTOSAVE pill in the queue panel:\n{all_lines}"
     );
 }
 
@@ -262,21 +257,21 @@ fn status_bar_has_surrounding_row_background_and_pill_cells() {
 }
 
 #[test]
-fn status_bar_shows_unsaved_marker_on_any_tab_when_queue_is_dirty() {
+fn unsaved_pill_appears_when_queue_is_dirty() {
     let mut app = make_app_stub();
     app.queue_dirty = true;
 
     let rendered = render_app_to_string(&mut app, 80, 24);
-    let last_line = rendered.lines().last().unwrap();
+    let all_lines: String = rendered.lines().collect::<Vec<_>>().join("\n");
 
     assert!(
-            last_line.contains("UNSAVED"),
-            "expected an UNSAVED marker regardless of the active tab when the queue is dirty:\n{last_line}"
+            all_lines.contains("UNSAVED"),
+            "expected an UNSAVED marker regardless of the active tab when the queue is dirty:\n{all_lines}"
         );
 }
 
 #[test]
-fn status_bar_uses_unsaved_in_autosave_slot_when_dirty() {
+fn unsaved_pill_replaces_autosave_when_dirty() {
     let mut app = make_app_stub();
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("playlist-1".into()),
@@ -286,15 +281,15 @@ fn status_bar_uses_unsaved_in_autosave_slot_when_dirty() {
     app.queue_dirty = true;
 
     let rendered = render_app_to_string(&mut app, 80, 24);
-    let last_line = rendered.lines().last().unwrap();
+    let all_lines: String = rendered.lines().collect::<Vec<_>>().join("\n");
 
     assert!(
-        last_line.contains("UNSAVED"),
-        "dirty saved-playlist queue should show UNSAVED in the save-state slot:\n{last_line}"
+        all_lines.contains("UNSAVED"),
+        "dirty saved-playlist queue should show UNSAVED in the save-state slot:\n{all_lines}"
     );
     assert!(
-        !last_line.contains("AUTOSAVE"),
-        "UNSAVED should replace AUTOSAVE while the queue is dirty:\n{last_line}"
+        !all_lines.contains("AUTOSAVE"),
+        "UNSAVED should replace AUTOSAVE while the queue is dirty:\n{all_lines}"
     );
 }
 

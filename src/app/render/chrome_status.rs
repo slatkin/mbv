@@ -148,6 +148,39 @@ impl App {
         ]
     }
 
+    pub(super) fn autosave_status_spans(&self) -> Option<Vec<Span<'static>>> {
+        let autosave_on = self.queue_is_saved_playlist() && {
+            let cfg = &self.client.lock().unwrap().config;
+            cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
+        };
+        if self.queue_dirty {
+            Some(vec![
+                Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+                Span::styled(
+                    " UNSAVED ",
+                    Style::default()
+                        .fg(palette::YELLOW)
+                        .bg(palette::STATUS_PILL_BG)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+            ])
+        } else if autosave_on {
+            Some(vec![
+                Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+                Span::styled(
+                    " AUTOSAVE ",
+                    Style::default()
+                        .fg(palette::AQUA)
+                        .bg(palette::STATUS_PILL_BG),
+                ),
+                Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+            ])
+        } else {
+            None
+        }
+    }
+
     pub(super) fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {
         self.playback_display_target()
             .displayed_mute(self)
@@ -394,34 +427,6 @@ impl App {
                     Span::styled(
                         format!(" {label} "),
                         Style::default().fg(color).bg(palette::STATUS_PILL_BG),
-                    ),
-                );
-            }
-            let autosave_on = matches!(self.panel_focus, PanelFocus::Queue)
-                && self.queue_is_saved_playlist()
-                && {
-                    let cfg = &self.client.lock().unwrap().config;
-                    cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
-                };
-            if self.queue_dirty {
-                append_right(
-                    &mut right_spans,
-                    Span::styled(
-                        " UNSAVED ",
-                        Style::default()
-                            .fg(palette::YELLOW)
-                            .bg(palette::STATUS_PILL_BG)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                );
-            } else if autosave_on {
-                append_right(
-                    &mut right_spans,
-                    Span::styled(
-                        " AUTOSAVE ",
-                        Style::default()
-                            .fg(palette::AQUA)
-                            .bg(palette::STATUS_PILL_BG),
                     ),
                 );
             }

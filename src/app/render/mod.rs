@@ -489,6 +489,22 @@ impl App {
                 Paragraph::new(Line::from(self.playlist_status_spans())),
                 pill_row,
             );
+            // Autosave/UNSAVED pill on the right side of the same row.
+            if let Some(autosave_spans) = self.autosave_status_spans() {
+                let autosave_w = Self::status_width(&autosave_spans);
+                let autosave_x = pill_row.x + pill_row.width.saturating_sub(autosave_w);
+                if autosave_x > pill_row.x {
+                    f.render_widget(
+                        Paragraph::new(Line::from(autosave_spans)),
+                        Rect {
+                            x: autosave_x,
+                            y: pill_row.y,
+                            width: autosave_w,
+                            height: 1,
+                        },
+                    );
+                }
+            }
         }
         let (library_area, visualizer_area) = self.split_visualizer_area(render_lib_area);
         self.render_visualizer(f, visualizer_area);

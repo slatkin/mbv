@@ -14,6 +14,9 @@ const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
 
 fn queue_group_start_row(display: &[QueueRow], row: usize) -> usize {
     let mut start = row;
+    while start > 0 && matches!(display[start - 1], QueueRow::Track { .. }) {
+        start -= 1;
+    }
     while start > 0 && !matches!(display[start - 1], QueueRow::Track { .. }) {
         start -= 1;
     }
@@ -527,7 +530,7 @@ mod tests {
 
         let (display, _) = super::super::build_power_queue_rows(&items);
 
-        assert!(matches!(display[1], QueueRow::Spacer));
+        assert!(matches!(display[0], QueueRow::Spacer));
         assert_eq!(queue_group_start_row(&display, 9), 6);
     }
 

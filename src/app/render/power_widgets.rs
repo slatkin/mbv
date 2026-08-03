@@ -263,11 +263,11 @@ pub(super) fn build_power_queue_rows(items: &[MediaItem]) -> (Vec<QueueRow>, Vec
     let (display, group_for_header) = build_queue_rows(items, true);
     let mut rows = Vec::with_capacity(display.len().saturating_add(group_for_header.len()));
 
+    if matches!(display.first(), Some(QueueRow::Header)) {
+        rows.push(QueueRow::Spacer);
+    }
     for row in display {
         rows.push(row.clone());
-        if matches!(row, QueueRow::Header) {
-            rows.push(QueueRow::Spacer);
-        }
     }
 
     (rows, group_for_header)
