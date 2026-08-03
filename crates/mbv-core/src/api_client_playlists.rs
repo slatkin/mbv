@@ -175,6 +175,16 @@ impl EmbyClient {
         Ok(())
     }
 
+    /// Delete one exact playlist occurrence without replacing the playlist.
+    /// This preserves stable `PlaylistItemId` values and unrelated server edits.
+    pub fn delete_playlist_entry(&self, playlist_id: &str, entry_id: &str) -> Result<(), String> {
+        self.delete(&format!("/Playlists/{playlist_id}/Items"))
+            .query("EntryIds", entry_id)
+            .call()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     // ── Series / episodes / chapters ────────────────────────────────────────
 
     pub fn get_items_by_ids(&self, ids: &[String]) -> Result<Vec<MediaItem>, String> {

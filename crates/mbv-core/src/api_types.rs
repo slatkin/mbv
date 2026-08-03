@@ -222,6 +222,8 @@ pub struct SessionInfo {
     pub now_playing_item_id: Option<String>,
     pub position_s: i64,
     pub runtime_s: i64,
+    pub position_ticks: i64,
+    pub runtime_ticks: i64,
     pub is_paused: bool,
     pub volume: i64,
     pub sub_index: i64,   // -1 = disabled

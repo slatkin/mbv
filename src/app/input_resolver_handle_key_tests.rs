@@ -551,7 +551,9 @@ fn context_stack_order_is_pinned() {
     // `confirm_clear_queue`, and `confirm_rescan` collapsed into one
     // `confirm_modal` entry (dispatching on `App::confirm_modal`), placed
     // at the topmost rank of the ranks it replaces (`save_modal`'s), per
-    // design.md decision 2. The visualizer is a global action and therefore
+    // design.md decision 2. The remote re-anchor picker is another blocking
+    // queue modal and therefore follows the shared confirmation modal. The
+    // visualizer is a global action and therefore
     // sits after modal/context-menu handlers but before playback dispatch.
     //
     // Updated for the retire-pty-relay-for-local-daemon-stay-alive change
@@ -564,6 +566,7 @@ fn context_stack_order_is_pinned() {
         vec![
             "daemon_lost_modal",
             "confirm_modal",
+            "remote_reanchor",
             "save_playlist",
             "settings",
             "help",

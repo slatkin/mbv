@@ -12,7 +12,8 @@ use super::types_feed::IdleFeed;
 use super::types_feed::SavePlaylistDialog;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
-    HomePane, PendingQueueAction, QueueScope, SuspendedLocalSession, UndoEntry,
+    HomePane, PendingQueueAction, PendingTrackingEdit, QueueScope, RemoteReanchorPopup,
+    SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::PanelFocus;
@@ -203,6 +204,9 @@ pub struct App {
     pub(super) queue_source: crate::config::QueueSource,
     pub(super) queue_dirty: bool,
     pub(super) pending_queue_action: Option<PendingQueueAction>,
+    pub(super) pending_tracking_edit: Option<PendingTrackingEdit>,
+    pub(super) tracking_edit_warning_shown: bool,
+    pub(super) remote_reanchor_popup: Option<RemoteReanchorPopup>,
     pub(super) use_nerd_fonts: bool,
     pub(super) indicator_style: render::indicators::IndicatorStyle,
     pub(super) ws_send_tx: Option<mbv_core::ws::WsSender>,
@@ -212,6 +216,9 @@ pub struct App {
     pub(super) sessions_rx: mpsc::Receiver<SessionEvent>,
     pub(super) connected_session_id: Option<String>,
     pub(super) connected_session_state: Option<mbv_core::api::SessionInfo>,
+    pub(super) remote_tracker: Option<mbv_core::remote_reconciliation::ReconciliationTracker>,
+    pub(super) session_poll_generation: u64,
+    pub(super) remote_unresolved_outcomes: usize,
     pub(super) direct_remote_connected: bool,
     pub(super) direct_remote_label: Option<String>,
     pub(super) last_session_poll: Instant,

@@ -1,5 +1,5 @@
 use super::ui_util::{is_playable, sort_audio_tracks};
-use super::{App, ArtistHeaderSelection, PanelFocus};
+use super::{App, ArtistHeaderSelection, PanelFocus, PendingTrackingEdit};
 use mbv_core::api::MediaItem;
 use rand::seq::SliceRandom;
 
@@ -42,6 +42,12 @@ impl App {
         lib_idx: usize,
         selection: &ArtistHeaderSelection,
     ) -> bool {
+        if !self.guard_tracking_edit(PendingTrackingEdit::EnqueueArtistHeader {
+            lib_idx,
+            selection: selection.clone(),
+        }) {
+            return true;
+        }
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=artist-header", selection.first_album_id, selection.artist_label);
         if self.in_non_library_thin_client_mode() {
             log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} source=artist-header reason=non-library thin-client owns playback", selection.first_album_id, selection.artist_label);

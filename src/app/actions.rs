@@ -1,6 +1,7 @@
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 use super::{
-    App, BrowseLevel, LocalPlaybackTarget, PanelFocus, PlaybackTarget, RemotePlaybackTarget,
+    App, BrowseLevel, LocalPlaybackTarget, PanelFocus, PendingTrackingEdit, PlaybackTarget,
+    RemotePlaybackTarget,
 };
 use mbv_core::api::MediaItem;
 use mbv_core::player::PlayerCommand;
@@ -205,18 +206,12 @@ impl App {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.clear_playback_overlays();
             let id = conn_id.clone();
-            let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
-            let start_ticks = items
-                .get(start_idx)
-                .map_or(0, |i| i.playback_position_ticks);
             let label = items
                 .get(start_idx)
                 .map(|i| i.playback_label())
                 .unwrap_or_default();
             self.flash_status(format!("Playing on remote: {label}"));
-            self.do_session_command(move |c| {
-                c.session_play_items(&id, &item_ids, start_idx, start_ticks)
-            });
+            self.submit_attached_sequence(&id, &items, start_idx);
             return;
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
@@ -253,6 +248,7 @@ impl App {
         }
         let label = item.playback_label();
         if let Some(ref conn_id) = self.connected_session_id.clone() {
+            self.remote_tracker = None;
             self.clear_playback_overlays();
             let id = conn_id.clone();
             let item_id = item.id.clone();
@@ -295,6 +291,9 @@ impl App {
     }
 
     pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::MediaItem) {
+        if !self.guard_tracking_edit(PendingTrackingEdit::EnqueueFolder(Box::new(item.clone()))) {
+            return;
+        }
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
         if self.in_non_library_thin_client_mode() {
             log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);

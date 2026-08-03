@@ -1,6 +1,7 @@
 use super::ui_util::take_chars;
 use super::{App, LocalPlaybackTarget, RemotePlaybackTarget};
 use crate::app::render::indicators::IndicatorData;
+use mbv_core::remote_reconciliation::RemoteIntent;
 
 impl RemotePlaybackTarget {
     pub(super) fn toggle_play_pause(&self, app: &mut App) {
@@ -10,7 +11,10 @@ impl RemotePlaybackTarget {
 
     pub(super) fn stop(&self, app: &mut App) {
         let session_id = self.session_id.clone();
-        app.do_session_command(move |c| c.session_transport(&session_id, "Stop"));
+        app.issue_remote_intent(RemoteIntent::Stop);
+        app.do_reconciliation_session_command(&session_id.clone(), move |c| {
+            c.session_transport(&session_id, "Stop")
+        });
     }
 
     pub(super) fn seek_relative(&self, app: &mut App, delta: f64) {
@@ -21,7 +25,10 @@ impl RemotePlaybackTarget {
             .unwrap_or(0);
         let target = App::remote_seek_ticks(pos_s, delta);
         let session_id = self.session_id.clone();
-        app.do_session_command(move |c| c.session_seek(&session_id, target));
+        app.issue_remote_intent(RemoteIntent::Seek);
+        app.do_reconciliation_session_command(&session_id.clone(), move |c| {
+            c.session_seek(&session_id, target)
+        });
     }
 
     pub(super) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {

@@ -467,15 +467,11 @@ impl App {
                 let n = queue.items.len();
                 if t < n {
                     if let Some(conn_id) = self.connected_session_id.clone() {
-                        let item = queue.items[t].clone();
-                        let item_ids: Vec<String> =
-                            queue.items.iter().map(|i| i.id.clone()).collect();
-                        let start_ticks = item.playback_position_ticks;
+                        let items = queue.items.clone();
+                        let item = items[t].clone();
                         let label = item.playback_label();
                         self.flash_status(format!("Playing on remote: {label}"));
-                        self.do_session_command(move |c| {
-                            c.session_play_items(&conn_id, &item_ids, t, start_ticks)
-                        });
+                        self.submit_attached_sequence(&conn_id, &items, t);
                     } else {
                         // Only read once we know we're not handing off to a
                         // session -- `queue_scope_is_playback` is the one

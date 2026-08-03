@@ -156,6 +156,10 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_confirm_modal,
     },
     ContextEntry {
+        name: "remote_reanchor",
+        handler: App::handle_key_remote_reanchor,
+    },
+    ContextEntry {
         name: "save_playlist",
         handler: App::handle_key_save_playlist_entry,
     },

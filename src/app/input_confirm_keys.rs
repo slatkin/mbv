@@ -145,6 +145,17 @@ impl App {
                     _ => {}
                 }
             }
+            ConfirmAction::StopTrackingForQueueEdit => match key.code {
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                    self.confirm_modal = None;
+                    self.apply_pending_tracking_edit();
+                }
+                KeyCode::Esc => {
+                    self.confirm_modal = None;
+                    self.pending_tracking_edit = None;
+                }
+                _ => {}
+            },
         }
         Some(false)
     }

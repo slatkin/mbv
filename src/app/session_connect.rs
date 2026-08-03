@@ -304,6 +304,7 @@ impl App {
         self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
         self.connected_session_id = None;
         self.connected_session_state = None;
+        self.remote_tracker = None;
         self.direct_remote_connected = true;
         self.direct_remote_label = {
             let name = sess.device_name.trim();
@@ -509,6 +510,7 @@ impl App {
         }
         self.connected_session_id = None;
         self.connected_session_state = None;
+        self.remote_tracker = None;
         self.direct_remote_connected = false;
         self.direct_remote_label = None;
         self.active_route = None;
@@ -616,6 +618,7 @@ impl App {
         );
         self.connected_session_id = Some(id);
         self.connected_session_state = Some(sess.clone());
+        self.remote_tracker = None;
         self.session_miss_count = 0;
         self.remote_pos_s = sess.position_s;
         self.remote_pos_at = Instant::now();

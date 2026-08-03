@@ -103,8 +103,35 @@ pub(super) enum LibEvent {
     Error(String),
 }
 
+pub(super) struct ReconciliationCommand {
+    pub(super) session_id: String,
+    pub(super) tracker_epoch: u64,
+    pub(super) generation: u64,
+}
+
 pub(super) enum SessionEvent {
-    Loaded(Vec<mbv_core::api::SessionInfo>),
+    Loaded {
+        sessions: Vec<mbv_core::api::SessionInfo>,
+        generation: u64,
+    },
     ItemRefreshed(String, Box<mbv_core::api::MediaItem>), // (item_id, fresh)
+    CommandError {
+        error: String,
+        reconciliation: Option<ReconciliationCommand>,
+    },
+    ConsumeValidated {
+        session_id: String,
+        epoch: u64,
+        occurrence_id: u64,
+        playlist_id: String,
+        entry_id: String,
+        result: Result<(), String>,
+    },
+    ConsumeOutcome {
+        session_id: String,
+        epoch: u64,
+        occurrence_id: u64,
+        result: Result<(), String>,
+    },
     Error(String),
 }

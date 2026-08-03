@@ -1,14 +1,174 @@
 use super::{App, SessionEvent, QUIT_REQUESTED};
+use mbv_core::remote_reconciliation::{ReconciliationEffect, RemoteObservation, TrackingState};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+pub(super) fn validate_remote_playlist_entry(
+    items: &[mbv_core::api::MediaItem],
+    entry_id: &str,
+    expected_media_id: &str,
+) -> Result<bool, String> {
+    match items.iter().find(|item| item.playlist_item_id == entry_id) {
+        None => Ok(false),
+        Some(item) if item.id == expected_media_id => Ok(true),
+        Some(item) => Err(format!(
+            "playlist entry {entry_id} now identifies media {} instead of {expected_media_id}",
+            item.id
+        )),
+    }
+}
+
 impl App {
+    fn apply_remote_observation(&mut self, session: &mbv_core::api::SessionInfo, generation: u64) {
+        let Some(tracker) = self.remote_tracker.as_mut() else {
+            return;
+        };
+        let observation = if let Some(media_id) = session.now_playing_item_id.clone() {
+            RemoteObservation::playing(
+                generation,
+                session.id.clone(),
+                media_id,
+                session.position_ticks,
+                session.runtime_ticks,
+                Self::now_ms(),
+            )
+        } else {
+            RemoteObservation::stopped(generation, session.id.clone(), Self::now_ms())
+        };
+        let effects = tracker.observe(observation);
+        if tracker.state() == TrackingState::Tracking {
+            if let Some(index) = tracker.current_index() {
+                if index < self.player_tab.items.len() {
+                    self.player_tab.queue_cursor = index;
+                }
+            }
+        }
+        for effect in effects {
+            match effect {
+                ReconciliationEffect::Completion(item) => {
+                    log::info!(
+                        target: "remote_reconciliation",
+                        "completed remote occurrence={} media={}",
+                        item.occurrence_id,
+                        item.media_id
+                    );
+                    self.begin_remote_consume(item);
+                }
+                ReconciliationEffect::StateChanged { state, reason } => {
+                    log::debug!(
+                        target: "remote_reconciliation",
+                        "tracking state={state:?} reason={reason:?}"
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn remote_playlist_id(&self) -> Option<String> {
+        match &self.queue_source {
+            crate::config::QueueSource::Playlist { id: Some(id), .. } => Some(id.clone()),
+            _ => None,
+        }
+    }
+
+    fn unresolved_consume(&mut self, error: String) {
+        self.remote_unresolved_outcomes = self.remote_unresolved_outcomes.saturating_add(1);
+        log::warn!(target: "remote_reconciliation", "unresolved playlist consume: {error}");
+    }
+
+    fn begin_remote_consume(
+        &mut self,
+        occurrence: mbv_core::remote_reconciliation::SubmittedOccurrence,
+    ) {
+        let Some(playlist_id) = self.remote_playlist_id() else {
+            return;
+        };
+        let is_audio = self
+            .player_tab
+            .items
+            .iter()
+            .find(|item| item.id == occurrence.media_id)
+            .is_some_and(|item| item.is_audio());
+        let consume_enabled = {
+            let config = &self.client.lock().unwrap().config;
+            if is_audio {
+                config.save_playlist_on_consume_audio
+            } else {
+                config.save_playlist_on_consume
+            }
+        };
+        if !consume_enabled {
+            return;
+        }
+        let Some(entry_id) = occurrence.playlist_item_id.clone() else {
+            return;
+        };
+        let Some(tracker) = self.remote_tracker.as_mut() else {
+            return;
+        };
+        let session_id = tracker.session_id().to_string();
+        let epoch = tracker.epoch();
+        if !tracker.mark_consumed(occurrence.occurrence_id) {
+            return;
+        }
+        let media_id = occurrence.media_id.clone();
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.sessions_tx.clone();
+        let occurrence_id = occurrence.occurrence_id;
+        std::thread::spawn(move || match client.get_playlist_items(&playlist_id) {
+            Ok(items) => match validate_remote_playlist_entry(&items, &entry_id, &media_id) {
+                Ok(false) => {
+                    let _ = tx.send(SessionEvent::ConsumeOutcome {
+                        session_id,
+                        epoch,
+                        occurrence_id,
+                        result: Ok(()),
+                    });
+                }
+                Err(error) => {
+                    let _ = tx.send(SessionEvent::ConsumeValidated {
+                        session_id,
+                        epoch,
+                        occurrence_id,
+                        playlist_id,
+                        entry_id,
+                        result: Err(error),
+                    });
+                }
+                Ok(true) => {
+                    let _ = tx.send(SessionEvent::ConsumeValidated {
+                        session_id,
+                        epoch,
+                        occurrence_id,
+                        playlist_id,
+                        entry_id,
+                        result: Ok(()),
+                    });
+                }
+            },
+            Err(error) => {
+                let _ = tx.send(SessionEvent::ConsumeValidated {
+                    session_id,
+                    epoch,
+                    occurrence_id,
+                    playlist_id,
+                    entry_id,
+                    result: Err(error),
+                });
+            }
+        });
+    }
+
     /// Handle a single `SessionEvent` from the sessions-poll channel. Faithful
     /// transcription of the match arms previously inlined in `run()`'s
     /// `sessions_rx` drain loop (see `drain_session_events`).
     pub(super) fn handle_session_event(&mut self, ev: SessionEvent) {
         match ev {
-            SessionEvent::Loaded(sessions) => {
+            SessionEvent::Loaded {
+                sessions,
+                generation,
+            } => {
                 let old_id = self
                     .sessions
                     .get(self.sessions_cursor)
@@ -30,7 +190,7 @@ impl App {
                 }
                 // Update connected session state; auto-disconnect if gone
                 if let Some(ref conn_id) = self.connected_session_id.clone() {
-                    if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id) {
+                    if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id).cloned() {
                         // Maintain a monotonic position estimate within a single video.
                         // Reset the anchor only when the playing item ID changes.
                         // Avoid keying on runtime or title — the API occasionally returns
@@ -116,15 +276,20 @@ impl App {
                             self.remote_pos_at = now;
                         }
                         if item_changed {
-                            if let Some(new_idx) = s.now_playing_item_id.as_ref().and_then(|id| {
-                                self.player_tab.items.iter().position(|it| &it.id == id)
-                            }) {
-                                self.player_tab.queue_cursor = new_idx;
+                            if self.remote_tracker.is_none() {
+                                if let Some(new_idx) =
+                                    s.now_playing_item_id.as_ref().and_then(|id| {
+                                        self.player_tab.items.iter().position(|it| &it.id == id)
+                                    })
+                                {
+                                    self.player_tab.queue_cursor = new_idx;
+                                }
                             }
                             self.runtime_zero_since = None;
                         }
                         self.connected_session_state = Some(s.clone());
                         self.session_miss_count = 0;
+                        self.apply_remote_observation(&s, generation);
                         // Remote hasn't started playing yet — repoll sooner.
                         // Cap fast-poll at 30 s: if runtime stays 0 that long the
                         // remote client likely won't report it and we stop hammering.
@@ -141,6 +306,9 @@ impl App {
                         self.session_miss_count += 1;
                         if self.session_miss_count >= 3 {
                             log::warn!(target: "sessions", "connected session gone; disconnecting");
+                            if let Some(tracker) = self.remote_tracker.as_mut() {
+                                tracker.session_disappeared();
+                            }
                             self.flash_status_high(
                                 "Remote session ended; disconnected".to_string(),
                             );
@@ -157,6 +325,66 @@ impl App {
             SessionEvent::ItemRefreshed(item_id, fresh) => {
                 if let Some(slot) = self.player_tab.items.iter_mut().find(|i| i.id == item_id) {
                     *slot = *fresh;
+                }
+            }
+            SessionEvent::CommandError {
+                error,
+                reconciliation,
+            } => {
+                if let (Some(command), Some(tracker)) =
+                    (reconciliation, self.remote_tracker.as_mut())
+                {
+                    if tracker.session_id() == command.session_id
+                        && tracker.epoch() == command.tracker_epoch
+                        && tracker.command_generation_matches(command.generation)
+                    {
+                        tracker.command_failed();
+                    }
+                }
+                self.flash_status_high(format!("Remote command failed: {error}"));
+            }
+            SessionEvent::ConsumeValidated {
+                session_id,
+                epoch,
+                occurrence_id,
+                playlist_id,
+                entry_id,
+                result,
+                ..
+            } => {
+                if let Err(error) = result {
+                    self.unresolved_consume(error);
+                } else if self.remote_tracker.as_ref().is_some_and(|tracker| {
+                    tracker.session_id() == session_id
+                        && tracker.consume_pending(epoch, occurrence_id)
+                }) {
+                    let client = self.client.lock().unwrap().clone();
+                    let tx = self.sessions_tx.clone();
+                    std::thread::spawn(move || {
+                        let result = client.delete_playlist_entry(&playlist_id, &entry_id);
+                        let _ = tx.send(SessionEvent::ConsumeOutcome {
+                            session_id,
+                            epoch,
+                            occurrence_id,
+                            result,
+                        });
+                    });
+                }
+            }
+            SessionEvent::ConsumeOutcome {
+                session_id,
+                epoch,
+                occurrence_id,
+                result,
+            } => {
+                let current = self.remote_tracker.as_ref().is_some_and(|tracker| {
+                    tracker.session_id() == session_id
+                        && tracker.consume_pending(epoch, occurrence_id)
+                });
+                if current {
+                    if let Err(error) = result {
+                        self.unresolved_consume(error);
+                    }
                 }
             }
             SessionEvent::Error(e) => {
@@ -406,5 +634,29 @@ impl App {
                 None
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::make_item;
+
+    #[test]
+    fn playlist_entry_validation_distinguishes_absent_match_and_mismatch() {
+        let mut item = make_item("Track", "Audio");
+        item.id = "media-1".into();
+        item.playlist_item_id = "entry-1".into();
+        let items = vec![item];
+
+        assert_eq!(
+            validate_remote_playlist_entry(&items, "missing", "media-1"),
+            Ok(false)
+        );
+        assert_eq!(
+            validate_remote_playlist_entry(&items, "entry-1", "media-1"),
+            Ok(true)
+        );
+        assert!(validate_remote_playlist_entry(&items, "entry-1", "media-2").is_err());
     }
 }

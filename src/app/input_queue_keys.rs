@@ -301,6 +301,18 @@ impl App {
         }
 
         match key.code {
+            KeyCode::Char('t')
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    && self.remote_tracker.is_some() =>
+            {
+                self.stop_remote_tracking();
+            }
+            KeyCode::Char('r')
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    && self.remote_tracker.is_some() =>
+            {
+                self.reanchor_remote_tracking();
+            }
             KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.move_queue_item_up();
             }
