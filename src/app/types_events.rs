@@ -6,7 +6,7 @@ pub(super) enum LibEvent {
     Loaded {
         lib_idx: usize,
         parent_id: String,
-        level: BrowseLevel,
+        level: Box<BrowseLevel>,
     },
     PageAppended {
         lib_idx: usize,

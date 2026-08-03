@@ -167,7 +167,7 @@ impl App {
                 lib_idx,
                 parent_id,
                 level,
-            } => self.handle_lib_loaded(lib_idx, parent_id, level),
+            } => self.handle_lib_loaded(lib_idx, parent_id, *level),
             LibEvent::PageAppended {
                 lib_idx,
                 parent_id,

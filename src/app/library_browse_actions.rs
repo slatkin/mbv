@@ -347,7 +347,7 @@ impl App {
                     let _ = tx.send(LibEvent::Loaded {
                         lib_idx,
                         parent_id: parent_id.clone(),
-                        level: BrowseLevel {
+                        level: Box::new(BrowseLevel {
                             parent_id,
                             title,
                             items,
@@ -362,7 +362,7 @@ impl App {
                             all_items: None,
                             letter_filter: None,
                             music_grouping: None,
-                        },
+                        }),
                     });
                 }
                 Err(e) => {

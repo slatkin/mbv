@@ -54,7 +54,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
     app.handle_lib_event(LibEvent::Loaded {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        level: BrowseLevel {
+        level: Box::new(BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: folders,
@@ -69,7 +69,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
             all_items: None,
             letter_filter: None,
             music_grouping: None,
-        },
+        }),
     });
 
     assert_eq!(app.libs[0].nav_stack.len(), 1);
@@ -140,7 +140,7 @@ fn feed_home_video_root_filters_groups_from_all_video_paths() {
     app.handle_lib_event(LibEvent::Loaded {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
-        level: BrowseLevel {
+        level: Box::new(BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![empty, active.clone()],
@@ -155,7 +155,7 @@ fn feed_home_video_root_filters_groups_from_all_video_paths() {
             all_items: None,
             letter_filter: None,
             music_grouping: None,
-        },
+        }),
     });
 
     assert_eq!(app.libs[0].nav_stack.len(), 1);
