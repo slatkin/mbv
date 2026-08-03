@@ -1,8 +1,8 @@
 ## 1. Shared Pill-Selector Presentation
 
-- [ ] 1.1 Replace Home-specific pill palette names with context-neutral pill-selector row, selected, unselected, and overflow tokens in `src/app/palette.rs`.
-- [ ] 1.2 Make `render_pill_bar` own the canonical Home-style joined edges, spacing, row background, selection styles, overflow indicators, width calculations, and hitbox geometry.
-- [ ] 1.3 Remove `render_home_pill_bar`, the Home-only style callback, and caller-selectable appearance variants from the shared pill-bar API.
+- [x] 1.1 Replace Home-specific pill palette names with context-neutral pill-selector row, selected, unselected, and overflow tokens in `src/app/palette.rs`.
+- [x] 1.2 Make `render_pill_bar` own the canonical Home-style joined edges, spacing, row background, selection styles, overflow indicators, width calculations, and hitbox geometry.
+- [x] 1.3 Remove `render_home_pill_bar`, the Home-only style callback, and caller-selectable appearance variants from the shared pill-bar API.
 
 ## 2. Selector Adoption
 
