@@ -55,7 +55,7 @@ The refactor will not introduce a new selector state model. Existing selected in
 
 1. Introduce context-neutral pill-selector palette tokens and make the common bar render the canonical shell.
 2. Move existing scrolling selector callers to the sole renderer and remove Home-specific appearance code.
-3. Delegate series seasons and selectable direct-remote queue scope to the common renderer.
+3. Delegate series seasons to the common renderer.
 4. Update existing render assertions and run the targeted render/input tests followed by the full test suite.
 
 The change affects only TUI rendering code and requires no persisted-data or protocol migration. Rollback consists of reverting the rendering refactor and palette renames.

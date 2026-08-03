@@ -4,12 +4,6 @@ Defines a consistent, reusable visual language for interactive pill selectors ac
 
 ## ADDED Requirements
 
-## Purpose
-
-Defines a consistent, reusable visual language for interactive pill selectors across the terminal interface while preserving their existing navigation behavior.
-
-## ADDED Requirements
-
 ### Requirement: Interactive pill selectors share one appearance
 The TUI SHALL render Home section, feed group, music group, letter filter, and series season controls with the same pill-selector appearance. The shared appearance SHALL use joined angled pill edges, a green selected surface with white text, and a dark unselected surface with muted text.
 
@@ -22,7 +16,7 @@ The TUI SHALL derive the visual shell and palette of every in-scope pill selecto
 
 #### Scenario: Shared appearance changes
 - **WHEN** the shared pill-selector presentation definitions are changed
-- **THEN** Home, library/filter, series-season, and selectable queue-scope pill selectors render the changed appearance without context-specific appearance implementations
+- **THEN** Home, library/filter, and series-season pill selectors render the changed appearance without context-specific appearance implementations
 
 ### Requirement: Existing pill selector interaction is preserved
 The TUI SHALL preserve each pill selector's existing selected value, keyboard commands, mouse selection, caller-defined target identity, and overflow behavior while unifying presentation.

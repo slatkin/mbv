@@ -276,8 +276,7 @@ pub(super) fn build_power_queue_rows(items: &[MediaItem]) -> (Vec<QueueRow>, Vec
 /// Style for a pill-selector choice: white text on the green selected
 /// surface, muted text on the dark unselected surface. This is the canonical
 /// appearance for every interactive pill selector (Home sections, feed
-/// groups, music groups, letter filters, series seasons, and the selectable
-/// queue scope).
+/// groups, music groups, letter filters, and series seasons).
 fn selector_pill_style(selected: bool) -> Style {
     if selected {
         Style::default()
@@ -348,7 +347,7 @@ pub(super) fn power_content_width(width: u16, needs_scrollbar: bool) -> usize {
 
 /// A horizontally-scrolling row of selector pills, shared by every
 /// pill selector (Home sections, feed groups, music groups, letter
-/// filters, series seasons, selectable queue scope) so their appearance,
+/// filters, and series seasons) so their appearance,
 /// scroll/overflow/selection behavior can't drift apart. Callers
 /// pre-truncate `labels`, supply the parallel `ids` recorded as click
 /// targets, mark which position is `selected_pos`, and may pass an
