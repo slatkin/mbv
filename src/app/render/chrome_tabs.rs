@@ -51,7 +51,7 @@ impl App {
         };
 
         let pb_h: u16 = 2; // 2-col padding inside the coloured box
-        let tabs_x = area.x + pb_h;
+        let tabs_x = area.x + 1;
         let tabs_w = area
             .width
             .saturating_sub(2 * pb_h + TABBAR_LEFT_RESERVE + TABBAR_RIGHT_RESERVE);
