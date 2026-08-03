@@ -78,6 +78,7 @@ jobs:
           cp scripts/mbv_*.lua "${DIST}/"
           cp fonts/Material-Design-Iconic-Font.ttf "${DIST}/"
           cp dist/config.toml "${DIST}/"
+          cp dist/mbvd.toml "${DIST}/"
           cp contrib/mbvd.service "${DIST}/"
           tar czf "${DIST}-linux-x86_64.tar.gz" "${DIST}"
           echo "TARBALL=${DIST}-linux-x86_64.tar.gz" >> "$GITHUB_ENV"
