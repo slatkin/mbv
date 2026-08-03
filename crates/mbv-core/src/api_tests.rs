@@ -344,6 +344,12 @@
         assert_eq!(parse_mbv_direct_tcp_port(&commands), Some(47788));
     }
 
+    #[test]
+    fn parse_mbv_shared_data_tcp_port_command_extracts_port() {
+        let commands = vec![mbv_shared_data_tcp_port_command(47789)];
+        assert_eq!(parse_mbv_shared_data_tcp_port(&commands), Some(47789));
+    }
+
     // ── auth_header ──────────────────────────────────────────────────────────
 
     #[test]

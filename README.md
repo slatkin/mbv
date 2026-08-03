@@ -32,57 +32,51 @@ You can browse libraries, build a queue, and play from your server. Playback sta
 
 ## Shared mbv State
 
-Shared state is disabled by default. On the canonical `mbvd`, enable the
-dedicated host and configure either a Unix socket or a loopback/private TCP
-listener. TLS is optional for TCP; WAN endpoints are rejected:
+Shared state is disabled by default. It requires one boolean in the system
+daemon config and one boolean in each client config. The daemon advertises its
+shared-data endpoint through Emby; clients discover it automatically.
+
+The packaged `mbvd` service reads `/etc/mbv/config.toml`. Set:
 
 ```toml
 [shared_data]
 enabled = true
-listen = "/run/mbv/shared.sock"
-# Or: listen = "192.168.1.20:47789"
-# Optional TLS for TCP listeners:
-# tls_cert_path = "/etc/mbv/shared-cert.pem"
-# tls_key_path = "/etc/mbv/shared-key.pem"
 ```
 
-On each participating client, opt in with an independent endpoint:
+Each `mbv` client reads `$XDG_CONFIG_HOME/mbv/config.toml`, normally
+`~/.config/mbv/config.toml`. Set the same boolean there:
 
 ```toml
 [shared_data]
-endpoint = "tcp://192.168.1.20:47789"
+enabled = true
 ```
 
-For a `tls://` endpoint, the client validates the TLS certificate before
-sending its Emby token. Shared queue, library-position, reconnect, and
-roaming-settings documents are mirrored locally. If `mbvd` is unavailable,
-browsing and playback continue from the local mirror and background reconnect
-attempts retry with bounded exponential backoff. Existing shared documents win
-when a client reconnects.
+The normal setup uses private-LAN TCP on port `47789`; clients reject a daemon
+advertised at a public address. Advanced deployments may still set `listen`,
+`endpoint`, and the TLS certificate/key fields explicitly. For `tls://`, the
+client validates the certificate before sending its Emby token.
+
+Shared queue, library-position, reconnect, and roaming-settings documents are
+mirrored locally. If `mbvd` is unavailable, browsing and playback continue from
+the local mirror and background reconnect attempts use bounded exponential
+backoff. Existing shared documents win when a client reconnects.
 
 To inspect an existing host database locally without starting the daemon, run
-`mbvd --export-shared-data`. Disabling either opt-in returns the client to
+`sudo MBV_SYSTEM=1 mbvd --export-shared-data`. Setting either boolean to false
+returns the client to
 local-only behavior; the database is preserved for later re-enablement or
 export.
 
 ### First-time setup
 
-1. On the host that will run `mbvd`, run `mbv` once and authenticate to Emby so
-   `mbvd` has cached credentials for its current-user validation.
-2. Choose a private IP address on that host and allow the shared-data port only
-   from the intended LAN in the host firewall. Do not use `0.0.0.0`, a public
-   address, or a public DNS name; WAN endpoints are rejected.
-3. Add the `[shared_data]` host configuration above and restart `mbvd`.
-4. On each client, authenticate to the same Emby account normally, add the
-   separate `shared_data.endpoint`, and restart `mbv`.
-5. The first connected client initializes absent shared documents from its
-   local state. Later clients adopt the existing shared documents; shared
-   queue, library position, reconnect target, and roaming settings then become
-   authoritative while the local mirrors remain available for fallback.
-6. Confirm the setup by changing a queue or library position on one client and
-   checking that another connected client receives it. Use
-   `mbvd --export-shared-data` on the host if you need to inspect revisions or
-   recover the stored values.
-7. To roll back, remove `shared_data.endpoint` from clients and/or set host
-   `shared_data.enabled = false`; clients continue using their local mirrors
-   and the database is preserved.
+1. Edit `/etc/mbv/config.toml`: set the Emby `[server].url` and
+   `[shared_data].enabled = true`.
+2. Run `sudo MBV_SYSTEM=1 mbv` once and log in. This writes the system daemon's
+   credentials under `/var/lib/mbv`; quit after login.
+3. Allow TCP port `47789` from the intended private LAN, then restart `mbvd`.
+4. In each client's `~/.config/mbv/config.toml`, set
+   `[shared_data].enabled = true` and restart `mbv`.
+
+The first client initializes empty shared documents from its local state. To
+roll back, set `enabled = false` on the clients or daemon. Local mirrors and the
+daemon database under `/var/lib/mbv` are preserved.

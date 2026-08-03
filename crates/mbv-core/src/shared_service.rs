@@ -161,13 +161,13 @@ impl SharedStream for native_tls::TlsStream<std::net::TcpStream> {
     }
 }
 
-/// Start the shared-data service. Returns `None` if hosting is disabled or
-/// the listener cannot be bound.
+/// Start the shared-data service. Returns the advertised TCP port (zero for a
+/// Unix socket), or `None` if hosting is disabled or the listener cannot bind.
 pub fn start_shared_service(
     client: Arc<Mutex<EmbyClient>>,
     store: SharedStoreHandle,
     config: &crate::config::Config,
-) -> Option<SharedSessionRegistry> {
+) -> Option<u16> {
     if !config.shared_data_enabled {
         return None;
     }
@@ -181,12 +181,14 @@ pub fn start_shared_service(
         sessions: Vec::new(),
     }));
 
-    let listen = crate::config::shared_tcp_address(config.shared_data_listen.trim());
+    let configured_listen = crate::config::shared_data_listen(config);
+    let listen = crate::config::shared_tcp_address(&configured_listen);
     let is_unix = listen.starts_with('/') || listen.starts_with("unix://");
     let is_tcp = !is_unix;
 
-    if is_tcp {
+    let advertised_port = if is_tcp {
         let listener = TcpListener::bind(listen).ok()?;
+        let port = listener.local_addr().ok()?.port();
         let use_tls = !config.shared_data_tls_cert_path.trim().is_empty();
         let acceptor = if use_tls {
             Some(bind_shared_tls_acceptor(
@@ -235,6 +237,7 @@ pub fn start_shared_service(
                 }
             }
         });
+        port
     } else {
         // Unix domain socket listener
         let listener = bind_shared_unix_listener(listen)?;
@@ -260,9 +263,10 @@ pub fn start_shared_service(
                 );
             }
         });
-    }
+        0
+    };
 
-    Some(registry)
+    Some(advertised_port)
 }
 
 fn spawn_shared_client_handler<S>(
