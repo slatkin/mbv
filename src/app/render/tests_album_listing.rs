@@ -6,18 +6,8 @@ use crate::app::{BrowseLevel, LibSearch, LibraryTab};
 
 #[test]
 fn album_folder_listing_renders_list_and_inline_detail_together() {
-    let mut app = make_power_music_group_app();
+    let mut app = make_power_music_group_app_with_second_album();
     assert_eq!(app.libs[0].nav_stack.len(), 2);
-
-    let mut second_album = make_item("Second Album", "MusicAlbum");
-    second_album.id = "album-2".into();
-    second_album.artist = "Alpha".into();
-    app.libs[0]
-        .nav_stack
-        .last_mut()
-        .unwrap()
-        .items
-        .push(second_album);
 
     let mut track = make_item("Opening Track", "Audio");
     track.id = "track-1".into();
@@ -46,55 +36,12 @@ fn album_folder_listing_renders_list_and_inline_detail_together() {
         .iter()
         .position(|l| l.contains("First Album"))
         .expect("expected selected album row");
-    assert!(
-        lines[title_y - 4].trim().is_empty(),
-        "expected the colored top-padding row above the artist header to be blank:\n{out}"
-    );
-    assert_eq!(
-        lines.iter().filter(|line| line.trim() == "Alpha").count(),
-        1,
-        "plain album framing must not duplicate the artist name:\n{out}"
-    );
-
     let track_y = lines
         .iter()
         .position(|l| l.contains("Opening Track"))
         .expect("expected inline track row");
-    assert!(
-        track_y > title_y,
-        "expected the track row to render below the selected album title:\n{out}"
-    );
 
-    let second_album_y = lines
-        .iter()
-        .position(|l| l.contains("Second Album"))
-        .expect("expected the following album row");
-    assert!(
-        second_album_y > track_y,
-        "expected the inline track detail to render before sibling albums:\n{out}"
-    );
-
-    let title_row_idx = layout
-        .left_row_map
-        .iter()
-        .position(|r| *r == Some(0))
-        .expect("expected the selected album (index 0) in the row map");
-    let second_row_idx = layout
-        .left_row_map
-        .iter()
-        .position(|r| *r == Some(1))
-        .expect("expected the following album (index 1) in the row map");
-    assert!(
-        second_row_idx > title_row_idx,
-        "expected the following album's row-map entry after the selected album's"
-    );
-    assert!(
-        layout.left_row_map[title_row_idx + 1..second_row_idx]
-            .iter()
-            .all(Option::is_none),
-        "expected every row between the two albums (borders, padding, track detail) to be non-selectable:\n{:?}",
-        layout.left_row_map
-    );
+    assert_inline_detail_frames_between_albums(&lines, &layout, title_y, track_y);
     assert_eq!(
         app.libs[0].nav_stack.len(),
         2,

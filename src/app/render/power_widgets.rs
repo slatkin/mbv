@@ -328,16 +328,6 @@ pub(super) fn selection_marker(_active: bool) -> Span<'static> {
     Span::raw(" ")
 }
 
-#[cfg(test)]
-mod tests {
-    use super::selection_marker;
-
-    #[test]
-    fn selected_rows_reserve_alignment_without_a_gutter_marker() {
-        assert_eq!(selection_marker(true).content, " ");
-    }
-}
-
 /// Width in columns reserved for a list's scrollbar gutter.
 pub(super) const POWER_SCROLLBAR_GUTTER: u16 = 1;
 

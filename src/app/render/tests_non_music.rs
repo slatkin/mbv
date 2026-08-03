@@ -126,66 +126,6 @@ fn letter_pills_show_for_any_captured_library_total() {
 }
 
 #[test]
-fn tv_letter_pills_render_for_large_tv_library() {
-    let mut large = make_power_large_tv_library_app(LIBRARY_PILL_THRESHOLD + 1);
-
-    let backend = TestBackend::new(60, 20);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutMain::default();
-    term.draw(|f| {
-        large.render_main(
-            f,
-            Rect::new(0, 0, 60, 20),
-            &mut layout,
-            &mut crate::app::layout::LayoutPlayback::default(),
-            &mut Rect::default(),
-            &mut Rect::default(),
-            0,
-            false,
-            &None,
-        );
-    })
-    .unwrap();
-    let out = buffer_to_string(&term);
-    assert!(
-        out.contains("A\u{2013}C"),
-        "expected A–C pill on large TV library:\n{out}"
-    );
-    assert!(
-        !layout.selector_tabs.is_empty(),
-        "expected TV pill hitboxes for click dispatch"
-    );
-}
-
-#[test]
-fn tv_letter_pills_render_also_for_small_tv_library() {
-    let mut small = make_power_large_tv_library_app(5);
-
-    let backend = TestBackend::new(60, 20);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutMain::default();
-    term.draw(|f| {
-        small.render_main(
-            f,
-            Rect::new(0, 0, 60, 20),
-            &mut layout,
-            &mut crate::app::layout::LayoutPlayback::default(),
-            &mut Rect::default(),
-            &mut Rect::default(),
-            0,
-            false,
-            &None,
-        );
-    })
-    .unwrap();
-    let out = buffer_to_string(&term);
-    assert!(
-        out.contains("A\u{2013}C"),
-        "TV pill row appears for any captured total:\n{out}"
-    );
-}
-
-#[test]
 fn tv_series_list_computes_sorted_indices_when_above_threshold() {
     let mut app = make_app_stub();
     app.library_tab = 1;

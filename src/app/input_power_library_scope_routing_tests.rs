@@ -176,65 +176,36 @@ fn ctrl_r_confirmation_targets_active_library() {
 }
 
 #[test]
-fn left_panel_mouse_scroll_saves_position() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_library_app();
-    app.layout.main.left_area = Rect {
-        x: 10,
-        y: 5,
-        width: 20,
-        height: 5,
-    };
-
-    app.handle_mouse(make_power_library_mouse_event(
+fn left_panel_mouse_events_save_position() {
+    for kind in [
         MouseEventKind::ScrollDown,
-        12,
-        6,
-    ));
-
-    let position = crate::config::load_library_position_state()
-        .libraries
-        .get("lib-movies")
-        .cloned()
-        .expect("saved library");
-    assert_eq!(
-        position
-            .levels
-            .first()
-            .and_then(|level| level.focused_item_id.as_deref()),
-        Some("id1")
-    );
-}
-
-#[test]
-fn left_panel_mouse_click_saves_position() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_library_app();
-    app.layout.main.left_area = Rect {
-        x: 10,
-        y: 5,
-        width: 20,
-        height: 5,
-    };
-
-    app.handle_mouse(make_power_library_mouse_event(
         MouseEventKind::Down(MouseButton::Left),
-        12,
-        6,
-    ));
+    ] {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_library_app();
+        app.layout.main.left_area = Rect {
+            x: 10,
+            y: 5,
+            width: 20,
+            height: 5,
+        };
 
-    let position = crate::config::load_library_position_state()
-        .libraries
-        .get("lib-movies")
-        .cloned()
-        .expect("saved library");
-    assert_eq!(
-        position
-            .levels
-            .first()
-            .and_then(|level| level.focused_item_id.as_deref()),
-        Some("id1")
-    );
+        app.handle_mouse(make_power_library_mouse_event(kind, 12, 6));
+
+        let position = crate::config::load_library_position_state()
+            .libraries
+            .get("lib-movies")
+            .cloned()
+            .unwrap_or_else(|| panic!("saved library for mouse event kind {kind:?}"));
+        assert_eq!(
+            position
+                .levels
+                .first()
+                .and_then(|level| level.focused_item_id.as_deref()),
+            Some("id1"),
+            "mouse event kind {kind:?} did not save the expected focused item"
+        );
+    }
 }
 
 #[test]
