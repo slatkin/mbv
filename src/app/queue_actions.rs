@@ -29,6 +29,9 @@ impl App {
             return;
         };
         match edit {
+            PendingTrackingEdit::ClearQueue => {
+                self.execute_pending_queue_action(PendingQueueAction::ClearQueue)
+            }
             PendingTrackingEdit::Remove(pos) => self.remove_from_queue(pos),
             PendingTrackingEdit::Move(delta) => self.move_queue_item_by(delta),
             PendingTrackingEdit::Undo(scope) => self.undo_last_queue_edit(scope),
@@ -252,6 +255,11 @@ impl App {
     }
 
     pub(super) fn execute_pending_queue_action(&mut self, action: PendingQueueAction) {
+        if matches!(&action, PendingQueueAction::ClearQueue)
+            && !self.guard_tracking_edit(PendingTrackingEdit::ClearQueue)
+        {
+            return;
+        }
         if self.action_touches_local_queue(&action) {
             self.queue_dirty = false;
         }

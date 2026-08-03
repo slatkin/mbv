@@ -89,7 +89,7 @@ use self::types_context_menu::{
     MultiSelectKind, MultiSelectPopup,
 };
 use self::types_daemon_lost::DaemonLostModal;
-use self::types_events::{LibEvent, SessionEvent};
+use self::types_events::{LibEvent, ReconciliationCommand, SessionEvent};
 use self::types_feed::{
     FeedHomeVideoGroup, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
 };

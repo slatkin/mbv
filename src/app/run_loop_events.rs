@@ -327,11 +327,21 @@ impl App {
                     *slot = *fresh;
                 }
             }
-            SessionEvent::CommandError(e) => {
-                if let Some(tracker) = self.remote_tracker.as_mut() {
-                    tracker.command_failed();
+            SessionEvent::CommandError {
+                error,
+                reconciliation,
+            } => {
+                if let (Some(command), Some(tracker)) =
+                    (reconciliation, self.remote_tracker.as_mut())
+                {
+                    if tracker.session_id() == command.session_id
+                        && tracker.epoch() == command.tracker_epoch
+                        && tracker.command_generation_matches(command.generation)
+                    {
+                        tracker.command_failed();
+                    }
                 }
-                self.flash_status_high(format!("Remote command failed: {e}"));
+                self.flash_status_high(format!("Remote command failed: {error}"));
             }
             SessionEvent::ConsumeValidated {
                 session_id,
