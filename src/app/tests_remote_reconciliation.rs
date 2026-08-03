@@ -141,6 +141,7 @@ fn replacement_tracker_ignores_an_earlier_in_flight_poll() {
     let mut app = attached_app();
     app.player_tab.items[0].id = "a".into();
     app.player_tab.items[1].id = "b".into();
+    app.player_tab.queue_cursor = 0;
     app.session_poll_generation = 4;
     let items = app.player_tab.items.clone();
     app.remote_tracker = App::build_remote_tracker("session", &items, 1, 5);
@@ -174,7 +175,7 @@ fn replacement_tracker_ignores_an_earlier_in_flight_poll() {
         app.remote_tracker.as_ref().unwrap().state(),
         TrackingState::Tracking
     );
-    assert_eq!(app.player_tab.queue_cursor, 1);
+    assert_eq!(app.player_tab.queue_cursor, 0);
 }
 
 #[test]

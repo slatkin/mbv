@@ -1,5 +1,5 @@
 use super::{App, SessionEvent, QUIT_REQUESTED};
-use mbv_core::remote_reconciliation::{ReconciliationEffect, RemoteObservation, TrackingState};
+use mbv_core::remote_reconciliation::{ReconciliationEffect, RemoteObservation};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -36,13 +36,6 @@ impl App {
             RemoteObservation::stopped(generation, session.id.clone(), Self::now_ms())
         };
         let effects = tracker.observe(observation);
-        if tracker.state() == TrackingState::Tracking {
-            if let Some(index) = tracker.current_index() {
-                if index < self.player_tab.items.len() {
-                    self.player_tab.queue_cursor = index;
-                }
-            }
-        }
         for effect in effects {
             match effect {
                 ReconciliationEffect::Completion(item) => {
