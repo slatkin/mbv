@@ -311,8 +311,15 @@ fn spawn_shared_client_handler<S>(
 
         // Reader: protocol handshake.
         // First line must be Hello with auth token.
-        let Some(Ok(line)) = read_shared_line(&reader) else {
-            return;
+        let mut line_buffer = String::new();
+        let line = loop {
+            match read_shared_line(&reader, &mut line_buffer) {
+                Some(Ok(line)) => break line,
+                Some(Err(error)) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Some(Err(_)) | None => return,
+            }
         };
         let cmd: SharedDataCmd = match serde_json::from_str(&line) {
             Ok(c) => c,
@@ -389,7 +396,7 @@ fn spawn_shared_client_handler<S>(
 
         // Command loop.
         loop {
-            let line = match read_shared_line(&reader) {
+            let line = match read_shared_line(&reader, &mut line_buffer) {
                 Some(Ok(line)) => line,
                 Some(Err(e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     std::thread::sleep(std::time::Duration::from_millis(10));
@@ -422,9 +429,10 @@ fn spawn_shared_client_handler<S>(
                         .unwrap_or_default(),
                     );
                 }
-                SharedDataCmd::Snapshot => match store.read_all(&user_id) {
+                SharedDataCmd::Snapshot { request_id } => match store.read_all(&user_id) {
                     Ok((q, l, r, s)) => {
                         let ev = SharedDataEvent::Snapshot {
+                            request_id,
                             queue_state: q,
                             library_position_state: l,
                             last_remote_connection: r,
@@ -434,15 +442,23 @@ fn spawn_shared_client_handler<S>(
                     }
                     Err(e) => {
                         let _ = ev_tx.send(
-                            serde_json::to_string(&SharedDataEvent::Error { reason: e })
-                                .unwrap_or_default(),
+                            serde_json::to_string(&SharedDataEvent::RequestError {
+                                request_id,
+                                reason: e,
+                            })
+                            .unwrap_or_default(),
                         );
                     }
                 },
-                SharedDataCmd::CreateDocument { kind, value } => {
+                SharedDataCmd::CreateDocument {
+                    request_id,
+                    kind,
+                    value,
+                } => {
                     match store.create(&user_id, kind, value) {
                         Ok(record) => {
                             let ev = SharedDataEvent::DocumentCreated {
+                                request_id,
                                 kind,
                                 record: record.clone(),
                             };
@@ -456,6 +472,7 @@ fn spawn_shared_client_handler<S>(
                                     .unwrap_or_default();
                             let _ = ev_tx.send(
                                 serde_json::to_string(&SharedDataEvent::DocumentAlreadyExists {
+                                    request_id,
                                     kind,
                                     current,
                                 })
@@ -464,13 +481,17 @@ fn spawn_shared_client_handler<S>(
                         }
                         Err(e) => {
                             let _ = ev_tx.send(
-                                serde_json::to_string(&SharedDataEvent::Error { reason: e })
-                                    .unwrap_or_default(),
+                                serde_json::to_string(&SharedDataEvent::RequestError {
+                                    request_id,
+                                    reason: e,
+                                })
+                                .unwrap_or_default(),
                             );
                         }
                     }
                 }
                 SharedDataCmd::UpdateDocument {
+                    request_id,
                     kind,
                     expected_revision,
                     value,
@@ -478,6 +499,7 @@ fn spawn_shared_client_handler<S>(
                     match store.update(&user_id, kind, expected_revision, value) {
                         Ok(record) => {
                             let ev = SharedDataEvent::DocumentUpdated {
+                                request_id,
                                 kind,
                                 record: record.clone(),
                             };
@@ -490,6 +512,7 @@ fn spawn_shared_client_handler<S>(
                                 serde_json::from_str(&e["stale:".len()..]).unwrap_or_default();
                             let _ = ev_tx.send(
                                 serde_json::to_string(&SharedDataEvent::DocumentStale {
+                                    request_id,
                                     kind,
                                     current,
                                 })
@@ -498,8 +521,11 @@ fn spawn_shared_client_handler<S>(
                         }
                         Err(e) => {
                             let _ = ev_tx.send(
-                                serde_json::to_string(&SharedDataEvent::Error { reason: e })
-                                    .unwrap_or_default(),
+                                serde_json::to_string(&SharedDataEvent::RequestError {
+                                    request_id,
+                                    reason: e,
+                                })
+                                .unwrap_or_default(),
                             );
                         }
                     }
@@ -518,12 +544,14 @@ fn spawn_shared_client_handler<S>(
 
 fn read_shared_line<S: SharedStream>(
     reader: &Arc<Mutex<BufReader<S>>>,
+    line: &mut String,
 ) -> Option<std::io::Result<String>> {
-    let mut line = String::new();
-    let result = reader.lock().unwrap().read_line(&mut line);
+    let result = reader.lock().unwrap().read_line(line);
     match result {
         Ok(0) => None,
-        Ok(_) => Some(Ok(line.trim_end_matches(['\n', '\r']).to_string())),
+        Ok(_) => Some(Ok(std::mem::take(line)
+            .trim_end_matches(['\n', '\r'])
+            .to_string())),
         Err(error) => Some(Err(error)),
     }
 }
@@ -549,5 +577,41 @@ fn fan_out_notification(
         if session.id != exclude_id && session.user_id == user_id {
             let _ = session.tx.send(json.clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_shared_line;
+    use std::io::Write;
+    use std::os::unix::net::UnixListener;
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn nonblocking_partial_line_is_preserved() {
+        let path =
+            std::env::temp_dir().join(format!("mbv-shared-framing-{}.sock", uuid::Uuid::new_v4()));
+        let listener = UnixListener::bind(&path).unwrap();
+        let client = std::os::unix::net::UnixStream::connect(&path).unwrap();
+        let (server, _) = listener.accept().unwrap();
+        server.set_nonblocking(true).unwrap();
+        let reader = Arc::new(Mutex::new(std::io::BufReader::new(server)));
+        let mut pending = String::new();
+
+        let mut client = client;
+        client.write_all(b"{\"partial\":").unwrap();
+        assert!(matches!(
+            read_shared_line(&reader, &mut pending),
+            Some(Err(error)) if error.kind() == std::io::ErrorKind::WouldBlock
+        ));
+        assert_eq!(pending, "{\"partial\":");
+
+        client.write_all(b"true}\n").unwrap();
+        assert_eq!(
+            read_shared_line(&reader, &mut pending).unwrap().unwrap(),
+            "{\"partial\":true}"
+        );
+        assert!(pending.is_empty());
+        let _ = std::fs::remove_file(path);
     }
 }

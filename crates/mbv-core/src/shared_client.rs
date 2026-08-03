@@ -1,5 +1,6 @@
+use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -33,6 +34,8 @@ enum MaybeTls {
     Unix(UnixStream),
     Tls(native_tls::TlsStream<TcpStream>),
 }
+
+const SHARED_DATA_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 
 impl std::io::Read for MaybeTls {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
@@ -95,7 +98,8 @@ pub struct SharedClient {
     revisions: DocumentRevisions,
     tx: Option<mpsc::Sender<SharedDataCmd>>,
     event_rx: Option<mpsc::Receiver<SharedDataEvent>>,
-    pending_events: Vec<SharedDataEvent>,
+    pending_events: VecDeque<SharedDataEvent>,
+    next_request_id: u64,
     backoff: Duration,
     last_attempt: Option<Instant>,
 }
@@ -114,7 +118,8 @@ impl SharedClient {
             revisions: DocumentRevisions::default(),
             tx: None,
             event_rx: None,
-            pending_events: Vec::new(),
+            pending_events: VecDeque::new(),
+            next_request_id: 1,
             backoff: Duration::from_secs(1),
             last_attempt: None,
         }
@@ -162,9 +167,7 @@ impl SharedClient {
         self.last_attempt = Some(Instant::now());
 
         let stream = if let Some(addr) = endpoint.strip_prefix("tcp://") {
-            MaybeTls::Plain(
-                TcpStream::connect(addr).map_err(|e| format!("connect to {addr}: {e}"))?,
-            )
+            MaybeTls::Plain(connect_tcp(addr)?)
         } else if endpoint.starts_with("unix://") || endpoint.starts_with('/') {
             let path = endpoint.strip_prefix("unix://").unwrap_or(endpoint);
             MaybeTls::Unix(
@@ -174,7 +177,7 @@ impl SharedClient {
         } else if let Some(addr) = endpoint.strip_prefix("tls://") {
             let connector =
                 native_tls::TlsConnector::new().map_err(|e| format!("TLS connector: {e}"))?;
-            let tcp = TcpStream::connect(addr).map_err(|e| format!("connect to {addr}: {e}"))?;
+            let tcp = connect_tcp(addr)?;
             let server_name = addr
                 .rsplit_once(':')
                 .map(|(host, _)| host.trim_matches(['[', ']']))
@@ -241,13 +244,27 @@ impl SharedClient {
             }
         }
 
-        send_command(reader.get_mut(), &SharedDataCmd::Snapshot, "snapshot")?;
-        let snapshot_line = read_line(&mut reader, "snapshot")?;
-        let snapshot_resp: SharedDataEvent =
-            serde_json::from_str(&snapshot_line).map_err(|e| format!("parse snapshot: {e}"))?;
+        let snapshot_request_id = self.allocate_request_id();
+        send_command(
+            reader.get_mut(),
+            &SharedDataCmd::Snapshot {
+                request_id: snapshot_request_id,
+            },
+            "snapshot",
+        )?;
+        let snapshot_resp = loop {
+            let snapshot_line = read_line(&mut reader, "snapshot")?;
+            let event: SharedDataEvent =
+                serde_json::from_str(&snapshot_line).map_err(|e| format!("parse snapshot: {e}"))?;
+            if event_request_id(&event) == Some(snapshot_request_id) {
+                break event;
+            }
+            self.pending_events.push_back(event);
+        };
 
         let snapshot = match snapshot_resp {
             SharedDataEvent::Snapshot {
+                request_id: _,
                 queue_state,
                 library_position_state,
                 last_remote_connection,
@@ -266,7 +283,9 @@ impl SharedClient {
                     roaming_settings,
                 }
             }
-            SharedDataEvent::Error { reason } => return Err(format!("snapshot error: {reason}")),
+            SharedDataEvent::RequestError { reason, .. } => {
+                return Err(format!("snapshot error: {reason}"));
+            }
             other => {
                 let s = serde_json::to_string(&other).unwrap_or_default();
                 return Err(format!("expected Snapshot, got: {s}"));
@@ -288,20 +307,27 @@ impl SharedClient {
                         continue;
                     };
                     if writeln!(reader.get_mut(), "{json}").is_err() {
+                        let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
                         return;
                     }
                 }
 
-                line.clear();
                 match reader.read_line(&mut line) {
-                    Ok(0) => return,
+                    Ok(0) => {
+                        let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
+                        return;
+                    }
                     Ok(_) => {
                         if let Ok(event) = serde_json::from_str::<SharedDataEvent>(line.trim()) {
                             let _ = ev_tx.send(event);
                         }
+                        line.clear();
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                    Err(_) => return,
+                    Err(_) => {
+                        let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
+                        return;
+                    }
                 }
 
                 match cmd_rx.recv_timeout(Duration::from_millis(20)) {
@@ -310,11 +336,15 @@ impl SharedClient {
                             continue;
                         };
                         if writeln!(reader.get_mut(), "{json}").is_err() {
+                            let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
                             return;
                         }
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
-                    Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
+                        return;
+                    }
                 }
             }
         });
@@ -386,19 +416,22 @@ impl SharedClient {
             return Ok(None);
         };
         let event = self.request_and_wait(SharedDataCmd::CreateDocument {
+            request_id: 0,
             kind,
             value: local.value.clone(),
         })?;
         let record = match event {
             SharedDataEvent::DocumentCreated {
+                request_id: _,
                 kind: response_kind,
                 record,
             } if response_kind == kind => record,
             SharedDataEvent::DocumentAlreadyExists {
+                request_id: _,
                 kind: response_kind,
                 current,
             } if response_kind == kind => current,
-            SharedDataEvent::Error { reason } => {
+            SharedDataEvent::RequestError { reason, .. } => {
                 return Err(format!("initialize {}: {reason}", kind.as_str()));
             }
             other => {
@@ -414,24 +447,47 @@ impl SharedClient {
     }
 
     fn request_and_wait(&mut self, command: SharedDataCmd) -> Result<SharedDataEvent, String> {
+        let request_id = self.allocate_request_id();
+        let command = with_request_id(command, request_id);
         let tx = self.tx.as_ref().ok_or("not connected")?;
         tx.send(command)
             .map_err(|_| "shared-data connection is closed".to_string())?;
-        if let Some(event) = self.pending_events.pop() {
-            return Ok(event);
-        }
-        let Some(rx) = &self.event_rx else {
-            return Err("shared-data event channel is unavailable".to_string());
-        };
-        match rx.recv_timeout(Duration::from_secs(10)) {
-            Ok(event) => Ok(event),
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                Err("timed out waiting for shared-data write response".to_string())
+        loop {
+            if let Some(index) = self
+                .pending_events
+                .iter()
+                .position(|event| event_request_id(event) == Some(request_id))
+            {
+                return Ok(self.pending_events.remove(index).unwrap());
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                Err("shared-data connection closed".to_string())
+            let event = {
+                let Some(rx) = &self.event_rx else {
+                    return Err("shared-data event channel is unavailable".to_string());
+                };
+                match rx.recv_timeout(Duration::from_secs(10)) {
+                    Ok(event) => event,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        return Err("timed out waiting for shared-data write response".to_string());
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        return Err("shared-data connection closed".to_string());
+                    }
+                }
+            };
+            if matches!(event, SharedDataEvent::ConnectionClosed) {
+                return Err("shared-data connection closed".to_string());
             }
+            if event_request_id(&event) == Some(request_id) {
+                return Ok(event);
+            }
+            self.pending_events.push_back(event);
         }
+    }
+
+    fn allocate_request_id(&mut self) -> u64 {
+        let request_id = self.next_request_id;
+        self.next_request_id = self.next_request_id.wrapping_add(1).max(1);
+        request_id
     }
 
     fn set_revision(&mut self, kind: SharedDocumentKind, revision: u64) {
@@ -449,29 +505,42 @@ impl SharedClient {
 
     /// Send an update request.
     pub fn update_document(
-        &self,
+        &mut self,
         kind: SharedDocumentKind,
         expected_revision: u64,
         value: serde_json::Value,
     ) -> Result<(), String> {
+        let request_id = self.allocate_request_id();
+        let command = with_request_id(
+            SharedDataCmd::UpdateDocument {
+                request_id: 0,
+                kind,
+                expected_revision,
+                value,
+            },
+            request_id,
+        );
         let tx = self.tx.as_ref().ok_or("not connected")?;
-        tx.send(SharedDataCmd::UpdateDocument {
-            kind,
-            expected_revision,
-            value,
-        })
-        .map_err(|_| "send failed".to_string())
+        tx.send(command).map_err(|_| "send failed".to_string())
     }
 
     /// Send a create request.
     pub fn create_document(
-        &self,
+        &mut self,
         kind: SharedDocumentKind,
         value: serde_json::Value,
     ) -> Result<(), String> {
+        let request_id = self.allocate_request_id();
+        let command = with_request_id(
+            SharedDataCmd::CreateDocument {
+                request_id: 0,
+                kind,
+                value,
+            },
+            request_id,
+        );
         let tx = self.tx.as_ref().ok_or("not connected")?;
-        tx.send(SharedDataCmd::CreateDocument { kind, value })
-            .map_err(|_| "send failed".to_string())
+        tx.send(command).map_err(|_| "send failed".to_string())
     }
 
     /// Update a document and wait for its durable acknowledgement. A stale
@@ -483,12 +552,14 @@ impl SharedClient {
         value: serde_json::Value,
     ) -> Result<SharedWriteResult, String> {
         let event = self.request_and_wait(SharedDataCmd::UpdateDocument {
+            request_id: 0,
             kind,
             expected_revision,
             value,
         })?;
         match event {
             SharedDataEvent::DocumentUpdated {
+                request_id: _,
                 kind: response_kind,
                 record,
             } if response_kind == kind => {
@@ -496,13 +567,14 @@ impl SharedClient {
                 Ok(SharedWriteResult::Committed(record))
             }
             SharedDataEvent::DocumentStale {
+                request_id: _,
                 kind: response_kind,
                 current,
             } if response_kind == kind => {
                 self.set_revision(kind, current.revision);
                 Ok(SharedWriteResult::Stale(current))
             }
-            SharedDataEvent::Error { reason } => Err(reason),
+            SharedDataEvent::RequestError { reason, .. } => Err(reason),
             other => Err(format!(
                 "update {} received unexpected response: {}",
                 kind.as_str(),
@@ -513,7 +585,9 @@ impl SharedClient {
 
     /// Drain pending events from the background reader.
     pub fn drain_events(&mut self) -> Vec<SharedDataEvent> {
-        let mut events = std::mem::take(&mut self.pending_events);
+        let mut events: Vec<SharedDataEvent> = std::mem::take(&mut self.pending_events)
+            .into_iter()
+            .collect();
         if let Some(rx) = &self.event_rx {
             events.extend(rx.try_iter());
         }
@@ -567,6 +641,51 @@ impl SharedClient {
     }
 }
 
+fn connect_tcp(addr: &str) -> Result<TcpStream, String> {
+    let socket_addr = addr
+        .to_socket_addrs()
+        .map_err(|e| format!("resolve shared-data endpoint {addr}: {e}"))?
+        .next()
+        .ok_or_else(|| format!("shared-data endpoint has no address: {addr}"))?;
+    TcpStream::connect_timeout(&socket_addr, SHARED_DATA_CONNECT_TIMEOUT)
+        .map_err(|e| format!("connect to {addr}: {e}"))
+}
+
+fn with_request_id(command: SharedDataCmd, request_id: u64) -> SharedDataCmd {
+    match command {
+        SharedDataCmd::Snapshot { .. } => SharedDataCmd::Snapshot { request_id },
+        SharedDataCmd::CreateDocument { kind, value, .. } => SharedDataCmd::CreateDocument {
+            request_id,
+            kind,
+            value,
+        },
+        SharedDataCmd::UpdateDocument {
+            kind,
+            expected_revision,
+            value,
+            ..
+        } => SharedDataCmd::UpdateDocument {
+            request_id,
+            kind,
+            expected_revision,
+            value,
+        },
+        SharedDataCmd::Hello { auth_token } => SharedDataCmd::Hello { auth_token },
+    }
+}
+
+fn event_request_id(event: &SharedDataEvent) -> Option<u64> {
+    match event {
+        SharedDataEvent::Snapshot { request_id, .. }
+        | SharedDataEvent::DocumentCreated { request_id, .. }
+        | SharedDataEvent::DocumentAlreadyExists { request_id, .. }
+        | SharedDataEvent::DocumentUpdated { request_id, .. }
+        | SharedDataEvent::DocumentStale { request_id, .. }
+        | SharedDataEvent::RequestError { request_id, .. } => Some(*request_id),
+        _ => None,
+    }
+}
+
 fn read_line<S: BufRead>(reader: &mut S, label: &str) -> Result<String, String> {
     let mut line = String::new();
     let bytes = reader
@@ -590,4 +709,45 @@ fn send_command<S: Write>(
 pub enum SharedWriteResult {
     Committed(SharedRecord),
     Stale(SharedRecord),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{event_request_id, with_request_id};
+    use crate::shared_protocol::{SharedDataCmd, SharedDataEvent};
+    use crate::shared_state::{SharedDocumentKind, SharedRecord};
+
+    #[test]
+    fn request_ids_round_trip_through_commands_and_responses() {
+        let command = with_request_id(
+            SharedDataCmd::UpdateDocument {
+                request_id: 0,
+                kind: SharedDocumentKind::QueueState,
+                expected_revision: 3,
+                value: serde_json::json!({"queue": true}),
+            },
+            42,
+        );
+        let response = match command {
+            SharedDataCmd::UpdateDocument { request_id, .. } => SharedDataEvent::DocumentUpdated {
+                request_id,
+                kind: SharedDocumentKind::QueueState,
+                record: SharedRecord {
+                    revision: 4,
+                    value: serde_json::json!({"queue": true}),
+                },
+            },
+            _ => unreachable!(),
+        };
+        assert_eq!(event_request_id(&response), Some(42));
+    }
+
+    #[test]
+    fn notifications_have_no_request_id() {
+        let notification = SharedDataEvent::DocumentNotification {
+            kind: SharedDocumentKind::QueueState,
+            record: SharedRecord::default(),
+        };
+        assert_eq!(event_request_id(&notification), None);
+    }
 }

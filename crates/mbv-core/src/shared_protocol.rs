@@ -32,14 +32,16 @@ pub enum SharedDataCmd {
     /// Client hello with authentication token.
     Hello { auth_token: String },
     /// Request a full snapshot of all four documents.
-    Snapshot,
+    Snapshot { request_id: u64 },
     /// Create a document that does not yet exist.
     CreateDocument {
+        request_id: u64,
         kind: SharedDocumentKind,
         value: serde_json::Value,
     },
     /// Update a document with expected revision (CAS).
     UpdateDocument {
+        request_id: u64,
         kind: SharedDocumentKind,
         expected_revision: u64,
         value: serde_json::Value,
@@ -58,6 +60,7 @@ pub enum SharedDataEvent {
     AuthFailed { reason: String },
     /// Full snapshot response.
     Snapshot {
+        request_id: u64,
         queue_state: Option<SharedRecord>,
         library_position_state: Option<SharedRecord>,
         last_remote_connection: Option<SharedRecord>,
@@ -65,21 +68,25 @@ pub enum SharedDataEvent {
     },
     /// Document created successfully.
     DocumentCreated {
+        request_id: u64,
         kind: SharedDocumentKind,
         record: SharedRecord,
     },
     /// Document already exists (create rejected).
     DocumentAlreadyExists {
+        request_id: u64,
         kind: SharedDocumentKind,
         current: SharedRecord,
     },
     /// Document updated successfully.
     DocumentUpdated {
+        request_id: u64,
         kind: SharedDocumentKind,
         record: SharedRecord,
     },
     /// Update rejected due to stale revision.
     DocumentStale {
+        request_id: u64,
         kind: SharedDocumentKind,
         current: SharedRecord,
     },
@@ -90,4 +97,8 @@ pub enum SharedDataEvent {
     },
     /// Generic error.
     Error { reason: String },
+    /// Error associated with a request.
+    RequestError { request_id: u64, reason: String },
+    /// Internal client-side signal that the shared stream closed.
+    ConnectionClosed,
 }

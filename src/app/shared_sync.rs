@@ -196,6 +196,25 @@ impl App {
             .map(|shared| shared.drain_events())
             .unwrap_or_default();
         for event in events {
+            if matches!(
+                event,
+                mbv_core::shared_protocol::SharedDataEvent::ConnectionClosed
+            ) {
+                let was_shared = self
+                    .shared_client
+                    .as_ref()
+                    .is_some_and(|shared| matches!(shared.state(), SharedClientState::Shared));
+                if was_shared {
+                    if let Some(shared) = self.shared_client.as_mut() {
+                        shared.enter_fallback();
+                    }
+                    self.flash_status_high(
+                        "Shared data connection closed; using local state".to_string(),
+                    );
+                    changed = true;
+                }
+                continue;
+            }
             let mbv_core::shared_protocol::SharedDataEvent::DocumentNotification { kind, record } =
                 event
             else {
