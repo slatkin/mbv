@@ -60,7 +60,6 @@ impl App {
                 ids: &ids,
                 selected_pos: group_cursor,
                 prefix: None,
-                underlay: super::PillUnderlay::Blank { fill: true },
             },
         );
     }

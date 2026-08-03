@@ -230,10 +230,6 @@ impl App {
                 height: 1,
             }
         };
-        f.render_widget(
-            Block::default().style(Style::default().bg(palette::HOME_PILL_ROW_BG)),
-            pills_area,
-        );
         self.render_power_home_section_pills_row(f, pills_area, layout);
 
         // In the wide Home layout, the list body is a separate right-column
@@ -562,7 +558,7 @@ impl App {
             .map(|(_, label)| trunc_str(label, MAX_LABEL).to_string())
             .collect();
         let ids: Vec<usize> = labels.iter().map(|(section_idx, _)| *section_idx).collect();
-        layout.selector_tabs = super::render_home_pill_bar(
+        layout.selector_tabs = super::render_pill_bar(
             f,
             area,
             super::PillBar {
@@ -570,7 +566,6 @@ impl App {
                 ids: &ids,
                 selected_pos,
                 prefix: Some("  "),
-                underlay: super::PillUnderlay::Blank { fill: false },
             },
         );
     }

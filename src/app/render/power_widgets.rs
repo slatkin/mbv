@@ -273,27 +273,19 @@ pub(super) fn build_power_queue_rows(items: &[MediaItem]) -> (Vec<QueueRow>, Vec
     (rows, group_for_header)
 }
 
-/// Style for a selector pill (group/section/artist tab row): dark active text
-/// on YELLOW, yellow inactive text on the dark pill background. Shared by
-/// every pill row (home's group/section pills, music's group
-/// pills) so they can't drift apart on the selected-vs-unselected look.
-pub(super) fn selector_pill_style(selected: bool) -> Style {
+/// Style for a pill-selector choice: white text on the green selected
+/// surface, muted text on the dark unselected surface. This is the canonical
+/// appearance for every interactive pill selector (Home sections, feed
+/// groups, music groups, letter filters, and series seasons).
+fn selector_pill_style(selected: bool) -> Style {
     if selected {
-        Style::default().fg(palette::PILL_DARK).bg(palette::YELLOW)
+        Style::default()
+            .fg(palette::PILL_SELECTOR_SELECTED_FG)
+            .bg(palette::PILL_SELECTOR_SELECTED_BG)
     } else {
         Style::default()
-            .fg(palette::YELLOW)
-            .bg(palette::PLAYBACK_PANEL_BG)
-    }
-}
-
-fn home_selector_pill_style(selected: bool) -> Style {
-    if selected {
-        Style::default().fg(palette::WHITE).bg(palette::BG_GREEN)
-    } else {
-        Style::default()
-            .fg(palette::HOME_PILL_FG)
-            .bg(palette::HOME_PILL_BG)
+            .fg(palette::PILL_SELECTOR_FG)
+            .bg(palette::PILL_SELECTOR_BG)
     }
 }
 
@@ -343,46 +335,28 @@ pub(super) fn power_content_width(width: u16, needs_scrollbar: bool) -> usize {
     width.saturating_sub(gutter) as usize
 }
 
-/// What to draw behind a pill bar before the pills are overlaid.
-pub(super) enum PillUnderlay {
-    /// No divider. `fill` clears the row's trailing cells with blanks so the
-    /// pills float on the panel background (used by the music-group tabs);
-    /// `fill: false` leaves the trailing cells untouched (feed-group tabs).
-    Blank { fill: bool },
-}
-
 /// A horizontally-scrolling row of selector pills, shared by every
-/// pill bar (Home's "Newest" section pills, feed-group tabs, music-group
-/// tabs) so their scroll/overflow/selection behavior can't drift apart.
-/// Callers pre-truncate `labels`, supply the parallel `ids` recorded as click
-/// targets, mark which position is `selected_pos`, and choose an optional
-/// leading `prefix` label and the `underlay`.
+/// pill selector (Home sections, feed groups, music groups, letter
+/// filters, and series seasons) so their appearance,
+/// scroll/overflow/selection behavior can't drift apart. Callers
+/// pre-truncate `labels`, supply the parallel `ids` recorded as click
+/// targets, mark which position is `selected_pos`, and may pass an
+/// optional leading `prefix` inset (rendered without the pill shell; it
+/// does not alter the pill visual).
 pub(super) struct PillBar<'a> {
     pub labels: &'a [String],
     pub ids: &'a [usize],
     pub selected_pos: usize,
     pub prefix: Option<&'a str>,
-    pub underlay: PillUnderlay,
 }
 
-/// Renders `bar` into `area`, scrolling the visible window so `selected_pos`
-/// stays on screen with `‹`/`›` chevrons when the pills overflow, and returns
-/// the on-screen hitboxes as `(rect, id)` pairs for `layout.selector_tabs`.
+/// Renders `bar` into `area`, painting the canonical pill-selector row
+/// background, drawing joined angled pills with the selected choice kept on
+/// screen (with `‹`/`›` chevrons when the pills overflow), and returning the
+/// on-screen pill hitboxes as `(rect, id)` pairs for `layout.selector_tabs`.
+/// This is the sole renderer for interactive pill selectors; callers do not
+/// select appearance variants.
 pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(Rect, usize)> {
-    render_pill_bar_with_style(f, area, bar, selector_pill_style, true)
-}
-
-pub(super) fn render_home_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(Rect, usize)> {
-    render_pill_bar_with_style(f, area, bar, home_selector_pill_style, false)
-}
-
-fn render_pill_bar_with_style(
-    f: &mut Frame,
-    area: Rect,
-    bar: PillBar,
-    style_for: fn(bool) -> Style,
-    gap_between_pills: bool,
-) -> Vec<(Rect, usize)> {
     // `ids` runs parallel to `labels`; a mismatch would panic on the slice
     // below, so assert the contract up front rather than fail cryptically.
     debug_assert_eq!(
@@ -397,29 +371,19 @@ fn render_pill_bar_with_style(
     let n = bar.labels.len();
     let bar_w = area.width as usize;
     let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);
-    // Display width of each pill is " label " = label width + 2. Home pills
-    // also include their leading and trailing edge glyphs.
-    let pill_widths: Vec<usize> = bar
-        .labels
-        .iter()
-        .map(|l| l.width() + 2 + if gap_between_pills { 0 } else { 2 })
-        .collect();
+    // Display width of each joined pill is "◢ label ◤" = label width + inner
+    // padding (2) + leading/trailing edge glyphs (2).
+    let pill_widths: Vec<usize> = bar.labels.iter().map(|l| l.width() + 4).collect();
 
     // Greedy: how many pills fit starting at `start` within `avail` columns.
     let count_fitting = |start: usize, avail: usize| -> usize {
         let mut used = 0usize;
         let mut count = 0usize;
-        let gap_width = if gap_between_pills { 1 } else { 0 };
         for width in pill_widths.iter().skip(start) {
-            let need = if count == 0 {
-                *width
-            } else {
-                gap_width + *width
-            };
-            if used + need > avail {
+            if used + *width > avail {
                 break;
             }
-            used += need;
+            used += *width;
             count += 1;
         }
         count
@@ -448,15 +412,21 @@ fn render_pill_bar_with_style(
     let scroll_end = (scroll_start + cnt).min(n);
     let has_right = scroll_end < n;
 
+    // The row surface is part of the canonical shell.
+    f.render_widget(
+        Block::default().style(Style::default().bg(palette::PILL_SELECTOR_ROW_BG)),
+        area,
+    );
+
     let mut spans: Vec<Span> = Vec::new();
     let mut x_cursor = area.x;
     if let Some(prefix) = bar.prefix {
-        if !gap_between_pills && prefix == "  " {
+        if prefix == "  " {
             spans.push(Span::styled(
                 "  ",
                 Style::default()
                     .fg(palette::GREEN)
-                    .bg(palette::HOME_PILL_ROW_BG),
+                    .bg(palette::PILL_SELECTOR_ROW_BG),
             ));
         } else {
             spans.push(Span::styled(
@@ -468,7 +438,10 @@ fn render_pill_bar_with_style(
     }
     if has_left {
         let chunk = "\u{2039} ";
-        spans.push(Span::styled(chunk, Style::default().fg(palette::BG_GREEN)));
+        spans.push(Span::styled(
+            chunk,
+            Style::default().fg(palette::PILL_SELECTOR_OVERFLOW_FG),
+        ));
         x_cursor += chunk.width() as u16;
     }
     for (offset, (label, &id)) in bar.labels[scroll_start..scroll_end]
@@ -476,23 +449,12 @@ fn render_pill_bar_with_style(
         .zip(bar.ids[scroll_start..scroll_end].iter())
         .enumerate()
     {
-        if gap_between_pills && offset > 0 {
-            // Single blank gap so the pills float free rather than sitting on
-            // a continuous divider.
-            spans.push(Span::raw(" "));
-            x_cursor += 1;
-        }
         let abs_idx = scroll_start + offset;
         let selected = abs_idx == bar.selected_pos;
         let is_last_pill = abs_idx + 1 == n;
-        let style = style_for(selected);
-        let home_marker = !gap_between_pills;
+        let style = selector_pill_style(selected);
         let pill = format!(" {} ", label);
-        let marker_w = if home_marker {
-            "◢◤".width() as u16
-        } else {
-            0
-        };
+        let marker_w = "◢◤".width() as u16;
         let pill_w = pill.width() as u16 + marker_w;
         selector_tabs.push((
             Rect {
@@ -503,54 +465,55 @@ fn render_pill_bar_with_style(
             },
             id,
         ));
-        if home_marker {
-            spans.push(Span::styled(
-                "◢",
-                Style::default()
-                    .fg(if selected {
-                        palette::BG_GREEN
-                    } else {
-                        palette::HOME_PILL_BG
-                    })
-                    .bg(if abs_idx == 0 {
-                        palette::HOME_PILL_ROW_BG
-                    } else {
-                        palette::HOME_PILL_BG
-                    }),
-            ));
-        }
+        spans.push(Span::styled(
+            "◢",
+            Style::default()
+                .fg(if selected {
+                    palette::PILL_SELECTOR_SELECTED_BG
+                } else {
+                    palette::PILL_SELECTOR_BG
+                })
+                .bg(if abs_idx == 0 {
+                    palette::PILL_SELECTOR_ROW_BG
+                } else {
+                    palette::PILL_SELECTOR_BG
+                }),
+        ));
         spans.push(Span::styled(pill, style));
-        if home_marker {
-            spans.push(Span::styled(
-                "◤",
-                Style::default()
-                    .fg(if selected {
-                        palette::BG_GREEN
-                    } else {
-                        palette::HOME_PILL_BG
-                    })
-                    .bg(if is_last_pill {
-                        palette::HOME_PILL_ROW_BG
-                    } else {
-                        palette::HOME_PILL_BG
-                    }),
-            ));
-        }
+        spans.push(Span::styled(
+            "◤",
+            Style::default()
+                .fg(if selected {
+                    palette::PILL_SELECTOR_SELECTED_BG
+                } else {
+                    palette::PILL_SELECTOR_BG
+                })
+                .bg(if is_last_pill {
+                    palette::PILL_SELECTOR_ROW_BG
+                } else {
+                    palette::PILL_SELECTOR_BG
+                }),
+        ));
         x_cursor += pill_w;
     }
     if has_right {
         let chunk = " \u{203a}";
-        spans.push(Span::styled(chunk, Style::default().fg(palette::BG_GREEN)));
+        spans.push(Span::styled(
+            chunk,
+            Style::default().fg(palette::PILL_SELECTOR_OVERFLOW_FG),
+        ));
         x_cursor += chunk.width() as u16;
     }
 
-    // With no rule underlay, optionally clear the rest of the row with blanks.
-    if let PillUnderlay::Blank { fill: true } = bar.underlay {
-        let used_w = x_cursor.saturating_sub(area.x) as usize;
-        let remaining = bar_w.saturating_sub(used_w);
-        if remaining > 0 {
-            spans.push(Span::raw(" ".repeat(remaining)));
-        }
+    // Clear the rest of the row with the canonical row background so the
+    // surface is continuous across the panel.
+    let used_w = x_cursor.saturating_sub(area.x) as usize;
+    let remaining = bar_w.saturating_sub(used_w);
+    if remaining > 0 {
+        spans.push(Span::styled(
+            " ".repeat(remaining),
+            Style::default().bg(palette::PILL_SELECTOR_ROW_BG),
+        ));
     }
 
     f.render_widget(Paragraph::new(Line::from(spans)), area);

@@ -5,22 +5,18 @@ Defines a consistent, reusable visual language for interactive pill selectors ac
 ## ADDED Requirements
 
 ### Requirement: Interactive pill selectors share one appearance
-The TUI SHALL render Home section, feed group, music group, letter filter, series season, and selectable Local/Remote queue-scope controls with the same pill-selector appearance. The shared appearance SHALL use joined angled pill edges, a green selected surface with white text, and a dark unselected surface with muted text.
+The TUI SHALL render Home section, feed group, music group, letter filter, and series season controls with the same pill-selector appearance. The shared appearance SHALL use joined angled pill edges, a green selected surface with white text, and a dark unselected surface with muted text.
 
 #### Scenario: Selected and unselected choices render consistently
 - **WHEN** any in-scope pill selector displays selected and unselected choices
 - **THEN** its selected and unselected choices use the shared pill-selector appearance
-
-#### Scenario: Queue scope is selectable
-- **WHEN** both Local and Remote queue scopes are available for direct selection
-- **THEN** the Local/Remote choices use the shared pill-selector appearance
 
 ### Requirement: Pill selector presentation has one source of truth
 The TUI SHALL derive the visual shell and palette of every in-scope pill selector from shared presentation definitions so that changing those definitions updates all in-scope selectors.
 
 #### Scenario: Shared appearance changes
 - **WHEN** the shared pill-selector presentation definitions are changed
-- **THEN** Home, library/filter, series-season, and selectable queue-scope pill selectors render the changed appearance without context-specific appearance implementations
+- **THEN** Home, library/filter, and series-season pill selectors render the changed appearance without context-specific appearance implementations
 
 ### Requirement: Existing pill selector interaction is preserved
 The TUI SHALL preserve each pill selector's existing selected value, keyboard commands, mouse selection, caller-defined target identity, and overflow behavior while unifying presentation.

@@ -38,7 +38,6 @@ impl App {
                 ids: &ids,
                 selected_pos,
                 prefix: None,
-                underlay: super::PillUnderlay::Blank { fill: true },
             },
         );
     }

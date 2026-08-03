@@ -6,14 +6,14 @@
 
 ## 2. Selector Adoption
 
-- [ ] 2.1 Update Home sections, feed groups, music groups, and letter filters to use the sole shared pill-bar renderer without changing their selected positions or target IDs.
-- [ ] 2.2 Render the series `Series:` prefix separately and delegate season choices to the shared pill bar, preserving season selection and keeping the selected season visible on overflow.
-- [ ] 2.3 Render DirectRemote Local/Remote queue choices through the shared pill bar and map its returned target hitboxes into the existing queue-scope layout fields.
-- [ ] 2.4 Keep primary navigation tabs, attached-session indicators, connection indicators, and other non-interactive status pills on their existing independent render paths.
+- [x] 2.1 Update Home sections, feed groups, music groups, and letter filters to use the sole shared pill-bar renderer without changing their selected positions or target IDs.
+- [x] 2.2 Render the series `Series:` prefix separately and delegate season choices to the shared pill bar, preserving season selection and keeping the selected season visible on overflow.
+- [x] 2.3 Leave DirectRemote Local/Remote queue choices on the status-pill path: they double as connection status (device name, icon, "Connected:" label) with no alternate display, so the scope pills are not treated as selectors and stay out of the shared pill bar.
+- [x] 2.4 Keep primary navigation tabs, attached-session indicators, connection indicators, and other non-interactive status pills on their existing independent render paths.
 
 ## 3. Verification
 
-- [ ] 3.1 Update existing Home, scrolling-pill, non-music, music-detail, series-detail, and queue-scope render assertions for the canonical appearance and geometry.
-- [ ] 3.2 Verify narrow rows keep the selected pill visible, preserve caller-defined target IDs, and produce hitboxes aligned with all rendered edge glyphs.
-- [ ] 3.3 Run `cargo fmt --all -- --check` and targeted pill-selector render/input tests.
-- [ ] 3.4 Run `cargo test` and resolve regressions introduced by the presentation refactor.
+- [x] 3.1 Update existing Home and scrolling-pill render assertions for the canonical appearance and geometry; series-detail and queue-scope assertions confirmed unchanged (they don't assert the shared pill shell).
+- [x] 3.2 Verify narrow rows keep the selected pill visible, preserve caller-defined target IDs, and produce hitboxes aligned with all rendered edge glyphs.
+- [x] 3.3 Run `cargo fmt --all -- --check` and targeted pill-selector render/input tests.
+- [x] 3.4 Run `cargo test` and resolve regressions introduced by the presentation refactor.
