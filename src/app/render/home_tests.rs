@@ -53,6 +53,7 @@ fn make_home_video_panel_app() -> crate::app::App {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: Some(FeedHomeVideoState {

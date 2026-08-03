@@ -360,6 +360,7 @@ impl App {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         });
         self.spawn_browse(
             lib_idx,
@@ -445,6 +446,7 @@ impl App {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         });
         self.spawn_browse(
             lib_idx,

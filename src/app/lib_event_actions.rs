@@ -82,6 +82,7 @@ impl App {
             last.loading = false;
         });
         self.normalize_current_browse_level_items(lib_idx);
+        self.start_or_supersede_music_grouping(lib_idx);
         self.maybe_aggregate_feed_after_page_append(lib_idx, &parent_id);
         self.maybe_fetch_next_page(lib_idx);
     }
@@ -107,6 +108,7 @@ impl App {
             });
         }
         self.normalize_current_browse_level_items(lib_idx);
+        self.start_or_supersede_music_grouping(lib_idx);
         self.maybe_refresh_feed_groups_after_refresh(lib_idx);
         self.spawn_all_items_prefetch(lib_idx);
     }
@@ -338,10 +340,12 @@ impl App {
             }
             LibEvent::AlbumArtistFetched { album_id, artist } => {
                 self.album_artist_loading.remove(&album_id);
-                self.album_artist_cache.insert(album_id, artist);
+                self.album_artist_cache
+                    .insert(album_id.clone(), artist.clone());
                 self.album_artist_fetches_active =
                     self.album_artist_fetches_active.saturating_sub(1);
                 self.drain_album_artist_fetches();
+                self.advance_music_grouping_candidates(&album_id, &artist);
             }
             LibEvent::NavigateTo {
                 lib_idx,

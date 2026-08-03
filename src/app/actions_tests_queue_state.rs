@@ -259,6 +259,7 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: None,
@@ -284,6 +285,7 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
         scroll: 3,
         all_items: None,
         letter_filter: None,
+        music_grouping: None,
     };
 
     app.handle_loaded_level(0, "parent".into(), level);
@@ -324,6 +326,7 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
             scroll: 0,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: None,

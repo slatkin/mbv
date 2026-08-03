@@ -85,6 +85,7 @@ fn flat_album_folder_listing_renders_inline_detail_under_selected_album() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: None,

@@ -31,6 +31,7 @@ fn make_power_library_app() -> App {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: None,
@@ -131,6 +132,7 @@ fn ctrl_r_confirmation_targets_active_library() {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                music_grouping: None,
             }],
             search: None,
             feed_home_video: None,
@@ -333,6 +335,7 @@ fn breadcrumb_click_saves_position() {
         loading: false,
         all_items: None,
         letter_filter: None,
+        music_grouping: None,
     });
     app.layout.main.breadcrumbs = vec![(10, 20, 2, 1)];
 
@@ -424,6 +427,7 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
     });
 

@@ -178,6 +178,7 @@ impl App {
                     scroll: 0,
                     all_items: None,
                     letter_filter: None,
+                    music_grouping: None,
                 });
             }
             let _ = tx.send(LibEvent::RecursiveAlbumActivated {

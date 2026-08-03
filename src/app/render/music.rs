@@ -120,6 +120,31 @@ impl App {
             return;
         }
 
+        // ── Organizing state ──────────────────────────────────────────────────
+        // While the first snapshot resolves (a candidate exists but no settled
+        // catalog yet), present a dedicated organizing message instead of
+        // progressively reshuffling artist groups as metadata arrives.
+        let organizing = self.libs[lib_idx]
+            .nav_stack
+            .last()
+            .and_then(|l| l.music_grouping.as_ref())
+            .is_some_and(|s| s.candidate.is_some() && s.settled.is_none());
+        if organizing {
+            if row < max_y {
+                super::render_power_placeholder(
+                    f,
+                    Rect {
+                        x: area.x,
+                        y: row,
+                        width: area.width,
+                        height: 1,
+                    },
+                    " Movin, doin it",
+                );
+            }
+            return;
+        }
+
         // ── Album list (grouped by artist) ────────────────────────────────────
         let list_area = Rect {
             x: area.x,

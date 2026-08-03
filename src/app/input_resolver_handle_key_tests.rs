@@ -297,6 +297,7 @@ fn test_lib_with_search() -> crate::app::LibraryTab {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: Some(LibSearch {
             query: String::new(),
@@ -440,6 +441,7 @@ fn power_enter_on_series_search_result_starts_selection_without_drilldown() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: Some(LibSearch {
             query: "search".into(),

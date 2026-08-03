@@ -142,6 +142,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
         search: None,
         feed_home_video: None,

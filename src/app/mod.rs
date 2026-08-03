@@ -34,6 +34,7 @@ mod library_position_state;
 mod library_route;
 mod library_search_actions;
 mod music_actions;
+mod music_grouping;
 mod notify_actions;
 pub(crate) mod palette;
 mod panel_focus_state;
@@ -624,3 +625,7 @@ mod tests_route_state;
 #[cfg(test)]
 #[path = "tests_status_bar.rs"]
 mod tests_status_bar;
+
+#[cfg(test)]
+#[path = "tests_music_grouping.rs"]
+mod tests_music_grouping;

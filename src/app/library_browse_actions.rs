@@ -144,6 +144,7 @@ impl App {
                         scroll: 0,
                         all_items: None,
                         letter_filter: None,
+                        music_grouping: None,
                     });
                     self.spawn_restore_library_position(idx, saved);
                     return;
@@ -180,6 +181,7 @@ impl App {
                 scroll: 0,
                 all_items: None,
                 letter_filter: None,
+                music_grouping: None,
             });
             self.spawn_browse(
                 idx,
@@ -359,6 +361,7 @@ impl App {
                             scroll: 0,
                             all_items: None,
                             letter_filter: None,
+                            music_grouping: None,
                         },
                     });
                 }
@@ -469,6 +472,7 @@ impl App {
                     scroll: 0,
                     all_items: None,
                     letter_filter: None,
+                    music_grouping: None,
                 });
             }
             let _ = tx.send(LibEvent::NavigateTo {

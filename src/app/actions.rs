@@ -372,6 +372,7 @@ impl App {
                             scroll: 0,
                             all_items: None,
                             letter_filter: None,
+                            music_grouping: None,
                         });
                         self.set_library_tab(lib_idx + 1);
                         self.spawn_browse(
@@ -428,6 +429,7 @@ impl App {
                 scroll: 0,
                 all_items: None,
                 letter_filter: None,
+                music_grouping: None,
             });
             self.save_default_library_position(lib_idx);
             self.spawn_browse(

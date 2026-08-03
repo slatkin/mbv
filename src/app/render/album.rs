@@ -4,7 +4,6 @@ use super::album_plan::GroupedAlbumDisplayRow;
 use super::list_rows::{
     focused_aqua_or_muted, focused_or_muted, focused_or_muted_soft_white, focused_or_subtle,
 };
-use super::parse_album_folder_name;
 use crate::app::layout::LayoutMain;
 use crate::app::ArtistHeaderSelection;
 use crate::app::{palette, App};
@@ -29,28 +28,30 @@ impl App {
     ) -> usize {
         let visible = area.height as usize;
         let avail = (area.width as usize).saturating_sub(2);
-        let mut album_info: Vec<(String, String, String)> = Vec::with_capacity(albums.len());
-        for item in albums {
-            let artist = self.resolve_group_album_artist(item);
-            let (year_str, album_name) = if !item.artist.is_empty() {
-                let year_str = if item.production_year > 0 {
-                    item.production_year.to_string()
-                } else {
-                    String::new()
-                };
-                (year_str, item.display_name())
-            } else if let Some((_, year, album)) = parse_album_folder_name(&item.name) {
-                let year_str = if year > 0 {
-                    year.to_string()
-                } else {
-                    String::new()
-                };
-                (year_str, album)
-            } else {
-                (String::new(), item.display_name())
-            };
-            album_info.push((artist, year_str, album_name));
-        }
+        let (album_info, order) = {
+            let catalog = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .and_then(|l| l.music_grouping.as_ref())
+                .and_then(|s| s.settled.as_ref());
+            match catalog {
+                Some(cat) => {
+                    let info = self.group_album_info(albums, Some(cat));
+                    let order: Vec<usize> = cat
+                        .entries
+                        .iter()
+                        .map(|e| e.album_index)
+                        .filter(|&i| i < albums.len())
+                        .collect();
+                    (info, order)
+                }
+                None => {
+                    let info = self.group_album_info(albums, None);
+                    let order = super::sorted_group_album_order(&info);
+                    (info, order)
+                }
+            }
+        };
 
         layout.inline_image_rect = None;
 
@@ -68,6 +69,8 @@ impl App {
         let expand_selected = !selectable_headers || self.libs[lib_idx].album_track_focus.is_some();
         let plan = self.build_grouped_album_display_plan(
             albums,
+            &album_info,
+            &order,
             cursor,
             true,
             selectable_headers,

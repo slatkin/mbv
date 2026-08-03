@@ -36,6 +36,7 @@ mod visualizer;
 // src/app/actions.rs); the rest are referenced via `super::X` from render's
 // sibling submodules (album, card, detail, home, list, music, pills, queue)
 // and/or `use super::*` in render/tests.rs.
+pub(super) use album_plan::sorted_group_album_order;
 use chrome::LIST_PLAY_ICON;
 use power_widgets::{
     build_power_queue_rows, power_content_width, power_right_panel_content_area, render_pill_bar,
@@ -44,7 +45,9 @@ use power_widgets::{
     render_power_scrollbar, render_selected_block_background, render_selected_block_borders,
     selection_marker, PillBar, COLUMN_GAP, MUSIC_ALBUM_IMAGE_TYPES, POWER_RENDER_FILTER,
 };
-use sort_filter::{effective_sort_str, letter_bucket, parse_album_folder_name, strip_article};
+pub(super) use sort_filter::{
+    effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,
+};
 pub(crate) use sort_filter::{initial_group_artist_sort_key, LetterFilter, LIBRARY_PILL_THRESHOLD};
 
 use super::ui_util::natural_sort_key;

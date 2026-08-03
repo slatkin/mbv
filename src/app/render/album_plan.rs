@@ -1,11 +1,22 @@
 use super::album_art::INLINE_ALBUM_ART_ROWS;
-use super::{natural_sort_key, parse_album_folder_name, strip_article};
+use super::{natural_sort_key, strip_article};
 use crate::app::layout::LibraryRowTarget;
+use crate::app::music_grouping::{derive_album_display_name, GroupedAlbumCatalog};
 use crate::app::{App, ArtistHeaderSelection};
 use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
 pub(super) const SELECTED_ALBUM_WINDOW: usize = 12;
+
+/// Sorted album display order for a set of `(artist, year, name)` info
+/// triples: indices ordered by the artist's natural sort key (articles
+/// stripped). Mirrors the catalog builder's sort so the fallback path
+/// (no settled catalog yet) matches the settled ordering exactly.
+pub(crate) fn sorted_group_album_order(album_info: &[(String, String, String)]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..album_info.len()).collect();
+    order.sort_by_key(|&i| natural_sort_key(strip_article(&album_info[i].0)));
+    order
+}
 
 #[derive(Clone)]
 pub(super) enum GroupedAlbumDisplayRow {
@@ -52,9 +63,38 @@ impl GroupedAlbumDisplayRow {
 }
 
 impl App {
+    /// Builds the `(artist, year, album_name)` display info for every album,
+    /// consuming the settled catalog when available (no artist derivation) and
+    /// falling back to a synchronous best-effort chain otherwise.
+    pub(super) fn group_album_info(
+        &self,
+        albums: &[mbv_core::api::MediaItem],
+        catalog: Option<&GroupedAlbumCatalog>,
+    ) -> Vec<(String, String, String)> {
+        match catalog {
+            Some(cat) => (0..albums.len())
+                .map(|i| {
+                    let pos = cat.index_to_entry.get(&i).copied().unwrap_or(0);
+                    let entry = &cat.entries[pos];
+                    (entry.artist.clone(), entry.year.clone(), entry.name.clone())
+                })
+                .collect(),
+            None => albums
+                .iter()
+                .map(|item| {
+                    let artist = self.resolve_group_album_artist(item);
+                    let (year, name) = derive_album_display_name(item);
+                    (artist, year, name)
+                })
+                .collect(),
+        }
+    }
+
     pub(super) fn build_grouped_album_display_plan(
         &mut self,
         albums: &[mbv_core::api::MediaItem],
+        album_info: &[(String, String, String)],
+        order: &[usize],
         cursor: usize,
         fetch_missing_tracks: bool,
         selectable_headers: bool,
@@ -62,32 +102,6 @@ impl App {
         expand_selected: bool,
         wrap_widths: Option<(u16, u16)>,
     ) -> GroupedAlbumDisplayPlan {
-        let mut album_info: Vec<(String, String, String)> = Vec::with_capacity(albums.len());
-        for item in albums {
-            let artist = self.resolve_group_album_artist(item);
-            let (year_str, album_name) = if !item.artist.is_empty() {
-                let year_str = if item.production_year > 0 {
-                    item.production_year.to_string()
-                } else {
-                    String::new()
-                };
-                (year_str, item.display_name())
-            } else if let Some((_, year, album)) = parse_album_folder_name(&item.name) {
-                let year_str = if year > 0 {
-                    year.to_string()
-                } else {
-                    String::new()
-                };
-                (year_str, album)
-            } else {
-                (String::new(), item.display_name())
-            };
-            album_info.push((artist, year_str, album_name));
-        }
-
-        let mut order: Vec<usize> = (0..album_info.len()).collect();
-        order.sort_by_key(|&i| natural_sort_key(strip_article(&album_info[i].0)));
-
         let header_selected = selectable_headers && selected_artist_header.is_some();
         let inline_art_rows_after_album = if self.images_enabled() {
             INLINE_ALBUM_ART_ROWS.saturating_sub(1) as usize
@@ -429,7 +443,7 @@ impl App {
         });
 
         GroupedAlbumDisplayPlan {
-            order,
+            order: order.to_vec(),
             rows,
             display_cursor,
             selected_artist_header_valid,

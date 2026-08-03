@@ -1,6 +1,8 @@
 use super::album_plan::{GroupedAlbumDisplayPlan, GroupedAlbumDisplayRow};
 use crate::app::layout::LibraryRowTarget;
+use crate::app::music_grouping::GroupedAlbumCatalog;
 use crate::app::{App, ArtistHeaderSelection};
+use mbv_core::api::MediaItem;
 
 impl App {
     pub(super) fn selected_power_music_artist_header(
@@ -64,6 +66,72 @@ impl App {
         targets
     }
 
+    /// Navigation targets for the settled catalog: every artist header
+    /// followed by every album in its group, in the catalog's display order.
+    /// Matches the plan-derived target list the fallback path produces.
+    fn catalog_album_navigation_targets(
+        catalog: &GroupedAlbumCatalog,
+        albums_len: usize,
+    ) -> Vec<LibraryRowTarget> {
+        let mut targets = Vec::new();
+        for group in &catalog.groups {
+            targets.push(LibraryRowTarget::ArtistHeader(ArtistHeaderSelection {
+                first_album_id: catalog.entries[group.start].album_id.clone(),
+                artist_label: group.artist.clone(),
+            }));
+            for entry in &catalog.entries[group.start..group.end] {
+                if entry.album_index < albums_len {
+                    targets.push(LibraryRowTarget::Album(entry.album_index));
+                }
+            }
+        }
+        targets
+    }
+
+    /// Navigation targets and header validity for the current music album
+    /// level, sourced from the settled catalog when available (no display
+    /// plan rebuild, no artist derivation) and a synchronous display plan
+    /// otherwise. Callers must have already checked the level is non-empty.
+    fn music_group_navigation(
+        &mut self,
+        lib_idx: usize,
+        albums: &[MediaItem],
+        cursor: usize,
+        selected: Option<&ArtistHeaderSelection>,
+    ) -> (Vec<LibraryRowTarget>, bool) {
+        let catalog = self.libs[lib_idx]
+            .nav_stack
+            .last()
+            .and_then(|l| l.music_grouping.as_ref())
+            .and_then(|s| s.settled.as_ref());
+        if let Some(cat) = catalog {
+            let header_valid = selected.is_none_or(|sel| {
+                cat.groups.iter().any(|g| {
+                    g.artist == sel.artist_label
+                        && cat.entries[g.start].album_id == sel.first_album_id
+                })
+            });
+            let targets = Self::catalog_album_navigation_targets(cat, albums.len());
+            return (targets, header_valid);
+        }
+        let expand_selected = self.libs[lib_idx].album_track_focus.is_some();
+        let album_info = self.group_album_info(albums, None);
+        let order = super::sorted_group_album_order(&album_info);
+        let plan = self.build_grouped_album_display_plan(
+            albums,
+            &album_info,
+            &order,
+            cursor,
+            false,
+            true,
+            selected,
+            expand_selected,
+            None,
+        );
+        let targets = Self::grouped_album_navigation_targets(albums, &plan);
+        (targets, plan.selected_artist_header_valid)
+    }
+
     pub(in crate::app) fn move_power_music_group_display_cursor(
         &mut self,
         lib_idx: usize,
@@ -82,20 +150,11 @@ impl App {
         let cursor = level.cursor;
         let albums = level.items.clone();
         let selected = self.selected_power_music_artist_header(lib_idx);
-        let expand_selected = self.libs[lib_idx].album_track_focus.is_some();
-        let plan = self.build_grouped_album_display_plan(
-            &albums,
-            cursor,
-            false,
-            true,
-            selected.as_ref(),
-            expand_selected,
-            None,
-        );
-        if selected.is_some() && !plan.selected_artist_header_valid {
+        let (targets, header_valid) =
+            self.music_group_navigation(lib_idx, &albums, cursor, selected.as_ref());
+        if selected.is_some() && !header_valid {
             self.clear_artist_header_focus(lib_idx);
         }
-        let targets = Self::grouped_album_navigation_targets(&albums, &plan);
         if targets.is_empty() {
             return true;
         }
@@ -111,7 +170,6 @@ impl App {
             .unwrap_or(0);
         let new_pos = (current_pos as i64 + delta).clamp(0, targets.len() as i64 - 1) as usize;
         let target = targets[new_pos].clone();
-        drop(plan);
         match target {
             LibraryRowTarget::ArtistHeader(selection) => {
                 self.set_artist_header_focus(lib_idx, selection);
@@ -146,17 +204,8 @@ impl App {
         }
         let albums = level.items.clone();
         let selected = self.selected_power_music_artist_header(lib_idx);
-        let expand_selected = self.libs[lib_idx].album_track_focus.is_some();
-        let plan = self.build_grouped_album_display_plan(
-            &albums,
-            level.cursor,
-            false,
-            true,
-            selected.as_ref(),
-            expand_selected,
-            None,
-        );
-        let targets = Self::grouped_album_navigation_targets(&albums, &plan);
+        let (targets, _) =
+            self.music_group_navigation(lib_idx, &albums, level.cursor, selected.as_ref());
         let Some(target) = (if to_end {
             targets.last().cloned()
         } else {
@@ -164,7 +213,6 @@ impl App {
         }) else {
             return true;
         };
-        drop(plan);
         match target {
             LibraryRowTarget::ArtistHeader(selection) => {
                 self.set_artist_header_focus(lib_idx, selection);
@@ -198,20 +246,11 @@ impl App {
         let cursor = level.cursor;
         let albums = level.items.clone();
         let selected = self.selected_power_music_artist_header(lib_idx);
-        let expand_selected = self.libs[lib_idx].album_track_focus.is_some();
-        let plan = self.build_grouped_album_display_plan(
-            &albums,
-            cursor,
-            false,
-            true,
-            selected.as_ref(),
-            expand_selected,
-            None,
-        );
-        if selected.is_some() && !plan.selected_artist_header_valid {
+        let (targets, header_valid) =
+            self.music_group_navigation(lib_idx, &albums, cursor, selected.as_ref());
+        if selected.is_some() && !header_valid {
             self.clear_artist_header_focus(lib_idx);
         }
-        let targets = Self::grouped_album_navigation_targets(&albums, &plan);
         if targets.is_empty() {
             return true;
         }
@@ -240,7 +279,6 @@ impl App {
                 .cloned()
                 .unwrap_or_else(|| targets.first().cloned().unwrap())
         };
-        drop(plan);
         match found {
             LibraryRowTarget::ArtistHeader(selection) => {
                 self.set_artist_header_focus(lib_idx, selection);
@@ -281,9 +319,41 @@ impl App {
             self.clear_artist_header_focus(lib_idx);
             return None;
         }
+        let catalog = self.libs[lib_idx]
+            .nav_stack
+            .last()
+            .and_then(|l| l.music_grouping.as_ref())
+            .and_then(|s| s.settled.as_ref());
+        if let Some(cat) = catalog {
+            let valid = cat.groups.iter().any(|g| {
+                g.artist == selection.artist_label
+                    && cat.entries[g.start].album_id == selection.first_album_id
+            });
+            if !valid {
+                if self.libs[lib_idx]
+                    .artist_header_focus
+                    .as_ref()
+                    .is_some_and(|focused| focused == selection)
+                {
+                    self.clear_artist_header_focus(lib_idx);
+                }
+                return None;
+            }
+            let group = cat.group_for_artist(&selection.artist_label)?;
+            return Some(
+                cat.entries[group.start..group.end]
+                    .iter()
+                    .filter_map(|e| albums.get(e.album_index).cloned())
+                    .collect(),
+            );
+        }
         let expand_selected = self.libs[lib_idx].album_track_focus.is_some();
+        let album_info = self.group_album_info(&albums, None);
+        let order = super::sorted_group_album_order(&album_info);
         let plan = self.build_grouped_album_display_plan(
             &albums,
+            &album_info,
+            &order,
             level.cursor,
             false,
             true,
@@ -359,21 +429,11 @@ impl App {
         let albums = level.items.clone();
         let page = (self.layout.main.left_area.height as usize).max(1);
         let selected = self.selected_power_music_artist_header(lib_idx);
-        let selectable_headers = self.is_music_group_view(lib_idx);
-        let expand_selected = !selectable_headers || self.libs[lib_idx].album_track_focus.is_some();
-        let plan = self.build_grouped_album_display_plan(
-            &albums,
-            cursor,
-            false,
-            selectable_headers,
-            selected.as_ref(),
-            expand_selected,
-            None,
-        );
-        if selected.is_some() && !plan.selected_artist_header_valid {
+        let (targets, header_valid) =
+            self.music_group_navigation(lib_idx, &albums, cursor, selected.as_ref());
+        if selected.is_some() && !header_valid {
             self.clear_artist_header_focus(lib_idx);
         }
-        let targets = Self::grouped_album_navigation_targets(&albums, &plan);
         if let Some(current_pos) = targets.iter().position(|target| {
             (selected.as_ref().is_some_and(|selection| {
                 matches!(target, LibraryRowTarget::ArtistHeader(current) if current == selection)

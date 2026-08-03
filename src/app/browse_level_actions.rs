@@ -51,6 +51,7 @@ impl App {
         });
         self.normalize_current_browse_level_items(lib_idx);
         self.snap_grouped_album_cursor_to_display_order(lib_idx);
+        self.start_or_supersede_music_grouping(lib_idx);
     }
 
     pub(super) fn maybe_auto_push_power_tv_season_level(&mut self, lib_idx: usize) {
@@ -100,6 +101,7 @@ impl App {
                         scroll: 0,
                         all_items: None,
                         letter_filter: None,
+                        music_grouping: None,
                     });
                 }
                 self.spawn_browse(

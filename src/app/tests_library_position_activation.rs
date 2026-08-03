@@ -176,6 +176,7 @@ fn ensure_lib_loaded_for_visible_power_library_accepts_restore_from_queue_focus(
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
     });
 
@@ -292,6 +293,7 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            music_grouping: None,
         }],
     });
 

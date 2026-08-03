@@ -52,6 +52,7 @@ pub(super) fn make_power_music_album_app() -> App {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                music_grouping: None,
             },
             BrowseLevel {
                 parent_id: "group-0".into(),
@@ -67,6 +68,7 @@ pub(super) fn make_power_music_album_app() -> App {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                music_grouping: None,
             },
         ],
         search: None,
@@ -150,6 +152,7 @@ pub(super) fn make_power_music_album_list_app(album_count: usize, cursor: usize)
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                music_grouping: None,
             },
             BrowseLevel {
                 parent_id: "group-0".into(),
@@ -165,6 +168,7 @@ pub(super) fn make_power_music_album_list_app(album_count: usize, cursor: usize)
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                music_grouping: None,
             },
         ],
         search: None,
