@@ -266,6 +266,41 @@ impl App {
         }
     }
 
+    /// Force-settles candidates whose lookup window expired, including the
+    /// case where every lookup failed before producing an event.
+    pub(super) fn expire_music_grouping_candidates(&mut self) {
+        let mut expired = Vec::new();
+        for lib_idx in 0..self.libs.len() {
+            if !self.is_music_group_view(lib_idx) {
+                continue;
+            }
+            let should_commit = {
+                let lib = &mut self.libs[lib_idx];
+                let Some(level) = lib.nav_stack.last_mut() else {
+                    continue;
+                };
+                let Some(state) = level.music_grouping.as_mut() else {
+                    continue;
+                };
+                let Some(candidate) = state.candidate.as_mut() else {
+                    continue;
+                };
+                if candidate.created_at.elapsed() < SETTLE_WINDOW {
+                    false
+                } else {
+                    candidate.unresolved.clear();
+                    true
+                }
+            };
+            if should_commit {
+                expired.push(lib_idx);
+            }
+        }
+        for lib_idx in expired {
+            self.commit_music_grouping_candidate(lib_idx);
+        }
+    }
+
     /// Commits the candidate's settled catalog when its source revision still
     /// matches the active browse level, anchoring the cursor and artist-header
     /// focus by album identity so a replacement keeps the selection in view.

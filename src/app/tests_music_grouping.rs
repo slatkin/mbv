@@ -3,6 +3,7 @@ use super::tests::{make_app_stub, make_item};
 use super::{BrowseLevel, LibraryTab};
 use mbv_core::api::MediaItem;
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 fn make_music_album_level(albums: Vec<MediaItem>) -> BrowseLevel {
     BrowseLevel {
@@ -251,6 +252,42 @@ fn advance_removes_from_unresolved_and_resolves() {
     let catalog = state.settled.as_ref().expect("settled catalog");
     assert_eq!(catalog.entries.len(), 1);
     assert_eq!(catalog.entries[0].artist, "Resolved Artist");
+}
+
+#[test]
+fn silent_artist_lookups_expire_to_fallback() {
+    let mut album = make_item("Unknown Album", "MusicAlbum");
+    album.id = "album-1".into();
+    album.artist = String::new();
+    let mut app = make_music_app(vec![album]);
+    app.start_or_supersede_music_grouping(0);
+
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .music_grouping
+        .as_mut()
+        .unwrap()
+        .candidate
+        .as_mut()
+        .unwrap()
+        .created_at = Instant::now() - Duration::from_secs(4);
+
+    app.expire_music_grouping_candidates();
+
+    let state = app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap();
+    assert!(state.candidate.is_none());
+    assert_eq!(
+        state.settled.as_ref().unwrap().entries[0].artist,
+        "Unknown Artist"
+    );
 }
 
 #[test]

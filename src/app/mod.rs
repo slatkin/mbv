@@ -474,6 +474,7 @@ impl App {
                 }
             }
 
+            self.expire_music_grouping_candidates();
             self.sync_volume_from_player();
 
             // Advance idle feed rotation
