@@ -4,6 +4,21 @@ A terminal UI for Emby. It plays media through mpv.
 
 You can browse libraries, build a queue, and play from your server. Playback stays in sync with Emby, so any Emby remote app can control it. It can also run headless as a daemon and launch videos/music via remote control.
 
+# Installation
+
+## Arch Linux
+
+The release package is built from the `PKGBUILD` in this repository and does not require AUR access. Install the build tools, download the pinned package recipe, and build it locally:
+
+```sh
+sudo pacman -S --needed base-devel curl
+mkdir -p mbv-package && cd mbv-package
+curl -fLO https://raw.githubusercontent.com/slatkin/mbv/main/PKGBUILD
+makepkg -si
+```
+
+The recipe downloads the matching release binary directly from GitHub and verifies its SHA-256 checksum before creating the pacman package. Refresh the `PKGBUILD` before rebuilding to pick up a newer release.
+
 # Features
 
 ## Emby-Parity Features
