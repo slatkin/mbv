@@ -78,13 +78,16 @@ fn bind_shared_tls_acceptor(cert_path: &str, key_path: &str) -> Option<native_tl
         }
     };
 
-    let identity = native_tls::Identity::from_pkcs8(&cert, &key).unwrap_or_else(|e| {
-        log::error!(
-            target: "shared_data",
-            "failed to load TLS identity from {cert_path}/{key_path}: {e}"
-        );
-        panic!("shared-data TLS identity load failed");
-    });
+    let identity = match native_tls::Identity::from_pkcs8(&cert, &key) {
+        Ok(id) => id,
+        Err(e) => {
+            log::error!(
+                target: "shared_data",
+                "failed to load TLS identity from {cert_path}/{key_path}: {e}"
+            );
+            return None;
+        }
+    };
 
     let acceptor = match native_tls::TlsAcceptor::new(identity) {
         Ok(a) => a,

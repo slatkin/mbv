@@ -261,7 +261,7 @@ fn validate_shared_tcp_address(address: &str, field: &str) -> Result<(), String>
 
     let socket_addr = addr.parse::<std::net::SocketAddr>().map_err(|_| {
         format!(
-            "{field} must use localhost or a loopback/private IP address, not a public hostname ({addr})"
+            "{field} must use localhost or a literal loopback/private IP address, not a hostname ({addr})"
         )
     })?;
     let ip = socket_addr.ip();
