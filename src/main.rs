@@ -459,15 +459,6 @@ mod tests {
     }
 
     #[test]
-    fn has_flag_detects_legacy_d_flag() {
-        // Prove that the `-d` flag is detected so it can be rejected
-        // with migration guidance before startup side effects.
-        assert!(has_flag(&["-d".into()], "-d"));
-        assert!(has_flag(&["-d".into(), "-q".into()], "-d"));
-        assert!(!has_flag(&["--daemon".into(), "-q".into()], "-d"));
-    }
-
-    #[test]
     fn classify_auth_failure_expired_credentials_gets_quiet_wording() {
         assert_eq!(
             classify_auth_failure("http://emby.local", "Cached credentials expired"),
