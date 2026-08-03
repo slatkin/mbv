@@ -24,7 +24,7 @@
 - [x] 4.1 Run `make check-code-file-lines` to confirm all governed files are at or below 800 lines.
 - [x] 4.2 Run `cargo clippy --workspace --all-targets --all-features -- -D warnings` to confirm no new warnings.
 - [x] 4.3 Confirm the three split files (`mod.rs`, `remote_player.rs`, `config_types_paths.rs`) are each below 650 lines after extraction.
-- [ ] 1.1 Create `src/app/run_loop_drains.rs` and move `drain_notif_actions`, `drain_search_results`, and `drain_session_events` methods from `mod.rs` into it.
-- [ ] 1.2 Add `mod run_loop_drains;` declaration to `src/app/mod.rs`.
-- [ ] 1.3 Update any `use` statements in `mod.rs` and other files that reference the moved methods.
-- [ ] 1.4 Run `cargo fmt --all -- --check`, `cargo check --workspace --all-targets`, and `cargo test --workspace` to verify the split.
+- [x] 1.1 Create `src/app/run_loop_drains.rs` and move `drain_notif_actions`, `drain_search_results`, and `drain_session_events` methods from `mod.rs` into it.
+- [x] 1.2 Add `mod run_loop_drains;` declaration to `src/app/mod.rs`.
+- [x] 1.3 Update any `use` statements in `mod.rs` and other files that reference the moved methods.
+- [x] 1.4 Run `cargo fmt --all -- --check`, `cargo check --workspace --all-targets`, and `cargo test --workspace` to verify the split.

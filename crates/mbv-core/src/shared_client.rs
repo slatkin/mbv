@@ -80,14 +80,16 @@ impl SharedClient {
     /// Initialize from configuration.
     pub fn initialize(&mut self, config: &Config) {
         let endpoint = config.shared_data_endpoint.trim();
-        if endpoint.is_empty() {
+        if !config.shared_data_enabled && endpoint.is_empty() {
             self.state = SharedClientState::Disabled;
             return;
         }
-        if let Err(e) = crate::config::validate_shared_data_endpoint(endpoint) {
-            log::warn!(target: "shared_data", "shared-data endpoint rejected: {e}");
-            self.state = SharedClientState::Disabled;
-            return;
+        if !endpoint.is_empty() {
+            if let Err(e) = crate::config::validate_shared_data_endpoint(endpoint) {
+                log::warn!(target: "shared_data", "shared-data endpoint rejected: {e}");
+                self.state = SharedClientState::Disabled;
+                return;
+            }
         }
         self.state = SharedClientState::Configured;
     }
@@ -98,10 +100,12 @@ impl SharedClient {
         config: &Config,
         client: &EmbyClient,
     ) -> Result<SharedSnapshotResponse, String> {
-        let endpoint = config.shared_data_endpoint.trim();
-        if endpoint.is_empty() {
-            return Err("no shared-data endpoint configured".to_string());
-        }
+        let endpoint = if config.shared_data_endpoint.trim().is_empty() {
+            discover_shared_data_endpoint(client)?
+        } else {
+            config.shared_data_endpoint.trim().to_string()
+        };
+        let endpoint = endpoint.as_str();
 
         self.state = SharedClientState::Connecting;
         self.last_attempt = Some(Instant::now());
@@ -541,6 +545,23 @@ impl SharedClient {
     /// Apply a committed notification: update the revision tracker.
     pub fn apply_notification(&mut self, kind: SharedDocumentKind, record: &SharedRecord) {
         self.set_revision(kind, record.revision);
+    }
+}
+
+fn discover_shared_data_endpoint(client: &EmbyClient) -> Result<String, String> {
+    let endpoints: Vec<String> = client
+        .get_sessions()?
+        .into_iter()
+        .filter_map(|session| {
+            crate::api::parse_mbv_shared_data_tcp_port(&session.supported_commands)
+                .map(|port| format!("tcp://{}:{port}", session.host))
+        })
+        .filter(|endpoint| crate::config::validate_shared_data_endpoint(endpoint).is_ok())
+        .collect();
+    match endpoints.as_slice() {
+        [endpoint] => Ok(endpoint.clone()),
+        [] => Err("no shared-data-enabled mbvd found for this Emby account".to_string()),
+        _ => Err("multiple shared-data-enabled mbvd hosts found; configure shared_data.endpoint to select one".to_string()),
     }
 }
 

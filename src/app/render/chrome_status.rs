@@ -262,8 +262,9 @@ impl App {
         }
     }
 
-    /// Persistent bottom status bar. Left side: connection, stay-alive, and
-    /// mute status groups. Right side: queue source/save-state/scope detail.
+    /// Persistent bottom status bar. Left side: connection, stay-alive,
+    /// shared-state, and mute status groups. Right side: queue
+    /// source/save-state/scope detail.
     /// The playlist status pill renders in the left queue panel instead.
     pub(super) fn render_status_bar(
         &mut self,
@@ -304,12 +305,31 @@ impl App {
                 ),
             ]
         });
+        let shared_status = self.shared_client.as_ref().is_some_and(|client| {
+            matches!(
+                client.state(),
+                mbv_core::shared_client::SharedClientState::Shared
+            )
+        });
+        let client_status = match (alive_status, shared_status) {
+            (None, false) => None,
+            (alive, shared) => {
+                let mut spans = alive.unwrap_or_default();
+                if shared {
+                    spans.extend([
+                        Span::raw(" "),
+                        Span::styled("", Style::default().fg(palette::FOAM)),
+                    ]);
+                }
+                Some(spans)
+            }
+        };
         let mute_status = self.mute_status_spans();
 
-        // Left-segment overflow priority: mute drops first if the combined
-        // left segment wouldn't fit in the row, then remote.
+        // Preserve the existing left-segment overflow order: client indicators
+        // drop first, then mute, then remote.
         let remote_w = Self::status_width(&remote_status);
-        let alive_w: u16 = alive_status
+        let client_w: u16 = client_status
             .as_ref()
             .map(|spans| Self::status_width(spans))
             .unwrap_or(0);
@@ -328,21 +348,21 @@ impl App {
             }
             total
         };
-        let fits_all = joined_width(&[remote_w, alive_w, mute_w]) <= available;
-        let fits_without_alive = !fits_all && joined_width(&[remote_w, mute_w]) <= available;
+        let fits_all = joined_width(&[remote_w, client_w, mute_w]) <= available;
+        let fits_without_client = !fits_all && joined_width(&[remote_w, mute_w]) <= available;
         let fits_without_mute =
-            !fits_all && !fits_without_alive && joined_width(&[remote_w, alive_w]) <= available;
+            !fits_all && !fits_without_client && joined_width(&[remote_w, client_w]) <= available;
         let fits_without_remote =
-            !fits_all && !fits_without_alive && !fits_without_mute && alive_w <= available;
+            !fits_all && !fits_without_client && !fits_without_mute && client_w <= available;
 
-        let show_remote = remote_w > 0 && (fits_all || fits_without_alive || fits_without_mute);
-        let show_alive =
-            alive_status.is_some() && (fits_all || fits_without_mute || fits_without_remote);
+        let show_remote = remote_w > 0 && (fits_all || fits_without_client || fits_without_mute);
+        let show_client =
+            client_status.is_some() && (fits_all || fits_without_mute || fits_without_remote);
 
         let mut spans: Vec<Span> = Vec::new();
-        if show_alive {
-            if let Some(alive) = alive_status.as_ref() {
-                spans.extend(alive.iter().cloned());
+        if show_client {
+            if let Some(client) = client_status.as_ref() {
+                spans.extend(client.iter().cloned());
             }
         }
         let remote_x =
@@ -351,7 +371,7 @@ impl App {
             Self::append_status(&mut spans, remote_status);
         }
         self.render_remote_status_hitbox(layout, area, remote_x, remote_w);
-        if fits_all || fits_without_alive {
+        if fits_all || fits_without_client {
             if let Some(mute) = mute_status {
                 let mute_x = area.x + Self::status_width(&spans);
                 let mute_w = Self::status_width(&mute);

@@ -141,6 +141,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         });
     }
 
+    let mut direct_commands = Vec::new();
+
     // Shared-data hosting is optional and starts only after the playback and
     // local ctrl listener are operational. A database failure disables this
     // feature without affecting daemon playback.
@@ -151,12 +153,16 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 Ok(db) => {
                     let store =
                         crate::shared_worker::spawn_shared_store_worker(Arc::new(Mutex::new(db)));
-                    let _shared_sessions = crate::shared_service::start_shared_service(
+                    let shared_port = crate::shared_service::start_shared_service(
                         client.clone(),
                         store,
                         &shared_config,
                     );
-                    if _shared_sessions.is_some() {
+                    if let Some(port) = shared_port {
+                        if port > 0 {
+                            direct_commands
+                                .push(crate::api::mbv_shared_data_tcp_port_command(port));
+                        }
                         log::info!(target: "shared_data", "shared-data hosting enabled");
                     } else {
                         log::warn!(target: "shared_data", "shared-data hosting unavailable; playback remains operational");
@@ -176,7 +182,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     // negotiation metadata, capability registration, live subtitle-prefs
     // fetch). Local control is already up and serving connections above. ---
 
-    let mut direct_commands = Vec::new();
     let daemon_tcp_listen = client
         .lock()
         .unwrap()

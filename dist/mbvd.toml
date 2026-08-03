@@ -1,0 +1,15 @@
+[server]
+# Set this to the same Emby server used by participating mbv clients.
+url = "http://emby.local:8096"
+
+[mpv]
+use_mpv_config = false
+show_audio_window = false
+audio_pipe_enabled = false
+audio_pipe_path = "/tmp/mbv-pipe"
+audio_pipe_samplerate = 44100
+audio_pipe_bitdepth = 16
+
+[shared_data]
+# Clients discover this daemon through its authenticated Emby session.
+enabled = false

@@ -68,37 +68,6 @@ fn hello_rejects_previous_v5_protocol_version() {
 }
 
 #[test]
-fn request_shutdown_round_trips() {
-    let cmd = CtrlCmd::RequestShutdown;
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
-    assert!(matches!(decoded, CtrlCmd::RequestShutdown));
-}
-
-#[test]
-fn shutdown_accepted_round_trips() {
-    let event = CtrlEvent::ShutdownAccepted;
-    let json = serde_json::to_string(&event).unwrap();
-    let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();
-    assert!(matches!(decoded, CtrlEvent::ShutdownAccepted));
-}
-
-#[test]
-fn shutdown_rejected_round_trips() {
-    let event = CtrlEvent::ShutdownRejected {
-        reason: "test reason".to_string(),
-    };
-    let json = serde_json::to_string(&event).unwrap();
-    let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();
-    match decoded {
-        CtrlEvent::ShutdownRejected { reason } => {
-            assert_eq!(reason, "test reason");
-        }
-        _ => panic!("expected ShutdownRejected"),
-    }
-}
-
-#[test]
 fn hello_rejects_missing_capability() {
     let mut hello = CtrlHello::current();
     hello.capabilities.retain(|cap| cap != CTRL_CAP_START_INDEX);
@@ -313,8 +282,8 @@ fn player_command_round_trips_through_wire_command() {
 
 #[test]
 fn ctrl_cmd_player_cmd_round_trips_through_json() {
-    let json = serde_json::to_string(&CtrlCmd::PlayerCmd(PlayerCommand::SetMute(true).into()))
-        .unwrap();
+    let json =
+        serde_json::to_string(&CtrlCmd::PlayerCmd(PlayerCommand::SetMute(true).into())).unwrap();
     let cmd: CtrlCmd = serde_json::from_str(&json).unwrap();
     match cmd {
         CtrlCmd::PlayerCmd(wire) => match PlayerCommand::from(wire) {

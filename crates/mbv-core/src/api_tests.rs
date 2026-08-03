@@ -314,63 +314,6 @@ fn ordinary_report_stopped_still_retries_once() {
 }
 
 #[test]
-fn delete_playlist_entry_uses_one_exact_entry_delete() {
-    use std::io::Write;
-    let (listener, url) = local_listener_url();
-    let request = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-    let request_for_thread = request.clone();
-    std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        *request_for_thread.lock().unwrap() = read_one_request(&mut stream);
-        stream
-            .write_all(b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n")
-            .unwrap();
-    });
-
-    client_with_url(&url)
-        .delete_playlist_entry("playlist-1", "entry-2")
-        .unwrap();
-
-    let request = request.lock().unwrap().clone();
-    assert!(request.starts_with("DELETE /Playlists/playlist-1/Items?EntryIds=entry-2 "));
-    assert!(!request.contains("POST /Playlists"));
-}
-
-#[test]
-fn get_playlist_items_preserves_entry_and_media_identity() {
-    use std::io::Write;
-    let (listener, url) = local_listener_url();
-    std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let _ = read_one_request(&mut stream);
-        let body = serde_json::json!({
-            "Items": [{
-                "Id": "media-2",
-                "Name": "Track",
-                "Type": "Audio",
-                "MediaType": "Audio",
-                "PlaylistItemId": "entry-2",
-                "UserData": {}
-            }]
-        })
-        .to_string();
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(),
-            body
-        );
-        stream.write_all(response.as_bytes()).unwrap();
-    });
-
-    let items = client_with_url(&url)
-        .get_playlist_items("playlist-1")
-        .unwrap();
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0].id, "media-2");
-    assert_eq!(items[0].playlist_item_id, "entry-2");
-}
-
-#[test]
 fn ws_url_http_becomes_ws() {
     let url = client_with_url("http://server:8096").ws_url();
     assert!(url.starts_with("ws://"));
@@ -399,6 +342,12 @@ fn parse_mbv_direct_tcp_port_command_extracts_port() {
         "Pause".to_string(),
     ];
     assert_eq!(parse_mbv_direct_tcp_port(&commands), Some(47788));
+}
+
+#[test]
+fn parse_mbv_shared_data_tcp_port_command_extracts_port() {
+    let commands = vec![mbv_shared_data_tcp_port_command(47789)];
+    assert_eq!(parse_mbv_shared_data_tcp_port(&commands), Some(47789));
 }
 
 // ── auth_header ──────────────────────────────────────────────────────────

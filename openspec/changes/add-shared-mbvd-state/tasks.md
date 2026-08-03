@@ -23,21 +23,21 @@
 
 ## 4. Client Synchronization And Fallback
 
-- [ ] 4.1 Implement a shared-state client connection independent of playback routing, with bounded connect/authenticate/restore operations and per-document revision tracking.
-- [ ] 4.2 On the initial snapshot, adopt existing shared documents and conditionally initialize absent documents from current local state, adopting the winner of any initialization race.
-- [ ] 4.3 Atomically mirror every accepted queue, library-position, reconnect, and roaming-settings document locally while preserving the three existing state schemas.
-- [ ] 4.4 Route connected writes through expected-revision updates; after acknowledgement update the local mirror, and on stale rejection adopt and mirror the returned shared winner without retrying the rejected mutation.
-- [ ] 4.5 On initial connection, restore, or write failure, persist pending state locally, enter fallback once, and keep browsing and playback operational.
-- [ ] 4.6 Add background reconnection with jittered exponential backoff capped at 60 seconds and reset the backoff after an authenticated snapshot.
-- [ ] 4.7 On reconnection, replace divergent fallback documents with existing shared documents without prompting, initialize only absent shared documents, then resume shared writes.
-- [ ] 4.8 Apply committed same-user notifications only when their revision is newer, then update application state and its local mirror without producing an echo write.
+- [x] 4.1 Implement a shared-state client connection independent of playback routing, with bounded connect/authenticate/restore operations and per-document revision tracking.
+- [x] 4.2 On the initial snapshot, adopt existing shared documents and conditionally initialize absent documents from current local state, adopting the winner of any initialization race.
+- [x] 4.3 Atomically mirror every accepted queue, library-position, reconnect, and roaming-settings document locally while preserving the three existing state schemas.
+- [x] 4.4 Route connected writes through expected-revision updates; after acknowledgement update the local mirror, and on stale rejection adopt and mirror the returned shared winner without retrying the rejected mutation.
+- [x] 4.5 On initial connection, restore, or write failure, persist pending state locally, enter fallback once, and keep browsing and playback operational.
+- [x] 4.6 Add background reconnection with jittered exponential backoff capped at 60 seconds and reset the backoff after an authenticated snapshot.
+- [x] 4.7 On reconnection, replace divergent fallback documents with existing shared documents without prompting, initialize only absent shared documents, then resume shared writes.
+- [x] 4.8 Apply committed same-user notifications only when their revision is newer, then update application state and its local mirror without producing an echo write.
 
 ## 5. Settings And User Feedback
 
-- [ ] 5.1 Apply mirrored/shared `auto_reconnect` and `library_routes` above local configuration while active, falling back to ordinary local configuration only when no mirror exists.
-- [ ] 5.2 Log each explicitly configured local roaming-setting mismatch once per shared connection while ignoring differences from compiled defaults.
-- [ ] 5.3 Add one notification toast per transition into fallback, one after successful reconnection, and one when a stale write is replaced by the current shared document.
-- [ ] 5.4 Confirm shared-data connection and notification handling never changes playback authority or subscribes to live playback queue/status events.
+- [x] 5.1 Apply mirrored/shared `auto_reconnect` and `library_routes` above local configuration while active, falling back to ordinary local configuration only when no mirror exists.
+- [x] 5.2 Log each explicitly configured local roaming-setting mismatch once per shared connection while ignoring differences from compiled defaults.
+- [x] 5.3 Add one notification toast per transition into fallback, one after successful reconnection, and one when a stale write is replaced by the current shared document.
+- [x] 5.4 Confirm shared-data connection and notification handling never changes playback authority or subscribes to live playback queue/status events.
 
 ## 6. Verification And Operator Documentation
 
@@ -46,4 +46,4 @@
 - [ ] 6.3 Verify concurrent create and update races produce one committed winner, monotonic independent revisions, stale-writer adoption, and post-commit same-user fan-out.
 - [ ] 6.4 Verify startup outage, mid-session write failure, local mirroring, background reconnection, shared-authority restoration, and transition toast behavior.
 - [ ] 6.5 Document canonical `mbvd` database/listener/TLS configuration, client endpoint opt-in, certificate trust setup, JSON export, fallback semantics, and rollback by disabling shared state.
-- [ ] 6.6 Run the relevant workspace formatting, lint, unit, and integration verification commands and resolve regressions attributable to this change.
+- [x] 6.6 Run the relevant workspace formatting, lint, unit, and integration verification commands and resolve regressions attributable to this change.

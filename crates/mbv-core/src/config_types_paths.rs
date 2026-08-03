@@ -103,6 +103,7 @@ pub struct Config {
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
+pub const DEFAULT_SHARED_DATA_TCP_PORT: u16 = 47789;
 
 impl Default for Config {
     fn default() -> Self {
@@ -219,16 +220,36 @@ pub fn default_daemon_server_tcp_listen() -> String {
     }
 }
 
+/// Resolve the shared-data listener without requiring a second address in the
+/// normal configuration. System daemons follow the existing daemon TCP bind;
+/// local daemons use a sibling Unix socket.
+pub fn shared_data_listen(cfg: &Config) -> String {
+    let configured = cfg.shared_data_listen.trim();
+    if !configured.is_empty() {
+        return configured.to_string();
+    }
+    if let Ok(mut address) = cfg
+        .daemon_server_tcp_listen
+        .trim()
+        .parse::<std::net::SocketAddr>()
+    {
+        address.set_port(DEFAULT_SHARED_DATA_TCP_PORT);
+        return address.to_string();
+    }
+    PathBuf::from(control_socket_path())
+        .with_file_name("mbv-shared.sock")
+        .display()
+        .to_string()
+}
+
 /// Validates shared-data configuration. Returns `Err` with a human-readable
 /// message if the configuration is invalid.
 pub fn validate_shared_data_config(cfg: &Config) -> Result<(), String> {
     if !cfg.shared_data_enabled {
         return Ok(());
     }
-    let listen = cfg.shared_data_listen.trim();
-    if listen.is_empty() {
-        return Err("shared_data.enabled is true but shared_data.listen is empty".to_string());
-    }
+    let resolved_listen = shared_data_listen(cfg);
+    let listen = resolved_listen.as_str();
     if listen.starts_with('/') || listen.starts_with("unix://") {
         if !cfg.shared_data_tls_cert_path.trim().is_empty()
             || !cfg.shared_data_tls_key_path.trim().is_empty()
@@ -237,7 +258,7 @@ pub fn validate_shared_data_config(cfg: &Config) -> Result<(), String> {
         }
         return Ok(());
     }
-    validate_shared_tcp_address(listen, "shared_data.listen")?;
+    validate_shared_tcp_listener(listen, "shared_data.listen")?;
     let has_cert = !cfg.shared_data_tls_cert_path.trim().is_empty();
     let has_key = !cfg.shared_data_tls_key_path.trim().is_empty();
     if has_cert != has_key {
@@ -247,6 +268,17 @@ pub fn validate_shared_data_config(cfg: &Config) -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+fn validate_shared_tcp_listener(address: &str, field: &str) -> Result<(), String> {
+    let addr = shared_tcp_address(address);
+    if addr
+        .parse::<std::net::SocketAddr>()
+        .is_ok_and(|address| address.ip().is_unspecified())
+    {
+        return Ok(());
+    }
+    validate_shared_tcp_address(address, field)
 }
 
 fn validate_shared_tcp_address(address: &str, field: &str) -> Result<(), String> {
@@ -372,6 +404,15 @@ mod shared_data_endpoint_tests {
                 "127.0.0.1".parse::<std::net::IpAddr>().unwrap()
             );
         }
+    }
+
+    #[test]
+    fn shared_data_uses_daemon_bind_address_with_its_own_port() {
+        let config = Config {
+            daemon_server_tcp_listen: "0.0.0.0:47788".to_string(),
+            ..Config::default()
+        };
+        assert_eq!(super::shared_data_listen(&config), "0.0.0.0:47789");
     }
 }
 
