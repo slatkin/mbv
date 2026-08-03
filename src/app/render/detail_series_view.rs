@@ -193,14 +193,8 @@ impl App {
         let ep_cursor = self.libs[lib_idx].series_selection;
         if let Some(ref detail) = series_detail {
             if !detail.seasons.is_empty() && row < max_y {
-                let (season_w, season_w16) = text_dims(row);
-                let mut spans: Vec<Span> = Vec::new();
-                spans.push(Span::styled(
-                    "Series: ",
-                    Style::default()
-                        .fg(palette::YELLOW)
-                        .add_modifier(Modifier::BOLD),
-                ));
+                let (_, season_w16) = text_dims(row);
+                let prefix_w = "Series: ".width();
                 if in_selection {
                     let tab_labels: Vec<String> = detail
                         .seasons
@@ -215,42 +209,67 @@ impl App {
                             format!("{:02}", n)
                         })
                         .collect();
-                    let per_tab = 5usize;
                     let n_tabs = tab_labels.len();
-                    let prefix_w = 8;
-                    let avail = season_w.saturating_sub(prefix_w + 2);
-                    let tabs_per_page = ((avail + 1) / per_tab).max(1);
-                    let scroll_end = tabs_per_page.min(n_tabs);
-                    for (idx, label) in tab_labels[..scroll_end].iter().enumerate() {
-                        if idx > 0 {
-                            spans.push(Span::raw(" "));
-                        }
-                        let is_active = idx == season_cursor;
-                        let style = super::selector_pill_style(is_active);
-                        spans.push(Span::styled(format!(" {} ", label), style));
-                    }
-                    if scroll_end < n_tabs {
-                        spans.push(Span::styled(
-                            " \u{203a}",
-                            Style::default().fg(palette::BG_GREEN),
-                        ));
-                    }
+                    let ids: Vec<usize> = (0..n_tabs).collect();
+                    // Render the `Series:` label separately, then delegate the
+                    // remaining row to the shared pill bar so season choices
+                    // share the canonical pill appearance and keep the
+                    // selected season visible on overflow. The bar's returned
+                    // hitboxes are discarded: season navigation is
+                    // keyboard-only and must not alter library click targets.
+                    f.render_widget(
+                        Paragraph::new(Line::from(Span::styled(
+                            "Series: ",
+                            Style::default()
+                                .fg(palette::YELLOW)
+                                .add_modifier(Modifier::BOLD),
+                        ))),
+                        Rect {
+                            x: area.x,
+                            y: row,
+                            width: prefix_w as u16,
+                            height: 1,
+                        },
+                    );
+                    super::render_pill_bar(
+                        f,
+                        Rect {
+                            x: area.x + prefix_w as u16,
+                            y: row,
+                            width: season_w16.saturating_sub(prefix_w as u16),
+                            height: 1,
+                        },
+                        super::PillBar {
+                            labels: &tab_labels,
+                            ids: &ids,
+                            selected_pos: season_cursor,
+                            prefix: None,
+                        },
+                    );
+                    row += 1;
                 } else {
+                    let mut spans: Vec<Span> = Vec::new();
+                    spans.push(Span::styled(
+                        "Series: ",
+                        Style::default()
+                            .fg(palette::YELLOW)
+                            .add_modifier(Modifier::BOLD),
+                    ));
                     spans.push(Span::styled(
                         detail.seasons.len().to_string(),
                         Style::default().fg(palette::SOFT_WHITE),
                     ));
+                    f.render_widget(
+                        Paragraph::new(Line::from(spans)),
+                        Rect {
+                            x: area.x,
+                            y: row,
+                            width: season_w16,
+                            height: 1,
+                        },
+                    );
+                    row += 1;
                 }
-                f.render_widget(
-                    Paragraph::new(Line::from(spans)),
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: season_w16,
-                        height: 1,
-                    },
-                );
-                row += 1;
             }
 
             // ── Episode list ─────────────────────────────────────────────

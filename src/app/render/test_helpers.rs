@@ -83,7 +83,6 @@ pub fn render_pill_bar_hitboxes(
                 ids,
                 selected_pos,
                 prefix: None,
-                underlay: PillUnderlay::Blank { fill: true },
             },
         );
     })

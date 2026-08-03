@@ -36,7 +36,7 @@ Alternative: share only palette constants while retaining separate renderers. Re
 
 Series-season choices will render their `Series:` prefix separately and delegate the remaining row to the common pill bar. This also lets the common overflow logic keep the selected season visible.
 
-When a direct remote queue exposes Local and Remote as actual choices, those choices will be normalized into pill-bar labels and the returned hitboxes will populate the existing queue-scope layout fields. Queue title, attached-session, and connection-only rendering will stay on the status-pill path because those displays are not selectors.
+The selectable Local/Remote queue-scope pills are intentionally left on the status-pill path: they double as connection status (device name, connection icon, "Connected:" label) and are the only place that status is displayed. Rerouting them through the shared pill bar would strip that status with nowhere else to render it. They are treated as connection status, not a selector, and are out of scope for the shared pill bar.
 
 Alternative: generalize all status-pill rendering into the pill bar. Rejected because status pills have richer content and different semantics, and doing so would expand the change beyond interactive selectors.
 
@@ -47,7 +47,7 @@ The refactor will not introduce a new selector state model. Existing selected in
 ## Risks / Trade-offs
 
 - [Joined pills consume different widths than separated pills] -> Reuse the common Unicode-width calculation and existing selected-item visibility logic, then update narrow-width render assertions.
-- [Queue labels contain status-oriented spacing or icon spans] -> Normalize label content before passing it to the pill bar while retaining the existing Local/Remote meaning and hitbox targets.
+- [Series seasons previously showed only the first page] -> Delegating to the shared pill bar now scrolls the visible window to keep the selected season on screen; update the render assertion if it assumed page-one-only display.
 - [A shared row background may contrast differently across panels] -> Make the row surface part of the canonical pill-selector shell rather than inheriting context backgrounds.
 - [Unicode edge glyphs can expose hitbox drift] -> Keep glyph width in the same renderer that records each pill rectangle and verify rendered cells against those rectangles.
 
