@@ -189,20 +189,55 @@ fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
         "wide Continue Watching pills belong at the top of the right panel"
     );
     assert!(
-        lines[2].contains("Hero Episode"),
+        lines[3].contains("Hero Episode"),
         "the right-panel list should follow the pills and panel top inset"
+    );
+    let right_panel_x = layout.main.selector_tabs[0].0.x;
+    assert!(
+        (right_panel_x..120).all(|x| term.backend().buffer()[(x, 1)].symbol() == " "),
+        "Home should keep one blank row below the pill bar"
+    );
+    assert_eq!(
+        term.backend().buffer()[(right_panel_x, 1)].bg,
+        crate::app::palette::LIBRARY_SIDE_BG,
+        "the spacer below the Home pill bar should use the library background"
+    );
+    assert!(
+        (right_panel_x..120).all(|x| term.backend().buffer()[(x, 2)].symbol() == "▔"),
+        "Home should use a full-width top border below the pill bar"
+    );
+    assert_eq!(
+        term.backend().buffer()[(right_panel_x, 2)].bg,
+        crate::app::palette::BG_GREEN,
+        "the list panel top row should use the green panel background"
     );
     assert_eq!(
         hero_text_y, 15,
         "the left hero metadata should follow the top-aligned image after one blank row"
     );
     assert_eq!(
-        term.backend().buffer()[(64, 2)].fg,
+        term.backend().buffer()[(64, 3)].fg,
         crate::app::palette::WHITE,
         "wide Home right-panel titles should remain white when the panel is focused"
     );
+    assert!(
+        (right_panel_x..120).all(|x| term.backend().buffer()[(x, 2)].symbol() == "▔"),
+        "wide Home right-panel top border should span the green row"
+    );
+    assert!(
+        (right_panel_x..120).all(|x| term.backend().buffer()[(x, 28)].symbol() == "▁"),
+        "wide Home right-panel bottom border should span the green row"
+    );
     assert_eq!(
-        term.backend().buffer()[(54, 2)].fg,
+        term.backend().buffer()[(right_panel_x, 2)].fg,
+        crate::app::palette::SEEK_TRACK
+    );
+    assert_eq!(
+        term.backend().buffer()[(right_panel_x, 28)].fg,
+        crate::app::palette::SEEK_TRACK
+    );
+    assert_eq!(
+        term.backend().buffer()[(54, 3)].fg,
         crate::app::palette::YELLOW,
         "wide Home show labels should use the yellow accent"
     );
@@ -235,7 +270,7 @@ fn wide_continue_watching_places_pills_and_list_right_of_image_first_hero() {
     .unwrap();
 
     assert_eq!(
-        term.backend().buffer()[(64, 2)].fg,
+        term.backend().buffer()[(64, 3)].fg,
         crate::app::palette::MUTED,
         "wide Home right-panel titles should dim when the panel is unfocused"
     );
@@ -262,7 +297,7 @@ fn playing_home_video_uses_aqua_play_icon_in_the_icon_column() {
     })
     .unwrap();
 
-    let cell = &term.backend().buffer()[(0, 2)];
+    let cell = &term.backend().buffer()[(0, 3)];
     assert_eq!(
         cell.symbol(),
         "▶",
@@ -285,7 +320,7 @@ fn selected_home_row_uses_aqua_bar_marker() {
     })
     .unwrap();
 
-    let cell = &term.backend().buffer()[(0, 4)];
+    let cell = &term.backend().buffer()[(0, 5)];
     assert_eq!(
         cell.symbol(),
         "▍",
@@ -315,7 +350,7 @@ fn row_continue_watching_places_list_one_row_after_hero() {
     let output = buffer_to_string(&term);
     let lines: Vec<_> = output.lines().collect();
     assert!(
-        lines[12].contains("Row Hero Episode"),
+        lines[13].contains("Row Hero Episode"),
         "the list should begin one row after the row-mode hero"
     );
 }

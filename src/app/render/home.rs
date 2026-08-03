@@ -68,8 +68,8 @@ impl App {
             .find(|section| section.section_idx == self.home.section);
 
         let content_area = Rect {
-            y: area.y.saturating_add(2),
-            height: area.height.saturating_sub(2),
+            y: area.y.saturating_add(3),
+            height: area.height.saturating_sub(3),
             ..area
         };
 
@@ -154,9 +154,9 @@ impl App {
             list_area = if hero_data.is_some() {
                 Rect {
                     x: content_area.x + hero_col_width + 2,
-                    y: area.y.saturating_add(1),
+                    y: area.y.saturating_add(2),
                     width: content_area.width.saturating_sub(hero_col_width + 2),
-                    height: area.height.saturating_sub(1),
+                    height: area.height.saturating_sub(2),
                 }
             } else {
                 // No hero item: list takes full width
@@ -235,13 +235,17 @@ impl App {
         // In the wide Home layout, the list body is a separate right-column
         // green surface directly below the pill row. Keep one blank green row
         // at its top and bottom.
-        // `green_panel_full` tracks the full green panel rect (before inset)
-        // so focused rows can span its entire width.
+        // `green_panel_full` tracks the painted green panel so focused rows and
+        // its top/bottom rules can span the entire width.
         let green_panel_full: Option<Rect>;
         let list_area = if two_column && hero_data.is_some() {
             const RIGHT_COLUMN_INNER_INSET: u16 = 2;
-            green_panel_full = Some(list_area);
             let panel_h = list_area.height.saturating_sub(1);
+            let panel_area = Rect {
+                height: panel_h,
+                ..list_area
+            };
+            green_panel_full = Some(panel_area);
             let green_bg = if focused {
                 palette::BG_GREEN
             } else {
@@ -249,16 +253,11 @@ impl App {
             };
             f.render_widget(
                 Block::default().style(Style::default().bg(green_bg)),
-                Rect {
-                    x: list_area.x,
-                    y: list_area.y,
-                    width: list_area.width,
-                    height: panel_h,
-                },
+                panel_area,
             );
             let interior_area = Rect {
                 y: list_area.y.saturating_add(1),
-                height: panel_h.saturating_sub(2),
+                height: panel_h.saturating_sub(3),
                 ..list_area
             };
             Rect {
@@ -272,6 +271,43 @@ impl App {
             green_panel_full = None;
             list_area
         };
+
+        // Keep the row immediately below the Home pill bar free of list text.
+        // The wide layout uses the list panel surface; other layouts inherit
+        // the library panel surface.
+        let pill_gap = Rect {
+            x: pills_area.x,
+            y: pills_area.y.saturating_add(1),
+            width: pills_area.width,
+            height: 1,
+        };
+        if pill_gap.y < area.bottom() && pill_gap.width > 0 {
+            let panel_bg = if wide_pill_section {
+                if focused {
+                    palette::BG_GREEN
+                } else {
+                    palette::PLAYBACK_PANEL_BG
+                }
+            } else {
+                palette::LIBRARY_SIDE_BG
+            };
+            f.render_widget(
+                Paragraph::new(" ".repeat(pill_gap.width as usize))
+                    .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                pill_gap,
+            );
+            let second_pill_gap = Rect {
+                y: pill_gap.y.saturating_add(1),
+                ..pill_gap
+            };
+            if second_pill_gap.y < area.bottom() {
+                f.render_widget(
+                    Paragraph::new(" ".repeat(second_pill_gap.width as usize))
+                        .style(Style::default().bg(panel_bg)),
+                    second_pill_gap,
+                );
+            }
+        }
 
         layout.left_area = list_area;
 
@@ -519,6 +555,28 @@ impl App {
         if needs_scrollbar && focused {
             let max_off = content_h.saturating_sub(list_area.height) as usize;
             super::render_power_right_scrollbar(f, list_area, max_off, scroll_y as usize);
+        }
+
+        if let Some(panel) = green_panel_full {
+            if panel.height > 0 {
+                let border_style = Style::default().fg(palette::SEEK_TRACK);
+                for (y, glyph) in [
+                    (panel.y, '\u{2594}'),
+                    (panel.bottom().saturating_sub(1), '\u{2581}'),
+                ] {
+                    f.render_widget(
+                        Paragraph::new(Line::from(Span::styled(
+                            glyph.to_string().repeat(panel.width as usize),
+                            border_style,
+                        ))),
+                        Rect {
+                            y,
+                            height: 1,
+                            ..panel
+                        },
+                    );
+                }
+            }
         }
     }
 
