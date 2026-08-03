@@ -273,6 +273,47 @@ impl EmbyClient {
         Ok(users[0]["Id"].as_str().unwrap_or("").to_string())
     }
 
-    // ── Browse / fetch ───────────────────────────────────────────────────────
+    /// Validate a presented Emby token for shared-data access. Unlike
+    /// `validate_presented_token`, this does NOT fall back to API-key user
+    /// list validation — a successful `/Users/Me` response with a non-empty
+    /// user ID is required. The token is never persisted or logged.
+    pub fn validate_shared_data_token(&self, token: &str) -> Result<String, String> {
+        let token = token.trim();
+        if token.is_empty() {
+            return Err("missing Emby auth token".to_string());
+        }
 
+        let auth_header = format!(
+            "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"{}\"",
+            self.device_name,
+            self.device_id,
+            env!("CARGO_PKG_VERSION"),
+            token
+        );
+
+        let resp = self
+            .agent
+            .get(&self.url("/Users/Me"))
+            .set("Authorization", &auth_header)
+            .set("X-Emby-Token", token)
+            .call()
+            .map_err(|e| format!("shared-data token validation failed: {e}"))?;
+
+        let resp: serde_json::Value = resp
+            .into_json()
+            .map_err(|e| format!("shared-data token validation parse failed: {e}"))?;
+
+        let user_id = resp["Id"].as_str().unwrap_or("").trim();
+        if user_id.is_empty() {
+            return Err(
+                "shared-data token validation: /Users/Me returned empty user ID; \
+                 API keys are not accepted for shared-data access"
+                    .to_string(),
+            );
+        }
+
+        Ok(user_id.to_string())
+    }
+
+    // ── Browse / fetch ───────────────────────────────────────────────────────
 }

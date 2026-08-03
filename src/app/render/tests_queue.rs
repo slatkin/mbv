@@ -2,8 +2,6 @@ use super::test_helpers::*;
 use super::*;
 use crate::app::tests::make_item;
 use crate::app::QueueScope;
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
 
 #[test]
 fn uses_configured_left_column_width() {

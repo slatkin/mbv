@@ -22,6 +22,7 @@ pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
 pub const CTRL_CAP_LIFECYCLE_SHUTDOWN: &str = "lifecycle-shutdown";
+pub const CTRL_CAP_SHARED_MBV_STATE: &str = "shared-mbv-state-v1";
 
 pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;

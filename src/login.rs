@@ -144,6 +144,11 @@ pub fn run(
                     auto_reconnect: base_config.auto_reconnect,
                     idle_feed_rss_url: base_config.idle_feed_rss_url.clone(),
                     idle_feed_rotation_secs: base_config.idle_feed_rotation_secs,
+                    shared_data_enabled: base_config.shared_data_enabled,
+                    shared_data_listen: base_config.shared_data_listen.clone(),
+                    shared_data_tls_cert_path: base_config.shared_data_tls_cert_path.clone(),
+                    shared_data_tls_key_path: base_config.shared_data_tls_key_path.clone(),
+                    shared_data_endpoint: base_config.shared_data_endpoint.clone(),
                 };
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {

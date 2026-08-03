@@ -322,9 +322,7 @@ impl App {
                     let is_active = i == playback.active_idx && playback.active;
                     let is_cursor = i == cursor && focused;
 
-                    let fg = if is_cursor {
-                        palette::WHITE
-                    } else if focused {
+                    let fg = if is_cursor || focused {
                         palette::WHITE
                     } else {
                         palette::QUEUE_UNFOCUSED_FG

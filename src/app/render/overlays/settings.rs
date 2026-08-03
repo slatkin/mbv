@@ -132,6 +132,9 @@ impl App {
                 }
             }
         }
+        if key == SettingKey::AutoReconnect {
+            self.persist_roaming_settings();
+        }
         self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
     }
 

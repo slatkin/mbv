@@ -248,17 +248,18 @@ impl App {
                     );
                     row += 1;
                 } else {
-                    let mut spans: Vec<Span> = Vec::new();
-                    spans.push(Span::styled(
-                        "Series: ",
-                        Style::default()
-                            .fg(palette::YELLOW)
-                            .add_modifier(Modifier::BOLD),
-                    ));
-                    spans.push(Span::styled(
-                        detail.seasons.len().to_string(),
-                        Style::default().fg(palette::SOFT_WHITE),
-                    ));
+                    let spans: Vec<Span> = vec![
+                        Span::styled(
+                            "Series: ",
+                            Style::default()
+                                .fg(palette::YELLOW)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            detail.seasons.len().to_string(),
+                            Style::default().fg(palette::SOFT_WHITE),
+                        ),
+                    ];
                     f.render_widget(
                         Paragraph::new(Line::from(spans)),
                         Rect {
@@ -399,14 +400,14 @@ impl App {
         // ── Bottom border: row of ▔ characters at the very bottom ───────
         if max_y > area.y {
             f.render_widget(
-                Paragraph::new(Span::styled(
-                    "\u{2594}".repeat(
-                        area.width
-                            .saturating_add(2 * SELECTED_BLOCK_SIDE_PADDING as u16)
-                            as usize,
+                Paragraph::new(
+                    Span::styled(
+                        "\u{2594}".repeat(
+                            area.width.saturating_add(2 * SELECTED_BLOCK_SIDE_PADDING) as usize,
+                        ),
+                        Style::default().fg(palette::SEEK_TRACK),
                     ),
-                    Style::default().fg(palette::SEEK_TRACK),
-                )),
+                ),
                 Rect {
                     x: area.x.saturating_sub(SELECTED_BLOCK_SIDE_PADDING),
                     y: max_y - 1,

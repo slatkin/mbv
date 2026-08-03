@@ -27,6 +27,8 @@ impl App {
             #[cfg(test)]
             _test_state_dir_guard,
             client: init.client,
+            shared_client: None,
+            shared_reconnect_rx: None,
             player: init.player,
             mpris: None,
             player_rx: init.player_rx,
@@ -302,6 +304,7 @@ impl App {
             idle_feed: None,
         });
         app.mpris = Some(mpris_handle);
+        app.initialize_shared_state();
         app.try_auto_reconnect();
         app
     }
@@ -435,6 +438,7 @@ impl App {
             idle_feed: None,
         });
         app.mpris = Some(mpris_handle);
+        app.initialize_shared_state();
         app.launched_as_remote = true;
         app.player_endpoint = Some(endpoint.clone());
         app.home_is_local_daemon = endpoint.is_local();

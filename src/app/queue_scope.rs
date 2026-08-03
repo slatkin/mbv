@@ -68,7 +68,7 @@ impl App {
         self.queue_undo_stack.clear();
     }
 
-    pub(super) fn persist_local_queue_state_if_needed(&self, scope: QueueScope) {
+    pub(super) fn persist_local_queue_state_if_needed(&mut self, scope: QueueScope) {
         if self.local_queue_metadata_applies(scope) {
             self.save_queue_state();
         }

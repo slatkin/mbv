@@ -78,6 +78,28 @@ pub struct Config {
     pub idle_feed_rss_url: String,
     /// Seconds between idle feed item rotations (minimum 1).
     pub idle_feed_rotation_secs: u64,
+    /// ── Shared-data hosting (daemon) ──────────────────────────────
+    /// When `true`, the daemon opens a dedicated shared-data listener and
+    /// the redb database. Disabled by default: no listener or database is
+    /// created unless this is explicitly enabled.
+    pub shared_data_enabled: bool,
+    /// Endpoint for the shared-data listener (e.g. `192.168.1.20:47789` for
+    /// private TCP, or a Unix socket path). Empty = disabled. TCP endpoints
+    /// are limited to loopback/private addresses; TLS is optional.
+    pub shared_data_listen: String,
+    /// Path to the TLS certificate file for the shared-data listener.
+    /// Optional when `shared_data_listen` is a TCP endpoint; cert and key must
+    /// be supplied together to enable TLS.
+    pub shared_data_tls_cert_path: String,
+    /// Path to the TLS private key file for the shared-data listener.
+    /// Optional when `shared_data_listen` is a TCP endpoint; cert and key must
+    /// be supplied together to enable TLS.
+    pub shared_data_tls_key_path: String,
+    /// ── Shared-data client ────────────────────────────────────────
+    /// Explicit shared-data endpoint for the client. Empty = disabled
+    /// (local-only behavior). Must be a loopback/private TCP or Unix endpoint;
+    /// WAN endpoints are rejected at validation time.
+    pub shared_data_endpoint: String,
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
@@ -125,6 +147,11 @@ impl Default for Config {
             auto_reconnect: false,
             idle_feed_rss_url: "https://novaramedia.com/feed/".to_string(),
             idle_feed_rotation_secs: 10,
+            shared_data_enabled: false,
+            shared_data_listen: String::new(),
+            shared_data_tls_cert_path: String::new(),
+            shared_data_tls_key_path: String::new(),
+            shared_data_endpoint: String::new(),
         }
     }
 }
@@ -189,6 +216,145 @@ pub fn default_daemon_server_tcp_listen() -> String {
         DEFAULT_SYSTEM_DAEMON_TCP_LISTEN.to_string()
     } else {
         String::new()
+    }
+}
+
+/// Validates shared-data configuration. Returns `Err` with a human-readable
+/// message if the configuration is invalid.
+pub fn validate_shared_data_config(cfg: &Config) -> Result<(), String> {
+    if !cfg.shared_data_enabled {
+        return Ok(());
+    }
+    let listen = cfg.shared_data_listen.trim();
+    if listen.is_empty() {
+        return Err("shared_data.enabled is true but shared_data.listen is empty".to_string());
+    }
+    if listen.starts_with('/') || listen.starts_with("unix://") {
+        if !cfg.shared_data_tls_cert_path.trim().is_empty()
+            || !cfg.shared_data_tls_key_path.trim().is_empty()
+        {
+            return Err("shared_data TLS paths require a TCP listener".to_string());
+        }
+        return Ok(());
+    }
+    validate_shared_tcp_address(listen, "shared_data.listen")?;
+    let has_cert = !cfg.shared_data_tls_cert_path.trim().is_empty();
+    let has_key = !cfg.shared_data_tls_key_path.trim().is_empty();
+    if has_cert != has_key {
+        return Err(
+            "shared_data.tls_cert_path and shared_data.tls_key_path must be supplied together"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_shared_tcp_address(address: &str, field: &str) -> Result<(), String> {
+    let addr = address.strip_prefix("tcp://").unwrap_or(address);
+    let addr = addr.strip_prefix("tls://").unwrap_or(addr);
+    let is_localhost = addr
+        .rsplit_once(':')
+        .map(|(host, _)| host.eq_ignore_ascii_case("localhost"))
+        .unwrap_or(false);
+    if is_localhost {
+        return Ok(());
+    }
+
+    let socket_addr = addr.parse::<std::net::SocketAddr>().map_err(|_| {
+        format!(
+            "{field} must use localhost or a loopback/private IP address, not a public hostname ({addr})"
+        )
+    })?;
+    let ip = socket_addr.ip();
+    let allowed = match ip {
+        std::net::IpAddr::V4(ip) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
+        std::net::IpAddr::V6(ip) => {
+            ip.is_loopback() || ip.is_unique_local() || ip.is_unicast_link_local()
+        }
+    };
+    if allowed {
+        Ok(())
+    } else {
+        Err(format!(
+            "{field} must use a loopback/private-network address; WAN address rejected ({addr})"
+        ))
+    }
+}
+
+/// Validates the client-side shared-data endpoint before any credentials are sent.
+pub fn validate_shared_data_endpoint(endpoint: &str) -> Result<(), String> {
+    let ep = endpoint.trim();
+    if ep.is_empty() {
+        return Ok(());
+    }
+    // Unix domain sockets are always accepted (permissions protect the socket).
+    if ep.starts_with('/') || ep.starts_with("unix://") {
+        return Ok(());
+    }
+    if ep.starts_with("tcp://") || ep.starts_with("tls://") {
+        return validate_shared_tcp_address(ep, "shared_data.endpoint");
+    }
+    Err(format!(
+        "shared_data.endpoint has unrecognized scheme: {ep}; \
+         expected tcp://, tls://, or a Unix socket path"
+    ))
+}
+
+#[cfg(test)]
+mod shared_data_endpoint_tests {
+    use super::{validate_shared_data_config, validate_shared_data_endpoint, Config};
+
+    #[test]
+    fn accepts_loopback_and_private_shared_endpoints_without_tls() {
+        for endpoint in [
+            "tcp://localhost:47789",
+            "tcp://127.0.0.1:47789",
+            "tcp://10.0.0.8:47789",
+            "tcp://172.16.4.8:47789",
+            "tcp://192.168.1.8:47789",
+            "tcp://[fd12:3456::8]:47789",
+        ] {
+            assert!(
+                validate_shared_data_endpoint(endpoint).is_ok(),
+                "{endpoint}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_wan_shared_endpoints() {
+        for endpoint in [
+            "tcp://0.0.0.0:47789",
+            "tcp://8.8.8.8:47789",
+            "tls://8.8.8.8:47789",
+            "tcp://mbvd.example.test:47789",
+        ] {
+            assert!(
+                validate_shared_data_endpoint(endpoint).is_err(),
+                "{endpoint}"
+            );
+        }
+    }
+
+    #[test]
+    fn hosting_allows_plaintext_private_tcp_and_optional_tls() {
+        let config = Config {
+            shared_data_enabled: true,
+            shared_data_listen: "192.168.1.8:47789".to_string(),
+            ..Config::default()
+        };
+        assert!(validate_shared_data_config(&config).is_ok());
+
+        let config = Config {
+            shared_data_tls_cert_path: "cert.p12".to_string(),
+            ..config
+        };
+        assert!(validate_shared_data_config(&config).is_err());
+        let config = Config {
+            shared_data_tls_key_path: "key.pem".to_string(),
+            ..config
+        };
+        assert!(validate_shared_data_config(&config).is_ok());
     }
 }
 

@@ -152,6 +152,8 @@ pub(crate) fn make_app_stub() -> App {
     App {
         _test_state_dir_guard: crate::config::TestStateDirGuard::new_if_unset(),
         client: Arc::new(Mutex::new(client)),
+        shared_client: None,
+        shared_reconnect_rx: None,
         player,
         mpris: None,
         launched_as_remote: false,

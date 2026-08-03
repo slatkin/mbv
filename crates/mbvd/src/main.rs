@@ -2,7 +2,7 @@ use mbv_core::api::EmbyClient;
 use mbv_core::{applog, config, daemon};
 
 fn print_usage() {
-    eprintln!("Usage: mbvd [--audio-only] [-q|--quit] [--version]");
+    eprintln!("Usage: mbvd [--audio-only] [-q|--quit] [--export-shared-data] [--version]");
 }
 
 fn has_flag(args: &[String], long: &str, short: Option<&str>) -> bool {
@@ -90,6 +90,11 @@ fn run() -> Result<(), String> {
     }
     if has_flag(&args, "--quit", Some("-q")) {
         println!("{}", stop_daemon()?);
+        return Ok(());
+    }
+    if has_flag(&args, "--export-shared-data", None) {
+        let db = mbv_core::shared_store::open_existing_shared_db()?;
+        println!("{}", mbv_core::shared_worker::export_json_pretty(&db)?);
         return Ok(());
     }
     for arg in &args {

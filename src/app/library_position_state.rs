@@ -16,6 +16,12 @@ impl App {
             .libraries
             .insert(library_id, position);
         crate::config::save_library_position_state(&self.library_position_state);
+        if let Ok(value) = serde_json::to_value(&self.library_position_state) {
+            let _ = self.persist_shared_document(
+                mbv_core::shared_state::SharedDocumentKind::LibraryPositionState,
+                value,
+            );
+        }
     }
 
     /// Whether `lib_idx` is the library currently visible in the left
@@ -48,6 +54,12 @@ impl App {
             .libraries
             .insert(lib.library.id.clone(), position);
         crate::config::save_library_position_state(&self.library_position_state);
+        if let Ok(value) = serde_json::to_value(&self.library_position_state) {
+            let _ = self.persist_shared_document(
+                mbv_core::shared_state::SharedDocumentKind::LibraryPositionState,
+                value,
+            );
+        }
     }
 
     pub(super) fn focus_power_queue_initial_item(&mut self) {
@@ -141,5 +153,11 @@ impl App {
             return;
         }
         crate::config::save_library_position_state(&self.library_position_state);
+        if let Ok(value) = serde_json::to_value(&self.library_position_state) {
+            let _ = self.persist_shared_document(
+                mbv_core::shared_state::SharedDocumentKind::LibraryPositionState,
+                value,
+            );
+        }
     }
 }

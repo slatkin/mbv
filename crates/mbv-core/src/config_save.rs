@@ -168,6 +168,44 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         toml::Value::Integer(cfg.idle_feed_rotation_secs as i64),
     );
 
+    let shared_data = section!("shared_data");
+    shared_data.insert(
+        "enabled".to_string(),
+        toml::Value::Boolean(cfg.shared_data_enabled),
+    );
+    if cfg.shared_data_listen.trim().is_empty() {
+        shared_data.remove("listen");
+    } else {
+        shared_data.insert(
+            "listen".to_string(),
+            toml::Value::String(cfg.shared_data_listen.clone()),
+        );
+    }
+    if cfg.shared_data_tls_cert_path.trim().is_empty() {
+        shared_data.remove("tls_cert_path");
+    } else {
+        shared_data.insert(
+            "tls_cert_path".to_string(),
+            toml::Value::String(cfg.shared_data_tls_cert_path.clone()),
+        );
+    }
+    if cfg.shared_data_tls_key_path.trim().is_empty() {
+        shared_data.remove("tls_key_path");
+    } else {
+        shared_data.insert(
+            "tls_key_path".to_string(),
+            toml::Value::String(cfg.shared_data_tls_key_path.clone()),
+        );
+    }
+    if cfg.shared_data_endpoint.trim().is_empty() {
+        shared_data.remove("endpoint");
+    } else {
+        shared_data.insert(
+            "endpoint".to_string(),
+            toml::Value::String(cfg.shared_data_endpoint.clone()),
+        );
+    }
+
     let mbvd = section!("mbvd");
     mbvd.insert(
         "broadcast_ms".to_string(),
