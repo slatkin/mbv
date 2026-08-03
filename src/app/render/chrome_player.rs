@@ -281,11 +281,14 @@ impl App {
             + stop_gap.width()
             + next_w as usize
             + next_gap.width()
+            + 2 // spaces between title and time
             + time_text.width()
             + post_time_gap.width()
             + right_w as usize;
         let title_w = (area.width as usize).saturating_sub(fixed_w);
         left.extend(self.playback_title_spans(title, title_color, title_w));
+
+        left.push(Span::raw("  "));
 
         left.push(Span::styled(
             time_text,
