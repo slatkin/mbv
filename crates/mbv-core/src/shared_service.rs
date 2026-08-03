@@ -348,17 +348,15 @@ fn spawn_shared_client_handler<S>(
         };
 
         // Validate the Emby token — /Users/Me only, no API-key fallback.
-        let user_id = {
-            let client = client.lock().unwrap();
-            match client.validate_shared_data_token(&auth_token) {
-                Ok(uid) => uid,
-                Err(e) => {
-                    let _ = ev_tx.send(
-                        serde_json::to_string(&SharedDataEvent::AuthFailed { reason: e })
-                            .unwrap_or_default(),
-                    );
-                    return;
-                }
+        let validate_client = client.lock().unwrap().clone();
+        let user_id = match validate_client.validate_shared_data_token(&auth_token) {
+            Ok(uid) => uid,
+            Err(e) => {
+                let _ = ev_tx.send(
+                    serde_json::to_string(&SharedDataEvent::AuthFailed { reason: e })
+                        .unwrap_or_default(),
+                );
+                return;
             }
         };
         // Token discarded here — never stored, logged, or persisted.

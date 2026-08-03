@@ -21,19 +21,23 @@ pub fn open_shared_db() -> Result<Database, String> {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("create shared db directory {}: {e}", parent.display()))?;
     }
+    // Only a database newly created by this call may be cleaned up on failure;
+    // a pre-existing database file must never be deleted, even if the init
+    // transaction cannot complete (e.g. a migration or commit failure).
+    let existed = path.is_file();
     let db = Database::create(&path)
         .map_err(|e| format!("open shared database {}: {e}", path.display()))?;
 
     // Ensure the table exists.
     let txn = db.begin_write().map_err(|e| {
-        let _ = std::fs::remove_file(&path);
+        remove_created_db(&path, existed);
         format!("begin shared db init transaction: {e}")
     })?;
     {
         let _ = txn.open_table(DB_TABLE);
     }
     txn.commit().map_err(|e| {
-        let _ = std::fs::remove_file(&path);
+        remove_created_db(&path, existed);
         format!("commit shared db init transaction: {e}")
     })?;
 
@@ -57,6 +61,15 @@ pub fn open_existing_shared_db() -> Result<Database, String> {
         ));
     }
     Database::open(&path).map_err(|e| format!("open shared database {}: {e}", path.display()))
+}
+
+/// Remove the database file only if `open_shared_db` created it during this
+/// call (i.e. it did not exist before). A pre-existing database is left in
+/// place so a failed initialization never deletes committed data.
+fn remove_created_db(path: &Path, existed: bool) {
+    if !existed {
+        let _ = std::fs::remove_file(path);
+    }
 }
 
 /// Best-effort `chmod 0o700` (directory) or `chmod 0o600` (file).
