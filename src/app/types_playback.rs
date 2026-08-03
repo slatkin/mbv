@@ -141,6 +141,7 @@ pub(super) enum PendingQueueAction {
 }
 
 pub(super) enum PendingTrackingEdit {
+    ClearQueue,
     Remove(usize),
     Move(isize),
     Undo(QueueScope),

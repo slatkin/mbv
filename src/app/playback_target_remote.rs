@@ -12,7 +12,9 @@ impl RemotePlaybackTarget {
     pub(super) fn stop(&self, app: &mut App) {
         let session_id = self.session_id.clone();
         app.issue_remote_intent(RemoteIntent::Stop);
-        app.do_session_command(move |c| c.session_transport(&session_id, "Stop"));
+        app.do_reconciliation_session_command(&session_id.clone(), move |c| {
+            c.session_transport(&session_id, "Stop")
+        });
     }
 
     pub(super) fn seek_relative(&self, app: &mut App, delta: f64) {
@@ -24,7 +26,9 @@ impl RemotePlaybackTarget {
         let target = App::remote_seek_ticks(pos_s, delta);
         let session_id = self.session_id.clone();
         app.issue_remote_intent(RemoteIntent::Seek);
-        app.do_session_command(move |c| c.session_seek(&session_id, target));
+        app.do_reconciliation_session_command(&session_id.clone(), move |c| {
+            c.session_seek(&session_id, target)
+        });
     }
 
     pub(super) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {

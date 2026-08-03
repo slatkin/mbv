@@ -72,7 +72,9 @@ impl App {
             self.remote_pos_at = Instant::now();
             self.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);
             self.issue_remote_intent(RemoteIntent::Seek);
-            self.do_session_command(move |c| c.session_seek(&id, ticks));
+            self.do_reconciliation_session_command(&id.clone(), move |c| {
+                c.session_seek(&id, ticks)
+            });
             return;
         }
         let runtime_ticks = self.player.status.lock().unwrap().runtime_ticks;

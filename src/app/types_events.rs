@@ -103,13 +103,22 @@ pub(super) enum LibEvent {
     Error(String),
 }
 
+pub(super) struct ReconciliationCommand {
+    pub(super) session_id: String,
+    pub(super) tracker_epoch: u64,
+    pub(super) generation: u64,
+}
+
 pub(super) enum SessionEvent {
     Loaded {
         sessions: Vec<mbv_core::api::SessionInfo>,
         generation: u64,
     },
     ItemRefreshed(String, Box<mbv_core::api::MediaItem>), // (item_id, fresh)
-    CommandError(String),
+    CommandError {
+        error: String,
+        reconciliation: Option<ReconciliationCommand>,
+    },
     ConsumeValidated {
         session_id: String,
         epoch: u64,

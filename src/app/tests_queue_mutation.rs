@@ -187,6 +187,40 @@ fn clearing_remote_queue_in_direct_remote_mode_leaves_local_queue_metadata_intac
 }
 
 #[test]
+fn clearing_tracked_queue_stops_tracking_before_later_observations() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.items = make_items(2);
+    app.remote_tracker = Some(tracking_stub());
+
+    app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
+
+    assert!(matches!(
+        app.pending_tracking_edit,
+        Some(PendingTrackingEdit::ClearQueue)
+    ));
+    assert!(app.remote_tracker.is_some());
+    assert_eq!(app.player_tab.items.len(), 2);
+
+    app.apply_pending_tracking_edit();
+
+    assert!(app.remote_tracker.is_none());
+    assert!(app.player_tab.items.is_empty());
+
+    app.connected_session_id = Some("session".into());
+    let mut advanced_session = make_session("Client", "Emby");
+    advanced_session.id = "session".into();
+    advanced_session.now_playing_item_id = Some("id1".into());
+    app.handle_session_event(SessionEvent::Loaded {
+        sessions: vec![advanced_session],
+        generation: 1,
+    });
+
+    assert!(app.remote_tracker.is_none());
+    assert!(app.sessions_rx.try_recv().is_err());
+}
+
+#[test]
 fn removing_from_local_queue_in_direct_remote_mode_does_not_touch_remote_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let local_items = make_items(3);

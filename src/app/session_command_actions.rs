@@ -1,4 +1,4 @@
-use super::{App, SessionEvent};
+use super::{App, ReconciliationCommand, SessionEvent};
 use mbv_core::api::{EmbyClient, TICKS_PER_SECOND};
 use mbv_core::remote_reconciliation::{ReconciliationTracker, RemoteIntent, SubmittedOccurrence};
 use std::time::SystemTime;
@@ -22,9 +22,12 @@ impl App {
         items: &[mbv_core::api::MediaItem],
         start_idx: usize,
     ) {
+        let generation = self.next_session_poll_generation();
         if items.len() < 2 {
             self.remote_tracker = None;
-        } else if let Some(tracker) = Self::build_remote_tracker(conn_id, items, start_idx) {
+        } else if let Some(tracker) =
+            Self::build_remote_tracker(conn_id, items, start_idx, generation)
+        {
             self.remote_tracker = Some(tracker);
         }
         self.tracking_edit_warning_shown = false;
@@ -33,15 +36,17 @@ impl App {
         let start_ticks = items
             .get(start_idx)
             .map_or(0, |item| item.playback_position_ticks);
-        self.do_session_command(move |client| {
+        let reconciliation = self.reconciliation_command(conn_id, generation);
+        self.dispatch_session_command(generation, reconciliation, move |client| {
             client.session_play_items(&id, &item_ids, start_idx, start_ticks)
         });
     }
 
-    fn build_remote_tracker(
+    pub(super) fn build_remote_tracker(
         conn_id: &str,
         items: &[mbv_core::api::MediaItem],
         start_idx: usize,
+        generation: u64,
     ) -> Option<ReconciliationTracker> {
         let occurrences = items
             .iter()
@@ -55,7 +60,12 @@ impl App {
                 occurrence
             })
             .collect();
-        ReconciliationTracker::new(conn_id, occurrences, start_idx, Self::now_ms())
+        ReconciliationTracker::new(conn_id, occurrences, start_idx, Self::now_ms()).map(
+            |mut tracker| {
+                tracker.accept_observations_from(generation);
+                tracker
+            },
+        )
     }
 
     pub(super) fn issue_remote_intent(&mut self, intent: RemoteIntent) {
@@ -170,7 +180,7 @@ impl App {
                 let start_ticks = items
                     .get(target_idx)
                     .map_or(0, |item| item.playback_position_ticks);
-                self.do_session_command(move |client| {
+                self.do_reconciliation_session_command(&id.clone(), move |client| {
                     client.session_play_items(&id, &item_ids, target_idx, start_ticks)
                 });
             } else {
@@ -209,12 +219,51 @@ impl App {
         &mut self,
         f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
     ) {
+        let generation = self.next_session_poll_generation();
+        self.dispatch_session_command(generation, None, f);
+    }
+
+    pub(super) fn do_reconciliation_session_command(
+        &mut self,
+        session_id: &str,
+        f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
+    ) {
+        let generation = self.next_session_poll_generation();
+        let reconciliation = self.reconciliation_command(session_id, generation);
+        self.dispatch_session_command(generation, reconciliation, f);
+    }
+
+    fn reconciliation_command(
+        &mut self,
+        session_id: &str,
+        generation: u64,
+    ) -> Option<ReconciliationCommand> {
+        let tracker = self.remote_tracker.as_mut()?;
+        if tracker.session_id() != session_id {
+            return None;
+        }
+        tracker.track_command_generation(generation);
+        Some(ReconciliationCommand {
+            session_id: session_id.to_string(),
+            tracker_epoch: tracker.epoch(),
+            generation,
+        })
+    }
+
+    fn dispatch_session_command(
+        &self,
+        generation: u64,
+        reconciliation: Option<ReconciliationCommand>,
+        f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
+    ) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.sessions_tx.clone();
-        let generation = self.next_session_poll_generation();
         std::thread::spawn(move || {
             if let Err(e) = f(&client) {
-                let _ = tx.send(SessionEvent::CommandError(e));
+                let _ = tx.send(SessionEvent::CommandError {
+                    error: e,
+                    reconciliation,
+                });
                 return;
             }
             match client.get_sessions() {
