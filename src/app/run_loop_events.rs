@@ -86,9 +86,9 @@ impl App {
         let consume_enabled = {
             let config = &self.client.lock().unwrap().config;
             if is_audio {
-                config.save_playlist_on_consume_audio
+                config.consume_audio
             } else {
-                config.save_playlist_on_consume
+                config.consume_videos
             }
         };
         if !consume_enabled {
