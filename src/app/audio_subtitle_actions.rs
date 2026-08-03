@@ -1,6 +1,28 @@
 use super::App;
+use mbv_core::api::EmbyClient;
+use mbv_core::player::{PlayerCommand, SubtitlePrefs};
+use mbv_core::remote_player::RemotePlayer;
+
+pub(crate) fn sync_remote_prefs(remote: &RemotePlayer, client: &EmbyClient) {
+    let prefs = SubtitlePrefs {
+        mode: client.config.subtitle_mode.clone(),
+        subtitle_lang: client.config.subtitle_lang.clone(),
+        audio_lang: client.config.audio_lang.clone(),
+    };
+    *remote.subtitle_prefs.lock().unwrap() = prefs.clone();
+    remote.send_command(PlayerCommand::SetSubtitlePrefs {
+        mode: prefs.mode,
+        subtitle_lang: prefs.subtitle_lang,
+        audio_lang: prefs.audio_lang,
+    });
+}
 
 impl App {
+    pub(super) fn sync_prefs_to_remote(&self, remote: &RemotePlayer) {
+        let client = self.client.lock().unwrap();
+        sync_remote_prefs(remote, &client);
+    }
+
     pub(super) fn toggle_mute(&mut self) {
         self.playback_target().toggle_soft_mute(self);
     }

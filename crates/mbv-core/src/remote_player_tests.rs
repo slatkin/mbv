@@ -1,8 +1,9 @@
 use super::*;
+use crate::api::EmbyClient;
 use crate::config::QueueSource;
-use crate::ctrl::CtrlState;
-use crate::ctrl::WireCommand;
+use crate::ctrl::{CtrlCmd, CtrlState, WireCommand};
 use crate::player::PlayerCommand;
+use std::sync::Arc;
 
 fn make_media_item(id: &str) -> MediaItem {
     MediaItem {
@@ -46,6 +47,36 @@ fn status_with_idx(current_idx: usize) -> PlayerStatus {
 
 fn status_with_idx_and_len(current_idx: usize, queue_len: usize) -> PlayerStatus {
     RemotePlayer::stub_status(current_idx, queue_len)
+}
+
+#[test]
+fn subtitle_preferences_are_ordered_before_direct_playback() {
+    let (remote, _events, commands) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.send_command(PlayerCommand::SetSubtitlePrefs {
+        mode: "Always".into(),
+        subtitle_lang: "English".into(),
+        audio_lang: "Japanese".into(),
+    });
+    remote.play_queue(
+        vec![make_media_item("episode-1"), make_media_item("episode-2")],
+        0,
+        QueueSource::Series,
+        Arc::new(EmbyClient::new(crate::config::Config::default())),
+        100,
+    );
+
+    assert!(matches!(
+        commands.recv().unwrap(),
+        CtrlCmd::PlayerCmd(WireCommand::SetSubtitlePrefs {
+            mode,
+            subtitle_lang,
+            audio_lang,
+        }) if mode == "Always" && subtitle_lang == "English" && audio_lang == "Japanese"
+    ));
+    assert!(matches!(
+        commands.recv().unwrap(),
+        CtrlCmd::PlaybackIntent(_)
+    ));
 }
 
 #[test]

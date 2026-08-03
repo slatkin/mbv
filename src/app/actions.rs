@@ -21,6 +21,20 @@ pub(super) fn enqueue_action_context(
     context
 }
 
+/// Resolve client-owned episode continuation before a target is contacted.
+/// Targets receive the returned sequence as-is; they do not apply this policy.
+pub(crate) fn client_playback_sequence(
+    item: MediaItem,
+    always_play_next: bool,
+    following: Vec<MediaItem>,
+) -> Vec<MediaItem> {
+    if always_play_next && following.len() > 1 {
+        following
+    } else {
+        vec![item]
+    }
+}
+
 /// Where playback should resume within a restored queue. Prefers locating
 /// `last_played_item_id` by ID (robust to the saved `cursor` index having
 /// drifted, e.g. if the list was edited before the last save) and falls back
@@ -262,6 +276,8 @@ impl App {
             let episodes = c.get_episodes_from(&item.series_id, &item.id);
             drop(c);
             if episodes.len() > 1 {
+                let episodes =
+                    client_playback_sequence(item.clone(), self.player.always_play_next, episodes);
                 let c = Arc::new(self.client.lock().unwrap().clone());
                 if !direct_remote {
                     self.on_queue_replace_silent();

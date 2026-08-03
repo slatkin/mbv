@@ -75,7 +75,6 @@ impl PlaybackSession {
             self.intro_end,
             &mut self.intro_show,
             &mut self.intro_hide,
-            self.config.always_skip_intro,
             mpv,
             &self.event_tx,
         );
@@ -501,5 +500,4 @@ impl PlaybackSession {
             let _ = self.event_tx.send(PlayerEvent::MpvQuit);
         }
     }
-
 }

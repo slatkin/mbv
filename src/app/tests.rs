@@ -443,6 +443,7 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
         player_rx,
         mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
+    let _ = cmd_rx.try_recv();
     app.player_tab.items = local_items;
     app.player_tab.queue_cursor = 0;
     (app, cmd_rx)

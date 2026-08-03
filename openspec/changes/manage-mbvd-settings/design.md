@@ -2,7 +2,7 @@
 
 See `proposal.md` for motivation and `specs/daemon-settings-management/spec.md` for observable behavior. The shared-data service already provides an authenticated full-duplex connection, additive capability negotiation, one serialized `redb` worker, durable acknowledgements, and notifications. Its existing records are deliberately per Emby user and limited to four roaming document kinds.
 
-The daemon currently receives one flattened `Config` whose values no longer reveal whether they came from TOML or a compiled default. It copies `always_play_next` into `Player` and captures `daemon_broadcast_ms` when starting the broadcast thread. Audio-pipe settings are consulted when playback sessions start, while playout delay is also read later when output starts. The F2 panel currently renders one fixed client-side setting collection and saves changes back to the client's `config.toml`.
+The daemon currently receives one flattened `Config` whose values no longer reveal whether they came from TOML or a compiled default. It captures `daemon_broadcast_ms` when starting the broadcast thread. Audio-pipe settings are consulted when playback sessions start, while playout delay is also read later when output starts. The F2 panel currently renders one fixed client-side setting collection and saves changes back to the client's `config.toml`.
 
 ## Goals / Non-Goals
 
@@ -20,7 +20,7 @@ The daemon currently receives one flattened `Config` whose values no longer reve
 - Managing credentials, endpoints, listeners, TLS, shared-data enablement, or authorization policy.
 - Adding administrator roles beyond successful shared-data authentication.
 - Dynamically applying settings classified as restart-required.
-- Generalizing the first three fields into a plugin, schema registry, or generic form system.
+- Generalizing the first two fields into a plugin, schema registry, or generic form system.
 
 ## Decisions
 
@@ -33,7 +33,6 @@ DaemonSettingsRecord
   revision: u64
   document:
     schema_version: 1
-    always_play_next: Option<bool>
     broadcast_ms: Option<u64>
     audio_pipe_playout_delay: Option<Disabled | Milliseconds(u64)>
 ```
@@ -49,7 +48,7 @@ Using a synthetic user ID in the existing per-user table was rejected because it
 Define typed protocol models rather than sending arbitrary JSON paths:
 
 ```text
-DaemonSettingKey = AlwaysPlayNext | BroadcastMs | AudioPipePlayoutDelayMs
+DaemonSettingKey = BroadcastMs | AudioPipePlayoutDelayMs
 SettingSource = Override | Config | Default
 ApplyMode = NextPlayback | RestartRequired
 
@@ -75,7 +74,7 @@ Returning only the raw override document was rejected because the client cannot 
 
 Add a daemon-specific configuration loader that returns the existing parsed `Config` plus a small `DaemonSettingsBaseline`. The baseline contains each allowlisted parsed value and whether its current TOML key was explicitly present. Both packaged `mbvd` and the detached local-daemon entrypoint pass this baseline into daemon startup; ordinary client configuration loading remains unchanged.
 
-The baseline follows the paths consumed by the parser for the three existing settings and centralizes those paths so source reporting cannot drift from parsing. It does not add provenance for unrelated configuration fields. Comparing parsed values to defaults was rejected because an explicitly configured value equal to the default must still report source `config`. Re-reading TOML for every settings request was rejected because the daemon does not otherwise hot-reload host configuration and repeated reads could report a baseline different from the one actually used at startup.
+The baseline follows the paths consumed by the parser for the two existing settings and centralizes those paths so source reporting cannot drift from parsing. It does not add provenance for unrelated configuration fields. Comparing parsed values to defaults was rejected because an explicitly configured value equal to the default must still report source `config`. Re-reading TOML for every settings request was rejected because the daemon does not otherwise hot-reload host configuration and repeated reads could report a baseline different from the one actually used at startup.
 
 ### Resolve overrides before constructing daemon runtime
 
@@ -87,11 +86,10 @@ Opening and resolving after `Player` construction was rejected because restart-r
 
 ### Apply the initial fields at their real runtime boundaries
 
-The initial registry is static code with three entries:
+The initial registry is static code with two entries:
 
 | Setting | Host config value | Validation | Apply mode |
 |---|---|---|---|
-| `always_play_next` | boolean | boolean | restart required |
 | `broadcast_ms` | integer milliseconds | `>= 100` | restart required |
 | `audio_pipe_playout_delay_ms` | disabled or integer milliseconds | `>= 0` | next playback |
 
@@ -99,7 +97,7 @@ For restart-required fields, a commit updates the effective value but leaves the
 
 For playout delay, keep a daemon runtime settings holder with separate effective and active values. A successful commit updates only the effective value. Acceptance of the next play request promotes it to active, increments `runtime_generation`, and captures that active delay for the playback intent so an update after playback begins cannot alter that playback's output-start accounting.
 
-Pretending all three are live was rejected because the current broadcast loop and `Player` capture values at startup. Restarting the daemon automatically after a commit was rejected because it would disrupt playback and hide an operationally significant action.
+Pretending both are live was rejected because the current broadcast loop captures its value at startup, while playout delay is applied at the next playback boundary. Restarting the daemon automatically after a commit was rejected because it would disrupt playback and hide an operationally significant action.
 
 ### Extend the shared-data protocol additively
 
@@ -115,7 +113,7 @@ Adding settings commands to the playback ctrl connection was rejected because th
 
 Add a `SettingsScope` with `Local` and `Daemon`, plus independent daemon cursor/editor state. Opening F2 defaults to `LOCAL`, preserving current behavior. A canonical two-item pill bar occupies the first content row. `Tab` and `BackTab` switch scopes, and the pills have settings-specific mouse hitboxes rather than reusing the library selector hit map.
 
-The local branch keeps the existing sections, activation behavior, delayed TOML save, cursor, and scroll handling. The daemon branch renders only the three server-provided rows, including effective value, source, and a pending `next playback` or `restart required` annotation when active differs from effective. It never calls the local config save path.
+The local branch keeps the existing sections, activation behavior, delayed TOML save, cursor, and scroll handling. The daemon branch renders only the two server-provided rows, including effective value, source, and a pending `next playback` or `restart required` annotation when active differs from effective. It never calls the local config save path.
 
 Boolean activation sets an explicit value opposite the effective value, or toggles the existing override. Numeric activation opens a small typed editor seeded with the effective value; playout delay also accepts `off`. Pressing `r` on a daemon row requests reset. All mutations use the snapshot revision and leave the UI on the last acknowledged snapshot until a committed or stale response arrives. A stale response replaces the displayed snapshot and raises the existing high-priority status notification.
 
@@ -129,7 +127,7 @@ Mixing local and daemon rows in one list was rejected because duplicate labels c
 - [Restart-required changes may surprise users] -> Always show active and effective divergence with the apply mode; never auto-restart.
 - [A LAN-authenticated user can change daemon-wide behavior] -> Make this explicit and reuse the existing shared-data boundary; administrator roles remain a future capability if the playground's trust model changes.
 - [An override database failure can make startup behavior differ from the prior run] -> Log clearly, fall back to host config/defaults, and do not expose an apparently writable daemon tab.
-- [Current configuration parsing loses source provenance] -> Capture only the three required presence bits in the daemon-specific loader and test explicit-default values.
+- [Current configuration parsing loses source provenance] -> Capture only the two required presence bits in the daemon-specific loader and test explicit-default values.
 - [Protocol notifications are global while roaming notifications are per-user] -> Track daemon-settings subscribers separately and keep event variants and fan-out paths distinct.
 - [Runtime and document state have different clocks] -> Carry both document revision and runtime generation in every resolved snapshot; use only the document revision for mutations.
 

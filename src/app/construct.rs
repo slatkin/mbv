@@ -350,6 +350,7 @@ impl App {
         let indicator_style: render::indicators::IndicatorStyle =
             ui_config.indicator_style.parse().unwrap_or_default();
         crate::config::evict_old_image_cache();
+        super::audio_subtitle_actions::sync_remote_prefs(&remote, &client);
         let client_arc = Arc::new(Mutex::new(client));
         {
             let c = client_arc.clone();

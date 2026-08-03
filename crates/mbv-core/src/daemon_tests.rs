@@ -1,5 +1,5 @@
 use super::{
-    all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
+    all_audio, audio_only_rejection, broadcast, daemon_runtime_preferences, handle_ctrl, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
     CtrlRequest, CtrlTransport, DaemonEvent, PlaybackIntentState, SharedQueueState,
 };
@@ -83,6 +83,142 @@ fn audio_only_daemon_accepts_audio_play_request() {
 fn non_audio_only_daemon_never_rejects() {
     let fetched = [item("movie", "Video", "Movie")];
     assert!(audio_only_rejection(false, &fetched).is_none());
+}
+
+#[test]
+fn daemon_startup_ignores_conflicting_client_playback_preferences() {
+    let config = Config {
+        always_play_next: true,
+        always_skip_intro: true,
+        subtitle_mode: "Always".into(),
+        subtitle_lang: "English".into(),
+        audio_lang: "Japanese".into(),
+        ..Config::default()
+    };
+
+    let (always_play_next, always_skip_intro, prefs) = daemon_runtime_preferences(&config);
+    let (event_tx, _event_rx) = mpsc::channel();
+    let player = Player::new(
+        config.server_url.clone(),
+        String::new(),
+        false,
+        config.use_mpv_config,
+        config.no_scripts,
+        always_play_next,
+        always_skip_intro,
+        prefs,
+        event_tx,
+        None,
+    );
+
+    // Startup must not let daemon-host preferences append episodes or seek
+    // past intros; intro and queue policy belong to the controlling client.
+    assert!(!player.always_play_next);
+    assert!(!player.always_skip_intro);
+
+    // Track selection starts neutral until the controlling client syncs it.
+    let prefs = player.subtitle_prefs.lock().unwrap();
+    assert_eq!(prefs.mode, SubtitlePrefs::default().mode);
+    assert_eq!(prefs.subtitle_lang, SubtitlePrefs::default().subtitle_lang);
+    assert_eq!(prefs.audio_lang, SubtitlePrefs::default().audio_lang);
+}
+
+#[test]
+fn direct_daemon_uses_controlling_client_subtitle_preferences() {
+    let host_config = Config {
+        subtitle_mode: "Always".into(),
+        subtitle_lang: "English".into(),
+        audio_lang: "Japanese".into(),
+        ..Config::default()
+    };
+    let (always_play_next, always_skip_intro, daemon_prefs) =
+        daemon_runtime_preferences(&host_config);
+    let (event_tx, _event_rx) = mpsc::channel();
+    let daemon = Player::new(
+        host_config.server_url.clone(),
+        String::new(),
+        false,
+        host_config.use_mpv_config,
+        host_config.no_scripts,
+        always_play_next,
+        always_skip_intro,
+        daemon_prefs,
+        event_tx,
+        None,
+    );
+    let daemon_commands = daemon.spy_on_commands();
+    let (remote, _events, direct_commands) =
+        crate::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    let client_prefs = SubtitlePrefs {
+        mode: "Only forced".into(),
+        subtitle_lang: "French".into(),
+        audio_lang: "German".into(),
+    };
+    remote.send_command(PlayerCommand::SetSubtitlePrefs {
+        mode: client_prefs.mode.clone(),
+        subtitle_lang: client_prefs.subtitle_lang.clone(),
+        audio_lang: client_prefs.audio_lang.clone(),
+    });
+    remote.play_queue(
+        vec![item("episode-1", "Video", "Episode")],
+        0,
+        QueueSource::Series,
+        Arc::new(crate::api::EmbyClient::new(Config::default())),
+        100,
+    );
+
+    let sync = direct_commands.recv().unwrap();
+    assert!(matches!(
+        direct_commands.recv().unwrap(),
+        CtrlCmd::PlaybackIntent(_)
+    ));
+
+    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (_sender_id, _sender_rx) = {
+        let mut clients = registry.lock().unwrap();
+        connect_client(&mut clients)
+    };
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let shared_queue = shared_queue_state();
+    let mut items = Vec::new();
+    let mut cursor = 0;
+    let mut source = QueueSource::Unknown;
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
+
+    handle_ctrl(
+        sync,
+        1,
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
+        &client,
+        &daemon,
+        false,
+        &mut items,
+        &mut cursor,
+        &mut source,
+        &shared_queue,
+        &registry,
+        &mut PlaybackIntentState::default(),
+        None,
+        &dummy_merged_tx,
+    );
+
+    assert!(matches!(
+        daemon_commands.try_recv(),
+        Ok(PlayerCommand::SetSubtitlePrefs {
+            mode,
+            subtitle_lang,
+            audio_lang,
+        }) if mode == client_prefs.mode
+            && subtitle_lang == client_prefs.subtitle_lang
+            && audio_lang == client_prefs.audio_lang
+    ));
+    let daemon_prefs = daemon.subtitle_prefs.lock().unwrap();
+    assert_ne!(daemon_prefs.mode, host_config.subtitle_mode);
+    assert_ne!(daemon_prefs.subtitle_lang, host_config.subtitle_lang);
+    assert_ne!(daemon_prefs.audio_lang, host_config.audio_lang);
 }
 
 /// Connects a client the same way the accept thread does. Under the

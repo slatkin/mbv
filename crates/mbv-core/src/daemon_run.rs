@@ -1,3 +1,9 @@
+fn daemon_runtime_preferences(
+    _config: &crate::config::Config,
+) -> (bool, bool, crate::player::SubtitlePrefs) {
+    (false, false, crate::player::SubtitlePrefs::default())
+}
+
 pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRuntimeHooks) -> ! {
     std::fs::write(pid_file(), std::process::id().to_string())
         .expect("mbv daemon: failed to write PID file");
@@ -37,41 +43,19 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     // — so it's cheap enough to keep here, ahead of Player/mpris/tray.
     let ws_send_tx = crate::ws::start(client.lock().unwrap().ws_url(), ws_tx_chan);
 
-    // Use client-config-only subtitle/audio-lang prefs (no network call) for
-    // the player's initial state, so startup never blocks on an Emby round
-    // trip. If the config doesn't pin these, the live user prefs are fetched
-    // from Emby in the background further down and applied to the
-    // already-running player once available.
-    let subtitle_prefs_from_config = {
-        let client = client.lock().unwrap();
-        if client.config.subtitle_mode.is_empty()
-            && client.config.subtitle_lang.is_empty()
-            && client.config.audio_lang.is_empty()
-        {
-            None
-        } else {
-            Some(crate::player::SubtitlePrefs {
-                mode: client.config.subtitle_mode.clone(),
-                subtitle_lang: client.config.subtitle_lang.clone(),
-                audio_lang: client.config.audio_lang.clone(),
-            })
-        }
-    };
-    let (has_config_subtitle_prefs, subtitle_prefs) = match subtitle_prefs_from_config {
-        Some(prefs) => (true, prefs),
-        None => (false, crate::player::SubtitlePrefs::default()),
-    };
     let mut client_locked = client.lock().unwrap().clone();
     // Daemon always runs headless — ignore user's show_audio_window setting.
     client_locked.config.show_audio_window = false;
+    let (always_play_next, always_skip_intro, subtitle_prefs) =
+        daemon_runtime_preferences(&client_locked.config);
     let player = Player::new(
         client_locked.config.server_url.clone(),
         client_locked.token.clone(),
         client_locked.config.show_audio_window,
         client_locked.config.use_mpv_config,
         client_locked.config.no_scripts,
-        client_locked.config.always_play_next,
-        client_locked.config.always_skip_intro,
+        always_play_next,
+        always_skip_intro,
         subtitle_prefs,
         player_tx,
         Some(ws_send_tx.clone()),
@@ -178,9 +162,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         }
     }
 
-    // --- From here on: network/Emby-session-visibility setup (protocol
-    // negotiation metadata, capability registration, live subtitle-prefs
-    // fetch). Local control is already up and serving connections above. ---
+    // --- From here on: network/Emby-session-visibility setup. Local control
+    // is already up and serving connections above. ---
 
     let daemon_tcp_listen = client
         .lock()
@@ -218,10 +201,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         }
     };
 
-    // Register capabilities and, if the config didn't pin subtitle/audio
-    // prefs, fetch the live user prefs — both are independent Emby HTTP
-    // round trips, so run them concurrently and off the startup path
-    // entirely rather than blocking one on the other.
+    // Register capabilities off the startup path rather than blocking on the
+    // independent Emby HTTP round trip.
     {
         let client = client.lock().unwrap().clone();
         let direct_commands = direct_commands.clone();
@@ -229,22 +210,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
             register_capabilities(&client, &direct_commands, audio_only);
         });
     }
-    if !has_config_subtitle_prefs {
-        let client = client.lock().unwrap().clone();
-        let player_cmd_tx = player.cmd_tx.clone();
-        std::thread::spawn(move || {
-            if let Ok(prefs) = client.get_user_subtitle_prefs() {
-                if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
-                    let _ = tx.send(PlayerCommand::SetSubtitlePrefs {
-                        mode: prefs.mode,
-                        subtitle_lang: prefs.subtitle_lang,
-                        audio_lang: prefs.audio_lang,
-                    });
-                }
-            }
-        });
-    }
-
     if let Some(listener) = tcp_listener {
         let ctrl_clients = ctrl_clients.clone();
         let merged_tx2 = merged_tx.clone();

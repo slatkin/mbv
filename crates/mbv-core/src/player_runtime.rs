@@ -34,6 +34,7 @@ struct MpvSessionConfig {
     headless: bool,
     use_mpv_config: bool,
     no_scripts: bool,
+    #[allow(dead_code)]
     always_skip_intro: bool,
     audio_pipe_path: Option<String>,
     audio_pipe_samplerate: u32,
@@ -515,39 +516,71 @@ fn load_intro_times(client: &EmbyClient, item_id: &str) -> (i64, i64) {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum IntroBoundary {
+    Started(i64),
+    Ended,
+    None,
+}
+
+fn intro_boundary(
+    ticks: i64,
+    start: i64,
+    end: i64,
+    show_fired: bool,
+    hide_fired: bool,
+) -> IntroBoundary {
+    if end <= start {
+        return IntroBoundary::None;
+    }
+    if !show_fired && ticks >= start {
+        if ticks < end {
+            return IntroBoundary::Started(end);
+        }
+        return IntroBoundary::None;
+    }
+    if !hide_fired && ticks >= end {
+        return IntroBoundary::Ended;
+    }
+    IntroBoundary::None
+}
+
 fn handle_intro(
     ticks: i64,
     start: i64,
     end: i64,
     show_fired: &mut bool,
     hide_fired: &mut bool,
-    always_skip: bool,
     mpv: &Mpv,
     event_tx: &mpsc::Sender<PlayerEvent>,
 ) {
-    if end <= start {
-        return;
-    }
-    if !*show_fired && ticks >= start {
-        *show_fired = true;
-        if ticks < end {
-            let end_secs = end as f64 / TICKS_PER_SECOND as f64;
-            if always_skip {
-                let _ = mpv.set_property("time-pos", end_secs);
-            } else {
-                let _ = event_tx.send(PlayerEvent::IntroStarted {
-                    intro_end_ticks: end,
-                });
-                let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
-            }
-        } else {
-            *hide_fired = true;
+    match intro_boundary(ticks, start, end, *show_fired, *hide_fired) {
+        IntroBoundary::Started(intro_end_ticks) => {
+            *show_fired = true;
+            let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
+            let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
+            let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
         }
+        IntroBoundary::Ended => {
+            *hide_fired = true;
+            let _ = event_tx.send(PlayerEvent::IntroEnded);
+            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+        }
+        IntroBoundary::None => {}
     }
-    if !*hide_fired && ticks >= end {
-        *hide_fired = true;
-        let _ = event_tx.send(PlayerEvent::IntroEnded);
-        let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+}
+
+#[cfg(test)]
+mod intro_tests {
+    use super::{intro_boundary, IntroBoundary};
+
+    #[test]
+    fn intro_boundary_is_neutral_and_reports_start_without_skip_policy() {
+        assert_eq!(
+            intro_boundary(15, 10, 30, false, false),
+            IntroBoundary::Started(30)
+        );
+        assert_eq!(intro_boundary(30, 10, 30, true, false), IntroBoundary::Ended);
     }
 }
 

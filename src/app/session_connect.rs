@@ -258,6 +258,7 @@ impl App {
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
+        self.sync_prefs_to_remote(&remote);
         let always_play_next = self.client.lock().unwrap().config.always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below:
         // MPRIS (if this session has a live registration) must follow this
@@ -349,6 +350,7 @@ impl App {
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
+        self.sync_prefs_to_remote(&remote);
         let always_play_next = self.client.lock().unwrap().config.always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below,
         // mirroring `switch_to_direct_remote`'s #175 MPRIS rebind.
@@ -466,6 +468,7 @@ impl App {
                     let initial_items = remote.items.lock().unwrap().clone();
                     let has_initial_items = !initial_items.is_empty();
                     let initial_cursor = remote.status.lock().unwrap().current_idx;
+                    self.sync_prefs_to_remote(&remote);
                     let always_play_next = self.client.lock().unwrap().config.always_play_next;
                     // Cloned before `remote` is moved into `PlayerProxy::remote`
                     // below, mirroring `switch_to_library_route`'s #175 MPRIS

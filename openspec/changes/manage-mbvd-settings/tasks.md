@@ -1,8 +1,8 @@
 ## 1. Typed Settings Model And Baseline
 
-- [ ] 1.1 Define the three-key daemon setting enum, typed override values, schema-versioned override document, revisioned record, source and apply-mode enums, resolved row, and snapshot with runtime generation.
-- [ ] 1.2 Centralize validation and resolution for `always_play_next`, `broadcast_ms`, and `audio_pipe_playout_delay_ms`, including explicit delay disablement and exact apply modes.
-- [ ] 1.3 Add a daemon-specific configuration loader that returns parsed values plus explicit-presence provenance for the three allowlisted TOML keys, and use it from packaged and detached daemon entrypoints without changing ordinary client loading.
+- [ ] 1.1 Define the two-key daemon setting enum, typed override values, schema-versioned override document, revisioned record, source and apply-mode enums, resolved row, and snapshot with runtime generation.
+- [ ] 1.2 Centralize validation and resolution for `broadcast_ms` and `audio_pipe_playout_delay_ms`, including explicit delay disablement and exact apply modes.
+- [ ] 1.3 Add a daemon-specific configuration loader that returns parsed values plus explicit-presence provenance for the two allowlisted TOML keys, and use it from packaged and detached daemon entrypoints without changing ordinary client loading.
 
 ## 2. Durable Global Override Storage
 
@@ -14,7 +14,7 @@
 ## 3. Runtime Settings State
 
 - [ ] 3.1 Add a daemon runtime settings holder that tracks effective and active values plus a runtime generation, initialized from the resolved startup baseline and override document.
-- [ ] 3.2 Feed active `always_play_next` and `broadcast_ms` into Player construction and the broadcast loop so restart-required overrides take effect after daemon restart.
+- [ ] 3.2 Feed active `broadcast_ms` into the broadcast loop so restart-required overrides take effect after daemon restart.
 - [ ] 3.3 Promote effective playout delay at the next accepted playback boundary, capture that delay for the playback intent, and increment runtime generation without allowing later edits to alter an in-flight playback's timing.
 - [ ] 3.4 Produce resolved snapshots from the baseline, current override record, and runtime holder, including accurate pending state after commits and after runtime promotion.
 
@@ -45,5 +45,5 @@
 - [ ] 7.2 Verify invalid values, unknown setting identifiers, stale revisions, and commit failures do not mutate storage or active runtime values and return actionable responses.
 - [ ] 7.3 Verify restart-required settings remain visibly pending until restart, playout delay activates only on the next playback, and active-state notifications with unchanged document revisions are accepted.
 - [ ] 7.4 Verify authenticated users observe the same daemon-wide settings while per-user roaming isolation, playback authority, unsupported peers, and the existing F2 local settings behavior remain unchanged.
-- [ ] 7.5 Document the three-setting allowlist, precedence and reset semantics, apply modes, shared-data dependency, LAN trust model, and rollback by disabling shared-data hosting.
+- [ ] 7.5 Document the two-setting allowlist, precedence and reset semantics, apply modes, shared-data dependency, LAN trust model, and rollback by disabling shared-data hosting.
 - [ ] 7.6 Run formatting, linting, relevant workspace tests, and strict OpenSpec validation; resolve regressions attributable to this change.

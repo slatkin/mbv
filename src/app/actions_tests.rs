@@ -14,6 +14,94 @@ use mbv_core::player::PlayerEvent;
 use std::collections::HashMap;
 use std::sync::mpsc;
 
+#[test]
+fn client_playback_sequence_expands_before_direct_daemon_dispatch() {
+    let item = make_item("Episode 1", "Episode");
+    let mut episode_two = make_item("Episode 2", "Episode");
+    episode_two.id = "episode-2".into();
+    let mut episode_three = make_item("Episode 3", "Episode");
+    episode_three.id = "episode-3".into();
+
+    let sequence = client_playback_sequence(
+        item,
+        true,
+        vec![
+            make_item("Episode 1", "Episode"),
+            episode_two,
+            episode_three,
+        ],
+    );
+
+    let (remote, _events, commands) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.play_queue(
+        sequence.clone(),
+        0,
+        crate::config::QueueSource::Series,
+        std::sync::Arc::new(mbv_core::api::EmbyClient::new(
+            crate::config::Config::default(),
+        )),
+        100,
+    );
+
+    let command = commands.recv().unwrap();
+    match command {
+        mbv_core::ctrl::CtrlCmd::PlaybackIntent(intent) => match intent.action {
+            mbv_core::ctrl::PlaybackIntentAction::Play { item_ids, .. } => {
+                assert_eq!(
+                    item_ids,
+                    sequence
+                        .iter()
+                        .map(|item| item.id.clone())
+                        .collect::<Vec<_>>()
+                );
+            }
+            _ => panic!("unexpected playback action"),
+        },
+        _ => panic!("unexpected command"),
+    }
+}
+
+#[test]
+fn client_playback_sequence_does_not_append_when_disabled() {
+    let item = make_item("Episode 1", "Episode");
+    let mut episode_two = make_item("Episode 2", "Episode");
+    episode_two.id = "episode-2".into();
+
+    let sequence = client_playback_sequence(item.clone(), false, vec![item.clone(), episode_two]);
+
+    assert_eq!(
+        sequence
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["id"]
+    );
+}
+
+#[test]
+fn client_expansion_is_target_independent() {
+    let mut first = make_item("Episode 1", "Episode");
+    first.id = "episode-1".into();
+    let mut second = make_item("Episode 2", "Episode");
+    second.id = "episode-2".into();
+    let following = vec![first.clone(), second.clone()];
+
+    let local_sequence = client_playback_sequence(first.clone(), true, following.clone());
+    let direct_sequence = client_playback_sequence(first, true, following);
+
+    assert_eq!(
+        local_sequence
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        direct_sequence
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>()
+    );
+}
+
 fn folder(id: &str, name: &str) -> MediaItem {
     let mut item = make_item(name, "Folder");
     item.id = id.into();

@@ -6,7 +6,7 @@ Packaged `mbvd` is headless, so changing its operational behavior currently requ
 
 - Add a `DAEMON` scope to the existing F2 settings panel, selected through a `LOCAL` / `DAEMON` pill bar. `LOCAL` retains the existing client-side settings behavior.
 - Expose an explicitly allowlisted daemon-settings snapshot containing effective values, their source (`override`, `config`, or `default`), and how each change takes effect.
-- Initially manage `always_play_next`, `broadcast_ms`, and `audio_pipe_playout_delay_ms`; all other configuration remains outside the remote management surface.
+- Initially manage `broadcast_ms` and `audio_pipe_playout_delay_ms`; all other configuration remains outside the remote management surface.
 - Store daemon-wide overrides as one typed, versioned document with optimistic revision checks, independently of per-user roaming documents and without rewriting `config.toml`.
 - Resolve effective daemon settings in the order compiled default, local daemon config, then stored override. Resetting a setting removes its override and reveals the inherited value.
 - Validate and durably commit an override document before acknowledging a change. Reject stale writes and return the current snapshot rather than silently overwriting another client's update.

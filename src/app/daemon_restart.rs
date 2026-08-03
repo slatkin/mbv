@@ -71,6 +71,7 @@ impl App {
         // Tear down the old (already-dead) connection before overwriting it,
         // mirroring `restore_local_mode`'s remote-to-remote swap (#233).
         self.player.disconnect_remote();
+        self.sync_prefs_to_remote(&remote);
         let always_play_next = self.client.lock().unwrap().config.always_play_next;
         let mpris_remote = remote.clone();
         self.player = PlayerProxy::remote(remote, always_play_next);

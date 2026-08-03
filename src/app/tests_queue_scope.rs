@@ -319,6 +319,94 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
 }
 
 #[test]
+fn new_direct_remote_receives_client_track_preferences_first() {
+    let mut config = crate::config::Config::default();
+    config.subtitle_mode = "Always".into();
+    config.subtitle_lang = "English".into();
+    config.audio_lang = "Japanese".into();
+    let (remote, player_rx, commands) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    let _app = App::new_remote(
+        mbv_core::api::EmbyClient::new(config),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
+
+    assert!(matches!(
+        commands.recv().unwrap(),
+        CtrlCmd::PlayerCmd(WireCommand::SetSubtitlePrefs {
+            mode,
+            subtitle_lang,
+            audio_lang,
+        }) if mode == "Always" && subtitle_lang == "English" && audio_lang == "Japanese"
+    ));
+}
+
+#[test]
+fn changing_track_preferences_updates_the_active_direct_remote() {
+    let (remote, player_rx, commands) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    let mut app = App::new_remote(
+        mbv_core::api::EmbyClient::new(crate::config::Config::default()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
+    let _ = commands.recv().unwrap();
+    {
+        let mut prefs = app.player.subtitle_prefs.lock().unwrap();
+        prefs.mode = "None".into();
+        prefs.subtitle_lang = "French".into();
+        prefs.audio_lang = "German".into();
+    }
+    app.push_subtitle_prefs();
+
+    assert!(matches!(
+        commands.recv().unwrap(),
+        CtrlCmd::PlayerCmd(WireCommand::SetSubtitlePrefs {
+            mode,
+            subtitle_lang,
+            audio_lang,
+        }) if mode == "None" && subtitle_lang == "French" && audio_lang == "German"
+    ));
+}
+
+#[test]
+fn enabled_always_skip_intro_sends_seek_and_dismissal() {
+    let mut app = make_app_stub();
+    app.client.lock().unwrap().config.always_skip_intro = true;
+    let commands = app.player.spy_on_commands();
+
+    app.handle_player_event(PlayerEvent::IntroStarted {
+        intro_end_ticks: 50_000_000,
+    });
+
+    assert!(matches!(
+        commands.recv().unwrap(),
+        mbv_core::player::PlayerCommand::SeekAbsolute(seconds)
+            if (seconds - 5.0).abs() < f64::EPSILON
+    ));
+    assert!(matches!(
+        commands.recv().unwrap(),
+        mbv_core::player::PlayerCommand::SkipIntroDismiss
+    ));
+    assert!(app.skip_intro_end_ticks.is_none());
+}
+
+#[test]
+fn disabled_always_skip_intro_keeps_manual_prompt_flow() {
+    let mut app = make_app_stub();
+
+    app.handle_player_event(PlayerEvent::IntroStarted {
+        intro_end_ticks: 50_000_000,
+    });
+
+    assert_eq!(app.skip_intro_end_ticks, Some(50_000_000));
+    assert_eq!(app.status, "Skip intro? (Y/n)");
+}
+
+#[test]
 fn clearing_a_local_daemon_queue_replaces_the_daemon_queue_with_empty() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (remote, player_rx, cmd_rx) =
