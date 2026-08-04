@@ -180,7 +180,7 @@ impl App {
             f.render_widget(
                 Paragraph::new(Span::styled(
                     trunc_str(&layout.show_name, text_w),
-                    Style::default().fg(palette::GREEN),
+                    Style::default().fg(palette::FOAM),
                 )),
                 Rect {
                     x: area.x,

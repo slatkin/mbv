@@ -522,7 +522,7 @@ impl App {
                     // Add now-playing throbber inline with title
                     if is_playing {
                         title_spans.push(Span::raw(" "));
-                        title_spans.push(self.now_playing_throbber_span());
+                        title_spans.push(self.music_throbber_span());
                     }
 
                     // Calculate actual title width for right-alignment

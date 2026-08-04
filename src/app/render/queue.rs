@@ -7,21 +7,9 @@ use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
-use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
 const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
-
-fn queue_group_start_row(display: &[QueueRow], row: usize) -> usize {
-    let mut start = row;
-    while start > 0 && matches!(display[start - 1], QueueRow::Track { .. }) {
-        start -= 1;
-    }
-    while start > 0 && !matches!(display[start - 1], QueueRow::Track { .. }) {
-        start -= 1;
-    }
-    start
-}
 
 impl App {
     /// Renders the "Queue" title pill (and optional Local/Remote scope pills)
@@ -213,20 +201,20 @@ impl App {
         }
     }
 
-    /// Renders the queue list (track items, group headers, scrollbar). The
-    /// title/scope pill row is rendered separately by `render_power_queue_title`.
+    /// Renders the queue list (track items, scrollbar). The title/scope pill
+    /// row is rendered separately by `render_power_queue_title`.
     pub(super) fn render_power_queue(
         &mut self,
         f: &mut Frame,
         area: Rect,
         focused: bool,
         layout: &mut LayoutMain,
-    ) -> Vec<u16> {
+    ) {
         layout.queue_cursor_screen_y = None;
         layout.queue_area = area;
 
         if area.height < 1 {
-            return vec![];
+            return;
         }
 
         let (items, cursor) = {
@@ -245,14 +233,13 @@ impl App {
                 .style(Style::default().fg(palette::MUTED)),
                 area,
             );
-            return vec![];
+            return;
         }
 
         let playback = self.displayed_queue_playback_state();
 
-        // Build display rows: audio grouped by album, episodes by series, the rest
-        // flat. group_for_header[j] holds the label for the j-th Header.
-        let (display, group_for_header) = super::build_power_queue_rows(&items);
+        // Flat display rows, one per item — the queue list has no grouping/headers.
+        let display = build_queue_rows(&items);
         let total = display.len();
         let visible = area.height as usize;
 
@@ -260,30 +247,20 @@ impl App {
         let cursor_row = display
             .iter()
             .position(|r| {
-                if let QueueRow::Track { idx, .. } = r {
-                    *idx == cursor
-                } else {
-                    false
-                }
+                let QueueRow::Track { idx } = r;
+                *idx == cursor
             })
             .unwrap_or(0);
         let max_offset = total.saturating_sub(visible);
         self.queue_scroll = self.queue_scroll.min(max_offset);
         if cursor_row < self.queue_scroll {
-            self.queue_scroll = queue_group_start_row(&display, cursor_row);
+            self.queue_scroll = cursor_row;
         } else if cursor_row >= self.queue_scroll + visible {
             self.queue_scroll = cursor_row.saturating_sub(visible.saturating_sub(1));
         }
         let offset = self.queue_scroll;
         layout.queue_cursor_screen_y =
             Some(area.y + (cursor_row.saturating_sub(self.queue_scroll)) as u16);
-
-        // Count how many group headers appear before the scroll offset, so we
-        // index group_for_header correctly for the visible window.
-        let mut header_idx = display[..offset]
-            .iter()
-            .filter(|r| matches!(r, QueueRow::Header))
-            .count();
 
         let has_sb = total > visible; // column always reserved when scrollbar would appear
         let need_sb = has_sb && focused; // scrollbar only drawn when focused
@@ -292,11 +269,7 @@ impl App {
 
         // Build visible ListItems and the row map simultaneously.
         let mut list_items: Vec<ListItem> = Vec::new();
-        let mut header_ys: Vec<u16> = Vec::new();
 
-        // Line-based cursor (not item-based): group headers can wrap into more
-        // than one screen line, so the on-screen row a given `display` entry
-        // lands on isn't always the same as its index in `display`.
         let mut line_offset: u16 = 0;
 
         for entry in display.iter().skip(offset) {
@@ -304,50 +277,6 @@ impl App {
                 break;
             }
             match entry {
-                QueueRow::Header => {
-                    let group = group_for_header
-                        .get(header_idx)
-                        .map(|s| s.as_str())
-                        .unwrap_or("");
-                    header_idx += 1;
-                    header_ys.push(area.y + line_offset);
-                    // Long group headers wrap onto additional lines instead of
-                    // being truncated, so the full artist/series name is
-                    // always visible.
-                    let wrap_w = render_w.saturating_sub(1).max(1);
-                    let wrapped = wrap(group, wrap_w);
-                    let lines: Vec<Line> = if wrapped.is_empty() {
-                        vec![Line::from(Span::styled(
-                            " ",
-                            Style::default()
-                                .fg(palette::YELLOW)
-                                .add_modifier(Modifier::BOLD),
-                        ))]
-                    } else {
-                        wrapped
-                            .iter()
-                            .map(|seg| {
-                                Line::from(Span::styled(
-                                    format!(" {seg}"),
-                                    Style::default()
-                                        .fg(palette::YELLOW)
-                                        .add_modifier(Modifier::BOLD),
-                                ))
-                            })
-                            .collect()
-                    };
-                    let n_lines = lines.len() as u16;
-                    list_items.push(ListItem::new(Text::from(lines)));
-                    for _ in 0..n_lines {
-                        layout.queue_row_map.push(None);
-                    }
-                    line_offset += n_lines;
-                }
-                QueueRow::Spacer => {
-                    list_items.push(ListItem::new(Line::raw("")));
-                    layout.queue_row_map.push(None);
-                    line_offset += 1;
-                }
                 QueueRow::Track { idx } => {
                     let i = *idx;
                     let indent: usize = 2;
@@ -404,12 +333,35 @@ impl App {
                     // Title truncated to leave room for indent + right-aligned metadata.
                     let dur_visible = show_length && !dur.is_empty();
                     let pct_visible = !pct_str.is_empty();
-                    let metadata_gap = if dur_visible && pct_visible { 1 } else { 0 };
+                    let show_throbber = is_active && focused;
+                    let now_playing_icon_w = if show_throbber && !pct_visible {
+                        4
+                    } else if show_throbber {
+                        1
+                    } else {
+                        0
+                    };
+                    // When the throbber pairs with the percentage pill, it moves out of
+                    // the title line and into the trailing metadata, so its width has
+                    // to be reserved there instead. It sits flush against the
+                    // percentage, with no gap between them.
+                    let throbber_pill_w = if show_throbber && pct_visible {
+                        now_playing_icon_w
+                    } else {
+                        0
+                    };
+                    // Pill indent: a space to its left (unless the throbber already
+                    // fills that slot) and a space to its right, always.
+                    let pill_left_indent = if pct_visible && !show_throbber { 1 } else { 0 };
+                    // Two columns to the pill's right: one inside the pill, one
+                    // in the row background separating it from the metadata.
+                    let pill_right_indent = if pct_visible { 2 } else { 0 };
                     let metadata_w = (if dur_visible { dur.width() } else { 0 })
                         + (if pct_visible { pct_str.width() } else { 0 })
-                        + metadata_gap;
+                        + pill_left_indent
+                        + pill_right_indent
+                        + throbber_pill_w;
                     let extra = metadata_w;
-                    let now_playing_icon_w = if is_active && focused { 2 } else { 0 };
                     let title_w = track_content_w.saturating_sub(
                         indent + now_playing_icon_w + extra + QUEUE_TITLE_QUIET_COLUMNS,
                     );
@@ -468,9 +420,10 @@ impl App {
                     } else {
                         spans.push(Span::styled(title, Style::default().fg(title_color)));
                     }
-                    if is_active && focused {
+                    if show_throbber && !pct_visible {
                         spans.push(Span::raw(" "));
                         spans.push(self.now_playing_throbber_span());
+                        spans.push(Span::raw(" "));
                     }
                     if pct_visible || dur_visible {
                         let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
@@ -478,19 +431,51 @@ impl App {
                         spans.push(Span::raw(" ".repeat(pad)));
                     }
                     if pct_visible {
-                        let pct_color = if is_active {
-                            palette::IRIS
+                        // Only the now-playing row gets the pill treatment
+                        // (dark background, throbber). Other rows just show
+                        // plain foam/grey text on the normal row background.
+                        let pill_bg = if show_throbber {
+                            Some(palette::DARK_BG)
                         } else {
-                            palette::MUTED
+                            None
                         };
-                        spans.push(Span::styled(pct_str, Style::default().fg(pct_color)));
-                    }
-                    if pct_visible && dur_visible {
+                        let with_bg = |mut s: Style| {
+                            if let Some(bg) = pill_bg {
+                                s = s.bg(bg);
+                            }
+                            s
+                        };
+                        if show_throbber {
+                            // to_symbol_span appends a trailing space; strip it so
+                            // the throbber sits flush against the percentage.
+                            let throbber = self.now_playing_throbber_span();
+                            spans.push(Span::styled(
+                                throbber.content.trim_end().to_string(),
+                                with_bg(throbber.style),
+                            ));
+                        } else {
+                            spans.push(Span::raw(" "));
+                        }
+                        spans.push(Span::styled(
+                            pct_str,
+                            with_bg(Style::default().fg(palette::FOAM)),
+                        ));
+                        spans.push(Span::styled(" ", with_bg(Style::default())));
                         spans.push(Span::raw(" "));
                     }
                     if dur_visible {
-                        let dur_color = dim_color;
-                        spans.push(Span::styled(dur, Style::default().fg(dur_color)));
+                        if let Some(split) = dur.rfind('′') {
+                            spans.push(Span::styled(
+                                dur[..split].to_string(),
+                                Style::default().fg(palette::GREEN),
+                            ));
+                            spans.push(Span::styled(
+                                "′".to_string(),
+                                Style::default().fg(palette::SOFT_WHITE),
+                            ));
+                        } else {
+                            spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));
+                        }
                     }
 
                     list_items.push(ListItem::new(Line::from(spans)).style(row_style));
@@ -516,7 +501,6 @@ impl App {
             let max_off = total.saturating_sub(visible);
             super::render_power_scrollbar(f, area, max_off, offset);
         }
-        header_ys
     }
 }
 
@@ -528,64 +512,84 @@ mod tests {
     use ratatui::Terminal;
 
     #[test]
-    fn queue_group_start_row_includes_spacer_and_header() {
-        let mut items = Vec::new();
-        for i in 0..4 {
-            let mut item = make_item(&format!("A{i}"), "Audio");
-            item.id = format!("a-{i}");
-            item.album_id = "album-a".into();
-            item.album = "Album A".into();
-            item.artist = "Artist".into();
-            items.push(item);
-        }
-        for i in 0..4 {
-            let mut item = make_item(&format!("B{i}"), "Audio");
-            item.id = format!("b-{i}");
-            item.album_id = "album-b".into();
-            item.album = "Album B".into();
-            item.artist = "Artist".into();
-            items.push(item);
-        }
-
-        let (display, _) = super::super::build_power_queue_rows(&items);
-
-        assert!(matches!(display[0], QueueRow::Spacer));
-        assert_eq!(queue_group_start_row(&display, 9), 6);
-    }
-
-    #[test]
-    fn render_power_queue_snaps_upward_scroll_to_group_start() {
+    fn render_power_queue_scroll_up_reaches_top_without_regressing() {
+        // Scrolling up one row at a time from the bottom must monotonically
+        // approach the top of the list and land exactly on it.
         let mut app = make_app_stub();
         app.panel_focus = crate::app::PanelFocus::Queue;
 
         let mut items = Vec::new();
-        for i in 0..4 {
+        for i in 0..60 {
             let mut item = make_item(&format!("A{i}"), "Audio");
             item.id = format!("a-{i}");
-            item.album_id = "album-a".into();
-            item.album = "Album A".into();
-            item.artist = "Artist".into();
             items.push(item);
         }
-        for i in 0..4 {
-            let mut item = make_item(&format!("B{i}"), "Audio");
-            item.id = format!("b-{i}");
-            item.album_id = "album-b".into();
-            item.album = "Album B".into();
-            item.artist = "Artist".into();
-            items.push(item);
-        }
-        app.player_tab.set_items(items, 4);
-        app.queue_scroll = 10;
+        let n = items.len();
+        app.player_tab.set_items(items, n - 1);
 
-        let backend = TestBackend::new(40, 3);
+        let backend = TestBackend::new(40, 15);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutMain::default();
+
+        let mut prev_scroll = usize::MAX;
+        for cursor in (0..n).rev() {
+            app.player_tab.queue_cursor = cursor;
+            term.draw(|f| {
+                app.render_power_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
+            })
+            .unwrap();
+            assert!(
+                app.queue_scroll <= prev_scroll,
+                "scroll regressed from {prev_scroll} to {} at cursor {cursor}",
+                app.queue_scroll
+            );
+            prev_scroll = app.queue_scroll;
+        }
+        assert_eq!(app.queue_scroll, 0);
+    }
+
+    #[test]
+    fn render_power_queue_page_up_from_bottom_reaches_top() {
+        let mut app = make_app_stub();
+        app.panel_focus = crate::app::PanelFocus::Queue;
+
+        let mut items = Vec::new();
+        for i in 0..60 {
+            let mut item = make_item(&format!("A{i}"), "Audio");
+            item.id = format!("a-{i}");
+            items.push(item);
+        }
+        let n = items.len();
+        app.player_tab.set_items(items, n - 1);
+
+        let backend = TestBackend::new(40, 15);
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutMain::default();
         term.draw(|f| {
-            app.render_power_queue(f, Rect::new(0, 0, 40, 3), true, &mut layout);
+            app.render_power_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
         })
         .unwrap();
 
-        assert_eq!(app.queue_scroll, 6);
+        let page = 14usize; // area.height - 1
+        let mut prev_scroll = app.queue_scroll;
+        loop {
+            let cur = app.player_tab.queue_cursor;
+            let next = cur.saturating_sub(page);
+            app.player_tab.queue_cursor = next;
+            term.draw(|f| {
+                app.render_power_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
+            })
+            .unwrap();
+            assert!(
+                app.queue_scroll <= prev_scroll,
+                "scroll regressed from {prev_scroll} to {} at cursor {next}",
+                app.queue_scroll
+            );
+            prev_scroll = app.queue_scroll;
+            if next == 0 {
+                break;
+            }
+        }
+        assert_eq!(app.queue_scroll, 0);
     }
 }

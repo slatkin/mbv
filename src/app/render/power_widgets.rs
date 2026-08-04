@@ -1,8 +1,6 @@
-use super::super::ui_util::{build_queue_rows, QueueRow};
 use super::chrome::thin_vertical_thumb;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
-use mbv_core::api::MediaItem;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -256,20 +254,6 @@ pub(super) fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, focused:
     f.render_widget(Block::default().style(Style::default().bg(bg)), area);
 
     area
-}
-
-pub(super) fn build_power_queue_rows(items: &[MediaItem]) -> (Vec<QueueRow>, Vec<String>) {
-    let (display, group_for_header) = build_queue_rows(items, true);
-    let mut rows = Vec::with_capacity(display.len().saturating_add(group_for_header.len()));
-
-    if matches!(display.first(), Some(QueueRow::Header)) {
-        rows.push(QueueRow::Spacer);
-    }
-    for row in display {
-        rows.push(row.clone());
-    }
-
-    (rows, group_for_header)
 }
 
 /// Style for a pill-selector choice: white text on the green selected

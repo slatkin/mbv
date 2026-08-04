@@ -341,7 +341,7 @@ impl App {
                             title_spans.push(Span::raw(title));
                             if is_playing {
                                 title_spans.push(Span::raw(" "));
-                                title_spans.push(self.now_playing_throbber_span());
+                                title_spans.push(self.music_throbber_span());
                             }
                             let title_cell = Cell::from(Line::from(title_spans));
                             let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;

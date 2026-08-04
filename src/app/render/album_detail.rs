@@ -260,7 +260,7 @@ impl App {
                         ));
                         if is_playing {
                             first_line.push(Span::raw(" "));
-                            first_line.push(self.now_playing_throbber_span());
+                            first_line.push(self.music_throbber_span());
                         }
                         wrapped_title_lines.push(Line::from(first_line));
                     } else {

@@ -288,7 +288,7 @@ impl App {
             + post_time_gap.width()
             + right_w as usize;
         let title_w = (area.width as usize).saturating_sub(fixed_w);
-        left.push(self.now_playing_throbber_span());
+        left.push(self.music_throbber_span());
         left.extend(self.playback_title_spans(title, title_color, title_w));
 
         left.push(Span::raw("  "));

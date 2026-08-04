@@ -71,19 +71,15 @@ pub fn fmt_duration(s: i64) -> String {
 }
 
 /// Format duration without seconds — for video items in the queue.
-/// Examples: "<1m", "37m", "1h05m", "2h03m".
+/// Examples: "<1′", "37′", "125′".
 pub fn fmt_duration_approx(s: i64) -> String {
     let total_mins = s / 60;
-    let h = total_mins / 60;
-    let m = total_mins % 60;
-    if h > 0 {
-        format!("{}h{:02}m", h, m)
-    } else if m > 0 {
-        format!("{}m", m)
+    if total_mins > 0 {
+        format!("{}′", total_mins)
     } else if s > 0 {
-        "<1m".to_string()
+        "<1′".to_string()
     } else {
-        "0m".to_string()
+        "0′".to_string()
     }
 }
 
@@ -199,88 +195,16 @@ pub fn trunc_str(s: &str, max: usize) -> String {
     }
 }
 
-/// A visual row in the queue: a group header, a blank spacer between groups, or a
-/// track (item index into the underlying queue).
+/// A visual row in the queue: a track (item index into the underlying queue).
+/// The queue list has no grouping/headers — every row is a track.
 #[derive(Clone)]
 pub(super) enum QueueRow {
-    Header,
-    Spacer,
     Track { idx: usize },
 }
 
-/// Build the visual rows for the queue.
-///
-/// When `group` is true, audio items are grouped by album ("Artist: Album") and
-/// episodes by series name, with a `Header` before each group and a `Spacer` between
-/// consecutive groups; movies and everything else stay ungrouped. When `group` is
-/// false, every item is a flat `Track` with no headers. A header is only emitted for
-/// runs of 3 or more consecutive same-key items; runs of 1-2 render as plain tracks.
-/// The returned `Vec<String>` holds the label for the i-th `Header`.
-pub(super) fn build_queue_rows(items: &[MediaItem], group: bool) -> (Vec<QueueRow>, Vec<String>) {
-    let mut display: Vec<QueueRow> = Vec::new();
-    let mut group_for_header: Vec<String> = Vec::new();
-    if !group {
-        display.extend((0..items.len()).map(|idx| QueueRow::Track { idx }));
-        return (display, group_for_header);
-    }
-
-    // Grouping key/label for each item, or `None` for ungrouped items.
-    let keys: Vec<Option<(String, String)>> = items
-        .iter()
-        .map(|item| {
-            if item.is_audio() && !item.album.is_empty() {
-                let key = format!("a:{}", item.album_id);
-                let label = if item.artist.is_empty() {
-                    item.album.clone()
-                } else {
-                    format!("{}: {}", item.artist, item.album)
-                };
-                Some((key, label))
-            } else if item.item_type == "Episode" && !item.series_name.is_empty() {
-                Some((format!("e:{}", item.series_name), item.series_name.clone()))
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let mut last_group_key: Option<String> = None;
-    let mut i = 0;
-    while i < items.len() {
-        match &keys[i] {
-            Some((key, label)) => {
-                // Find the end of this run of consecutive same-key items.
-                let mut end = i;
-                while end + 1 < items.len()
-                    && keys[end + 1].as_ref().map(|(k, _)| k.as_str()) == Some(key.as_str())
-                {
-                    end += 1;
-                }
-                let run_len = end - i + 1;
-                if run_len >= 3 {
-                    if last_group_key.is_some() {
-                        display.push(QueueRow::Spacer);
-                    }
-                    display.push(QueueRow::Header);
-                    group_for_header.push(label.clone());
-                    last_group_key = Some(key.clone());
-                } else {
-                    last_group_key = None;
-                }
-                for idx in i..=end {
-                    display.push(QueueRow::Track { idx });
-                }
-                i = end + 1;
-            }
-            None => {
-                last_group_key = None;
-                display.push(QueueRow::Track { idx: i });
-                i += 1;
-            }
-        }
-    }
-
-    (display, group_for_header)
+/// Build the flat visual rows for the queue: one `Track` row per item, in order.
+pub(super) fn build_queue_rows(items: &[MediaItem]) -> Vec<QueueRow> {
+    (0..items.len()).map(|idx| QueueRow::Track { idx }).collect()
 }
 
 #[cfg(test)]
@@ -296,155 +220,15 @@ mod tests {
         item
     }
 
-    fn make_episode_item(series_name: &str) -> MediaItem {
-        let mut item = make_item(series_name, "Episode");
-        item.series_name = series_name.to_string();
-        item
-    }
-
-    fn make_movie_item() -> MediaItem {
-        make_item("Movie", "Movie")
-    }
-
     #[test]
-    fn build_queue_rows_single_audio_item_no_header() {
-        let items = vec![make_audio_item("Album A", "a1", "Artist")];
-        let (rows, headers) = build_queue_rows(&items, true);
-
-        // Single item should have no header
-        assert_eq!(headers.len(), 0);
-        assert_eq!(rows.len(), 1);
-        assert!(matches!(rows[0], QueueRow::Track { idx: 0 }));
-    }
-
-    #[test]
-    fn build_queue_rows_two_same_album_items_no_header() {
-        let items = vec![
-            make_audio_item("Album A", "a1", "Artist"),
-            make_audio_item("Album A", "a1", "Artist"),
-        ];
-        let (rows, headers) = build_queue_rows(&items, true);
-
-        // Two items with same album should have no header
-        assert_eq!(headers.len(), 0);
-        assert_eq!(rows.len(), 2);
-        assert!(matches!(rows[0], QueueRow::Track { idx: 0 }));
-        assert!(matches!(rows[1], QueueRow::Track { idx: 1 }));
-    }
-
-    #[test]
-    fn build_queue_rows_three_same_album_items_has_header() {
+    fn build_queue_rows_is_flat_in_item_order() {
         let items = vec![
             make_audio_item("Album A", "a1", "Artist"),
             make_audio_item("Album A", "a1", "Artist"),
             make_audio_item("Album A", "a1", "Artist"),
         ];
-        let (rows, headers) = build_queue_rows(&items, true);
+        let rows = build_queue_rows(&items);
 
-        // Three items with same album should have one header
-        assert_eq!(headers.len(), 1);
-        assert_eq!(headers[0], "Artist: Album A");
-        assert_eq!(rows.len(), 4); // Header + 3 tracks
-        assert!(matches!(rows[0], QueueRow::Header));
-        assert!(matches!(rows[1], QueueRow::Track { idx: 0 }));
-        assert!(matches!(rows[2], QueueRow::Track { idx: 1 }));
-        assert!(matches!(rows[3], QueueRow::Track { idx: 2 }));
-    }
-
-    #[test]
-    fn build_queue_rows_four_same_album_items_has_header() {
-        let items = vec![
-            make_audio_item("Album A", "a1", "Artist"),
-            make_audio_item("Album A", "a1", "Artist"),
-            make_audio_item("Album A", "a1", "Artist"),
-            make_audio_item("Album A", "a1", "Artist"),
-        ];
-        let (rows, headers) = build_queue_rows(&items, true);
-
-        // Four items with same album should have one header
-        assert_eq!(headers.len(), 1);
-        assert_eq!(rows.len(), 5); // Header + 4 tracks
-        assert!(matches!(rows[0], QueueRow::Header));
-    }
-
-    #[test]
-    fn build_queue_rows_three_episode_items_has_header() {
-        let items = vec![
-            make_episode_item("Series A"),
-            make_episode_item("Series A"),
-            make_episode_item("Series A"),
-        ];
-        let (rows, headers) = build_queue_rows(&items, true);
-
-        // Three episodes with same series should have one header
-        assert_eq!(headers.len(), 1);
-        assert_eq!(headers[0], "Series A");
-        assert_eq!(rows.len(), 4); // Header + 3 tracks
-        assert!(matches!(rows[0], QueueRow::Header));
-    }
-
-    #[test]
-    fn build_queue_rows_mixed_run_lengths() {
-        let items = vec![
-            make_audio_item("Album A", "a1", "Artist A"),
-            make_audio_item("Album A", "a1", "Artist A"),
-            // Run of 2: no header
-            make_audio_item("Album B", "a2", "Artist B"),
-            // Run of 1: no header
-            make_audio_item("Album C", "a3", "Artist C"),
-            make_audio_item("Album C", "a3", "Artist C"),
-            make_audio_item("Album C", "a3", "Artist C"),
-            // Run of 3: has header
-            make_movie_item(),
-            // Ungrouped: no header
-        ];
-        let (rows, headers) = build_queue_rows(&items, true);
-
-        // Only the run of 3 should have a header
-        assert_eq!(headers.len(), 1);
-        assert_eq!(headers[0], "Artist C: Album C");
-
-        // Expected rows: 2 tracks + 1 track + header + 3 tracks + 1 track = 8 rows
-        assert_eq!(rows.len(), 8);
-    }
-
-    #[test]
-    fn build_queue_rows_consecutive_groups_have_spacer() {
-        let items = vec![
-            make_audio_item("Album A", "a1", "Artist A"),
-            make_audio_item("Album A", "a1", "Artist A"),
-            make_audio_item("Album A", "a1", "Artist A"),
-            // Header + Spacer expected here before Album B
-            make_audio_item("Album B", "a2", "Artist B"),
-            make_audio_item("Album B", "a2", "Artist B"),
-            make_audio_item("Album B", "a2", "Artist B"),
-        ];
-        let (rows, headers) = build_queue_rows(&items, true);
-
-        // Both groups should have headers
-        assert_eq!(headers.len(), 2);
-
-        // Expected: Header, 3 tracks, Spacer, Header, 3 tracks = 9 rows
-        assert_eq!(rows.len(), 9);
-        assert!(matches!(rows[0], QueueRow::Header));
-        assert!(matches!(rows[1], QueueRow::Track { .. }));
-        assert!(matches!(rows[2], QueueRow::Track { .. }));
-        assert!(matches!(rows[3], QueueRow::Track { .. }));
-        assert!(matches!(rows[4], QueueRow::Spacer));
-        assert!(matches!(rows[5], QueueRow::Header));
-    }
-
-    #[test]
-    fn build_queue_rows_no_grouping() {
-        let items = vec![
-            make_audio_item("Album A", "a1", "Artist A"),
-            make_audio_item("Album A", "a1", "Artist A"),
-            make_audio_item("Album A", "a1", "Artist A"),
-        ];
-        let (rows, headers) = build_queue_rows(&items, false);
-
-        // With grouping disabled, no headers even for 3+ items
-        assert_eq!(headers.len(), 0);
         assert_eq!(rows.len(), 3);
         assert!(matches!(rows[0], QueueRow::Track { idx: 0 }));
         assert!(matches!(rows[1], QueueRow::Track { idx: 1 }));

@@ -134,33 +134,3 @@ fn short_power_queue_panel_drops_padding_before_rows() {
         layout.queue_area
     );
 }
-
-#[test]
-fn power_queue_panel_preserves_group_aware_scrolling() {
-    let mut app = make_power_movie_app();
-    app.panel_focus = PanelFocus::Queue;
-
-    let mut items = Vec::new();
-    for i in 0..4 {
-        let mut item = make_item(&format!("A{i}"), "Audio");
-        item.id = format!("a-{i}");
-        item.album_id = "album-a".into();
-        item.album = "Album A".into();
-        item.artist = "Artist".into();
-        items.push(item);
-    }
-    for i in 0..4 {
-        let mut item = make_item(&format!("B{i}"), "Audio");
-        item.id = format!("b-{i}");
-        item.album_id = "album-b".into();
-        item.album = "Album B".into();
-        item.artist = "Artist".into();
-        items.push(item);
-    }
-    app.player_tab.set_items(items, 4);
-    app.queue_scroll = 8;
-
-    let (_term, _layout) = render_view_to_terminal(&mut app, 100, 20);
-
-    assert_eq!(app.queue_scroll, 8);
-}
