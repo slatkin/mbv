@@ -90,6 +90,8 @@ impl App {
             mk("h", "Collapse/expand queue column"),
             mk("Shift+← / →", "Resize queue column"),
             mk("Ctrl+S", "Save playlist"),
+            mk("Ctrl+R", "Re-anchor tracking"),
+            mk("Ctrl+T", "Stop remote tracking"),
             blank(),
         ];
         let sec_home = vec![
@@ -108,7 +110,7 @@ impl App {
             mk("Ctrl+P", "Play all"),
             mk("Ctrl+A", "Add to Queue"),
             mk("r", "Refresh library"),
-            mk("Ctrl+R", "Rescan"),
+            mk("Ctrl+R", "Rescan library"),
             blank(),
         ];
         let is_queue = matches!(self.panel_focus, crate::app::PanelFocus::Queue);

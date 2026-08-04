@@ -1,7 +1,6 @@
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 use super::{
-    App, BrowseLevel, LocalPlaybackTarget, PanelFocus, PendingTrackingEdit, PlaybackTarget,
-    RemotePlaybackTarget,
+    App, BrowseLevel, LocalPlaybackTarget, PanelFocus, PlaybackTarget, RemotePlaybackTarget,
 };
 use mbv_core::api::MediaItem;
 use mbv_core::player::PlayerCommand;
@@ -248,7 +247,7 @@ impl App {
         }
         let label = item.playback_label();
         if let Some(ref conn_id) = self.connected_session_id.clone() {
-            self.remote_tracker = None;
+            self.retire_remote_tracking(true);
             self.clear_playback_overlays();
             let id = conn_id.clone();
             let item_id = item.id.clone();
@@ -291,9 +290,6 @@ impl App {
     }
 
     pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::MediaItem) {
-        if !self.guard_tracking_edit(PendingTrackingEdit::EnqueueFolder(Box::new(item.clone()))) {
-            return;
-        }
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
         if self.in_non_library_thin_client_mode() {
             log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
@@ -330,6 +326,7 @@ impl App {
                 ));
                 if self.sync_playback_queue_after_append(scope, appended) {
                     self.persist_local_queue_state_if_needed(scope);
+                    self.retire_remote_tracking_after_queue_mutation();
                 } else {
                     self.queue_dirty = previous_dirty;
                     *self.queue_for_scope_mut(scope) = previous_queue;

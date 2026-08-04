@@ -19,6 +19,10 @@ impl App {
         self.mouse_col = col;
         self.mouse_row = row;
 
+        if self.remote_reanchor_popup.is_some() {
+            return;
+        }
+
         // Swallow the single click that merely refocused the window (e.g.
         // alt-tab back in by clicking): if a FocusGained landed within the
         // last 150ms, this Down(Left)/Down(Right) is that click, not a UI

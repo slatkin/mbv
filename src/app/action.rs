@@ -471,7 +471,24 @@ impl App {
                         let item = items[t].clone();
                         let label = item.playback_label();
                         self.flash_status(format!("Playing on remote: {label}"));
-                        self.submit_attached_sequence(&conn_id, &items, t);
+                        if let Some(occurrence_id) = self.tracked_occurrence_at_queue_index(t) {
+                            self.issue_remote_intent(
+                                mbv_core::remote_reconciliation::RemoteIntent::Select {
+                                    target: occurrence_id,
+                                },
+                            );
+                            let item_ids: Vec<String> =
+                                items.iter().map(|item| item.id.clone()).collect();
+                            let start_ticks = items[t].playback_position_ticks;
+                            self.do_reconciliation_session_command(
+                                &conn_id.clone(),
+                                move |client| {
+                                    client.session_play_items(&conn_id, &item_ids, t, start_ticks)
+                                },
+                            );
+                        } else {
+                            self.submit_attached_sequence(&conn_id, &items, t);
+                        }
                     } else {
                         // Only read once we know we're not handing off to a
                         // session -- `queue_scope_is_playback` is the one

@@ -97,9 +97,9 @@ use self::types_library_tab::LibraryTab;
 #[cfg(test)]
 use self::types_playback::HomePane;
 use self::types_playback::{
-    ArtistHeaderSelection, LocalPlaybackTarget, PendingQueueAction, PendingTrackingEdit,
-    PlaybackState, PlaybackTarget, QueueScope, QueueScopeResolution, RemotePlaybackTarget,
-    RemoteReanchorPopup, RemoteSlotState, SuspendedLocalSession, UndoEntry,
+    ArtistHeaderSelection, LocalPlaybackTarget, PendingQueueAction, PlaybackState, PlaybackTarget,
+    QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteReanchorPopup, RemoteSlotState,
+    SuspendedLocalSession, UndoEntry,
 };
 use self::types_player_tab::PlayerTab;
 use self::types_settings::{PanelFocus, SettingKey, SETTING_SECTIONS};

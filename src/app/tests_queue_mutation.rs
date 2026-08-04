@@ -3,6 +3,14 @@ use crate::app::tests::*;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+#[cfg(test)]
+#[path = "tests_queue_mutation_playlist_save.rs"]
+mod tests_queue_mutation_playlist_save;
+
+#[cfg(test)]
+#[path = "tests_queue_mutation_retention.rs"]
+mod tests_queue_mutation_retention;
+
 fn tracking_stub() -> mbv_core::remote_reconciliation::ReconciliationTracker {
     mbv_core::remote_reconciliation::ReconciliationTracker::new(
         "session",
@@ -72,7 +80,7 @@ fn ctrl_a_appends_to_direct_remote_queue() {
 }
 
 #[test]
-fn enqueue_requires_one_tracking_confirmation_and_applies_after_yes() {
+fn enqueue_stops_tracking_and_applies_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.home.section = 0;
@@ -81,42 +89,36 @@ fn enqueue_requires_one_tracking_confirmation_and_applies_after_yes() {
     app.remote_tracker = Some(tracking_stub());
 
     app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
-    assert!(matches!(app.confirm_modal, Some(ConfirmModal { .. })));
-    assert!(app.player_tab.items.is_empty());
-
-    app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
     assert!(app.confirm_modal.is_none());
     assert!(app.remote_tracker.is_none());
     assert_eq!(app.player_tab.items.len(), 1);
 }
 
 #[test]
-fn folder_and_artist_enqueue_routes_use_tracking_confirmation() {
+fn tracked_playlist_deletes_apply_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
+    app.player_tab.items = make_items(4);
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("playlist-1".into()),
+        name: "Saved".into(),
+    };
     app.remote_tracker = Some(tracking_stub());
-    let mut folder = make_item("Folder", "Folder");
-    folder.is_folder = true;
-    app.execute_context_action(Some(ContextAction::EnqueueFolder(Box::new(folder))));
-    assert!(matches!(
-        app.pending_tracking_edit,
-        Some(PendingTrackingEdit::EnqueueFolder(_))
-    ));
 
-    app.confirm_modal = None;
-    app.pending_tracking_edit = None;
-    app.remote_tracker = Some(tracking_stub());
-    app.enqueue_artist_header_selection(
-        0,
-        &ArtistHeaderSelection {
-            first_album_id: "album".into(),
-            artist_label: "Artist".into(),
-        },
+    app.remove_from_queue(1);
+    app.remove_from_queue(1);
+
+    assert!(app.remote_tracker.is_none());
+    assert!(app.confirm_modal.is_none());
+    assert_eq!(
+        app.player_tab
+            .items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["id0", "id3"]
     );
-    assert!(matches!(
-        app.pending_tracking_edit,
-        Some(PendingTrackingEdit::EnqueueArtistHeader { .. })
-    ));
+    assert!(app.queue_dirty);
 }
 
 #[test]
@@ -187,7 +189,7 @@ fn clearing_remote_queue_in_direct_remote_mode_leaves_local_queue_metadata_intac
 }
 
 #[test]
-fn clearing_tracked_queue_stops_tracking_before_later_observations() {
+fn clearing_tracked_queue_applies_immediately_and_stops_tracking() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player_tab.items = make_items(2);
@@ -195,16 +197,8 @@ fn clearing_tracked_queue_stops_tracking_before_later_observations() {
 
     app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
 
-    assert!(matches!(
-        app.pending_tracking_edit,
-        Some(PendingTrackingEdit::ClearQueue)
-    ));
-    assert!(app.remote_tracker.is_some());
-    assert_eq!(app.player_tab.items.len(), 2);
-
-    app.apply_pending_tracking_edit();
-
     assert!(app.remote_tracker.is_none());
+    assert!(app.confirm_modal.is_none());
     assert!(app.player_tab.items.is_empty());
 
     app.connected_session_id = Some("session".into());
@@ -380,4 +374,27 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
     );
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
     assert!(app.remote_queue_undo_stack.is_empty());
+}
+
+#[test]
+fn boundary_queue_edit_does_not_retire_tracking() {
+    let mut app = make_app_stub();
+    app.player_tab.items = make_items(2);
+    app.remote_tracker = Some(tracking_stub());
+    app.player_tab.queue_cursor = 0;
+
+    app.move_queue_item_up();
+
+    assert!(app.remote_tracker.is_some());
+    assert_eq!(app.player_tab.items.len(), 2);
+}
+
+#[test]
+fn empty_clear_queue_does_not_retire_tracking() {
+    let mut app = make_app_stub();
+    app.remote_tracker = Some(tracking_stub());
+
+    app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
+
+    assert!(app.remote_tracker.is_some());
 }

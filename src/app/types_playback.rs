@@ -2,6 +2,8 @@ use mbv_core::api::MediaItem;
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
+use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::mpsc;
 
 /// Shared local-vs-remote playback seam for the TUI action layer.
@@ -140,20 +142,94 @@ pub(super) enum PendingQueueAction {
     ClearQueue,
 }
 
-pub(super) enum PendingTrackingEdit {
-    ClearQueue,
-    Remove(usize),
-    Move(isize),
-    Undo(QueueScope),
-    EnqueueSelected,
-    EnqueueFolder(Box<MediaItem>),
-    EnqueueArtistHeader {
-        lib_idx: usize,
-        selection: ArtistHeaderSelection,
-    },
-}
-
 pub(super) struct RemoteReanchorPopup {
     pub(super) targets: Vec<(usize, String)>,
     pub(super) cursor: usize,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct RemoteConsumeOperation {
+    pub(super) operation_id: u64,
+    pub(super) mutation_id: u64,
+    pub(super) session_id: String,
+    pub(super) tracking_id: u64,
+    pub(super) epoch: u64,
+    pub(super) occurrence_id: u64,
+    pub(super) playlist_id: String,
+    pub(super) entry_id: String,
+    pub(super) media_id: String,
+    pub(super) queue_slot_id: Option<QueueSlotId>,
+    pub(super) queue_lineage: u64,
+}
+
+#[derive(Clone, Debug)]
+pub(super) enum PlaylistMutation {
+    ConsumeValidate {
+        mutation_id: u64,
+        operation_id: u64,
+        session_id: String,
+        tracking_id: u64,
+        epoch: u64,
+        occurrence_id: u64,
+        entry_id: String,
+        media_id: String,
+    },
+    ConsumeDelete {
+        mutation_id: u64,
+        operation_id: u64,
+        session_id: String,
+        tracking_id: u64,
+        epoch: u64,
+        occurrence_id: u64,
+        entry_id: String,
+        media_id: String,
+    },
+    Save {
+        mutation_id: u64,
+        queue_lineage: u64,
+        source_playlist_id: String,
+        item_ids: Option<Vec<String>>,
+    },
+    CreateAs {
+        mutation_id: u64,
+        coordinator_key: String,
+        name: String,
+        queue_lineage: u64,
+        source_playlist_id: Option<String>,
+        item_ids: Option<Vec<String>>,
+    },
+    Replace {
+        mutation_id: u64,
+        queue_lineage: u64,
+        source_playlist_id: String,
+        name: String,
+        item_ids: Option<Vec<String>>,
+    },
+}
+
+impl PlaylistMutation {
+    pub(super) fn mutation_id(&self) -> u64 {
+        match self {
+            Self::ConsumeValidate { mutation_id, .. }
+            | Self::ConsumeDelete { mutation_id, .. }
+            | Self::Save { mutation_id, .. }
+            | Self::CreateAs { mutation_id, .. }
+            | Self::Replace { mutation_id, .. } => *mutation_id,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub(super) struct PlaylistMutationState {
+    pub(super) active: Option<PlaylistMutation>,
+    pub(super) queued: VecDeque<PlaylistMutation>,
+}
+
+#[derive(Clone, Debug)]
+pub(super) struct RemoteQueueProjection {
+    pub(super) session_id: String,
+    pub(super) epoch: u64,
+    pub(super) queue_lineage: u64,
+    pub(super) occurrence_slots: HashMap<u64, QueueSlotId>,
+    pub(super) slot_occurrences: HashMap<QueueSlotId, u64>,
 }

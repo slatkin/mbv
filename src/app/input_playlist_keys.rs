@@ -1,3 +1,4 @@
+use super::types_playback::PlaylistMutation;
 use super::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, SavePlaylistDialog,
     SavePlaylistStage,
@@ -263,26 +264,9 @@ impl App {
                         },
                     });
                 } else {
-                    let ids: Vec<String> =
-                        self.player_tab.items.iter().map(|i| i.id.clone()).collect();
-                    let result = {
-                        let c = self.client.lock().unwrap();
-                        c.create_playlist(&name, &ids)
-                    };
                     self.save_playlist_dialog = None;
                     self.force_clear = true;
-                    match result {
-                        Ok(id) => {
-                            self.queue_source = crate::config::QueueSource::Playlist {
-                                id: Some(id),
-                                name: name.clone(),
-                            };
-                            self.queue_dirty = false;
-                            self.save_queue_state();
-                            self.flash_status(format!("Saved as playlist \"{name}\""));
-                        }
-                        Err(e) => self.flash_status_high(format!("Error: {e}")),
-                    }
+                    self.save_queue_as_playlist(name);
                 }
             }
             _ => {}
@@ -296,24 +280,19 @@ impl App {
     /// `SavePlaylistStage::ConfirmOverwrite` key handler so the shared
     /// confirmation-modal dispatcher can call it directly.
     pub(super) fn do_overwrite_playlist(&mut self, existing_id: &str, name: &str) {
-        let ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
-        let result = {
-            let c = self.client.lock().unwrap();
-            c.delete_playlist(existing_id)
-                .and_then(|_| c.create_playlist(name, &ids))
-        };
         self.save_playlist_dialog = None;
         self.force_clear = true;
-        match result {
-            Ok(id) => {
-                self.queue_source = crate::config::QueueSource::Playlist {
-                    id: Some(id),
-                    name: name.to_string(),
-                };
-                self.queue_dirty = false;
-                self.flash_status(format!("Saved as playlist \"{name}\""));
-            }
-            Err(e) => self.flash_status_high(format!("Error: {e}")),
-        }
+        let mutation_id = self.next_playlist_mutation;
+        self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);
+        self.enqueue_playlist_mutation(
+            existing_id.to_string(),
+            PlaylistMutation::Replace {
+                mutation_id,
+                queue_lineage: self.remote_queue_lineage,
+                source_playlist_id: existing_id.to_string(),
+                name: name.to_string(),
+                item_ids: None,
+            },
+        );
     }
 }

@@ -75,6 +75,7 @@ impl App {
     }
 
     pub(super) fn replace_direct_remote_queue(&mut self, items: Vec<MediaItem>, cursor: usize) {
+        self.retire_remote_tracking(true);
         let cursor = cursor.min(items.len().saturating_sub(1));
         self.player
             .send_command(crate::player::PlayerCommand::ReplaceQueue {
@@ -111,6 +112,7 @@ impl App {
     }
 
     pub(super) fn replace_playback_queue(&mut self, items: Vec<MediaItem>, cursor: usize) {
+        self.retire_remote_tracking(true);
         let cursor = cursor.min(items.len().saturating_sub(1));
         match self.playback_target_queue_scope() {
             QueueScope::Local => {
