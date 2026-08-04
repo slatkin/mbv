@@ -369,6 +369,9 @@ impl App {
                 width: list_w.saturating_add(list_area.x.saturating_sub(row_x)),
                 height: 1,
             };
+            if row_idx >= rows.len() {
+                continue;
+            }
             match &rows[row_idx] {
                 DisplayRow::Empty => {
                     f.render_widget(
@@ -386,57 +389,78 @@ impl App {
                         layout.cursor_screen_y = Some(sy);
                     }
 
+                    let avail = (row_rect.width as usize).saturating_sub(2);
+
                     let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
-                        let mins = (item.runtime_ticks / TICKS_PER_SECOND / 60).max(1);
-                        format!("{}m", mins)
+                        let total_secs = item.runtime_ticks / TICKS_PER_SECOND;
+                        let hours = total_secs / 3600;
+                        let mins = (total_secs % 3600) / 60;
+                        let secs = total_secs % 60;
+                        if hours > 0 {
+                            format!("{}:{:02}:{:02}", hours, mins, secs)
+                        } else {
+                            format!("{}:{:02}", mins, secs)
+                        }
                     } else {
                         String::new()
                     };
-                    let avail = (row_rect.width as usize).saturating_sub(2); // 2-col gutter (marker/icon)
-                                                                             // Reserve a 6-column gap before the duration column so the title
-                                                                             // truncates well before running up against it, plus a 1-column
-                                                                             // pad after the duration so it isn't flush against the right edge.
-                    const DUR_GAP: usize = 6;
-                    let dur_reserve = if dur_str.is_empty() {
-                        0
-                    } else {
-                        dur_str.width() + DUR_GAP + 1
-                    };
-                    let name_w = avail.saturating_sub(dur_reserve);
-                    let is_episode = item.item_type == "Episode" && !item.series_name.is_empty();
-                    let title_width: usize;
 
-                    let playing_icon_w = if is_playing { 2 } else { 0 };
-                    let mut spans: Vec<Span> = if is_episode {
-                        // Episode: show name in yellow, episode title in white.
-                        let name_w_for_title = name_w.saturating_sub(playing_icon_w);
-                        let show_w = name_w_for_title * 2 / 5;
+                    let pct_str = if item.playback_position_ticks > 0
+                        && !item.played
+                        && item.runtime_ticks > 0
+                    {
+                        let pct =
+                            (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+                        if pct > 0 {
+                            Some(format!("{}%", pct))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                    let meta_text = dur_str;
+                    let meta_w = meta_text.width();
+                    // pad + 8-char "HH:MM:SS" + pad
+                    const META_COL_W: usize = 10;
+                    const META_RIGHT_MARGIN: usize = 0;
+                    const META_INNER_PAD: usize = 1;
+                    // " 100%" - space + up to 4 chars, reserved next to the title.
+                    const PCT_COL_W: usize = 5;
+                    let title_col_w = avail.saturating_sub(
+                        META_COL_W + META_RIGHT_MARGIN + META_INNER_PAD * 2 + PCT_COL_W,
+                    );
+
+                    // Render selection background
+                    if selected_row && focused {
+                        if let Some(full) = green_panel_full {
+                            f.render_widget(
+                                Block::default()
+                                    .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                                Rect {
+                                    x: full.x,
+                                    y: sy,
+                                    width: full.width,
+                                    height: 1,
+                                },
+                            );
+                        }
+                    }
+
+                    // Build left column (title)
+                    let is_episode = item.item_type == "Episode" && !item.series_name.is_empty();
+                    let mut title_spans: Vec<Span> = if is_episode {
+                        let show_w = title_col_w * 2 / 5;
                         let show = trunc_str(&item.series_name, show_w);
                         let show_actual_w = show.width();
-                        let ep_title = trunc_str(
-                            &item.name,
-                            name_w_for_title.saturating_sub(show_actual_w + 1),
-                        );
-                        title_width = show_actual_w + 1 + ep_title.width() + playing_icon_w;
+                        let ep_title =
+                            trunc_str(&item.name, title_col_w.saturating_sub(show_actual_w + 1));
                         let bold = if selected_row && focused {
                             Modifier::BOLD
                         } else {
                             Modifier::empty()
                         };
-                        if selected_row && focused {
-                            if let Some(full) = green_panel_full {
-                                f.render_widget(
-                                    Block::default()
-                                        .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
-                                    Rect {
-                                        x: full.x,
-                                        y: sy,
-                                        width: full.width,
-                                        height: 1,
-                                    },
-                                );
-                            }
-                        }
                         vec![
                             if selected_row && focused {
                                 Span::styled("▍", Style::default().fg(palette::AQUA))
@@ -461,73 +485,74 @@ impl App {
                             ),
                         ]
                     } else {
-                        // Non-episode: single title span.
-                        let title =
-                            trunc_str(&item.display_name(), name_w.saturating_sub(playing_icon_w));
-                        title_width = title.width() + playing_icon_w;
-                        if selected_row && focused {
-                            if let Some(full) = green_panel_full {
-                                f.render_widget(
-                                    Block::default()
-                                        .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
-                                    Rect {
-                                        x: full.x,
-                                        y: sy,
-                                        width: full.width,
-                                        height: 1,
-                                    },
-                                );
-                                vec![
-                                    Span::styled("▍", Style::default().fg(palette::AQUA)),
-                                    Span::raw(" "),
-                                    Span::styled(
-                                        title,
-                                        Style::default()
-                                            .fg(if wide_home_panel_unfocused {
-                                                palette::MUTED
-                                            } else {
-                                                palette::WHITE
-                                            })
-                                            .add_modifier(Modifier::BOLD),
-                                    ),
-                                ]
+                        let title = trunc_str(&item.display_name(), title_col_w);
+                        vec![
+                            if selected_row && focused {
+                                Span::styled("▍", Style::default().fg(palette::AQUA))
                             } else {
-                                vec![
-                                    Span::styled("▍", Style::default().fg(palette::AQUA)),
-                                    Span::raw(" "),
-                                    Span::styled(
-                                        title,
-                                        Style::default()
-                                            .fg(palette::WHITE)
-                                            .add_modifier(Modifier::BOLD),
-                                    ),
-                                ]
-                            }
-                        } else {
-                            vec![
-                                Span::raw(" "),
-                                Span::raw(" "),
-                                Span::styled(
-                                    title,
-                                    Style::default().fg(if wide_home_panel_unfocused {
+                                Span::raw(" ")
+                            },
+                            Span::raw(" "),
+                            Span::styled(
+                                title,
+                                Style::default()
+                                    .fg(if wide_home_panel_unfocused {
                                         palette::MUTED
                                     } else {
                                         palette::WHITE
+                                    })
+                                    .add_modifier(if selected_row && focused {
+                                        Modifier::BOLD
+                                    } else {
+                                        Modifier::empty()
                                     }),
-                                ),
-                            ]
-                        }
+                            ),
+                        ]
                     };
+
+                    // Add playback progress percentage to the right of the title
+                    if let Some(pct) = &pct_str {
+                        title_spans.push(Span::raw(" "));
+                        title_spans.push(Span::styled(
+                            pct.clone(),
+                            Style::default().fg(palette::MUTED),
+                        ));
+                    }
+
+                    // Add now-playing throbber inline with title
                     if is_playing {
-                        spans.push(Span::raw(" "));
-                        spans.push(self.now_playing_throbber_span());
+                        title_spans.push(Span::raw(" "));
+                        title_spans.push(self.now_playing_throbber_span());
                     }
-                    let pad = avail.saturating_sub(title_width + dur_str.width() + 1);
-                    if !dur_str.is_empty() {
-                        spans.push(Span::raw(" ".repeat(pad)));
-                        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+
+                    // Calculate actual title width for right-alignment
+                    let actual_title_w: usize = title_spans.iter().map(|s| s.content.width()).sum();
+
+                    // Build right column (metadata) - flush with right edge.
+                    // Use the row's full width here, not `avail`: `avail` already
+                    // subtracts the 2-column left prefix, and `actual_title_w`
+                    // includes that same prefix, so reusing `avail` would
+                    // double-subtract it and push the metadata box too far left.
+                    let mut meta_spans: Vec<Span> = Vec::new();
+                    let pad_to_right =
+                        (row_rect.width as usize).saturating_sub(actual_title_w + META_COL_W);
+                    if pad_to_right > 0 {
+                        meta_spans.push(Span::raw(" ".repeat(pad_to_right)));
                     }
-                    f.render_widget(Paragraph::new(Line::from(spans)), row_rect);
+                    // Create fixed-width metadata column, text right-aligned inside.
+                    // No explicit background: the row's own background (panel or
+                    // focused-selection fill) already shows through underneath.
+                    let content_w = META_COL_W - META_INNER_PAD * 2;
+                    let inner_pad = content_w.saturating_sub(meta_w);
+                    let left_pad_str = " ".repeat(META_INNER_PAD + inner_pad);
+                    let full_meta = format!("{}{}", left_pad_str, meta_text);
+                    let full_meta = format!("{:width$}", full_meta, width = META_COL_W);
+                    meta_spans.push(Span::styled(full_meta, Style::default().fg(palette::FOAM)));
+
+                    // Combine and render
+                    let mut all_spans = title_spans;
+                    all_spans.extend(meta_spans);
+                    f.render_widget(Paragraph::new(Line::from(all_spans)), row_rect);
                     hitmap.push((row_rect, *flat_idx));
                 }
             }
