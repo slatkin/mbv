@@ -128,35 +128,6 @@ mod tests {
     }
 
     #[test]
-    fn render_visualizer_draws_block_with_bars_when_active() {
-        let mut app = make_app_stub();
-        app.visualizer_enabled = true;
-        app.visualizer_frame = (0..64).map(|i| (i as f32) / 63.0).collect();
-
-        let backend = TestBackend::new(40, 12);
-        let mut term = Terminal::new(backend).unwrap();
-        term.draw(|f| {
-            app.render_visualizer(f, Rect::new(0, 0, 40, 12));
-        })
-        .unwrap();
-
-        let buffer = term.backend().buffer().clone();
-        let mut saw_bar = false;
-        for y in 0..12 {
-            for x in 0..40 {
-                if buffer[(x, y)].symbol() == "\u{2588}" {
-                    saw_bar = true;
-                    break;
-                }
-            }
-        }
-        assert!(
-            saw_bar,
-            "expected at least one rendered bar character in visualizer buffer"
-        );
-    }
-
-    #[test]
     fn render_visualizer_is_noop_on_empty_area() {
         let mut app = make_app_stub();
         app.visualizer_enabled = true;

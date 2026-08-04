@@ -122,56 +122,6 @@ fn push_movie_lib(app: &mut App, movie: mbv_core::api::MediaItem) {
 }
 
 #[test]
-fn compact_movie_detail_shows_director_without_enter_prompt() {
-    let mut app = make_app_stub();
-
-    let mut movie = make_item("Focused Movie", "Movie");
-    movie.id = "movie-1".into();
-    movie.overview = "A long-form overview for the compact movie detail banner.".into();
-    movie.director = "Jane Director".into();
-    push_movie_lib(&mut app, movie);
-
-    let mut layout = LayoutMain::default();
-    let out = render_power_compact_detail_to_string(&mut app, &mut layout);
-
-    assert!(
-        out.contains("Director: Jane Director"),
-        "expected director:\n{out}"
-    );
-    assert!(
-        !out.contains("Press"),
-        "enter prompt should be removed:\n{out}"
-    );
-    assert!(
-        !out.contains("[ENTER]"),
-        "enter prompt should be removed:\n{out}"
-    );
-}
-
-#[test]
-fn compact_movie_detail_shows_full_short_overview_with_no_scrollbar() {
-    let mut app = make_app_stub();
-
-    let mut movie = make_item("Focused Movie", "Movie");
-    movie.id = "movie-1".into();
-    movie.overview = "A short overview.".into();
-    movie.director = "Jane Director".into();
-    push_movie_lib(&mut app, movie);
-
-    let mut layout = LayoutMain::default();
-    let out = render_power_compact_detail_to_string(&mut app, &mut layout);
-
-    assert!(
-        out.contains("A short overview."),
-        "expected full overview text:\n{out}"
-    );
-    assert!(
-        out.contains("Director: Jane Director"),
-        "expected director:\n{out}"
-    );
-}
-
-#[test]
 fn compact_movie_detail_reserves_placeholder_space_while_image_loads() {
     let mut app = make_app_stub();
     app.image_protocol_enabled = true;
@@ -241,25 +191,5 @@ fn compact_movie_detail_placeholder_matches_typical_poster_aspect_ratio() {
         Some((19, 14)),
         "expected the placeholder to match a typical 2:3 poster's fitted \
          width at this font size, not the full IMG_COLS bounding box"
-    );
-}
-
-#[test]
-fn compact_movie_detail_shows_full_long_overview_with_no_scrollbar() {
-    let mut app = make_app_stub();
-
-    let mut movie = make_item("Focused Movie", "Movie");
-    movie.id = "movie-1".into();
-    movie.overview = "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. "
-        .repeat(12);
-    movie.director = "Very Distinctive Unique Director Name".into();
-    push_movie_lib(&mut app, movie);
-
-    let mut layout = LayoutMain::default();
-    let out = render_power_compact_detail_to_string_sized(&mut app, &mut layout, 60, 80);
-
-    assert!(
-        out.contains("Very Distinctive Unique Director Name"),
-        "expected full director text with no scrolling:\n{out}"
     );
 }

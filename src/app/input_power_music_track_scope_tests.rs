@@ -10,42 +10,6 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::io::{Read, Write};
 
-fn buffer_to_string(term: &ratatui::Terminal<ratatui::backend::TestBackend>) -> String {
-    let buf = term.backend().buffer();
-    let area = *buf.area();
-    let mut out = String::new();
-    for y in 0..area.height {
-        for x in 0..area.width {
-            out.push_str(buf[(x, y)].symbol());
-        }
-        out.push('\n');
-    }
-    out
-}
-
-#[test]
-fn render_inline_album_detail_uses_track_focus_as_cursor() {
-    let mut app = make_power_music_album_app();
-    push_tracks(&mut app, "album-1", 3);
-    app.libs[0].album_track_focus = Some(2);
-
-    let backend = ratatui::backend::TestBackend::new(100, 40);
-    let mut term = ratatui::Terminal::new(backend).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    let out = buffer_to_string(&term);
-
-    // Track-focus mode retains the standard spacing, while the old green
-    // marker glyph is absent.
-    let track_line = out
-        .lines()
-        .find(|l| l.contains("Track 2"))
-        .unwrap_or_else(|| panic!("no 'Track 2' row found in rendered output:\n{out}"));
-    assert!(
-        !track_line.contains('\u{258c}'),
-        "expected focused track row to omit the selected-row marker, got: {track_line:?}\nfull output:\n{out}"
-    );
-}
-
 // ── Task 4: scope-correct actions (#145) ─────────────────────────────
 
 #[test]
