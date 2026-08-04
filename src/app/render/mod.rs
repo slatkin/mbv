@@ -39,11 +39,11 @@ mod visualizer;
 pub(super) use album_plan::sorted_group_album_order;
 use chrome::LIST_PLAY_ICON;
 use power_widgets::{
-    power_content_width, power_right_panel_content_area, render_pill_bar,
-    render_power_count_label, render_power_placeholder, render_power_queue_panel_frame,
-    render_power_right_scrollbar, render_power_right_scrollbar_with_viewport,
-    render_power_scrollbar, render_selected_block_background, render_selected_block_borders,
-    selection_marker, PillBar, COLUMN_GAP, MUSIC_ALBUM_IMAGE_TYPES, POWER_RENDER_FILTER,
+    power_content_width, power_right_panel_content_area, render_pill_bar, render_power_count_label,
+    render_power_placeholder, render_power_queue_panel_frame, render_power_right_scrollbar,
+    render_power_right_scrollbar_with_viewport, render_power_scrollbar,
+    render_selected_block_background, render_selected_block_borders, selection_marker, PillBar,
+    COLUMN_GAP, MUSIC_ALBUM_IMAGE_TYPES, POWER_RENDER_FILTER,
 };
 pub(super) use sort_filter::{
     effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,

@@ -204,7 +204,9 @@ pub(super) enum QueueRow {
 
 /// Build the flat visual rows for the queue: one `Track` row per item, in order.
 pub(super) fn build_queue_rows(items: &[MediaItem]) -> Vec<QueueRow> {
-    (0..items.len()).map(|idx| QueueRow::Track { idx }).collect()
+    (0..items.len())
+        .map(|idx| QueueRow::Track { idx })
+        .collect()
 }
 
 #[cfg(test)]
