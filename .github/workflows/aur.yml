@@ -26,7 +26,7 @@ jobs:
     # a reproducible pacman/makepkg/git toolchain.
     container: archlinux/archlinux:base-devel-20260801.0.566255
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - uses: actions/checkout@v7
@@ -70,13 +70,25 @@ jobs:
           test -s "/tmp/release/mbv-${VERSION}-linux-x86_64.tar.gz"
           echo "Downloaded release asset for ${TAG}"
 
-      - name: Regenerate PKGBUILD
+      - name: Commit updated PKGBUILD to main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           SHA256=$(sha256sum "/tmp/release/mbv-${VERSION}-linux-x86_64.tar.gz" | cut -d' ' -f1)
           sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
           sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
           echo "Regenerated PKGBUILD: pkgver=${VERSION} sha256sums=('${SHA256}')"
+          git config user.name "mbv release"
+          git config user.email "github@poo.town"
+          git add PKGBUILD
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update PKGBUILD to v${VERSION}"
+            git push origin HEAD:main
+          else
+            echo "PKGBUILD already up to date"
+          fi
 
       - name: Publish to AUR
         env:
