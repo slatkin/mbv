@@ -8,7 +8,6 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
-use unicode_width::UnicodeWidthStr;
 
 const INLINE_ALBUM_TITLE_EXTRA_INDENT: u16 = 1;
 const INLINE_ALBUM_TRACK_EXTRA_INDENT: u16 = 2;

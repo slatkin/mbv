@@ -8,6 +8,7 @@ use ratatui::Frame;
 pub(super) const VISUALIZER_HEIGHT: u16 = 11;
 
 impl App {
+    #[cfg(test)]
     pub(super) fn split_visualizer_area(&self, area: Rect) -> (Rect, Rect) {
         if !self.visualizer_enabled || area.height < 3 {
             return (area, Rect::default());
