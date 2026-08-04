@@ -209,6 +209,37 @@ fn teardown_skips_persistence_for_an_explicit_remote_daemon_launch() {
 }
 
 #[test]
+fn teardown_retires_remote_tracking_owned_state() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.connected_session_id = Some("session".into());
+    app.remote_tracker = Some(
+        mbv_core::remote_reconciliation::ReconciliationTracker::new(
+            "session",
+            vec![
+                mbv_core::remote_reconciliation::SubmittedOccurrence::new(1, "a"),
+                mbv_core::remote_reconciliation::SubmittedOccurrence::new(2, "b"),
+            ],
+            0,
+            0,
+        )
+        .unwrap(),
+    );
+    app.remote_unresolved_outcomes = 4;
+    app.remote_reanchor_popup = Some(super::types_playback::RemoteReanchorPopup {
+        targets: vec![(0, "a".into())],
+        cursor: 0,
+    });
+
+    app.teardown(Duration::from_secs(1));
+
+    assert!(app.remote_tracker.is_none());
+    assert!(app.remote_queue_projection.is_none());
+    assert!(app.remote_reanchor_popup.is_none());
+    assert_eq!(app.remote_unresolved_outcomes, 0);
+}
+
+#[test]
 fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
     let _guard = crate::config::TestStateDirGuard::new();
     let old_items = make_items(1);

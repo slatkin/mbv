@@ -11,7 +11,6 @@ pub(super) enum ConfirmAction {
     SaveOverwritePlaylist { existing_id: String, name: String },
     DiscardOrSaveDirtyPlaylist,
     DeletePlaylist { id: String, name: String },
-    StopTrackingForQueueEdit,
 }
 
 /// State for the shared confirmation-modal overlay: a centered, bordered

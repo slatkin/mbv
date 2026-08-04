@@ -1,4 +1,5 @@
 use super::App;
+use std::time::{Duration, Instant};
 
 impl App {
     /// `q` (and every keyboard/mouse path that routes here). Always a real
@@ -15,9 +16,21 @@ impl App {
         if self.queue_dirty && self.queue_is_saved_playlist() {
             let save_on_quit = self.client.lock().unwrap().config.save_playlist_on_quit;
             if save_on_quit {
-                // non-blocking: enqueues save in a spawned thread, does not block quit
+                let playlist_id = self.queue_playlist_id().map(str::to_string);
                 self.save_playlist_to_emby();
-                self.queue_dirty = false;
+                if let Some(playlist_id) = playlist_id {
+                    let deadline = Instant::now()
+                        + Duration::from_secs(self.client.lock().unwrap().config.quit_timeout_secs);
+                    while self.playlist_mutations.contains_key(&playlist_id)
+                        && Instant::now() < deadline
+                    {
+                        let remaining = deadline.saturating_duration_since(Instant::now());
+                        match self.sessions_rx.recv_timeout(remaining) {
+                            Ok(event) => self.handle_session_event(event),
+                            Err(_) => break,
+                        }
+                    }
+                }
             } else {
                 self.on_queue_replace_silent();
             }

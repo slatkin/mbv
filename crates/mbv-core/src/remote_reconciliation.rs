@@ -5,11 +5,13 @@
 //! observations, and mbv-issued intents into bounded, occurrence-aware effects.
 
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub type OccurrenceId = u64;
 
 const POSITION_JITTER_TICKS: i64 = 3 * crate::api::TICKS_PER_SECOND;
 const EXPECTED_TRANSITION_TTL_MS: u64 = 15_000;
+static NEXT_TRACKING_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SequenceSource {
@@ -24,6 +26,15 @@ pub struct SubmittedOccurrence {
     pub playlist_item_id: Option<String>,
     pub source: Option<SequenceSource>,
     pub runtime_ticks: i64,
+}
+
+impl SubmittedOccurrence {
+    pub fn playlist_id(&self) -> Option<&str> {
+        match self.source.as_ref() {
+            Some(SequenceSource::Playlist { id }) => Some(id),
+            _ => None,
+        }
+    }
 }
 
 impl SubmittedOccurrence {
@@ -125,10 +136,10 @@ impl RemoteObservation {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RemoteIntent {
-    Submit { target: usize },
-    Next { target: usize },
-    Previous { target: usize },
-    Select { target: usize },
+    Submit { target: OccurrenceId },
+    Next { target: OccurrenceId },
+    Previous { target: OccurrenceId },
+    Select { target: OccurrenceId },
     Restart,
     Seek,
     Stop,
@@ -156,6 +167,7 @@ pub enum ReconciliationEffect {
 
 #[derive(Clone, Debug)]
 pub struct ReconciliationTracker {
+    tracking_id: u64,
     session_id: String,
     submitted: Vec<SubmittedOccurrence>,
     state: TrackingState,
@@ -163,7 +175,7 @@ pub struct ReconciliationTracker {
     candidates: Vec<usize>,
     epoch: u64,
     next_generation: u64,
-    command_generation: Option<u64>,
+    active_command_generation: Option<u64>,
     last_generation: Option<u64>,
     previous_observation: Option<RemoteObservation>,
     current_observation: Option<RemoteObservation>,
@@ -184,7 +196,9 @@ impl ReconciliationTracker {
         if submitted.len() < 2 || start >= submitted.len() {
             return None;
         }
+        let start_occurrence_id = submitted[start].occurrence_id;
         Some(Self {
+            tracking_id: NEXT_TRACKING_ID.fetch_add(1, Ordering::Relaxed),
             session_id: session_id.into(),
             submitted,
             state: TrackingState::Starting,
@@ -192,12 +206,14 @@ impl ReconciliationTracker {
             candidates: vec![start],
             epoch: 0,
             next_generation: 1,
-            command_generation: None,
+            active_command_generation: None,
             last_generation: None,
             previous_observation: None,
             current_observation: None,
             expected: Some(ExpectedTransition {
-                intent: RemoteIntent::Submit { target: start },
+                intent: RemoteIntent::Submit {
+                    target: start_occurrence_id,
+                },
                 source: None,
                 epoch: 0,
                 deadline_ms: now_ms.saturating_add(EXPECTED_TRANSITION_TTL_MS),
@@ -211,6 +227,13 @@ impl ReconciliationTracker {
 
     pub fn session_id(&self) -> &str {
         &self.session_id
+    }
+
+    /// Process-local identity for this tracker lifetime. It deliberately does
+    /// not reuse the Emby session ID or the tracker epoch: a replacement
+    /// tracker for the same session must not accept old asynchronous results.
+    pub fn tracking_id(&self) -> u64 {
+        self.tracking_id
     }
 
     pub fn submitted(&self) -> &[SubmittedOccurrence] {
@@ -326,13 +349,35 @@ impl ReconciliationTracker {
         generation
     }
 
-    /// Associate the current reconciliation-affecting command with this tracker.
+    /// Correlate the current reconciliation-affecting command with this
+    /// tracker. Starting a newer tracked command supersedes any prior pending
+    /// command correlation, so a late observation or acknowledgment for an
+    /// older command can never confirm, contradict, or clear the current
+    /// Expected transition.
     pub fn track_command_generation(&mut self, generation: u64) {
-        self.command_generation = Some(generation);
+        if !self.active {
+            return;
+        }
+        self.active_command_generation = Some(generation);
     }
 
     pub fn command_generation_matches(&self, generation: u64) -> bool {
-        self.command_generation == Some(generation)
+        self.active_command_generation == Some(generation)
+    }
+
+    /// A successful remote command is acknowledged independently of its
+    /// post-command session poll. This retires the pending command
+    /// correlation and advances the causal boundary so ordinary polls issued
+    /// after the command reached Emby are eligible to confirm or reconcile the
+    /// Expected transition, even when the immediate follow-up poll failed.
+    /// Acknowledging a generation other than the active one is stale and inert.
+    pub fn acknowledge_command(&mut self, generation: u64) -> Vec<ReconciliationEffect> {
+        if !self.active || self.active_command_generation != Some(generation) {
+            return vec![];
+        }
+        self.active_command_generation = None;
+        self.last_generation = Some(generation.saturating_sub(1));
+        vec![]
     }
 
     /// Reject observations from polls issued before this causal boundary.
@@ -352,7 +397,12 @@ impl ReconciliationTracker {
             | RemoteIntent::Select { target } => Some(target),
             RemoteIntent::Restart | RemoteIntent::Seek | RemoteIntent::Stop => None,
         };
-        if target.is_some_and(|idx| idx >= self.submitted.len()) {
+        if target.is_some_and(|occurrence_id| {
+            !self
+                .submitted
+                .iter()
+                .any(|occurrence| occurrence.occurrence_id == occurrence_id)
+        }) {
             return;
         }
         self.expected = Some(ExpectedTransition {
@@ -368,12 +418,14 @@ impl ReconciliationTracker {
             return vec![];
         }
         self.active = false;
+        self.active_command_generation = None;
         self.expected = None;
         self.set_state(TrackingState::Invalid, TrackingReason::CommandFailed)
     }
 
     pub fn stop_tracking(&mut self) {
         self.active = false;
+        self.active_command_generation = None;
         self.expected = None;
     }
 
@@ -404,15 +456,34 @@ impl ReconciliationTracker {
     }
 
     pub fn observe(&mut self, observation: RemoteObservation) -> Vec<ReconciliationEffect> {
+        let is_command_observation = self.active_command_generation == Some(observation.generation);
         if !self.active
             || observation.session_id != self.session_id
-            || self
-                .last_generation
-                .is_some_and(|generation| observation.generation <= generation)
+            || (!is_command_observation
+                && self
+                    .last_generation
+                    .is_some_and(|generation| observation.generation <= generation))
         {
             return vec![];
         }
-        self.last_generation = Some(observation.generation);
+        // A poll racing a command is not authoritative for the command's
+        // expected transition. Keep the expected state and observations
+        // intact until the command is acknowledged and a post-command
+        // observation becomes eligible.
+        if self.expected.is_some()
+            && !is_command_observation
+            && self.active_command_generation.is_some()
+        {
+            return vec![];
+        }
+        self.last_generation = Some(
+            self.last_generation
+                .unwrap_or_default()
+                .max(observation.generation),
+        );
+        if is_command_observation {
+            self.active_command_generation = None;
+        }
         self.previous_observation = self.current_observation.take();
         self.current_observation = Some(observation.clone());
 
@@ -469,6 +540,7 @@ impl ReconciliationTracker {
         self.epoch = self.epoch.saturating_add(1);
         self.candidates = vec![occurrence_index];
         self.expected = None;
+        self.active_command_generation = None;
         self.set_state(TrackingState::Tracking, TrackingReason::Reanchored)
     }
 
@@ -479,6 +551,13 @@ impl ReconciliationTracker {
         let target = match expected.intent {
             RemoteIntent::Submit { target } => target,
             _ => return vec![],
+        };
+        let Some(target) = self
+            .submitted
+            .iter()
+            .position(|occurrence| occurrence.occurrence_id == target)
+        else {
+            return vec![];
         };
         if observation.media_id.as_deref() == Some(self.submitted[target].media_id.as_str()) {
             self.expected = None;
@@ -582,33 +661,52 @@ impl ReconciliationTracker {
         let media_id = observation.media_id.as_deref().unwrap_or_default();
         let expected = self.expected.clone();
         if let Some(expected) = expected {
+            let mut target_ambiguity_retained = false;
             if let Some(target) = Self::intent_target(&expected.intent) {
+                let Some(target) = self
+                    .submitted
+                    .iter()
+                    .position(|occurrence| occurrence.occurrence_id == target)
+                else {
+                    return vec![];
+                };
                 if self.submitted[target].media_id == media_id {
-                    self.expected = None;
-                    let non_adjacent =
-                        self.candidates.len() == 1 && target.abs_diff(self.candidates[0]) > 1;
-                    self.candidates = vec![target];
-                    if non_adjacent {
-                        self.epoch = self.epoch.saturating_add(1);
+                    if self.expected_move_provable(&expected, target) {
+                        self.expected = None;
+                        let non_adjacent =
+                            self.candidates.len() == 1 && target.abs_diff(self.candidates[0]) > 1;
+                        self.candidates = vec![target];
+                        if non_adjacent {
+                            self.epoch = self.epoch.saturating_add(1);
+                        }
+                        let mut effects = vec![ReconciliationEffect::ExpectedConfirmed];
+                        effects.extend(
+                            self.set_state(TrackingState::Tracking, TrackingReason::Confirmed),
+                        );
+                        return effects;
                     }
-                    let mut effects = vec![ReconciliationEffect::ExpectedConfirmed];
-                    effects
-                        .extend(self.set_state(TrackingState::Tracking, TrackingReason::Confirmed));
-                    return effects;
+                    // A target that is a duplicate of the source media cannot
+                    // be proven from an observation alone. Keep the Expected
+                    // transition pending so a stale observation cannot confirm
+                    // or contradict it, and never complete an occurrence that
+                    // was not uniquely observed.
+                    target_ambiguity_retained = true;
                 }
             }
-            if matches!(expected.intent, RemoteIntent::Restart | RemoteIntent::Seek)
-                && self
-                    .candidates
-                    .iter()
-                    .any(|&idx| self.submitted[idx].media_id == media_id)
-            {
+            if !target_ambiguity_retained {
+                if matches!(expected.intent, RemoteIntent::Restart | RemoteIntent::Seek)
+                    && self
+                        .candidates
+                        .iter()
+                        .any(|&idx| self.submitted[idx].media_id == media_id)
+                {
+                    self.expected = None;
+                    return vec![ReconciliationEffect::ExpectedConfirmed];
+                }
+                // An incompatible live command is evidence of contradiction, not
+                // proof that playback is invalid. Reconcile it as unprompted.
                 self.expected = None;
-                return vec![ReconciliationEffect::ExpectedConfirmed];
             }
-            // An incompatible live command is evidence of contradiction, not
-            // proof that playback is invalid. Reconcile it as unprompted.
-            self.expected = None;
         }
 
         let mut next_candidates = Vec::new();
@@ -693,6 +791,24 @@ impl ReconciliationTracker {
             > POSITION_JITTER_TICKS
     }
 
+    /// Whether an Expected move onto `target` can be confirmed from the
+    /// observed media alone. Duplicate source/target media cannot prove an
+    /// occurrence transition from observation alone: a target that shares the
+    /// source's media identity must stay pending rather than be confirmed (or
+    /// later completed) for an occurrence that was never uniquely observed.
+    fn expected_move_provable(&self, expected: &ExpectedTransition, target: usize) -> bool {
+        match expected.source {
+            Some(source) => {
+                source == target
+                    || self.submitted[source].media_id != self.submitted[target].media_id
+            }
+            None => !self.candidates.iter().any(|&candidate| {
+                candidate != target
+                    && self.submitted[candidate].media_id == self.submitted[target].media_id
+            }),
+        }
+    }
+
     fn maybe_complete_prior(&mut self) -> Vec<ReconciliationEffect> {
         let Some(previous) = self.previous_observation.as_ref() else {
             return vec![];
@@ -722,7 +838,7 @@ impl ReconciliationTracker {
         (self.candidates.len() == 1).then_some(self.candidates[0])
     }
 
-    fn intent_target(intent: &RemoteIntent) -> Option<usize> {
+    fn intent_target(intent: &RemoteIntent) -> Option<OccurrenceId> {
         match intent {
             RemoteIntent::Submit { target }
             | RemoteIntent::Next { target }

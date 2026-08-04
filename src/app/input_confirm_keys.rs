@@ -74,6 +74,7 @@ impl App {
                             if self.local_queue_metadata_applies(scope) {
                                 self.queue_dirty = true;
                             }
+                            self.retire_remote_tracking_after_queue_mutation();
                         }
                     }
                 }
@@ -120,13 +121,10 @@ impl App {
                     KeyCode::Char('s') | KeyCode::Char('S') => {
                         self.confirm_modal = None;
                         self.save_playlist_to_emby();
-                        if let Some(action) = self.pending_queue_action.take() {
-                            self.execute_pending_queue_action(action);
-                        }
-                        if play_after {
-                            self.show_playlists = false;
-                            self.set_panel_focus(PanelFocus::Queue);
-                        }
+                        // Keep the replacement queued until the coordinator
+                        // reports that this save crossed its mutation boundary.
+                        // Starting it here could snapshot/recreate the same
+                        // playlist before the save has executed.
                     }
                     KeyCode::Char('d') | KeyCode::Char('D') => {
                         self.confirm_modal = None;
@@ -145,17 +143,6 @@ impl App {
                     _ => {}
                 }
             }
-            ConfirmAction::StopTrackingForQueueEdit => match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
-                    self.confirm_modal = None;
-                    self.apply_pending_tracking_edit();
-                }
-                KeyCode::Esc => {
-                    self.confirm_modal = None;
-                    self.pending_tracking_edit = None;
-                }
-                _ => {}
-            },
         }
         Some(false)
     }

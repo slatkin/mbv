@@ -105,6 +105,7 @@ pub(super) enum LibEvent {
 
 pub(super) struct ReconciliationCommand {
     pub(super) session_id: String,
+    pub(super) tracking_id: u64,
     pub(super) tracker_epoch: u64,
     pub(super) generation: u64,
 }
@@ -119,19 +120,56 @@ pub(super) enum SessionEvent {
         error: String,
         reconciliation: Option<ReconciliationCommand>,
     },
+    /// A tracked remote command succeeded on the Emby server, correlated
+    /// separately from the follow-up session poll. Emitted even when that
+    /// immediate poll fails, so command acknowledgment never freezes tracking.
+    CommandAcknowledged(ReconciliationCommand),
     ConsumeValidated {
+        mutation_id: u64,
+        operation_id: u64,
+        tracking_id: u64,
         session_id: String,
         epoch: u64,
         occurrence_id: u64,
         playlist_id: String,
         entry_id: String,
-        result: Result<(), String>,
+        media_id: String,
+        result: Result<bool, String>,
     },
     ConsumeOutcome {
+        mutation_id: u64,
+        operation_id: u64,
+        tracking_id: u64,
         session_id: String,
         epoch: u64,
         occurrence_id: u64,
+        playlist_id: String,
+        entry_id: String,
+        media_id: String,
         result: Result<(), String>,
+    },
+    PlaylistMutationComplete {
+        mutation_id: u64,
+        playlist_id: String,
+        queue_lineage: u64,
+        source_playlist_id: String,
+        result: Result<(), String>,
+    },
+    PlaylistReplacementComplete {
+        mutation_id: u64,
+        playlist_id: String,
+        queue_lineage: u64,
+        source_playlist_id: String,
+        name: String,
+        result: Result<String, String>,
+    },
+    PlaylistCreateComplete {
+        mutation_id: u64,
+        coordinator_key: String,
+        name: String,
+        queue_lineage: u64,
+        source_playlist_id: Option<String>,
+        result: Result<String, String>,
     },
     Error(String),
 }

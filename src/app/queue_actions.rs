@@ -1,52 +1,23 @@
+use super::types_playback::PlaylistMutation;
 use super::ui_util::is_playable;
 use super::{
-    App, ConfirmAction, ConfirmModal, LibEvent, PendingQueueAction, PendingTrackingEdit,
-    QueueScope, UndoEntry,
+    App, ConfirmAction, ConfirmModal, LibEvent, PendingQueueAction, QueueScope, SessionEvent,
+    UndoEntry,
 };
 use mbv_core::api::MediaItem;
 use mbv_core::player::PlayerCommand;
 use std::sync::Arc;
 
 impl App {
-    pub(super) fn guard_tracking_edit(&mut self, edit: PendingTrackingEdit) -> bool {
-        if self.remote_tracker.is_none() || self.tracking_edit_warning_shown {
-            return true;
-        }
-        self.pending_tracking_edit = Some(edit);
-        self.confirm_modal = Some(ConfirmModal {
-            title: " Stop Remote Tracking? ".into(),
-            message: "This queue edit will stop remote playback tracking.".into(),
-            hint: "[y] Confirm    [Esc] Cancel".into(),
-            on_confirm: ConfirmAction::StopTrackingForQueueEdit,
-        });
-        false
+    fn retire_tracking_after_queue_mutation(&mut self) {
+        self.retire_remote_tracking(true);
     }
 
-    pub(super) fn apply_pending_tracking_edit(&mut self) {
-        self.remote_tracker = None;
-        self.tracking_edit_warning_shown = true;
-        let Some(edit) = self.pending_tracking_edit.take() else {
-            return;
-        };
-        match edit {
-            PendingTrackingEdit::ClearQueue => {
-                self.execute_pending_queue_action(PendingQueueAction::ClearQueue)
-            }
-            PendingTrackingEdit::Remove(pos) => self.remove_from_queue(pos),
-            PendingTrackingEdit::Move(delta) => self.move_queue_item_by(delta),
-            PendingTrackingEdit::Undo(scope) => self.undo_last_queue_edit(scope),
-            PendingTrackingEdit::EnqueueSelected => self.enqueue_selected(),
-            PendingTrackingEdit::EnqueueFolder(item) => self.do_enqueue_folder(*item),
-            PendingTrackingEdit::EnqueueArtistHeader { lib_idx, selection } => {
-                self.enqueue_artist_header_selection(lib_idx, &selection);
-            }
-        }
+    pub(super) fn retire_remote_tracking_after_queue_mutation(&mut self) {
+        self.retire_tracking_after_queue_mutation();
     }
 
     pub(super) fn remove_from_queue(&mut self, pos: usize) {
-        if !self.guard_tracking_edit(PendingTrackingEdit::Remove(pos)) {
-            return;
-        }
         let scope = self.visible_queue_scope();
         let controls_playback_queue = self.queue_scope_is_playback(scope);
         let (active, current_idx) = {
@@ -96,6 +67,7 @@ impl App {
             queue.queue_cursor = cursor_before - 1;
         }
         queue.clamp_cursor();
+        self.retire_tracking_after_queue_mutation();
     }
 
     /// Moves the item at the displayed queue's cursor one position earlier.
@@ -111,9 +83,6 @@ impl App {
     }
 
     fn move_queue_item_by(&mut self, delta: isize) {
-        if !self.guard_tracking_edit(PendingTrackingEdit::Move(delta)) {
-            return;
-        }
         let scope = self.visible_queue_scope();
         let queue = self.queue_for_scope(scope);
         let from = queue.queue_cursor;
@@ -134,6 +103,7 @@ impl App {
             return;
         };
         if self.apply_queue_move_by_slot(scope, slot_id, from, to) {
+            self.retire_tracking_after_queue_mutation();
             if scope == QueueScope::Remote {
                 self.pending_remote_move_cursor = Some(to);
             }
@@ -204,9 +174,6 @@ impl App {
     /// re-inserting a removed item, or swapping a moved item back to where it
     /// came from. No-op if the undo stack for that scope is empty.
     pub(super) fn undo_last_queue_edit(&mut self, scope: QueueScope) {
-        if !self.guard_tracking_edit(PendingTrackingEdit::Undo(scope)) {
-            return;
-        }
         let Some(entry) = self.undo_stack_for_scope_mut(scope).pop() else {
             return;
         };
@@ -219,6 +186,7 @@ impl App {
                     self.queue_dirty = true;
                 }
                 self.persist_local_queue_state_if_needed(scope);
+                self.retire_tracking_after_queue_mutation();
             }
             UndoEntry::Move { from, to, slot_id } => {
                 let still_in_place = self.queue_for_scope(scope).slot_id_matches_at(to, slot_id);
@@ -226,6 +194,7 @@ impl App {
                     self.flash_status_high("Can't undo move: queue changed since then".into());
                     return;
                 }
+                self.retire_tracking_after_queue_mutation();
             }
         }
         self.set_queue_scope(scope);
@@ -255,11 +224,6 @@ impl App {
     }
 
     pub(super) fn execute_pending_queue_action(&mut self, action: PendingQueueAction) {
-        if matches!(&action, PendingQueueAction::ClearQueue)
-            && !self.guard_tracking_edit(PendingTrackingEdit::ClearQueue)
-        {
-            return;
-        }
         if self.action_touches_local_queue(&action) {
             self.queue_dirty = false;
         }
@@ -304,12 +268,13 @@ impl App {
             }
             PendingQueueAction::ClearQueue => {
                 let scope = self.visible_queue_scope();
+                let had_items = !self.queue_for_scope(scope).items.is_empty();
                 if self.local_queue_metadata_applies(scope) {
                     self.clear_local_queue_metadata();
                 } else {
                     self.remote_queue_undo_stack.clear();
                 }
-                if scope == QueueScope::Remote {
+                if scope == QueueScope::Remote && had_items {
                     self.replace_direct_remote_queue(Vec::new(), 0);
                 } else if self.queue_scope_is_playback(scope) {
                     self.player.stop();
@@ -323,6 +288,9 @@ impl App {
                 if scope != QueueScope::Remote {
                     let queue = self.queue_for_scope_mut(scope);
                     queue.clear();
+                }
+                if had_items {
+                    self.retire_tracking_after_queue_mutation();
                 }
                 if self.local_queue_metadata_applies(scope) {
                     self.save_queue_state_after_explicit_clear();
@@ -339,7 +307,7 @@ impl App {
         )
     }
 
-    fn queue_playlist_id(&self) -> Option<&str> {
+    pub(super) fn queue_playlist_id(&self) -> Option<&str> {
         if let crate::config::QueueSource::Playlist {
             id: Some(ref id), ..
         } = self.queue_source
@@ -358,18 +326,354 @@ impl App {
         }
     }
 
-    pub(super) fn save_playlist_to_emby(&self) {
+    pub(super) fn save_playlist_to_emby(&mut self) {
         let Some(playlist_id) = self.queue_playlist_id() else {
             return;
         };
-        let item_ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
-        let client = self.client.lock().unwrap().clone();
         let playlist_id = playlist_id.to_string();
-        std::thread::spawn(move || {
-            if let Err(e) = client.update_playlist_items(&playlist_id, &item_ids) {
-                log::error!(target: "playlist", "Failed to save playlist: {e}");
+        let mutation_id = self.next_playlist_mutation;
+        self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);
+        self.enqueue_playlist_mutation(
+            playlist_id.clone(),
+            PlaylistMutation::Save {
+                mutation_id,
+                queue_lineage: self.remote_queue_lineage,
+                source_playlist_id: playlist_id,
+                item_ids: None,
+            },
+        );
+    }
+
+    pub(super) fn save_queue_as_playlist(&mut self, name: String) {
+        let source_playlist_id = self.queue_playlist_id().map(str::to_string);
+        let queue_lineage = self.remote_queue_lineage;
+        let mutation_id = self.next_playlist_mutation;
+        self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);
+        let key = source_playlist_id
+            .clone()
+            .filter(|id| self.playlist_mutation_pending(id))
+            .unwrap_or_else(|| format!("create:{mutation_id}"));
+        self.enqueue_playlist_mutation(
+            key.clone(),
+            PlaylistMutation::CreateAs {
+                mutation_id,
+                coordinator_key: key,
+                name,
+                queue_lineage,
+                source_playlist_id,
+                item_ids: None,
+            },
+        );
+    }
+
+    fn playlist_mutation_pending(&self, playlist_id: &str) -> bool {
+        self.playlist_mutations
+            .get(playlist_id)
+            .is_some_and(|state| state.active.is_some() || !state.queued.is_empty())
+    }
+
+    /// Clears `playlist_item_id` from the local queue's items after a full
+    /// playlist update that recreates server entry identities. The local queue
+    /// is the queue whose items every full update (Save/Replace/CreateAs)
+    /// pushes to Emby, so those identities are invalidated whether or not
+    /// tracking is active.
+    pub(super) fn clear_local_playlist_entry_ids(&mut self) {
+        for item in &mut self.player_tab.items {
+            item.playlist_item_id.clear();
+        }
+        self.player_tab.sync_queue_model_from_items_if_needed();
+    }
+
+    pub(super) fn enqueue_playlist_mutation(
+        &mut self,
+        playlist_id: String,
+        mutation: PlaylistMutation,
+    ) {
+        let state = self
+            .playlist_mutations
+            .entry(playlist_id.clone())
+            .or_default();
+        if state.active.is_some() {
+            state.queued.push_back(mutation);
+        } else {
+            state.active = Some(mutation);
+            self.start_playlist_mutation(&playlist_id);
+        }
+    }
+
+    pub(super) fn finish_playlist_mutation(&mut self, playlist_id: &str, mutation_id: u64) {
+        let Some(state) = self.playlist_mutations.get_mut(playlist_id) else {
+            return;
+        };
+        if state.active.as_ref().map(PlaylistMutation::mutation_id) != Some(mutation_id) {
+            return;
+        }
+        state.active = None;
+        if let Some(next) = state.queued.pop_front() {
+            state.active = Some(next);
+            self.start_playlist_mutation(playlist_id);
+        } else {
+            self.playlist_mutations.remove(playlist_id);
+        }
+    }
+
+    pub(super) fn replace_active_playlist_mutation(
+        &mut self,
+        playlist_id: &str,
+        mutation_id: u64,
+        next: PlaylistMutation,
+    ) -> bool {
+        let Some(state) = self.playlist_mutations.get_mut(playlist_id) else {
+            return false;
+        };
+        if state.active.as_ref().map(PlaylistMutation::mutation_id) != Some(mutation_id) {
+            return false;
+        }
+        state.active = Some(next);
+        self.start_playlist_mutation(playlist_id);
+        true
+    }
+
+    fn start_playlist_mutation(&mut self, playlist_id: &str) {
+        let stale = self
+            .playlist_mutations
+            .get(playlist_id)
+            .and_then(|state| state.active.as_ref())
+            .is_some_and(|mutation| match mutation {
+                PlaylistMutation::Save {
+                    queue_lineage,
+                    source_playlist_id,
+                    ..
+                } => {
+                    *queue_lineage != self.remote_queue_lineage
+                        || self.queue_playlist_id() != Some(source_playlist_id.as_str())
+                }
+                PlaylistMutation::CreateAs {
+                    queue_lineage,
+                    source_playlist_id,
+                    ..
+                } => {
+                    *queue_lineage != self.remote_queue_lineage
+                        || self.queue_playlist_id() != source_playlist_id.as_deref()
+                }
+                PlaylistMutation::Replace { queue_lineage, .. } => {
+                    *queue_lineage != self.remote_queue_lineage
+                }
+                _ => false,
+            });
+        if stale {
+            log::debug!(target: "playlist", "discarding stale queued playlist mutation for {playlist_id}");
+            if let Some(mutation_id) = self
+                .playlist_mutations
+                .get(playlist_id)
+                .and_then(|state| state.active.as_ref())
+                .map(PlaylistMutation::mutation_id)
+            {
+                self.finish_playlist_mutation(playlist_id, mutation_id);
             }
-        });
+            return;
+        }
+        // Full updates (Save/Replace) recreate server playlist-entry IDs.
+        // Consume eligibility derived from the old IDs dies at this boundary,
+        // after earlier same-playlist mutations have completed, not when the
+        // user merely queues the update. A Replace genuinely replaces queue
+        // content/source and advances visible-queue lineage; a Save does not
+        // change queue slots, content, or source, so it must preserve the
+        // request lineage — otherwise its successful completion can never
+        // satisfy the original-lineage checks that clear dirty state and run
+        // an explicit save-before-replace continuation.
+        let is_full_update = self
+            .playlist_mutations
+            .get(playlist_id)
+            .and_then(|state| state.active.as_ref())
+            .is_some_and(|mutation| {
+                matches!(
+                    mutation,
+                    PlaylistMutation::Save { .. } | PlaylistMutation::Replace { .. }
+                )
+            });
+        if is_full_update {
+            let is_replace = self
+                .playlist_mutations
+                .get(playlist_id)
+                .and_then(|state| state.active.as_ref())
+                .is_some_and(|mutation| matches!(mutation, PlaylistMutation::Replace { .. }));
+            if self.remote_tracking_source_is(playlist_id) {
+                self.retire_remote_tracking(is_replace);
+            }
+            // A full update recreates entry identities for the playlist it
+            // targets. Only the current source's items carry those identities,
+            // so clear and persist them exactly when the update targets that
+            // source — and regardless of whether a tracker is active. An
+            // unrelated overwrite leaves the current source's identities valid
+            // until completion flips the source.
+            if self.queue_playlist_id() == Some(playlist_id) {
+                self.clear_local_playlist_entry_ids();
+                self.save_queue_state();
+            }
+        }
+        let Some(state) = self.playlist_mutations.get_mut(playlist_id) else {
+            return;
+        };
+        let Some(mutation) = state.active.as_mut() else {
+            return;
+        };
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.sessions_tx.clone();
+        let playlist_id = playlist_id.to_string();
+        let mutation_id = mutation.mutation_id();
+        match mutation {
+            PlaylistMutation::Save {
+                queue_lineage,
+                source_playlist_id,
+                item_ids,
+                ..
+            } => {
+                *item_ids = Some(self.player_tab.items.iter().map(|i| i.id.clone()).collect());
+                let ids = item_ids.clone().unwrap_or_default();
+                let queue_lineage = *queue_lineage;
+                let source_playlist_id = source_playlist_id.clone();
+                std::thread::spawn(move || {
+                    let result = client.update_playlist_items(&playlist_id, &ids);
+                    let _ = tx.send(SessionEvent::PlaylistMutationComplete {
+                        mutation_id,
+                        playlist_id,
+                        queue_lineage,
+                        source_playlist_id,
+                        result,
+                    });
+                });
+            }
+            PlaylistMutation::CreateAs {
+                name,
+                coordinator_key,
+                item_ids,
+                queue_lineage,
+                source_playlist_id,
+                ..
+            } => {
+                *item_ids = Some(self.player_tab.items.iter().map(|i| i.id.clone()).collect());
+                let ids = item_ids.clone().unwrap_or_default();
+                let name = name.clone();
+                let coordinator_key = coordinator_key.clone();
+                let source_playlist_id = source_playlist_id.clone();
+                let queue_lineage = *queue_lineage;
+                std::thread::spawn(move || {
+                    let result = client.create_playlist(&name, &ids);
+                    let _ = tx.send(SessionEvent::PlaylistCreateComplete {
+                        mutation_id,
+                        coordinator_key,
+                        name,
+                        queue_lineage,
+                        source_playlist_id,
+                        result,
+                    });
+                });
+            }
+            PlaylistMutation::Replace {
+                name,
+                queue_lineage,
+                source_playlist_id,
+                item_ids,
+                ..
+            } => {
+                *item_ids = Some(self.player_tab.items.iter().map(|i| i.id.clone()).collect());
+                let replacement_name = name.to_string();
+                let ids = item_ids.clone().unwrap_or_default();
+                let queue_lineage = *queue_lineage;
+                let source_playlist_id = source_playlist_id.clone();
+                std::thread::spawn(move || {
+                    let result = client
+                        .delete_playlist(&playlist_id)
+                        .and_then(|_| client.create_playlist(&replacement_name, &ids));
+                    let _ = tx.send(SessionEvent::PlaylistReplacementComplete {
+                        mutation_id,
+                        playlist_id,
+                        queue_lineage,
+                        source_playlist_id,
+                        name: replacement_name,
+                        result,
+                    });
+                });
+            }
+            PlaylistMutation::ConsumeValidate {
+                mutation_id,
+                operation_id,
+                session_id,
+                tracking_id,
+                epoch,
+                occurrence_id,
+                entry_id,
+                media_id,
+            } => {
+                let (mutation_id, operation_id, session_id, tracking_id, epoch, occurrence_id) = (
+                    *mutation_id,
+                    *operation_id,
+                    session_id.clone(),
+                    *tracking_id,
+                    *epoch,
+                    *occurrence_id,
+                );
+                let entry_id = entry_id.to_string();
+                let media_id = media_id.clone();
+                std::thread::spawn(move || {
+                    let result = client.get_playlist_items(&playlist_id).and_then(|items| {
+                        super::run_loop_events::validate_remote_playlist_entry(
+                            &items, &entry_id, &media_id,
+                        )
+                    });
+                    let _ = tx.send(SessionEvent::ConsumeValidated {
+                        mutation_id,
+                        operation_id,
+                        tracking_id,
+                        session_id,
+                        epoch,
+                        occurrence_id,
+                        playlist_id,
+                        entry_id,
+                        media_id,
+                        result,
+                    });
+                });
+            }
+            PlaylistMutation::ConsumeDelete {
+                mutation_id,
+                operation_id,
+                session_id,
+                tracking_id,
+                epoch,
+                occurrence_id,
+                entry_id,
+                media_id,
+                ..
+            } => {
+                let (mutation_id, operation_id, session_id, tracking_id, epoch, occurrence_id) = (
+                    *mutation_id,
+                    *operation_id,
+                    session_id.clone(),
+                    *tracking_id,
+                    *epoch,
+                    *occurrence_id,
+                );
+                let entry_id = entry_id.to_string();
+                let media_id = media_id.to_string();
+                std::thread::spawn(move || {
+                    let result = client.delete_playlist_entry(&playlist_id, &entry_id);
+                    let _ = tx.send(SessionEvent::ConsumeOutcome {
+                        mutation_id,
+                        operation_id,
+                        tracking_id,
+                        session_id,
+                        epoch,
+                        occurrence_id,
+                        playlist_id,
+                        entry_id,
+                        media_id,
+                        result,
+                    });
+                });
+            }
+        }
     }
 
     fn build_queue_state(&self) -> crate::config::QueueState {
@@ -427,6 +731,16 @@ impl App {
     fn save_queue_state_after_explicit_clear(&mut self) {
         self.save_queue_state();
         let state = self.build_queue_state();
+        self.persist_shared_queue_state(&state, true);
+    }
+
+    pub(super) fn save_queue_state_after_remote_projection(&mut self) {
+        let state = self.build_queue_state();
+        if state.items.is_empty() {
+            crate::config::clear_queue_state();
+        } else if let Err(e) = crate::config::save_queue_state(&state) {
+            log::warn!(target: "queue", "failed to save projected queue state: {e}");
+        }
         self.persist_shared_queue_state(&state, true);
     }
 
@@ -537,9 +851,6 @@ impl App {
     }
 
     pub(super) fn enqueue_selected(&mut self) {
-        if !self.guard_tracking_edit(PendingTrackingEdit::EnqueueSelected) {
-            return;
-        }
         if self.library_tab == 0 {
             let Some(item) = self.current_home_item() else {
                 return;
@@ -605,6 +916,7 @@ impl App {
         self.flash_status(format!("Added: {name}"));
         if self.sync_playback_queue_after_append(scope, vec![appended]) {
             self.persist_local_queue_state_if_needed(scope);
+            self.retire_tracking_after_queue_mutation();
         } else {
             self.queue_dirty = previous_dirty;
             *self.queue_for_scope_mut(scope) = previous_queue;

@@ -1,3 +1,4 @@
+use super::types_playback::{PlaylistMutation, RemoteConsumeOperation};
 use super::{App, SessionEvent, QUIT_REQUESTED};
 use mbv_core::remote_reconciliation::{ReconciliationEffect, RemoteObservation};
 use std::sync::atomic::Ordering;
@@ -58,23 +59,48 @@ impl App {
         }
     }
 
-    fn remote_playlist_id(&self) -> Option<String> {
-        match &self.queue_source {
-            crate::config::QueueSource::Playlist { id: Some(id), .. } => Some(id.clone()),
-            _ => None,
-        }
-    }
-
     fn unresolved_consume(&mut self, error: String) {
         self.remote_unresolved_outcomes = self.remote_unresolved_outcomes.saturating_add(1);
         log::warn!(target: "remote_reconciliation", "unresolved playlist consume: {error}");
+    }
+
+    fn apply_remote_consumed_occurrence(&mut self, operation: &RemoteConsumeOperation) {
+        let Some(slot_id) = operation.queue_slot_id else {
+            return;
+        };
+        if operation.queue_lineage != self.remote_queue_lineage {
+            return;
+        }
+
+        self.player_tab.sync_queue_model_from_items_if_needed();
+        let selected_slot = self
+            .player_tab
+            .queue
+            .slots()
+            .get(self.player_tab.queue_cursor)
+            .map(|slot| slot.slot_id);
+        if !matches!(
+            self.player_tab.queue.consume_slot(slot_id),
+            mbv_core::playback_queue::QueueMutationResult::Applied(_)
+        ) {
+            return;
+        }
+        self.player_tab.sync_items_from_queue_model();
+        if let Some(index) =
+            selected_slot.and_then(|selected| self.player_tab.queue.slot_index(selected))
+        {
+            self.player_tab.queue_cursor = index;
+        }
+        // An attached session must still persist an intentionally empty queue;
+        // the ordinary empty-save guard protects unrelated remote-control UI.
+        self.save_queue_state_after_remote_projection();
     }
 
     fn begin_remote_consume(
         &mut self,
         occurrence: mbv_core::remote_reconciliation::SubmittedOccurrence,
     ) {
-        let Some(playlist_id) = self.remote_playlist_id() else {
+        let Some(playlist_id) = occurrence.playlist_id().map(str::to_string) else {
             return;
         };
         let is_audio = self
@@ -100,57 +126,58 @@ impl App {
         let Some(tracker) = self.remote_tracker.as_mut() else {
             return;
         };
+        if self.remote_consume_operations.len() >= 128 {
+            log::warn!(target: "remote_reconciliation", "consume operation limit reached; deferring new consume");
+            return;
+        }
         let session_id = tracker.session_id().to_string();
+        let tracking_id = tracker.tracking_id();
         let epoch = tracker.epoch();
         if !tracker.mark_consumed(occurrence.occurrence_id) {
             return;
         }
         let media_id = occurrence.media_id.clone();
-        let client = self.client.lock().unwrap().clone();
-        let tx = self.sessions_tx.clone();
         let occurrence_id = occurrence.occurrence_id;
-        std::thread::spawn(move || match client.get_playlist_items(&playlist_id) {
-            Ok(items) => match validate_remote_playlist_entry(&items, &entry_id, &media_id) {
-                Ok(false) => {
-                    let _ = tx.send(SessionEvent::ConsumeOutcome {
-                        session_id,
-                        epoch,
-                        occurrence_id,
-                        result: Ok(()),
-                    });
-                }
-                Err(error) => {
-                    let _ = tx.send(SessionEvent::ConsumeValidated {
-                        session_id,
-                        epoch,
-                        occurrence_id,
-                        playlist_id,
-                        entry_id,
-                        result: Err(error),
-                    });
-                }
-                Ok(true) => {
-                    let _ = tx.send(SessionEvent::ConsumeValidated {
-                        session_id,
-                        epoch,
-                        occurrence_id,
-                        playlist_id,
-                        entry_id,
-                        result: Ok(()),
-                    });
-                }
-            },
-            Err(error) => {
-                let _ = tx.send(SessionEvent::ConsumeValidated {
-                    session_id,
-                    epoch,
-                    occurrence_id,
-                    playlist_id,
-                    entry_id,
-                    result: Err(error),
-                });
-            }
+        let operation_id = self.next_remote_consume_operation;
+        self.next_remote_consume_operation = self.next_remote_consume_operation.saturating_add(1);
+        let mutation_id = self.next_playlist_mutation;
+        self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);
+        let queue_slot_id = self
+            .remote_queue_projection
+            .as_ref()
+            .and_then(|projection| {
+                (projection.session_id == session_id
+                    && projection.epoch == epoch
+                    && projection.queue_lineage == self.remote_queue_lineage)
+                    .then(|| projection.occurrence_slots.get(&occurrence_id).copied())
+                    .flatten()
+            });
+        self.remote_consume_operations.push(RemoteConsumeOperation {
+            operation_id,
+            mutation_id,
+            session_id: session_id.clone(),
+            tracking_id,
+            epoch,
+            occurrence_id,
+            playlist_id: playlist_id.clone(),
+            entry_id: entry_id.clone(),
+            media_id: media_id.clone(),
+            queue_slot_id,
+            queue_lineage: self.remote_queue_lineage,
         });
+        self.enqueue_playlist_mutation(
+            playlist_id,
+            PlaylistMutation::ConsumeValidate {
+                mutation_id,
+                operation_id,
+                session_id,
+                tracking_id,
+                epoch,
+                occurrence_id,
+                entry_id,
+                media_id,
+            },
+        );
     }
 
     /// Handle a single `SessionEvent` from the sessions-poll channel. Faithful
@@ -269,14 +296,10 @@ impl App {
                             self.remote_pos_at = now;
                         }
                         if item_changed {
-                            if self.remote_tracker.is_none() {
-                                if let Some(new_idx) =
-                                    s.now_playing_item_id.as_ref().and_then(|id| {
-                                        self.player_tab.items.iter().position(|it| &it.id == id)
-                                    })
-                                {
-                                    self.player_tab.queue_cursor = new_idx;
-                                }
+                            if let Some(new_idx) = s.now_playing_item_id.as_ref().and_then(|id| {
+                                self.player_tab.items.iter().position(|it| &it.id == id)
+                            }) {
+                                self.player_tab.queue_cursor = new_idx;
                             }
                             self.runtime_zero_since = None;
                         }
@@ -297,16 +320,24 @@ impl App {
                         }
                     } else {
                         self.session_miss_count += 1;
+                        // A poll gap means the connected session is not
+                        // currently observable, but the logical attachment is
+                        // still held (capable of observing a return), so
+                        // tracking suspends rather than staying confidently
+                        // current or retiring early. Only the three-miss
+                        // policy clears the attachment, and tracking retires
+                        // in that same transition (below).
+                        if let Some(tracker) = self.remote_tracker.as_mut() {
+                            tracker.session_disappeared();
+                        }
                         if self.session_miss_count >= 3 {
                             log::warn!(target: "sessions", "connected session gone; disconnecting");
-                            if let Some(tracker) = self.remote_tracker.as_mut() {
-                                tracker.session_disappeared();
-                            }
                             self.flash_status_high(
                                 "Remote session ended; disconnected".to_string(),
                             );
                             self.connected_session_id = None;
                             self.connected_session_state = None;
+                            self.retire_remote_tracking(false);
                             self.session_miss_count = 0;
                             self.remote_pos_s = 0;
                         } else {
@@ -320,6 +351,16 @@ impl App {
                     *slot = *fresh;
                 }
             }
+            SessionEvent::CommandAcknowledged(command) => {
+                if let Some(tracker) = self.remote_tracker.as_mut() {
+                    if tracker.session_id() == command.session_id
+                        && tracker.tracking_id() == command.tracking_id
+                        && tracker.epoch() == command.tracker_epoch
+                    {
+                        tracker.acknowledge_command(command.generation);
+                    }
+                }
+            }
             SessionEvent::CommandError {
                 error,
                 reconciliation,
@@ -328,57 +369,234 @@ impl App {
                     (reconciliation, self.remote_tracker.as_mut())
                 {
                     if tracker.session_id() == command.session_id
+                        && tracker.tracking_id() == command.tracking_id
                         && tracker.epoch() == command.tracker_epoch
                         && tracker.command_generation_matches(command.generation)
                     {
                         tracker.command_failed();
+                        self.retire_remote_tracking(false);
                     }
                 }
                 self.flash_status_high(format!("Remote command failed: {error}"));
             }
             SessionEvent::ConsumeValidated {
+                mutation_id,
+                operation_id,
+                tracking_id,
                 session_id,
                 epoch,
                 occurrence_id,
                 playlist_id,
                 entry_id,
+                media_id,
                 result,
-                ..
             } => {
+                let operation = self
+                    .remote_consume_operations
+                    .iter()
+                    .find(|op| {
+                        op.operation_id == operation_id
+                            && op.mutation_id == mutation_id
+                            && op.session_id == session_id
+                            && op.tracking_id == tracking_id
+                            && op.epoch == epoch
+                            && op.occurrence_id == occurrence_id
+                            && op.playlist_id == playlist_id
+                            && op.entry_id == entry_id
+                            && op.media_id == media_id
+                    })
+                    .cloned();
+                let Some(operation) = operation else {
+                    return;
+                };
                 if let Err(error) = result {
-                    self.unresolved_consume(error);
-                } else if self.remote_tracker.as_ref().is_some_and(|tracker| {
-                    tracker.session_id() == session_id
-                        && tracker.consume_pending(epoch, occurrence_id)
-                }) {
-                    let client = self.client.lock().unwrap().clone();
-                    let tx = self.sessions_tx.clone();
-                    std::thread::spawn(move || {
-                        let result = client.delete_playlist_entry(&playlist_id, &entry_id);
-                        let _ = tx.send(SessionEvent::ConsumeOutcome {
-                            session_id,
-                            epoch,
-                            occurrence_id,
-                            result,
-                        });
+                    if self.remote_tracker.as_ref().is_some_and(|tracker| {
+                        tracker.session_id() == operation.session_id
+                            && tracker.tracking_id() == operation.tracking_id
+                            && tracker.epoch() == operation.epoch
+                    }) {
+                        self.unresolved_consume(error);
+                    }
+                    self.remote_consume_operations
+                        .retain(|op| op.operation_id != operation.operation_id);
+                    self.finish_playlist_mutation(&operation.playlist_id, operation.mutation_id);
+                } else {
+                    log::debug!(
+                        target: "remote_reconciliation",
+                        "validated consume operation={} media={}",
+                        operation.operation_id,
+                        operation.media_id
+                    );
+                    let eligible = self.remote_tracker.as_ref().is_some_and(|tracker| {
+                        tracker.session_id() == session_id
+                            && tracker.tracking_id() == tracking_id
+                            && tracker.consume_pending(epoch, occurrence_id)
                     });
+                    if matches!(result, Ok(false)) {
+                        self.remote_consume_operations
+                            .retain(|op| op.operation_id != operation.operation_id);
+                        self.apply_remote_consumed_occurrence(&operation);
+                        self.finish_playlist_mutation(
+                            &operation.playlist_id,
+                            operation.mutation_id,
+                        );
+                    } else if !eligible {
+                        self.remote_consume_operations
+                            .retain(|op| op.operation_id != operation.operation_id);
+                        self.finish_playlist_mutation(
+                            &operation.playlist_id,
+                            operation.mutation_id,
+                        );
+                    } else {
+                        self.replace_active_playlist_mutation(
+                            &operation.playlist_id,
+                            operation.mutation_id,
+                            PlaylistMutation::ConsumeDelete {
+                                mutation_id: operation.mutation_id,
+                                operation_id: operation.operation_id,
+                                session_id: operation.session_id,
+                                tracking_id: operation.tracking_id,
+                                epoch: operation.epoch,
+                                occurrence_id: operation.occurrence_id,
+                                entry_id: operation.entry_id,
+                                media_id: operation.media_id,
+                            },
+                        );
+                    }
                 }
             }
             SessionEvent::ConsumeOutcome {
+                mutation_id,
+                operation_id,
+                tracking_id,
                 session_id,
                 epoch,
                 occurrence_id,
+                playlist_id,
+                entry_id,
+                media_id,
                 result,
             } => {
-                let current = self.remote_tracker.as_ref().is_some_and(|tracker| {
-                    tracker.session_id() == session_id
-                        && tracker.consume_pending(epoch, occurrence_id)
-                });
-                if current {
+                if let Some(index) = self.remote_consume_operations.iter().position(|op| {
+                    op.operation_id == operation_id
+                        && op.mutation_id == mutation_id
+                        && op.session_id == session_id
+                        && op.tracking_id == tracking_id
+                        && op.epoch == epoch
+                        && op.occurrence_id == occurrence_id
+                        && op.playlist_id == playlist_id
+                        && op.entry_id == entry_id
+                        && op.media_id == media_id
+                }) {
+                    let operation = self.remote_consume_operations.remove(index);
                     if let Err(error) = result {
-                        self.unresolved_consume(error);
+                        if self.remote_tracker.as_ref().is_some_and(|tracker| {
+                            tracker.session_id() == session_id
+                                && tracker.tracking_id() == tracking_id
+                                && tracker.epoch() == epoch
+                        }) {
+                            self.unresolved_consume(error);
+                        }
+                    } else {
+                        self.apply_remote_consumed_occurrence(&operation);
+                    }
+                    self.finish_playlist_mutation(&operation.playlist_id, operation.mutation_id);
+                }
+            }
+            SessionEvent::PlaylistMutationComplete {
+                mutation_id,
+                playlist_id,
+                queue_lineage,
+                source_playlist_id,
+                result,
+            } => {
+                let succeeded = result.is_ok();
+                if let Err(error) = result {
+                    self.flash_status_high(format!("Playlist save failed: {error}"));
+                } else if queue_lineage == self.remote_queue_lineage
+                    && self.queue_playlist_id() == Some(source_playlist_id.as_str())
+                {
+                    self.queue_dirty = false;
+                    // A successful Save recreated server entry identities
+                    // (cleared locally at the mutation boundary); persist that
+                    // cleared state so stale identities cannot survive restart.
+                    self.save_queue_state();
+                }
+                self.finish_playlist_mutation(&playlist_id, mutation_id);
+                if succeeded
+                    && queue_lineage == self.remote_queue_lineage
+                    && self.queue_playlist_id() == Some(playlist_id.as_str())
+                    && self.pending_queue_action.is_some()
+                {
+                    if let Some(action) = self.pending_queue_action.take() {
+                        self.execute_pending_queue_action(action);
+                    }
+                    self.show_playlists = false;
+                    self.set_panel_focus(super::PanelFocus::Queue);
+                }
+            }
+            SessionEvent::PlaylistReplacementComplete {
+                mutation_id,
+                playlist_id,
+                queue_lineage,
+                source_playlist_id,
+                name,
+                result,
+            } => {
+                match result {
+                    Ok(id) if queue_lineage == self.remote_queue_lineage => {
+                        if self.remote_tracking_source_is(&source_playlist_id) {
+                            self.retire_remote_tracking(true);
+                        }
+                        self.queue_source =
+                            crate::config::QueueSource::Playlist { id: Some(id), name };
+                        self.queue_dirty = false;
+                        // The queue now identifies the replacement playlist; its
+                        // items must not retain entry identities from a previously
+                        // current source. Persist before reporting the overwrite
+                        // clean so stale identities cannot survive restart.
+                        self.clear_local_playlist_entry_ids();
+                        self.save_queue_state();
+                    }
+                    Ok(_) => {
+                        log::debug!(target: "playlist", "discarding stale playlist replacement completion")
+                    }
+                    Err(error) => {
+                        self.flash_status_high(format!("Playlist overwrite failed: {error}"))
                     }
                 }
+                self.finish_playlist_mutation(&playlist_id, mutation_id);
+            }
+            SessionEvent::PlaylistCreateComplete {
+                mutation_id,
+                coordinator_key,
+                name,
+                queue_lineage,
+                source_playlist_id,
+                result,
+            } => {
+                match result {
+                    Ok(id)
+                        if queue_lineage == self.remote_queue_lineage
+                            && self.queue_playlist_id() == source_playlist_id.as_deref() =>
+                    {
+                        self.queue_source = crate::config::QueueSource::Playlist {
+                            id: Some(id),
+                            name: name.clone(),
+                        };
+                        self.queue_dirty = false;
+                        // The new source must never retain entry identities
+                        // from the old playlist.
+                        self.clear_local_playlist_entry_ids();
+                        self.save_queue_state();
+                        self.flash_status(format!("Saved as playlist \"{name}\""));
+                    }
+                    Ok(_) => {
+                        log::debug!(target: "playlist", "discarding stale Save As completion");
+                    }
+                    Err(error) => self.flash_status_high(format!("Playlist save failed: {error}")),
+                }
+                self.finish_playlist_mutation(&coordinator_key, mutation_id);
             }
             SessionEvent::Error(e) => {
                 self.sessions_loading = false;
@@ -438,6 +656,11 @@ impl App {
 
     pub(super) fn teardown(&mut self, quit_timeout: Duration) {
         self.stop_visualizer_worker();
+        // Process-local tracking must not outlive the process: retire the
+        // session, its projection, and its unresolved presentation through the
+        // same helper every other lifecycle boundary uses. Late consume
+        // outcomes and stale unresolved counts are discarded with the exit.
+        self.retire_remote_tracking(true);
         // #236: persist whichever remote connection (if any) is active
         // right now, before anything below or in the caller's cleanup
         // path clears `active_route` / direct-session identity -- so the
