@@ -32,6 +32,35 @@ impl App {
         self.playback_target().cycle_audio(self);
     }
 
+    /// Seeds a freshly attached daemon target's subtitle/audio-language
+    /// state with this client's own preferences and pushes them over the
+    /// wire. A newly connected `RemotePlayer` always starts at
+    /// `SubtitlePrefs::default()` — `mbvd` no longer reads these from its
+    /// own host config — so without this, direct-daemon and stay_alive
+    /// sessions would silently ignore the controlling client's language
+    /// preferences until the user manually cycled subtitle mode once.
+    /// Call this right after any `self.player = PlayerProxy::remote(...)`
+    /// assignment.
+    pub(super) fn sync_subtitle_prefs_to_player(&mut self) {
+        let prefs = {
+            let client = self.client.lock().unwrap();
+            if client.config.subtitle_mode.is_empty()
+                && client.config.subtitle_lang.is_empty()
+                && client.config.audio_lang.is_empty()
+            {
+                client.get_user_subtitle_prefs().unwrap_or_default()
+            } else {
+                mbv_core::player::SubtitlePrefs {
+                    mode: client.config.subtitle_mode.clone(),
+                    subtitle_lang: client.config.subtitle_lang.clone(),
+                    audio_lang: client.config.audio_lang.clone(),
+                }
+            }
+        };
+        *self.player.subtitle_prefs.lock().unwrap() = prefs;
+        self.push_subtitle_prefs();
+    }
+
     /// Clone the current subtitle prefs from the shared Arc and notify the player thread.
     pub(super) fn push_subtitle_prefs(&self) {
         let prefs = self.player.subtitle_prefs.lock().unwrap().clone();

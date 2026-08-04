@@ -178,6 +178,9 @@ fn queue_edit_forwards_to_local_daemon_while_daemon_is_idle() {
     app.player_tab.queue_cursor = 0;
     app.player.status.lock().unwrap().active = false;
     assert!(app.remote_player_tab.is_none());
+    // Drain the subtitle-prefs sync `App::new_remote` sends on attach so it
+    // isn't mistaken for the removal's own command below.
+    while cmd_rx.try_recv().is_ok() {}
 
     app.remove_from_queue(1);
 

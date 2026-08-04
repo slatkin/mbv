@@ -449,6 +449,10 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
     );
     app.player_tab.items = local_items;
     app.player_tab.queue_cursor = 0;
+    // `App::new_remote` synchronizes this client's subtitle/audio-language
+    // prefs to the freshly attached daemon before returning; drain that so
+    // callers see only commands their own test actions send.
+    while cmd_rx.try_recv().is_ok() {}
     (app, cmd_rx)
 }
 

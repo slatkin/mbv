@@ -345,20 +345,30 @@ impl App {
                 }
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
-                self.skip_intro_end_ticks = Some(intro_end_ticks);
-                let playing_title = self
-                    .playback_queue()
-                    .items
-                    .get(self.playback_queue().queue_cursor)
-                    .map(|i| i.name.clone())
-                    .unwrap_or_else(|| "mbv".into());
-                self.notify_with_actions(
-                    &playing_title,
-                    "Skip intro?",
-                    &[("skip_intro:skip", "Skip"), ("skip_intro:ignore", "Ignore")],
-                );
-                self.status = "Skip intro? (Y/n)".into();
-                self.status_expires = None;
+                // mbvd never auto-seeks on this event itself — it always
+                // reports the boundary neutrally, regardless of daemon-host
+                // config, so this client's own `always_skip_intro` is the
+                // only thing that decides whether to skip.
+                if self.client.lock().unwrap().config.always_skip_intro {
+                    let secs = intro_end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+                    self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+                    self.player.send_command(PlayerCommand::SkipIntroDismiss);
+                } else {
+                    self.skip_intro_end_ticks = Some(intro_end_ticks);
+                    let playing_title = self
+                        .playback_queue()
+                        .items
+                        .get(self.playback_queue().queue_cursor)
+                        .map(|i| i.name.clone())
+                        .unwrap_or_else(|| "mbv".into());
+                    self.notify_with_actions(
+                        &playing_title,
+                        "Skip intro?",
+                        &[("skip_intro:skip", "Skip"), ("skip_intro:ignore", "Ignore")],
+                    );
+                    self.status = "Skip intro? (Y/n)".into();
+                    self.status_expires = None;
+                }
             }
             PlayerEvent::IntroEnded => {
                 if self.skip_intro_end_ticks.take().is_some() {

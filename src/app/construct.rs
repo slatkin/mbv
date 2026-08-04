@@ -450,6 +450,7 @@ impl App {
         app.mpris = Some(mpris_handle);
         app.player_endpoint = Some(endpoint.clone());
         app.home_is_local_daemon = endpoint.is_local();
+        app.sync_subtitle_prefs_to_player();
         app.initialize_shared_state();
         app.launched_as_remote = true;
         debug_assert_eq!(

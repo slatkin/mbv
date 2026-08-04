@@ -288,6 +288,7 @@ impl App {
             self.player_rx = remote_rx;
         }
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+        self.sync_subtitle_prefs_to_player();
 
         if let Some(handle) = &self.mpris {
             let disconnected = mpris_remote.disconnected_flag();
@@ -377,6 +378,7 @@ impl App {
             self.player_rx = remote_rx;
         }
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+        self.sync_subtitle_prefs_to_player();
 
         if let Some(handle) = &self.mpris {
             let disconnected = mpris_remote.disconnected_flag();
@@ -486,6 +488,7 @@ impl App {
                     }
                     self.player_endpoint = Some(mbv_core::remote_player::DaemonEndpoint::Local);
                     debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+                    self.sync_subtitle_prefs_to_player();
                     reconnected_local_daemon =
                         Some((initial_items, initial_cursor, has_initial_items));
                 }

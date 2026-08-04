@@ -644,3 +644,7 @@ mod tests_status_bar;
 #[cfg(test)]
 #[path = "tests_music_grouping.rs"]
 mod tests_music_grouping;
+
+#[cfg(test)]
+#[path = "tests_player_event.rs"]
+mod tests_player_event;
