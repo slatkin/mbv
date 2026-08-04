@@ -156,6 +156,48 @@ fn clearing_local_queue_in_direct_remote_mode_leaves_remote_queue_intact() {
 }
 
 #[test]
+fn queue_edit_forwards_to_local_daemon_while_daemon_is_idle() {
+    // Reproduces: attaching to a tracked remote Emby session (which never
+    // touches `self.player`) while the local daemon that owns this queue
+    // isn't itself playing anything (`active == false`). Queue edits must
+    // still reach the daemon over ctrl, or its authoritative copy diverges
+    // from what the client shows and re-adopting it on the next launch
+    // resurrects deleted items.
+    let _guard = crate::config::TestStateDirGuard::new();
+    use crate::config::Config;
+    use mbv_core::api::EmbyClient;
+    let (remote, player_rx, cmd_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(vec![], 0);
+    let mut app = App::new_remote(
+        EmbyClient::new(Config::default()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Local,
+    );
+    app.player_tab.items = make_items(3);
+    app.player_tab.queue_cursor = 0;
+    app.player.status.lock().unwrap().active = false;
+    assert!(app.remote_player_tab.is_none());
+
+    app.remove_from_queue(1);
+
+    assert_eq!(
+        app.player_tab
+            .items
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["id0", "id2"]
+    );
+    assert!(matches!(
+        cmd_rx.try_recv(),
+        Ok(mbv_core::ctrl::CtrlCmd::PlayerCmd(
+            mbv_core::ctrl::WireCommand::QueueRemove(1)
+        ))
+    ));
+}
+
+#[test]
 fn clearing_remote_queue_in_direct_remote_mode_leaves_local_queue_metadata_intact() {
     let _guard = crate::config::TestStateDirGuard::new();
     let local_items = make_items(2);

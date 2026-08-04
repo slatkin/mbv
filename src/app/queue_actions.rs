@@ -58,7 +58,9 @@ impl App {
         if controls_playback_queue && active && pos < current_idx {
             self.pending_active_idx = Some(current_idx - 1);
         }
-        if controls_playback_queue && (active || scope == QueueScope::Remote) {
+        if controls_playback_queue
+            && (active || scope == QueueScope::Remote || self.player.is_remote())
+        {
             self.player.send_command(PlayerCommand::QueueRemove(pos));
             // Player thread adjusts current_idx when it processes the command.
             // No eager adjustment here — doing so races with the player thread
@@ -171,7 +173,9 @@ impl App {
                 }
             }
         }
-        if controls_playback_queue && (active || scope == QueueScope::Remote) {
+        if controls_playback_queue
+            && (active || scope == QueueScope::Remote || self.player.is_remote())
+        {
             self.player.send_command(PlayerCommand::QueueMove(from, to));
         }
         true
