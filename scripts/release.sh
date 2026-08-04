@@ -2,9 +2,11 @@
 # Usage: scripts/release.sh <version> "<summary>"
 # Example: scripts/release.sh 0.8.9 "add keyboard shortcuts for playback speed"
 #
-# Runs tests + clippy, bumps Cargo.toml, updates Cargo.lock, commits,
-# and pushes. On main: pushes, tags, and pushes the tag. On a branch:
+# Runs tests + clippy, bumps Cargo.toml + PKGBUILD, updates Cargo.lock,
+# commits, and pushes. On main: pushes, tags, and pushes the tag. On a branch:
 # commits only; merge via PR then tag manually.
+# PKGBUILD sha256sums is set to 'SKIP' here; build.yml fills in the real hash
+# after building the release tarball.
 set -euo pipefail
 
 VERSION="${1?Usage: scripts/release.sh <version> \"<summary>\"}"
@@ -48,12 +50,17 @@ echo "==> Bumping Cargo.toml to ${VERSION}..."
 sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
 
 echo
+echo "==> Bumping PKGBUILD to ${VERSION}..."
+sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+sed -i "s/^sha256sums=.*/sha256sums=('SKIP')/" PKGBUILD
+
+echo
 echo "==> cargo build (updates Cargo.lock)..."
 cargo build
 
 echo
 echo "==> Committing..."
-git add Cargo.toml Cargo.lock
+git add Cargo.toml Cargo.lock PKGBUILD
 git commit --no-verify --allow-empty -m "Release ${TAG}: ${SUMMARY}"
 
 echo

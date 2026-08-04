@@ -70,26 +70,6 @@ jobs:
           test -s "/tmp/release/mbv-${VERSION}-linux-x86_64.tar.gz"
           echo "Downloaded release asset for ${TAG}"
 
-      - name: Commit updated PKGBUILD to main
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          SHA256=$(sha256sum "/tmp/release/mbv-${VERSION}-linux-x86_64.tar.gz" | cut -d' ' -f1)
-          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
-          sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
-          echo "Regenerated PKGBUILD: pkgver=${VERSION} sha256sums=('${SHA256}')"
-          git config user.name "mbv release"
-          git config user.email "github@poo.town"
-          git add PKGBUILD
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update PKGBUILD to v${VERSION}"
-            git push origin HEAD:main
-          else
-            echo "PKGBUILD already up to date"
-          fi
-
       - name: Publish to AUR
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
@@ -99,6 +79,9 @@ jobs:
             echo "AUR_SSH_KEY secret is not set; cannot publish to AUR." >&2
             exit 1
           fi
+          SHA256=$(sha256sum "/tmp/release/mbv-${VERSION}-linux-x86_64.tar.gz" | cut -d' ' -f1)
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+          sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
           # Install the AUR SSH key with restrictive permissions. The secret is
           # auto-masked in logs, so never echo it back.
           mkdir -p /root/.ssh
