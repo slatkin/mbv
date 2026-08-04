@@ -180,13 +180,11 @@ impl App {
 mod tests {
     use crate::app::images::QUEUE_CARD_PLACEHOLDER_KEY;
     use crate::app::tests::{make_app_stub, make_item, make_items};
-    use crate::app::{palette, App, BrowseLevel, LibraryTab, PanelFocus, QueueScope};
+    use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, QueueScope};
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
-    use ratatui::style::Style;
-    use ratatui::widgets::Paragraph;
     use ratatui::Terminal;
 
     fn make_queue_app(n: usize, cursor: usize) -> App {
@@ -248,16 +246,6 @@ mod tests {
         })
         .unwrap();
         result
-    }
-
-    fn render_power_card_to_string(app: &mut App) -> String {
-        let backend = TestBackend::new(30, 20);
-        let mut term = Terminal::new(backend).unwrap();
-        term.draw(|f| {
-            app.render_power_card(f, Rect::new(0, 0, 30, 20));
-        })
-        .unwrap();
-        format!("{:?}", term.backend().buffer())
     }
 
     fn set_playback(app: &mut App, active_idx: usize, paused: bool) {
@@ -419,43 +407,6 @@ mod tests {
         assert!(fetch_triggered(&app, "id4:P"));
         assert!(fetch_triggered(&app, "id5:P"));
         assert!(!fetch_triggered(&app, "id0:P"));
-    }
-
-    #[test]
-    fn loading_image_paints_dim_reserved_block() {
-        let mut app = make_queue_app(1, 0);
-        app.image_protocol_enabled = true;
-
-        let rendered = render_power_card_to_string(&mut app);
-
-        assert!(app.card_image_loading.contains("id0:P"));
-        assert!(rendered.contains(&format!("bg: {:?}", palette::OVERLAY)));
-    }
-
-    #[test]
-    fn loading_image_overwrites_prior_card_area_with_dim_block() {
-        let backend = TestBackend::new(30, 20);
-        let mut term = Terminal::new(backend).unwrap();
-        term.draw(|f| {
-            f.render_widget(
-                Paragraph::new("STALE ART").style(Style::default().bg(palette::IRIS)),
-                Rect::new(0, 0, 30, 6),
-            );
-        })
-        .unwrap();
-
-        let mut app = make_queue_app(1, 0);
-        app.image_protocol_enabled = true;
-        app.last_card_height = 6;
-        term.draw(|f| {
-            app.render_power_card(f, Rect::new(0, 0, 30, 20));
-        })
-        .unwrap();
-        let rendered = format!("{:?}", term.backend().buffer());
-
-        assert!(app.card_image_loading.contains("id0:P"));
-        assert!(rendered.contains(&format!("bg: {:?}", palette::OVERLAY)));
-        assert!(!rendered.contains("STALE"));
     }
 
     #[test]

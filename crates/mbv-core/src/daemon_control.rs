@@ -365,28 +365,6 @@ fn handle_ctrl(
             }
             if fetched.len() == 1 {
                 let item = fetched[0].clone();
-                if !item.series_id.is_empty() && player.always_play_next {
-                    let queue = client
-                        .lock()
-                        .unwrap()
-                        .get_episodes_from(&item.series_id, &item.id);
-                    if queue.len() > 1 {
-                        *items = queue.clone();
-                        *cursor = 0;
-                        *source = new_source;
-                        broadcast_queue_state(
-                            ctrl_clients,
-                            player,
-                            shared_queue,
-                            &queue,
-                            0,
-                            source,
-                        );
-                        let c = Arc::new(client.lock().unwrap().clone());
-                        player.play_queue(queue, 0, c, 100);
-                        return;
-                    }
-                }
                 *items = vec![item.clone()];
                 *cursor = 0;
                 *source = new_source;
