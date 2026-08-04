@@ -97,8 +97,8 @@ fn playback_episode_title_colors_show_yellow_and_episode_green() {
     .unwrap();
 
     let buffer = term.backend().buffer();
-    assert_eq!(buffer[(8, 0)].fg, palette::YELLOW);
-    assert_eq!(buffer[(17, 0)].fg, palette::GREEN);
+    assert_eq!(buffer[(11, 0)].fg, palette::YELLOW);
+    assert_eq!(buffer[(20, 0)].fg, palette::GREEN);
 }
 
 #[test]

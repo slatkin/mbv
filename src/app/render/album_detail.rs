@@ -244,8 +244,7 @@ impl App {
                     title_spans.push(Span::raw(" "));
                 }
                 let num_w = track_num.chars().count();
-                let play_icon = super::LIST_PLAY_ICON;
-                let play_icon_w = if is_playing { play_icon.width() + 1 } else { 0 };
+                let play_icon_w = if is_playing { 2 } else { 0 };
                 let title_width = title_col_w.saturating_sub(num_w + play_icon_w).max(1);
                 let title_lines = wrap(&item.name, title_width);
                 let mut wrapped_title_lines = Vec::with_capacity(title_lines.len());
@@ -256,24 +255,20 @@ impl App {
                             track_num.clone(),
                             Style::default().fg(palette::SOFT_WHITE),
                         ));
-                        if is_playing {
-                            first_line.push(Span::styled(
-                                format!("{play_icon} "),
-                                Style::default().fg(palette::AQUA),
-                            ));
-                        }
                         first_line.push(Span::styled(
                             line.into_owned(),
                             Style::default().fg(palette::SOFT_WHITE),
                         ));
+                        if is_playing {
+                            first_line.push(Span::raw(" "));
+                            first_line.push(self.now_playing_throbber_span());
+                        }
                         wrapped_title_lines.push(Line::from(first_line));
                     } else {
                         wrapped_title_lines.push(Line::from(vec![
-                            Span::raw(" ".repeat(
-                                1 + if selected_region_gutter { 1 } else { 0 }
-                                    + num_w
-                                    + play_icon_w,
-                            )),
+                            Span::raw(
+                                " ".repeat(1 + if selected_region_gutter { 1 } else { 0 } + num_w),
+                            ),
                             Span::styled(
                                 line.into_owned(),
                                 Style::default().fg(palette::SOFT_WHITE),

@@ -487,6 +487,12 @@ impl App {
             // See `render_interval`'s doc comment for the fast/slow cadence rules.
             let render_interval = self.render_interval();
             if self.wants_terminal_render(had_events, last_render, render_interval) {
+                if self.last_throbber_advance.elapsed() >= std::time::Duration::from_millis(300) {
+                    if self.player.status.lock().unwrap().active {
+                        self.now_playing_throbber.calc_next();
+                    }
+                    self.last_throbber_advance = std::time::Instant::now();
+                }
                 if self.force_clear {
                     self.force_clear = false;
                     if let Err(e) = terminal.clear() {

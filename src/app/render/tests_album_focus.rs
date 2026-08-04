@@ -39,10 +39,10 @@ fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {
         .find(|line| line.contains("Openi"))
         .copied()
         .expect("expected active music track row");
-    let icon = super::LIST_PLAY_ICON;
+    let throbber_symbols = ["▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
     assert!(
-        playing_line.contains(&format!("1. {icon} Openi")),
-        "expected the active track icon and following space after its number:\n{out}"
+        playing_line.contains("Openi") && throbber_symbols.iter().any(|s| playing_line.contains(s)),
+        "expected the active track title with throbber after it:\n{out}"
     );
     let track_y = lines
         .iter()

@@ -434,10 +434,13 @@ fn series_inline_detail_has_no_stray_banner_border_in_plain_list_branch() {
         .find(|line| line.contains("Episode 2"))
         .copied()
         .expect("active episode row should render");
-    let icon = crate::app::render::LIST_PLAY_ICON;
+    let throbber_symbols = ["▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
     assert!(
-        active_episode_line.contains(&format!("2. {icon} Episode 2")),
-        "expected the active episode icon and following space after its number:\n{out}"
+        active_episode_line.contains("Episode 2")
+            && throbber_symbols
+                .iter()
+                .any(|s| active_episode_line.contains(s)),
+        "expected the active episode title with throbber after it:\n{out}"
     );
 
     let last_episode_row = lines

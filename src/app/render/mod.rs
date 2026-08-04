@@ -78,6 +78,13 @@ use unicode_width::UnicodeWidthStr;
 pub(super) const TAB_BAR_BOX_HEIGHT: u16 = 3;
 
 impl App {
+    pub(super) fn now_playing_throbber_span(&self) -> Span<'static> {
+        throbber_widgets_tui::Throbber::default()
+            .throbber_set(throbber_widgets_tui::HORIZONTAL_BLOCK)
+            .throbber_style(Style::default().fg(palette::AQUA))
+            .to_symbol_span(&self.now_playing_throbber)
+    }
+
     pub fn render(&mut self, f: &mut Frame) {
         let area = f.area();
         // Guard against zero-dimension terminal (e.g. minimized or piped).
@@ -510,9 +517,7 @@ impl App {
                 }
             }
         }
-        let (library_area, visualizer_area) = self.split_visualizer_area(render_lib_area);
-        self.render_visualizer(f, visualizer_area);
-        self.render_power_library(f, library_area, left_focused, layout);
+        self.render_power_library(f, render_lib_area, left_focused, layout);
 
         // Status bar + toast overlay at the bottom of the right panel.
         if status_area.width > 0 {

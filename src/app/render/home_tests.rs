@@ -297,14 +297,24 @@ fn playing_home_video_indents_aqua_play_icon_one_cell() {
     })
     .unwrap();
 
-    let cell = &term.backend().buffer()[(1, 3)];
+    let throbber_symbols = ["▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
+    let buf = term.backend().buffer();
+    let icon_cell = (0..120)
+        .find_map(|x| {
+            let cell = &buf[(x, 3)];
+            if throbber_symbols.contains(&cell.symbol()) {
+                Some(cell)
+            } else {
+                None
+            }
+        })
+        .expect("expected throbber symbol somewhere in the home row");
     assert_eq!(
-        cell.symbol(),
-        "▶",
+        icon_cell.fg,
+        crate::app::palette::AQUA,
         "rendered Home panel:\n{}",
         buffer_to_string(&term)
     );
-    assert_eq!(cell.fg, crate::app::palette::AQUA);
 }
 
 #[test]

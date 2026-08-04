@@ -409,12 +409,7 @@ impl App {
                         + (if pct_visible { pct_str.width() } else { 0 })
                         + metadata_gap;
                     let extra = metadata_w;
-                    let now_playing_icon = super::LIST_PLAY_ICON;
-                    let now_playing_icon_w = if is_active {
-                        now_playing_icon.width() + 1
-                    } else {
-                        0
-                    };
+                    let now_playing_icon_w = if is_active && focused { 2 } else { 0 };
                     let title_w = track_content_w.saturating_sub(
                         indent + now_playing_icon_w + extra + QUEUE_TITLE_QUIET_COLUMNS,
                     );
@@ -466,24 +461,16 @@ impl App {
                             title[..split].to_string(),
                             Style::default().fg(dim_color),
                         ));
-                        if is_active {
-                            spans.push(Span::styled(
-                                format!("{now_playing_icon} "),
-                                Style::default().fg(palette::AQUA),
-                            ));
-                        }
                         spans.push(Span::styled(
                             title[split..].to_string(),
                             Style::default().fg(title_color),
                         ));
                     } else {
                         spans.push(Span::styled(title, Style::default().fg(title_color)));
-                        if is_active {
-                            spans.push(Span::styled(
-                                format!("{now_playing_icon} "),
-                                Style::default().fg(palette::AQUA),
-                            ));
-                        }
+                    }
+                    if is_active && focused {
+                        spans.push(Span::raw(" "));
+                        spans.push(self.now_playing_throbber_span());
                     }
                     if pct_visible || dur_visible {
                         let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();

@@ -330,8 +330,7 @@ impl App {
                                 format!("{:>ep_num_w$}. ", i + 1)
                             };
                             let label_w = ep_label.chars().count();
-                            let play_icon = super::LIST_PLAY_ICON;
-                            let play_icon_w = if is_playing { play_icon.width() + 1 } else { 0 };
+                            let play_icon_w = if is_playing { 2 } else { 0 };
                             let title = trunc_str(
                                 &ep.name,
                                 title_col_w.saturating_sub(label_w + play_icon_w),
@@ -339,13 +338,11 @@ impl App {
                             let mut title_spans = vec![marker];
                             title_spans
                                 .push(Span::styled(ep_label, Style::default().fg(palette::MUTED)));
-                            if is_playing {
-                                title_spans.push(Span::styled(
-                                    format!("{play_icon} "),
-                                    Style::default().fg(palette::AQUA),
-                                ));
-                            }
                             title_spans.push(Span::raw(title));
+                            if is_playing {
+                                title_spans.push(Span::raw(" "));
+                                title_spans.push(self.now_playing_throbber_span());
+                            }
                             let title_cell = Cell::from(Line::from(title_spans));
                             let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
                             let length = if len_secs > 0 {

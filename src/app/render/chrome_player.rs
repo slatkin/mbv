@@ -276,16 +276,19 @@ impl App {
         let time_text = format!("{pos_str} / {dur_str}");
         let post_time_gap = "  ";
         let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
+        let throbber_w = 2; // space + throbber symbol (throbber span includes trailing space)
         let fixed_w = glyph_w as usize
             + stop_w as usize
             + stop_gap.width()
             + next_w as usize
             + next_gap.width()
+            + throbber_w
             + 2 // spaces between title and time
             + time_text.width()
             + post_time_gap.width()
             + right_w as usize;
         let title_w = (area.width as usize).saturating_sub(fixed_w);
+        left.push(self.now_playing_throbber_span());
         left.extend(self.playback_title_spans(title, title_color, title_w));
 
         left.push(Span::raw("  "));

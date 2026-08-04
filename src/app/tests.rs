@@ -244,6 +244,8 @@ pub(crate) fn make_app_stub() -> App {
         visualizer_failed: false,
         visualizer: None,
         visualizer_frame: Vec::new(),
+        now_playing_throbber: throbber_widgets_tui::ThrobberState::default(),
+        last_throbber_advance: std::time::Instant::now(),
         sessions: Vec::new(),
         sessions_cursor: 0,
         sessions_scroll: 0,

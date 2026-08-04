@@ -406,14 +406,18 @@ impl App {
                     let is_episode = item.item_type == "Episode" && !item.series_name.is_empty();
                     let title_width: usize;
 
+                    let playing_icon_w = if is_playing { 2 } else { 0 };
                     let mut spans: Vec<Span> = if is_episode {
                         // Episode: show name in yellow, episode title in white.
-                        let show_w = name_w * 2 / 5;
+                        let name_w_for_title = name_w.saturating_sub(playing_icon_w);
+                        let show_w = name_w_for_title * 2 / 5;
                         let show = trunc_str(&item.series_name, show_w);
                         let show_actual_w = show.width();
-                        let ep_title =
-                            trunc_str(&item.name, name_w.saturating_sub(show_actual_w + 1));
-                        title_width = show_actual_w + 1 + ep_title.width();
+                        let ep_title = trunc_str(
+                            &item.name,
+                            name_w_for_title.saturating_sub(show_actual_w + 1),
+                        );
+                        title_width = show_actual_w + 1 + ep_title.width() + playing_icon_w;
                         let bold = if selected_row && focused {
                             Modifier::BOLD
                         } else {
@@ -434,17 +438,12 @@ impl App {
                             }
                         }
                         vec![
-                            if is_playing {
-                                Span::styled(
-                                    format!(" {}", super::LIST_PLAY_ICON),
-                                    Style::default().fg(palette::AQUA),
-                                )
-                            } else if selected_row && focused {
+                            if selected_row && focused {
                                 Span::styled("▍", Style::default().fg(palette::AQUA))
                             } else {
                                 Span::raw(" ")
                             },
-                            Span::raw(if is_playing { "" } else { " " }),
+                            Span::raw(" "),
                             Span::styled(
                                 show,
                                 Style::default().fg(palette::YELLOW).add_modifier(bold),
@@ -463,8 +462,9 @@ impl App {
                         ]
                     } else {
                         // Non-episode: single title span.
-                        let title = trunc_str(&item.display_name(), name_w);
-                        title_width = title.width();
+                        let title =
+                            trunc_str(&item.display_name(), name_w.saturating_sub(playing_icon_w));
+                        title_width = title.width() + playing_icon_w;
                         if selected_row && focused {
                             if let Some(full) = green_panel_full {
                                 f.render_widget(
@@ -478,15 +478,8 @@ impl App {
                                     },
                                 );
                                 vec![
-                                    if is_playing {
-                                        Span::styled(
-                                            format!(" {}", super::LIST_PLAY_ICON),
-                                            Style::default().fg(palette::AQUA),
-                                        )
-                                    } else {
-                                        Span::styled("▍", Style::default().fg(palette::AQUA))
-                                    },
-                                    Span::raw(if is_playing { "" } else { " " }),
+                                    Span::styled("▍", Style::default().fg(palette::AQUA)),
+                                    Span::raw(" "),
                                     Span::styled(
                                         title,
                                         Style::default()
@@ -500,15 +493,8 @@ impl App {
                                 ]
                             } else {
                                 vec![
-                                    if is_playing {
-                                        Span::styled(
-                                            format!(" {}", super::LIST_PLAY_ICON),
-                                            Style::default().fg(palette::AQUA),
-                                        )
-                                    } else {
-                                        Span::styled("▍", Style::default().fg(palette::AQUA))
-                                    },
-                                    Span::raw(if is_playing { "" } else { " " }),
+                                    Span::styled("▍", Style::default().fg(palette::AQUA)),
+                                    Span::raw(" "),
                                     Span::styled(
                                         title,
                                         Style::default()
@@ -519,15 +505,8 @@ impl App {
                             }
                         } else {
                             vec![
-                                if is_playing {
-                                    Span::styled(
-                                        format!(" {}", super::LIST_PLAY_ICON),
-                                        Style::default().fg(palette::AQUA),
-                                    )
-                                } else {
-                                    Span::raw(" ")
-                                },
-                                Span::raw(if is_playing { "" } else { " " }),
+                                Span::raw(" "),
+                                Span::raw(" "),
                                 Span::styled(
                                     title,
                                     Style::default().fg(if wide_home_panel_unfocused {
@@ -539,6 +518,10 @@ impl App {
                             ]
                         }
                     };
+                    if is_playing {
+                        spans.push(Span::raw(" "));
+                        spans.push(self.now_playing_throbber_span());
+                    }
                     let pad = avail.saturating_sub(title_width + dur_str.width() + 1);
                     if !dur_str.is_empty() {
                         spans.push(Span::raw(" ".repeat(pad)));

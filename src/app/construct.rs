@@ -120,6 +120,8 @@ impl App {
             visualizer_failed: false,
             visualizer: None,
             visualizer_frame: Vec::new(),
+            now_playing_throbber: throbber_widgets_tui::ThrobberState::default(),
+            last_throbber_advance: std::time::Instant::now(),
             last_played_item_id: None,
             last_played_completed: false,
             card_image_states: std::collections::HashMap::new(),
