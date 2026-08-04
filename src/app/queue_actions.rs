@@ -58,9 +58,9 @@ impl App {
         if controls_playback_queue && active && pos < current_idx {
             self.pending_active_idx = Some(current_idx - 1);
         }
-        if controls_playback_queue
-            && (active || scope == QueueScope::Remote || self.player.is_remote())
-        {
+        let sent_queue_remove = controls_playback_queue
+            && (active || scope == QueueScope::Remote || self.player.is_remote());
+        if sent_queue_remove {
             self.player.send_command(PlayerCommand::QueueRemove(pos));
             // Player thread adjusts current_idx when it processes the command.
             // No eager adjustment here — doing so races with the player thread
@@ -76,6 +76,14 @@ impl App {
             queue.queue_cursor = cursor_before - 1;
         }
         queue.clamp_cursor();
+        if sent_queue_remove {
+            // The daemon's reply carries its own `cursor`, which tracks
+            // *playback* position, not this selection — without this, the
+            // round trip would snap the display cursor onto the now-playing
+            // item instead of leaving it on the item that shifted into this
+            // slot. See `PlayerEvent::QueueUpdated`.
+            self.pending_queue_edit_cursor = Some(queue.queue_cursor);
+        }
         self.retire_tracking_after_queue_mutation();
     }
 

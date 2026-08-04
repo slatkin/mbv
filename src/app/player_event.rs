@@ -327,13 +327,16 @@ impl App {
                 cursor,
                 source,
             } => {
+                let pending_local_cursor = self.pending_queue_edit_cursor.take();
                 let cursor = if self.has_direct_remote_queue() {
                     self.pending_remote_move_cursor
                         .take()
                         .filter(|pending_cursor| *pending_cursor < items.len())
                         .unwrap_or(cursor)
                 } else {
-                    cursor
+                    pending_local_cursor
+                        .filter(|pending_cursor| *pending_cursor < items.len())
+                        .unwrap_or(cursor)
                 };
                 let queue = self.playback_queue_mut();
                 queue.set_items(items, cursor);

@@ -329,6 +329,31 @@ fn removing_from_remote_queue_in_direct_remote_mode_does_not_touch_local_queue()
 }
 
 #[test]
+fn removing_non_active_item_keeps_cursor_off_now_playing_after_daemon_ack() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_local_daemon_app_stub(make_items(4));
+    app.player.status.lock().unwrap().active = true;
+    // Track 0 is playing; the user has selected track 2 in the queue view.
+    app.player_tab.queue_cursor = 2;
+
+    app.remove_from_queue(2);
+
+    // Simulate the daemon's async ack of the removal: its `cursor` reports
+    // the playback position (still track 0), not the UI's selection.
+    app.handle_player_event(PlayerEvent::QueueUpdated {
+        items: app.player_tab.items.clone(),
+        cursor: 0,
+        source: app.queue_source.clone(),
+    });
+
+    assert_eq!(
+        app.player_tab.queue_cursor, 2,
+        "deleting a non-playing item must not snap the display cursor onto \
+         the now-playing item"
+    );
+}
+
+#[test]
 fn clearing_remote_queue_does_not_prompt_to_save_local_playlist() {
     let mut app = make_remote_app_stub(make_items(2), make_items(3));
     app.queue_source = crate::config::QueueSource::Playlist {

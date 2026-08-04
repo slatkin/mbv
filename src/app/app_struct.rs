@@ -133,6 +133,11 @@ pub struct App {
     pub(super) queue_undo_stack: Vec<UndoEntry>,
     pub(super) remote_queue_undo_stack: Vec<UndoEntry>,
     pub(super) pending_remote_move_cursor: Option<usize>,
+    /// The display cursor a just-issued local queue edit (e.g. remove) wants
+    /// the next `QueueUpdated` broadcast to land on, since that broadcast's
+    /// own `cursor` field tracks the daemon's *playback* position, not the
+    /// UI selection — see `remove_from_queue` and `PlayerEvent::QueueUpdated`.
+    pub(super) pending_queue_edit_cursor: Option<usize>,
     pub(super) pending_active_idx: Option<usize>,
     pub(super) skip_intro_end_ticks: Option<i64>,
     pub(super) next_up_item: Option<MediaItem>,
