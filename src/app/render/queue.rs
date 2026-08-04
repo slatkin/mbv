@@ -187,13 +187,8 @@ impl App {
                     }
                 })
                 .unwrap_or_default();
-            let unresolved = if self.remote_unresolved_outcomes > 0 {
-                format!(" · !{}", self.remote_unresolved_outcomes)
-            } else {
-                String::new()
-            };
             let spans = vec![Span::styled(
-                format!(" {}{}{}", label.trim_start(), tracking, unresolved),
+                format!(" {}{}", label.trim_start(), tracking),
                 label_style,
             )];
             f.render_widget(Block::default().style(Style::default().bg(bg)), remote_area);

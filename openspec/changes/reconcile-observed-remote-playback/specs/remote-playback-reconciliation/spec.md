@@ -101,7 +101,6 @@ An Unprompted transition from a resolved occurrence to its immediate successor S
 - **WHEN** a resolved occurrence below 95 percent is followed by its immediate successor without an applicable Expected transition
 - **THEN** mbv remains `TRACKING` at the successor
 - **AND** does not consume the prior occurrence
-- **AND** does not report an unresolved playlist outcome solely for the skipped occurrence
 
 ### Requirement: Unexplained transitions invalidate tracking
 An Unprompted transition that skips one or more Submitted-sequence occurrences, moves backward, or materially resets the same non-duplicate occurrence SHALL enter `INVALID`. mbv SHALL infer no completion or traversal across the invalidating transition.
@@ -266,7 +265,7 @@ A suspended Tracking session SHALL resume automatically only when the returning 
 - **AND** does not offer re-anchor
 
 ### Requirement: Re-anchoring starts a new tracking epoch
-When the user re-anchors at a uniquely selected occurrence, mbv SHALL start a new Tracking epoch there. Unresolved earlier occurrences SHALL become Bypassed occurrences, remain in the saved playlist, and become ineligible for automatic consume in the new epoch. Previously confirmed and applied consumes SHALL remain applied.
+When the user re-anchors at a uniquely selected occurrence, mbv SHALL start a new Tracking epoch there. Unresolved earlier occurrences SHALL become Bypassed occurrences, remain in the queue, and become ineligible for automatic consume in the new epoch. Previously applied consumes SHALL remain applied.
 
 #### Scenario: User re-anchors after invalidation
 - **WHEN** tracking is invalid and the user re-anchors at a unique observed occurrence
@@ -286,7 +285,7 @@ Tracking sessions SHALL NOT persist across mbv process exit or restart. Tracking
 
 #### Scenario: mbv exits
 - **WHEN** mbv exits for any reason
-- **THEN** all Tracking sessions and unresolved playlist outcomes are discarded
+- **THEN** all Tracking sessions are discarded
 
 #### Scenario: Remote playback stops
 - **WHEN** the remote reports stopped but mbv remains attached
@@ -311,71 +310,42 @@ The first enqueue, remove, reorder, or undo action while a Tracking session exis
 - **AND** remains attached to the Emby session
 
 ### Requirement: Reconciliation applies to every submitted multi-item source
-mbv SHALL reconcile every multi-item Submitted sequence regardless of whether its source is a saved playlist, album, series, collection, or ad hoc queue. Automatic playlist consumption SHALL apply only when the Submitted sequence remains associated with a saved Emby playlist.
+mbv SHALL reconcile every multi-item Submitted sequence regardless of whether its source is a saved playlist, album, series, collection, or ad hoc queue. Consume SHALL behave identically for every source: the source determines only whether Save on consume can subsequently write the shortened queue back to a playlist.
 
 #### Scenario: Album is submitted remotely
 - **WHEN** mbv submits a multi-item album to an attached Emby session
 - **THEN** mbv tracks its remote position
-- **AND** does not perform saved-playlist mutation
+- **AND** consumes completed occurrences when consume is enabled for their media type
 
 #### Scenario: Saved playlist is submitted remotely
 - **WHEN** mbv submits a saved Emby playlist
 - **THEN** mbv tracks its remote position
-- **AND** may apply safe consume behavior when configured
+- **AND** consumes completed occurrences exactly as it would for any other source
 
 ### Requirement: Safe occurrence completion is consumed promptly
-When media-type consume is enabled, mbv SHALL promptly apply a resolved Occurrence completion to the associated saved playlist only while tracking is active and valid, the occurrence has not already been consumed, and the intended server playlist occurrence can be identified safely. These conditions SHALL be checked when completion emits the consume request and checked again after the playlist reload immediately before deletion.
+Consume is removal from the queue and nothing else. When media-type consume is enabled, mbv SHALL promptly remove a resolved Occurrence completion's item from the queue while tracking is active and valid, the occurrence has not already been consumed, and the occurrence still maps to a queue slot in the current queue lineage. mbv SHALL apply the same consume behavior it applies to local playback, including the separate Save on consume behavior, and SHALL NOT make consume conditional on a saved playlist.
 
-#### Scenario: Completed occurrence is safely identifiable
-- **WHEN** a valid Tracking session establishes Occurrence completion and the exact saved-playlist occurrence remains safely identifiable
-- **THEN** mbv removes that occurrence automatically when consume is enabled for its media type
+#### Scenario: Completed occurrence is resolved
+- **WHEN** a valid Tracking session establishes Occurrence completion and the occurrence still maps to a queue slot
+- **THEN** mbv removes that item from the queue when consume is enabled for its media type
+
+#### Scenario: Queue was replaced since the occurrence was projected
+- **WHEN** the completed occurrence no longer maps to a slot in the current queue lineage
+- **THEN** mbv removes nothing
 
 #### Scenario: Tracking is ambiguous or invalid
 - **WHEN** tracking is `AMBIGUOUS`, `INVALID`, or `SUSPENDED`
 - **THEN** mbv does not initiate a new automatic consume from uncertain evidence
 
-### Requirement: Playlist mutation preserves unrelated external edits
-Before applying remote consume, mbv SHALL reload current server playlist state and verify that the stable playlist-entry identity still exists and still identifies the expected media item. A missing entry SHALL count as already applied; an entry mapped to different media SHALL be unresolved and SHALL NOT be deleted. mbv SHALL attempt at most one exact-entry deletion per completed occurrence, preserve unrelated server-side additions, removals, and reordering, and SHALL NOT fall back to replacing the playlist. When the intended occurrence cannot be verified or the deletion result cannot be established, mbv SHALL report an unresolved outcome passively.
-
-#### Scenario: Playlist changed but occurrence identity remains stable
-- **WHEN** the server playlist changed externally and the completed occurrence remains safely identifiable
-- **THEN** mbv removes only that occurrence
-- **AND** preserves unrelated external changes
-
-#### Scenario: External changes make occurrence identity unsafe
-- **WHEN** current playlist state cannot safely identify the completed occurrence
-- **THEN** mbv does not mutate the playlist automatically
-- **AND** reports an unresolved playlist outcome
-
-#### Scenario: Stable entry identity maps to different media
-- **WHEN** the current playlist contains the target entry identity but it no longer identifies the expected media item
-- **THEN** mbv does not delete the entry
-- **AND** reports an unresolved playlist outcome
-
-#### Scenario: Exact deletion outcome is uncertain
-- **WHEN** mbv cannot establish whether the one exact-entry deletion attempt succeeded
-- **THEN** mbv does not retry the deletion automatically
-- **AND** reports an unresolved playlist outcome
+### Requirement: External playlist edits do not affect tracking
+Tracking SHALL be reconciled against the immutable Submitted sequence, independently of any playlist the sequence was loaded from.
 
 #### Scenario: External playlist edit occurs during playback
-- **WHEN** the associated saved playlist changes externally
+- **WHEN** a playlist the Submitted sequence was loaded from changes externally
 - **THEN** playback tracking remains valid against the immutable Submitted sequence
 
-### Requirement: Unresolved playlist outcomes remain passive
-An unresolved playlist outcome SHALL remain process-local, SHALL NOT trigger automatic retries or interactive repair, and SHALL NOT block playback, queue replacement, disconnect, or process exit. mbv SHALL NOT create unresolved outcomes for ordinary incomplete skips, Bypassed occurrences, unobserved items, suspension, or invalidation without completion evidence.
-
-#### Scenario: Unresolved outcomes accumulate during playback
-- **WHEN** one or more unresolved playlist outcomes exist
-- **THEN** the queue panel shows a passive unresolved count
-- **AND** does not open a prompt automatically
-
-#### Scenario: User quits with unresolved outcomes
-- **WHEN** mbv exits with unresolved playlist outcomes
-- **THEN** exit is not blocked
-- **AND** the outcomes are not persisted across restart
-
 ### Requirement: Queue panel is the primary tracking surface
-The queue panel SHALL present the active Tracking session's health, remote target, current resolved or candidate position, concise exceptional-state reason, unresolved playlist-outcome count, and available re-anchor action. The Sessions panel SHALL only indicate that the attached session has active tracking.
+The queue panel SHALL present the active Tracking session's health, remote target, current resolved or candidate position, concise exceptional-state reason, and available re-anchor action. The Sessions panel SHALL only indicate that the attached session has active tracking.
 
 #### Scenario: Tracking is valid
 - **WHEN** tracking is valid and unambiguous

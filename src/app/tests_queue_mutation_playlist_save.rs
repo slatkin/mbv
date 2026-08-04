@@ -30,34 +30,13 @@ fn track_source(app: &mut App, playlist_id: &str) {
     assert!(app.remote_tracker.is_some(), "test tracker must build");
 }
 
-fn consume_occurrence(app: &mut App, slot_index: usize, media_id: &str, entry_id: &str) {
+fn consume_occurrence(app: &mut App, slot_index: usize) {
     let slot = app.player_tab.queue.slots()[slot_index].slot_id;
-    app.remote_consume_operations
-        .push(crate::app::types_playback::RemoteConsumeOperation {
-            operation_id: 1,
-            mutation_id: 1,
-            session_id: "session".into(),
-            tracking_id: 0,
-            epoch: 0,
-            occurrence_id: 1,
-            playlist_id: "pl-1".into(),
-            entry_id: entry_id.into(),
-            media_id: media_id.into(),
-            queue_slot_id: Some(slot),
-            queue_lineage: app.remote_queue_lineage,
-        });
-    app.handle_session_event(SessionEvent::ConsumeOutcome {
-        mutation_id: 1,
-        operation_id: 1,
-        tracking_id: 0,
-        session_id: "session".into(),
-        epoch: 0,
-        occurrence_id: 1,
-        playlist_id: "pl-1".into(),
-        entry_id: entry_id.into(),
-        media_id: media_id.into(),
-        result: Ok(()),
-    });
+    assert!(matches!(
+        app.player_tab.queue.consume_slot(slot),
+        mbv_core::playback_queue::QueueMutationResult::Applied(_)
+    ));
+    app.player_tab.sync_items_from_queue_model();
 }
 
 #[test]
@@ -153,7 +132,7 @@ fn overwriting_unrelated_playlist_leaves_tracked_source_identity_intact() {
 fn save_after_consumed_projection_snapshots_the_projected_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = saved_playlist_app();
-    consume_occurrence(&mut app, 0, "id0", "entry-0");
+    consume_occurrence(&mut app, 0);
     assert_eq!(app.player_tab.items.len(), 1);
 
     app.save_playlist_to_emby();
@@ -345,7 +324,7 @@ fn replace_completion_persists_new_source_and_cleared_entry_ids() {
 fn save_and_save_on_quit_cannot_resurrect_a_consumed_occurrence() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = saved_playlist_app();
-    consume_occurrence(&mut app, 0, "id0", "entry-0");
+    consume_occurrence(&mut app, 0);
     assert_eq!(app.player_tab.items.len(), 1);
 
     // Manual save completes cleanly against the projected queue.

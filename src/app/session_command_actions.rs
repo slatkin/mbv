@@ -137,7 +137,6 @@ impl App {
         self.remote_tracker = None;
         self.remote_queue_projection = None;
         self.remote_reanchor_popup = None;
-        self.remote_unresolved_outcomes = 0;
         if invalidate_lineage {
             self.remote_queue_lineage = self.remote_queue_lineage.saturating_add(1);
         }

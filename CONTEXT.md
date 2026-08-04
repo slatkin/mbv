@@ -68,6 +68,21 @@ A client connecting to an existing Player owner. Never displaces another client;
 several may be attached at once.
 _Avoid_: reattach, connect, resume, take over
 
+## Queue
+
+**Consume**:
+Removal of an item from the queue once it finishes playing, as in ncmpcpp.
+Purely a queue operation — it says nothing about where the queue came from and
+never edits anything on the server. Applies the same way whether playback ran
+in this process, on a Local daemon, or on another device's Session.
+_Avoid_: auto-remove, playlist consume, consume-and-save
+
+**Save on consume**:
+The separate, opt-in behaviour of writing the shortened queue back to the Emby
+playlist it was loaded from. Only meaningful for a queue that is a saved
+playlist; Consume happens with or without it.
+_Avoid_: autosave, consume persistence, playlist sync
+
 ## Remote sessions
 
 A client can also reach *another* device's playback, discovered through Emby

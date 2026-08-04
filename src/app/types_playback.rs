@@ -148,42 +148,7 @@ pub(super) struct RemoteReanchorPopup {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct RemoteConsumeOperation {
-    pub(super) operation_id: u64,
-    pub(super) mutation_id: u64,
-    pub(super) session_id: String,
-    pub(super) tracking_id: u64,
-    pub(super) epoch: u64,
-    pub(super) occurrence_id: u64,
-    pub(super) playlist_id: String,
-    pub(super) entry_id: String,
-    pub(super) media_id: String,
-    pub(super) queue_slot_id: Option<QueueSlotId>,
-    pub(super) queue_lineage: u64,
-}
-
-#[derive(Clone, Debug)]
 pub(super) enum PlaylistMutation {
-    ConsumeValidate {
-        mutation_id: u64,
-        operation_id: u64,
-        session_id: String,
-        tracking_id: u64,
-        epoch: u64,
-        occurrence_id: u64,
-        entry_id: String,
-        media_id: String,
-    },
-    ConsumeDelete {
-        mutation_id: u64,
-        operation_id: u64,
-        session_id: String,
-        tracking_id: u64,
-        epoch: u64,
-        occurrence_id: u64,
-        entry_id: String,
-        media_id: String,
-    },
     Save {
         mutation_id: u64,
         queue_lineage: u64,
@@ -210,9 +175,7 @@ pub(super) enum PlaylistMutation {
 impl PlaylistMutation {
     pub(super) fn mutation_id(&self) -> u64 {
         match self {
-            Self::ConsumeValidate { mutation_id, .. }
-            | Self::ConsumeDelete { mutation_id, .. }
-            | Self::Save { mutation_id, .. }
+            Self::Save { mutation_id, .. }
             | Self::CreateAs { mutation_id, .. }
             | Self::Replace { mutation_id, .. } => *mutation_id,
         }

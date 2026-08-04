@@ -1,26 +1,11 @@
-use super::types_playback::{PlaylistMutation, RemoteConsumeOperation};
 use super::App;
+use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::remote_reconciliation::{ReconciliationEffect, RemoteObservation};
 
 #[path = "run_loop_events_session.rs"]
 mod run_loop_events_session;
 #[path = "run_loop_events_teardown.rs"]
 mod run_loop_events_teardown;
-
-pub(super) fn validate_remote_playlist_entry(
-    items: &[mbv_core::api::MediaItem],
-    entry_id: &str,
-    expected_media_id: &str,
-) -> Result<bool, String> {
-    match items.iter().find(|item| item.playlist_item_id == entry_id) {
-        None => Ok(false),
-        Some(item) if item.id == expected_media_id => Ok(true),
-        Some(item) => Err(format!(
-            "playlist entry {entry_id} now identifies media {} instead of {expected_media_id}",
-            item.id
-        )),
-    }
-}
 
 impl App {
     fn apply_remote_observation(&mut self, session: &mbv_core::api::SessionInfo, generation: u64) {
@@ -49,7 +34,7 @@ impl App {
                         item.occurrence_id,
                         item.media_id
                     );
-                    self.begin_remote_consume(item);
+                    self.consume_remote_occurrence(&item);
                 }
                 ReconciliationEffect::StateChanged { state, reason } => {
                     log::debug!(
@@ -62,19 +47,70 @@ impl App {
         }
     }
 
-    fn unresolved_consume(&mut self, error: String) {
-        self.remote_unresolved_outcomes = self.remote_unresolved_outcomes.saturating_add(1);
-        log::warn!(target: "remote_reconciliation", "unresolved playlist consume: {error}");
-    }
-
-    fn apply_remote_consumed_occurrence(&mut self, operation: &RemoteConsumeOperation) {
-        let Some(slot_id) = operation.queue_slot_id else {
+    /// Consume, as in ncmpcpp: a finished item leaves the queue. Nothing here
+    /// touches a playlist. Persisting the shortened queue back to a saved
+    /// playlist is the separate `save_playlist_on_consume` feature, applied by
+    /// `on_video_consumed`/`on_audio_consumed` exactly as for local playback.
+    fn consume_remote_occurrence(
+        &mut self,
+        occurrence: &mbv_core::remote_reconciliation::SubmittedOccurrence,
+    ) {
+        let Some(tracker) = self.remote_tracker.as_ref() else {
             return;
         };
-        if operation.queue_lineage != self.remote_queue_lineage {
+        let session_id = tracker.session_id().to_string();
+        let epoch = tracker.epoch();
+        let Some(slot_id) = self.projected_queue_slot(&session_id, epoch, occurrence.occurrence_id)
+        else {
+            log::warn!(
+                target: "remote_reconciliation",
+                "no queue slot projected for occurrence={}; not consuming",
+                occurrence.occurrence_id
+            );
+            return;
+        };
+        let (should_consume, is_audio) = self.should_consume_slot(slot_id, true);
+        if !should_consume {
             return;
         }
+        // The tracker still gates repeat completions for one occurrence.
+        if !self
+            .remote_tracker
+            .as_mut()
+            .is_some_and(|tracker| tracker.mark_consumed(occurrence.occurrence_id))
+        {
+            return;
+        }
+        if !self.remove_projected_queue_slot(slot_id) {
+            return;
+        }
+        if is_audio {
+            self.on_audio_consumed();
+        } else {
+            self.on_video_consumed();
+        }
+    }
 
+    /// The queue slot a tracked occurrence currently maps to, or `None` when
+    /// the projection no longer describes this tracker or this queue lineage.
+    fn projected_queue_slot(
+        &self,
+        session_id: &str,
+        epoch: u64,
+        occurrence_id: u64,
+    ) -> Option<QueueSlotId> {
+        let projection = self.remote_queue_projection.as_ref()?;
+        (projection.session_id == session_id
+            && projection.epoch == epoch
+            && projection.queue_lineage == self.remote_queue_lineage)
+            .then(|| projection.occurrence_slots.get(&occurrence_id).copied())
+            .flatten()
+    }
+
+    /// Remove a slot from the queue an attached Emby session is playing,
+    /// holding the display cursor on whatever it was already pointing at.
+    /// Returns whether the slot was actually removed.
+    fn remove_projected_queue_slot(&mut self, slot_id: QueueSlotId) -> bool {
         self.player_tab.sync_queue_model_from_items_if_needed();
         let selected_slot = self
             .player_tab
@@ -86,7 +122,7 @@ impl App {
             self.player_tab.queue.consume_slot(slot_id),
             mbv_core::playback_queue::QueueMutationResult::Applied(_)
         ) {
-            return;
+            return false;
         }
         self.player_tab.sync_items_from_queue_model();
         if let Some(index) =
@@ -97,113 +133,6 @@ impl App {
         // An attached session must still persist an intentionally empty queue;
         // the ordinary empty-save guard protects unrelated remote-control UI.
         self.save_queue_state_after_remote_projection();
-    }
-
-    fn begin_remote_consume(
-        &mut self,
-        occurrence: mbv_core::remote_reconciliation::SubmittedOccurrence,
-    ) {
-        let Some(playlist_id) = occurrence.playlist_id().map(str::to_string) else {
-            return;
-        };
-        let is_audio = self
-            .player_tab
-            .items
-            .iter()
-            .find(|item| item.id == occurrence.media_id)
-            .is_some_and(|item| item.is_audio());
-        let consume_enabled = {
-            let config = &self.client.lock().unwrap().config;
-            if is_audio {
-                config.consume_audio
-            } else {
-                config.consume_videos
-            }
-        };
-        if !consume_enabled {
-            return;
-        }
-        let Some(entry_id) = occurrence.playlist_item_id.clone() else {
-            return;
-        };
-        let Some(tracker) = self.remote_tracker.as_mut() else {
-            return;
-        };
-        if self.remote_consume_operations.len() >= 128 {
-            log::warn!(target: "remote_reconciliation", "consume operation limit reached; deferring new consume");
-            return;
-        }
-        let session_id = tracker.session_id().to_string();
-        let tracking_id = tracker.tracking_id();
-        let epoch = tracker.epoch();
-        if !tracker.mark_consumed(occurrence.occurrence_id) {
-            return;
-        }
-        let media_id = occurrence.media_id.clone();
-        let occurrence_id = occurrence.occurrence_id;
-        let operation_id = self.next_remote_consume_operation;
-        self.next_remote_consume_operation = self.next_remote_consume_operation.saturating_add(1);
-        let mutation_id = self.next_playlist_mutation;
-        self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);
-        let queue_slot_id = self
-            .remote_queue_projection
-            .as_ref()
-            .and_then(|projection| {
-                (projection.session_id == session_id
-                    && projection.epoch == epoch
-                    && projection.queue_lineage == self.remote_queue_lineage)
-                    .then(|| projection.occurrence_slots.get(&occurrence_id).copied())
-                    .flatten()
-            });
-        self.remote_consume_operations.push(RemoteConsumeOperation {
-            operation_id,
-            mutation_id,
-            session_id: session_id.clone(),
-            tracking_id,
-            epoch,
-            occurrence_id,
-            playlist_id: playlist_id.clone(),
-            entry_id: entry_id.clone(),
-            media_id: media_id.clone(),
-            queue_slot_id,
-            queue_lineage: self.remote_queue_lineage,
-        });
-        self.enqueue_playlist_mutation(
-            playlist_id,
-            PlaylistMutation::ConsumeValidate {
-                mutation_id,
-                operation_id,
-                session_id,
-                tracking_id,
-                epoch,
-                occurrence_id,
-                entry_id,
-                media_id,
-            },
-        );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::tests::make_item;
-
-    #[test]
-    fn playlist_entry_validation_distinguishes_absent_match_and_mismatch() {
-        let mut item = make_item("Track", "Audio");
-        item.id = "media-1".into();
-        item.playlist_item_id = "entry-1".into();
-        let items = vec![item];
-
-        assert_eq!(
-            validate_remote_playlist_entry(&items, "missing", "media-1"),
-            Ok(false)
-        );
-        assert_eq!(
-            validate_remote_playlist_entry(&items, "entry-1", "media-1"),
-            Ok(true)
-        );
-        assert!(validate_remote_playlist_entry(&items, "entry-1", "media-2").is_err());
+        true
     }
 }

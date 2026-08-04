@@ -427,21 +427,4 @@ impl App {
             self.playlist_mutations.remove(playlist_id);
         }
     }
-
-    pub(super) fn replace_active_playlist_mutation(
-        &mut self,
-        playlist_id: &str,
-        mutation_id: u64,
-        next: PlaylistMutation,
-    ) -> bool {
-        let Some(state) = self.playlist_mutations.get_mut(playlist_id) else {
-            return false;
-        };
-        if state.active.as_ref().map(PlaylistMutation::mutation_id) != Some(mutation_id) {
-            return false;
-        }
-        state.active = Some(next);
-        self.start_playlist_mutation(playlist_id);
-        true
-    }
 }

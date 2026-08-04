@@ -124,30 +124,6 @@ pub(super) enum SessionEvent {
     /// separately from the follow-up session poll. Emitted even when that
     /// immediate poll fails, so command acknowledgment never freezes tracking.
     CommandAcknowledged(ReconciliationCommand),
-    ConsumeValidated {
-        mutation_id: u64,
-        operation_id: u64,
-        tracking_id: u64,
-        session_id: String,
-        epoch: u64,
-        occurrence_id: u64,
-        playlist_id: String,
-        entry_id: String,
-        media_id: String,
-        result: Result<bool, String>,
-    },
-    ConsumeOutcome {
-        mutation_id: u64,
-        operation_id: u64,
-        tracking_id: u64,
-        session_id: String,
-        epoch: u64,
-        occurrence_id: u64,
-        playlist_id: String,
-        entry_id: String,
-        media_id: String,
-        result: Result<(), String>,
-    },
     PlaylistMutationComplete {
         mutation_id: u64,
         playlist_id: String,

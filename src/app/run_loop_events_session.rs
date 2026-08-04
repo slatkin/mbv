@@ -1,7 +1,6 @@
 //! `SessionEvent` handling, split out of `run_loop_events.rs` to keep that
 //! file within the repository's file-size limit.
 
-use crate::app::types_playback::PlaylistMutation;
 use crate::app::{App, PanelFocus, SessionEvent};
 use std::time::{Duration, Instant};
 
@@ -204,130 +203,6 @@ impl App {
                     }
                 }
                 self.flash_status_high(format!("Remote command failed: {error}"));
-            }
-            SessionEvent::ConsumeValidated {
-                mutation_id,
-                operation_id,
-                tracking_id,
-                session_id,
-                epoch,
-                occurrence_id,
-                playlist_id,
-                entry_id,
-                media_id,
-                result,
-            } => {
-                let operation = self
-                    .remote_consume_operations
-                    .iter()
-                    .find(|op| {
-                        op.operation_id == operation_id
-                            && op.mutation_id == mutation_id
-                            && op.session_id == session_id
-                            && op.tracking_id == tracking_id
-                            && op.epoch == epoch
-                            && op.occurrence_id == occurrence_id
-                            && op.playlist_id == playlist_id
-                            && op.entry_id == entry_id
-                            && op.media_id == media_id
-                    })
-                    .cloned();
-                let Some(operation) = operation else {
-                    return;
-                };
-                if let Err(error) = result {
-                    if self.remote_tracker.as_ref().is_some_and(|tracker| {
-                        tracker.session_id() == operation.session_id
-                            && tracker.tracking_id() == operation.tracking_id
-                            && tracker.epoch() == operation.epoch
-                    }) {
-                        self.unresolved_consume(error);
-                    }
-                    self.remote_consume_operations
-                        .retain(|op| op.operation_id != operation.operation_id);
-                    self.finish_playlist_mutation(&operation.playlist_id, operation.mutation_id);
-                } else {
-                    log::debug!(
-                        target: "remote_reconciliation",
-                        "validated consume operation={} media={}",
-                        operation.operation_id,
-                        operation.media_id
-                    );
-                    let eligible = self.remote_tracker.as_ref().is_some_and(|tracker| {
-                        tracker.session_id() == session_id
-                            && tracker.tracking_id() == tracking_id
-                            && tracker.consume_pending(epoch, occurrence_id)
-                    });
-                    if matches!(result, Ok(false)) {
-                        self.remote_consume_operations
-                            .retain(|op| op.operation_id != operation.operation_id);
-                        self.apply_remote_consumed_occurrence(&operation);
-                        self.finish_playlist_mutation(
-                            &operation.playlist_id,
-                            operation.mutation_id,
-                        );
-                    } else if !eligible {
-                        self.remote_consume_operations
-                            .retain(|op| op.operation_id != operation.operation_id);
-                        self.finish_playlist_mutation(
-                            &operation.playlist_id,
-                            operation.mutation_id,
-                        );
-                    } else {
-                        self.replace_active_playlist_mutation(
-                            &operation.playlist_id,
-                            operation.mutation_id,
-                            PlaylistMutation::ConsumeDelete {
-                                mutation_id: operation.mutation_id,
-                                operation_id: operation.operation_id,
-                                session_id: operation.session_id,
-                                tracking_id: operation.tracking_id,
-                                epoch: operation.epoch,
-                                occurrence_id: operation.occurrence_id,
-                                entry_id: operation.entry_id,
-                                media_id: operation.media_id,
-                            },
-                        );
-                    }
-                }
-            }
-            SessionEvent::ConsumeOutcome {
-                mutation_id,
-                operation_id,
-                tracking_id,
-                session_id,
-                epoch,
-                occurrence_id,
-                playlist_id,
-                entry_id,
-                media_id,
-                result,
-            } => {
-                if let Some(index) = self.remote_consume_operations.iter().position(|op| {
-                    op.operation_id == operation_id
-                        && op.mutation_id == mutation_id
-                        && op.session_id == session_id
-                        && op.tracking_id == tracking_id
-                        && op.epoch == epoch
-                        && op.occurrence_id == occurrence_id
-                        && op.playlist_id == playlist_id
-                        && op.entry_id == entry_id
-                        && op.media_id == media_id
-                }) {
-                    let operation = self.remote_consume_operations.remove(index);
-                    if let Err(error) = result {
-                        if self.remote_tracker.as_ref().is_some_and(|tracker| {
-                            tracker.session_id() == session_id
-                                && tracker.tracking_id() == tracking_id
-                                && tracker.epoch() == epoch
-                        }) {
-                            self.unresolved_consume(error);
-                        }
-                    } else {
-                        self.apply_remote_consumed_occurrence(&operation);
-                    }
-                    self.finish_playlist_mutation(&operation.playlist_id, operation.mutation_id);
-                }
             }
             SessionEvent::PlaylistMutationComplete {
                 mutation_id,

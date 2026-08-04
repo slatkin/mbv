@@ -12,8 +12,8 @@ use super::types_feed::IdleFeed;
 use super::types_feed::SavePlaylistDialog;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
-    HomePane, PendingQueueAction, PlaylistMutationState, QueueScope, RemoteConsumeOperation,
-    RemoteQueueProjection, RemoteReanchorPopup, SuspendedLocalSession, UndoEntry,
+    HomePane, PendingQueueAction, PlaylistMutationState, QueueScope, RemoteQueueProjection,
+    RemoteReanchorPopup, SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::PanelFocus;
@@ -216,13 +216,10 @@ pub struct App {
     pub(super) connected_session_state: Option<mbv_core::api::SessionInfo>,
     pub(super) remote_tracker: Option<mbv_core::remote_reconciliation::ReconciliationTracker>,
     pub(super) remote_queue_projection: Option<RemoteQueueProjection>,
-    pub(super) remote_consume_operations: Vec<RemoteConsumeOperation>,
-    pub(super) next_remote_consume_operation: u64,
     pub(super) remote_queue_lineage: u64,
     pub(super) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
     pub(super) next_playlist_mutation: u64,
     pub(super) session_poll_generation: u64,
-    pub(super) remote_unresolved_outcomes: usize,
     pub(super) direct_remote_connected: bool,
     pub(super) direct_remote_label: Option<String>,
     pub(super) last_session_poll: Instant,

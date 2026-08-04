@@ -42,36 +42,30 @@
 - [x] 4.5 On edit confirmation, terminate tracking, apply the requested edit, and suppress further tracking warnings until another sequence submission.
 - [x] 4.6 On edit cancellation, preserve both the Submitted sequence and the queue unchanged.
 
-## 5. Exact-Occurrence Playlist Consume
+## 5. Occurrence Consume
 
-- [x] 5.1 Add an Emby API operation using the playlist `EntryIds` deletion endpoint without replacing playlist contents.
-- [x] 5.2 Define correlated consume-application events carrying Tracking-session, epoch, occurrence, playlist, and entry identities.
-- [x] 5.3 On qualifying Occurrence completion, perform one current-playlist reload and verify both the target `PlaylistItemId` and expected media item ID.
-- [x] 5.4 Delete only the verified target entry and treat an already-absent exact entry as the desired applied state.
-- [x] 5.5 Re-check tracker, epoch, occurrence, and consume eligibility immediately before deletion; abort stale or no-longer-valid applications.
-- [x] 5.6 Attempt at most one exact-entry deletion per completed occurrence, classify HTTP success as applied and every transport or HTTP error as unresolved, and do not retry automatically.
-- [x] 5.7 Preserve unrelated server additions, removals, and reordering and refuse automatic mutation when entry identity is missing, ambiguous, or mapped to different media.
-- [x] 5.8 Gate consume by saved-playlist association, media-specific consume setting, valid resolved tracking, and at-most-once occurrence emission.
-- [x] 5.9 Record ambiguous or unknown application results as passive process-local unresolved outcomes without adding interactive repair.
-- [x] 5.10 Keep playback reconciliation independent while playlist application is pending, failed, stale, or unresolved.
-- [x] 5.11 Discard stale playlist-operation outcomes after tracker replacement, epoch change, disconnect, Stop Tracking, or process shutdown.
-- [x] 5.12 Add API and application coverage for exact deletion, already-absent entries, entry/media mismatch, duplicate ambiguity, external edits, bounded attempts, stale outcomes, and no full-list replacement fallback.
+- [x] 5.1 Map a completed occurrence to its queue slot through the remote queue projection, guarded by session, epoch, and queue lineage.
+- [x] 5.2 Remove the mapped slot from the queue and route through `on_video_consumed`/`on_audio_consumed`, the same path local playback uses.
+- [x] 5.3 Leave playlist persistence entirely to the separate Save on consume setting.
+- [x] 5.4 Re-check tracker, epoch, and queue lineage when the completion is applied; abort stale applications.
+- [x] 5.5 Gate consume by the media-specific consume setting, valid resolved tracking, and at-most-once occurrence emission — never by playlist association.
+- [x] 5.6 Discard consume eligibility after tracker replacement, epoch change, disconnect, Stop Tracking, or process shutdown.
+- [x] 5.7 Add application coverage for consume on an ad-hoc queue, at-most-once emission, and stale queue lineage.
 
 ## 6. Queue and Sessions UI
 
 - [x] 6.1 Add compact remote target, Tracking state, and resolved or candidate position presentation to the queue panel's existing title/source area.
 - [x] 6.2 Keep normal `TRACKING` presentation quiet and show concise reasons for `AMBIGUOUS`, `INVALID`, and `SUSPENDED`.
 - [x] 6.3 Add queue-context actions for re-anchor and Stop Tracking, including an occurrence picker for duplicate re-anchor targets.
-- [x] 6.4 Add a passive unresolved playlist-outcome count without an interactive repair overlay.
 - [x] 6.5 Mark active tracking in the Sessions panel without adding a second tracking-management surface.
 - [x] 6.6 Preserve usable narrow and wide queue layouts and add keyboard and mouse hit targets through the existing input-resolution paths.
-- [x] 6.7 Add render and input coverage for normal, starting, ambiguous, invalid, suspended, re-anchor, Stop Tracking, edit confirmation, and unresolved-outcome states.
+- [x] 6.7 Add render and input coverage for normal, starting, ambiguous, invalid, suspended, re-anchor, Stop Tracking, and edit-confirmation states.
 
 ## 7. End-to-End Verification
 
 - [x] 7.1 Verify all existing local, local-daemon, direct-remote, playlist-save, queue-edit, and attached-session tests remain green.
 - [ ] 7.2 Exercise representative attached-client traces for natural advance, each mbv command intent, client-side Next, non-adjacent jump, duplicate ambiguity, backward transition, same-item reset, final stop, present-but-stopped, failed poll, disappearance, each return class, and re-anchor.
-- [ ] 7.3 Verify consume applies only to exact saved-playlist occurrences and preserves externally added, removed, or reordered entries.
-- [ ] 7.4 Verify tracking terminates before single-item replacement and that tracking and unresolved-outcome state disappear on every disconnect, target replacement, and quit path and are absent after restart.
-- [ ] 7.5 Verify stale poll generations, stale command outcomes, and stale playlist-operation outcomes cannot mutate current tracking or playlist state.
+- [x] 7.3 Verify consume removes the completed occurrence from an ad-hoc queue as well as a saved-playlist queue.
+- [ ] 7.4 Verify tracking terminates before single-item replacement and that tracking state disappears on every disconnect, target replacement, and quit path and is absent after restart.
+- [ ] 7.5 Verify stale poll generations and stale command outcomes cannot mutate current tracking or queue state.
 - [x] 7.6 Run formatting, linting, focused tests, the full project test suite, and strict OpenSpec validation.

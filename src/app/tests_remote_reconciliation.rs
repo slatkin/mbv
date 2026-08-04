@@ -266,111 +266,69 @@ fn stale_reconciliation_command_failure_does_not_invalidate_replacement_tracker(
     );
 }
 
+/// The point of remote tracking: an item the remote client finishes leaves
+/// the queue. Consume is queue removal only, so this must work for an
+/// ordinary ad-hoc queue with no saved playlist behind it.
 #[test]
-fn stale_consume_validation_failure_does_not_increment_new_tracker() {
-    let mut app = attached_app();
-    app.remote_tracker = Some(tracker(&["new-a", "new-b"]));
-    app.remote_consume_operations
-        .push(super::types_playback::RemoteConsumeOperation {
-            operation_id: 7,
-            mutation_id: 7,
-            session_id: "old-session".into(),
-            tracking_id: 0,
-            epoch: 2,
-            occurrence_id: 41,
-            playlist_id: "old-playlist".into(),
-            entry_id: "old-entry".into(),
-            media_id: "old-a".into(),
-            queue_slot_id: None,
-            queue_lineage: app.remote_queue_lineage,
-        });
-
-    app.handle_session_event(SessionEvent::ConsumeValidated {
-        mutation_id: 7,
-        operation_id: 7,
-        tracking_id: 0,
-        session_id: "old-session".into(),
-        epoch: 2,
-        occurrence_id: 41,
-        playlist_id: "old-playlist".into(),
-        entry_id: "old-entry".into(),
-        media_id: "old-a".into(),
-        result: Err("stale validation".into()),
-    });
-
-    assert_eq!(app.remote_unresolved_outcomes, 0);
-    assert!(app.remote_consume_operations.is_empty());
-}
-
-#[test]
-fn successful_remote_consume_removes_exact_occurrence_from_queue() {
+fn completed_remote_occurrence_is_consumed_from_an_ad_hoc_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = attached_app();
+    app.client.lock().unwrap().config.consume_videos = true;
     app.player_tab.items[0].id = "a".into();
     app.player_tab.items[1].id = "b".into();
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[0].playlist_item_id = "entry-a".into();
-    app.player_tab.items[1].id = "b".into();
-    app.player_tab.items[1].playlist_item_id = "entry-b".into();
-    app.player_tab.queue_cursor = 1;
+    app.player_tab.queue_cursor = 0;
+    app.session_poll_generation = 5;
+    let items = app.player_tab.items.clone();
+    app.remote_tracker = App::build_remote_tracker_with_source("session", &items, 0, 5, None);
     app.player_tab.sync_queue_model_from_items_if_needed();
+    let slots: Vec<QueueSlotId> = app
+        .player_tab
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| slot.slot_id)
+        .collect();
+    app.remote_queue_projection = Some(projection(&app, &[(1, slots[0]), (2, slots[1])]));
 
-    let mut tracking = ReconciliationTracker::new(
-        "session",
-        vec![
-            SubmittedOccurrence::new(1, "a").playlist_entry("entry-a"),
-            SubmittedOccurrence::new(2, "b").playlist_entry("entry-b"),
-        ],
-        0,
-        0,
-    )
-    .unwrap();
-    tracking.observe(RemoteObservation::playing(1, "session", "a", 95, 100, 1));
-    tracking.observe(RemoteObservation::playing(2, "session", "b", 1, 100, 2));
-    assert!(tracking.mark_consumed(1));
-    let tracking_id = tracking.tracking_id();
-    app.remote_tracker = Some(tracking);
-    app.remote_consume_operations
-        .push(super::types_playback::RemoteConsumeOperation {
-            operation_id: 1,
-            mutation_id: 1,
-            session_id: "session".into(),
-            tracking_id,
-            epoch: 0,
-            occurrence_id: 1,
-            playlist_id: "playlist-1".into(),
-            entry_id: "entry-a".into(),
-            media_id: "a".into(),
-            queue_slot_id: Some(app.player_tab.queue.slots()[0].slot_id),
-            queue_lineage: app.remote_queue_lineage,
-        });
-
-    app.handle_session_event(SessionEvent::ConsumeOutcome {
-        mutation_id: 1,
-        operation_id: 1,
-        tracking_id,
-        session_id: "session".into(),
-        epoch: 0,
-        occurrence_id: 1,
-        playlist_id: "playlist-1".into(),
-        entry_id: "entry-a".into(),
-        media_id: "a".into(),
-        result: Ok(()),
+    let poll = |media: &str, position: i64| {
+        let mut session = make_session("Client", "Emby");
+        session.id = "session".into();
+        session.now_playing_item_id = Some(media.into());
+        session.position_ticks = position;
+        session.runtime_ticks = 100;
+        session
+    };
+    app.handle_session_event(SessionEvent::Loaded {
+        sessions: vec![poll("a", 1)],
+        generation: 5,
+    });
+    app.handle_session_event(SessionEvent::Loaded {
+        sessions: vec![poll("a", 99)],
+        generation: 6,
+    });
+    app.handle_session_event(SessionEvent::Loaded {
+        sessions: vec![poll("b", 1)],
+        generation: 7,
     });
 
     assert_eq!(
         app.player_tab
             .items
             .iter()
-            .map(|item| item.playlist_item_id.as_str())
+            .map(|item| item.id.as_str())
             .collect::<Vec<_>>(),
-        vec!["entry-b"]
+        vec!["b"],
+        "the finished item is consumed from the queue"
     );
     assert_eq!(app.player_tab.queue_cursor, 0);
-    assert_eq!(app.remote_tracker.as_ref().unwrap().submitted().len(), 2);
+    assert_eq!(
+        app.remote_tracker.as_ref().unwrap().submitted().len(),
+        2,
+        "the immutable submitted sequence is preserved"
+    );
     let persisted = crate::config::load_queue_state().expect("projected queue persisted");
     assert_eq!(persisted.items.len(), 1);
-    assert_eq!(persisted.items[0].playlist_item_id, "entry-b");
+    assert_eq!(persisted.items[0].id, "b");
 }
 
 fn projection(

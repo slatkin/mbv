@@ -225,7 +225,6 @@ fn teardown_retires_remote_tracking_owned_state() {
         )
         .unwrap(),
     );
-    app.remote_unresolved_outcomes = 4;
     app.remote_reanchor_popup = Some(super::types_playback::RemoteReanchorPopup {
         targets: vec![(0, "a".into())],
         cursor: 0,
@@ -236,7 +235,6 @@ fn teardown_retires_remote_tracking_owned_state() {
     assert!(app.remote_tracker.is_none());
     assert!(app.remote_queue_projection.is_none());
     assert!(app.remote_reanchor_popup.is_none());
-    assert_eq!(app.remote_unresolved_outcomes, 0);
 }
 
 #[test]

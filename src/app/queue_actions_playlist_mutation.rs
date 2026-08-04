@@ -30,7 +30,6 @@ impl App {
                 PlaylistMutation::Replace { queue_lineage, .. } => {
                     *queue_lineage != self.remote_queue_lineage
                 }
-                _ => false,
             });
         if stale {
             log::debug!(target: "playlist", "discarding stale queued playlist mutation for {playlist_id}");
@@ -163,83 +162,6 @@ impl App {
                         queue_lineage,
                         source_playlist_id,
                         name: replacement_name,
-                        result,
-                    });
-                });
-            }
-            PlaylistMutation::ConsumeValidate {
-                mutation_id,
-                operation_id,
-                session_id,
-                tracking_id,
-                epoch,
-                occurrence_id,
-                entry_id,
-                media_id,
-            } => {
-                let (mutation_id, operation_id, session_id, tracking_id, epoch, occurrence_id) = (
-                    *mutation_id,
-                    *operation_id,
-                    session_id.clone(),
-                    *tracking_id,
-                    *epoch,
-                    *occurrence_id,
-                );
-                let entry_id = entry_id.to_string();
-                let media_id = media_id.clone();
-                std::thread::spawn(move || {
-                    let result = client.get_playlist_items(&playlist_id).and_then(|items| {
-                        super::super::run_loop_events::validate_remote_playlist_entry(
-                            &items, &entry_id, &media_id,
-                        )
-                    });
-                    let _ = tx.send(SessionEvent::ConsumeValidated {
-                        mutation_id,
-                        operation_id,
-                        tracking_id,
-                        session_id,
-                        epoch,
-                        occurrence_id,
-                        playlist_id,
-                        entry_id,
-                        media_id,
-                        result,
-                    });
-                });
-            }
-            PlaylistMutation::ConsumeDelete {
-                mutation_id,
-                operation_id,
-                session_id,
-                tracking_id,
-                epoch,
-                occurrence_id,
-                entry_id,
-                media_id,
-                ..
-            } => {
-                let (mutation_id, operation_id, session_id, tracking_id, epoch, occurrence_id) = (
-                    *mutation_id,
-                    *operation_id,
-                    session_id.clone(),
-                    *tracking_id,
-                    *epoch,
-                    *occurrence_id,
-                );
-                let entry_id = entry_id.to_string();
-                let media_id = media_id.to_string();
-                std::thread::spawn(move || {
-                    let result = client.delete_playlist_entry(&playlist_id, &entry_id);
-                    let _ = tx.send(SessionEvent::ConsumeOutcome {
-                        mutation_id,
-                        operation_id,
-                        tracking_id,
-                        session_id,
-                        epoch,
-                        occurrence_id,
-                        playlist_id,
-                        entry_id,
-                        media_id,
                         result,
                     });
                 });
