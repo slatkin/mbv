@@ -147,7 +147,7 @@ impl App {
                 } else {
                     Line::from(Span::styled(
                         format!("  {n}  "),
-                        Style::default().fg(palette::PLAYBACK_META_FG),
+                        Style::default().fg(Color::Rgb(73, 81, 86)),
                     ))
                 }
             })
