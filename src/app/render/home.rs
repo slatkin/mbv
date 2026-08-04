@@ -547,7 +547,10 @@ impl App {
                     let left_pad_str = " ".repeat(META_INNER_PAD + inner_pad);
                     let full_meta = format!("{}{}", left_pad_str, meta_text);
                     let full_meta = format!("{:width$}", full_meta, width = META_COL_W);
-                    meta_spans.push(Span::styled(full_meta, Style::default().fg(palette::FOAM)));
+                    meta_spans.push(Span::styled(
+                        full_meta,
+                        Style::default().fg(palette::SOFT_WHITE),
+                    ));
 
                     // Combine and render
                     let mut all_spans = title_spans;
