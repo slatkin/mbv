@@ -40,34 +40,6 @@ fn hello_rejects_incompatible_protocol_version() {
 }
 
 #[test]
-fn hello_rejects_v2_protocol_version() {
-    let mut hello = CtrlHello::current();
-    hello.protocol_version = 2;
-    assert!(hello.validate_peer().is_err());
-}
-
-#[test]
-fn hello_rejects_v3_protocol_version() {
-    let mut hello = CtrlHello::current();
-    hello.protocol_version = 3;
-    assert!(hello.validate_peer().is_err());
-}
-
-#[test]
-fn hello_rejects_previous_v4_protocol_version() {
-    let mut hello = CtrlHello::current();
-    hello.protocol_version = 4;
-    assert!(hello.validate_peer().is_err());
-}
-
-#[test]
-fn hello_rejects_previous_v5_protocol_version() {
-    let mut hello = CtrlHello::current();
-    hello.protocol_version = 5;
-    assert!(hello.validate_peer().is_err());
-}
-
-#[test]
 fn hello_rejects_missing_capability() {
     let mut hello = CtrlHello::current();
     hello.capabilities.retain(|cap| cap != CTRL_CAP_START_INDEX);

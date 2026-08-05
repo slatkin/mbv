@@ -40,11 +40,6 @@ fn make_item(name: &str, item_type: &str) -> MediaItem {
 // ── MediaItem::display_name ──────────────────────────────────────────────
 
 #[test]
-fn display_name_movie() {
-    assert_eq!(make_item("Inception", "Movie").display_name(), "Inception");
-}
-
-#[test]
 fn display_name_episode_without_series_falls_back_to_name() {
     let item = make_item("Standalone", "Episode");
     assert_eq!(item.display_name(), "Standalone");

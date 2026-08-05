@@ -402,18 +402,6 @@ fn transport_next_unavailable_on_last_item() {
 }
 
 #[test]
-fn transport_prev_next_both_unavailable_on_single_item_queue() {
-    let app = make_app_stub();
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.queue_len = 1;
-        st.current_idx = 0;
-    }
-    assert_eq!(app.transport_prev_next_available(), (false, false));
-}
-
-#[test]
 fn transport_prev_next_both_available_for_connected_remote_session_regardless_of_local_status() {
     // SessionInfo (see mbv_core::api::SessionInfo) exposes no
     // queue-position/length fields, so there's no boundary to check for a

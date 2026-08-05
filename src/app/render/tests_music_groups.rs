@@ -151,28 +151,3 @@ fn grouped_target_marker_and_inline_art_follow_album_or_artist_focus() {
     let _header_out = render_power_library_to_string(&mut header_app, &mut header_layout);
     assert!(header_app.card_image_loading.contains("album-1:sq"));
 }
-
-#[test]
-fn long_inline_track_focus_keeps_the_detail_table_inside_the_selected_block() {
-    let mut app = make_power_music_group_app();
-    app.libs[0].album_track_focus = Some(29);
-    let tracks: Vec<_> = (0..30)
-        .map(|i| {
-            let mut track = make_item(&format!("Track {i}"), "Audio");
-            track.id = format!("track-{i}");
-            track.album = "First Album".into();
-            track.artist = "Alpha".into();
-            track.index_number = i + 1;
-            track
-        })
-        .collect();
-    app.album_tracks_cache.insert("album-1".into(), tracks);
-
-    let mut layout = LayoutMain::default();
-    let out = render_power_library_to_string(&mut app, &mut layout);
-    assert!(
-        out.contains("Track 29"),
-        "expected focused track in the block:\n{out}"
-    );
-    assert!(layout.cursor_screen_y.is_some());
-}

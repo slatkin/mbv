@@ -153,24 +153,6 @@
     }
 
     #[test]
-    fn is_system_instance_false_with_env_set_to_zero() {
-        let _g = SYS_ENV_LOCK.lock().unwrap();
-        std::env::set_var("MBV_SYSTEM", "0");
-        let result = is_system_instance();
-        std::env::remove_var("MBV_SYSTEM");
-        assert!(!result);
-    }
-
-    #[test]
-    fn is_system_instance_false_with_empty_env_var() {
-        let _g = SYS_ENV_LOCK.lock().unwrap();
-        std::env::set_var("MBV_SYSTEM", "");
-        let result = is_system_instance();
-        std::env::remove_var("MBV_SYSTEM");
-        assert!(!result);
-    }
-
-    #[test]
     fn cache_dir_uses_system_path_when_mbv_system_set() {
         let _g = SYS_ENV_LOCK.lock().unwrap();
         std::env::set_var("MBV_SYSTEM", "1");

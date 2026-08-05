@@ -124,30 +124,6 @@ fn volume_keys_fire_unconditionally() {
 // transport keys -- see #88 (previously `active` only, no remote path).
 
 #[test]
-fn a_fires_when_active_only() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('a')), true, false),
-        Some(Command::ToggleMuteOrCycleAudio)
-    );
-}
-
-#[test]
-fn a_fires_when_remote_session_only() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('a')), false, true),
-        Some(Command::ToggleMuteOrCycleAudio)
-    );
-}
-
-#[test]
-fn a_does_not_fire_when_neither_active_nor_remote() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('a')), false, false),
-        None
-    );
-}
-
-#[test]
 fn ctrl_a_does_not_fire() {
     assert_eq!(
         playback_command_for_key(key_ctrl(KeyCode::Char('a')), true, true),

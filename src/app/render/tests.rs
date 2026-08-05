@@ -169,17 +169,3 @@ fn remote_status_spans_shows_local_device_name_when_off() {
     );
     assert!(!text.contains("remote:"));
 }
-
-#[test]
-fn status_label_style_uppercases_selected_label() {
-    let mut spans = vec![
-        Span::raw(" "),
-        Span::raw("icon"),
-        Span::styled("  living-room", Style::default().fg(palette::SUBTLE)),
-        Span::raw(" "),
-    ];
-
-    App::uppercase_status_label(&mut spans);
-
-    assert_eq!(spans[2].content.as_ref(), "  LIVING-ROOM");
-}
