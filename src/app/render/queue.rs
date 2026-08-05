@@ -137,7 +137,7 @@ impl App {
             height: 1,
         };
         let (_icon, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
-        let target_bg = palette::SOFT_WHITE;
+        let target_bg = palette::BG_GREEN_SOFT;
         let target_fg = palette::QUEUE_BUTTON_FOCUSED_BG;
         let target_label_style = Style::default()
             .fg(target_fg)
@@ -456,7 +456,7 @@ impl App {
 
         if need_sb {
             let max_off = total.saturating_sub(visible);
-            super::render_power_scrollbar(f, area, max_off, offset, palette::SOFT_WHITE);
+            super::render_power_scrollbar(f, area, max_off, offset, palette::BG_GREEN_SOFT);
         }
     }
 }
