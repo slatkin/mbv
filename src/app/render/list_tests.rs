@@ -247,8 +247,8 @@ fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
 
 #[test]
 fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
-    // Tall enough viewport that the 18-row hero (at 82 wide) leaves real
-    // list rows below it, so `lib_page_size` reflects the list, not 0.
+    // Tall enough viewport that the 22-row hero block (at 82 wide) leaves
+    // real list rows below it, so `lib_page_size` reflects the list, not 0.
     let mut app = make_power_movie_list_app(vec!["M0", "M1", "M2", "M3", "M4", "M5", "M6"]);
     let mut layout = LayoutMain::default();
     let _ = render_power_list_term(&mut app, &mut layout, 82, 30);
@@ -589,16 +589,91 @@ fn hero_paints_below_selected_row_in_two_column_mode() {
     // Inline hero: the hero sits directly below the row containing the
     // selected item (cursor 0 → display row 0), and the list wraps around
     // it — the top section ends at the selected row, the bottom section
-    // continues below the hero.
+    // continues below the hero. The block is `hero_height + 4` rows tall:
+    // a `▁` top border, a bare colored-bg top padding row, the content,
+    // a bare colored-bg bottom padding row, and a `▔` bottom border.
     let hero = layout.hero_area;
     assert_eq!(hero.y, 1, "hero must sit below the selected item's row");
     assert_eq!(hero.width, 82);
-    assert!(hero.height > 0);
+    assert_eq!(
+        hero.height,
+        super::hero_height_for_width(82) + 4,
+        "hero block = content + top border + top padding + bottom padding + bottom border"
+    );
     assert_eq!(
         hero.y,
         layout.left_area.y + 1,
         "hero starts one row below the selected row"
     );
+
+    // The 4-row structure, top to bottom (focused render):
+    //   row 0           : `▁` top border in SEEK_TRACK
+    //   row 1           : bare colored bg (MEDIA_SELECTED_BG), no content
+    //   rows 2..h-2     : content (meta + overview; image disabled in tests)
+    //   row h-2         : bare colored bg (MEDIA_SELECTED_BG), no content
+    //   row h-1         : `▔` bottom border in SEEK_TRACK
+    let focused_bg = palette::MEDIA_SELECTED_BG;
+    let top_border: String = (0..width).map(|x| buf[(x, hero.y)].symbol()).collect();
+    assert_eq!(
+        top_border,
+        "\u{2581}".repeat(width as usize),
+        "top border row must be all ▁"
+    );
+    for x in 0..width {
+        assert_eq!(
+            buf[(x, hero.y)].fg,
+            palette::SEEK_TRACK,
+            "top border must be painted in SEEK_TRACK at x={x}"
+        );
+    }
+    // Top padding row: colored bg, no text or image content.
+    let top_pad_row: String = (0..width).map(|x| buf[(x, hero.y + 1)].symbol()).collect();
+    assert_eq!(
+        top_pad_row.trim(),
+        "",
+        "top padding row must be bare, got: {top_pad_row:?}"
+    );
+    for x in 0..width {
+        assert_eq!(
+            buf[(x, hero.y + 1)].bg,
+            focused_bg,
+            "top padding row must use the focused bg at x={x}"
+        );
+    }
+    // Bottom padding row: colored bg, no text or image content.
+    let bottom_pad_y = hero.y + hero.height - 2;
+    let bottom_pad_row: String = (0..width)
+        .map(|x| buf[(x, bottom_pad_y)].symbol())
+        .collect();
+    assert_eq!(
+        bottom_pad_row.trim(),
+        "",
+        "bottom padding row must be bare, got: {bottom_pad_row:?}"
+    );
+    for x in 0..width {
+        assert_eq!(
+            buf[(x, bottom_pad_y)].bg,
+            focused_bg,
+            "bottom padding row must use the focused bg at x={x}"
+        );
+    }
+    // Bottom border row: all ▔ in SEEK_TRACK.
+    let bottom_border_y = hero.y + hero.height - 1;
+    let bottom_border: String = (0..width)
+        .map(|x| buf[(x, bottom_border_y)].symbol())
+        .collect();
+    assert_eq!(
+        bottom_border,
+        "\u{2594}".repeat(width as usize),
+        "bottom border row must be all ▔"
+    );
+    for x in 0..width {
+        assert_eq!(
+            buf[(x, bottom_border_y)].fg,
+            palette::SEEK_TRACK,
+            "bottom border must be painted in SEEK_TRACK at x={x}"
+        );
+    }
 
     // The hero carries the selected item's content (the poster image would
     // render here; with images off in the test stub the meta + overview
@@ -610,6 +685,13 @@ fn hero_paints_below_selected_row_in_two_column_mode() {
     assert!(
         hero_text.contains("Sci-Fi") && hero_text.contains("2020"),
         "hero must render the selected item's meta line, got:\n{hero_text}"
+    );
+    // The content sits offset 2 rows down (past the top border + top
+    // padding), not at the block's first row.
+    let content_row: String = (0..width).map(|x| buf[(x, hero.y + 2)].symbol()).collect();
+    assert!(
+        content_row.contains("Sci-Fi"),
+        "content must start 2 rows into the hero block, got: {content_row:?}"
     );
 
     // The top section (above the hero) holds the selected item's row,
@@ -635,6 +717,145 @@ fn hero_paints_below_selected_row_in_two_column_mode() {
         item_rows(&layout),
         vec![vec![0, 1], vec![2, 3]],
         "2-col packing must be unchanged around the hero"
+    );
+}
+
+#[test]
+#[allow(non_snake_case)] // name specified by task: seeK
+fn hero_has_top_and_bottom_borders_with_seeK_track_color() {
+    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1"]);
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let buf = term.backend().buffer();
+    let hero = layout.hero_area;
+
+    // First row of the hero block: the `▁` top border across the full
+    // content width, painted in SEEK_TRACK.
+    let top_row: String = (0..hero.width).map(|x| buf[(x, hero.y)].symbol()).collect();
+    assert_eq!(
+        top_row,
+        "\u{2581}".repeat(hero.width as usize),
+        "hero top border must be all ▁ across the content width, got: {top_row:?}"
+    );
+    for x in 0..hero.width {
+        assert_eq!(
+            buf[(x, hero.y)].fg,
+            palette::SEEK_TRACK,
+            "top border must be painted in SEEK_TRACK at x={x}"
+        );
+    }
+
+    // Last row of the hero block: the `▔` bottom border in SEEK_TRACK.
+    let bot_y = hero.y + hero.height - 1;
+    let bot_row: String = (0..hero.width).map(|x| buf[(x, bot_y)].symbol()).collect();
+    assert_eq!(
+        bot_row,
+        "\u{2594}".repeat(hero.width as usize),
+        "hero bottom border must be all ▔ across the content width, got: {bot_row:?}"
+    );
+    for x in 0..hero.width {
+        assert_eq!(
+            buf[(x, bot_y)].fg,
+            palette::SEEK_TRACK,
+            "bottom border must be painted in SEEK_TRACK at x={x}"
+        );
+    }
+}
+
+#[test]
+fn hero_uses_unfocused_bg_when_library_panel_is_unfocused() {
+    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1"]);
+
+    // Focused render: the hero's padding rows use MEDIA_SELECTED_BG.
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let buf = term.backend().buffer();
+    let hero = layout.hero_area;
+    assert_eq!(
+        buf[(0, hero.y + 1)].bg,
+        palette::MEDIA_SELECTED_BG,
+        "focused hero must use MEDIA_SELECTED_BG"
+    );
+
+    // Unfocused render: the same hero uses PLAYBACK_PANEL_BG instead.
+    let mut layout = LayoutMain::default();
+    let backend = TestBackend::new(82, 40);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        app.render_power_list(f, Rect::new(0, 0, 82, 40), false, &mut layout);
+    })
+    .unwrap();
+    let buf = term.backend().buffer();
+    let hero = layout.hero_area;
+    assert!(hero.height > 0, "unfocused render must still show the hero");
+    for y in [hero.y + 1, hero.y + hero.height - 2] {
+        for x in 0..hero.width {
+            assert_eq!(
+                buf[(x, y)].bg,
+                palette::PLAYBACK_PANEL_BG,
+                "unfocused hero padding row y={y} must use PLAYBACK_PANEL_BG at x={x}, got {:?}",
+                buf[(x, y)].bg
+            );
+        }
+    }
+    // Sanity: the unfocused hero must *not* use the focused bg anywhere
+    // on its padding rows.
+    assert_ne!(
+        palette::PLAYBACK_PANEL_BG,
+        palette::MEDIA_SELECTED_BG,
+        "the two bgs must differ for this test to be meaningful"
+    );
+}
+
+#[test]
+fn hero_top_and_bottom_padding_rows_are_colored_bg_with_no_content() {
+    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1"]);
+    // Give the selected item hero content so the content region is
+    // populated (images are disabled in the test stub).
+    {
+        let level = app.libs[0].nav_stack.last_mut().unwrap();
+        level.items[0].genre = "Sci-Fi".into();
+        level.items[0].production_year = 2020;
+        level.items[0].overview = "A hero overview for the top banner.".into();
+        level.cursor = 0;
+    }
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let buf = term.backend().buffer();
+    let hero = layout.hero_area;
+    let bg = palette::MEDIA_SELECTED_BG;
+
+    // The two padding rows (one inside each border) are bare colored bg:
+    // no text, no image, no border glyphs -- just empty cells on the
+    // focused bg.
+    for y in [hero.y + 1, hero.y + hero.height - 2] {
+        let row: String = (0..hero.width).map(|x| buf[(x, y)].symbol()).collect();
+        assert_eq!(
+            row.trim(),
+            "",
+            "padding row y={y} must have no content, got: {row:?}"
+        );
+        for x in 0..hero.width {
+            assert_eq!(
+                buf[(x, y)].bg,
+                bg,
+                "padding row y={y} must carry the colored bg at x={x}"
+            );
+        }
+    }
+
+    // The content region between them is populated (meta + overview text).
+    let content: String = (hero.y + 2..hero.y + hero.height - 2)
+        .map(|y| {
+            (0..hero.width)
+                .map(|x| buf[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        content.contains("Sci-Fi") && content.contains("2020"),
+        "content between the padding rows must render the meta line, got:\n{content}"
     );
 }
 
@@ -677,8 +898,9 @@ fn hero_follows_cursor_when_cursor_moves() {
         above.contains("Movie 0") && above.contains("Movie 5"),
         "top section must run through the selected row, got:\n{above}"
     );
-    // The rows below the hero continue with items 6+.
-    let below: String = (3 + 18..40)
+    // The rows below the hero continue with items 6+. The hero block is
+    // hero_height + 4 = 22 rows at this width (borders + padding included).
+    let below: String = (3 + 22..40)
         .map(|y| (0..82).map(|x| buf[(x, y)].symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
@@ -696,8 +918,14 @@ fn row_map_has_none_entries_for_hero_rows() {
     let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
     let hero = layout.hero_area;
     // Cursor 1 is in display row 0 (2-col); the hero occupies the rows
-    // right below it.
+    // right below it. The block is hero_height + 4 rows tall (top border,
+    // top padding, content, bottom padding, bottom border).
     assert_eq!(hero.y, 1);
+    assert_eq!(
+        hero.height,
+        super::hero_height_for_width(82) + 4,
+        "row map must reserve hero_height + 4 None entries for the hero block"
+    );
     let row_map = &layout.left_row_map;
     // Top section: row 0 maps to item 0.
     assert_eq!(row_map[0], Some(0), "top section row must map to its item");
@@ -726,17 +954,19 @@ fn row_map_has_none_entries_for_hero_rows() {
 
 #[test]
 fn auto_scroll_keeps_cursor_and_hero_visible() {
-    // 60 movies → 30 display rows (2-col) + 18 hero rows. A 20-row
-    // viewport can't show everything; the auto-scroll must bring the
-    // cursor row and the hero below it into view even from a stale scroll
-    // offset of 0.
+    // 60 movies → 30 display rows (2-col) + 22 hero rows (hero_height 18
+    // + 4 block rows at 82 wide). A 26-row viewport can't show everything;
+    // the auto-scroll must bring the cursor row and the hero below it into
+    // view even from a stale scroll offset of 0. The min-visible area is
+    // the cursor's row + 1 + hero_height + 4 (cursor row, then the whole
+    // block below it).
     let titles: Vec<String> = (0..60).map(|i| format!("Movie {i}")).collect();
     let title_refs: Vec<&str> = titles.iter().map(|s| s.as_str()).collect();
     let mut app = make_power_movie_list_app(title_refs);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 59;
     app.libs[0].nav_stack.last_mut().unwrap().scroll = 0;
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 20);
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 26);
     let area = layout.left_area;
 
     // The cursor's row and the hero below it are both on screen.
@@ -759,8 +989,9 @@ fn auto_scroll_keeps_cursor_and_hero_visible() {
 
 #[test]
 fn hero_height_scales_with_content_width() {
-    // The image cap (design decision 3a) bounds the hero at ≤ 18 rows at
-    // these widths; the list above and below keeps rows at any width.
+    // The image cap (design decision 3a) bounds the hero at ≤ 18 content
+    // rows at these widths; the hero *block* adds the 4 border/padding
+    // rows, and the list above and below keeps rows at any width.
     for width in [60u16, 82, 100, 150] {
         let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1", "Movie 2", "Movie 3"]);
         let mut layout = LayoutMain::default();
@@ -769,9 +1000,14 @@ fn hero_height_scales_with_content_width() {
 
         let hero = layout.hero_area;
         assert_eq!(hero.width, width);
+        assert_eq!(
+            hero.height,
+            super::hero_height_for_width(width) + 4,
+            "hero block = content + top border + top padding + bottom padding + bottom border at width {width}"
+        );
         assert!(
-            hero.height <= 18,
-            "hero must be bounded by the 12-row image cap + meta at width {width}, got {}",
+            hero.height <= 22,
+            "hero must be bounded by the 12-row image cap + meta + 4 block rows at width {width}, got {}",
             hero.height
         );
         // Cursor 0 → the hero sits one row below the selected item's row.

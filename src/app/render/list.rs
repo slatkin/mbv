@@ -18,6 +18,13 @@ const HERO_GAP_ROWS: u16 = 1;
 /// Row budget for the meta block under the hero image (meta line, spacer,
 /// overview/director lines).
 const HERO_META_ROWS: u16 = 5;
+/// Rows the hero *block* adds beyond the content rows, matching the
+/// selected-block look of music/homevideo: a `▁` top border row and a `▔`
+/// bottom border row (painted in `palette::SEEK_TRACK`) plus one bare
+/// colored-bg padding row just inside each border. The borders are part of
+/// the hero block's reserved rows (the list makes room), not painted over
+/// list content like `render_selected_block_borders` does.
+const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
 
 /// Height of the top hero banner for a content area `width` columns wide:
 /// the poster image at 16:9 in terminal cells (cells are roughly twice as
@@ -260,19 +267,22 @@ impl App {
         // The selected item's banner (poster + meta + overview) is painted
         // full-width just below the row containing the selected item; the
         // list renderer packs rows above and below it (the hero occupies
-        // `hero_rows` blank `DisplayRow::Hero` rows, painted over by
-        // `render_power_compact_detail` afterwards). The hero's height
-        // comes from the poster's 16:9 aspect (capped so the list keeps a
-        // few rows in wide terminals — design decision 3, option a). No
-        // hero when nothing is selected (e.g. an empty list) or when the
-        // selected item has no banner (folders, music) — the list then
-        // takes the whole content area.
+        // `hero_rows` blank `DisplayRow::Hero` rows, painted over
+        // afterwards). The block grows the content height by 4 so the
+        // `▁`/`▔` SEEK_TRACK borders and the two bare colored-bg padding
+        // rows are *inside* the hero block's reserved rows (the list makes
+        // room; nothing gets painted over). The content height comes from
+        // the poster's 16:9 aspect (capped so the list keeps a few rows in
+        // wide terminals — design decision 3, option a). No hero when
+        // nothing is selected (e.g. an empty list) or when the selected
+        // item has no banner (folders, music) — the list then takes the
+        // whole content area.
         let hero_rows: u16 = if self.library_tab > 0 {
             let lib_idx = self.library_tab - 1;
             let hero_item = self.power_selected_movie_item(lib_idx).is_some()
                 || self.power_selected_series_item(lib_idx).is_some();
             if hero_item {
-                hero_height_for_width(content_area.width)
+                hero_height_for_width(content_area.width) + HERO_BLOCK_EXTRA_ROWS
             } else {
                 0
             }
@@ -327,15 +337,71 @@ impl App {
         }
 
         // Paint the hero last, over the blank `DisplayRow::Hero` rows the
-        // list renderer left. The row renderer has already overwritten
-        // `cursor_screen_y` with the selected list row (the blinking cursor
-        // / mouse hit target stays on the list row, not the hero), so save
-        // and restore it around the hero paint.
+        // list renderer left: the colored bg (focused/unfocused pattern,
+        // matching music/homevideo's selected block), then the `▁` top and
+        // `▔` bottom borders in SEEK_TRACK on the block's outer rows, then
+        // the content offset 2 rows down past the top border + top padding.
+        // The row renderer has already overwritten `cursor_screen_y` with
+        // the selected list row (the blinking cursor / mouse hit target
+        // stays on the list row, not the hero), so save and restore it
+        // around the hero paint.
         if hero_rows > 0 {
             let saved_cursor_y = layout.cursor_screen_y;
+            let bg = if focused {
+                palette::MEDIA_SELECTED_BG
+            } else {
+                palette::PLAYBACK_PANEL_BG
+            };
+            // Colored bg across the padding + content rows (inside the
+            // borders, i.e. `hero_rows - 2` rows starting one row down).
+            f.render_widget(
+                Block::default().style(Style::default().bg(bg)),
+                Rect {
+                    x: layout.hero_area.x,
+                    y: layout.hero_area.y + 1,
+                    width: layout.hero_area.width,
+                    height: hero_rows - 2,
+                },
+            );
+            // Top `▁` / bottom `▔` borders in SEEK_TRACK, painted on the
+            // hero block's own outer rows (the list above and below made
+            // room for them).
+            let border_style = Style::default().fg(palette::SEEK_TRACK);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    "\u{2581}".repeat(layout.hero_area.width as usize),
+                    border_style,
+                ))),
+                Rect {
+                    x: layout.hero_area.x,
+                    y: layout.hero_area.y,
+                    width: layout.hero_area.width,
+                    height: 1,
+                },
+            );
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    "\u{2594}".repeat(layout.hero_area.width as usize),
+                    border_style,
+                ))),
+                Rect {
+                    x: layout.hero_area.x,
+                    y: layout.hero_area.y + hero_rows - 1,
+                    width: layout.hero_area.width,
+                    height: 1,
+                },
+            );
+            // Content, offset 2 rows down past the top border + top
+            // padding; the banner layout is a pure function of the panel
+            // width, so this paints the same content as before.
             self.render_power_compact_detail(
                 f,
-                layout.hero_area,
+                Rect {
+                    x: layout.hero_area.x,
+                    y: layout.hero_area.y + 2,
+                    width: layout.hero_area.width,
+                    height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
+                },
                 self.library_tab - 1,
                 focused,
                 layout,

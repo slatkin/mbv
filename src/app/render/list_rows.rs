@@ -49,8 +49,9 @@ pub(super) enum DisplayRow {
     /// one-column mode every such row carries exactly one index, so both
     /// modes share a single rendering path with no `cols == 1` branch.
     Item(Vec<usize>),
-    /// A display row occupied by the inline hero banner (painted separately
-    /// by `render_power_compact_detail`, over the blank rows the List
+    /// A display row occupied by the inline hero banner's block (top `▁`
+    /// border, colored bg padding + content, bottom `▔` border — painted
+    /// afterwards by `render_power_list` over the blank rows the List
     /// widget leaves here). Maps to `None` in the row map and an empty row
     /// in `left_item_rows`, so mouse clicks on it hit the hero, not an
     /// item.
