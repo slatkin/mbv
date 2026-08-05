@@ -14,6 +14,14 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
 
+/// Inset of the TRACK_BLOCK_BG box from the row's own bounds, on each side.
+const TRACK_BLOCK_MARGIN: u16 = 2;
+/// Further inset of the track text/cursor-highlight from the block's edge,
+/// on each side -- kept as its own constant so the "track text sits inside
+/// the block" relationship stays explicit instead of two independently
+/// hand-picked offsets.
+const TRACK_TEXT_MARGIN: u16 = 2;
+
 impl App {
     pub(super) fn render_power_grouped_album_rows(
         &mut self,
@@ -146,10 +154,10 @@ impl App {
             if vis_top <= vis_bot {
                 let block_y = area.y + (vis_top - offset) as u16;
                 let block_h = (vis_bot - vis_top + 1) as u16;
-                let block_x = area.x + 2;
+                let block_x = area.x + TRACK_BLOCK_MARGIN;
                 let block_w = area
                     .width
-                    .saturating_sub(4)
+                    .saturating_sub(2 * TRACK_BLOCK_MARGIN)
                     .saturating_sub(selected_art_reserved_w);
                 f.render_widget(
                     Block::default().style(Style::default().bg(palette::TRACK_BLOCK_BG)),
@@ -249,11 +257,11 @@ impl App {
                         let cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
                         let detail_focused = self.libs[lib_idx].album_track_focus.is_some();
                         let track_area = Rect {
-                            x: row_area.x + 6,
+                            x: row_area.x + TRACK_BLOCK_MARGIN + TRACK_TEXT_MARGIN,
                             y: row_area.y,
                             width: row_area
                                 .width
-                                .saturating_sub(10)
+                                .saturating_sub(2 * (TRACK_BLOCK_MARGIN + TRACK_TEXT_MARGIN))
                                 .saturating_sub(selected_art_reserved_w),
                             height,
                         };
@@ -262,11 +270,11 @@ impl App {
                             f.render_widget(
                                 Block::default().style(Style::default().bg(palette::BG_GREEN)),
                                 Rect {
-                                    x: row_area.x + 2,
+                                    x: row_area.x + TRACK_BLOCK_MARGIN,
                                     y: row_area.y + cursor.saturating_sub(scroll_offset) as u16,
                                     width: row_area
                                         .width
-                                        .saturating_sub(4)
+                                        .saturating_sub(2 * TRACK_BLOCK_MARGIN)
                                         .saturating_sub(selected_art_reserved_w),
                                     height: 1,
                                 },
@@ -283,7 +291,7 @@ impl App {
                             true,
                             false, // show_hint: AlbumActionHint row at top already shows it
                             0,     // art_reserved_w: already accounted for in track_area
-                            Some(row_area.x + 2),
+                            Some(row_area.x + TRACK_BLOCK_MARGIN),
                             layout,
                         );
                     }

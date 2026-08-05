@@ -507,7 +507,7 @@ impl App {
                         title_spans.push(Span::raw(" "));
                         title_spans.push(Span::styled(
                             pct.clone(),
-                            Style::default().fg(palette::MUTED),
+                            Style::default().fg(palette::FOAM),
                         ));
                     }
 

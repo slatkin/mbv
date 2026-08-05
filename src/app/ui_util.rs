@@ -105,6 +105,16 @@ pub fn fmt_duration_mmss(s: i64) -> String {
     format!("{}:{:02}", m, s)
 }
 
+/// Format playback progress as "N%", capped at 99% (100% reads as finished,
+/// not "in progress"). Empty when there's no meaningful progress to show.
+pub fn fmt_playback_pct(pos_ticks: i64, runtime_ticks: i64) -> String {
+    if pos_ticks > 0 && runtime_ticks > 0 {
+        format!("{}%", (pos_ticks * 100 / runtime_ticks.max(1)).min(99))
+    } else {
+        String::new()
+    }
+}
+
 pub fn trunc_overview(s: &str) -> String {
     let stripped = regex_strip_urls(s);
     trunc_str(stripped.trim(), 400)

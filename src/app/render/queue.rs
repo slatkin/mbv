@@ -9,14 +9,10 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
-// Throbber (1) + percent slot (3, right-aligned so "%" lands at a fixed
-// column across rows) + one DARK_BG indent right after the %.
-const QUEUE_NOW_PLAYING_COL_W: usize = 5;
-// Width of the percent slot inside the pill. pct_str is "N%" or "NN%",
-// so it gets left-padded with spaces to land the "%" at the slot's last
-// cell. 99% is the widest, so 3 is enough.
-const QUEUE_PCT_SLOT_W: usize = 3;
+// Extra gap reserved between the title and whatever follows it (inline
+// percent and/or the right-aligned duration), on top of their own widths
+// which are already accounted for separately via `pct_w`/`right_w`.
+const QUEUE_TITLE_QUIET_COLUMNS: usize = 2;
 
 impl App {
     /// Renders the "Queue" title pill (and optional Local/Remote scope pills)
@@ -351,11 +347,10 @@ impl App {
                     } else {
                         (item.playback_position_ticks, item.runtime_ticks)
                     };
-                    let pct_str = if pt > 0 && rt > 0 && !item.is_audio() {
-                        let pct = (pt * 100 / rt.max(1)).min(99);
-                        format!("{}%", pct)
-                    } else {
+                    let pct_str = if item.is_audio() {
                         String::new()
+                    } else {
+                        fmt_playback_pct(pt, rt)
                     };
 
                     // Show queue position (1-based) for all items, right-aligned
@@ -378,20 +373,16 @@ impl App {
                         palette::MUTED
                     };
 
-                    // Title truncated to leave room for indent, the "N. " prefix,
-                    // the now-playing gutter, the right gutter pad, and the
-                    // right-aligned duration + quiet columns.
+                    // Title truncated to leave room for indent, the "N. "
+                    // prefix, the inline progress percent (always reserved
+                    // when present, even once the title itself is cut off),
+                    // the right-aligned duration, and quiet columns.
                     let dur_visible = show_length && !dur.is_empty();
                     let pct_visible = !pct_str.is_empty();
-                    let show_throbber = is_active && focused;
+                    let pct_w = if pct_visible { 1 + pct_str.width() } else { 0 };
+                    let right_w = if dur_visible { dur.width() } else { 0 };
                     let title_w = track_content_w.saturating_sub(
-                        indent
-                            + num_w
-                            + 2
-                            + QUEUE_NOW_PLAYING_COL_W
-                            + 1
-                            + (if dur_visible { dur.width() } else { 0 })
-                            + QUEUE_TITLE_QUIET_COLUMNS,
+                        indent + num_w + 2 + pct_w + right_w + QUEUE_TITLE_QUIET_COLUMNS,
                     );
                     let title = trunc_str(&item.name, title_w);
 
@@ -407,11 +398,12 @@ impl App {
                         );
                     }
 
-                    // Inactive rows (not the now-playing item) match the
-                    // dimmed index-number/duration color when the queue
-                    // panel is unfocused, instead of standing out in the
-                    // brighter unfocused row color.
-                    let title_color = if is_active && !focused {
+                    // The now-playing row's title is always aqua, focused or
+                    // not. Other inactive rows match the dimmed index-number/
+                    // duration color when the queue panel is unfocused,
+                    // instead of standing out in the brighter unfocused row
+                    // color.
+                    let title_color = if is_active {
                         palette::AQUA
                     } else if !focused {
                         dim_color
@@ -428,69 +420,20 @@ impl App {
                             spans.push(Span::raw("  "));
                         }
                     }
-                    // "N. " track number — its trailing space is the left
-                    // padding of the now-playing gutter.
                     spans.push(Span::styled(prefix, Style::default().fg(dim_color)));
-                    // Now-playing gutter: throbber (AQUA) + progress (FOAM) on a
-                    // DARK_BG pill, or plain spaces on inactive rows. Sits in a
-                    // 5-cell column between the track number and the title: the
-                    // pill includes one DARK_BG indent right after the %.
-                    if show_throbber || pct_visible {
-                        // Only the now-playing row gets the pill treatment
-                        // (dark background, throbber). Other rows just show
-                        // plain foam/grey text on the normal row background.
-                        let pill_bg = if show_throbber {
-                            Some(palette::DARK_BG)
-                        } else {
-                            None
-                        };
-                        let with_bg = |mut s: Style| {
-                            if let Some(bg) = pill_bg {
-                                s = s.bg(bg);
-                            }
-                            s
-                        };
-                        // Cell 0: throbber (active) or a raw placeholder (inactive
-                        // rows with a percent but no throbber).
-                        if show_throbber {
-                            // to_symbol_span appends a trailing space; strip it so
-                            // the throbber sits flush against the percent slot.
-                            let throbber = self.now_playing_throbber_span();
-                            spans.push(Span::styled(
-                                throbber.content.trim_end().to_string(),
-                                with_bg(throbber.style),
-                            ));
-                        } else {
-                            spans.push(Span::raw(" "));
-                        }
-                        // Cells 1-3: percent slot, right-aligned so "%" lands at
-                        // column 3 on every row. Space-padded with the same bg
-                        // (DARK_BG on the now-playing row, none elsewhere).
-                        if pct_visible {
-                            spans.push(Span::styled(
-                                format!("{:>QUEUE_PCT_SLOT_W$}", pct_str),
-                                with_bg(Style::default().fg(palette::FOAM)),
-                            ));
-                        } else {
-                            spans.push(Span::raw(" ".repeat(QUEUE_PCT_SLOT_W)));
-                        }
-                        // Cell 4: one DARK_BG indent right after the %, inside
-                        // the pill. Only on the now-playing row and only when
-                        // there is actually a percent to indent past.
-                        if show_throbber && pct_visible {
-                            spans.push(Span::styled(" ", with_bg(Style::default())));
-                        } else {
-                            spans.push(Span::raw(" "));
-                        }
-                    } else {
-                        spans.push(Span::raw(" ".repeat(QUEUE_NOW_PLAYING_COL_W)));
-                    }
-                    // Right padding of the now-playing gutter, before the title.
-                    spans.push(Span::raw(" "));
+                    let title_w_actual = title.width();
                     spans.push(Span::styled(title, Style::default().fg(title_color)));
+                    if pct_visible {
+                        spans.push(Span::raw(" "));
+                        spans.push(Span::styled(
+                            pct_str,
+                            Style::default().fg(palette::FOAM),
+                        ));
+                    }
+
                     if dur_visible {
-                        let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
-                        let pad = track_content_w.saturating_sub(used + dur.width());
+                        let used = indent + num_w + 2 + title_w_actual + pct_w;
+                        let pad = track_content_w.saturating_sub(used + right_w);
                         spans.push(Span::raw(" ".repeat(pad)));
                         spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));
                     }

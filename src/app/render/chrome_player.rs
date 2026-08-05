@@ -276,19 +276,38 @@ impl App {
         let time_text = format!("{pos_str} / {dur_str}");
         let post_time_gap = "  ";
         let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
-        let throbber_w = 2; // space + throbber symbol (throbber span includes trailing space)
+        // Now-playing pill: throbber (1) + percent slot (3, right-aligned) +
+        // one trailing indent -- same layout as the queue list's pill, but
+        // on PLAYBACK_INDICATOR_BG (#2d353b) instead of the queue's DARK_BG
+        // (#1e2326).
+        const PILL_PCT_SLOT_W: usize = 3;
+        const PILL_W: usize = 1 + PILL_PCT_SLOT_W + 1;
         let fixed_w = glyph_w as usize
             + stop_w as usize
             + stop_gap.width()
             + next_w as usize
             + next_gap.width()
-            + throbber_w
+            + PILL_W
+            + 1 // gap between pill and title
             + 2 // spaces between title and time
             + time_text.width()
             + post_time_gap.width()
             + right_w as usize;
         let title_w = (area.width as usize).saturating_sub(fixed_w);
-        left.push(self.music_throbber_span());
+
+        let pill_bg = palette::PLAYBACK_INDICATOR_BG;
+        let pct_str = fmt_playback_pct(pos_ticks, rt_ticks);
+        let throbber = self.now_playing_throbber_span();
+        left.push(Span::styled(
+            throbber.content.trim_end().to_string(),
+            throbber.style.bg(pill_bg),
+        ));
+        left.push(Span::styled(
+            format!("{:>PILL_PCT_SLOT_W$}", pct_str),
+            Style::default().fg(palette::FOAM).bg(pill_bg),
+        ));
+        left.push(Span::styled(" ", Style::default().bg(pill_bg)));
+        left.push(Span::raw(" "));
         left.extend(self.playback_title_spans(title, title_color, title_w));
 
         left.push(Span::raw("  "));
