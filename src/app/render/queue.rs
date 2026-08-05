@@ -456,7 +456,7 @@ impl App {
 
         if need_sb {
             let max_off = total.saturating_sub(visible);
-            super::render_power_scrollbar(f, area, max_off, offset, palette::BG_GREEN_SOFT);
+            super::render_power_scrollbar(f, area, max_off, offset, palette::SOFT_WHITE);
         }
     }
 }
