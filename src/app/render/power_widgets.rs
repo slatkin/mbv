@@ -184,17 +184,11 @@ fn render_power_scrollbar_with_viewport_at(
     );
 }
 
-/// Paints a colored background block spanning display rows
-/// `[top_pad_abs, bottom_pad_abs]` (absolute/unscrolled indices into the
-/// complete display row sequence), clamped to the visible scroll window
-/// `[offset, offset+visible)`. The block is notched: a **tab** region paints
-/// rows `[top_pad_abs, item_row_abs]` at the selected cell's `slot`
-/// (x/width), and a **panel** region paints rows `[item_row_abs+1,
-/// bottom_pad_abs]` at the full content width. Both regions use the same
-/// `bg`, so they abut with no seam. In one-column mode the slot equals the
-/// full content width and the two rectangles tile today's single
-/// rectangle exactly. Call before rendering list/row content so the
-/// background shows through.
+/// Paints a colored background block spanning display rows `[top_pad_abs, bottom_pad_abs]`
+/// (absolute/unscrolled indices into the complete display row sequence), clamped to the
+/// visible scroll window `[offset, offset+visible)`. The block fills the full row width
+/// supplied by `area.x` and `area.width` (interior content can indent itself further).
+/// Call before rendering list/row content so the background shows through.
 pub(super) fn render_selected_block_background(
     f: &mut Frame,
     area: Rect,
@@ -202,38 +196,20 @@ pub(super) fn render_selected_block_background(
     visible: usize,
     top_pad_abs: usize,
     bottom_pad_abs: usize,
-    item_row_abs: usize,
-    slot: Rect,
     bg: Color,
 ) {
+    let vis_top = top_pad_abs.max(offset);
     let vis_bot = bottom_pad_abs.min(offset + visible.saturating_sub(1));
-    // Tab region: the selected cell's slot, spanning the block's top padding
-    // row through the item row. The top padding row must narrow with the
-    // tab -- leaving it full width would band across the unselected partner
-    // cell and destroy the notch.
-    let tab_top = top_pad_abs.max(offset);
-    let tab_bot = item_row_abs.min(offset + visible.saturating_sub(1));
-    if tab_top <= tab_bot {
-        f.render_widget(
-            Block::default().style(Style::default().bg(bg)),
-            Rect {
-                x: slot.x,
-                y: area.y + (tab_top - offset) as u16,
-                width: slot.width,
-                height: (tab_bot - tab_top + 1) as u16,
-            },
-        );
-    }
-    // Panel region: full content width below the item row (detail fillers).
-    let panel_top = (item_row_abs + 1).max(offset);
-    if panel_top <= vis_bot {
+    if vis_top <= vis_bot {
+        let block_y = area.y + (vis_top - offset) as u16;
+        let block_h = (vis_bot - vis_top + 1) as u16;
         f.render_widget(
             Block::default().style(Style::default().bg(bg)),
             Rect {
                 x: area.x,
-                y: area.y + (panel_top - offset) as u16,
+                y: block_y,
                 width: area.width,
-                height: (vis_bot - panel_top + 1) as u16,
+                height: block_h,
             },
         );
     }

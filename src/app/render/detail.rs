@@ -23,6 +23,45 @@ pub(super) fn compact_banner_image_cache_key(item_id: &str) -> String {
     format!("{item_id}:cmp_primary")
 }
 
+/// Paints the hero's top-row title (two-column lists only, when `show_title`
+/// is set at the call site): the selected item's name in yellow, bold when
+/// focused. Shared by the movie hero (`render_power_compact_detail`) and the
+/// Series inline hero (`render_series_inline_detail`), which otherwise
+/// duplicated this block with only the geometry differing. Returns `row + 1`
+/// if the title was painted, else `row` unchanged, so callers push
+/// subsequent content down by the result.
+pub(super) fn render_hero_title_row(
+    f: &mut Frame,
+    x: u16,
+    row: u16,
+    max_y: u16,
+    width: u16,
+    name: &str,
+    focused: bool,
+) -> u16 {
+    if row >= max_y {
+        return row;
+    }
+    let title = trunc_str(name, width as usize);
+    let title_style = if focused {
+        Style::default()
+            .fg(palette::YELLOW)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(palette::YELLOW)
+    };
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(title, title_style))),
+        Rect {
+            x,
+            y: row,
+            width,
+            height: 1,
+        },
+    );
+    row + 1
+}
+
 /// Estimated placeholder size for a poster that hasn't been fetched/decoded
 /// yet. Emby/TMDb primary movie art is overwhelmingly a 2:3 (width:height)
 /// aspect ratio, so fitting that ratio into the same `IMG_COLS x IMG_ROWS`
@@ -364,25 +403,8 @@ impl App {
         // one-column lists, where the full-width list-row title directly
         // above the hero already shows the name (and reserving the row there
         // would not have been budgeted for).
-        if show_title && row < max_y {
-            let title = trunc_str(&item.display_name(), inner_w);
-            let title_style = if focused {
-                Style::default()
-                    .fg(palette::YELLOW)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::YELLOW)
-            };
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(title, title_style))),
-                Rect {
-                    x: inner_x,
-                    y: row,
-                    width: inner_w16,
-                    height: 1,
-                },
-            );
-            row += 1;
+        if show_title {
+            row = render_hero_title_row(f, inner_x, row, max_y, inner_w16, &item.display_name(), focused);
         }
 
         let img_actual_w = content.img_actual_w;

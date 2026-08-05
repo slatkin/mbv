@@ -137,21 +137,7 @@ impl App {
                 palette::PLAYBACK_PANEL_BG
             };
             super::render_selected_block_background(
-                f,
-                area,
-                offset,
-                visible,
-                top_pad_abs,
-                bottom_pad_abs,
-                display_cursor,
-                // Single-column renderer: the tab slot spans the full width,
-                // collapsing the notch into a plain rectangle.
-                Rect {
-                    x: area.x,
-                    width: area.width,
-                    ..area
-                },
-                bg,
+                f, area, offset, visible, top_pad_abs, bottom_pad_abs, bg,
             );
         }
 

@@ -63,25 +63,16 @@ impl App {
         // poster/meta content down a row. Skipped for one-column lists, where
         // the full-width list-row title directly above the block already
         // shows the name.
-        if show_title && row < max_y {
-            let title = trunc_str(&item.display_name(), inner_w);
-            let title_style = if focused {
-                Style::default()
-                    .fg(palette::YELLOW)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::YELLOW)
-            };
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(title, title_style))),
-                Rect {
-                    x: inner_x,
-                    y: row,
-                    width: inner_w16,
-                    height: 1,
-                },
+        if show_title {
+            row = super::detail::render_hero_title_row(
+                f,
+                inner_x,
+                row,
+                max_y,
+                inner_w16,
+                &item.display_name(),
+                focused,
             );
-            row += 1;
         }
 
         // ── Series Primary image (right-aligned, text wraps around it) ───

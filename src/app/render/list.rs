@@ -69,8 +69,21 @@ impl App {
 
         let mut content_area = area;
 
-        // Store for click / page-size calculations.
-        layout.left_area = content_area;
+        // Selected movie/Series item, computed once and reused below for the
+        // prefetch gate, the hero row-count calc, and the hero paint --
+        // `power_selected_movie_item`/`power_selected_series_item` each clone
+        // the whole `MediaItem`, so one call keeps that to a single clone per
+        // frame instead of three.
+        let selected_movie_item = if self.library_tab > 0 {
+            self.power_selected_movie_item(self.library_tab - 1)
+        } else {
+            None
+        };
+        let selected_series_item = if selected_movie_item.is_none() && self.library_tab > 0 {
+            self.power_selected_series_item(self.library_tab - 1)
+        } else {
+            None
+        };
 
         // Column count for the two-column list layout, derived from the list
         // pane width -- the content area this renderer already receives,
@@ -127,36 +140,33 @@ impl App {
         // carousel. Only applies when a movie banner is actually showing
         // (i.e. this is a movies library with a leaf Movie selected); if
         // there's no banner, there's nothing to prefetch for.
-        if self.library_tab > 0 {
-            let lib_idx = self.library_tab - 1;
-            if self.power_selected_movie_item(lib_idx).is_some() {
-                const PREFETCH_AHEAD: usize = 3;
-                const PREFETCH_BEHIND: usize = 1;
-                let start = cursor.saturating_sub(PREFETCH_BEHIND);
-                let end = (cursor + PREFETCH_AHEAD + 1).min(items.len());
-                let prefetch: Vec<(String, String, String)> = items[start..end]
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, item)| {
-                        start + i != cursor && item.item_type == "Movie" && !item.is_folder
-                    })
-                    .map(|(_, item)| {
-                        (
-                            compact_banner_image_cache_key(&item.id),
-                            item.id.clone(),
-                            item.series_id.clone(),
-                        )
-                    })
-                    .collect();
-                if self.images_enabled() {
-                    for (cache_key, item_id, series_id) in prefetch {
-                        self.fetch_list_card_image_when_idle(
-                            cache_key,
-                            item_id,
-                            series_id,
-                            &["Primary"],
-                        );
-                    }
+        if selected_movie_item.is_some() {
+            const PREFETCH_AHEAD: usize = 3;
+            const PREFETCH_BEHIND: usize = 1;
+            let start = cursor.saturating_sub(PREFETCH_BEHIND);
+            let end = (cursor + PREFETCH_AHEAD + 1).min(items.len());
+            let prefetch: Vec<(String, String, String)> = items[start..end]
+                .iter()
+                .enumerate()
+                .filter(|(i, item)| {
+                    start + i != cursor && item.item_type == "Movie" && !item.is_folder
+                })
+                .map(|(_, item)| {
+                    (
+                        compact_banner_image_cache_key(&item.id),
+                        item.id.clone(),
+                        item.series_id.clone(),
+                    )
+                })
+                .collect();
+            if self.images_enabled() {
+                for (cache_key, item_id, series_id) in prefetch {
+                    self.fetch_list_card_image_when_idle(
+                        cache_key,
+                        item_id,
+                        series_id,
+                        &["Primary"],
+                    );
                 }
             }
         }
@@ -297,12 +307,12 @@ impl App {
         // movie hero's row math.
         let hero_rows: u16 = if self.library_tab > 0 {
             let lib_idx = self.library_tab - 1;
-            if self.power_selected_movie_item(lib_idx).is_some() {
+            if selected_movie_item.is_some() {
                 hero_height_for_width(content_area.width, cols > 1) + HERO_BLOCK_EXTRA_ROWS
-            } else if let Some(item) = self.power_selected_series_item(lib_idx) {
+            } else if let Some(item) = &selected_series_item {
                 let (in_selection, episode_count) = self.series_selection_state(lib_idx, &item.id);
                 self.series_inline_detail_rows(
-                    &item,
+                    item,
                     content_area.width,
                     cols > 1,
                     in_selection,
@@ -434,7 +444,7 @@ impl App {
             // Same movie/Series branch as the row-count calc above: a
             // selected Series renders its season pills + episode table
             // instead of the generic compact banner.
-            if self.power_selected_movie_item(lib_idx).is_some() {
+            if selected_movie_item.is_some() {
                 self.render_power_compact_detail(
                     f, content_rect, lib_idx, focused, cols > 1, layout,
                 );

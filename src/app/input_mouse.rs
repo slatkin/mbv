@@ -191,9 +191,9 @@ impl App {
                     // the existing row-map / arithmetic paths).
                     let cell_target: Option<Option<usize>> = {
                         use crate::app::library_column_width::{
-                            library_cell_width, library_column_count, LIBRARY_COLUMN_GAP,
+                            library_cell_width, LIBRARY_COLUMN_GAP,
                         };
-                        let cols = library_column_count(la.width);
+                        let cols = self.current_library_columns(lib_idx);
                         let cw = library_cell_width(la, cols) as usize;
                         let x = (col as usize).saturating_sub(la.x as usize);
                         if !self.layout.main.left_item_rows.is_empty() && cols > 1 && cw > 0 {

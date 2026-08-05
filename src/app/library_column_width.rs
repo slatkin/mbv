@@ -53,56 +53,9 @@ pub(super) fn library_cell_width(content_area: Rect, cols: usize) -> u16 {
         / cols
 }
 
-/// Rect of column `col` within `content_area`: `cols` equal cells separated
-/// by `LIBRARY_COLUMN_GAP`, cell `c` starting at `c * (cell_width + gap)`.
-/// The returned rect's `y`/`height` span the whole content area; callers
-/// that paint a fixed number of rows use only `x`/`width`.
-pub(super) fn library_cell_rect(content_area: Rect, cols: usize, col: usize) -> Rect {
-    let cell_w = library_cell_width(content_area, cols);
-    Rect {
-        x: content_area.x + (col as u16).saturating_mul(cell_w + LIBRARY_COLUMN_GAP),
-        y: content_area.y,
-        width: cell_w,
-        height: content_area.height,
-    }
-}
-
-/// Slot rect for painting the notched selected block, like
-/// `library_cell_rect` but with the rightmost cell's width extended to
-/// cover the trailing remainder column. When the content width minus the
-/// inter-column gap does not divide evenly by `cols` (e.g. width=149
-/// gives cells of 73+2+73=148 with 1 leftover col), the right cell
-/// absorbs that leftover so its tab joins the full-width panel below at
-/// the content area's right edge instead of leaving a 1-col strip of
-/// ordinary background between them.
-///
-/// The notched block this sized is gone with the hero-on-top change (the
-/// selected cell is a `▌`/`##` marker now), but the slot geometry stays
-/// for future cell work.
-#[allow(dead_code)]
-pub(super) fn library_cell_slot(content_area: Rect, cols: usize, col: usize) -> Rect {
-    let rect = library_cell_rect(content_area, cols, col);
-    if col + 1 == cols {
-        let right_edge = content_area.x + content_area.width;
-        Rect {
-            x: rect.x,
-            y: rect.y,
-            width: right_edge.saturating_sub(rect.x),
-            height: rect.height,
-        }
-    } else {
-        rect
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::layout::Rect;
-
-    fn area(width: u16) -> Rect {
-        Rect::new(0, 0, width, 10)
-    }
 
     #[test]
     fn column_count_threshold_boundary_both_directions() {
@@ -111,75 +64,5 @@ mod tests {
         assert_eq!(library_column_count(82), 2, "exactly at the threshold");
         assert_eq!(library_column_count(40), 1);
         assert_eq!(library_column_count(200), 2, "very wide panes cap at 2");
-    }
-
-    #[test]
-    fn one_column_cell_spans_the_full_content_area() {
-        let rect = library_cell_rect(area(60), 1, 0);
-        assert_eq!((rect.x, rect.width), (0, 60));
-        assert_eq!((rect.y, rect.height), (0, 10));
-    }
-
-    #[test]
-    fn two_column_cell_rect_arithmetic() {
-        // 82 - 2 gap = 80, /2 = 40 per cell.
-        let c0 = library_cell_rect(area(82), 2, 0);
-        assert_eq!((c0.x, c0.width), (0, 40));
-        let c1 = library_cell_rect(area(82), 2, 1);
-        assert_eq!(
-            (c1.x, c1.width),
-            (42, 40),
-            "cell 1 starts after cell 0 + gap"
-        );
-    }
-
-    #[test]
-    fn cell_rect_with_non_dividing_width_floors_cell_width() {
-        // 83 - 2 = 81, /2 = 40 (floored); one column is left over at the
-        // right edge and cell 1 still starts at 0 + 40 + 2 = 42.
-        let c0 = library_cell_rect(area(83), 2, 0);
-        assert_eq!((c0.x, c0.width), (0, 40));
-        let c1 = library_cell_rect(area(83), 2, 1);
-        assert_eq!((c1.x, c1.width), (42, 40));
-    }
-
-    #[test]
-    fn cell_rect_respects_content_area_origin() {
-        let area = Rect::new(5, 3, 84, 12);
-        let c1 = library_cell_rect(area, 2, 1);
-        assert_eq!(
-            (c1.x, c1.width),
-            (5 + 41 + 2, 41),
-            "(84-2)/2 = 41, cell 1 starts after cell 0 + gap"
-        );
-    }
-
-    #[test]
-    fn cell_slot_left_cell_matches_cell_rect() {
-        // The leftmost cell never absorbs a remainder, so its slot is the
-        // plain cell rect.
-        let slot = library_cell_slot(area(82), 2, 0);
-        let rect = library_cell_rect(area(82), 2, 0);
-        assert_eq!((slot.x, slot.width), (rect.x, rect.width));
-    }
-
-    #[test]
-    fn cell_slot_right_cell_absorbs_trailing_remainder() {
-        // Width 83: cells of 40+2+40 = 82 leaves 1 trailing col. The right
-        // cell's slot extends to absorb it so the tab joins the panel.
-        let slot = library_cell_slot(area(83), 2, 1);
-        assert_eq!(
-            (slot.x, slot.width),
-            (42, 41),
-            "right slot extends 1 col past the cell to the content area's right edge"
-        );
-    }
-
-    #[test]
-    fn cell_slot_even_width_unchanged() {
-        // Width 82 divides evenly: no trailing col, slot matches cell rect.
-        let slot = library_cell_slot(area(82), 2, 1);
-        let rect = library_cell_rect(area(82), 2, 1);
-        assert_eq!((slot.x, slot.width), (rect.x, rect.width));
     }
 }
