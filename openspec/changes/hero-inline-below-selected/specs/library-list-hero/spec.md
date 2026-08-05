@@ -64,8 +64,14 @@ ordinary list background, not `MEDIA_SELECTED_BG`.
 
 ### Hero interaction
 
-A mouse click inside the hero area MUST be treated as an Enter
-equivalent on the currently selected item. The hero is interactive.
+A single click inside the hero area MUST only focus the library panel
+(the cursor is already on the selected item). A double-click inside
+the hero area MUST be treated as an Enter equivalent on the currently
+selected item -- the same activation Enter and a double-click on the
+selected row perform (playing a movie, entering a Series' season/
+episode selection, etc.), so hero activation can't drift from the
+single-click-only-focuses convention used everywhere else in the
+library list. The hero is interactive.
 
 ### Invariant preserved
 

@@ -88,19 +88,17 @@ impl App {
 
     pub(super) fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
         {
-            // Click on the top hero banner: an Enter equivalent — open the
-            // selected item (design decision 5). Mirrors the double-click
-            // handler's non-folder guard so a Series/folder click only
-            // focuses the panel instead of drilling into a raw folder browse.
+            // Click on the inline hero: same as clicking anywhere else in
+            // the library pane -- a single click only focuses (the cursor
+            // is already on the selected item, so there's nothing else to
+            // move). Activation (playing a movie, entering a Series'
+            // season/episode selection) is a double-click gesture, handled
+            // in `handle_mouse`'s `is_double` branch alongside every other
+            // library-row activation, so it can't drift from Enter's
+            // behavior or from the app-wide "single click only focuses"
+            // convention.
             if self.layout.main.hero_area.contains((col, row).into()) && self.library_tab > 0 {
                 self.set_panel_focus(PanelFocus::Library);
-                if self
-                    .current_lib_item()
-                    .map(|i| !i.is_folder)
-                    .unwrap_or(false)
-                {
-                    self.select();
-                }
                 return true;
             }
             if self.has_direct_remote_queue() {
