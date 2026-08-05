@@ -70,6 +70,20 @@ pub fn fmt_duration(s: i64) -> String {
     }
 }
 
+/// Format duration as `H:MM:SS` (or `M:SS` when under an hour). Hours and
+/// minutes are unpadded; seconds are always zero-padded to two digits so
+/// `1:5` and `1:50` are still distinguishable at a glance. Intended for
+/// right-aligned list cells where a ragged left edge reads cleaner than
+/// padded columns.
+/// Examples: "0:00", "0:45", "3:05", "59:59", "1:0:00", "1:23:45".
+pub fn fmt_duration_short(s: i64) -> String {
+    if s >= 3600 {
+        format!("{}:{}:{:02}", s / 3600, (s % 3600) / 60, s % 60)
+    } else {
+        format!("{}:{:02}", s / 60, s % 60)
+    }
+}
+
 /// Format duration without seconds — for video items in the queue.
 /// Examples: "<1′", "37′", "125′".
 pub fn fmt_duration_approx(s: i64) -> String {

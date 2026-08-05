@@ -392,15 +392,7 @@ impl App {
                     let avail = (row_rect.width as usize).saturating_sub(2);
 
                     let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
-                        let total_secs = item.runtime_ticks / TICKS_PER_SECOND;
-                        let hours = total_secs / 3600;
-                        let mins = (total_secs % 3600) / 60;
-                        let secs = total_secs % 60;
-                        if hours > 0 {
-                            format!("{}:{:02}:{:02}", hours, mins, secs)
-                        } else {
-                            format!("{}:{:02}", mins, secs)
-                        }
+                        fmt_duration_short(item.runtime_ticks / TICKS_PER_SECOND)
                     } else {
                         String::new()
                     };
@@ -547,10 +539,7 @@ impl App {
                     let left_pad_str = " ".repeat(META_INNER_PAD + inner_pad);
                     let full_meta = format!("{}{}", left_pad_str, meta_text);
                     let full_meta = format!("{:width$}", full_meta, width = META_COL_W);
-                    meta_spans.push(Span::styled(
-                        full_meta,
-                        Style::default().fg(palette::SOFT_WHITE),
-                    ));
+                    meta_spans.push(Span::styled(full_meta, Style::default().fg(palette::GREEN)));
 
                     // Combine and render
                     let mut all_spans = title_spans;

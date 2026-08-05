@@ -211,7 +211,10 @@ impl App {
                 local_btn_text,
                 Style::default().fg(palette::YELLOW).bg(local_btn_bg),
             ),
-            Span::styled(divider_text, Style::default().fg(palette::WHITE).bg(base_bg)),
+            Span::styled(
+                divider_text,
+                Style::default().fg(palette::WHITE).bg(base_bg),
+            ),
             Span::styled(
                 remote_btn_text,
                 Style::default().fg(palette::AQUA).bg(remote_btn_bg),
@@ -355,11 +358,7 @@ impl App {
 
                     let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
                     let dur = if len_secs > 0 {
-                        if item.is_audio() {
-                            fmt_duration(len_secs)
-                        } else {
-                            fmt_duration_approx(len_secs)
-                        }
+                        fmt_duration_short(len_secs)
                     } else {
                         String::new()
                     };
@@ -503,18 +502,7 @@ impl App {
                         spans.push(Span::raw(" "));
                     }
                     if dur_visible {
-                        if let Some(split) = dur.rfind('′') {
-                            spans.push(Span::styled(
-                                dur[..split].to_string(),
-                                Style::default().fg(palette::GREEN),
-                            ));
-                            spans.push(Span::styled(
-                                "′".to_string(),
-                                Style::default().fg(palette::SOFT_WHITE),
-                            ));
-                        } else {
-                            spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));
-                        }
+                        spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));
                     }
 
                     list_items.push(ListItem::new(Line::from(spans)).style(row_style));
