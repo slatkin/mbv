@@ -135,6 +135,18 @@ impl App {
         // Store for click / page-size calculations.
         layout.left_area = content_area;
 
+        // Column count for the two-column list layout, derived from the list
+        // pane width -- the content area this renderer already receives,
+        // which excludes the queue column and widens when
+        // `queue_column_collapsed` is set, so both feed through with no
+        // separate code path. Season grids keep their own single-column
+        // stride (see `is_viewing_season_grid`).
+        let cols = if self.library_tab > 0 && self.is_viewing_season_grid(self.library_tab - 1) {
+            1
+        } else {
+            crate::app::library_column_width::library_column_count(content_area.width)
+        };
+
         // Gather items, cursor, stored scroll offset, and the *true* library total
         // (not just how many pages have been fetched so far) from the appropriate
         // source.
@@ -375,7 +387,6 @@ impl App {
             );
         } else if use_letter_groups {
             let ctx = ListRenderCtx {
-                area,
                 content_area,
                 items: &items,
                 cursor,
@@ -383,6 +394,7 @@ impl App {
                 banner_rows,
                 banner_content_rows,
                 series_detail_rows,
+                cols,
                 focused,
             };
             final_offset = self.render_power_letter_grouped_rows(
@@ -394,7 +406,6 @@ impl App {
             );
         } else {
             let ctx = ListRenderCtx {
-                area,
                 content_area,
                 items: &items,
                 cursor,
@@ -402,6 +413,7 @@ impl App {
                 banner_rows,
                 banner_content_rows,
                 series_detail_rows,
+                cols,
                 focused,
             };
             final_offset = self.render_power_plain_rows(f, ctx, layout);

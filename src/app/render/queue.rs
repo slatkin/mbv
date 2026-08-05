@@ -425,10 +425,7 @@ impl App {
                     spans.push(Span::styled(title, Style::default().fg(title_color)));
                     if pct_visible {
                         spans.push(Span::raw(" "));
-                        spans.push(Span::styled(
-                            pct_str,
-                            Style::default().fg(palette::FOAM),
-                        ));
+                        spans.push(Span::styled(pct_str, Style::default().fg(palette::FOAM)));
                     }
 
                     if dur_visible {

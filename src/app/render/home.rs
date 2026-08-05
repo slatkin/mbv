@@ -3,7 +3,7 @@ use super::home_hero::KeepWatchingHeroLayout;
 use super::home_video::power_home_panel_scroll;
 
 use crate::app::layout::LayoutMain;
-use crate::app::{palette, App};
+use crate::app::{palette, App, POWER_TWO_COLUMN_THRESHOLD};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -110,7 +110,9 @@ impl App {
         // flat cursor item whether the active pill is Continue Watching or one
         // of the Newest sections.
         let hero_item = self.power_home_current_item();
-        let two_column = area.width >= 80;
+        // Same threshold the library list uses to switch to two columns, so
+        // Home's hero/list split and the library list cross over together.
+        let two_column = area.width >= POWER_TWO_COLUMN_THRESHOLD;
 
         // Hero data: (item, meta_area, img_area, meta_layout)
         let hero_data: Option<(mbv_core::api::MediaItem, Rect, Rect, KeepWatchingHeroLayout)>;

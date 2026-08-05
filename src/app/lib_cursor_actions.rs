@@ -4,6 +4,97 @@ use mbv_core::api::MediaItem;
 use std::time::Instant;
 
 impl App {
+    /// Number of columns the currently-rendered library list uses: 1 for
+    /// every single-column renderer (season grids, grouped album views,
+    /// music group views, feed home-video group views) and the
+    /// pane-derived count for the plain and letter-grouped list renderers.
+    /// Search results always render through the plain (column-aware)
+    /// renderer, so they use the pane-derived count even inside a music
+    /// library at the album-folder level.
+    pub(super) fn current_library_columns(&self, lib_idx: usize) -> usize {
+        use crate::app::library_column_width::library_column_count;
+        if self.libs[lib_idx].search.is_some() {
+            return library_column_count(self.layout.main.left_area.width);
+        }
+        if self.is_viewing_season_grid(lib_idx)
+            || self.is_viewing_album_folders(lib_idx)
+            || self.is_music_group_view(lib_idx)
+            || self.is_feed_home_video_group_view(lib_idx)
+        {
+            return 1;
+        }
+        library_column_count(self.layout.main.left_area.width)
+    }
+
+    /// Moves the library cursor vertically by `item_rows` display rows
+    /// (1 for up/down, one viewport for page keys). Flat lists stride by
+    /// `cols` items per row; letter-grouped lists move through the laid-out
+    /// row map, since independent bucket packing means item index no longer
+    /// maps to row by division. Single-column views (music groups, grouped
+    /// albums, feed home-video groups, season grids) receive `item_rows`
+    /// exactly as they do today.
+    pub(super) fn move_lib_cursor_rows(&mut self, item_rows: i64) {
+        let lib_idx = self.library_tab.saturating_sub(1);
+
+        // Letter-grouped lists: resolve the target item through the last
+        // frame's laid-out item rows. The grouped-album view also publishes
+        // `left_sorted_indices` but renders single-column, so it is excluded
+        // (its own display-order cursor handling keeps working unchanged).
+        if self.libs[lib_idx].search.is_none()
+            && self.libs[lib_idx].album_track_focus.is_none()
+            && !self.is_viewing_album_folders(lib_idx)
+            && !self.layout.main.left_sorted_indices.is_empty()
+        {
+            if let Some(delta) = self.letter_vertical_delta(lib_idx, item_rows) {
+                self.move_lib_cursor(delta);
+                return;
+            }
+        }
+
+        let cols = self.current_library_columns(lib_idx);
+        self.move_lib_cursor(item_rows * cols as i64);
+    }
+
+    /// Computes the flat (sorted-order) delta that lands the cursor on the
+    /// item `item_rows` rows up (negative) or down (positive) from its
+    /// current display row, per the last frame's laid-out item rows.
+    /// Headers/spacers/fillers do not participate: the target is the
+    /// `item_rows`-th *item row* away, keeping the cursor's column (a
+    /// ragged target row falls back to its last item; moving past the end
+    /// clamps to the last item). Returns `None` when the layout is stale
+    /// (cursor not found), letting the caller fall back to flat arithmetic.
+    fn letter_vertical_delta(&self, lib_idx: usize, item_rows: i64) -> Option<i64> {
+        let sorted = &self.layout.main.left_sorted_indices;
+        let all_rows = &self.layout.main.left_item_rows;
+        if all_rows.is_empty() || sorted.is_empty() {
+            return None;
+        }
+        let item_row_list: Vec<&Vec<usize>> = all_rows.iter().filter(|r| !r.is_empty()).collect();
+        if item_row_list.is_empty() {
+            return None;
+        }
+        let cursor = self.libs[lib_idx].nav_stack.last()?.cursor;
+        let (cur_row, cur_col) = item_row_list
+            .iter()
+            .enumerate()
+            .find_map(|(r, row)| row.iter().position(|&i| i == cursor).map(|col| (r, col)))?;
+        let row_count = item_row_list.len();
+        let target_row = if item_rows < 0 {
+            cur_row.saturating_sub(item_rows.unsigned_abs() as usize)
+        } else {
+            cur_row
+                .saturating_add(item_rows as usize)
+                .min(row_count.saturating_sub(1))
+        };
+        let target = item_row_list[target_row]
+            .get(cur_col)
+            .copied()
+            .or_else(|| item_row_list[target_row].last().copied())?;
+        let cur_pos = sorted.iter().position(|&i| i == cursor)?;
+        let target_pos = sorted.iter().position(|&i| i == target)?;
+        Some(target_pos as i64 - cur_pos as i64)
+    }
+
     pub(super) fn move_lib_cursor(&mut self, delta: i64) {
         let now = Instant::now();
         let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;

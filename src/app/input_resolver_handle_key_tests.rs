@@ -316,45 +316,47 @@ fn home_search_esc_closes_via_handle_key() {
 }
 
 #[test]
-fn home_search_char_capture_wins_over_h_power_sidebar_toggle_via_handle_key() {
-    // Regression guard: `power_sidebar_toggle_h` must stay ordered after
+fn home_search_char_capture_wins_over_x_power_sidebar_toggle_via_handle_key() {
+    // Regression guard: `power_sidebar_toggle_x` must stay ordered after
     // `home_search` in CONTEXT_STACK (matching the pre-phase-2 source,
     // where the h-toggle ran after all three search blocks). If it were
-    // ever reordered ahead of home_search, pressing the literal 'h'
+    // ever reordered ahead of home_search, pressing the literal 'x'
     // character while a search box is focused would toggle the sidebar
-    // instead of typing 'h' into the query — a real behavior change.
+    // instead of typing 'x' into the query — a real behavior change.
+    // (The toggle key used to be 'h' before being moved to 'x' so 'h'
+    // could be repurposed for vim-style horizontal navigation.)
     let mut app = make_app_stub();
     app.search.set_state_for_test(Some(test_home_search()));
     if let Some(hs) = app.search.state_mut() {
         hs.input_focused = true;
     }
     let collapsed_before = app.queue_column_collapsed;
-    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(
         app.search.state().unwrap().query,
-        "h",
-        "home search must capture the literal 'h' character"
+        "x",
+        "home search must capture the literal 'x' character"
     );
     assert_eq!(
         app.queue_column_collapsed, collapsed_before,
-        "Sidebar must not toggle while home search captures 'h'"
+        "Sidebar must not toggle while home search captures 'x'"
     );
 }
 
 #[test]
-fn h_toggles_sidebar_via_handle_key() {
+fn x_toggles_sidebar_via_handle_key() {
     let mut app = make_app_stub();
     let before = app.queue_column_collapsed;
-    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_ne!(app.queue_column_collapsed, before);
 }
 
 #[test]
-fn h_does_not_toggle_power_sidebar_while_context_menu_is_open_via_handle_key() {
+fn x_does_not_toggle_power_sidebar_while_context_menu_is_open_via_handle_key() {
     let mut app = make_app_stub();
     app.context_menu = Some(test_empty_context_menu());
     let before = app.queue_column_collapsed;
-    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(
         app.queue_column_collapsed, before,
         "Sidebar must not toggle while a context menu is open"
@@ -362,19 +364,34 @@ fn h_does_not_toggle_power_sidebar_while_context_menu_is_open_via_handle_key() {
 }
 
 #[test]
-fn h_moves_queue_focus_to_library_when_collapsing_power_sidebar() {
+fn x_moves_queue_focus_to_library_when_collapsing_power_sidebar() {
     let mut app = make_app_stub();
     app.panel_focus = crate::app::PanelFocus::Queue;
 
-    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
 
     assert!(app.queue_column_collapsed);
     assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
 
-    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
 
     assert!(!app.queue_column_collapsed);
     assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
+}
+
+/// Regression guard in the other direction: the sidebar toggle key used to
+/// be 'h'; the toggle moved to 'x' so 'h' could be repurposed for vim-style
+/// horizontal navigation in 2-col library lists. Make sure 'h' no longer
+/// collapses the sidebar on its own.
+#[test]
+fn h_no_longer_toggles_sidebar_via_handle_key() {
+    let mut app = make_app_stub();
+    let before = app.queue_column_collapsed;
+    app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+    assert_eq!(
+        app.queue_column_collapsed, before,
+        "Sidebar toggle moved from 'h' to 'x'; 'h' must not toggle the sidebar"
+    );
 }
 
 #[test]
@@ -555,7 +572,7 @@ fn context_stack_order_is_pinned() {
             "queue_column_width",
             "home_search",
             "lib_search",
-            "sidebar_toggle_h",
+            "sidebar_toggle_x",
             "confirm_skip_intro",
             "confirm_next_up",
             "clear_queue_prompt_c",

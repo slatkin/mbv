@@ -147,6 +147,91 @@ fn down_always_moves_the_list_cursor_never_scrolls_the_banner() {
     );
 }
 
+// Vim-style navigation for the two-column library list: j/k mirror Up/Down
+// in any column count; h/l move across cells in 2-col mode only and stay
+// unbound (so the user can type 'h' and 'l' as query characters) in 1-col
+// mode. The sidebar-toggle key moved from 'h' to 'x' to free 'h' for this.
+#[test]
+fn hjkl_navigates_two_column_library_list_via_handle_key() {
+    let mut app = make_power_movie_app();
+    // Four movies => two 2-col rows: [0,1] / [2,3].
+    let mut m2 = make_item("Third Movie", "Movie");
+    m2.id = "movie-3".into();
+    let mut m3 = make_item("Fourth Movie", "Movie");
+    m3.id = "movie-4".into();
+    app.libs[0].nav_stack[0].items.push(m2);
+    app.libs[0].nav_stack[0].items.push(m3);
+    // Force the layout to read as 2-col so the h/l guard passes.
+    app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 84, 20);
+
+    // l moves right one cell: 0 -> 1.
+    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack[0].cursor, 1, "'l' should move right");
+
+    // h moves left one cell: 1 -> 0.
+    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack[0].cursor, 0, "'h' should move left");
+
+    // j moves down one row in 2-col: 0 -> 2.
+    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+    assert_eq!(
+        app.libs[0].nav_stack[0].cursor, 2,
+        "'j' should move down one row"
+    );
+
+    // k moves up one row in 2-col: 2 -> 0.
+    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+    assert_eq!(
+        app.libs[0].nav_stack[0].cursor, 0,
+        "'k' should move up one row"
+    );
+}
+
+#[test]
+fn hl_are_unbound_in_one_column_library_list() {
+    let mut app = make_power_movie_app();
+    // Force the layout to read as 1-col so the h/l guard fails.
+    app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 60, 20);
+
+    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
+    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE));
+    // Cursor must not have moved: h and l fell through as unbound.
+    assert_eq!(
+        app.libs[0].nav_stack[0].cursor, 0,
+        "h/l must stay unbound in 1-col mode (so they remain free as input characters)"
+    );
+}
+
+#[test]
+fn lib_search_ignores_navigation_keys_and_only_accepts_query_editing() {
+    // Regression: per design, when the lib search box is open and the user
+    // is typing into the query, NO navigation key should fire -- not
+    // Up/Down/PageUp/PageDown, not Enter, not h/j/k/l. Only Esc, Backspace,
+    // and printable characters are recognised. This prevents "h" typed into
+    // a query for "Harry Potter" from being silently consumed as nav.
+    let mut app = make_power_movie_app();
+    app.libs[0].search = Some(crate::app::LibSearch {
+        query: String::new(),
+        items: app.libs[0].nav_stack[0].items.clone(),
+        results: (0..app.libs[0].nav_stack[0].items.len()).collect(),
+        cursor: 0,
+        scroll: 0,
+        loading: false,
+    });
+
+    // Type a multi-letter query that uses every previously-bound letter.
+    for c in "hjklll".chars() {
+        let _ = app.handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
+    }
+    assert_eq!(
+        app.libs[0].search.as_ref().unwrap().query,
+        "hjklll",
+        "h/j/k/l must be typed into the query, not consumed as nav"
+    );
+    // Cursor stays at 0 -- nothing has moved it.
+    assert_eq!(app.libs[0].search.as_ref().unwrap().cursor, 0);
+}
+
 #[test]
 fn shift_right_resizes_without_switching_focus() {
     let mut app = make_power_movie_app();

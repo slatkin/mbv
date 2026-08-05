@@ -30,6 +30,7 @@ pub(crate) mod layout;
 mod lib_cursor_actions;
 mod lib_event_actions;
 mod library_browse_actions;
+mod library_column_width;
 mod library_load_actions;
 mod library_position_state;
 mod library_route;
@@ -158,6 +159,12 @@ static SESSIONS_LOAD_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
 pub(super) const POWER_LEFT_WIDTH_STEP: u16 = 5;
+/// Minimum list-pane / Home-pane width at which Power View switches to a
+/// two-column layout. Used by both the library list renderer
+/// (`library_column_count`) and the Home view's hero/list split, so they
+/// cross the threshold together. Equals `2 * LIBRARY_COLUMN_MIN_WIDTH +
+/// LIBRARY_COLUMN_GAP`.
+pub(super) const POWER_TWO_COLUMN_THRESHOLD: u16 = 82;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
 pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
 /// Left margin for the tab row. The control pill used to live here (hence

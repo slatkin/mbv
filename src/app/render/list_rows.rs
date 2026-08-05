@@ -66,7 +66,10 @@ pub(super) fn focused_or_muted_soft_white(focused: bool) -> Color {
 pub(super) enum DisplayRow {
     Spacer,
     LetterHeader(String),
-    Item(usize),
+    /// One display row: the item indices occupying it, in column order. In
+    /// one-column mode every such row carries exactly one index, so both
+    /// modes share a single rendering path with no `cols == 1` branch.
+    Item(Vec<usize>),
     BannerFiller,
     SeriesDetailFiller,
 }
@@ -75,11 +78,7 @@ pub(super) enum DisplayRow {
 /// (`render_power_letter_grouped_rows`, `render_power_plain_rows`): the
 /// prelude values both kinds' bodies read, factored out so each callee takes
 /// one struct instead of the same eight-plus positional arguments.
-/// `area` and `content_area` differ only when a search input box has shifted
-/// `content_area` down (see `render_power_list`'s prelude); both are read
-/// independently by the bodies, so both are carried.
 pub(super) struct ListRenderCtx<'a> {
-    pub(super) area: Rect,
     pub(super) content_area: Rect,
     pub(super) items: &'a [mbv_core::api::MediaItem],
     pub(super) cursor: usize,
@@ -87,41 +86,48 @@ pub(super) struct ListRenderCtx<'a> {
     pub(super) banner_rows: usize,
     pub(super) banner_content_rows: usize,
     pub(super) series_detail_rows: usize,
+    /// Column count for this frame's list pane width (1 or 2).
+    pub(super) cols: usize,
     pub(super) focused: bool,
 }
 
+/// Pushes the filler rows that precede the selected item's own row (the
+/// colored block's top padding + rule space). `row_selected` is true when
+/// the row being built holds the cursor item; fillers attach to the whole
+/// row, never displacing the item that shares it in two-column mode.
 pub(super) fn push_selected_detail_fillers_before(
     rows: &mut Vec<DisplayRow>,
-    item_idx: usize,
-    cursor: usize,
+    row_selected: bool,
     banner_rows: usize,
     series_detail_rows: usize,
 ) {
-    if banner_rows > 0 && item_idx == cursor {
+    if banner_rows > 0 && row_selected {
         rows.push(DisplayRow::BannerFiller);
         rows.push(DisplayRow::BannerFiller);
     }
-    if series_detail_rows > 0 && item_idx == cursor {
+    if series_detail_rows > 0 && row_selected {
         rows.push(DisplayRow::SeriesDetailFiller);
         rows.push(DisplayRow::SeriesDetailFiller);
     }
 }
 
+/// Pushes the filler rows that follow the selected item's own row (banner
+/// content + bottom padding, series detail rows). `row_selected` is true
+/// when the row just pushed holds the cursor item.
 pub(super) fn push_selected_detail_fillers_after(
     rows: &mut Vec<DisplayRow>,
-    item_idx: usize,
-    cursor: usize,
+    row_selected: bool,
     banner_rows: usize,
     series_detail_rows: usize,
 ) {
-    if banner_rows > 0 && item_idx == cursor {
+    if banner_rows > 0 && row_selected {
         for _ in 0..banner_rows.saturating_sub(2) {
             rows.push(DisplayRow::BannerFiller);
         }
         rows.push(DisplayRow::BannerFiller);
         rows.push(DisplayRow::BannerFiller);
     }
-    if series_detail_rows > 0 && item_idx == cursor {
+    if series_detail_rows > 0 && row_selected {
         for _ in 0..series_detail_rows {
             rows.push(DisplayRow::SeriesDetailFiller);
         }
@@ -210,7 +216,9 @@ pub(super) fn build_list_row_spans(
 /// The colored block starts at the spacer row above the selected item and runs
 /// through the spacer row below the episode list; the SeriesDetailFiller top
 /// border (▁) and the bottom border (▔, drawn inside `render_series_inline_detail`)
-/// are left uncolored so they blend into the existing background.
+/// are left uncolored so they blend into the existing background. The block is
+/// notched: the tab (selected cell's `slot`) covers the padding + item rows,
+/// the panel covers the full content width below the item row.
 pub(super) fn render_series_detail_background(
     f: &mut Frame,
     content_area: Rect,
@@ -218,6 +226,7 @@ pub(super) fn render_series_detail_background(
     visible: usize,
     display_cursor: usize,
     series_detail_rows: usize,
+    slot: Rect,
     focused: bool,
 ) {
     if series_detail_rows == 0 {
@@ -237,6 +246,41 @@ pub(super) fn render_series_detail_background(
         visible,
         series_rule_top,
         series_rule_bottom,
+        display_cursor,
+        slot,
         bg,
     );
+}
+
+/// Builds the padded spans for one item rendered into a `cell_width`-wide
+/// cell: the existing marker/title/metadata/truncation logic operating
+/// against the narrower cell width. Returns the cell's spans plus trailing
+/// padding so the next cell starts at its own x offset; `pad_to` is the
+/// total width to fill (cell width, plus the inter-column gap for every
+/// cell except the last in its row).
+pub(super) fn item_cell_spans(
+    title: String,
+    dur_str: String,
+    selected: bool,
+    selected_has_banner: bool,
+    is_series: bool,
+    focused: bool,
+    fg: Color,
+    pad_to: usize,
+) -> Vec<Span<'static>> {
+    let mut spans = build_list_row_spans(
+        title,
+        dur_str,
+        selected,
+        selected_has_banner,
+        is_series,
+        focused,
+        fg,
+    );
+    let used: usize = spans.iter().map(|s| s.width()).sum();
+    let pad = pad_to.saturating_sub(used);
+    if pad > 0 {
+        spans.push(Span::raw(" ".repeat(pad)));
+    }
+    spans
 }

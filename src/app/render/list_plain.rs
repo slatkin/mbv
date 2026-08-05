@@ -1,10 +1,11 @@
 use super::super::ui_util::*;
 use super::list_rows::{
-    build_list_row_spans, focused_or_subtle, push_selected_detail_fillers_after,
+    focused_or_subtle, item_cell_spans, push_selected_detail_fillers_after,
     push_selected_detail_fillers_before, render_series_detail_background,
     selected_detail_lower_bound, DisplayRow, ListRenderCtx, COMPACT_MOVIE_BANNER_INDENT,
 };
 use crate::app::layout::LayoutMain;
+use crate::app::library_column_width::{library_cell_slot, library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
@@ -26,7 +27,6 @@ impl App {
         layout: &mut LayoutMain,
     ) -> usize {
         let ListRenderCtx {
-            area,
             content_area,
             items,
             cursor,
@@ -34,35 +34,49 @@ impl App {
             banner_rows,
             banner_content_rows,
             series_detail_rows,
+            cols,
             focused,
         } = ctx;
         let n = items.len();
         let visible = content_area.height as usize;
+        let cell_w = library_cell_width(content_area, cols) as usize;
 
+        // Build display rows row-major: item `i` occupies column `i % cols`
+        // of row `i / cols`. In one-column mode every row carries exactly
+        // one index, so both modes share this single path. Detail fillers
+        // attach to the row containing the cursor and never displace the
+        // item sharing that row.
         let mut display_rows: Vec<DisplayRow> =
-            Vec::with_capacity(n + banner_rows + series_detail_rows);
-        for i in 0..n {
+            Vec::with_capacity(n / cols.max(1) + banner_rows + series_detail_rows + 2);
+        for item_row in (0..n).collect::<Vec<_>>().chunks(cols.max(1)) {
+            let row_selected = item_row.contains(&cursor);
             push_selected_detail_fillers_before(
                 &mut display_rows,
-                i,
-                cursor,
+                row_selected,
                 banner_rows,
                 series_detail_rows,
             );
-            display_rows.push(DisplayRow::Item(i));
+            display_rows.push(DisplayRow::Item(item_row.to_vec()));
             push_selected_detail_fillers_after(
                 &mut display_rows,
-                i,
-                cursor,
+                row_selected,
                 banner_rows,
                 series_detail_rows,
             );
         }
         let total_display = display_rows.len();
+        // `display_cursor` is the index of the *row containing* the cursor
+        // item, so the scroll clamp keeps the whole block (tab + panel) on
+        // screen together; the partner item on that row moves with it.
         let display_cursor = display_rows
             .iter()
-            .position(|r| matches!(r, DisplayRow::Item(i) if *i == cursor))
+            .position(|r| matches!(r, DisplayRow::Item(idxs) if idxs.contains(&cursor)))
             .unwrap_or(0);
+        let cursor_col = cursor % cols.max(1);
+        // Tab slot for the notched block: the rightmost cell absorbs the
+        // trailing remainder column so the tab joins the full-width panel
+        // below at the content area's right edge.
+        let slot = library_cell_slot(content_area, cols, cursor_col);
 
         // Lower bound normally just keeps the cursor row visible; when a
         // banner or series detail follows it, extend the lower bound so
@@ -121,6 +135,8 @@ impl App {
                 visible,
                 banner_rule_top,
                 banner_rule_bottom,
+                display_cursor,
+                slot,
                 bg,
             );
         }
@@ -132,6 +148,7 @@ impl App {
             visible,
             display_cursor,
             series_detail_rows,
+            slot,
             focused,
         );
 
@@ -148,58 +165,71 @@ impl App {
                 DisplayRow::BannerFiller | DisplayRow::SeriesDetailFiller => {
                     ListItem::new(Line::default())
                 }
-                DisplayRow::Item(idx) => {
-                    let item = &items[*idx];
-                    let selected = *idx == cursor;
+                DisplayRow::Item(idxs) => {
+                    // Each item renders into its own cell, truncated to the
+                    // cell width; cells are padded to the cell boundary
+                    // (+ inter-column gap) so the next cell starts at its
+                    // own x offset. Trailing partial rows leave the empty
+                    // cells as plain list background.
+                    let mut spans: Vec<Span> = Vec::new();
+                    for (cell_idx, &idx) in idxs.iter().enumerate() {
+                        let item = &items[idx];
+                        let selected = idx == cursor;
 
-                    // Compute name and duration as separate strings so they can be styled
-                    // independently: name in the normal fg, duration in OVERLAY (no parens).
-                    let (item_name, dur_str) = if item.is_folder {
-                        let name = if item.item_type == "Folder" && item.total_count > 0 {
-                            format!("{} \u{b7} {} items", item.display_name(), item.total_count)
-                        } else if item.unplayed_item_count > 0 && item.item_type != "Series" {
-                            format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+                        // Compute name and duration as separate strings so they can be styled
+                        // independently: name in the normal fg, duration in OVERLAY (no parens).
+                        let (item_name, dur_str) = if item.is_folder {
+                            let name = if item.item_type == "Folder" && item.total_count > 0 {
+                                format!("{} \u{b7} {} items", item.display_name(), item.total_count)
+                            } else if item.unplayed_item_count > 0 && item.item_type != "Series" {
+                                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+                            } else {
+                                item.display_name()
+                            };
+                            (name, String::new())
                         } else {
-                            item.display_name()
+                            let dur = if item.runtime_ticks > 0 {
+                                format!(
+                                    " {}",
+                                    fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
+                                )
+                            } else {
+                                String::new()
+                            };
+                            (item.display_name(), dur)
                         };
-                        (name, String::new())
-                    } else {
-                        let dur = if item.runtime_ticks > 0 {
-                            format!(
-                                " {}",
-                                fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-                            )
+
+                        let selected_has_banner = selected && banner_rows > 0;
+                        let avail = if selected_has_banner {
+                            // 2-col left pad + 2-col right pad inside the
+                            // colored block: title+dur share cell width - 4.
+                            cell_w.saturating_sub(2 + 2 * COMPACT_MOVIE_BANNER_INDENT as usize)
+                        } else if selected {
+                            cell_w.saturating_sub(1)
                         } else {
-                            String::new()
+                            cell_w.saturating_sub(2)
                         };
-                        (item.display_name(), dur)
-                    };
+                        let name_w = avail.saturating_sub(dur_str.width());
+                        let title = trunc_str(&item_name, name_w);
+                        let fg = focused_or_subtle(focused);
 
-                    let selected_has_banner = selected && banner_rows > 0;
-                    let avail = if selected_has_banner {
-                        // 2-col left pad + 2-col right pad inside the
-                        // colored block: title+dur share area.width - 4.
-                        (area.width as usize)
-                            .saturating_sub(2 + 2 * COMPACT_MOVIE_BANNER_INDENT as usize)
-                    } else if selected {
-                        (area.width as usize).saturating_sub(1)
-                    } else {
-                        (area.width as usize).saturating_sub(2)
-                    };
-                    let name_w = avail.saturating_sub(dur_str.width());
-                    let title = trunc_str(&item_name, name_w);
-                    let fg = focused_or_subtle(focused);
-
-                    let is_series = item.item_type == "Series";
-                    let spans = build_list_row_spans(
-                        title,
-                        dur_str,
-                        selected,
-                        selected_has_banner,
-                        is_series,
-                        focused,
-                        fg,
-                    );
+                        let is_series = item.item_type == "Series";
+                        let pad_to = if cell_idx + 1 == idxs.len() {
+                            cell_w
+                        } else {
+                            cell_w + LIBRARY_COLUMN_GAP as usize
+                        };
+                        spans.extend(item_cell_spans(
+                            title,
+                            dur_str,
+                            selected,
+                            selected_has_banner,
+                            is_series,
+                            focused,
+                            fg,
+                            pad_to,
+                        ));
+                    }
                     ListItem::new(Line::from(spans))
                 }
             })
@@ -214,7 +244,17 @@ impl App {
                 | DisplayRow::LetterHeader(_)
                 | DisplayRow::BannerFiller
                 | DisplayRow::SeriesDetailFiller => None,
-                DisplayRow::Item(idx) => Some(*idx),
+                DisplayRow::Item(idxs) => idxs.first().copied(),
+            })
+            .collect();
+        // Publish the full row structure (parallel to the display rows,
+        // empty entries for headers/fillers) so column-aware cursor
+        // movement and mouse hit-testing can resolve cells between frames.
+        layout.left_item_rows = display_rows
+            .iter()
+            .map(|row| match row {
+                DisplayRow::Item(idxs) => idxs.clone(),
+                _ => Vec::new(),
             })
             .collect();
 
