@@ -274,25 +274,41 @@ impl App {
         }
 
         // ── Hero inline, list wraps around it ──────────────────────────
-        // The selected item's banner (poster + meta + overview) is painted
+        // The selected item's banner (poster + meta + overview, or --  for a
+        // selected Series -- the season pills + episode table) is painted
         // full-width just below the row containing the selected item; the
         // list renderer packs rows above and below it (the hero occupies
         // `hero_rows` blank `DisplayRow::Hero` rows, painted over
         // afterwards). The block grows the content height by 4 so the
         // `▁`/`▔` SEEK_TRACK borders and the two bare colored-bg padding
         // rows are *inside* the hero block's reserved rows (the list makes
-        // room; nothing gets painted over). The content height comes from
-        // the poster's 16:9 aspect (capped so the list keeps a few rows in
-        // wide terminals — design decision 3, option a). No hero when
-        // nothing is selected (e.g. an empty list) or when the selected
-        // item has no banner (folders, music) — the list then takes the
-        // whole content area.
+        // room; nothing gets painted over). No hero when nothing is
+        // selected (e.g. an empty list) or when the selected item has no
+        // banner (folders, music) — the list then takes the whole content
+        // area.
+        //
+        // Movies get the poster/meta/overview content sized by the image's
+        // 16:9 aspect, capped so the list keeps a few rows in wide
+        // terminals (design decision 3, option a). A selected Series keeps
+        // its own inline detail (season pills + episode table,
+        // `series_inline_detail_rows` / `render_series_inline_detail`) --
+        // that's a distinct, taller, interactive content shape the generic
+        // compact banner can't represent, so it isn't folded into the
+        // movie hero's row math.
         let hero_rows: u16 = if self.library_tab > 0 {
             let lib_idx = self.library_tab - 1;
-            let hero_item = self.power_selected_movie_item(lib_idx).is_some()
-                || self.power_selected_series_item(lib_idx).is_some();
-            if hero_item {
+            if self.power_selected_movie_item(lib_idx).is_some() {
                 hero_height_for_width(content_area.width, cols > 1) + HERO_BLOCK_EXTRA_ROWS
+            } else if let Some(item) = self.power_selected_series_item(lib_idx) {
+                let (in_selection, episode_count) = self.series_selection_state(lib_idx, &item.id);
+                self.series_inline_detail_rows(
+                    &item,
+                    content_area.width,
+                    cols > 1,
+                    in_selection,
+                    episode_count,
+                ) as u16
+                    + HERO_BLOCK_EXTRA_ROWS
             } else {
                 0
             }
@@ -405,22 +421,28 @@ impl App {
             // padding, and inset 2 cols on each side like music/homevideo's
             // selected blocks; the banner layout is a pure function of the
             // panel width, so this paints the same content as before.
-            self.render_power_compact_detail(
-                f,
-                Rect {
-                    x: layout.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                    y: layout.hero_area.y + 2,
-                    width: layout
-                        .hero_area
-                        .width
-                        .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-                    height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
-                },
-                self.library_tab - 1,
-                focused,
-                cols > 1,
-                layout,
-            );
+            let content_rect = Rect {
+                x: layout.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
+                y: layout.hero_area.y + 2,
+                width: layout
+                    .hero_area
+                    .width
+                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
+                height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
+            };
+            let lib_idx = self.library_tab - 1;
+            // Same movie/Series branch as the row-count calc above: a
+            // selected Series renders its season pills + episode table
+            // instead of the generic compact banner.
+            if self.power_selected_movie_item(lib_idx).is_some() {
+                self.render_power_compact_detail(
+                    f, content_rect, lib_idx, focused, cols > 1, layout,
+                );
+            } else {
+                self.render_series_inline_detail(
+                    f, content_rect, lib_idx, focused, cols > 1, layout,
+                );
+            }
             layout.cursor_screen_y = saved_cursor_y;
         }
 

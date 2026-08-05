@@ -108,17 +108,26 @@ The selected cell uses the same `▌` + `##` marker as the top-hero
 design. The hero provides visual identification through proximity,
 not through a tab.
 
-### 8. Click on the hero = Enter equivalent
+### 8. Double-click on the hero = Enter equivalent
 
-A click inside `hero_area` opens the selected item. Same as the
-top-hero design.
+**Amended.** A single click inside `hero_area` only focuses the
+library panel, matching the app-wide "single click only focuses;
+double-click plays" convention (see the fix for #448's mouse-click
+review). A double-click inside `hero_area` opens the selected item --
+the same activation `left_area`'s double-click and Enter perform.
 
-### 9. Series detail is the hero (same as top-hero)
+### 9. Series keeps its own inline detail (season pills + episode table)
 
-The series inline detail is replaced by the hero. The hero shows
-the series' overview, year, episode count, etc. — everything the
-inline detail showed, just wider and positioned inline below the
-selected row.
+**Amended.** The original plan replaced the series inline detail with
+the generic hero (image + meta + overview only), dropping the season
+pills and episode table. That regressed real functionality (browsing
+and playing an episode without leaving the list), so `detail_series.rs`
+/ `detail_series_view.rs` were restored: a selected Series renders its
+season pills + episode table (`render_series_inline_detail`) in the
+same inline slot a selected Movie's hero would occupy, sized by
+`series_inline_detail_rows` instead of the movie hero's
+`hero_height_for_width`. Both share the same block framing (border +
+padding rows, `HERO_BLOCK_EXTRA_ROWS`) -- only the content differs.
 
 ## What changes in the code
 
