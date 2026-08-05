@@ -38,7 +38,13 @@ pub fn render_power_scrollbar_column(height: u16, max_offset: usize, offset: usi
     let backend = TestBackend::new(1, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        render_power_scrollbar(f, Rect::new(0, 0, 1, height), max_offset, offset);
+        render_power_scrollbar(
+            f,
+            Rect::new(0, 0, 1, height),
+            max_offset,
+            offset,
+            palette::FOAM,
+        );
     })
     .unwrap();
     buffer_to_string(&term)
@@ -59,6 +65,7 @@ pub fn render_power_scrollbar_column_with_viewport(
             content_length,
             viewport_content_length,
             offset,
+            palette::FOAM,
         );
     })
     .unwrap();

@@ -49,7 +49,13 @@ pub(super) fn power_right_panel_content_area(area: Rect, left_collapsed: bool) -
     }
 }
 
-pub(super) fn render_power_scrollbar(f: &mut Frame, area: Rect, max_offset: usize, offset: usize) {
+pub(super) fn render_power_scrollbar(
+    f: &mut Frame,
+    area: Rect,
+    max_offset: usize,
+    offset: usize,
+    color: Color,
+) {
     let visible = area.height as usize;
     render_power_scrollbar_with_viewport(
         f,
@@ -57,6 +63,7 @@ pub(super) fn render_power_scrollbar(f: &mut Frame, area: Rect, max_offset: usiz
         max_offset.saturating_add(visible),
         visible,
         offset,
+        color,
     );
 }
 
@@ -66,6 +73,7 @@ pub(super) fn render_power_scrollbar_with_viewport(
     content_length: usize,
     viewport_content_length: usize,
     offset: usize,
+    color: Color,
 ) {
     render_power_scrollbar_with_viewport_at(
         f,
@@ -75,7 +83,7 @@ pub(super) fn render_power_scrollbar_with_viewport(
         offset,
         area.x + area.width.saturating_sub(1),
         thin_vertical_thumb(GlyphSet::minimal()),
-        palette::SOFT_WHITE,
+        color,
     );
 }
 
