@@ -205,8 +205,9 @@ fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
 
 #[test]
 fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
-    // Tall enough viewport that the 22-row hero block (at 82 wide) leaves
-    // real list rows below it, so `lib_page_size` reflects the list, not 0.
+    // Tall enough viewport that the 23-row hero block (at 82 wide, 2-col)
+    // leaves real list rows below it, so `lib_page_size` reflects the list,
+    // not 0.
     let mut app = make_power_movie_list_app(vec!["M0", "M1", "M2", "M3", "M4", "M5", "M6"]);
     let mut layout = LayoutMain::default();
     let _ = render_power_list_term(&mut app, &mut layout, 82, 30);

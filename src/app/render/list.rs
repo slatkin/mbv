@@ -18,6 +18,12 @@ const HERO_GAP_ROWS: u16 = 1;
 /// Row budget for the meta block under the hero image (meta line, spacer,
 /// overview/director lines).
 const HERO_META_ROWS: u16 = 5;
+/// Row budget for the selected item's title on the hero's top row, rendered
+/// in yellow. Reserved only in two-column lists (`show_title`), where the
+/// list row's own title is truncated to a narrow cell; one-column lists
+/// skip it since the full-width row title right above the hero already shows
+/// the name.
+const HERO_TITLE_ROWS: u16 = 1;
 /// Rows the hero *block* adds beyond the content rows, matching the
 /// selected-block look of music/homevideo: a `▁` top border row and a `▔`
 /// bottom border row (painted in `palette::SEEK_TRACK`) plus one bare
@@ -29,13 +35,17 @@ const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
 /// Height of the top hero banner for a content area `width` columns wide:
 /// the poster image at 16:9 in terminal cells (cells are roughly twice as
 /// tall as they are wide, so 9 rows per 32 columns — the home view's
-/// formula), capped at `HERO_IMAGE_CAP_ROWS`, plus a 1-row gap and the meta
-/// block. The hero grows with the terminal until it hits the cap.
-fn hero_height_for_width(width: u16) -> u16 {
+/// formula), capped at `HERO_IMAGE_CAP_ROWS`, plus (in two-column lists) a
+/// 1-row yellow title, a 1-row gap, and the meta block. The hero grows with
+/// the terminal until it hits the cap.
+fn hero_height_for_width(width: u16, show_title: bool) -> u16 {
     let image_height = ((width as u32 * 9 + 31) / 32)
         .max(1)
         .min(HERO_IMAGE_CAP_ROWS as u32) as u16;
-    image_height + HERO_GAP_ROWS + HERO_META_ROWS
+    image_height
+        + HERO_TITLE_ROWS.saturating_mul(show_title as u16)
+        + HERO_GAP_ROWS
+        + HERO_META_ROWS
 }
 
 impl App {
@@ -282,7 +292,7 @@ impl App {
             let hero_item = self.power_selected_movie_item(lib_idx).is_some()
                 || self.power_selected_series_item(lib_idx).is_some();
             if hero_item {
-                hero_height_for_width(content_area.width) + HERO_BLOCK_EXTRA_ROWS
+                hero_height_for_width(content_area.width, cols > 1) + HERO_BLOCK_EXTRA_ROWS
             } else {
                 0
             }
@@ -408,6 +418,7 @@ impl App {
                 },
                 self.library_tab - 1,
                 focused,
+                cols > 1,
                 layout,
             );
             layout.cursor_screen_y = saved_cursor_y;

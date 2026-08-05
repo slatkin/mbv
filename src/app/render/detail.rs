@@ -322,6 +322,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        show_title: bool,
         layout: &mut LayoutMain,
     ) {
         // The hero shows the selected leaf movie (movies/homevideos/podcasts)
@@ -357,15 +358,41 @@ impl App {
             palette::SUBTLE
         };
 
+        // — Title row (two-column lists only) —
+        // The selected item's name on the hero's top row, in yellow (bold
+        // when focused), mirroring the album-detail title block. Skipped for
+        // one-column lists, where the full-width list-row title directly
+        // above the hero already shows the name (and reserving the row there
+        // would not have been budgeted for).
+        if show_title && row < max_y {
+            let title = trunc_str(&item.display_name(), inner_w);
+            let title_style = if focused {
+                Style::default()
+                    .fg(palette::YELLOW)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette::YELLOW)
+            };
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(title, title_style))),
+                Rect {
+                    x: inner_x,
+                    y: row,
+                    width: inner_w16,
+                    height: 1,
+                },
+            );
+            row += 1;
+        }
+
         let img_actual_w = content.img_actual_w;
         let img_height = content.img_height;
         let img_is_placeholder = content.img_is_placeholder;
         let img_x = area.x + area.width.saturating_sub(img_actual_w);
-        // No title row is drawn here anymore (it duplicated the selected list
-        // row's title, already shown in green just above the banner), so the
-        // poster starts flush with the banner's own top row instead of being
-        // pushed down a row to make room for a redundant title.
-        let img_y = area.y.min(area.y + area.height.saturating_sub(1));
+        // In two-column lists the title row above pushes the poster down a
+        // row; one-column lists have no title row so it stays flush with the
+        // hero's top border, as before.
+        let img_y = (area.y + show_title as u16).min(area.y + area.height.saturating_sub(1));
         let img_end_row = img_y + img_height;
         layout.inline_image_rect = if img_height > 0 {
             Some(Rect {

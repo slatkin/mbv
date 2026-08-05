@@ -17,6 +17,15 @@ in terminal cells), capped at 12 image rows, plus a 1-row gap and a
 5-row meta block, for a total of 12 to 18 rows depending on the
 content width.
 
+#### Title row
+
+In a two-column list, the hero MUST render the selected item's title
+as its top row, in `palette::YELLOW` foreground (bold when focused),
+pushing the poster and meta content down a row. In a one-column list
+the hero MUST NOT render a title row (the full-width list-row title
+directly above the hero already shows the name), keeping the
+12-to-18-row height.
+
 ### Hero follows the cursor
 
 The hero's position MUST update as the cursor moves. When the cursor

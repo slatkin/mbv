@@ -185,6 +185,7 @@ impl App {
             },
             lib_idx,
             focused,
+            false,
             layout,
         );
         layout.cursor_screen_y = Some(row_y + 1);
