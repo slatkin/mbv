@@ -10,6 +10,7 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
+const QUEUE_NOW_PLAYING_COL_W: usize = 4;
 
 impl App {
     /// Renders the "Queue" title pill (and optional Local/Remote scope pills)
@@ -345,16 +346,19 @@ impl App {
                         (item.playback_position_ticks, item.runtime_ticks)
                     };
                     let pct_str = if pt > 0 && rt > 0 && !item.is_audio() {
-                        format!("{}%", pt * 100 / rt.max(1))
+                        let pct = (pt * 100 / rt.max(1)).min(99);
+                        format!("{}%", pct)
                     } else {
                         String::new()
                     };
 
                     // Show queue position (1-based) for all items, right-aligned
                     // so single-digit numbers line up with double-digit ones.
+                    // The trailing space is the left padding of the now-playing
+                    // gutter (1 cell on each side of the 4-cell column).
                     let queue_pos = idx + 1;
                     let num_w = items.len().to_string().len();
-                    let label = format!("{:>num_w$}. {}", queue_pos, item.name);
+                    let prefix = format!("{:>num_w$}. ", queue_pos);
 
                     let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
                     let dur = if len_secs > 0 {
@@ -368,42 +372,22 @@ impl App {
                         palette::MUTED
                     };
 
-                    // Title truncated to leave room for indent + right-aligned metadata.
+                    // Title truncated to leave room for indent, the "N. " prefix,
+                    // the now-playing gutter, the right gutter pad, and the
+                    // right-aligned duration + quiet columns.
                     let dur_visible = show_length && !dur.is_empty();
                     let pct_visible = !pct_str.is_empty();
                     let show_throbber = is_active && focused;
-                    let now_playing_icon_w = if show_throbber && !pct_visible {
-                        4
-                    } else if show_throbber {
-                        1
-                    } else {
-                        0
-                    };
-                    // When the throbber pairs with the percentage pill, it moves out of
-                    // the title line and into the trailing metadata, so its width has
-                    // to be reserved there instead. It sits flush against the
-                    // percentage, with no gap between them.
-                    let throbber_pill_w = if show_throbber && pct_visible {
-                        now_playing_icon_w
-                    } else {
-                        0
-                    };
-                    // Pill indent: a space to its left (unless the throbber already
-                    // fills that slot) and a space to its right, always.
-                    let pill_left_indent = if pct_visible && !show_throbber { 1 } else { 0 };
-                    // Two columns to the pill's right: one inside the pill, one
-                    // in the row background separating it from the metadata.
-                    let pill_right_indent = if pct_visible { 2 } else { 0 };
-                    let metadata_w = (if dur_visible { dur.width() } else { 0 })
-                        + (if pct_visible { pct_str.width() } else { 0 })
-                        + pill_left_indent
-                        + pill_right_indent
-                        + throbber_pill_w;
-                    let extra = metadata_w;
                     let title_w = track_content_w.saturating_sub(
-                        indent + now_playing_icon_w + extra + QUEUE_TITLE_QUIET_COLUMNS,
+                        indent
+                            + num_w
+                            + 2
+                            + QUEUE_NOW_PLAYING_COL_W
+                            + 1
+                            + (if dur_visible { dur.width() } else { 0 })
+                            + QUEUE_TITLE_QUIET_COLUMNS,
                     );
-                    let title = trunc_str(&label, title_w);
+                    let title = trunc_str(&item.name, title_w);
 
                     if is_cursor {
                         f.render_widget(
@@ -438,37 +422,13 @@ impl App {
                             spans.push(Span::raw("  "));
                         }
                     }
-                    // Prefix is "{n:>w}. " — render it dim.
-                    let prefix_chars = format!("{:>num_w$}. ", queue_pos).chars().count();
-                    let tc = title.chars().count();
-                    if tc > prefix_chars {
-                        let split = title
-                            .char_indices()
-                            .nth(prefix_chars)
-                            .map(|(i, _)| i)
-                            .unwrap_or(title.len());
-                        spans.push(Span::styled(
-                            title[..split].to_string(),
-                            Style::default().fg(dim_color),
-                        ));
-                        spans.push(Span::styled(
-                            title[split..].to_string(),
-                            Style::default().fg(title_color),
-                        ));
-                    } else {
-                        spans.push(Span::styled(title, Style::default().fg(title_color)));
-                    }
-                    if show_throbber && !pct_visible {
-                        spans.push(Span::raw(" "));
-                        spans.push(self.now_playing_throbber_span());
-                        spans.push(Span::raw(" "));
-                    }
-                    if pct_visible || dur_visible {
-                        let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
-                        let pad = track_content_w.saturating_sub(used + metadata_w);
-                        spans.push(Span::raw(" ".repeat(pad)));
-                    }
-                    if pct_visible {
+                    // "N. " track number — its trailing space is the left
+                    // padding of the now-playing gutter.
+                    spans.push(Span::styled(prefix, Style::default().fg(dim_color)));
+                    // Now-playing gutter: throbber (AQUA) + progress (FOAM) on a
+                    // DARK_BG pill, or plain spaces on inactive rows. Sits in a
+                    // 4-cell column between the track number and the title.
+                    if show_throbber || pct_visible {
                         // Only the now-playing row gets the pill treatment
                         // (dark background, throbber). Other rows just show
                         // plain foam/grey text on the normal row background.
@@ -483,6 +443,7 @@ impl App {
                             }
                             s
                         };
+                        let mut used = 0usize;
                         if show_throbber {
                             // to_symbol_span appends a trailing space; strip it so
                             // the throbber sits flush against the percentage.
@@ -491,17 +452,29 @@ impl App {
                                 throbber.content.trim_end().to_string(),
                                 with_bg(throbber.style),
                             ));
-                        } else {
-                            spans.push(Span::raw(" "));
+                            used += 1;
                         }
-                        spans.push(Span::styled(
-                            pct_str,
-                            with_bg(Style::default().fg(palette::FOAM)),
-                        ));
-                        spans.push(Span::styled(" ", with_bg(Style::default())));
-                        spans.push(Span::raw(" "));
+                        if pct_visible {
+                            used += pct_str.width();
+                            spans.push(Span::styled(
+                                pct_str,
+                                with_bg(Style::default().fg(palette::FOAM)),
+                            ));
+                        }
+                        let pad = QUEUE_NOW_PLAYING_COL_W.saturating_sub(used);
+                        if pad > 0 {
+                            spans.push(Span::raw(" ".repeat(pad)));
+                        }
+                    } else {
+                        spans.push(Span::raw(" ".repeat(QUEUE_NOW_PLAYING_COL_W)));
                     }
+                    // Right padding of the now-playing gutter, before the title.
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(title, Style::default().fg(title_color)));
                     if dur_visible {
+                        let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
+                        let pad = track_content_w.saturating_sub(used + dur.width());
+                        spans.push(Span::raw(" ".repeat(pad)));
                         spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));
                     }
 
