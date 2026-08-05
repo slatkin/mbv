@@ -247,10 +247,9 @@ fn mouse_click_on_already_selected_folder_row_is_a_noop() {
 }
 
 #[test]
-fn mouse_click_on_a_different_folder_row_still_drills_in() {
-    // Companion to the no-op test above: clicking a *different* folder
-    // row must still emulate Enter and drill in, so the no-op fix is
-    // scoped strictly to re-clicking the already-selected row.
+fn mouse_click_on_a_different_folder_row_only_focuses_it() {
+    // A single click never drills into a folder -- it only moves the
+    // cursor/highlight. Drilling in is a double-click gesture.
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_power_library_app();
     for item in app.libs[0].nav_stack[0].items.iter_mut() {
@@ -273,8 +272,40 @@ fn mouse_click_on_a_different_folder_row_still_drills_in() {
 
     assert_eq!(
         app.libs[0].nav_stack.len(),
+        1,
+        "a single click on a different folder row must not drill in"
+    );
+    assert_eq!(app.libs[0].nav_stack[0].cursor, 1);
+}
+
+#[test]
+fn double_click_on_a_folder_row_drills_in() {
+    // The second click of a double-click on a folder row is the
+    // activation gesture: it must drill into the folder just like Enter.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_power_library_app();
+    for item in app.libs[0].nav_stack[0].items.iter_mut() {
+        item.is_folder = true;
+    }
+    app.libs[0].nav_stack[0].cursor = 0;
+    app.layout.main.left_area = Rect {
+        x: 10,
+        y: 5,
+        width: 20,
+        height: 5,
+    };
+
+    // Two Down(Left) events at the same cell, back to back: the first
+    // focuses row 1, the second is the activation.
+    let click = make_power_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 6);
+    app.handle_mouse(click);
+    assert_eq!(app.libs[0].nav_stack[0].cursor, 1, "first click focuses");
+    app.handle_mouse(click);
+
+    assert_eq!(
+        app.libs[0].nav_stack.len(),
         2,
-        "clicking a different folder row should still drill in"
+        "double-click on a folder row should drill in"
     );
     assert_eq!(app.libs[0].nav_stack[0].cursor, 1);
 }

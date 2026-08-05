@@ -201,12 +201,34 @@ impl App {
                         }
                     } else if self.library_tab == 0 {
                         self.power_home_play();
-                    } else if self
-                        .current_lib_item()
-                        .map(|i| !i.is_folder)
-                        .unwrap_or(false)
-                    {
-                        self.select();
+                    } else if self.layout.main.left_area.contains((col, row).into()) {
+                        // Double-click activates the row under the cursor
+                        // (the first click of the pair already focused it).
+                        // Mirrors the Enter key's activation for the same
+                        // row so the two gestures can't drift: recursive
+                        // album search jump, album-folder track mode,
+                        // series selection, then `select()` (plays media
+                        // items and drills into folders).
+                        let lib_idx = self.library_tab - 1;
+                        if self.activate_recursive_album(lib_idx) {
+                            // active-search jump; unchanged
+                        } else if self.is_viewing_album_folders(lib_idx) {
+                            self.activate_album_folder_row(lib_idx);
+                        } else if self.libs[lib_idx].series_selection.is_some() {
+                            // Play the focused episode in selection mode.
+                            if let Some(episodes) = self.series_selection_episodes(lib_idx) {
+                                let ep_idx = self.libs[lib_idx].series_selection.unwrap_or(0);
+                                if let Some(ep) = episodes.get(ep_idx) {
+                                    let ep = ep.clone();
+                                    self.libs[lib_idx].series_selection = None;
+                                    self.play_item(ep);
+                                }
+                            }
+                        } else if let Some(item) = self.power_selected_series_item(lib_idx) {
+                            self.enter_series_selection(lib_idx, &item);
+                        } else {
+                            self.select();
+                        }
                     }
                     return;
                 }
@@ -281,56 +303,11 @@ impl App {
                     }
                 }
 
-                // Capture the row that was already selected *before* this
-                // click moves the cursor. Clicking a folder row normally
-                // emulates Enter (drills in), but if the click landed on
-                // the row that was already selected (e.g. re-clicking the
-                // current row), drilling in again produces a jarring,
-                // unrequested navigation. Treat that case as a no-op
-                // instead.
-                let prev_id = self.current_lib_item().map(|i| i.id);
-                let hit = self.click_set_cursor(col, row);
-                if hit && self.library_tab > 0 {
-                    let lib_idx = self.library_tab - 1;
-                    if self.activate_recursive_album(lib_idx) {
-                        // active-search jump; unchanged
-                    } else if self.is_viewing_album_folders(lib_idx) {
-                        // Track-selection mode only opens via Enter; mouse
-                        // click never opens it. If it's already open, a click
-                        // still plays the focused track (mirrors Enter's
-                        // "already focused" branch inside
-                        // `activate_album_folder_row`), but cannot open it.
-                        if self.libs[lib_idx].album_track_focus.is_some() {
-                            self.activate_album_folder_row(lib_idx);
-                        }
-                    } else {
-                        let cur_item = self.current_lib_item();
-                        let already_selected = cur_item
-                            .as_ref()
-                            .is_some_and(|i| prev_id.as_deref() == Some(i.id.as_str()));
-                        // TV `Series` rows are always `is_folder` (they have
-                        // seasons underneath), but Enter on a Series row
-                        // doesn't drill into a generic folder browse -- it
-                        // opens the inline series-selection detail (season
-                        // pills + episode list; see
-                        // `enter_series_selection`). A mouse click has no
-                        // equivalent of that inline mode, so calling
-                        // `select()` here would instead push a raw
-                        // folder-browse nav level, a screen the click never
-                        // asked for. Mouse clicks on Series rows -- and on
-                        // any row that was already selected before this
-                        // click -- should only ever move the
-                        // cursor/highlight; leave opening the detail view to
-                        // Enter/double-click.
-                        let is_series = cur_item.as_ref().is_some_and(|i| i.item_type == "Series");
-                        if !already_selected
-                            && !is_series
-                            && cur_item.map(|i| i.is_folder).unwrap_or(false)
-                        {
-                            self.select();
-                        }
-                    }
-                }
+                // Single click only focuses the clicked row. Activation --
+                // playing a media item, drilling into a folder, opening
+                // track/series selection -- is a double-click (or Enter)
+                // gesture and never happens here.
+                self.click_set_cursor(col, row);
             }
             MouseEventKind::Down(MouseButton::Right) => {
                 if self.click_set_cursor(col, row) {

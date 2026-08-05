@@ -160,7 +160,13 @@ impl App {
                             idx += 1;
                         }
                         if idx < self.playlists_open_items.len() {
-                            if self.playlists_open_cursor == idx {
+                            let now = Instant::now();
+                            let is_double = now.duration_since(self.last_click_time)
+                                < Duration::from_millis(400)
+                                && self.last_click_pos == (col, row);
+                            self.last_click_time = now;
+                            self.last_click_pos = (col, row);
+                            if self.playlists_open_cursor == idx && is_double {
                                 let selected_id =
                                     self.playlists_open_items.get(idx).map(|i| i.id.clone());
                                 let pl_source = crate::config::QueueSource::Playlist {
@@ -218,7 +224,15 @@ impl App {
                     MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
                         let idx = (row - content_top) as usize + self.playlists_scroll;
                         if idx < self.playlists.len() {
-                            if self.playlists_cursor == idx {
+                            // Single click only moves the cursor; playback
+                            // requires a double-click on the focused row.
+                            let now = Instant::now();
+                            let is_double = now.duration_since(self.last_click_time)
+                                < Duration::from_millis(400)
+                                && self.last_click_pos == (col, row);
+                            self.last_click_time = now;
+                            self.last_click_pos = (col, row);
+                            if self.playlists_cursor == idx && is_double {
                                 let id = self.playlists[idx].id.clone();
                                 self.load_and_play_playlist(id);
                             } else {
