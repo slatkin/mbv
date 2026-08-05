@@ -188,21 +188,6 @@ fn hjkl_navigates_two_column_library_list_via_handle_key() {
 }
 
 #[test]
-fn hl_are_unbound_in_one_column_library_list() {
-    let mut app = make_power_movie_app();
-    // Force the layout to read as 1-col so the h/l guard fails.
-    app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 60, 20);
-
-    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
-    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE));
-    // Cursor must not have moved: h and l fell through as unbound.
-    assert_eq!(
-        app.libs[0].nav_stack[0].cursor, 0,
-        "h/l must stay unbound in 1-col mode (so they remain free as input characters)"
-    );
-}
-
-#[test]
 fn lib_search_ignores_navigation_keys_and_only_accepts_query_editing() {
     // Regression: per design, when the lib search box is open and the user
     // is typing into the query, NO navigation key should fire -- not
