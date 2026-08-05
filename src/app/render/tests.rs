@@ -171,7 +171,7 @@ fn remote_status_spans_shows_local_device_name_when_off() {
 }
 
 #[test]
-fn status_label_style_uppercases_and_bolds_selected_label() {
+fn status_label_style_uppercases_selected_label() {
     let mut spans = vec![
         Span::raw(" "),
         Span::raw("icon"),
@@ -180,8 +180,6 @@ fn status_label_style_uppercases_and_bolds_selected_label() {
     ];
 
     App::uppercase_status_label(&mut spans);
-    App::set_status_label_bold(&mut spans, true);
 
     assert_eq!(spans[2].content.as_ref(), "  LIVING-ROOM");
-    assert!(spans[2].style.add_modifier.contains(Modifier::BOLD));
 }

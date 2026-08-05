@@ -232,14 +232,6 @@ impl App {
         label.content = label.content.to_uppercase().into();
     }
 
-    /// Bold the status label span (index 2) in place when `bold` is set.
-    pub(super) fn set_status_label_bold(spans: &mut [Span<'static>], bold: bool) {
-        if bold {
-            if let Some(label) = spans.get_mut(2) {
-                label.style = label.style.add_modifier(Modifier::BOLD);
-            }
-        }
-    }
 
     pub(super) fn render_remote_status_hitbox(
         &self,

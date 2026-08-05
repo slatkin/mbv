@@ -49,7 +49,18 @@ impl App {
         let has_remote = matches!(remote_state, RemoteSlotState::DirectRemote);
         let has_attached = matches!(remote_state, RemoteSlotState::AttachedSession);
         let show_split = has_remote || has_attached;
+        // DirectRemote only ever exists after a session was confirmed to be an
+        // mbv/mbvd client (see `session_direct_endpoint`'s "mbv" check), so it's
+        // always an mbv session; AttachedSession covers both mbv/mbvd sessions
+        // not yet upgraded to a direct connection and plain Emby clients.
+        let is_mbv_session = has_remote
+            || (has_attached
+                && self
+                    .connected_session_state
+                    .as_ref()
+                    .is_some_and(|session| session.client.eq_ignore_ascii_case("mbv")));
 
+        // --- Left "local" pill: display-only, no longer a scope toggle. ---
         let mut local_spans = self.remote_status_spans(crate::app::RemoteSlotState::Off, "");
         if show_split {
             if let Some(trailing) = local_spans.get_mut(3) {
@@ -61,29 +72,11 @@ impl App {
                 icon.content = "\u{F0AFE}".into();
             }
         }
-        let local_active = local_selected && has_remote;
-        let local_bg = if local_active {
-            palette::YELLOW
-        } else {
-            palette::QUEUE_BUTTON_FOCUSED_BG
-        };
-        let local_fg = if local_active {
-            palette::QUEUE_BUTTON_FOCUSED_BG
-        } else {
-            palette::YELLOW
-        };
+        let local_bg = palette::QUEUE_BUTTON_FOCUSED_BG;
+        let local_fg = palette::YELLOW;
         if show_split {
             if let Some(label) = local_spans.get_mut(2) {
-                label.content = if local_active {
-                    "Connected: ".into()
-                } else {
-                    " Connected: ".into()
-                };
-            }
-        }
-        if local_active {
-            if let Some(icon) = local_spans.get_mut(1) {
-                icon.content = "".into();
+                label.content = " Connected: ".into();
             }
         }
         Self::set_status_pill_style(&mut local_spans, local_fg, local_bg);
@@ -91,7 +84,6 @@ impl App {
             icon.style = icon.style.fg(local_fg);
         }
         Self::uppercase_status_label(&mut local_spans);
-        Self::set_status_label_bold(&mut local_spans, local_active);
 
         let local_content_w: usize = local_spans.iter().map(|s| s.content.width()).sum();
         let local_w = (local_content_w as u16).min(area.width);
@@ -101,65 +93,55 @@ impl App {
             width: local_w,
             height: 1,
         };
-        if show_split {
-            layout.queue_scope_local_area = local_area;
-        }
         f.render_widget(
             Block::default().style(Style::default().bg(local_bg)),
             local_area,
         );
         f.render_widget(Paragraph::new(Line::from(local_spans)), local_area);
 
-        if has_remote {
-            let remote_x = area.x + local_w;
-            let mut remote_spans = self.remote_status_spans(remote_state, &daemon_endpoint);
-            if let Some(leading) = remote_spans.get_mut(0) {
-                leading.content = "".into();
-            }
-            if let Some(label) = remote_spans.get_mut(2) {
-                let text = label.content.trim_start();
-                label.content = format!(" {text}").into();
-            }
-            let remote_active = !local_selected;
-            let remote_bg = if remote_active {
-                palette::AQUA
-            } else {
-                palette::QUEUE_BUTTON_FOCUSED_BG
-            };
-            let remote_fg = palette::YELLOW;
-            Self::set_status_pill_style(&mut remote_spans, remote_fg, remote_bg);
-            if let Some(icon) = remote_spans.get_mut(1) {
-                icon.style = icon.style.fg(remote_fg);
-            }
-            Self::uppercase_status_label(&mut remote_spans);
-            Self::set_status_label_bold(&mut remote_spans, remote_active);
-            let remote_w = area.width.saturating_sub(local_w);
-            let remote_area = Rect {
-                x: remote_x,
-                y: area.y,
-                width: remote_w,
-                height: 1,
-            };
-            layout.queue_scope_remote_area = remote_area;
-            f.render_widget(
-                Block::default().style(Style::default().bg(remote_bg)),
-                remote_area,
-            );
-            f.render_widget(Paragraph::new(Line::from(remote_spans)), remote_area);
-        } else if has_attached {
-            let remote_x = area.x + local_w;
-            let remote_area = Rect {
-                x: remote_x,
-                y: area.y,
-                width: area.width.saturating_sub(local_w),
-                height: 1,
-            };
-            let (_icon, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
-            let fg = palette::QUEUE_BUTTON_FOCUSED_BG;
-            let bg = palette::YELLOW;
-            let label_style = Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD);
-            let tracking = self
-                .remote_tracker
+        if !show_split {
+            return;
+        }
+
+        // --- Button pill: local/remote queue-scope toggle, right-aligned.
+        // Only rendered for mbv/mbvd sessions -- plain Emby sessions have no
+        // remote queue to switch to.
+        let remote_icon = if self.use_nerd_fonts {
+            "\u{f1616}"
+        } else {
+            "\u{1F5A7}"
+        };
+        let local_btn_text = " \u{2302} ";
+        let divider_text = "\u{29F8}";
+        let remote_btn_text = format!(" {remote_icon} ");
+        let remote_btn_text_w = remote_btn_text.width() as u16;
+        let divider_w = divider_text.width() as u16;
+        let local_btn_w = local_btn_text.width() as u16;
+        let button_pill_w = if is_mbv_session {
+            (local_btn_w + divider_w + remote_btn_text_w).min(area.width.saturating_sub(local_w))
+        } else {
+            0
+        };
+
+        // --- Right "target" pill: display-only connected hostname/route. ---
+        let target_x = area.x + local_w;
+        let target_total_w = area.width.saturating_sub(local_w);
+        let target_w = target_total_w.saturating_sub(button_pill_w);
+        let target_area = Rect {
+            x: target_x,
+            y: area.y,
+            width: target_w,
+            height: 1,
+        };
+        let (_icon, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
+        let target_bg = palette::FOAM;
+        let target_fg = palette::QUEUE_BUTTON_FOCUSED_BG;
+        let target_label_style = Style::default()
+            .fg(target_fg)
+            .bg(target_bg)
+            .add_modifier(Modifier::BOLD);
+        let tracking = if has_attached {
+            self.remote_tracker
                 .as_ref()
                 .map(|tracker| {
                     let state = match tracker.state() {
@@ -186,14 +168,76 @@ impl App {
                         format!(" · {state}")
                     }
                 })
-                .unwrap_or_default();
-            let spans = vec![Span::styled(
-                format!(" {}{}", label.trim_start(), tracking),
-                label_style,
-            )];
-            f.render_widget(Block::default().style(Style::default().bg(bg)), remote_area);
-            f.render_widget(Paragraph::new(Line::from(spans)), remote_area);
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+        let target_label_text = format!(" {}{}", label.trim_start(), tracking);
+        f.render_widget(
+            Block::default().style(Style::default().bg(target_bg)),
+            target_area,
+        );
+        f.render_widget(
+            Paragraph::new(Line::from(vec![Span::styled(
+                target_label_text,
+                target_label_style,
+            )])),
+            target_area,
+        );
+
+        if !is_mbv_session {
+            return;
         }
+
+        let button_area = Rect {
+            x: target_x + target_w,
+            y: area.y,
+            width: button_pill_w,
+            height: 1,
+        };
+        let base_bg = palette::QUEUE_BUTTON_FOCUSED_BG;
+        let local_btn_bg = if local_selected {
+            palette::QUEUE_SCOPE_BUTTON_ACTIVE_BG
+        } else {
+            palette::QUEUE_BUTTON_FOCUSED_BG
+        };
+        let remote_btn_bg = if local_selected {
+            palette::QUEUE_BUTTON_FOCUSED_BG
+        } else {
+            palette::QUEUE_SCOPE_BUTTON_ACTIVE_BG
+        };
+        let spans = vec![
+            Span::styled(
+                local_btn_text,
+                Style::default().fg(palette::YELLOW).bg(local_btn_bg),
+            ),
+            Span::styled(divider_text, Style::default().fg(palette::WHITE).bg(base_bg)),
+            Span::styled(
+                remote_btn_text,
+                Style::default().fg(palette::AQUA).bg(remote_btn_bg),
+            ),
+        ];
+        f.render_widget(
+            Block::default().style(Style::default().bg(base_bg)),
+            button_area,
+        );
+        f.render_widget(Paragraph::new(Line::from(spans)), button_area);
+
+        let local_btn_w = local_btn_w.min(button_area.width);
+        layout.queue_scope_local_area = Rect {
+            x: button_area.x,
+            y: button_area.y,
+            width: local_btn_w,
+            height: 1,
+        };
+        let remote_btn_x = button_area.x + local_btn_w + divider_w;
+        let remote_btn_w = button_area.width.saturating_sub(local_btn_w + divider_w);
+        layout.queue_scope_remote_area = Rect {
+            x: remote_btn_x,
+            y: button_area.y,
+            width: remote_btn_w,
+            height: 1,
+        };
     }
 
     /// Renders the queue list (track items, scrollbar). The title/scope pill
