@@ -205,9 +205,10 @@ impl App {
                             };
                             (item.display_name(), dur)
                         };
-                        // The selected cell's `▌` mark + `## ` prefix take 4
-                        // cols, matching the ordinary rows' indent so titles
-                        // align across the row.
+                        // Same width budget for every row (selected or not)
+                        // so titles align across the row; the selected
+                        // cell's `▍` grabber occupies its 1-column leading
+                        // separator rather than adding an indent.
                         let avail = normal_avail;
                         let name_w = avail.saturating_sub(dur_str.width());
                         let title = trunc_str(&item_name, name_w);

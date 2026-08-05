@@ -82,10 +82,12 @@ pub(super) struct ListRenderCtx<'a> {
 /// Builds the title (+ optional duration) spans for one list row, shared by
 /// both the letter-grouped and plain-list rendering branches (identical
 /// styling logic, only how `title`/`dur_str`/`avail` are computed differs
-/// between the two call sites). The selected cell carries a `▍` mark in
-/// `palette::AQUA` on its left edge (matching the queue list panel and Home
-/// tab list); the cell background stays the ordinary list background — the
-/// top hero carries the heavy selected styling now (see `render_power_list`).
+/// between the two call sites). Every cell starts with a 1-column leading
+/// separator; for the selected cell that separator is the `▍` grabber in
+/// `palette::AQUA` (matching the queue list panel and Home tab list), so the
+/// title begins at the same x as unselected rows. The cell background stays
+/// the ordinary list background — the inline hero carries the heavy selected
+/// styling now (see `render_power_list`).
 pub(super) fn build_list_row_spans(
     title: String,
     dur_str: String,
@@ -102,7 +104,6 @@ pub(super) fn build_list_row_spans(
         };
         vec![
             Span::styled("\u{258d}", marker_style),
-            Span::raw(" "),
             Span::styled(title, title_style),
         ]
     } else {

@@ -119,13 +119,10 @@ impl App {
                             (item.display_name(), dur)
                         };
 
-                        // The selected cell's `▌` mark + `## ` prefix take 4
-                        // cols; ordinary rows carry a 1-col leading separator.
-                        let avail = if selected {
-                            cell_w.saturating_sub(4)
-                        } else {
-                            cell_w.saturating_sub(2)
-                        };
+                        // Every cell starts with a 1-column leading
+                        // separator (the selected cell's `▍` grabber, a
+                        // space otherwise), so titles align across rows.
+                        let avail = cell_w.saturating_sub(2);
                         let name_w = avail.saturating_sub(dur_str.width());
                         let title = trunc_str(&item_name, name_w);
                         let fg = focused_or_subtle(focused);
