@@ -90,9 +90,25 @@ impl App {
             .get(cur_col)
             .copied()
             .or_else(|| item_row_list[target_row].last().copied())?;
-        let cur_pos = sorted.iter().position(|&i| i == cursor)?;
-        let target_pos = sorted.iter().position(|&i| i == target)?;
-        Some(target_pos as i64 - cur_pos as i64)
+
+        // Single pass over `sorted` for both positions instead of two
+        // separate `.position()` scans -- this runs on every j/k/Up/Down
+        // keypress in letter-grouped view, so halving the work (and
+        // early-exiting once both are found) matters on large libraries.
+        let mut cur_pos = None;
+        let mut target_pos = None;
+        for (pos, &idx) in sorted.iter().enumerate() {
+            if idx == cursor {
+                cur_pos = Some(pos);
+            }
+            if idx == target {
+                target_pos = Some(pos);
+            }
+            if cur_pos.is_some() && target_pos.is_some() {
+                break;
+            }
+        }
+        Some(target_pos? as i64 - cur_pos? as i64)
     }
 
     pub(super) fn move_lib_cursor(&mut self, delta: i64) {
