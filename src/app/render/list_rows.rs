@@ -85,9 +85,10 @@ pub(super) struct ListRenderCtx<'a> {
 /// between the two call sites). Every cell starts with a 1-column leading
 /// separator; for the selected cell that separator is the `▍` grabber in
 /// `palette::AQUA` (matching the queue list panel and Home tab list), so the
-/// title begins at the same x as unselected rows. The cell background stays
-/// the ordinary list background — the inline hero carries the heavy selected
-/// styling now (see `render_power_list`).
+/// title begins at the same x as unselected rows. The selected cell sits on
+/// the same block background as the inline hero below it
+/// (`palette::PLAYBACK_PANEL_BG`), so the two read as one selected block;
+/// every other cell stays on the ordinary list background.
 pub(super) fn build_list_row_spans(
     title: String,
     dur_str: String,
@@ -95,13 +96,22 @@ pub(super) fn build_list_row_spans(
     focused: bool,
     fg: Color,
 ) -> Vec<Span<'static>> {
+    // Applies the selected-block background to a style when this span
+    // belongs to the selected cell, leaves other spans untouched.
+    let on_block = |style: Style| -> Style {
+        if selected {
+            style.bg(palette::PLAYBACK_PANEL_BG)
+        } else {
+            style
+        }
+    };
     let mut spans: Vec<Span> = if selected {
-        let marker_style = Style::default().fg(palette::AQUA);
-        let title_style = if focused {
+        let marker_style = on_block(Style::default().fg(palette::AQUA));
+        let title_style = on_block(if focused {
             Style::default().fg(fg).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(fg)
-        };
+        });
         vec![
             Span::styled("\u{258d}", marker_style),
             Span::styled(title, title_style),
@@ -110,7 +120,10 @@ pub(super) fn build_list_row_spans(
         vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
     };
     if !dur_str.is_empty() {
-        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+        spans.push(Span::styled(
+            dur_str,
+            on_block(Style::default().fg(palette::MUTED)),
+        ));
     }
     spans
 }
@@ -133,7 +146,15 @@ pub(super) fn item_cell_spans(
     let used: usize = spans.iter().map(|s| s.width()).sum();
     let pad = pad_to.saturating_sub(used);
     if pad > 0 {
-        spans.push(Span::raw(" ".repeat(pad)));
+        let pad_span = if selected {
+            Span::styled(
+                " ".repeat(pad),
+                Style::default().bg(palette::PLAYBACK_PANEL_BG),
+            )
+        } else {
+            Span::raw(" ".repeat(pad))
+        };
+        spans.push(pad_span);
     }
     spans
 }
