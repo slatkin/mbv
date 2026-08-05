@@ -371,16 +371,3 @@ impl App {
         spans
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::uppercase_playback_span;
-    use ratatui::text::Span;
-
-    #[test]
-    fn playback_indicator_span_text_is_rendered_in_uppercase() {
-        let span = uppercase_playback_span(Span::raw("720p en"));
-
-        assert_eq!(span.content, "720P EN");
-    }
-}

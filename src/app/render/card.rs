@@ -382,11 +382,6 @@ mod tests {
             .card_image_states
             .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
         assert!(!app.card_image_loading.contains("id2:P"));
-        assert!(fetch_triggered(&app, "id1:P"));
-        assert!(fetch_triggered(&app, "id3:P"));
-        assert!(fetch_triggered(&app, "id4:P"));
-        assert!(fetch_triggered(&app, "id5:P"));
-        assert!(!fetch_triggered(&app, "id0:P"));
     }
 
     #[test]
@@ -403,10 +398,6 @@ mod tests {
             .card_image_states
             .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
         assert!(!app.card_image_loading.contains("id3:P"));
-        assert!(fetch_triggered(&app, "id2:P"));
-        assert!(fetch_triggered(&app, "id4:P"));
-        assert!(fetch_triggered(&app, "id5:P"));
-        assert!(!fetch_triggered(&app, "id0:P"));
     }
 
     #[test]

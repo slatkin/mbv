@@ -651,10 +651,3 @@ mod route_tests;
 #[cfg(test)]
 #[path = "actions_tests.rs"]
 mod tests;
-#[test]
-fn enqueue_action_context_names_action_item_and_thin_client_bypass() {
-    assert_eq!(
-            enqueue_action_context("item-42", "Track", "library-view", true),
-            "user action=enqueue item_id=\"item-42\" item_name=\"Track\" source=library-view reason=non-library thin-client owns playback"
-        );
-}

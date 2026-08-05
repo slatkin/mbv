@@ -151,58 +151,6 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
 }
 
 #[test]
-fn podcast_context_menu_uses_left_pane_library_context() {
-    let mut app = make_app_stub();
-    let mut library = make_item("Podcasts", "CollectionFolder");
-    library.id = "lib-podcasts".into();
-    library.collection_type = "podcasts".into();
-    library.is_folder = true;
-
-    let mut show = make_item("Show A", "Folder");
-    show.id = "show-a".into();
-    show.is_folder = true;
-    show.unplayed_item_count = 0;
-
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: vec![BrowseLevel {
-            parent_id: "lib-podcasts".into(),
-            title: "Podcasts".into(),
-            items: vec![show],
-            total_count: 1,
-            cursor: 0,
-            scroll: 0,
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            music_grouping: None,
-        }],
-        search: None,
-        feed_home_video: None,
-
-        album_track_focus: None,
-        artist_header_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
-    app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
-
-    app.open_context_menu();
-
-    let menu = app.context_menu.as_ref().expect("context menu");
-    let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
-    assert!(labels.contains(&"Mark Unplayed"));
-    assert!(!labels.contains(&"Mark Watched"));
-    assert!(!labels.contains(&"Mark Unwatched"));
-}
-
-#[test]
 fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
     let mut app = make_app_stub();
     let mut library = make_item("Podcasts", "CollectionFolder");

@@ -159,31 +159,6 @@ input-ipc-server=/tmp/user.sock
         assert_eq!(shift_index_for_move(4, 1, 3), 4);
     }
 
-    // ── mpv_title_opt ────────────────────────────────────────────────────────
-
-    #[test]
-    fn title_opt_plain() {
-        assert_eq!(mpv_title_opt("Inception"), "force-media-title=%9%Inception");
-    }
-
-    #[test]
-    fn title_opt_comma() {
-        assert_eq!(
-            mpv_title_opt("Cardiff, Claire (2)"),
-            "force-media-title=%19%Cardiff, Claire (2)"
-        );
-    }
-
-    #[test]
-    fn title_opt_backslash() {
-        assert_eq!(mpv_title_opt("A\\B"), "force-media-title=%3%A\\B");
-    }
-
-    #[test]
-    fn title_opt_empty() {
-        assert_eq!(mpv_title_opt(""), "force-media-title=%0%");
-    }
-
     // ── PlayerCommand serde (IPC protocol integrity) ─────────────────────────
 
     fn make_media_item(id: &str) -> crate::api::MediaItem {

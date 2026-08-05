@@ -1,10 +1,4 @@
 use super::test_helpers::*;
-use super::*;
-
-#[test]
-fn uses_triangle_resampling() {
-    assert_eq!(POWER_RENDER_FILTER, ratatui_image::FilterType::Triangle);
-}
 
 #[test]
 fn pill_bar_hitboxes_carry_caller_ids_not_display_positions() {

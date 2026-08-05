@@ -115,27 +115,6 @@ fn repeated_space_dispatches_each_available_toggle() {
 }
 
 #[test]
-fn esc_stops_on_first_press_when_active() {
-    let mut app = make_app_stub();
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-    }
-    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-}
-
-#[test]
-fn repeated_esc_remains_available_while_active() {
-    let mut app = make_app_stub();
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-    }
-    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-}
-
-#[test]
 fn f1_opens_help_via_handle_key() {
     let mut app = make_app_stub();
     app.handle_key(ev(KeyCode::F(1), KeyModifiers::NONE));

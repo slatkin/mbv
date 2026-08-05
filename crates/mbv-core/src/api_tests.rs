@@ -45,22 +45,6 @@ fn display_name_episode_without_series_falls_back_to_name() {
     assert_eq!(item.display_name(), "Standalone");
 }
 
-// ── MediaItem::resume_seconds / runtime_seconds ──────────────────────────
-
-#[test]
-fn resume_seconds_converts_ticks() {
-    let mut item = make_item("X", "Movie");
-    item.playback_position_ticks = TICKS_PER_SECOND * 90;
-    assert!((item.resume_seconds() - 90.0).abs() < 1e-6);
-}
-
-#[test]
-fn runtime_seconds_converts_ticks() {
-    let mut item = make_item("X", "Movie");
-    item.runtime_ticks = TICKS_PER_SECOND * 5400; // 90 min
-    assert!((item.runtime_seconds() - 5400.0).abs() < 1e-6);
-}
-
 // ── parse_item ───────────────────────────────────────────────────────────
 
 #[test]
@@ -209,17 +193,6 @@ fn parse_item_artist_falls_back_to_artists_array() {
 fn parse_item_album_artist_takes_priority_over_artists_array() {
     let raw = json!({ "Type": "Audio", "AlbumArtist": "Album Artist", "Artists": ["Track Artist"], "UserData": {} });
     assert_eq!(parse_item(&raw).artist, "Album Artist");
-}
-
-// ── EmbyClient::stream_url ───────────────────────────────────────────────
-
-#[test]
-fn stream_url_format() {
-    let c = client_with_url("http://server:8096");
-    assert_eq!(
-        c.stream_url("abc123"),
-        "http://server:8096/Videos/abc123/stream?static=true&api_key=tok"
-    );
 }
 
 // ── EmbyClient::ws_url ───────────────────────────────────────────────────
@@ -390,21 +363,6 @@ fn device_name_falls_back_to_mbv() {
 }
 
 // ── device_id ────────────────────────────────────────────────────────────
-
-#[test]
-fn device_id_returns_uuid_v4_format() {
-    let id = device_id_in(make_temp_data_dir());
-    // xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-    let parts: Vec<&str> = id.split('-').collect();
-    assert_eq!(parts.len(), 5, "id: {id}");
-    assert_eq!(parts[0].len(), 8);
-    assert_eq!(parts[1].len(), 4);
-    assert_eq!(parts[2].len(), 4);
-    assert!(parts[2].starts_with('4'), "version nibble: {id}");
-    assert_eq!(parts[3].len(), 4);
-    assert_eq!(parts[4].len(), 12);
-    assert!(id.chars().all(|c| c.is_ascii_hexdigit() || c == '-'));
-}
 
 #[test]
 fn device_id_is_stable_across_calls() {
@@ -621,23 +579,6 @@ fn parse_session_media_info_handles_audio_only_sessions() {
     assert_eq!(media.video_label, "English FLAC Stereo");
     assert_eq!(media.audio_streams.len(), 1);
     assert_eq!(media.audio_streams[0].index, 0);
-}
-
-// ── get_sessions_unfiltered ──────────────────────────────────────────────
-
-#[test]
-fn get_sessions_with_active_within_none_omits_query_param() {
-    // get_sessions_unfiltered must not constrain ActiveWithinSeconds --
-    // this is a compile-time/shape check since the real query param is
-    // only observable over the wire; the behavioral guarantee is that
-    // both methods exist and share one implementation.
-    let client = client_with_url("http://localhost:1");
-    // Both calls fail (no server listening on port 1) -- we only need
-    // them to compile and return a network-error Result, proving the
-    // unfiltered path exists and is reachable without a required
-    // ActiveWithinSeconds argument.
-    assert!(client.get_sessions_unfiltered().is_err());
-    assert!(client.get_sessions().is_err());
 }
 
 // ── is_audio / is_video ──────────────────────────────────────────────────

@@ -196,20 +196,8 @@ mod tests {
     #[test]
     fn now_playing_rows_shown_only_when_playing_with_title() {
         assert!(is_playing_with_title(&status(true, false, "A Song")));
-    }
-
-    #[test]
-    fn now_playing_rows_hidden_when_idle() {
         assert!(!is_playing_with_title(&status(false, false, "A Song")));
-    }
-
-    #[test]
-    fn now_playing_rows_hidden_when_paused() {
         assert!(!is_playing_with_title(&status(true, true, "A Song")));
-    }
-
-    #[test]
-    fn now_playing_rows_hidden_when_no_title() {
         assert!(!is_playing_with_title(&status(true, false, "")));
     }
 

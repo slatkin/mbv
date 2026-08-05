@@ -8,25 +8,6 @@ use ratatui::Frame;
 pub(super) const VISUALIZER_HEIGHT: u16 = 11;
 
 impl App {
-    #[cfg(test)]
-    pub(super) fn split_visualizer_area(&self, area: Rect) -> (Rect, Rect) {
-        if !self.visualizer_enabled || area.height < 3 {
-            return (area, Rect::default());
-        }
-        let height = area.height.min(VISUALIZER_HEIGHT);
-        (
-            Rect {
-                height: area.height.saturating_sub(height),
-                ..area
-            },
-            Rect {
-                y: area.y + area.height.saturating_sub(height),
-                height,
-                ..area
-            },
-        )
-    }
-
     pub(super) fn render_visualizer(&self, f: &mut Frame, area: Rect) {
         if area.width == 0 || area.height == 0 {
             return;
@@ -92,41 +73,6 @@ mod tests {
     use crate::app::tests::make_app_stub;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-
-    #[test]
-    fn split_returns_full_area_when_disabled() {
-        let app = make_app_stub();
-        let area = Rect::new(0, 0, 30, 20);
-        let (library, visualizer) = app.split_visualizer_area(area);
-        assert_eq!(library, area);
-        assert_eq!(visualizer, Rect::default());
-    }
-
-    #[test]
-    fn split_reserves_visualizer_strip_at_bottom_when_enabled() {
-        let mut app = make_app_stub();
-        app.visualizer_enabled = true;
-        let area = Rect::new(2, 4, 30, 20);
-        let (library, visualizer) = app.split_visualizer_area(area);
-
-        assert_eq!(library.y, area.y);
-        assert_eq!(library.x, area.x);
-        assert_eq!(library.width, area.width);
-        assert_eq!(library.height, area.height - VISUALIZER_HEIGHT);
-        assert_eq!(visualizer.y, area.y + area.height - VISUALIZER_HEIGHT);
-        assert_eq!(visualizer.height, VISUALIZER_HEIGHT);
-        assert_eq!(visualizer.width, area.width);
-    }
-
-    #[test]
-    fn split_falls_back_to_full_area_when_too_short() {
-        let mut app = make_app_stub();
-        app.visualizer_enabled = true;
-        let area = Rect::new(0, 0, 30, 2);
-        let (library, visualizer) = app.split_visualizer_area(area);
-        assert_eq!(library, area);
-        assert_eq!(visualizer, Rect::default());
-    }
 
     #[test]
     fn render_visualizer_is_noop_on_empty_area() {

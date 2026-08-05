@@ -85,8 +85,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
     );
 }
 
-#[test]
-fn feed_home_video_root_filters_groups_from_all_video_paths() {
+fn make_home_video_app() -> App {
     let mut app = make_app_stub();
     app.library_tab = 1;
     app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
@@ -127,6 +126,10 @@ fn feed_home_video_root_filters_groups_from_all_video_paths() {
         library_total: None,
     });
 
+    app
+}
+
+fn seed_home_video_root_loaded(app: &mut App) -> MediaItem {
     let mut empty = make_item("Empty Channel", "Folder");
     empty.id = "folder-empty".into();
     empty.is_folder = true;
@@ -158,7 +161,20 @@ fn feed_home_video_root_filters_groups_from_all_video_paths() {
         }),
     });
 
+    active
+}
+
+#[test]
+fn feed_home_video_loaded_does_not_push_sublevel() {
+    let mut app = make_home_video_app();
+    seed_home_video_root_loaded(&mut app);
     assert_eq!(app.libs[0].nav_stack.len(), 1);
+}
+
+#[test]
+fn feed_home_video_aggregated_populates_groups_and_all_items() {
+    let mut app = make_home_video_app();
+    let active = seed_home_video_root_loaded(&mut app);
 
     let mut video = make_item("Episode 1", "Movie");
     video.path = "/videos/active/ep1.mp4".into();
@@ -168,7 +184,7 @@ fn feed_home_video_root_filters_groups_from_all_video_paths() {
         parent_id: "lib-youtube".into(),
         all_items: vec![video.clone()],
         groups: vec![FeedHomeVideoGroup {
-            folder: active.clone(),
+            folder: active,
             items: vec![video],
         }],
     });
@@ -196,6 +212,26 @@ fn feed_home_video_root_filters_groups_from_all_video_paths() {
         Some(1)
     );
     assert_eq!(app.libs[0].nav_stack.len(), 1);
+}
+
+#[test]
+fn feed_home_video_aggregated_ensure_group_level_does_not_push_and_resolves_selected_items() {
+    let mut app = make_home_video_app();
+    let active = seed_home_video_root_loaded(&mut app);
+
+    let mut video = make_item("Episode 1", "Movie");
+    video.path = "/videos/active/ep1.mp4".into();
+
+    app.handle_lib_event(LibEvent::FeedHomeVideoAggregated {
+        lib_idx: 0,
+        parent_id: "lib-youtube".into(),
+        all_items: vec![video.clone()],
+        groups: vec![FeedHomeVideoGroup {
+            folder: active,
+            items: vec![video],
+        }],
+    });
+
     app.ensure_feed_home_video_group_level(0);
     assert_eq!(app.libs[0].nav_stack.len(), 1);
     assert_eq!(app.feed_home_video_selected_items(0).len(), 1);

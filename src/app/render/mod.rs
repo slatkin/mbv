@@ -68,7 +68,7 @@ use visualizer::VISUALIZER_HEIGHT;
 #[cfg(test)]
 use mbv_core::api::TICKS_PER_SECOND;
 #[cfg(test)]
-use power_widgets::{render_power_scrollbar_with_viewport, POWER_TAB_LEFT_PAD};
+use power_widgets::render_power_scrollbar_with_viewport;
 #[cfg(test)]
 use unicode_width::UnicodeWidthStr;
 

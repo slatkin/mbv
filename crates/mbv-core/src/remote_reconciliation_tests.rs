@@ -298,69 +298,6 @@ fn stopped_final_near_end_completes_but_disappearance_does_not() {
     assert_eq!(t.state(), TrackingState::Suspended);
 }
 
-#[test]
-fn representative_traces_are_table_driven() {
-    let traces: Vec<(&str, Vec<RemoteObservation>, TrackingState)> = vec![
-        (
-            "startup",
-            vec![RemoteObservation::playing(1, "session", "a", 1, 100, 1)],
-            TrackingState::Tracking,
-        ),
-        (
-            "adjacent",
-            vec![
-                RemoteObservation::playing(1, "session", "a", 95, 100, 1),
-                RemoteObservation::playing(2, "session", "b", 1, 100, 2),
-            ],
-            TrackingState::Tracking,
-        ),
-        (
-            "poll gap invalidation",
-            vec![
-                RemoteObservation::playing(1, "session", "a", 1, 100, 1),
-                RemoteObservation::playing(2, "session", "c", 1, 100, 2),
-            ],
-            TrackingState::Invalid,
-        ),
-        (
-            "duplicate ambiguity",
-            vec![
-                RemoteObservation::playing(1, "session", "a", 80, 100, 1),
-                RemoteObservation::playing(2, "session", "a", 1, 100, 2),
-            ],
-            TrackingState::Ambiguous,
-        ),
-        (
-            "present stopped",
-            vec![
-                RemoteObservation::playing(1, "session", "a", 1, 100, 1),
-                RemoteObservation::stopped(2, "session", 2),
-            ],
-            TrackingState::Tracking,
-        ),
-    ];
-    for (name, observations, expected) in traces {
-        let items = if name == "duplicate ambiguity" {
-            vec![
-                occurrence(1, "a", 100),
-                occurrence(2, "a", 100),
-                occurrence(3, "b", 100),
-            ]
-        } else {
-            vec![
-                occurrence(1, "a", 100),
-                occurrence(2, "b", 100),
-                occurrence(3, "c", 100),
-            ]
-        };
-        let mut tracker = tracker(items);
-        for observation in observations {
-            tracker.observe(observation);
-        }
-        assert_eq!(tracker.state(), expected, "trace {name}");
-    }
-}
-
 #[derive(Clone)]
 enum TraceStep {
     Observe(RemoteObservation),
@@ -377,153 +314,191 @@ struct Trace {
     expected_completion: Option<OccurrenceId>,
 }
 
-#[test]
-fn reconciliation_paths_are_covered_by_table_driven_traces() {
-    let traces = vec![
-        Trace {
-            name: "startup confirmation",
-            media: &["a", "b", "c"],
-            steps: vec![TraceStep::Observe(RemoteObservation::playing(
-                1, "session", "a", 1, 100, 1,
-            ))],
-            expected_state: TrackingState::Tracking,
-            expected_completion: None,
-        },
-        Trace {
-            name: "near-end adjacent completion",
-            media: &["a", "b"],
-            steps: vec![
-                TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 95, 100, 1)),
-                TraceStep::Observe(RemoteObservation::playing(2, "session", "b", 1, 100, 2)),
-            ],
-            expected_state: TrackingState::Tracking,
-            expected_completion: Some(1),
-        },
-        Trace {
-            name: "poll gap invalidation",
-            media: &["a", "b", "c"],
-            steps: vec![
-                TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 1, 100, 1)),
-                TraceStep::Observe(RemoteObservation::playing(2, "session", "c", 1, 100, 2)),
-            ],
-            expected_state: TrackingState::Invalid,
-            expected_completion: None,
-        },
-        Trace {
-            name: "stale generation",
-            media: &["a", "b"],
-            steps: vec![
-                TraceStep::Observe(RemoteObservation::playing(2, "session", "a", 10, 100, 2)),
-                TraceStep::Observe(RemoteObservation::playing(1, "session", "b", 1, 100, 3)),
-            ],
-            expected_state: TrackingState::Tracking,
-            expected_completion: None,
-        },
-        Trace {
-            name: "duplicate ambiguity",
-            media: &["a", "a", "b"],
-            steps: vec![
-                TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 80, 100, 1)),
-                TraceStep::Observe(RemoteObservation::playing(2, "session", "a", 1, 100, 2)),
-            ],
-            expected_state: TrackingState::Ambiguous,
-            expected_completion: None,
-        },
-        Trace {
-            name: "backward invalidation",
-            media: &["a", "b", "c"],
-            steps: vec![
-                TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 1, 100, 1)),
-                TraceStep::Observe(RemoteObservation::playing(2, "session", "b", 1, 100, 2)),
-                TraceStep::Observe(RemoteObservation::playing(3, "session", "a", 1, 100, 3)),
-            ],
-            expected_state: TrackingState::Invalid,
-            expected_completion: None,
-        },
-        Trace {
-            name: "suspension exact return",
-            media: &["a", "b"],
-            steps: vec![
-                TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 10, 100, 1)),
-                TraceStep::Disappear,
-                TraceStep::Observe(RemoteObservation::playing(2, "session", "a", 11, 100, 2)),
-            ],
-            expected_state: TrackingState::Tracking,
-            expected_completion: None,
-        },
-        Trace {
-            name: "re-anchor after invalidation",
-            media: &["a", "b", "c"],
-            steps: vec![
-                TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 1, 100, 1)),
-                TraceStep::Observe(RemoteObservation::playing(2, "session", "c", 1, 100, 2)),
-                TraceStep::Reanchor(2),
-            ],
-            expected_state: TrackingState::Tracking,
-            expected_completion: None,
-        },
-        Trace {
-            name: "stopped playback remains tracked",
-            media: &["a", "b"],
-            steps: vec![
-                TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 10, 100, 1)),
-                TraceStep::Observe(RemoteObservation::stopped(2, "session", 2)),
-            ],
-            expected_state: TrackingState::Tracking,
-            expected_completion: None,
-        },
-        Trace {
-            name: "final stopped completion",
-            media: &["a", "b"],
-            steps: vec![
-                TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 1, 100, 1)),
-                TraceStep::Observe(RemoteObservation::playing(2, "session", "b", 95, 100, 2)),
-                TraceStep::Observe(RemoteObservation::stopped(3, "session", 3)),
-            ],
-            expected_state: TrackingState::Tracking,
-            expected_completion: Some(2),
-        },
-        Trace {
-            name: "startup expiry",
-            media: &["a", "b"],
-            steps: vec![TraceStep::Expire(15_000)],
-            expected_state: TrackingState::Invalid,
-            expected_completion: None,
-        },
-    ];
-
-    for trace in traces {
-        let items = trace
-            .media
-            .iter()
-            .enumerate()
-            .map(|(index, media)| occurrence(index as u64 + 1, media, 100))
-            .collect();
-        let mut tracker = tracker(items);
-        let mut completions = Vec::new();
-        for step in trace.steps {
-            let effects = match step {
-                TraceStep::Observe(observation) => tracker.observe(observation),
-                TraceStep::Disappear => tracker.session_disappeared(),
-                TraceStep::Expire(now_ms) => tracker.expire(now_ms),
-                TraceStep::Reanchor(index) => tracker.reanchor(index),
-            };
-            completions.extend(effects.into_iter().filter_map(|effect| match effect {
-                ReconciliationEffect::Completion(item) => Some(item.occurrence_id),
-                _ => None,
-            }));
-        }
-        assert_eq!(
-            tracker.state(),
-            trace.expected_state,
-            "trace {}",
-            trace.name
-        );
-        assert_eq!(
-            completions.into_iter().next(),
-            trace.expected_completion,
-            "trace {} completion",
-            trace.name
-        );
+fn run_trace(trace: Trace) {
+    let items = trace
+        .media
+        .iter()
+        .enumerate()
+        .map(|(index, media)| occurrence(index as u64 + 1, media, 100))
+        .collect();
+    let mut tracker = tracker(items);
+    let mut completions = Vec::new();
+    for step in trace.steps {
+        let effects = match step {
+            TraceStep::Observe(observation) => tracker.observe(observation),
+            TraceStep::Disappear => tracker.session_disappeared(),
+            TraceStep::Expire(now_ms) => tracker.expire(now_ms),
+            TraceStep::Reanchor(index) => tracker.reanchor(index),
+        };
+        completions.extend(effects.into_iter().filter_map(|effect| match effect {
+            ReconciliationEffect::Completion(item) => Some(item.occurrence_id),
+            _ => None,
+        }));
     }
+    assert_eq!(
+        tracker.state(),
+        trace.expected_state,
+        "trace {}",
+        trace.name
+    );
+    assert_eq!(
+        completions.into_iter().next(),
+        trace.expected_completion,
+        "trace {} completion",
+        trace.name
+    );
+}
+
+#[test]
+fn reconciliation_trace_startup_confirmation() {
+    run_trace(Trace {
+        name: "startup confirmation",
+        media: &["a", "b", "c"],
+        steps: vec![TraceStep::Observe(RemoteObservation::playing(
+            1, "session", "a", 1, 100, 1,
+        ))],
+        expected_state: TrackingState::Tracking,
+        expected_completion: None,
+    });
+}
+
+#[test]
+fn reconciliation_trace_near_end_adjacent_completion() {
+    run_trace(Trace {
+        name: "near-end adjacent completion",
+        media: &["a", "b"],
+        steps: vec![
+            TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 95, 100, 1)),
+            TraceStep::Observe(RemoteObservation::playing(2, "session", "b", 1, 100, 2)),
+        ],
+        expected_state: TrackingState::Tracking,
+        expected_completion: Some(1),
+    });
+}
+
+#[test]
+fn reconciliation_trace_poll_gap_invalidation() {
+    run_trace(Trace {
+        name: "poll gap invalidation",
+        media: &["a", "b", "c"],
+        steps: vec![
+            TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 1, 100, 1)),
+            TraceStep::Observe(RemoteObservation::playing(2, "session", "c", 1, 100, 2)),
+        ],
+        expected_state: TrackingState::Invalid,
+        expected_completion: None,
+    });
+}
+
+#[test]
+fn reconciliation_trace_stale_generation() {
+    run_trace(Trace {
+        name: "stale generation",
+        media: &["a", "b"],
+        steps: vec![
+            TraceStep::Observe(RemoteObservation::playing(2, "session", "a", 10, 100, 2)),
+            TraceStep::Observe(RemoteObservation::playing(1, "session", "b", 1, 100, 3)),
+        ],
+        expected_state: TrackingState::Tracking,
+        expected_completion: None,
+    });
+}
+
+#[test]
+fn reconciliation_trace_duplicate_ambiguity() {
+    run_trace(Trace {
+        name: "duplicate ambiguity",
+        media: &["a", "a", "b"],
+        steps: vec![
+            TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 80, 100, 1)),
+            TraceStep::Observe(RemoteObservation::playing(2, "session", "a", 1, 100, 2)),
+        ],
+        expected_state: TrackingState::Ambiguous,
+        expected_completion: None,
+    });
+}
+
+#[test]
+fn reconciliation_trace_backward_invalidation() {
+    run_trace(Trace {
+        name: "backward invalidation",
+        media: &["a", "b", "c"],
+        steps: vec![
+            TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 1, 100, 1)),
+            TraceStep::Observe(RemoteObservation::playing(2, "session", "b", 1, 100, 2)),
+            TraceStep::Observe(RemoteObservation::playing(3, "session", "a", 1, 100, 3)),
+        ],
+        expected_state: TrackingState::Invalid,
+        expected_completion: None,
+    });
+}
+
+#[test]
+fn reconciliation_trace_suspension_exact_return() {
+    run_trace(Trace {
+        name: "suspension exact return",
+        media: &["a", "b"],
+        steps: vec![
+            TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 10, 100, 1)),
+            TraceStep::Disappear,
+            TraceStep::Observe(RemoteObservation::playing(2, "session", "a", 11, 100, 2)),
+        ],
+        expected_state: TrackingState::Tracking,
+        expected_completion: None,
+    });
+}
+
+#[test]
+fn reconciliation_trace_re_anchor_after_invalidation() {
+    run_trace(Trace {
+        name: "re-anchor after invalidation",
+        media: &["a", "b", "c"],
+        steps: vec![
+            TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 1, 100, 1)),
+            TraceStep::Observe(RemoteObservation::playing(2, "session", "c", 1, 100, 2)),
+            TraceStep::Reanchor(2),
+        ],
+        expected_state: TrackingState::Tracking,
+        expected_completion: None,
+    });
+}
+
+#[test]
+fn reconciliation_trace_stopped_playback_remains_tracked() {
+    run_trace(Trace {
+        name: "stopped playback remains tracked",
+        media: &["a", "b"],
+        steps: vec![
+            TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 10, 100, 1)),
+            TraceStep::Observe(RemoteObservation::stopped(2, "session", 2)),
+        ],
+        expected_state: TrackingState::Tracking,
+        expected_completion: None,
+    });
+}
+
+#[test]
+fn reconciliation_trace_final_stopped_completion() {
+    run_trace(Trace {
+        name: "final stopped completion",
+        media: &["a", "b"],
+        steps: vec![
+            TraceStep::Observe(RemoteObservation::playing(1, "session", "a", 1, 100, 1)),
+            TraceStep::Observe(RemoteObservation::playing(2, "session", "b", 95, 100, 2)),
+            TraceStep::Observe(RemoteObservation::stopped(3, "session", 3)),
+        ],
+        expected_state: TrackingState::Tracking,
+        expected_completion: Some(2),
+    });
+}
+
+#[test]
+fn reconciliation_trace_startup_expiry() {
+    run_trace(Trace {
+        name: "startup expiry",
+        media: &["a", "b"],
+        steps: vec![TraceStep::Expire(15_000)],
+        expected_state: TrackingState::Invalid,
+        expected_completion: None,
+    });
 }

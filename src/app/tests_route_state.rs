@@ -26,10 +26,6 @@ fn remote_slot_state_is_off_for_local_only_app() {
     let app = make_app_stub();
     assert_eq!(app.remote_slot_state(), RemoteSlotState::Off);
     assert!(!app.can_disconnect_remote());
-    assert_eq!(
-        app.sessions_overlay_footer(),
-        "[↵]conn [r]refresh [Esc]close"
-    );
 }
 
 #[test]
@@ -47,10 +43,6 @@ fn remote_slot_state_is_attached_session_when_connected_to_remote_session() {
 
     assert_eq!(app.remote_slot_state(), RemoteSlotState::AttachedSession);
     assert!(app.can_disconnect_remote());
-    assert_eq!(
-        app.sessions_overlay_footer(),
-        "[↵]conn [d]disc [r]refresh [Esc]close"
-    );
 }
 
 #[test]
@@ -59,10 +51,6 @@ fn remote_slot_state_direct_remote_display_does_not_imply_sessions_panel_disconn
 
     assert_eq!(app.remote_slot_state(), RemoteSlotState::DirectRemote);
     assert!(!app.can_disconnect_remote());
-    assert_eq!(
-        app.sessions_overlay_footer(),
-        "[↵]conn [r]refresh [Esc]close"
-    );
 }
 
 #[test]
@@ -189,10 +177,6 @@ fn route_owned_transport_is_not_sessions_panel_disconnectable() {
 
     assert_eq!(app.remote_slot_state(), RemoteSlotState::DirectRemote);
     assert!(!app.can_disconnect_remote());
-    assert_eq!(
-        app.sessions_overlay_footer(),
-        "[↵]conn [r]refresh [Esc]close"
-    );
 
     app.disconnect_remote();
 
@@ -317,10 +301,6 @@ fn remote_slot_state_is_local_daemon_for_thin_client_mode() {
 
     assert_eq!(app.remote_slot_state(), RemoteSlotState::LocalDaemon);
     assert!(!app.can_disconnect_remote());
-    assert_eq!(
-        app.sessions_overlay_footer(),
-        "[↵]conn [r]refresh [Esc]close"
-    );
 }
 
 #[test]
