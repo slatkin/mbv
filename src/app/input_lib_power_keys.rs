@@ -175,12 +175,17 @@ impl App {
             }
             KeyCode::Left if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(-1),
             KeyCode::Right if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(1),
-            // Vim-style navigation. Complements the arrow keys:
+            // Arrow-key column navigation: in 2-col flat lists Left/Right
+            // mirror h/l (Up/Down already mirror j/k). Season-grid Left/Right
+            // are covered above.
+            KeyCode::Left if self.current_library_columns(lib_idx) > 1 => self.move_lib_cursor(-1),
+            KeyCode::Right if self.current_library_columns(lib_idx) > 1 => self.move_lib_cursor(1),
+            // Vim-style navigation. Complements the arrow keys (Left/Right
+            // and Up/Down above carry the same movements):
             //   j/k mirror Up/Down (any column count) -- `j` is down, `k` is up.
-            //   h/l move horizontally across cells in 2-col mode, mirroring
-            //   the arrow keys' old role; in 1-col mode h/l are unbound
-            //   (left as a free input character -- h is not a global key now
-            //   that the sidebar toggle moved to `x`).
+            //   h/l mirror Left/Right across cells in 2-col mode; in 1-col
+            //   mode h/l are unbound (left as a free input character -- h is
+            //   not a global key now that the sidebar toggle moved to `x`).
             KeyCode::Char('j') => {
                 if self.is_viewing_season_grid(lib_idx) {
                     self.move_lib_cursor(4);

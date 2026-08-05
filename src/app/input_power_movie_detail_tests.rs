@@ -238,7 +238,7 @@ fn left_does_not_focus_hidden_queue_when_power_left_column_is_collapsed() {
     app.queue_column_collapsed = true;
     app.panel_focus = PanelFocus::Library;
 
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
 
     assert!(!handled);
     assert_eq!(app.panel_focus, PanelFocus::Library);
@@ -660,7 +660,7 @@ fn power_library_navigation_stays_debounced_after_focus_moves_to_queue() {
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(!app.power_right_panel_image_renders_allowed());
 
-    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
     assert_eq!(app.panel_focus, PanelFocus::Queue);
     assert!(!app.power_right_panel_image_renders_allowed());
 }
@@ -684,7 +684,7 @@ fn power_queue_navigation_keeps_right_panel_gate_open_after_focus_moves_to_libra
     assert_eq!(app.last_power_library_nav_at, power_library_nav_at);
     assert!(app.power_right_panel_image_renders_allowed());
 
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
 
     assert_eq!(app.panel_focus, PanelFocus::Library);
     assert!(app.power_right_panel_image_renders_allowed());

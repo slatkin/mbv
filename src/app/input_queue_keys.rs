@@ -55,9 +55,12 @@ impl App {
     }
 
     pub(super) fn handle_queue_key(&mut self, key: KeyEvent) -> bool {
-        // Bare Left/Right switch focus between the two panels. Queue is on
-        // the left; library is on the right.
-        if key.modifiers.is_empty() {
+        // Alt+Left/Right switch focus between the two panels. Queue is on the
+        // left; library is on the right. (Bare Left/Right now navigate columns
+        // inside the library list, and Alt+Up/Alt+Down cycle tabs -- see
+        // below -- so the old Alt+arrow tab bindings are gone.) Tab/BackTab
+        // remain the tab webhook via `handle_global_view_key`.
+        if key.modifiers.contains(KeyModifiers::ALT) {
             if key.code == KeyCode::Right && matches!(self.panel_focus, PanelFocus::Queue) {
                 self.set_panel_focus(PanelFocus::Library);
                 self.last_card_height = 0; // reset stale image height for new view
@@ -167,7 +170,8 @@ impl App {
                 // currently-displayed album instead of drilling into
                 // `nav_stack` (`select`) or moving the album cursor
                 // (`move_lib_cursor`). Scoped strictly to `!is_power_nav`
-                // (so Alt+arrow pane-switching is untouched) and to
+                // (so the Alt+arrow panel-switch / tab-cycling bindings above
+                // are untouched) and to
                 // `is_viewing_album_folders` (so movies/series/home-video
                 // panels and non-power tabs are completely unaffected; the
                 // legacy `is_album_level` drilldown this used to also
@@ -420,10 +424,10 @@ impl App {
                     });
                 }
             }
-            KeyCode::Left | KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
                 self.library_tab_prev();
             }
-            KeyCode::Right | KeyCode::Down if key.modifiers.contains(KeyModifiers::ALT) => {
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::ALT) => {
                 self.library_tab_next();
             }
             _ => {}
