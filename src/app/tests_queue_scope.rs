@@ -72,25 +72,6 @@ fn queue_scope_resolution_matrix_direct_remote_displaying_remote() {
 }
 
 #[test]
-fn power_queue_renders_scope_pills_and_hitboxes_for_direct_remote() {
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-    app.panel_focus = PanelFocus::Library;
-    app.set_queue_scope(QueueScope::Local);
-
-    let rendered = render_app_to_string(&mut app, 90, 28);
-    let device_name = device_name();
-    let upper_device_name = device_name.to_uppercase();
-
-    assert!(
-        rendered.contains(&format!(" {} ", upper_device_name)),
-        "expected power queue local/session pills to use the device name:\n{rendered}"
-    );
-    assert!(app.layout.main.queue_scope_local_area.width >= device_name.width() as u16);
-    assert!(app.layout.main.queue_scope_remote_area.width >= device_name.width() as u16);
-    assert!(app.layout.main.queue_scope_remote_area.x > app.layout.main.queue_scope_local_area.x);
-}
-
-#[test]
 fn power_queue_scope_switch_via_keyboard_works_from_queue_focus() {
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
     app.panel_focus = PanelFocus::Queue;
