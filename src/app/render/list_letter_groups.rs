@@ -1,15 +1,10 @@
 use super::super::ui_util::*;
-use super::list_rows::{
-    focused_or_subtle, item_cell_spans, push_selected_detail_fillers_after,
-    push_selected_detail_fillers_before, render_series_detail_background,
-    selected_detail_lower_bound, DisplayRow, ListRenderCtx, COMPACT_MOVIE_BANNER_INDENT,
-};
+use super::list_rows::{focused_or_subtle, item_cell_spans, DisplayRow, ListRenderCtx};
 use super::{effective_sort_str, letter_bucket, LetterFilter};
 use crate::app::layout::LayoutMain;
-use crate::app::library_column_width::{library_cell_slot, library_cell_width, LIBRARY_COLUMN_GAP};
+use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
-use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
@@ -33,9 +28,6 @@ impl App {
             items,
             cursor,
             stored_scroll,
-            banner_rows,
-            banner_content_rows,
-            series_detail_rows,
             cols,
             focused,
         } = ctx;
@@ -76,13 +68,7 @@ impl App {
             let bucket = letter_bucket(item, bucket_total);
             if bucket != last_bucket {
                 if !current_row.is_empty() {
-                    push_item_row(
-                        &mut display_rows,
-                        &mut current_row,
-                        cursor,
-                        banner_rows,
-                        series_detail_rows,
-                    );
+                    push_item_row(&mut display_rows, &mut current_row);
                 }
                 if !last_bucket.is_empty() {
                     display_rows.push(DisplayRow::Spacer);
@@ -92,85 +78,39 @@ impl App {
             }
             current_row.push(idx);
             if current_row.len() >= cols.max(1) {
-                push_item_row(
-                    &mut display_rows,
-                    &mut current_row,
-                    cursor,
-                    banner_rows,
-                    series_detail_rows,
-                );
+                push_item_row(&mut display_rows, &mut current_row);
             }
         }
         if !current_row.is_empty() {
-            push_item_row(
-                &mut display_rows,
-                &mut current_row,
-                cursor,
-                banner_rows,
-                series_detail_rows,
-            );
+            push_item_row(&mut display_rows, &mut current_row);
         }
         let total_display = display_rows.len();
 
         // Find the visual row of the current cursor item for scrolling
-        // (`display_cursor` is the *row containing* the cursor, so the clamp
-        // keeps the whole tab+panel block on screen together) and the
-        // cursor's column within that row (for the notched block's tab).
+        // (`display_cursor` is the *row containing* the cursor) and the
+        // cursor's column within that row.
         let display_cursor = display_rows
             .iter()
             .position(|r| matches!(r, DisplayRow::Item(idxs) if idxs.contains(&cursor)))
             .unwrap_or(0);
-        let cursor_col = display_rows
-            .iter()
-            .find_map(|r| match r {
-                DisplayRow::Item(idxs) => idxs.iter().position(|&i| i == cursor),
-                _ => None,
-            })
-            .unwrap_or(0);
-        // Tab slot for the notched block: the rightmost cell absorbs the
-        // trailing remainder column so the tab joins the full-width panel
-        // below at the content area's right edge.
-        let slot = library_cell_slot(content_area, cols, cursor_col);
-        // For banners, `banner_rows` rows sit below the cursor (opening rule above).
-        // For series, `series_detail_rows` rows sit below the cursor (block follows it).
-        let lower_bound =
-            selected_detail_lower_bound(display_cursor, banner_rows, series_detail_rows, visible);
+
+        // Keep the cursor row visible: never scroll past the row above the
+        // viewport's last row.
+        let lower_bound = display_cursor.saturating_sub(visible.saturating_sub(1));
         let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
         // If stale scroll state would put the first item of a bucket at the
         // top of the viewport, back up so its letter header remains visible.
-        // When that item is also the selected/bannered one, the banner's
-        // opening rule sits between the header and the item, so back up an
-        // extra row to clear the rule too.
-        // Also, if a colored-padding BannerFiller (from a selected block) is at
-        // the top, back up one row to keep the border-space BannerFiller visible.
         if visible > 1 && offset > 0 {
-            // Walk back over any run of banner/series-detail filler rows
-            // touching `offset` (whether `offset` lands inside the run or
-            // right after it, on the Item row the fillers belong to) so
-            // `run_start` points at the run's first row. Then, if a
-            // LetterHeader immediately precedes that run, include it too
-            // -- otherwise the header (and/or the block's top padding)
-            // can be scrolled just out of view with no way back except
-            // scrolling further. This generalizes the old fixed-offset
-            // special cases to any filler-run length.
             let mut run_start = offset;
-            while run_start > 0
+            if run_start > 0
                 && matches!(
                     display_rows.get(run_start - 1),
-                    Some(DisplayRow::BannerFiller | DisplayRow::SeriesDetailFiller)
+                    Some(DisplayRow::LetterHeader(_))
                 )
             {
                 run_start -= 1;
             }
-            offset = if run_start > 0
-                && matches!(
-                    display_rows.get(run_start - 1),
-                    Some(DisplayRow::LetterHeader(_))
-                ) {
-                run_start - 1
-            } else {
-                run_start
-            };
+            offset = run_start;
         }
         let final_offset = offset;
 
@@ -179,16 +119,13 @@ impl App {
         // cell via `left_item_rows`).
         for row in display_rows.iter().skip(offset).take(visible) {
             layout.left_row_map.push(match row {
-                DisplayRow::Spacer
-                | DisplayRow::LetterHeader(_)
-                | DisplayRow::BannerFiller
-                | DisplayRow::SeriesDetailFiller => None,
+                DisplayRow::Spacer | DisplayRow::LetterHeader(_) => None,
                 DisplayRow::Item(idxs) => idxs.first().copied(),
             });
         }
         // Publish the full row structure (parallel to the display rows,
-        // empty entries for headers/fillers) so column-aware cursor
-        // movement and mouse hit-testing can resolve cells between frames.
+        // empty entries for headers) so column-aware cursor movement and
+        // mouse hit-testing can resolve cells between frames.
         layout.left_item_rows = display_rows
             .iter()
             .map(|row| match row {
@@ -197,60 +134,11 @@ impl App {
             })
             .collect();
 
-        // Absolute display-row indices of the colored block's top and
-        // bottom padding rows (only meaningful when banner_rows > 0).
-        // `banner_rule_top` is the padding row directly above the selected
-        // item's own row; `banner_rule_bottom` is the padding row after
-        // the banner content, before the next list row. Together they
-        // frame the selected row + banner as a single CONTINUE_BG block
-        // instead of `─` rules around it.
-        let banner_rule_top = display_cursor.saturating_sub(1);
-        let content_start = display_cursor + 1;
-        let banner_rule_bottom = content_start + banner_rows.saturating_sub(2);
         let show_scrollbar = focused && total_display > visible;
 
-        // The selected movie + banner are wrapped in a colored block
-        // (matching the home tab's Keep Watching look). Draw the block
-        // first, before the list items, so the per-row spans only paint
-        // their own cells and the block's background shows through on the
-        // side padding cols and on the top/bottom padding rows.
-        if banner_rows > 0 {
-            let bg = if focused {
-                palette::MEDIA_SELECTED_BG
-            } else {
-                palette::PLAYBACK_PANEL_BG
-            };
-            super::render_selected_block_background(
-                f,
-                content_area,
-                offset,
-                visible,
-                banner_rule_top,
-                banner_rule_bottom,
-                display_cursor,
-                slot,
-                bg,
-            );
-        }
-
-        render_series_detail_background(
-            f,
-            content_area,
-            offset,
-            visible,
-            display_cursor,
-            series_detail_rows,
-            slot,
-            focused,
-        );
-
-        // Width available to title + duration on a normal list row (with a
-        // 1-col leading separator before the title). For the selected row
-        // with an inline banner, the colored block's 2-col side padding
-        // + render_power_compact_detail's own internal 1-col pad reserve
-        // `2 * COMPACT_MOVIE_BANNER_INDENT + 2` cols off both sides, so the
-        // title aligns with the banner's `inner_x` exactly.
-        let normal_avail = cell_w.saturating_sub(2 + COMPACT_MOVIE_BANNER_INDENT as usize);
+        // Width available to title + duration on a list row: the 1-col
+        // leading separator, plus the letter-grouped rows' extra indent.
+        let normal_avail = cell_w.saturating_sub(4);
         let list_items: Vec<ListItem> = display_rows
             .iter()
             .enumerate()
@@ -258,12 +146,6 @@ impl App {
             .take(visible)
             .map(|(_abs_idx, row)| match row {
                 DisplayRow::Spacer => ListItem::new(Line::default()),
-                // The colored block (drawn above) frames the selected row
-                // + banner, so the banner's top/bottom padding rows are
-                // empty -- they show the block's background.
-                DisplayRow::BannerFiller | DisplayRow::SeriesDetailFiller => {
-                    ListItem::new(Line::default())
-                }
                 DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                     Span::raw(" "),
                     Span::styled(
@@ -303,32 +185,20 @@ impl App {
                             };
                             (item.display_name(), dur)
                         };
-                        let selected_has_banner = selected && banner_rows > 0;
-                        let avail = if selected_has_banner {
-                            // 2-col left pad + 2-col right pad inside the
-                            // colored block: title+dur share cell width - 4.
-                            cell_w.saturating_sub(2 + 2 * COMPACT_MOVIE_BANNER_INDENT as usize)
-                        } else {
-                            normal_avail
-                        };
+                        // The selected cell's `▌` mark + `## ` prefix take 4
+                        // cols, matching the ordinary rows' indent so titles
+                        // align across the row.
+                        let avail = normal_avail;
                         let name_w = avail.saturating_sub(dur_str.width());
                         let title = trunc_str(&item_name, name_w);
                         let fg = focused_or_subtle(focused);
-                        let is_series = item.item_type == "Series";
                         let pad_to = if cell_idx + 1 == idxs.len() {
                             cell_w
                         } else {
                             cell_w + LIBRARY_COLUMN_GAP as usize
                         };
                         spans.extend(item_cell_spans(
-                            title,
-                            dur_str,
-                            selected,
-                            selected_has_banner,
-                            is_series,
-                            focused,
-                            fg,
-                            pad_to,
+                            title, dur_str, selected, focused, fg, pad_to,
                         ));
                     }
                     ListItem::new(Line::from(spans))
@@ -346,99 +216,20 @@ impl App {
             &mut state,
         );
 
-        if banner_rows > 0 && content_start >= offset && content_start < offset + visible {
-            let banner_y = content_area.y + (content_start - offset) as u16;
-            let bottom = content_area.y + content_area.height;
-            let banner_h = (banner_content_rows as u16).min(bottom.saturating_sub(banner_y));
-            if banner_h > 0 {
-                // The banner content sits inside the colored block with
-                // `COMPACT_MOVIE_BANNER_INDENT` cols of external side padding on
-                // each side (and render_power_compact_detail's own
-                // internal 1-col pad), so the poster image — right-anchored
-                // inside `banner_rect` — never renders under the scrollbar
-                // (which is drawn on the rightmost col afterwards).
-                let banner_rect = Rect {
-                    x: content_area.x + COMPACT_MOVIE_BANNER_INDENT,
-                    y: banner_y,
-                    width: content_area
-                        .width
-                        .saturating_sub(2 * COMPACT_MOVIE_BANNER_INDENT),
-                    height: banner_h,
-                };
-                let want_cursor_y = layout.cursor_screen_y;
-                self.render_power_compact_detail(
-                    f,
-                    banner_rect,
-                    self.library_tab - 1,
-                    focused,
-                    layout,
-                );
-                layout.cursor_screen_y = want_cursor_y;
-            }
-        }
-
-        self.render_series_detail_if_visible(
-            f,
-            content_area,
-            offset,
-            visible,
-            display_cursor,
-            series_detail_rows,
-            self.library_tab - 1,
-            focused,
-            layout,
-        );
-
         if show_scrollbar {
             let max_off = total_display.saturating_sub(visible);
             super::render_power_right_scrollbar(f, content_area, max_off, offset);
         }
 
-        if banner_rows > 0 {
-            super::render_selected_block_borders(
-                f,
-                content_area,
-                offset,
-                visible,
-                banner_rule_top,
-                banner_rule_bottom,
-            );
-        }
-
-        Self::render_series_detail_top_border(
-            f,
-            content_area,
-            offset,
-            visible,
-            display_cursor,
-            series_detail_rows,
-        );
-
         final_offset
     }
 }
 
-/// Flushes one packed item row into `display_rows`, attaching the selected
-/// detail fillers around the row when it holds the cursor item (the fillers
-/// always sit below the whole row, never displacing the item sharing it).
-/// `current_row` is emptied by the flush.
-fn push_item_row(
-    display_rows: &mut Vec<DisplayRow>,
-    current_row: &mut Vec<usize>,
-    cursor: usize,
-    banner_rows: usize,
-    series_detail_rows: usize,
-) {
+/// Flushes one packed item row into `display_rows`; `current_row` is
+/// emptied by the flush.
+fn push_item_row(display_rows: &mut Vec<DisplayRow>, current_row: &mut Vec<usize>) {
     if current_row.is_empty() {
         return;
     }
-    let row_selected = current_row.contains(&cursor);
-    push_selected_detail_fillers_before(
-        display_rows,
-        row_selected,
-        banner_rows,
-        series_detail_rows,
-    );
     display_rows.push(DisplayRow::Item(std::mem::take(current_row)));
-    push_selected_detail_fillers_after(display_rows, row_selected, banner_rows, series_detail_rows);
 }

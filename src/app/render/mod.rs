@@ -10,8 +10,6 @@ mod chrome_seekbar;
 mod chrome_status;
 mod chrome_tabs;
 mod detail;
-mod detail_series;
-mod detail_series_view;
 mod home;
 mod home_feed;
 mod home_hero;

@@ -88,6 +88,21 @@ impl App {
 
     pub(super) fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
         {
+            // Click on the top hero banner: an Enter equivalent — open the
+            // selected item (design decision 5). Mirrors the double-click
+            // handler's non-folder guard so a Series/folder click only
+            // focuses the panel instead of drilling into a raw folder browse.
+            if self.layout.main.hero_area.contains((col, row).into()) && self.library_tab > 0 {
+                self.set_panel_focus(PanelFocus::Library);
+                if self
+                    .current_lib_item()
+                    .map(|i| !i.is_folder)
+                    .unwrap_or(false)
+                {
+                    self.select();
+                }
+                return true;
+            }
             if self.has_direct_remote_queue() {
                 if self
                     .layout

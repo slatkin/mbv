@@ -338,13 +338,14 @@ fn render_normalizes_oversized_saved_power_width_and_persists_it() {
 }
 
 #[test]
-fn search_result_click_uses_left_row_map_past_banner_filler_rows() {
+fn search_result_click_uses_left_row_map_below_the_hero() {
     let mut app = make_power_movie_app();
 
     // Replace the plain nav-stack browsing state with an active search
-    // over three leaf movies, cursor on the first result -- this is what
-    // triggers the inline compact banner (and its filler rows) in the
-    // plain (non-grouped) render_power_list branch.
+    // over three leaf movies, cursor on the first result. The selected
+    // leaf movie gets the top hero, so the list (and its row map) sits
+    // below it -- the click target must be resolved against the list
+    // area, not the full content area.
     let mut movie1 = make_item("First Movie", "Movie");
     movie1.id = "movie-1".into();
     let mut movie2 = make_item("Second Movie", "Movie");
@@ -362,34 +363,42 @@ fn search_result_click_uses_left_row_map_past_banner_filler_rows() {
     });
 
     // Render for real so layout.main.left_row_map / left_area reflect the
-    // actual banner-filler rows inserted after the selected (cursor=0) row.
+    // hero split.
     let backend = TestBackend::new(100, 40);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| app.render(f)).unwrap();
 
-    let row_map = app.layout.main.left_row_map.clone();
+    let hero = app.layout.main.hero_area;
     assert!(
-        row_map.iter().any(|r| r.is_none()),
-        "expected banner filler (None) rows in left_row_map, got {:?}",
+        hero.height > 0,
+        "the search selection must show the top hero, got height {}",
+        hero.height
+    );
+
+    let la = app.layout.main.left_area;
+    assert!(
+        la.y > 0,
+        "the list must sit below the hero, got list y {}",
+        la.y
+    );
+
+    // With the inline banner gone, every row in the list maps to an item:
+    // no banner-filler (None) rows in the row map.
+    let row_map = app.layout.main.left_row_map.clone();
+    assert_eq!(
+        row_map,
+        vec![Some(0), Some(1), Some(2)],
+        "expected one row map entry per search result below the hero, got {:?}",
         row_map
     );
 
-    // Find a row mapping to search result index 1 (the "Second Movie"
-    // row) that sits after at least one filler row -- this is the row
-    // whose click target would be computed wrong by the old naive
-    // offset + click_y arithmetic, which ignored the banner filler rows
-    // entirely.
+    // Click the row mapping to search result index 1 (the "Second Movie"
+    // row) -- the click coordinates are relative to the list area, which
+    // starts below the hero.
     let click_row_idx = row_map
         .iter()
         .position(|r| *r == Some(1))
         .expect("expected a row mapping to search result index 1");
-    assert!(
-        click_row_idx > 1,
-        "expected the row for result index 1 to be pushed down by filler rows, got index {}",
-        click_row_idx
-    );
-
-    let la = app.layout.main.left_area;
     let row = la.y + click_row_idx as u16;
     let col = la.x + 1;
 

@@ -1,8 +1,5 @@
 use super::detail::compact_banner_image_cache_key;
-use super::list_rows::{
-    ListRenderCtx, COMPACT_BANNER_GAP_ROWS, COMPACT_BANNER_INDENT, COMPACT_BANNER_RULE_ROWS,
-    COMPACT_MOVIE_BANNER_INDENT, SELECTED_BLOCK_SIDE_PADDING,
-};
+use super::list_rows::ListRenderCtx;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use ratatui::layout::*;
@@ -11,107 +8,30 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 
+/// Cap on the hero image's height in rows (design decision 3, option a): at
+/// full content width the 16:9 formula would otherwise grow the hero to the
+/// whole list in wide terminals. 12 image rows + 1 gap + 5 meta rows keeps
+/// the hero at ≤ 18 rows and leaves the list a few rows at any width.
+const HERO_IMAGE_CAP_ROWS: u16 = 12;
+/// Blank row between the hero image and the meta block below it.
+const HERO_GAP_ROWS: u16 = 1;
+/// Row budget for the meta block under the hero image (meta line, spacer,
+/// overview/director lines).
+const HERO_META_ROWS: u16 = 5;
+
+/// Height of the top hero banner for a content area `width` columns wide:
+/// the poster image at 16:9 in terminal cells (cells are roughly twice as
+/// tall as they are wide, so 9 rows per 32 columns — the home view's
+/// formula), capped at `HERO_IMAGE_CAP_ROWS`, plus a 1-row gap and the meta
+/// block. The hero grows with the terminal until it hits the cap.
+fn hero_height_for_width(width: u16) -> u16 {
+    let image_height = ((width as u32 * 9 + 31) / 32)
+        .max(1)
+        .min(HERO_IMAGE_CAP_ROWS as u32) as u16;
+    image_height + HERO_GAP_ROWS + HERO_META_ROWS
+}
+
 impl App {
-    /// Filler-row count to reserve around the selected movie's row in
-    /// `lib_idx`'s display-row sequence: the colored block's top/bottom
-    /// padding rows plus the banner's actual content height
-    /// (meta/overview/director wrapped to `panel_width`, computed by
-    /// `compact_banner_layout` — #263 replaced the old fixed content-row
-    /// constant with this, so a longer overview grows the reserved space and
-    /// a shorter one shrinks it) when a leaf movie is selected, else 0 (no
-    /// banner — ordinary list rendering). One of the reserved rows is the
-    /// top padding placed immediately *before* the selected item's row; the
-    /// rest (content + bottom padding) follow it.
-    ///
-    /// `panel_width` matches the banner's eventual `Rect` width
-    /// (`content_area.width - 2 * COMPACT_BANNER_INDENT` — see
-    /// `render_power_compact_detail`'s inner padding), so the row count the
-    /// layout reserves and the rows the banner actually renders stay in
-    /// lockstep.
-    fn compact_banner_rows(&mut self, lib_idx: usize, panel_width: u16) -> usize {
-        let Some(item) = self.power_selected_movie_item(lib_idx) else {
-            return 0;
-        };
-        let content_rows = self
-            .compact_banner_layout(&item, panel_width)
-            .content_rows();
-        COMPACT_BANNER_RULE_ROWS + content_rows + COMPACT_BANNER_GAP_ROWS
-    }
-
-    pub(super) fn render_series_detail_if_visible(
-        &mut self,
-        f: &mut Frame,
-        content_area: Rect,
-        offset: usize,
-        visible: usize,
-        display_cursor: usize,
-        series_detail_rows: usize,
-        lib_idx: usize,
-        focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        if series_detail_rows == 0 {
-            return;
-        }
-        let content_start = display_cursor + 1;
-        if content_start < offset || content_start >= offset + visible {
-            return;
-        }
-
-        let detail_y = content_area.y + (content_start - offset) as u16;
-        let bottom = content_area.y + content_area.height;
-        let detail_h = (series_detail_rows as u16).min(bottom.saturating_sub(detail_y));
-        if detail_h == 0 {
-            return;
-        }
-
-        self.render_series_inline_detail(
-            f,
-            Rect {
-                x: content_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                y: detail_y,
-                width: content_area
-                    .width
-                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-                height: detail_h,
-            },
-            lib_idx,
-            focused,
-            layout,
-        );
-    }
-
-    pub(super) fn render_series_detail_top_border(
-        f: &mut Frame,
-        content_area: Rect,
-        offset: usize,
-        visible: usize,
-        display_cursor: usize,
-        series_detail_rows: usize,
-    ) {
-        if series_detail_rows == 0
-            || display_cursor < 2
-            || display_cursor - 2 < offset
-            || display_cursor - 2 >= offset + visible
-        {
-            return;
-        }
-
-        let border_y = content_area.y + (display_cursor - 2 - offset) as u16;
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                "\u{2581}".repeat(content_area.width as usize),
-                Style::default().fg(palette::SEEK_TRACK),
-            )),
-            Rect {
-                x: content_area.x,
-                y: border_y,
-                width: content_area.width,
-                height: 1,
-            },
-        );
-    }
-
     /// Renders the Continue/library list items into `area`.
     /// The title header is now drawn in the top-of-screen FOAM bar.
     pub(super) fn render_power_list(
@@ -182,45 +102,6 @@ impl App {
                 }
             };
             (items, cur, scroll, total)
-        };
-
-        // Reserved filler-row count for the compact movie banner, 0 for every
-        // library type/state except "leaf movie selected, detail not pinned".
-        // The width estimate matches the final banner rect's width:
-        // `content_area.width.saturating_sub(2 * COMPACT_BANNER_INDENT)` (= the
-        // colored block's width minus the external side padding, with the right
-        // external pad covering the scrollbar column when one shows up).
-        let banner_rows: usize = if self.library_tab > 0 {
-            let banner_panel_width = content_area
-                .width
-                .saturating_sub(1)
-                .saturating_sub(COMPACT_MOVIE_BANNER_INDENT);
-            self.compact_banner_rows(self.library_tab - 1, banner_panel_width)
-        } else {
-            0
-        };
-        // Content-only row count (banner_rows minus its top/bottom colored-pad
-        // filler rows), used below to size the banner rect to the same
-        // content-dependent height that was reserved for it above.
-        let banner_content_rows: usize =
-            banner_rows.saturating_sub(COMPACT_BANNER_RULE_ROWS + COMPACT_BANNER_GAP_ROWS);
-
-        // Series inline detail rows: when a TV show Series is selected,
-        // show its metadata/overview inline below the selected row.
-        let series_detail_rows: usize = if self.library_tab > 0 && banner_rows == 0 {
-            let lib_idx = self.library_tab - 1;
-            if let Some(item) = self.power_selected_series_item(lib_idx) {
-                let panel_width = content_area
-                    .width
-                    .saturating_sub(1)
-                    .saturating_sub(COMPACT_BANNER_INDENT);
-                let (in_selection, episode_count) = self.series_selection_state(lib_idx, &item.id);
-                self.series_inline_detail_rows(&item, panel_width, in_selection, episode_count)
-            } else {
-                0
-            }
-        } else {
-            0
         };
 
         // Pre-warm nearby movies' poster images so they're already cached by
@@ -371,13 +252,55 @@ impl App {
             return;
         }
 
+        // ── Hero on top, list below ──────────────────────────────────────
+        // The selected item's banner (poster + meta + overview) gets the top
+        // of the content area at full width; the list renderer gets the rows
+        // below it. The hero's height comes from the poster's 16:9 aspect
+        // (capped so the list keeps a few rows in wide terminals — design
+        // decision 3, option a). No hero when nothing is selected (e.g. an
+        // empty list) or when the selected item has no banner (folders,
+        // music) — the list then takes the whole content area.
+        let hero_rows: u16 = if self.library_tab > 0 {
+            let lib_idx = self.library_tab - 1;
+            let hero_item = self.power_selected_movie_item(lib_idx).is_some()
+                || self.power_selected_series_item(lib_idx).is_some();
+            if hero_item {
+                hero_height_for_width(content_area.width)
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+        let hero_area = Rect {
+            x: content_area.x,
+            y: content_area.y,
+            width: content_area.width,
+            height: hero_rows,
+        };
+        let list_area = Rect {
+            x: content_area.x,
+            y: content_area.y + hero_rows,
+            width: content_area.width,
+            height: content_area.height.saturating_sub(hero_rows),
+        };
+        layout.hero_area = hero_area;
+        layout.left_area = list_area;
+
+        // Paint the hero first; the list renderer below overwrites
+        // `cursor_screen_y` with the selected row, so the blinking cursor /
+        // mouse hit target stays on the list row, not the hero.
+        if hero_rows > 0 {
+            self.render_power_compact_detail(f, hero_area, self.library_tab - 1, focused, layout);
+        }
+
         let final_offset: usize;
 
         if show_grouped {
             let lib_idx = self.library_tab - 1;
             final_offset = self.render_power_grouped_album_rows(
                 f,
-                content_area,
+                list_area,
                 lib_idx,
                 &items,
                 cursor,
@@ -387,13 +310,10 @@ impl App {
             );
         } else if use_letter_groups {
             let ctx = ListRenderCtx {
-                content_area,
+                content_area: list_area,
                 items: &items,
                 cursor,
                 stored_scroll,
-                banner_rows,
-                banner_content_rows,
-                series_detail_rows,
                 cols,
                 focused,
             };
@@ -406,13 +326,10 @@ impl App {
             );
         } else {
             let ctx = ListRenderCtx {
-                content_area,
+                content_area: list_area,
                 items: &items,
                 cursor,
                 stored_scroll,
-                banner_rows,
-                banner_content_rows,
-                series_detail_rows,
                 cols,
                 focused,
             };

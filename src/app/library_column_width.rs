@@ -75,6 +75,11 @@ pub(super) fn library_cell_rect(content_area: Rect, cols: usize, col: usize) -> 
 /// absorbs that leftover so its tab joins the full-width panel below at
 /// the content area's right edge instead of leaving a 1-col strip of
 /// ordinary background between them.
+///
+/// The notched block this sized is gone with the hero-on-top change (the
+/// selected cell is a `▌`/`##` marker now), but the slot geometry stays
+/// for future cell work.
+#[allow(dead_code)]
 pub(super) fn library_cell_slot(content_area: Rect, cols: usize, col: usize) -> Rect {
     let rect = library_cell_rect(content_area, cols, col);
     if col + 1 == cols {

@@ -68,6 +68,11 @@ pub(crate) struct LayoutMain {
     pub left_row_targets: Vec<Option<LibraryRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
+    /// The selected item's top hero banner (above `left_area`), when the
+    /// library list shows one; zero rect otherwise. A click here is an
+    /// Enter equivalent — it opens the selected item (see
+    /// `App::click_set_cursor`).
+    pub hero_area: Rect,
     /// Geometry for the Home sub-tab grid. Distinct from
     /// `AppLayout::home` (`LayoutHome`), which is the regular Home-tab.
     pub home: LayoutHome,
