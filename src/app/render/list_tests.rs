@@ -471,15 +471,25 @@ fn one_and_two_column_render_the_same_per_cell_content() {
     let buf2 = term2.backend().buffer();
     let width2 = buf2.area().width;
 
-    // The top hero (18 rows at both widths) consumes the top of the
-    // content area; the list under it is the renderer under test, so the
-    // item rows live inside the list area, not the full content area.
+    // The inline hero (18 rows at both widths) sits below the selected
+    // item's row (cursor 0 → display row 0), and the item rows are the
+    // renderer under test, packed above and below the hero inside the full
+    // content area.
     assert_eq!(layout1.hero_area.height, layout2.hero_area.height);
+    assert_eq!(
+        layout1.hero_area.y, 1,
+        "hero below the selected row (1-col)"
+    );
+    assert_eq!(
+        layout2.hero_area.y, 1,
+        "hero below the selected row (2-col)"
+    );
     let list_y1 = layout1.left_area.y;
     let list_y2 = layout2.left_area.y;
-    assert!(
-        list_y1 > 0 && list_y2 > 0,
-        "list must sit below the hero (y1={list_y1}, y2={list_y2})"
+    assert_eq!(
+        (list_y1, list_y2),
+        (0, 0),
+        "the list renderer must use the full content area (y1={list_y1}, y2={list_y2})"
     );
 
     // Helper: collect the symbols on a row, joined together.
@@ -559,7 +569,7 @@ fn one_and_two_column_render_the_same_per_cell_content() {
 }
 
 #[test]
-fn hero_paints_above_list_area_in_two_column_mode() {
+fn hero_paints_below_selected_row_in_two_column_mode() {
     let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1", "Movie 2", "Movie 3"]);
     // Give the selected item hero content: genre + year (the meta line) and
     // an overview, so the hero paints visible text in the test buffer
@@ -576,22 +586,24 @@ fn hero_paints_above_list_area_in_two_column_mode() {
     let buf = term.backend().buffer();
     let width = buf.area().width;
 
-    // Hero split: hero on top of the content area, list below it.
+    // Inline hero: the hero sits directly below the row containing the
+    // selected item (cursor 0 → display row 0), and the list wraps around
+    // it — the top section ends at the selected row, the bottom section
+    // continues below the hero.
     let hero = layout.hero_area;
-    let list = layout.left_area;
-    assert_eq!(hero.y, 0);
+    assert_eq!(hero.y, 1, "hero must sit below the selected item's row");
     assert_eq!(hero.width, 82);
     assert!(hero.height > 0);
     assert_eq!(
-        list.y,
-        hero.y + hero.height,
-        "the list must start at the row right below the hero"
+        hero.y,
+        layout.left_area.y + 1,
+        "hero starts one row below the selected row"
     );
 
     // The hero carries the selected item's content (the poster image would
     // render here; with images off in the test stub the meta + overview
     // text is the observable content).
-    let hero_text: String = (hero.y..list.y)
+    let hero_text: String = (hero.y..hero.y + hero.height)
         .map(|y| (0..width).map(|x| buf[(x, y)].symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
@@ -600,28 +612,155 @@ fn hero_paints_above_list_area_in_two_column_mode() {
         "hero must render the selected item's meta line, got:\n{hero_text}"
     );
 
-    // The list below holds the 2-col packed rows, starting at the row
-    // immediately under the hero.
-    let first_list_row: String = (0..width).map(|x| buf[(x, list.y)].symbol()).collect();
+    // The top section (above the hero) holds the selected item's row,
+    // packed 2-col.
+    let top_row: String = (0..width).map(|x| buf[(x, 0)].symbol()).collect();
     assert!(
-        first_list_row.contains("Movie 0") && first_list_row.contains("Movie 1"),
-        "first list row must hold the two-column packed cells, got:\n{first_list_row}"
+        top_row.contains("Movie 0") && top_row.contains("Movie 1"),
+        "top section row must hold the two-column packed cells, got:\n{top_row}"
     );
     assert!(
-        !first_list_row.contains("Sci-Fi"),
+        !top_row.contains("Sci-Fi"),
         "hero content must not leak into the list"
+    );
+
+    // The bottom section (below the hero) continues packing the rest.
+    let bottom_y = hero.y + hero.height;
+    let bottom_row: String = (0..width).map(|x| buf[(x, bottom_y)].symbol()).collect();
+    assert!(
+        bottom_row.contains("Movie 2") && bottom_row.contains("Movie 3"),
+        "bottom section must continue packing below the hero, got:\n{bottom_row}"
     );
     assert_eq!(
         item_rows(&layout),
         vec![vec![0, 1], vec![2, 3]],
-        "2-col packing must be unchanged below the hero"
+        "2-col packing must be unchanged around the hero"
+    );
+}
+
+#[test]
+fn hero_follows_cursor_when_cursor_moves() {
+    let titles: Vec<String> = (0..12).map(|i| format!("Movie {i}")).collect();
+    let title_refs: Vec<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let mut app = make_power_movie_list_app(title_refs);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 0;
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let buf = term.backend().buffer();
+    assert_eq!(
+        layout.hero_area.y, 1,
+        "cursor on display row 0 → hero just below row 0"
+    );
+    // The row above the hero is the selected item's row.
+    let top_row: String = (0..82).map(|x| buf[(x, 0)].symbol()).collect();
+    assert!(
+        top_row.contains("Movie 0") && top_row.contains("Movie 1"),
+        "top section must end at the selected row, got: {top_row:?}"
+    );
+
+    // Move the cursor to item 5 (display row 2 in 2-col) and re-render:
+    // the hero moves down with it.
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 5;
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let buf = term.backend().buffer();
+    assert_eq!(
+        layout.hero_area.y, 3,
+        "cursor on display row 2 → hero below that row"
+    );
+    // The rows above the hero hold items 0..=5 packed 2-col.
+    let above: String = (0..3)
+        .map(|y| (0..82).map(|x| buf[(x, y)].symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        above.contains("Movie 0") && above.contains("Movie 5"),
+        "top section must run through the selected row, got:\n{above}"
+    );
+    // The rows below the hero continue with items 6+.
+    let below: String = (3 + 18..40)
+        .map(|y| (0..82).map(|x| buf[(x, y)].symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        below.contains("Movie 6") && below.contains("Movie 11"),
+        "bottom section must continue below the hero, got:\n{below}"
+    );
+}
+
+#[test]
+fn row_map_has_none_entries_for_hero_rows() {
+    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1", "Movie 2", "Movie 3"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let hero = layout.hero_area;
+    // Cursor 1 is in display row 0 (2-col); the hero occupies the rows
+    // right below it.
+    assert_eq!(hero.y, 1);
+    let row_map = &layout.left_row_map;
+    // Top section: row 0 maps to item 0.
+    assert_eq!(row_map[0], Some(0), "top section row must map to its item");
+    // Hero rows: None (a click on them hits the hero, not an item).
+    for (i, entry) in row_map
+        .iter()
+        .enumerate()
+        .skip(1)
+        .take(hero.height as usize)
+    {
+        assert_eq!(*entry, None, "hero display row {i} must map to None");
+    }
+    // Bottom section: the row below the hero maps to item 2.
+    let bottom_idx = 1 + hero.height as usize;
+    assert_eq!(
+        row_map[bottom_idx],
+        Some(2),
+        "bottom section row must map to the item below the cursor"
+    );
+    assert_eq!(
+        row_map.len(),
+        bottom_idx + 1,
+        "row map covers top section + hero + bottom section"
+    );
+}
+
+#[test]
+fn auto_scroll_keeps_cursor_and_hero_visible() {
+    // 60 movies → 30 display rows (2-col) + 18 hero rows. A 20-row
+    // viewport can't show everything; the auto-scroll must bring the
+    // cursor row and the hero below it into view even from a stale scroll
+    // offset of 0.
+    let titles: Vec<String> = (0..60).map(|i| format!("Movie {i}")).collect();
+    let title_refs: Vec<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let mut app = make_power_movie_list_app(title_refs);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 59;
+    app.libs[0].nav_stack.last_mut().unwrap().scroll = 0;
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 20);
+    let area = layout.left_area;
+
+    // The cursor's row and the hero below it are both on screen.
+    let cursor_y = layout.cursor_screen_y.expect("cursor row");
+    assert!(
+        cursor_y >= area.y && cursor_y < area.y + area.height,
+        "cursor row must be visible (y={cursor_y})"
+    );
+    let hero = layout.hero_area;
+    assert_eq!(
+        hero.y,
+        cursor_y + 1,
+        "hero must sit directly below the cursor's row"
+    );
+    assert!(
+        hero.y + hero.height <= area.y + area.height,
+        "hero must fit in the viewport (hero {hero:?}, area {area:?})"
     );
 }
 
 #[test]
 fn hero_height_scales_with_content_width() {
     // The image cap (design decision 3a) bounds the hero at ≤ 18 rows at
-    // these widths; the list below always keeps at least one row.
+    // these widths; the list above and below keeps rows at any width.
     for width in [60u16, 82, 100, 150] {
         let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1", "Movie 2", "Movie 3"]);
         let mut layout = LayoutMain::default();
@@ -629,28 +768,34 @@ fn hero_height_scales_with_content_width() {
         let buf = term.backend().buffer();
 
         let hero = layout.hero_area;
-        let list = layout.left_area;
         assert_eq!(hero.width, width);
         assert!(
             hero.height <= 18,
             "hero must be bounded by the 12-row image cap + meta at width {width}, got {}",
             hero.height
         );
+        // Cursor 0 → the hero sits one row below the selected item's row.
         assert_eq!(
-            list.y, hero.height,
-            "list must start directly below the hero at width {width}"
+            hero.y, 1,
+            "hero must sit below the selected row at width {width}"
         );
         assert!(
-            list.height >= 1,
-            "list must keep at least 1 row at width {width}, got {}",
-            list.height
+            hero.y + hero.height <= buf.area().height,
+            "hero must fit in the content area at width {width}"
         );
-        // The first list row is actually visible and holds the selected
-        // item (cursor 0).
-        let first_row: String = (0..width).map(|x| buf[(x, list.y)].symbol()).collect();
+        // The top section row above the hero holds the selected item.
+        let top_row: String = (0..width).map(|x| buf[(x, 0)].symbol()).collect();
         assert!(
-            first_row.contains("Movie 0"),
-            "first list row must show the selected item at width {width}, got: {first_row:?}"
+            top_row.contains("Movie 0"),
+            "top section must show the selected item at width {width}, got: {top_row:?}"
+        );
+        // The bottom section below the hero keeps real item rows.
+        let bottom_row: String = (0..width)
+            .map(|x| buf[(x, hero.y + hero.height)].symbol())
+            .collect();
+        assert!(
+            !bottom_row.trim().is_empty(),
+            "bottom section must keep rows below the hero at width {width}, got: {bottom_row:?}"
         );
     }
 }

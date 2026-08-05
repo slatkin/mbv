@@ -49,6 +49,12 @@ pub(super) enum DisplayRow {
     /// one-column mode every such row carries exactly one index, so both
     /// modes share a single rendering path with no `cols == 1` branch.
     Item(Vec<usize>),
+    /// A display row occupied by the inline hero banner (painted separately
+    /// by `render_power_compact_detail`, over the blank rows the List
+    /// widget leaves here). Maps to `None` in the row map and an empty row
+    /// in `left_item_rows`, so mouse clicks on it hit the hero, not an
+    /// item.
+    Hero,
 }
 
 /// Shared inputs to the per-kind row-rendering bodies of `render_power_list`
@@ -56,9 +62,9 @@ pub(super) enum DisplayRow {
 /// prelude values both kinds' bodies read, factored out so each callee takes
 /// one struct instead of the same six-plus positional arguments.
 pub(super) struct ListRenderCtx<'a> {
-    /// The list's own area: the content area minus the top hero banner
-    /// (`render_power_list` splits `content_area` into a hero area and this
-    /// list area before calling either row renderer).
+    /// The list's own area: the full content area (`render_power_list` no
+    /// longer splits it into a hero area plus a list area -- the hero is
+    /// inserted inline below the selected row as `DisplayRow::Hero` rows).
     pub(super) content_area: Rect,
     pub(super) items: &'a [mbv_core::api::MediaItem],
     pub(super) cursor: usize,
@@ -66,6 +72,10 @@ pub(super) struct ListRenderCtx<'a> {
     /// Column count for this frame's list pane width (1 or 2).
     pub(super) cols: usize,
     pub(super) focused: bool,
+    /// Height in rows of the inline hero banner to insert below the row
+    /// containing the cursor; 0 when no hero is shown (the list then takes
+    /// the whole content area).
+    pub(super) hero_rows: u16,
 }
 
 /// Builds the title (+ optional duration) spans for one list row, shared by

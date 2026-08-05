@@ -338,14 +338,14 @@ fn render_normalizes_oversized_saved_power_width_and_persists_it() {
 }
 
 #[test]
-fn search_result_click_uses_left_row_map_below_the_hero() {
+fn search_result_click_uses_left_row_map_around_the_inline_hero() {
     let mut app = make_power_movie_app();
 
     // Replace the plain nav-stack browsing state with an active search
     // over three leaf movies, cursor on the first result. The selected
-    // leaf movie gets the top hero, so the list (and its row map) sits
-    // below it -- the click target must be resolved against the list
-    // area, not the full content area.
+    // leaf movie gets the hero, inserted inline just below the selected
+    // row; the click target must be resolved against the row map (hero
+    // rows are None), not the full content area.
     let mut movie1 = make_item("First Movie", "Movie");
     movie1.id = "movie-1".into();
     let mut movie2 = make_item("Second Movie", "Movie");
@@ -363,7 +363,7 @@ fn search_result_click_uses_left_row_map_below_the_hero() {
     });
 
     // Render for real so layout.main.left_row_map / left_area reflect the
-    // hero split.
+    // inline hero.
     let backend = TestBackend::new(100, 40);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| app.render(f)).unwrap();
@@ -371,30 +371,53 @@ fn search_result_click_uses_left_row_map_below_the_hero() {
     let hero = app.layout.main.hero_area;
     assert!(
         hero.height > 0,
-        "the search selection must show the top hero, got height {}",
+        "the search selection must show the hero, got height {}",
         hero.height
     );
 
     let la = app.layout.main.left_area;
     assert!(
         la.y > 0,
-        "the list must sit below the hero, got list y {}",
+        "the list sits below the search input (y {})",
         la.y
     );
 
-    // With the inline banner gone, every row in the list maps to an item:
-    // no banner-filler (None) rows in the row map.
-    let row_map = app.layout.main.left_row_map.clone();
+    // The hero is inline: it sits *inside* the list area, one row below
+    // the selected item's row (cursor 0) -- not at the top of the area.
+    assert!(
+        hero.y > la.y,
+        "the hero must be inline below the selected row (hero y {}, area y {})",
+        hero.y,
+        la.y
+    );
     assert_eq!(
-        row_map,
-        vec![Some(0), Some(1), Some(2)],
-        "expected one row map entry per search result below the hero, got {:?}",
-        row_map
+        hero.y,
+        la.y + 1,
+        "the hero starts one row below the selected row"
+    );
+
+    // The row map reflects the inserted hero: the selected item's row maps
+    // to item 0, the hero rows are None (a click there hits the hero, not
+    // an item), and the remaining results map to items below the hero.
+    let row_map = app.layout.main.left_row_map.clone();
+    assert_eq!(row_map[0], Some(0));
+    for (i, entry) in row_map
+        .iter()
+        .enumerate()
+        .skip(1)
+        .take(hero.height as usize)
+    {
+        assert_eq!(*entry, None, "hero display row {i} must map to None");
+    }
+    assert_eq!(
+        row_map[1 + hero.height as usize],
+        Some(1),
+        "the first result below the hero must map to search result index 1"
     );
 
     // Click the row mapping to search result index 1 (the "Second Movie"
-    // row) -- the click coordinates are relative to the list area, which
-    // starts below the hero.
+    // row) -- the click coordinates are derived from the row map, which
+    // accounts for the hero rows.
     let click_row_idx = row_map
         .iter()
         .position(|r| *r == Some(1))

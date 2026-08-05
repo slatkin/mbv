@@ -225,6 +225,10 @@ impl App {
             }
         }
 
+        // The list (and its row map / click targets) is indexed against the
+        // post-search content area; the hero is inserted inline inside it.
+        layout.left_area = content_area;
+
         if n == 0 {
             let msg = if self.library_tab > 0 {
                 let lib_idx = self.library_tab - 1;
@@ -252,14 +256,17 @@ impl App {
             return;
         }
 
-        // ── Hero on top, list below ──────────────────────────────────────
-        // The selected item's banner (poster + meta + overview) gets the top
-        // of the content area at full width; the list renderer gets the rows
-        // below it. The hero's height comes from the poster's 16:9 aspect
-        // (capped so the list keeps a few rows in wide terminals — design
-        // decision 3, option a). No hero when nothing is selected (e.g. an
-        // empty list) or when the selected item has no banner (folders,
-        // music) — the list then takes the whole content area.
+        // ── Hero inline, list wraps around it ──────────────────────────
+        // The selected item's banner (poster + meta + overview) is painted
+        // full-width just below the row containing the selected item; the
+        // list renderer packs rows above and below it (the hero occupies
+        // `hero_rows` blank `DisplayRow::Hero` rows, painted over by
+        // `render_power_compact_detail` afterwards). The hero's height
+        // comes from the poster's 16:9 aspect (capped so the list keeps a
+        // few rows in wide terminals — design decision 3, option a). No
+        // hero when nothing is selected (e.g. an empty list) or when the
+        // selected item has no banner (folders, music) — the list then
+        // takes the whole content area.
         let hero_rows: u16 = if self.library_tab > 0 {
             let lib_idx = self.library_tab - 1;
             let hero_item = self.power_selected_movie_item(lib_idx).is_some()
@@ -272,35 +279,16 @@ impl App {
         } else {
             0
         };
-        let hero_area = Rect {
-            x: content_area.x,
-            y: content_area.y,
-            width: content_area.width,
-            height: hero_rows,
-        };
-        let list_area = Rect {
-            x: content_area.x,
-            y: content_area.y + hero_rows,
-            width: content_area.width,
-            height: content_area.height.saturating_sub(hero_rows),
-        };
-        layout.hero_area = hero_area;
-        layout.left_area = list_area;
 
-        // Paint the hero first; the list renderer below overwrites
-        // `cursor_screen_y` with the selected row, so the blinking cursor /
-        // mouse hit target stays on the list row, not the hero.
-        if hero_rows > 0 {
-            self.render_power_compact_detail(f, hero_area, self.library_tab - 1, focused, layout);
-        }
-
+        // The list renderer gets the whole content area; the hero is
+        // inserted inline below the selected row, not above the list.
         let final_offset: usize;
 
         if show_grouped {
             let lib_idx = self.library_tab - 1;
             final_offset = self.render_power_grouped_album_rows(
                 f,
-                list_area,
+                content_area,
                 lib_idx,
                 &items,
                 cursor,
@@ -310,12 +298,13 @@ impl App {
             );
         } else if use_letter_groups {
             let ctx = ListRenderCtx {
-                content_area: list_area,
+                content_area,
                 items: &items,
                 cursor,
                 stored_scroll,
                 cols,
                 focused,
+                hero_rows,
             };
             final_offset = self.render_power_letter_grouped_rows(
                 f,
@@ -326,14 +315,32 @@ impl App {
             );
         } else {
             let ctx = ListRenderCtx {
-                content_area: list_area,
+                content_area,
                 items: &items,
                 cursor,
                 stored_scroll,
                 cols,
                 focused,
+                hero_rows,
             };
             final_offset = self.render_power_plain_rows(f, ctx, layout);
+        }
+
+        // Paint the hero last, over the blank `DisplayRow::Hero` rows the
+        // list renderer left. The row renderer has already overwritten
+        // `cursor_screen_y` with the selected list row (the blinking cursor
+        // / mouse hit target stays on the list row, not the hero), so save
+        // and restore it around the hero paint.
+        if hero_rows > 0 {
+            let saved_cursor_y = layout.cursor_screen_y;
+            self.render_power_compact_detail(
+                f,
+                layout.hero_area,
+                self.library_tab - 1,
+                focused,
+                layout,
+            );
+            layout.cursor_screen_y = saved_cursor_y;
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.
