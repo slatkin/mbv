@@ -138,3 +138,657 @@ fn compact_banner_rows_grows_with_a_longer_overview() {
         "long overview ({long_rows} rows) should reserve more rows than short overview ({short_rows} rows)"
     );
 }
+
+// ── Two-column list layout (library-list-columns) ─────────────────────────
+
+/// Renders the power list at an explicit width/height and returns the
+/// terminal for buffer (background) inspection.
+fn render_power_list_term(
+    app: &mut App,
+    layout: &mut LayoutMain,
+    width: u16,
+    height: u16,
+) -> Terminal<TestBackend> {
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        app.render_power_list(f, Rect::new(0, 0, width, height), true, layout);
+    })
+    .unwrap();
+    term
+}
+
+/// Same as `make_power_movie_list_app`, but with a music collection type so
+/// no inline movie banner / series detail is attached to the selection (the
+/// compact banner only appears for leaf Movies in movies/homevideos/podcasts
+/// collections, and series detail only in tvshows).
+fn make_no_banner_list_app(titles: Vec<&str>) -> App {
+    let mut app = make_power_movie_list_app(titles);
+    app.libs[0].library.collection_type = "music".into();
+    app
+}
+
+/// Item rows (non-empty entries of `left_item_rows`): the packed rows of a
+/// two-column list, independent of banner/header filler rows.
+fn item_rows(layout: &LayoutMain) -> Vec<Vec<usize>> {
+    layout
+        .left_item_rows
+        .iter()
+        .filter(|r| !r.is_empty())
+        .cloned()
+        .collect()
+}
+
+fn cursor_of(app: &App) -> usize {
+    app.libs[0].nav_stack.last().unwrap().cursor
+}
+
+/// The render helpers write into a local `LayoutMain`, but cursor-movement
+/// and mouse code read `app.layout` (the App's own layout, which only a
+/// full-frame `render` swaps in). Copy the fields those paths consult so
+/// the tests exercise the real production code paths.
+fn sync_layout_to_app(app: &mut App, layout: &LayoutMain) {
+    app.layout.main.left_area = layout.left_area;
+    app.layout.main.left_item_rows = layout.left_item_rows.clone();
+    app.layout.main.left_sorted_indices = layout.left_sorted_indices.clone();
+    app.layout.main.left_row_map = layout.left_row_map.clone();
+}
+
+#[test]
+fn two_columns_pack_items_row_major_left_to_right_before_wrapping() {
+    let mut app = make_power_movie_list_app(vec!["A", "B", "C", "D", "E", "F"]);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 8);
+    assert_eq!(
+        item_rows(&layout),
+        vec![vec![0, 1], vec![2, 3], vec![4, 5]],
+        "item i occupies column i % 2 of row i / 2"
+    );
+}
+
+#[test]
+fn two_column_placement_is_independent_of_viewport_height() {
+    let mut app = make_power_movie_list_app(vec!["A", "B", "C", "D", "E", "F"]);
+    let mut layout_short = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout_short, 82, 6);
+    let rows_short = item_rows(&layout_short);
+
+    let mut layout_tall = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout_tall, 82, 20);
+    let rows_tall = item_rows(&layout_tall);
+
+    assert_eq!(rows_short, rows_tall);
+    for (r, row) in rows_tall.iter().enumerate() {
+        for (c, &item) in row.iter().enumerate() {
+            assert_eq!(
+                r * 2 + c,
+                item,
+                "item {item} must stay in column {c} of row {r}"
+            );
+        }
+    }
+}
+
+#[test]
+fn inline_banner_spans_full_width_below_the_cursor_row_and_leaves_partner_in_place() {
+    let mut app =
+        make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected", "Movie 2", "Movie 3"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 82, 12);
+    let buf = term.backend().buffer();
+    let width = buf.area().width;
+
+    let line_of = |needle: &str| -> u16 {
+        (0..buf.area().height)
+            .find(|&y| {
+                let line: String = (0..width).map(|x| buf[(x, y)].symbol()).collect();
+                line.contains(needle)
+            })
+            .expect(needle)
+    };
+
+    // Cursor row: the selected item's partner shares the row (not displaced).
+    let item_y = line_of("Movie 1 Selected");
+    let item_line: String = (0..width).map(|x| buf[(x, item_y)].symbol()).collect();
+    assert!(
+        item_line.contains("Movie 0") && item_line.contains("Movie 1 Selected"),
+        "cursor row must hold both the selected item and its partner:\n{item_line}"
+    );
+
+    // The banner (overview text) renders below the cursor row, full width.
+    let banner_y = line_of("compact movie banner");
+    assert!(banner_y > item_y, "banner must render below the cursor row");
+    for x in 0..width {
+        assert_eq!(
+            buf[(x, banner_y)].bg,
+            palette::MEDIA_SELECTED_BG,
+            "banner content row must carry the full-width panel background at x={x}"
+        );
+    }
+}
+
+#[test]
+fn moving_the_cursor_between_adjacent_items_does_not_change_any_column() {
+    let mut app = make_power_movie_list_app(vec!["A", "B", "C", "D"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 0;
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 8);
+    let before = item_rows(&layout);
+
+    app.move_lib_cursor(1); // 0 -> 1
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 8);
+    let after = item_rows(&layout);
+
+    assert_eq!(
+        before, after,
+        "columns must not change when the cursor moves"
+    );
+    assert_eq!(cursor_of(&app), 1);
+}
+
+#[test]
+fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
+    let mut app = make_power_movie_list_app(vec![
+        "Aardvark", "Alpha", "Apple", "Banana", "Beta", "Cherry",
+    ]);
+    // >= 250 switches `letter_bucket` to per-letter headers, giving an odd
+    // three-item A bucket to prove ragged trailing cells.
+    app.libs[0].library_total = Some(250);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 20);
+    assert_eq!(
+        item_rows(&layout),
+        vec![vec![0, 1], vec![2], vec![3, 4], vec![5]],
+        "each bucket starts a fresh item row; no row mixes two buckets"
+    );
+}
+
+#[test]
+fn selected_block_notches_left_and_right_column_selections() {
+    // Left-column selection: tab on cell 0, partner cell keeps the ordinary
+    // background, panel below is full width.
+    let mut app = make_power_movie_list_app(vec!["L A", "L B", "L C", "L D"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 0;
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 82, 12);
+    let buf = term.backend().buffer();
+    let width = buf.area().width;
+    let item_y = (0..buf.area().height)
+        .find(|&y| {
+            let line: String = (0..width).map(|x| buf[(x, y)].symbol()).collect();
+            line.contains("L A") && line.contains("L B")
+        })
+        .expect("cursor row");
+    // Tab: selected cell's slot on the item row and the top padding row.
+    assert_eq!(
+        buf[(0, item_y)].bg,
+        palette::MEDIA_SELECTED_BG,
+        "left-column tab"
+    );
+    assert_eq!(
+        buf[(0, item_y - 1)].bg,
+        palette::MEDIA_SELECTED_BG,
+        "top padding row narrows with the tab"
+    );
+    // Partner cell: ordinary background, both on the item row and the top
+    // padding row (no band across it).
+    assert_eq!(
+        buf[(42, item_y)].bg,
+        Color::Reset,
+        "partner cell keeps ordinary bg"
+    );
+    assert_eq!(
+        buf[(42, item_y - 1)].bg,
+        Color::Reset,
+        "top padding row must not band across the partner cell"
+    );
+    // Panel below: full width (including the inter-column gap). With an
+    // empty overview the banner reserves 2 rows total, so the panel is the
+    // single row below the item row.
+    let panel_row = item_y + 1;
+    for x in 0..width {
+        assert_eq!(
+            buf[(x, panel_row)].bg,
+            palette::MEDIA_SELECTED_BG,
+            "panel spans the full width below the item row at x={x}"
+        );
+    }
+
+    // Right-column selection: tab on cell 1.
+    let mut app = make_power_movie_list_app(vec!["R A", "R B", "R C", "R D"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 82, 12);
+    let buf = term.backend().buffer();
+    let item_y = (0..buf.area().height)
+        .find(|&y| {
+            let line: String = (0..width).map(|x| buf[(x, y)].symbol()).collect();
+            line.contains("R A") && line.contains("R B")
+        })
+        .expect("cursor row");
+    assert_eq!(
+        buf[(0, item_y)].bg,
+        Color::Reset,
+        "left cell is the partner"
+    );
+    assert_eq!(
+        buf[(42, item_y)].bg,
+        palette::MEDIA_SELECTED_BG,
+        "right-column tab"
+    );
+    assert_eq!(
+        buf[(42, item_y - 1)].bg,
+        palette::MEDIA_SELECTED_BG,
+        "top pad narrows with the tab"
+    );
+    assert_eq!(
+        buf[(0, item_y - 1)].bg,
+        Color::Reset,
+        "no band across the partner cell"
+    );
+}
+
+#[test]
+fn right_column_tab_absorbs_trailing_remainder_at_odd_widths() {
+    // Width 83 has 1 trailing col after the two 40-wide cells + 2 gap.
+    // The right cell's tab should extend into that trailing col so the
+    // tab joins the full-width panel below at the content area's right
+    // edge instead of leaving a 1-col strip of ordinary background.
+    let mut app = make_power_movie_list_app(vec!["R A", "R B", "R C", "R D"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 83, 12);
+    let buf = term.backend().buffer();
+    let width = buf.area().width;
+    let item_y = (0..buf.area().height)
+        .find(|&y| {
+            let line: String = (0..width).map(|x| buf[(x, y)].symbol()).collect();
+            line.contains("R A") && line.contains("R B")
+        })
+        .expect("cursor row");
+    // Right cell tab: x=42..82 (41 cols, including the trailing col).
+    for x in 42..width {
+        assert_eq!(
+            buf[(x, item_y)].bg,
+            palette::MEDIA_SELECTED_BG,
+            "right cell tab should extend into trailing col at x={x}"
+        );
+    }
+    // Top padding row also extends to the trailing col.
+    for x in 42..width {
+        assert_eq!(
+            buf[(x, item_y - 1)].bg,
+            palette::MEDIA_SELECTED_BG,
+            "top pad narrows with the tab and reaches x={x}"
+        );
+    }
+}
+
+#[test]
+fn one_column_selected_block_remains_a_single_rectangle() {
+    let mut app = make_power_movie_list_app(vec!["S A", "S B", "S C"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 0;
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 60, 10);
+    let buf = term.backend().buffer();
+    let width = buf.area().width;
+    eprintln!("scroll={:?}", app.libs[0].nav_stack.last().unwrap().scroll);
+    let item_y = (0..buf.area().height)
+        .find(|&y| {
+            let line: String = (0..width).map(|x| buf[(x, y)].symbol()).collect();
+            line.contains("S A")
+        })
+        .expect("item row");
+    // Item row, top padding row, and the panel rows below: one full-width
+    // rectangle, exactly as before the two-column change.
+    for y in (item_y - 1)..(item_y + 2) {
+        for x in 0..width {
+            assert_eq!(
+                buf[(x, y)].bg,
+                palette::MEDIA_SELECTED_BG,
+                "one-column block must fill the full row width at ({x},{y})"
+            );
+        }
+    }
+}
+
+#[test]
+fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
+    let mut app = make_power_movie_list_app(vec!["M0", "M1", "M2", "M3", "M4", "M5", "M6"]);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 10);
+    sync_layout_to_app(&mut app, &layout);
+    let cur = cursor_of;
+
+    // Left/right: ±1.
+    app.move_lib_cursor(1);
+    assert_eq!(cur(&app), 1);
+    app.move_lib_cursor(-1);
+    assert_eq!(cur(&app), 0);
+    // Row-boundary wrap: right from the last cell of a row wraps to the
+    // next row's first item, left wraps back.
+    app.move_lib_cursor(1);
+    app.move_lib_cursor(1);
+    assert_eq!(cur(&app), 2, "right from cell 1 wraps to the next row");
+    app.move_lib_cursor(-1);
+    assert_eq!(cur(&app), 1, "left from cell 0 wraps to the previous row");
+    // Up/down: ±cols.
+    app.move_lib_cursor_rows(-1);
+    assert_eq!(cur(&app), 0);
+    app.move_lib_cursor_rows(1);
+    assert_eq!(cur(&app), 2);
+    // Down from the second-to-last row with no item directly below clamps
+    // to the last item (5 -> 6).
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 5;
+    app.move_lib_cursor_rows(1);
+    assert_eq!(
+        cur(&app),
+        6,
+        "down past the ragged end clamps to the last item"
+    );
+    // End-of-list clamp on right.
+    app.move_lib_cursor(1);
+    assert_eq!(cur(&app), 6);
+    // Paging: one viewport of item rows, clamped at both ends.
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 0;
+    let page = app.lib_page_size();
+    app.move_lib_cursor_rows(-(page as i64));
+    assert_eq!(cur(&app), 0, "page up from the top stays");
+    app.move_lib_cursor_rows(page as i64);
+    assert_eq!(
+        cur(&app),
+        6,
+        "page down past the end clamps to the last item"
+    );
+}
+
+#[test]
+fn letter_grouped_vertical_movement_moves_through_the_row_map() {
+    let mut app = make_power_movie_list_app(vec![
+        "Aardvark", "Alpha", "Apple", "Banana", "Beta", "Cherry",
+    ]);
+    app.libs[0].library_total = Some(250);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 20);
+    sync_layout_to_app(&mut app, &layout);
+    let cur = cursor_of;
+    // Item rows: [0,1],[2],[3,4],[5].
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 4;
+    app.move_lib_cursor_rows(1);
+    assert_eq!(
+        cur(&app),
+        5,
+        "down from a ragged column falls to the next row's last item"
+    );
+    app.move_lib_cursor_rows(-1);
+    assert_eq!(cur(&app), 3, "up keeps the same column (row [3,4] col 0)");
+    app.move_lib_cursor_rows(-1);
+    assert_eq!(cur(&app), 2, "up into a single-item row keeps the column");
+    app.move_lib_cursor_rows(-1);
+    assert_eq!(cur(&app), 0, "up into a full row keeps the column");
+    app.move_lib_cursor_rows(-1);
+    assert_eq!(cur(&app), 0, "up past the first row stays");
+}
+
+#[test]
+fn crossing_the_column_threshold_preserves_selection_and_scrolls_it_into_view() {
+    let titles: Vec<String> = (0..10)
+        .map(|i| format!("Long Movie Title Number {i}"))
+        .collect();
+    let title_refs: Vec<&str> = titles.iter().map(|s| s.as_str()).collect();
+    let mut app = make_power_movie_list_app(title_refs);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 9;
+    app.libs[0].nav_stack.last_mut().unwrap().scroll = 9;
+    let mut layout = LayoutMain::default();
+
+    // Single column (list pane 60 wide).
+    let _ = render_power_list_term(&mut app, &mut layout, 60, 6);
+    assert_eq!(cursor_of(&app), 9, "selection preserved while narrow");
+
+    // Two columns (list pane 82 wide): same item stays selected and the
+    // renderer's scroll write-back lands on a valid row that keeps the item
+    // (and its block) on screen.
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 6);
+    assert_eq!(
+        cursor_of(&app),
+        9,
+        "selection preserved across the threshold"
+    );
+    let rows = &layout.left_item_rows;
+    let row_of_9 = rows
+        .iter()
+        .position(|r| r.contains(&9))
+        .expect("item 9's row");
+    let offset = app.libs[0].nav_stack.last().unwrap().scroll;
+    let visible = 6usize;
+    assert!(
+        row_of_9 >= offset && row_of_9 < offset + visible,
+        "item 9 must be visible in the new layout (row {row_of_9}, offset {offset})"
+    );
+
+    // And back to single column: selection still intact.
+    let _ = render_power_list_term(&mut app, &mut layout, 60, 6);
+    assert_eq!(cursor_of(&app), 9);
+}
+
+#[test]
+fn narrow_pane_renders_identically_to_single_column_output() {
+    let mut app = make_no_banner_list_app(vec!["Movie 0", "Movie 1"]);
+    let mut layout = LayoutMain::default();
+    let out = render_power_list_to_string(&mut app, &mut layout); // 60 wide, 8 tall
+    let row = |prefix: &str, title: &str| {
+        format!(
+            "{prefix}{title}{}",
+            " ".repeat(60 - prefix.chars().count() - title.chars().count())
+        )
+    };
+    let blank = " ".repeat(60);
+    // `buffer_to_string` terminates every row (including the last) with a
+    // newline, so the expected string must too.
+    let expected = format!(
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n",
+        row(" ", "Movie 0"),
+        row(" ", "Movie 1"),
+        blank,
+        blank,
+        blank,
+        blank,
+        blank,
+        blank,
+    );
+    assert_eq!(
+        out, expected,
+        "narrow pane must match today's single-column output"
+    );
+}
+
+#[test]
+fn two_column_mouse_click_selects_the_clicked_cell_not_the_row_first_item() {
+    let mut app = make_no_banner_list_app(vec!["Click A", "Click B", "Click C"]);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 8);
+    sync_layout_to_app(&mut app, &layout);
+    let la = layout.left_area;
+    // Click cell 1 of the first row (x = cell 1 start, y = row 0).
+    let cell1_x = la.x + 42;
+    assert!(app.click_set_cursor(cell1_x, la.y));
+    assert_eq!(
+        cursor_of(&app),
+        1,
+        "click on the right cell must select the second item of the row"
+    );
+}
+#[test]
+fn two_columns_fit_more_items_per_viewport_so_the_scrollbar_stays_hidden() {
+    let mut app = make_no_banner_list_app(vec![
+        "S 0", "S 1", "S 2", "S 3", "S 4", "S 5", "S 6", "S 7", "S 8", "S 9", "S 10", "S 11",
+    ]);
+    // Two columns: 6 item rows fit in an 8-row viewport -> no scrollbar.
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 82, 8);
+    let buf = term.backend().buffer();
+    let last_col: String = (0..buf.area().height)
+        .map(|y| buf[(buf.area().width - 1, y)].symbol().to_string())
+        .collect::<Vec<_>>()
+        .join("");
+    assert!(
+        last_col.trim().is_empty(),
+        "two-column list that fits must show no scroll indicator, got {last_col:?}"
+    );
+
+    // Same 12 items in one column: 12 rows > 8 -> scrollbar appears.
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 60, 8);
+    let buf = term.backend().buffer();
+    let last_col: String = (0..buf.area().height)
+        .map(|y| buf[(buf.area().width - 1, y)].symbol().to_string())
+        .collect::<Vec<_>>()
+        .join("");
+    assert!(
+        !last_col.trim().is_empty(),
+        "single-column list taller than the viewport must show a scroll indicator"
+    );
+}
+
+#[test]
+fn unfocused_selected_block_uses_the_unfocused_background_on_tab_and_panel() {
+    let mut app = make_power_movie_list_app(vec!["U A", "U B", "U C"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 0;
+    let mut layout = LayoutMain::default();
+    let backend = TestBackend::new(82, 10);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        app.render_power_list(f, Rect::new(0, 0, 82, 10), false, &mut layout);
+    })
+    .unwrap();
+    let buf = term.backend().buffer();
+    let width = buf.area().width;
+    let item_y = (0..buf.area().height)
+        .find(|&y| {
+            let line: String = (0..width).map(|x| buf[(x, y)].symbol()).collect();
+            line.contains("U A") && line.contains("U B")
+        })
+        .expect("item row");
+    // Tab region (item row + top padding) at the selected cell's slot and
+    // the panel region (row below) at full width both carry the unfocused
+    // block background; the gap/partner columns stay ordinary.
+    for y in (item_y - 1)..(item_y + 1) {
+        for x in 0..40 {
+            assert_eq!(
+                buf[(x, y)].bg,
+                palette::PLAYBACK_PANEL_BG,
+                "unfocused tab bg expected at ({x},{y})"
+            );
+        }
+    }
+    for x in 0..width {
+        assert_eq!(
+            buf[(x, item_y + 1)].bg,
+            palette::PLAYBACK_PANEL_BG,
+            "unfocused panel bg expected full width at ({x},{})",
+            item_y + 1
+        );
+    }
+}
+
+/// Maintenance invariant: the library list is one renderer parameterized
+/// by column count, not two separate views. Render the same library just
+/// below and just above the column-count threshold (width 81 vs 82) and
+/// assert the per-cell content is identical, modulo cell-width truncation
+/// and the right cell's trailing-column absorption. If this test fails
+/// the two modes have diverged and need to be reconciled before merging
+/// (see design.md "Maintenance Rule: 1-col and 2-col stay the same view,
+/// parameterized").
+#[test]
+fn one_and_two_column_render_the_same_per_cell_content() {
+    // Items short enough to fit in both cell widths without truncating, so
+    // the test compares real content rather than truncation artifacts.
+    let titles = vec!["Movie 0", "Movie 1", "Movie 2", "Movie 3"];
+    let mut app1 = make_power_movie_list_app(titles.clone());
+    app1.libs[0].nav_stack.last_mut().unwrap().cursor = 0;
+    let mut layout1 = LayoutMain::default();
+    let term1 = render_power_list_term(&mut app1, &mut layout1, 81, 12);
+    let buf1 = term1.backend().buffer();
+    let width1 = buf1.area().width;
+
+    let mut app2 = make_power_movie_list_app(titles);
+    app2.libs[0].nav_stack.last_mut().unwrap().cursor = 0;
+    let mut layout2 = LayoutMain::default();
+    let term2 = render_power_list_term(&mut app2, &mut layout2, 82, 12);
+    let buf2 = term2.backend().buffer();
+    let width2 = buf2.area().width;
+
+    // Helper: collect the non-space symbols on a row, joined together.
+    let line_symbols = |buf: &ratatui::buffer::Buffer, y: u16| -> String {
+        (0..buf.area().width)
+            .map(|x| buf[(x, y)].symbol().to_string())
+            .collect::<Vec<_>>()
+            .join("")
+    };
+
+    // 1-col: every item lives in its own row, and cell starts at the
+    // content area's left edge.
+    let item_row_1col = (0..buf1.area().height)
+        .find(|&y| line_symbols(buf1, y).contains("Movie 0"))
+        .expect("1-col item row");
+    let one_col_row: String = (0..width1)
+        .map(|x| buf1[(x, item_row_1col)].symbol().to_string())
+        .collect::<Vec<_>>()
+        .join("");
+
+    // 2-col: item 0 is the left cell of the first item row. The left cell
+    // starts at the content area's left edge (same x as 1-col) and is
+    // `library_cell_width(82, 2) = 40` wide, so we sample the first 40
+    // columns of that row.
+    let item_row_2col = (0..buf2.area().height)
+        .find(|&y| line_symbols(buf2, y).contains("Movie 0"))
+        .expect("2-col item row");
+    let two_col_left_cell: String = (0..40)
+        .map(|x| buf2[(x, item_row_2col)].symbol().to_string())
+        .collect::<Vec<_>>()
+        .join("");
+
+    // The 1-col cell starts with the same content as the 2-col left cell:
+    // same background-prefix pattern (`##` selected pad with banner) and
+    // same item text. Truncation aside, the per-cell rendering must be
+    // identical -- the two views are the same renderer, parameterized by
+    // `cols`.
+    assert!(
+        one_col_row.starts_with(&two_col_left_cell)
+            || two_col_left_cell.starts_with(&one_col_row[..one_col_row.len().min(40)]),
+        "1-col and 2-col selected-cell content must match (modulo cell width):\n\
+         1-col: {one_col_row:?}\n\
+         2-col left cell: {two_col_left_cell:?}"
+    );
+
+    // The 2-col right cell exists and starts with the partner item's text
+    // (item 1). The right cell is cell_width(82, 2) = 40 wide.
+    let two_col_right_cell: String = (42..82)
+        .map(|x| buf2[(x, item_row_2col)].symbol().to_string())
+        .collect::<Vec<_>>()
+        .join("");
+    assert!(
+        two_col_right_cell.contains("Movie 1"),
+        "2-col right cell should contain the partner item's text, got: {two_col_right_cell:?}"
+    );
+
+    // Backgrounds: selected cell (left in 2-col, full row in 1-col) uses
+    // MEDIA_SELECTED_BG. Partner cell uses the ordinary background.
+    for x in 0..40 {
+        assert_eq!(
+            buf1[(x, item_row_1col)].bg,
+            buf2[(x, item_row_2col)].bg,
+            "selected-cell bg at x={x} must match between 1-col and 2-col"
+        );
+    }
+    // 1-col: no partner row content. 2-col: the partner cell at x=42..82
+    // uses the ordinary (Reset) background.
+    for x in 42..width2 {
+        assert_eq!(
+            buf2[(x, item_row_2col)].bg,
+            ratatui::style::Color::Reset,
+            "2-col partner cell must be ordinary background at x={x}"
+        );
+    }
+}

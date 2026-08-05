@@ -143,6 +143,14 @@ impl App {
                 visible,
                 top_pad_abs,
                 bottom_pad_abs,
+                display_cursor,
+                // Single-column renderer: the tab slot spans the full width,
+                // collapsing the notch into a plain rectangle.
+                Rect {
+                    x: area.x,
+                    width: area.width,
+                    ..area
+                },
                 bg,
             );
         }

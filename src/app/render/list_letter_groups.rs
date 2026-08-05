@@ -1,11 +1,12 @@
 use super::super::ui_util::*;
 use super::list_rows::{
-    build_list_row_spans, focused_or_subtle, push_selected_detail_fillers_after,
+    focused_or_subtle, item_cell_spans, push_selected_detail_fillers_after,
     push_selected_detail_fillers_before, render_series_detail_background,
     selected_detail_lower_bound, DisplayRow, ListRenderCtx, COMPACT_MOVIE_BANNER_INDENT,
 };
 use super::{effective_sort_str, letter_bucket, LetterFilter};
 use crate::app::layout::LayoutMain;
+use crate::app::library_column_width::{library_cell_slot, library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
@@ -28,7 +29,6 @@ impl App {
         layout: &mut LayoutMain,
     ) -> usize {
         let ListRenderCtx {
-            area,
             content_area,
             items,
             cursor,
@@ -36,10 +36,12 @@ impl App {
             banner_rows,
             banner_content_rows,
             series_detail_rows,
+            cols,
             focused,
         } = ctx;
         let n = items.len();
         let visible = content_area.height as usize;
+        let cell_w = library_cell_width(content_area, cols) as usize;
 
         // Build display rows: inject a Spacer+LetterHeader at each bucket boundary.
         // The spacer is omitted before the very first header.
@@ -61,29 +63,48 @@ impl App {
         } else {
             ungrouped_total
         };
+        // Each letter bucket packs independently: a bucket always starts a
+        // fresh item row, so no row mixes items from two buckets. The cost
+        // is a ragged trailing cell at the end of every bucket, which is
+        // correct -- a row straddling the bucket boundary would put the
+        // header between its items.
         let mut display_rows: Vec<DisplayRow> = Vec::new();
         let mut last_bucket = String::new();
+        let mut current_row: Vec<usize> = Vec::with_capacity(cols.max(1));
         for &idx in &sorted_indices {
             let item = &items[idx];
             let bucket = letter_bucket(item, bucket_total);
             if bucket != last_bucket {
+                if !current_row.is_empty() {
+                    push_item_row(
+                        &mut display_rows,
+                        &mut current_row,
+                        cursor,
+                        banner_rows,
+                        series_detail_rows,
+                    );
+                }
                 if !last_bucket.is_empty() {
                     display_rows.push(DisplayRow::Spacer);
                 }
                 display_rows.push(DisplayRow::LetterHeader(bucket.clone()));
                 last_bucket = bucket;
             }
-            push_selected_detail_fillers_before(
+            current_row.push(idx);
+            if current_row.len() >= cols.max(1) {
+                push_item_row(
+                    &mut display_rows,
+                    &mut current_row,
+                    cursor,
+                    banner_rows,
+                    series_detail_rows,
+                );
+            }
+        }
+        if !current_row.is_empty() {
+            push_item_row(
                 &mut display_rows,
-                idx,
-                cursor,
-                banner_rows,
-                series_detail_rows,
-            );
-            display_rows.push(DisplayRow::Item(idx));
-            push_selected_detail_fillers_after(
-                &mut display_rows,
-                idx,
+                &mut current_row,
                 cursor,
                 banner_rows,
                 series_detail_rows,
@@ -91,11 +112,25 @@ impl App {
         }
         let total_display = display_rows.len();
 
-        // Find the visual row of the current cursor item for scrolling.
+        // Find the visual row of the current cursor item for scrolling
+        // (`display_cursor` is the *row containing* the cursor, so the clamp
+        // keeps the whole tab+panel block on screen together) and the
+        // cursor's column within that row (for the notched block's tab).
         let display_cursor = display_rows
             .iter()
-            .position(|r| matches!(r, DisplayRow::Item(i) if *i == cursor))
+            .position(|r| matches!(r, DisplayRow::Item(idxs) if idxs.contains(&cursor)))
             .unwrap_or(0);
+        let cursor_col = display_rows
+            .iter()
+            .find_map(|r| match r {
+                DisplayRow::Item(idxs) => idxs.iter().position(|&i| i == cursor),
+                _ => None,
+            })
+            .unwrap_or(0);
+        // Tab slot for the notched block: the rightmost cell absorbs the
+        // trailing remainder column so the tab joins the full-width panel
+        // below at the content area's right edge.
+        let slot = library_cell_slot(content_area, cols, cursor_col);
         // For banners, `banner_rows` rows sit below the cursor (opening rule above).
         // For series, `series_detail_rows` rows sit below the cursor (block follows it).
         let lower_bound =
@@ -139,16 +174,28 @@ impl App {
         }
         let final_offset = offset;
 
-        // Build row map so mouse clicks can map visual row → item index.
+        // Build row map so mouse clicks can map visual row → item index
+        // (first item of each row; two-column mouse clicks resolve the
+        // cell via `left_item_rows`).
         for row in display_rows.iter().skip(offset).take(visible) {
             layout.left_row_map.push(match row {
                 DisplayRow::Spacer
                 | DisplayRow::LetterHeader(_)
                 | DisplayRow::BannerFiller
                 | DisplayRow::SeriesDetailFiller => None,
-                DisplayRow::Item(idx) => Some(*idx),
+                DisplayRow::Item(idxs) => idxs.first().copied(),
             });
         }
+        // Publish the full row structure (parallel to the display rows,
+        // empty entries for headers/fillers) so column-aware cursor
+        // movement and mouse hit-testing can resolve cells between frames.
+        layout.left_item_rows = display_rows
+            .iter()
+            .map(|row| match row {
+                DisplayRow::Item(idxs) => idxs.clone(),
+                _ => Vec::new(),
+            })
+            .collect();
 
         // Absolute display-row indices of the colored block's top and
         // bottom padding rows (only meaningful when banner_rows > 0).
@@ -180,6 +227,8 @@ impl App {
                 visible,
                 banner_rule_top,
                 banner_rule_bottom,
+                display_cursor,
+                slot,
                 bg,
             );
         }
@@ -191,6 +240,7 @@ impl App {
             visible,
             display_cursor,
             series_detail_rows,
+            slot,
             focused,
         );
 
@@ -200,7 +250,7 @@ impl App {
         // + render_power_compact_detail's own internal 1-col pad reserve
         // `2 * COMPACT_MOVIE_BANNER_INDENT + 2` cols off both sides, so the
         // title aligns with the banner's `inner_x` exactly.
-        let avail = (area.width as usize).saturating_sub(2 + COMPACT_MOVIE_BANNER_INDENT as usize);
+        let normal_avail = cell_w.saturating_sub(2 + COMPACT_MOVIE_BANNER_INDENT as usize);
         let list_items: Vec<ListItem> = display_rows
             .iter()
             .enumerate()
@@ -223,51 +273,64 @@ impl App {
                             .add_modifier(Modifier::BOLD),
                     ),
                 ])),
-                DisplayRow::Item(idx) => {
-                    let item = &items[*idx];
-                    let selected = *idx == cursor;
-                    let (item_name, dur_str) = if item.is_folder {
-                        let name = if item.item_type == "Folder" && item.total_count > 0 {
-                            format!("{} \u{b7} {} items", item.display_name(), item.total_count)
-                        } else if item.unplayed_item_count > 0 && item.item_type != "Series" {
-                            format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+                DisplayRow::Item(idxs) => {
+                    // Each item renders into its own cell, truncated to the
+                    // cell width; cells are padded to the cell boundary
+                    // (+ inter-column gap) so the next cell starts at its
+                    // own x offset. Trailing partial rows leave the empty
+                    // cells as plain list background.
+                    let mut spans: Vec<Span> = Vec::new();
+                    for (cell_idx, &idx) in idxs.iter().enumerate() {
+                        let item = &items[idx];
+                        let selected = idx == cursor;
+                        let (item_name, dur_str) = if item.is_folder {
+                            let name = if item.item_type == "Folder" && item.total_count > 0 {
+                                format!("{} \u{b7} {} items", item.display_name(), item.total_count)
+                            } else if item.unplayed_item_count > 0 && item.item_type != "Series" {
+                                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+                            } else {
+                                item.display_name()
+                            };
+                            (name, String::new())
                         } else {
-                            item.display_name()
+                            let dur = if item.runtime_ticks > 0 {
+                                format!(
+                                    " {}",
+                                    fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
+                                )
+                            } else {
+                                String::new()
+                            };
+                            (item.display_name(), dur)
                         };
-                        (name, String::new())
-                    } else {
-                        let dur = if item.runtime_ticks > 0 {
-                            format!(
-                                " {}",
-                                fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-                            )
+                        let selected_has_banner = selected && banner_rows > 0;
+                        let avail = if selected_has_banner {
+                            // 2-col left pad + 2-col right pad inside the
+                            // colored block: title+dur share cell width - 4.
+                            cell_w.saturating_sub(2 + 2 * COMPACT_MOVIE_BANNER_INDENT as usize)
                         } else {
-                            String::new()
+                            normal_avail
                         };
-                        (item.display_name(), dur)
-                    };
-                    let selected_has_banner = selected && banner_rows > 0;
-                    let avail = if selected_has_banner {
-                        // 2-col left pad + 2-col right pad inside the
-                        // colored block: title+dur share area.width - 4.
-                        (area.width as usize)
-                            .saturating_sub(2 + 2 * COMPACT_MOVIE_BANNER_INDENT as usize)
-                    } else {
-                        avail
-                    };
-                    let name_w = avail.saturating_sub(dur_str.width());
-                    let title = trunc_str(&item_name, name_w);
-                    let fg = focused_or_subtle(focused);
-                    let is_series = item.item_type == "Series";
-                    let spans = build_list_row_spans(
-                        title,
-                        dur_str,
-                        selected,
-                        selected_has_banner,
-                        is_series,
-                        focused,
-                        fg,
-                    );
+                        let name_w = avail.saturating_sub(dur_str.width());
+                        let title = trunc_str(&item_name, name_w);
+                        let fg = focused_or_subtle(focused);
+                        let is_series = item.item_type == "Series";
+                        let pad_to = if cell_idx + 1 == idxs.len() {
+                            cell_w
+                        } else {
+                            cell_w + LIBRARY_COLUMN_GAP as usize
+                        };
+                        spans.extend(item_cell_spans(
+                            title,
+                            dur_str,
+                            selected,
+                            selected_has_banner,
+                            is_series,
+                            focused,
+                            fg,
+                            pad_to,
+                        ));
+                    }
                     ListItem::new(Line::from(spans))
                 }
             })
@@ -353,4 +416,29 @@ impl App {
 
         final_offset
     }
+}
+
+/// Flushes one packed item row into `display_rows`, attaching the selected
+/// detail fillers around the row when it holds the cursor item (the fillers
+/// always sit below the whole row, never displacing the item sharing it).
+/// `current_row` is emptied by the flush.
+fn push_item_row(
+    display_rows: &mut Vec<DisplayRow>,
+    current_row: &mut Vec<usize>,
+    cursor: usize,
+    banner_rows: usize,
+    series_detail_rows: usize,
+) {
+    if current_row.is_empty() {
+        return;
+    }
+    let row_selected = current_row.contains(&cursor);
+    push_selected_detail_fillers_before(
+        display_rows,
+        row_selected,
+        banner_rows,
+        series_detail_rows,
+    );
+    display_rows.push(DisplayRow::Item(std::mem::take(current_row)));
+    push_selected_detail_fillers_after(display_rows, row_selected, banner_rows, series_detail_rows);
 }
