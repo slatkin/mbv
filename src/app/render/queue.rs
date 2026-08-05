@@ -10,7 +10,13 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
-const QUEUE_NOW_PLAYING_COL_W: usize = 4;
+// Throbber (1) + percent slot (3, right-aligned so "%" lands at a fixed
+// column across rows) + one DARK_BG indent right after the %.
+const QUEUE_NOW_PLAYING_COL_W: usize = 5;
+// Width of the percent slot inside the pill. pct_str is "N%" or "NN%",
+// so it gets left-padded with spaces to land the "%" at the slot's last
+// cell. 99% is the widest, so 3 is enough.
+const QUEUE_PCT_SLOT_W: usize = 3;
 
 impl App {
     /// Renders the "Queue" title pill (and optional Local/Remote scope pills)
@@ -427,7 +433,8 @@ impl App {
                     spans.push(Span::styled(prefix, Style::default().fg(dim_color)));
                     // Now-playing gutter: throbber (AQUA) + progress (FOAM) on a
                     // DARK_BG pill, or plain spaces on inactive rows. Sits in a
-                    // 4-cell column between the track number and the title.
+                    // 5-cell column between the track number and the title: the
+                    // pill includes one DARK_BG indent right after the %.
                     if show_throbber || pct_visible {
                         // Only the now-playing row gets the pill treatment
                         // (dark background, throbber). Other rows just show
@@ -443,27 +450,37 @@ impl App {
                             }
                             s
                         };
-                        let mut used = 0usize;
+                        // Cell 0: throbber (active) or a raw placeholder (inactive
+                        // rows with a percent but no throbber).
                         if show_throbber {
                             // to_symbol_span appends a trailing space; strip it so
-                            // the throbber sits flush against the percentage.
+                            // the throbber sits flush against the percent slot.
                             let throbber = self.now_playing_throbber_span();
                             spans.push(Span::styled(
                                 throbber.content.trim_end().to_string(),
                                 with_bg(throbber.style),
                             ));
-                            used += 1;
+                        } else {
+                            spans.push(Span::raw(" "));
                         }
+                        // Cells 1-3: percent slot, right-aligned so "%" lands at
+                        // column 3 on every row. Space-padded with the same bg
+                        // (DARK_BG on the now-playing row, none elsewhere).
                         if pct_visible {
-                            used += pct_str.width();
                             spans.push(Span::styled(
-                                pct_str,
+                                format!("{:>QUEUE_PCT_SLOT_W$}", pct_str),
                                 with_bg(Style::default().fg(palette::FOAM)),
                             ));
+                        } else {
+                            spans.push(Span::raw(" ".repeat(QUEUE_PCT_SLOT_W)));
                         }
-                        let pad = QUEUE_NOW_PLAYING_COL_W.saturating_sub(used);
-                        if pad > 0 {
-                            spans.push(Span::raw(" ".repeat(pad)));
+                        // Cell 4: one DARK_BG indent right after the %, inside
+                        // the pill. Only on the now-playing row and only when
+                        // there is actually a percent to indent past.
+                        if show_throbber && pct_visible {
+                            spans.push(Span::styled(" ", with_bg(Style::default())));
+                        } else {
+                            spans.push(Span::raw(" "));
                         }
                     } else {
                         spans.push(Span::raw(" ".repeat(QUEUE_NOW_PLAYING_COL_W)));
