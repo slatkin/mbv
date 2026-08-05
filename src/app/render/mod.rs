@@ -463,24 +463,9 @@ impl App {
                     layout,
                 );
             }
-            // Thin soft-white underline below the header row.
-            if queue_list_area.height > 1 {
-                let underline_text = "─".repeat(queue_list_area.width as usize);
-                let underline_line = Line::from(Span::styled(
-                    underline_text,
-                    Style::default().fg(palette::SOFT_WHITE),
-                ));
-                let underline_area = Rect {
-                    x: queue_list_area.x,
-                    y: queue_list_area.y + 1,
-                    width: queue_list_area.width,
-                    height: 1,
-                };
-                f.render_widget(Paragraph::new(vec![underline_line]), underline_area);
-            }
             let queue_content_area = Rect {
-                y: queue_list_area.y + 2,
-                height: queue_list_area.height.saturating_sub(2),
+                y: queue_list_area.y + 1,
+                height: queue_list_area.height.saturating_sub(1),
                 ..queue_list_area
             };
             self.render_power_queue(f, queue_content_area, queue_focused, layout);
