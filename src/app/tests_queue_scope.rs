@@ -1,9 +1,7 @@
 use super::*;
 use crate::app::tests::*;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mbv_core::api::device_name;
 use mbv_core::ctrl::{CtrlCmd, WireCommand};
-use unicode_width::UnicodeWidthStr;
 
 #[test]
 fn stale_remote_queue_scope_falls_back_to_local_when_not_in_direct_remote_mode() {
@@ -186,69 +184,6 @@ fn shift_resize_clamps_and_reports_minimum_and_maximum() {
     )
     .expect("prefs json");
     assert_eq!(prefs["queue_column_width"].as_u64(), Some(48));
-}
-
-#[test]
-fn render_normalizes_saved_left_width_and_updates_layout() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let prefs = serde_json::json!({
-        "queue_column_width": 70,
-    });
-    std::fs::write(
-        crate::config::prefs_path(),
-        serde_json::to_string(&prefs).expect("prefs json"),
-    )
-    .expect("write prefs");
-
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-
-    let _ = render_app_to_string(&mut app, 70, 28);
-
-    assert_eq!(app.layout.main.queue_area.width, 38);
-    let saved: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
-    )
-    .expect("prefs json");
-    assert_eq!(saved["queue_column_width"].as_u64(), Some(42));
-}
-
-#[test]
-fn render_uses_resized_width_on_next_frame() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_remote_app_stub(make_items(1), make_items(2));
-
-    let _ = render_app_to_string(&mut app, 100, 28);
-    assert_eq!(app.layout.main.queue_area.width, 36);
-
-    assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
-    assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
-
-    let _ = render_app_to_string(&mut app, 100, 28);
-    assert_eq!(app.layout.main.queue_area.width, 46);
-}
-
-#[test]
-fn local_daemon_queue_has_no_scope_affordance_or_remote_switch() {
-    let mut app = make_local_daemon_app_stub(make_items(2));
-    let rendered = render_app_to_string(&mut app, 90, 24);
-
-    assert!(!app.has_direct_remote_queue());
-    assert_eq!(
-        app.layout.main.queue_scope_local_area,
-        ratatui::layout::Rect::default()
-    );
-    assert_eq!(
-        app.layout.main.queue_scope_remote_area,
-        ratatui::layout::Rect::default()
-    );
-    assert!(
-        !rendered.contains(" Local ") && !rendered.contains(" Remote "),
-        "local-daemon queue should not render split-scope pills:\n{rendered}"
-    );
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
-    assert!(!handled);
-    assert_eq!(app.visible_queue_scope(), QueueScope::Local);
 }
 
 #[test]

@@ -402,17 +402,6 @@ pub(crate) fn render_app_to_string(app: &mut App, width: u16, height: u16) -> St
     out
 }
 
-pub(crate) fn render_app_to_terminal(
-    app: &mut App,
-    width: u16,
-    height: u16,
-) -> Terminal<TestBackend> {
-    let backend = TestBackend::new(width, height);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    term
-}
-
 pub(crate) fn make_remote_app_stub(
     local_items: Vec<MediaItem>,
     remote_items: Vec<MediaItem>,

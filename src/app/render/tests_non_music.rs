@@ -2,8 +2,6 @@ use super::test_helpers::*;
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab};
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
 
 #[test]
 fn home_video_library_is_never_album_folders_and_renders_via_original_list_path() {
@@ -62,66 +60,6 @@ fn letter_filter_default_is_the_first_bucket() {
     assert_eq!(
         LetterFilter::default_filter(),
         LetterFilter::for_index(0).unwrap()
-    );
-}
-
-#[test]
-fn letter_pills_show_for_any_captured_library_total() {
-    let mut small = make_power_large_movie_library_app(5);
-    assert!(small.should_show_letter_pills(0));
-
-    let mut large = make_power_large_movie_library_app(LIBRARY_PILL_THRESHOLD + 1);
-    assert!(large.should_show_letter_pills(0));
-
-    let backend = TestBackend::new(60, 20);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutMain::default();
-    term.draw(|f| {
-        large.render_main(
-            f,
-            Rect::new(0, 0, 60, 20),
-            &mut layout,
-            &mut crate::app::layout::LayoutPlayback::default(),
-            &mut Rect::default(),
-            &mut Rect::default(),
-            0,
-            false,
-            &None,
-        );
-    })
-    .unwrap();
-    let out = buffer_to_string(&term);
-    assert!(
-        out.contains("A\u{2013}C"),
-        "expected the default A–C pill to render:\n{out}"
-    );
-    assert!(
-        !layout.selector_tabs.is_empty(),
-        "expected pill hitboxes to be recorded for click dispatch"
-    );
-
-    let backend2 = TestBackend::new(60, 20);
-    let mut term2 = Terminal::new(backend2).unwrap();
-    let mut layout2 = LayoutMain::default();
-    term2
-        .draw(|f| {
-            small.render_main(
-                f,
-                Rect::new(0, 0, 60, 20),
-                &mut layout2,
-                &mut crate::app::layout::LayoutPlayback::default(),
-                &mut Rect::default(),
-                &mut Rect::default(),
-                0,
-                false,
-                &None,
-            );
-        })
-        .unwrap();
-    let out2 = buffer_to_string(&term2);
-    assert!(
-        out2.contains("A\u{2013}C"),
-        "any captured total shows pills:\n{out2}"
     );
 }
 

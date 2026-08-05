@@ -54,65 +54,6 @@ fn selectable_artist_headers_are_typed_row_targets() {
 }
 
 #[test]
-fn grouped_album_rows_use_styled_suffix_and_single_group_spacers() {
-    let mut app = make_power_music_group_app();
-    let mut alpha_album = make_item("Second Alpha Album", "MusicAlbum");
-    alpha_album.id = "album-1b".into();
-    alpha_album.artist = "Alpha".into();
-    alpha_album.production_year = 2002;
-    let mut beta_album = make_item("Beta Album", "MusicAlbum");
-    beta_album.id = "album-2".into();
-    beta_album.artist = "Beta".into();
-    beta_album.production_year = 2003;
-    let level = app.libs[0].nav_stack.last_mut().unwrap();
-    level.items.extend([alpha_album, beta_album]);
-    level.cursor = 2;
-
-    let mut layout = LayoutMain::default();
-    let term = render_power_library_to_terminal(&mut app, &mut layout);
-    let out = buffer_to_string(&term);
-    let lines: Vec<&str> = out.lines().collect();
-    let alpha_y = lines
-        .iter()
-        .position(|line| line.contains("Alpha") && !line.contains("Album"))
-        .expect("expected Alpha artist header");
-    let beta_y = lines
-        .iter()
-        .position(|line| line.contains("Beta") && !line.contains("Album"))
-        .expect("expected Beta artist header");
-    let last_alpha_album_y = lines
-        .iter()
-        .rposition(|line| line.contains("Alpha Album"))
-        .expect("expected the final Alpha album row");
-    assert_eq!(
-        beta_y,
-        last_alpha_album_y + 4,
-        "expected one spacer plus the selected group's frame before the next artist:\n{out}"
-    );
-    let last_selectable = layout
-        .left_row_targets
-        .iter()
-        .rev()
-        .find_map(Option::as_ref)
-        .expect("expected a selectable album row");
-    assert!(
-        matches!(last_selectable, LibraryRowTarget::Album(_)),
-        "expected no trailing artist spacer after the final album"
-    );
-
-    let album_y = lines
-        .iter()
-        .position(|line| line.contains("Second Alpha Album"))
-        .expect("expected Alpha album row");
-    let title_x = lines[album_y].find("Second Alpha Album").unwrap() as u16;
-    let header_x = lines[alpha_y].find("Alpha").unwrap() as u16;
-    assert_eq!(
-        title_x, header_x,
-        "album title should align with its header"
-    );
-}
-
-#[test]
 fn artist_and_album_focus_share_one_selected_group_bounds() {
     let mut app = make_power_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");

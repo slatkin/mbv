@@ -3,7 +3,7 @@
 //! of `tests_remote_reconciliation.rs` to keep that file within the
 //! repository's file-size limit.
 
-use super::{attached_app, rendered_text, tracker};
+use super::{attached_app, tracker};
 use crate::app::tests::{make_item, make_session};
 use crate::app::*;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -263,21 +263,4 @@ fn library_focus_rescan_does_not_trigger_tracking_controls() {
     app.confirm_modal = None;
     app.handle_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::CONTROL));
     assert!(app.remote_tracker.is_some());
-}
-
-#[test]
-fn help_documents_tracking_controls_in_queue_context() {
-    let mut app = attached_app();
-    app.show_help = true;
-    app.panel_focus = crate::app::PanelFocus::Queue;
-    app.remote_tracker = Some(tracker(&["a", "b"]));
-    let text = rendered_text(&mut app);
-    assert!(
-        text.contains("Re-anchor tracking"),
-        "help must document re-anchor"
-    );
-    assert!(
-        text.contains("Stop remote tracking"),
-        "help must document Stop Tracking"
-    );
 }

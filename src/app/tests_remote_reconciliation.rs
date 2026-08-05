@@ -5,8 +5,6 @@ use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::remote_reconciliation::{
     ReconciliationTracker, RemoteObservation, SubmittedOccurrence, TrackingState,
 };
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
 
 #[cfg(test)]
 #[path = "tests_remote_reconciliation_consume.rs"]
@@ -32,19 +30,6 @@ fn tracker(media: &[&str]) -> ReconciliationTracker {
         0,
     )
     .unwrap()
-}
-
-fn rendered_text(app: &mut App) -> String {
-    let backend = TestBackend::new(160, 30);
-    let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|frame| app.render(frame)).unwrap();
-    terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .map(|cell| cell.symbol().to_string())
-        .collect()
 }
 
 fn attached_app() -> App {

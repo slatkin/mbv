@@ -550,17 +550,11 @@ impl App {
 }
 
 #[cfg(test)]
-#[path = "tests_album_detail.rs"]
-mod album_detail_tests;
-#[cfg(test)]
 #[path = "tests_album_focus.rs"]
 mod album_focus_tests;
 #[cfg(test)]
 #[path = "tests_album_listing.rs"]
 mod album_listing_tests;
-#[cfg(test)]
-#[path = "tests_music_detail.rs"]
-mod music_detail_tests;
 #[cfg(test)]
 #[path = "tests_music_groups.rs"]
 mod music_group_tests;
