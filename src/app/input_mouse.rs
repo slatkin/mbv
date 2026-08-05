@@ -88,6 +88,19 @@ impl App {
 
     pub(super) fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
         {
+            // Click on the inline hero: same as clicking anywhere else in
+            // the library pane -- a single click only focuses (the cursor
+            // is already on the selected item, so there's nothing else to
+            // move). Activation (playing a movie, entering a Series'
+            // season/episode selection) is a double-click gesture, handled
+            // in `handle_mouse`'s `is_double` branch alongside every other
+            // library-row activation, so it can't drift from Enter's
+            // behavior or from the app-wide "single click only focuses"
+            // convention.
+            if self.layout.main.hero_area.contains((col, row).into()) && self.library_tab > 0 {
+                self.set_panel_focus(PanelFocus::Library);
+                return true;
+            }
             if self.has_direct_remote_queue() {
                 if self
                     .layout
@@ -168,6 +181,47 @@ impl App {
                     } else {
                         None
                     };
+                    // Two-column lists: resolve the clicked *cell* so the item
+                    // under the click is selected, not the row's first item.
+                    // Geometry mirrors the renderer's cell layout, derived
+                    // from the list pane width. `cell_target` is
+                    // Some(Some(idx)) for a filled cell, Some(None) for an
+                    // empty cell / inter-column gap (cursor unchanged), and
+                    // None when the list is single-column (fall through to
+                    // the existing row-map / arithmetic paths).
+                    let cell_target: Option<Option<usize>> = {
+                        use crate::app::library_column_width::{
+                            library_cell_width, LIBRARY_COLUMN_GAP,
+                        };
+                        let cols = self.current_library_columns(lib_idx);
+                        let cw = library_cell_width(la, cols) as usize;
+                        let x = (col as usize).saturating_sub(la.x as usize);
+                        if !self.layout.main.left_item_rows.is_empty() && cols > 1 && cw > 0 {
+                            let cell = x / (cw + LIBRARY_COLUMN_GAP as usize);
+                            if cell < cols {
+                                let scroll = if self.libs[lib_idx].search.is_some() {
+                                    self.libs[lib_idx].search.as_ref().unwrap().scroll
+                                } else {
+                                    self.libs[lib_idx]
+                                        .nav_stack
+                                        .last()
+                                        .map(|l| l.scroll)
+                                        .unwrap_or(0)
+                                };
+                                Some(
+                                    self.layout
+                                        .main
+                                        .left_item_rows
+                                        .get(scroll + click_y)
+                                        .and_then(|row| row.get(cell).copied()),
+                                )
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    };
                     let row_target = self
                         .layout
                         .main
@@ -203,7 +257,16 @@ impl App {
                     let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
                     let lib = &mut self.libs[lib_idx];
                     if let Some(s) = &mut lib.search {
-                        if use_row_map {
+                        if let Some(cell_item) = cell_target {
+                            // Two-column list: select the item under the
+                            // click's cell; empty cells/gaps leave the
+                            // cursor unchanged.
+                            if let Some(item_idx) = cell_item {
+                                if item_idx < s.results.len() {
+                                    s.cursor = item_idx;
+                                }
+                            }
+                        } else if use_row_map {
                             // Letter-grouped or banner-adjacent mode: row map gives the
                             // result index directly (None = header/banner-filler row).
                             if let Some(Some(item_idx)) = row_map_item {
@@ -247,7 +310,20 @@ impl App {
                         }
                         self.save_default_library_position(lib_idx);
                     } else if let Some(lvl) = lib.nav_stack.last_mut() {
-                        if use_row_map {
+                        if let Some(cell_item) = cell_target {
+                            // Two-column list: select the item under the
+                            // click's cell; empty cells/gaps leave the
+                            // cursor unchanged.
+                            if let Some(item_idx) = cell_item {
+                                if item_idx < lvl.items.len() {
+                                    if lvl.cursor != item_idx {
+                                        lib.album_track_focus = None;
+                                    }
+                                    lib.artist_header_focus = None;
+                                    lvl.cursor = item_idx;
+                                }
+                            }
+                        } else if use_row_map {
                             // Letter-grouped mode: row map gives item index (None = header row).
                             if let Some(Some(item_idx)) = row_map_item {
                                 if item_idx < lvl.items.len() {

@@ -147,6 +147,76 @@ fn down_always_moves_the_list_cursor_never_scrolls_the_banner() {
     );
 }
 
+// Vim-style navigation for the two-column library list: j/k mirror Up/Down
+// in any column count; h/l move across cells in 2-col mode only and stay
+// unbound (so the user can type 'h' and 'l' as query characters) in 1-col
+// mode. The sidebar-toggle key moved from 'h' to 'x' to free 'h' for this.
+#[test]
+fn hjkl_navigates_two_column_library_list_via_handle_key() {
+    let mut app = make_power_movie_app();
+    // Four movies => two 2-col rows: [0,1] / [2,3].
+    let mut m2 = make_item("Third Movie", "Movie");
+    m2.id = "movie-3".into();
+    let mut m3 = make_item("Fourth Movie", "Movie");
+    m3.id = "movie-4".into();
+    app.libs[0].nav_stack[0].items.push(m2);
+    app.libs[0].nav_stack[0].items.push(m3);
+    // Force the layout to read as 2-col so the h/l guard passes.
+    app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 84, 20);
+
+    // l moves right one cell: 0 -> 1.
+    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack[0].cursor, 1, "'l' should move right");
+
+    // h moves left one cell: 1 -> 0.
+    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack[0].cursor, 0, "'h' should move left");
+
+    // j moves down one row in 2-col: 0 -> 2.
+    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+    assert_eq!(
+        app.libs[0].nav_stack[0].cursor, 2,
+        "'j' should move down one row"
+    );
+
+    // k moves up one row in 2-col: 2 -> 0.
+    let _ = app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+    assert_eq!(
+        app.libs[0].nav_stack[0].cursor, 0,
+        "'k' should move up one row"
+    );
+}
+
+#[test]
+fn lib_search_ignores_navigation_keys_and_only_accepts_query_editing() {
+    // Regression: per design, when the lib search box is open and the user
+    // is typing into the query, NO navigation key should fire -- not
+    // Up/Down/PageUp/PageDown, not Enter, not h/j/k/l. Only Esc, Backspace,
+    // and printable characters are recognised. This prevents "h" typed into
+    // a query for "Harry Potter" from being silently consumed as nav.
+    let mut app = make_power_movie_app();
+    app.libs[0].search = Some(crate::app::LibSearch {
+        query: String::new(),
+        items: app.libs[0].nav_stack[0].items.clone(),
+        results: (0..app.libs[0].nav_stack[0].items.len()).collect(),
+        cursor: 0,
+        scroll: 0,
+        loading: false,
+    });
+
+    // Type a multi-letter query that uses every previously-bound letter.
+    for c in "hjklll".chars() {
+        let _ = app.handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
+    }
+    assert_eq!(
+        app.libs[0].search.as_ref().unwrap().query,
+        "hjklll",
+        "h/j/k/l must be typed into the query, not consumed as nav"
+    );
+    // Cursor stays at 0 -- nothing has moved it.
+    assert_eq!(app.libs[0].search.as_ref().unwrap().cursor, 0);
+}
+
 #[test]
 fn shift_right_resizes_without_switching_focus() {
     let mut app = make_power_movie_app();
@@ -168,7 +238,7 @@ fn left_does_not_focus_hidden_queue_when_power_left_column_is_collapsed() {
     app.queue_column_collapsed = true;
     app.panel_focus = PanelFocus::Library;
 
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
 
     assert!(!handled);
     assert_eq!(app.panel_focus, PanelFocus::Library);
@@ -250,72 +320,6 @@ fn render_normalizes_oversized_saved_power_width_and_persists_it() {
 
     assert_eq!(app.queue_column_width, 42);
     assert_eq!(App::load_prefs()["queue_column_width"].as_u64(), Some(42));
-}
-
-#[test]
-fn search_result_click_uses_left_row_map_past_banner_filler_rows() {
-    let mut app = make_power_movie_app();
-
-    // Replace the plain nav-stack browsing state with an active search
-    // over three leaf movies, cursor on the first result -- this is what
-    // triggers the inline compact banner (and its filler rows) in the
-    // plain (non-grouped) render_power_list branch.
-    let mut movie1 = make_item("First Movie", "Movie");
-    movie1.id = "movie-1".into();
-    let mut movie2 = make_item("Second Movie", "Movie");
-    movie2.id = "movie-2".into();
-    let mut movie3 = make_item("Third Movie", "Movie");
-    movie3.id = "movie-3".into();
-    let items = vec![movie1, movie2, movie3];
-    app.libs[0].search = Some(LibSearch {
-        query: "movie".into(),
-        items,
-        results: vec![0, 1, 2],
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    // Render for real so layout.main.left_row_map / left_area reflect the
-    // actual banner-filler rows inserted after the selected (cursor=0) row.
-    let backend = TestBackend::new(100, 40);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-
-    let row_map = app.layout.main.left_row_map.clone();
-    assert!(
-        row_map.iter().any(|r| r.is_none()),
-        "expected banner filler (None) rows in left_row_map, got {:?}",
-        row_map
-    );
-
-    // Find a row mapping to search result index 1 (the "Second Movie"
-    // row) that sits after at least one filler row -- this is the row
-    // whose click target would be computed wrong by the old naive
-    // offset + click_y arithmetic, which ignored the banner filler rows
-    // entirely.
-    let click_row_idx = row_map
-        .iter()
-        .position(|r| *r == Some(1))
-        .expect("expected a row mapping to search result index 1");
-    assert!(
-        click_row_idx > 1,
-        "expected the row for result index 1 to be pushed down by filler rows, got index {}",
-        click_row_idx
-    );
-
-    let la = app.layout.main.left_area;
-    let row = la.y + click_row_idx as u16;
-    let col = la.x + 1;
-
-    let handled = app.click_set_cursor(col, row);
-
-    assert!(handled);
-    assert_eq!(
-        app.libs[0].search.as_ref().unwrap().cursor,
-        1,
-        "click should select the row-map item index, not a naive offset + click_y index"
-    );
 }
 
 // ── Phase 3 (#132) view-routing boundary tests ─────────────────────
@@ -656,7 +660,7 @@ fn power_library_navigation_stays_debounced_after_focus_moves_to_queue() {
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert!(!app.power_right_panel_image_renders_allowed());
 
-    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
     assert_eq!(app.panel_focus, PanelFocus::Queue);
     assert!(!app.power_right_panel_image_renders_allowed());
 }
@@ -680,7 +684,7 @@ fn power_queue_navigation_keeps_right_panel_gate_open_after_focus_moves_to_libra
     assert_eq!(app.last_power_library_nav_at, power_library_nav_at);
     assert!(app.power_right_panel_image_renders_allowed());
 
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
 
     assert_eq!(app.panel_focus, PanelFocus::Library);
     assert!(app.power_right_panel_image_renders_allowed());

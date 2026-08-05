@@ -67,6 +67,7 @@ impl App {
             mk("Tab", "Cycle menu"),
             mk("1 – 9", "Jump to tab"),
             mk("↑ / ↓", "Move cursor"),
+            mk("Alt+← / →", "Switch panels"),
             mk("PgUp / PgDn", "Page scroll"),
             mk("Home / End", "First/last item"),
             mk("Enter", "Select/Play/Open"),

@@ -119,22 +119,156 @@ fn compact_banner_prefetches_nearby_movies_but_not_beyond_the_window() {
     );
 }
 
+// ── Two-column list layout (library-list-columns) ─────────────────────────
+
+/// Renders the power list at an explicit width/height and returns the
+/// terminal for buffer (background) inspection.
+fn render_power_list_term(
+    app: &mut App,
+    layout: &mut LayoutMain,
+    width: u16,
+    height: u16,
+) -> Terminal<TestBackend> {
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        app.render_power_list(f, Rect::new(0, 0, width, height), true, layout);
+    })
+    .unwrap();
+    term
+}
+
+/// Same as `make_power_movie_list_app`, but with a music collection type so
+/// no inline movie banner / series detail is attached to the selection (the
+/// compact banner only appears for leaf Movies in movies/homevideos/podcasts
+/// collections, and series detail only in tvshows).
+fn make_no_banner_list_app(titles: Vec<&str>) -> App {
+    let mut app = make_power_movie_list_app(titles);
+    app.libs[0].library.collection_type = "music".into();
+    app
+}
+
+/// Item rows (non-empty entries of `left_item_rows`): the packed rows of a
+/// two-column list, independent of banner/header filler rows.
+fn item_rows(layout: &LayoutMain) -> Vec<Vec<usize>> {
+    layout
+        .left_item_rows
+        .iter()
+        .filter(|r| !r.is_empty())
+        .cloned()
+        .collect()
+}
+
+fn cursor_of(app: &App) -> usize {
+    app.libs[0].nav_stack.last().unwrap().cursor
+}
+
+/// The render helpers write into a local `LayoutMain`, but cursor-movement
+/// and mouse code read `app.layout` (the App's own layout, which only a
+/// full-frame `render` swaps in). Copy the fields those paths consult so
+/// the tests exercise the real production code paths.
+fn sync_layout_to_app(app: &mut App, layout: &LayoutMain) {
+    app.layout.main.left_area = layout.left_area;
+    app.layout.main.left_item_rows = layout.left_item_rows.clone();
+    app.layout.main.left_sorted_indices = layout.left_sorted_indices.clone();
+    app.layout.main.left_row_map = layout.left_row_map.clone();
+}
+
 #[test]
-fn compact_banner_rows_grows_with_a_longer_overview() {
-    let mut app = make_power_movie_list_app(vec!["First", "Second Selected", "Third"]);
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
-    let panel_width = 40u16
-        .saturating_sub(1)
-        .saturating_sub(COMPACT_BANNER_INDENT);
+fn two_columns_pack_items_row_major_left_to_right_before_wrapping() {
+    let mut app = make_power_movie_list_app(vec!["A", "B", "C", "D", "E", "F"]);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 8);
+    assert_eq!(
+        item_rows(&layout),
+        vec![vec![0, 1], vec![2, 3], vec![4, 5]],
+        "item i occupies column i % 2 of row i / 2"
+    );
+}
 
-    app.libs[0].nav_stack.last_mut().unwrap().items[1].overview = "Short.".into();
-    let short_rows = app.compact_banner_rows(0, panel_width);
+#[test]
+fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
+    let mut app = make_power_movie_list_app(vec![
+        "Aardvark", "Alpha", "Apple", "Banana", "Beta", "Cherry",
+    ]);
+    // >= 250 switches `letter_bucket` to per-letter headers, giving an odd
+    // three-item A bucket to prove ragged trailing cells.
+    app.libs[0].library_total = Some(250);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 20);
+    assert_eq!(
+        item_rows(&layout),
+        vec![vec![0, 1], vec![2], vec![3, 4], vec![5]],
+        "each bucket starts a fresh item row; no row mixes two buckets"
+    );
+}
 
-    app.libs[0].nav_stack.last_mut().unwrap().items[1].overview = "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ".repeat(6);
-    let long_rows = app.compact_banner_rows(0, panel_width);
+#[test]
+fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
+    // Tall enough viewport that the 23-row hero block (at 82 wide, 2-col)
+    // leaves real list rows below it, so `lib_page_size` reflects the list,
+    // not 0.
+    let mut app = make_power_movie_list_app(vec!["M0", "M1", "M2", "M3", "M4", "M5", "M6"]);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 30);
+    sync_layout_to_app(&mut app, &layout);
+    let cur = cursor_of;
 
-    assert!(
-        long_rows > short_rows,
-        "long overview ({long_rows} rows) should reserve more rows than short overview ({short_rows} rows)"
+    // Left/right: ±1.
+    app.move_lib_cursor(1);
+    assert_eq!(cur(&app), 1);
+    app.move_lib_cursor(-1);
+    assert_eq!(cur(&app), 0);
+    // Row-boundary wrap: right from the last cell of a row wraps to the
+    // next row's first item, left wraps back.
+    app.move_lib_cursor(1);
+    app.move_lib_cursor(1);
+    assert_eq!(cur(&app), 2, "right from cell 1 wraps to the next row");
+    app.move_lib_cursor(-1);
+    assert_eq!(cur(&app), 1, "left from cell 0 wraps to the previous row");
+    // Up/down: ±cols.
+    app.move_lib_cursor_rows(-1);
+    assert_eq!(cur(&app), 0);
+    app.move_lib_cursor_rows(1);
+    assert_eq!(cur(&app), 2);
+    // Down from the second-to-last row with no item directly below clamps
+    // to the last item (5 -> 6).
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 5;
+    app.move_lib_cursor_rows(1);
+    assert_eq!(
+        cur(&app),
+        6,
+        "down past the ragged end clamps to the last item"
+    );
+    // End-of-list clamp on right.
+    app.move_lib_cursor(1);
+    assert_eq!(cur(&app), 6);
+    // Paging: one viewport of item rows, clamped at both ends.
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 0;
+    let page = app.lib_page_size();
+    app.move_lib_cursor_rows(-(page as i64));
+    assert_eq!(cur(&app), 0, "page up from the top stays");
+    app.move_lib_cursor_rows(page as i64);
+    assert_eq!(
+        cur(&app),
+        6,
+        "page down past the end clamps to the last item"
+    );
+}
+
+#[test]
+fn two_column_mouse_click_selects_the_clicked_cell_not_the_row_first_item() {
+    let mut app = make_no_banner_list_app(vec!["Click A", "Click B", "Click C"]);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 8);
+    sync_layout_to_app(&mut app, &layout);
+    let la = layout.left_area;
+    // Click cell 1 of the first row (x = cell 1 start, y = row 0).
+    let cell1_x = la.x + 42;
+    assert!(app.click_set_cursor(cell1_x, la.y));
+    assert_eq!(
+        cursor_of(&app),
+        1,
+        "click on the right cell must select the second item of the row"
     );
 }

@@ -201,14 +201,20 @@ impl App {
                         }
                     } else if self.library_tab == 0 {
                         self.power_home_play();
-                    } else if self.layout.main.left_area.contains((col, row).into()) {
+                    } else if self.layout.main.left_area.contains((col, row).into())
+                        || self.layout.main.hero_area.contains((col, row).into())
+                    {
                         // Double-click activates the row under the cursor
                         // (the first click of the pair already focused it).
                         // Mirrors the Enter key's activation for the same
                         // row so the two gestures can't drift: recursive
                         // album search jump, album-folder track mode,
                         // series selection, then `select()` (plays media
-                        // items and drills into folders).
+                        // items and drills into folders). The inline hero is
+                        // just another surface over the selected item, so a
+                        // double-click there activates it the same way --
+                        // including entering a Series' season/episode
+                        // selection, which a single click never did.
                         let lib_idx = self.library_tab - 1;
                         if self.activate_recursive_album(lib_idx) {
                             // active-search jump; unchanged

@@ -11,9 +11,9 @@ use unicode_width::UnicodeWidthStr;
 pub(super) const SERIES_DETAIL_DIVIDER_ROWS: usize = 1; // season summary/pills row
 pub(super) const SERIES_DETAIL_EPISODE_ROWS_ESTIMATE: usize = 8; // estimated visible episode rows
 const SERIES_DETAIL_OVERVIEW_MAX_LINES: usize = 4;
-/// Blank row below the episode list (above the ▔ bottom border). Shared by
-/// `series_inline_detail_rows` and `render_series_inline_detail` for the same
-/// reason as the constants above -- one row budget, two call sites.
+/// Blank row below the episode list. Shared by `series_inline_detail_rows`
+/// and `render_series_inline_detail` for the same reason as the constants
+/// above -- one row budget, two call sites.
 pub(super) const SERIES_DETAIL_TRAILING_BLANK_ROWS: usize = 1;
 pub(super) const SERIES_IMAGE_COLS: u16 = 18;
 pub(super) const SERIES_IMAGE_ROWS: u16 = 12;
@@ -89,16 +89,27 @@ impl App {
         (in_selection, episode_count)
     }
 
+    /// Row budget for the inline series detail block's *content* (title
+    /// through the trailing blank row) -- the caller adds its own block
+    /// framing (border/padding rows) on top, mirroring the movie hero's
+    /// `hero_height_for_width` + `HERO_BLOCK_EXTRA_ROWS` split. `show_title`
+    /// reserves the yellow title row used in two-column lists (see
+    /// `render_series_inline_detail`).
     pub(super) fn series_inline_detail_rows(
         &mut self,
         item: &mbv_core::api::MediaItem,
         panel_width: u16,
+        show_title: bool,
         in_selection: bool,
         episode_count: Option<usize>,
     ) -> usize {
         let inner_w = (panel_width as usize).saturating_sub(2);
 
         let mut rows = 0usize;
+
+        if show_title {
+            rows += 1;
+        }
 
         // Series metadata row (year range + genre)
         if !series_meta_line(item).is_empty() {
@@ -124,21 +135,18 @@ impl App {
             rows += episode_count.unwrap_or(SERIES_DETAIL_EPISODE_ROWS_ESTIMATE);
         }
 
-        // Keep the block tall enough for the image, if it extends below the
-        // text and episode content.
+        // Keep the block tall enough for the image (which starts below the
+        // title row), if it extends below the text and episode content.
         let img_height = if self.images_enabled() {
             SERIES_IMAGE_ROWS as usize
         } else {
             0
         };
-        let image_end_row = img_height;
+        let image_end_row = img_height + show_title as usize;
         rows = rows.max(image_end_row);
 
         // Blank spacer below the episode list
         rows += SERIES_DETAIL_TRAILING_BLANK_ROWS;
-
-        // Bottom border row
-        rows += 1;
 
         rows
     }

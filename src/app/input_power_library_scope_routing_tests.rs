@@ -465,3 +465,72 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
     assert_eq!(app.libs[0].nav_stack[0].title, "Power restored");
     assert!(!app.libs[0].nav_stack[0].loading);
 }
+
+fn make_power_series_app() -> App {
+    let mut app = make_power_library_app();
+    for item in app.libs[0].nav_stack[0].items.iter_mut() {
+        item.is_folder = true;
+        item.item_type = "Series".into();
+    }
+    app.libs[0].library.collection_type = "tvshows".into();
+    app
+}
+
+// Regression coverage for the inline hero's click handling (issue found in
+// review of #448): a single click on the hero must only focus the library
+// panel, matching the app-wide "single click only focuses; double-click
+// activates" convention (see `mouse_click_on_a_different_folder_row_only_focuses_it`
+// / `double_click_on_a_folder_row_drills_in` above). Activation used to fire
+// from a single click inside `click_set_cursor`, bypassing that convention
+// entirely for the hero.
+#[test]
+fn single_click_on_hero_only_focuses_the_panel() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_power_series_app();
+    app.panel_focus = PanelFocus::Queue;
+    app.layout.main.hero_area = Rect {
+        x: 10,
+        y: 10,
+        width: 20,
+        height: 5,
+    };
+
+    app.handle_mouse(make_power_library_mouse_event(
+        MouseEventKind::Down(MouseButton::Left),
+        12,
+        11,
+    ));
+
+    assert_eq!(app.panel_focus, PanelFocus::Library, "click focuses the panel");
+    assert_eq!(
+        app.libs[0].series_selection, None,
+        "a single click on the hero must not enter series selection"
+    );
+    assert_eq!(app.libs[0].nav_stack.len(), 1);
+}
+
+#[test]
+fn double_click_on_hero_activates_the_selected_item() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_power_series_app();
+    app.layout.main.hero_area = Rect {
+        x: 10,
+        y: 10,
+        width: 20,
+        height: 5,
+    };
+
+    let click = make_power_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 11);
+    app.handle_mouse(click);
+    assert_eq!(
+        app.libs[0].series_selection, None,
+        "the first click of the pair only focuses"
+    );
+
+    app.handle_mouse(click);
+    assert_eq!(
+        app.libs[0].series_selection,
+        Some(0),
+        "double-click on the hero activates the selected Series, same as Enter"
+    );
+}

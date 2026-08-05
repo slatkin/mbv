@@ -2,30 +2,9 @@ use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
-use ratatui::Frame;
 
-/// Rows the compact movie banner occupies inline in the library list. The
-/// selected movie row + the banner's own content (meta/overview/poster,
-/// rendered by `render_power_compact_detail`, directly below the selected row)
-/// are wrapped in a colored block — `palette::MEDIA_SELECTED_BG` when focused,
-/// `palette::PLAYBACK_PANEL_BG` when unfocused — a dark (#282828 / #151515)
-/// background visually similar to the home tab's Keep Watching
-/// list — instead of horizontal rules. The two
-/// constants below reserve one row above the selected item (the block's top
-/// padding, replacing the previous opening `─` rule) and one row after the
-/// banner content (the block's bottom padding, replacing the previous closing
-/// `─` rule), and `COMPACT_BANNER_INDENT` reserves that many columns of
-/// external side padding on each side of the colored block (matched one-for-
-/// one by `render_power_compact_detail`'s own internal padding, so the
-/// visible side padding is `INDENT + 1` columns on each side).
-pub(super) const COMPACT_BANNER_RULE_ROWS: usize = 1;
-pub(super) const COMPACT_BANNER_GAP_ROWS: usize = 1;
 /// Standard inset for every selected detail block.
 pub(super) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
-/// External side padding for the selected movie block.
-pub(super) const COMPACT_MOVIE_BANNER_INDENT: u16 = SELECTED_BLOCK_SIDE_PADDING;
-/// External side padding for inline series detail.
-pub(super) const COMPACT_BANNER_INDENT: u16 = 1;
 
 /// Returns `palette::WHITE` when `focused`, `palette::SUBTLE` otherwise.
 pub(super) fn focused_or_subtle(focused: bool) -> Color {
@@ -66,177 +45,116 @@ pub(super) fn focused_or_muted_soft_white(focused: bool) -> Color {
 pub(super) enum DisplayRow {
     Spacer,
     LetterHeader(String),
-    Item(usize),
-    BannerFiller,
-    SeriesDetailFiller,
+    /// One display row: the item indices occupying it, in column order. In
+    /// one-column mode every such row carries exactly one index, so both
+    /// modes share a single rendering path with no `cols == 1` branch.
+    Item(Vec<usize>),
+    /// A display row occupied by the inline hero banner's block (top `▁`
+    /// border, colored bg padding + content, bottom `▔` border — painted
+    /// afterwards by `render_power_list` over the blank rows the List
+    /// widget leaves here). Maps to `None` in the row map and an empty row
+    /// in `left_item_rows`, so mouse clicks on it hit the hero, not an
+    /// item.
+    Hero,
 }
 
 /// Shared inputs to the per-kind row-rendering bodies of `render_power_list`
 /// (`render_power_letter_grouped_rows`, `render_power_plain_rows`): the
 /// prelude values both kinds' bodies read, factored out so each callee takes
-/// one struct instead of the same eight-plus positional arguments.
-/// `area` and `content_area` differ only when a search input box has shifted
-/// `content_area` down (see `render_power_list`'s prelude); both are read
-/// independently by the bodies, so both are carried.
+/// one struct instead of the same six-plus positional arguments.
 pub(super) struct ListRenderCtx<'a> {
-    pub(super) area: Rect,
+    /// The list's own area: the full content area (`render_power_list` no
+    /// longer splits it into a hero area plus a list area -- the hero is
+    /// inserted inline below the selected row as `DisplayRow::Hero` rows).
     pub(super) content_area: Rect,
     pub(super) items: &'a [mbv_core::api::MediaItem],
     pub(super) cursor: usize,
     pub(super) stored_scroll: usize,
-    pub(super) banner_rows: usize,
-    pub(super) banner_content_rows: usize,
-    pub(super) series_detail_rows: usize,
+    /// Column count for this frame's list pane width (1 or 2).
+    pub(super) cols: usize,
     pub(super) focused: bool,
-}
-
-pub(super) fn push_selected_detail_fillers_before(
-    rows: &mut Vec<DisplayRow>,
-    item_idx: usize,
-    cursor: usize,
-    banner_rows: usize,
-    series_detail_rows: usize,
-) {
-    if banner_rows > 0 && item_idx == cursor {
-        rows.push(DisplayRow::BannerFiller);
-        rows.push(DisplayRow::BannerFiller);
-    }
-    if series_detail_rows > 0 && item_idx == cursor {
-        rows.push(DisplayRow::SeriesDetailFiller);
-        rows.push(DisplayRow::SeriesDetailFiller);
-    }
-}
-
-pub(super) fn push_selected_detail_fillers_after(
-    rows: &mut Vec<DisplayRow>,
-    item_idx: usize,
-    cursor: usize,
-    banner_rows: usize,
-    series_detail_rows: usize,
-) {
-    if banner_rows > 0 && item_idx == cursor {
-        for _ in 0..banner_rows.saturating_sub(2) {
-            rows.push(DisplayRow::BannerFiller);
-        }
-        rows.push(DisplayRow::BannerFiller);
-        rows.push(DisplayRow::BannerFiller);
-    }
-    if series_detail_rows > 0 && item_idx == cursor {
-        for _ in 0..series_detail_rows {
-            rows.push(DisplayRow::SeriesDetailFiller);
-        }
-    }
-}
-
-pub(super) fn selected_detail_lower_bound(
-    display_cursor: usize,
-    banner_rows: usize,
-    series_detail_rows: usize,
-    visible: usize,
-) -> usize {
-    let rows_below_cursor = banner_rows.max(series_detail_rows);
-    (display_cursor + rows_below_cursor)
-        .saturating_sub(visible.saturating_sub(1))
-        .min(display_cursor)
+    /// Height in rows of the inline hero banner to insert below the row
+    /// containing the cursor; 0 when no hero is shown (the list then takes
+    /// the whole content area).
+    pub(super) hero_rows: u16,
 }
 
 /// Builds the title (+ optional duration) spans for one list row, shared by
 /// both the letter-grouped and plain-list rendering branches (identical
 /// styling logic, only how `title`/`dur_str`/`avail` are computed differs
-/// between the two call sites).
+/// between the two call sites). Every cell starts with a 1-column leading
+/// separator; for the selected cell that separator is the `▍` grabber in
+/// `palette::AQUA` (matching the queue list panel and Home tab list), so the
+/// title begins at the same x as unselected rows. The selected cell sits on
+/// the same block background as the inline hero below it
+/// (`palette::PLAYBACK_PANEL_BG`), so the two read as one selected block;
+/// every other cell stays on the ordinary list background.
 pub(super) fn build_list_row_spans(
     title: String,
     dur_str: String,
     selected: bool,
-    selected_has_banner: bool,
-    is_series: bool,
     focused: bool,
     fg: Color,
 ) -> Vec<Span<'static>> {
-    let mut spans: Vec<Span> = if selected {
-        if selected_has_banner {
-            // Colored-block look: 2-col leading pad inside the
-            // MEDIA_SELECTED_BG block, no green `▌` gutter. Title is Emby
-            // green (BOLD when focused) and the row omits the duration --
-            // it lives in the banner's metadata row below.
-            let title_style = if focused {
-                Style::default()
-                    .fg(palette::YELLOW)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::YELLOW)
-            };
-            vec![Span::raw("  "), Span::styled(title, title_style)]
-        } else if is_series {
-            // Series inline detail: title is yellow when selected.
-            let title_style = if focused {
-                Style::default()
-                    .fg(palette::YELLOW)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::YELLOW)
-            };
-            vec![
-                Span::raw(" ".repeat(SELECTED_BLOCK_SIDE_PADDING as usize)),
-                Span::styled(title, title_style),
-            ]
+    // Applies the selected-block background to a style when this span
+    // belongs to the selected cell, leaves other spans untouched.
+    let on_block = |style: Style| -> Style {
+        if selected {
+            style.bg(palette::PLAYBACK_PANEL_BG)
         } else {
-            // Keep standard alignment without an inline banner.
-            let title_style = if focused {
-                Style::default()
-                    .fg(palette::IRIS)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(fg)
-            };
-            vec![
-                super::selection_marker(true),
-                Span::styled(title, title_style),
-            ]
+            style
         }
+    };
+    let mut spans: Vec<Span> = if selected {
+        let marker_style = on_block(Style::default().fg(palette::AQUA));
+        let title_style = on_block(if focused {
+            Style::default().fg(fg).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(fg)
+        });
+        vec![
+            Span::styled("\u{258d}", marker_style),
+            Span::styled(title, title_style),
+        ]
     } else {
         vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
     };
-    if !selected_has_banner && !dur_str.is_empty() {
-        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+    if !dur_str.is_empty() {
+        spans.push(Span::styled(
+            dur_str,
+            on_block(Style::default().fg(palette::MUTED)),
+        ));
     }
     spans
 }
 
-/// Paints the series inline detail block's colored background, shared by
-/// both the letter-grouped and plain-list rendering branches of
-/// `render_power_list` (identical treatment, only how `display_cursor` /
-/// `offset` / `visible` are computed differs between the two call sites).
-/// The colored block starts at the spacer row above the selected item and runs
-/// through the spacer row below the episode list; the SeriesDetailFiller top
-/// border (▁) and the bottom border (▔, drawn inside `render_series_inline_detail`)
-/// are left uncolored so they blend into the existing background.
-pub(super) fn render_series_detail_background(
-    f: &mut Frame,
-    content_area: Rect,
-    offset: usize,
-    visible: usize,
-    display_cursor: usize,
-    series_detail_rows: usize,
+/// Builds the padded spans for one item rendered into a `cell_width`-wide
+/// cell: the existing marker/title/metadata/truncation logic operating
+/// against the narrower cell width. Returns the cell's spans plus trailing
+/// padding so the next cell starts at its own x offset; `pad_to` is the
+/// total width to fill (cell width, plus the inter-column gap for every
+/// cell except the last in its row).
+pub(super) fn item_cell_spans(
+    title: String,
+    dur_str: String,
+    selected: bool,
     focused: bool,
-) {
-    if series_detail_rows == 0 {
-        return;
+    fg: Color,
+    pad_to: usize,
+) -> Vec<Span<'static>> {
+    let mut spans = build_list_row_spans(title, dur_str, selected, focused, fg);
+    let used: usize = spans.iter().map(|s| s.width()).sum();
+    let pad = pad_to.saturating_sub(used);
+    if pad > 0 {
+        let pad_span = if selected {
+            Span::styled(
+                " ".repeat(pad),
+                Style::default().bg(palette::PLAYBACK_PANEL_BG),
+            )
+        } else {
+            Span::raw(" ".repeat(pad))
+        };
+        spans.push(pad_span);
     }
-    let series_rule_top = display_cursor.saturating_sub(1);
-    let series_rule_bottom = display_cursor + series_detail_rows.saturating_sub(1);
-    let bg = if focused {
-        palette::MEDIA_SELECTED_BG
-    } else {
-        palette::PLAYBACK_PANEL_BG
-    };
-    super::render_selected_block_background(
-        f,
-        content_area,
-        offset,
-        visible,
-        series_rule_top,
-        series_rule_bottom,
-        bg,
-    );
+    spans
 }

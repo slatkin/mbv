@@ -23,6 +23,45 @@ pub(super) fn compact_banner_image_cache_key(item_id: &str) -> String {
     format!("{item_id}:cmp_primary")
 }
 
+/// Paints the hero's top-row title (two-column lists only, when `show_title`
+/// is set at the call site): the selected item's name in yellow, bold when
+/// focused. Shared by the movie hero (`render_power_compact_detail`) and the
+/// Series inline hero (`render_series_inline_detail`), which otherwise
+/// duplicated this block with only the geometry differing. Returns `row + 1`
+/// if the title was painted, else `row` unchanged, so callers push
+/// subsequent content down by the result.
+pub(super) fn render_hero_title_row(
+    f: &mut Frame,
+    x: u16,
+    row: u16,
+    max_y: u16,
+    width: u16,
+    name: &str,
+    focused: bool,
+) -> u16 {
+    if row >= max_y {
+        return row;
+    }
+    let title = trunc_str(name, width as usize);
+    let title_style = if focused {
+        Style::default()
+            .fg(palette::YELLOW)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(palette::YELLOW)
+    };
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(title, title_style))),
+        Rect {
+            x,
+            y: row,
+            width,
+            height: 1,
+        },
+    );
+    row + 1
+}
+
 /// Estimated placeholder size for a poster that hasn't been fetched/decoded
 /// yet. Emby/TMDb primary movie art is overwhelmingly a 2:3 (width:height)
 /// aspect ratio, so fitting that ratio into the same `IMG_COLS x IMG_ROWS`
@@ -50,12 +89,9 @@ fn poster_placeholder_size(font_size: ratatui_image::FontSize) -> (u16, u16) {
 /// Everything content-dependent about the compact movie-detail banner: the
 /// meta line, the "Playing" indicator, and the overview + director text
 /// wrapped to the banner's actual panel width. Computed once by
-/// `App::compact_banner_layout` and consumed both to size the banner's row
-/// budget in the list layout (`list::compact_banner_rows`, run *before* the
-/// rest of the list's rows are positioned) and to actually render the
-/// banner (`render_power_compact_detail`) -- the two-pass split this issue
-/// (#263) introduces, kept in lockstep by sharing this one computation
-/// instead of the row count and the render duplicating the wrapping logic.
+/// `App::compact_banner_layout_with_overview` and consumed by
+/// `render_power_compact_detail` to actually render the banner, so the
+/// row-count estimate and the render never duplicate the wrapping logic.
 pub(super) struct CompactBannerLayout {
     meta_line: Option<String>,
     show_playing: bool,
@@ -150,14 +186,6 @@ impl App {
     /// `render_power_compact_detail`). Pure function of `item` + width aside
     /// from the image-state cache lookup/fetch-trigger, so calling it twice
     /// per frame (once to measure, once to render) is safe and idempotent.
-    pub(super) fn compact_banner_layout(
-        &mut self,
-        item: &mbv_core::api::MediaItem,
-        panel_width: u16,
-    ) -> CompactBannerLayout {
-        self.compact_banner_layout_with_overview(item, panel_width, false)
-    }
-
     pub(super) fn compact_banner_layout_with_overview(
         &mut self,
         item: &mbv_core::api::MediaItem,
@@ -333,9 +361,17 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        show_title: bool,
         layout: &mut LayoutMain,
     ) {
-        let Some(item) = self.power_selected_movie_item(lib_idx) else {
+        // The hero shows the selected leaf movie (movies/homevideos/podcasts)
+        // or, on a tvshows library, the selected Series — the compact banner
+        // layout is generic over the item, so a Series renders its meta +
+        // overview the same way a Movie does (design decision 6).
+        let Some(item) = self
+            .power_selected_movie_item(lib_idx)
+            .or_else(|| self.power_selected_series_item(lib_idx))
+        else {
             return;
         };
         if area.height == 0 || area.width < 3 {
@@ -361,15 +397,24 @@ impl App {
             palette::SUBTLE
         };
 
+        // — Title row (two-column lists only) —
+        // The selected item's name on the hero's top row, in yellow (bold
+        // when focused), mirroring the album-detail title block. Skipped for
+        // one-column lists, where the full-width list-row title directly
+        // above the hero already shows the name (and reserving the row there
+        // would not have been budgeted for).
+        if show_title {
+            row = render_hero_title_row(f, inner_x, row, max_y, inner_w16, &item.display_name(), focused);
+        }
+
         let img_actual_w = content.img_actual_w;
         let img_height = content.img_height;
         let img_is_placeholder = content.img_is_placeholder;
         let img_x = area.x + area.width.saturating_sub(img_actual_w);
-        // No title row is drawn here anymore (it duplicated the selected list
-        // row's title, already shown in green just above the banner), so the
-        // poster starts flush with the banner's own top row instead of being
-        // pushed down a row to make room for a redundant title.
-        let img_y = area.y.min(area.y + area.height.saturating_sub(1));
+        // In two-column lists the title row above pushes the poster down a
+        // row; one-column lists have no title row so it stays flush with the
+        // hero's top border, as before.
+        let img_y = (area.y + show_title as u16).min(area.y + area.height.saturating_sub(1));
         let img_end_row = img_y + img_height;
         layout.inline_image_rect = if img_height > 0 {
             Some(Rect {

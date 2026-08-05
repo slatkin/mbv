@@ -4,7 +4,6 @@ use super::detail_series::{
     SERIES_DETAIL_EPISODE_ROWS_ESTIMATE, SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS,
     SERIES_IMAGE_PLACEHOLDER_ROWS, SERIES_IMAGE_ROWS,
 };
-use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use super::POWER_RENDER_FILTER;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
@@ -17,12 +16,19 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 impl App {
+    /// Renders the selected Series' season pills + episode table into the
+    /// inline hero slot (`render_power_list` reserves `area`'s rows via
+    /// `series_inline_detail_rows` and paints the surrounding block
+    /// border/background itself -- this draws only the content, mirroring
+    /// how `render_power_compact_detail` is the movie hero's content-only
+    /// counterpart).
     pub(super) fn render_series_inline_detail(
         &mut self,
         f: &mut Frame,
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        show_title: bool,
         _layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
@@ -50,6 +56,24 @@ impl App {
         } else {
             palette::SUBTLE
         };
+
+        // — Title row (two-column lists only) —
+        // Mirrors the movie hero's top-row title (`render_power_compact_detail`
+        // in `detail.rs`): the selected item's name in yellow, pushing the
+        // poster/meta content down a row. Skipped for one-column lists, where
+        // the full-width list-row title directly above the block already
+        // shows the name.
+        if show_title {
+            row = super::detail::render_hero_title_row(
+                f,
+                inner_x,
+                row,
+                max_y,
+                inner_w16,
+                &item.display_name(),
+                focused,
+            );
+        }
 
         // ── Series Primary image (right-aligned, text wraps around it) ───
         let img_start_row = row;
@@ -135,8 +159,7 @@ impl App {
                 } else {
                     0
                 }
-                + SERIES_DETAIL_TRAILING_BLANK_ROWS
-                + 1) as u16;
+                + SERIES_DETAIL_TRAILING_BLANK_ROWS) as u16;
             let available_rows =
                 (max_y.saturating_sub(row).saturating_sub(reserved_for_below)) as usize;
             for line_text in lines.iter().take(available_rows) {
@@ -287,7 +310,7 @@ impl App {
                     width: table_width,
                     height: max_y
                         .saturating_sub(row)
-                        .saturating_sub((SERIES_DETAIL_TRAILING_BLANK_ROWS + 1) as u16),
+                        .saturating_sub(SERIES_DETAIL_TRAILING_BLANK_ROWS as u16),
                 };
                 if table_area.height > 0 {
                     let show_length = table_area.width > 40;
@@ -391,26 +414,6 @@ impl App {
                     height: 1,
                 },
                 " Loading\u{2026}",
-            );
-        }
-
-        // ── Bottom border: row of ▔ characters at the very bottom ───────
-        if max_y > area.y {
-            f.render_widget(
-                Paragraph::new(
-                    Span::styled(
-                        "\u{2594}".repeat(
-                            area.width.saturating_add(2 * SELECTED_BLOCK_SIDE_PADDING) as usize,
-                        ),
-                        Style::default().fg(palette::SEEK_TRACK),
-                    ),
-                ),
-                Rect {
-                    x: area.x.saturating_sub(SELECTED_BLOCK_SIDE_PADDING),
-                    y: max_y - 1,
-                    width: area.width.saturating_add(2 * SELECTED_BLOCK_SIDE_PADDING),
-                    height: 1,
-                },
             );
         }
     }

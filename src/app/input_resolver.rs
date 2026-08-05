@@ -196,7 +196,7 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_power_lib_search,
     },
     ContextEntry {
-        name: "sidebar_toggle_h",
+        name: "sidebar_toggle_x",
         handler: App::handle_key_power_sidebar_toggle,
     },
     ContextEntry {

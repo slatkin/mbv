@@ -30,7 +30,7 @@ impl App {
     }
 
     pub(super) fn handle_key_power_sidebar_toggle(&mut self, key: KeyEvent) -> Option<bool> {
-        if key.code != KeyCode::Char('h') || !key.modifiers.is_empty() || self.context_menu_open() {
+        if key.code != KeyCode::Char('x') || !key.modifiers.is_empty() || self.context_menu_open() {
             return None;
         }
         Some(self.dispatch(Command::TogglePowerSidebar))
@@ -116,6 +116,14 @@ impl App {
         }
     }
 
+    /// Edit the active library search query. Only query-editing keys are
+    /// recognised here: `Esc` closes the search, `Backspace` deletes one
+    /// character, and printable characters extend the query. Navigation
+    /// keys (arrows, page, Home/End, Enter) and the new vim-nav letters
+    /// (h/j/k/l) are deliberately NOT handled in this context -- typing
+    /// into the query and moving the result cursor must not interleave.
+    /// To navigate results, close the search (Esc) and use the flat-list
+    /// bindings, which include h/j/k/l in 2-col mode.
     fn handle_lib_search_key(&mut self, lib_idx: usize, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
@@ -131,27 +139,6 @@ impl App {
                 } else {
                     self.libs[lib_idx].search.as_mut().unwrap().query.pop();
                     self.update_lib_search(lib_idx);
-                }
-            }
-            KeyCode::Up => self.move_lib_cursor(-1),
-            KeyCode::Down => self.move_lib_cursor(1),
-            KeyCode::PageUp => {
-                let p = self.lib_page_size();
-                self.move_lib_cursor(-(p as i64));
-            }
-            KeyCode::PageDown => {
-                let p = self.lib_page_size();
-                self.move_lib_cursor(p as i64);
-            }
-            KeyCode::Home => self.jump_lib_cursor(false),
-            KeyCode::End => self.jump_lib_cursor(true),
-            KeyCode::Enter => {
-                if self.activate_recursive_album(lib_idx) {
-                    // active-search jump; unchanged
-                } else if self.is_viewing_album_folders(lib_idx) {
-                    self.activate_album_folder_row(lib_idx);
-                } else {
-                    self.select();
                 }
             }
             KeyCode::Char(c) => {
@@ -172,18 +159,53 @@ impl App {
 
         match key.code {
             KeyCode::Esc | KeyCode::Backspace => self.go_back(),
-            KeyCode::Up => self.move_lib_cursor(if self.is_viewing_season_grid(lib_idx) {
-                -4
-            } else {
-                -1
-            }),
-            KeyCode::Down => self.move_lib_cursor(if self.is_viewing_season_grid(lib_idx) {
-                4
-            } else {
-                1
-            }),
+            KeyCode::Up => {
+                if self.is_viewing_season_grid(lib_idx) {
+                    self.move_lib_cursor(-4);
+                } else {
+                    self.move_lib_cursor_rows(-1);
+                }
+            }
+            KeyCode::Down => {
+                if self.is_viewing_season_grid(lib_idx) {
+                    self.move_lib_cursor(4);
+                } else {
+                    self.move_lib_cursor_rows(1);
+                }
+            }
             KeyCode::Left if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(-1),
             KeyCode::Right if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(1),
+            // Arrow-key column navigation: in 2-col flat lists Left/Right
+            // mirror h/l (Up/Down already mirror j/k). Season-grid Left/Right
+            // are covered above.
+            KeyCode::Left if self.current_library_columns(lib_idx) > 1 => self.move_lib_cursor(-1),
+            KeyCode::Right if self.current_library_columns(lib_idx) > 1 => self.move_lib_cursor(1),
+            // Vim-style navigation. Complements the arrow keys (Left/Right
+            // and Up/Down above carry the same movements):
+            //   j/k mirror Up/Down (any column count) -- `j` is down, `k` is up.
+            //   h/l mirror Left/Right across cells in 2-col mode; in 1-col
+            //   mode h/l are unbound (left as a free input character -- h is
+            //   not a global key now that the sidebar toggle moved to `x`).
+            KeyCode::Char('j') => {
+                if self.is_viewing_season_grid(lib_idx) {
+                    self.move_lib_cursor(4);
+                } else {
+                    self.move_lib_cursor_rows(1);
+                }
+            }
+            KeyCode::Char('k') => {
+                if self.is_viewing_season_grid(lib_idx) {
+                    self.move_lib_cursor(-4);
+                } else {
+                    self.move_lib_cursor_rows(-1);
+                }
+            }
+            KeyCode::Char('l') if self.current_library_columns(lib_idx) > 1 => {
+                self.move_lib_cursor(1)
+            }
+            KeyCode::Char('h') if self.current_library_columns(lib_idx) > 1 => {
+                self.move_lib_cursor(-1)
+            }
             KeyCode::PageUp
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && self.is_music_group_view(lib_idx) =>
@@ -199,13 +221,13 @@ impl App {
             KeyCode::PageUp => {
                 if !self.page_power_grouped_album_cursor(lib_idx, false) {
                     let p = self.lib_page_size();
-                    self.move_lib_cursor(-(p as i64));
+                    self.move_lib_cursor_rows(-(p as i64));
                 }
             }
             KeyCode::PageDown => {
                 if !self.page_power_grouped_album_cursor(lib_idx, true) {
                     let p = self.lib_page_size();
-                    self.move_lib_cursor(p as i64);
+                    self.move_lib_cursor_rows(p as i64);
                 }
             }
             KeyCode::Home => self.jump_lib_cursor(false),
