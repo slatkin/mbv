@@ -860,6 +860,76 @@ fn hero_top_and_bottom_padding_rows_are_colored_bg_with_no_content() {
 }
 
 #[test]
+fn hero_content_is_inset_by_two_cells_on_left_and_right() {
+    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1"]);
+    // Give the selected item hero content so the content region is
+    // populated (images are disabled in the test stub).
+    {
+        let level = app.libs[0].nav_stack.last_mut().unwrap();
+        level.items[0].genre = "Sci-Fi".into();
+        level.items[0].production_year = 2020;
+        level.items[0].overview = "A hero overview for the top banner.".into();
+        level.cursor = 0;
+    }
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 80, 40);
+    let buf = term.backend().buffer();
+    let hero = layout.hero_area;
+    let bg = palette::MEDIA_SELECTED_BG;
+
+    // Content rows sit between the top/bottom padding rows (the borders
+    // are the outer rows of the hero block). Their first and last 2 cols
+    // must be bare colored bg -- no text, no image, no border glyphs --
+    // because the content is inset by SELECTED_BLOCK_SIDE_PADDING on each
+    // side.
+    for y in hero.y + 2..hero.y + hero.height - 2 {
+        for x in [0u16, 1, hero.width - 2, hero.width - 1] {
+            let cell = &buf[(x, y)];
+            assert!(
+                cell.symbol().trim().is_empty(),
+                "content row y={y} must have no content in the inset col x={x}, got {:?}",
+                cell.symbol()
+            );
+            assert_eq!(
+                cell.bg, bg,
+                "content row y={y} inset col x={x} must carry the colored bg"
+            );
+        }
+    }
+
+    // The content between the insets is still rendered (meta + overview),
+    // so the inset is meaningful and not a vacuous pass.
+    let content: String = (hero.y + 2..hero.y + hero.height - 2)
+        .map(|y| {
+            (SELECTED_BLOCK_SIDE_PADDING..hero.width - SELECTED_BLOCK_SIDE_PADDING)
+                .map(|x| buf[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        content.contains("Sci-Fi") && content.contains("2020"),
+        "inset content must still render the meta line, got:\n{content}"
+    );
+
+    // The borders are NOT inset: the outer rows of the hero block still
+    // span the full hero width.
+    let top_row: String = (0..hero.width).map(|x| buf[(x, hero.y)].symbol()).collect();
+    assert_eq!(
+        top_row,
+        "\u{2581}".repeat(hero.width as usize),
+        "hero top border must still span the full width, got: {top_row:?}"
+    );
+    let bot_y = hero.y + hero.height - 1;
+    let bot_row: String = (0..hero.width).map(|x| buf[(x, bot_y)].symbol()).collect();
+    assert_eq!(
+        bot_row,
+        "\u{2594}".repeat(hero.width as usize),
+        "hero bottom border must still span the full width, got: {bot_row:?}"
+    );
+}
+
+#[test]
 fn hero_follows_cursor_when_cursor_moves() {
     let titles: Vec<String> = (0..12).map(|i| format!("Movie {i}")).collect();
     let title_refs: Vec<&str> = titles.iter().map(|s| s.as_str()).collect();

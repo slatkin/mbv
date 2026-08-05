@@ -1,5 +1,5 @@
 use super::detail::compact_banner_image_cache_key;
-use super::list_rows::ListRenderCtx;
+use super::list_rows::{ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING};
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use ratatui::layout::*;
@@ -392,14 +392,18 @@ impl App {
                 },
             );
             // Content, offset 2 rows down past the top border + top
-            // padding; the banner layout is a pure function of the panel
-            // width, so this paints the same content as before.
+            // padding, and inset 2 cols on each side like music/homevideo's
+            // selected blocks; the banner layout is a pure function of the
+            // panel width, so this paints the same content as before.
             self.render_power_compact_detail(
                 f,
                 Rect {
-                    x: layout.hero_area.x,
+                    x: layout.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
                     y: layout.hero_area.y + 2,
-                    width: layout.hero_area.width,
+                    width: layout
+                        .hero_area
+                        .width
+                        .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
                     height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
                 },
                 self.library_tab - 1,
