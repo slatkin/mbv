@@ -82,10 +82,10 @@ pub(super) struct ListRenderCtx<'a> {
 /// Builds the title (+ optional duration) spans for one list row, shared by
 /// both the letter-grouped and plain-list rendering branches (identical
 /// styling logic, only how `title`/`dur_str`/`avail` are computed differs
-/// between the two call sites). The selected cell carries a `▌` mark on its
-/// left edge and a `## ` prefix on the title; the cell background stays the
-/// ordinary list background — the top hero carries the heavy selected styling
-/// now (see `render_power_list`).
+/// between the two call sites). The selected cell carries a `▍` mark in
+/// `palette::AQUA` on its left edge (matching the queue list panel and Home
+/// tab list); the cell background stays the ordinary list background — the
+/// top hero carries the heavy selected styling now (see `render_power_list`).
 pub(super) fn build_list_row_spans(
     title: String,
     dur_str: String,
@@ -94,21 +94,15 @@ pub(super) fn build_list_row_spans(
     fg: Color,
 ) -> Vec<Span<'static>> {
     let mut spans: Vec<Span> = if selected {
-        let marker_style = if focused {
-            Style::default().fg(palette::YELLOW)
-        } else {
-            Style::default().fg(palette::MUTED)
-        };
+        let marker_style = Style::default().fg(palette::AQUA);
         let title_style = if focused {
-            Style::default()
-                .fg(palette::YELLOW)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(fg).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(fg)
         };
         vec![
-            Span::styled("\u{258c}", marker_style),
-            Span::styled("## ", title_style),
+            Span::styled("\u{258d}", marker_style),
+            Span::raw(" "),
             Span::styled(title, title_style),
         ]
     } else {
