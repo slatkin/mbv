@@ -1,9 +1,10 @@
 use super::search_modal::SearchMode;
 use super::App;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const SEARCH_PROMOTION_WINDOW: Duration = Duration::from_millis(400);
+const SEARCH_DEBOUNCE_MS: u64 = 300;
 
 impl App {
     /// Handle keys while the unified search modal is open. Takes precedence
@@ -161,7 +162,10 @@ impl App {
     /// Re-issue the server query as the user types in global mode.
     /// `on_query_changed` only re-scores locally for fuzzy mode -- global
     /// mode has no local corpus, so without this the modal would sit in
-    /// its post-`on_query_changed` loading state forever.
+    /// its post-`on_query_changed` loading state forever. Queries are only
+    /// dispatched once the query reaches 2 characters and are debounced by
+    /// SEARCH_DEBOUNCE_MS; the actual send is handled by
+    /// `maybe_flush_search_debounce` in the run loop.
     fn dispatch_search_modal_query_if_global(&mut self) {
         let Some(modal) = self.search_modal.as_ref() else {
             return;
@@ -169,9 +173,12 @@ impl App {
         if !matches!(modal.mode, SearchMode::Global) {
             return;
         }
-        let query = modal.query.clone();
-        let client = self.client.lock().unwrap().clone();
-        self.spawn_search_modal_query(client, query);
+        if modal.query.len() < 2 {
+            return;
+        }
+        self.search_debounce_pending = Some(modal.query.clone());
+        self.search_debounce_deadline =
+            Some(Instant::now() + Duration::from_millis(SEARCH_DEBOUNCE_MS));
     }
 }
 

@@ -338,6 +338,8 @@ impl App {
                 self.handle_lib_event(ev);
             }
 
+            had_events |= self.maybe_flush_search_debounce();
+
             had_events |= self.drain_search_results();
 
             had_events |= self.drain_session_events();

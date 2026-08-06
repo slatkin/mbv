@@ -55,6 +55,8 @@ impl App {
             search_modal: None,
             search_modal_prior_focus: None,
             last_slash_at: None,
+            search_debounce_deadline: None,
+            search_debounce_pending: None,
             sessions_tx: init.sessions_tx,
             sessions_rx: init.sessions_rx,
             card_image_tx: init.card_image_tx,

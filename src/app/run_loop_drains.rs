@@ -78,6 +78,26 @@ impl App {
         produced
     }
 
+    /// Flush a debounced search query if the deadline has passed. Called
+    /// from the run loop every frame so queries fire after the user pauses
+    /// typing for SEARCH_DEBOUNCE_MS.
+    pub(super) fn maybe_flush_search_debounce(&mut self) -> bool {
+        let Some(deadline) = self.search_debounce_deadline else {
+            return false;
+        };
+        if std::time::Instant::now() < deadline {
+            return false;
+        }
+        let Some(query) = self.search_debounce_pending.take() else {
+            self.search_debounce_deadline = None;
+            return false;
+        };
+        self.search_debounce_deadline = None;
+        let client = self.client.lock().unwrap().clone();
+        self.spawn_search_modal_query(client, query);
+        true
+    }
+
     /// Drain the sessions-poll channel, dispatching each event to
     /// `handle_session_event`. Extracted from `run()`'s loop body; returns
     /// whether any event was received so the caller can fold that into

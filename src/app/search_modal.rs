@@ -636,22 +636,33 @@ mod tests {
     }
 
     #[test]
-    fn typing_in_global_mode_dispatches_a_new_query() {
+    fn typing_in_global_mode_dispatches_after_two_chars_and_debounce() {
         let mut app = stub_library_with_root(Some(make_items(3)), None);
         app.open_search_modal_global();
-        // Drain the query dispatched by opening the modal so it doesn't
-        // masquerade as the response to the keystroke below.
-        let _ = app
-            .search_rx
-            .recv_timeout(std::time::Duration::from_secs(2));
+        // Opening global mode no longer dispatches an empty query.
+        assert!(app.search_rx.try_recv().is_err());
 
+        // One character: query stays pending, nothing dispatched yet.
         let _ = app.handle_key_search_modal(key(crossterm::event::KeyCode::Char('a')));
+        assert!(app.search_debounce_deadline.is_none());
+        assert!(app.search_rx.try_recv().is_err());
+
+        // Two characters: pending query is set, but not yet sent.
+        let _ = app.handle_key_search_modal(key(crossterm::event::KeyCode::Char('b')));
+        assert!(app.search_debounce_pending.is_some());
+        assert!(app.search_rx.try_recv().is_err());
+
+        // Advance past the debounce deadline and flush.
+        app.search_debounce_deadline = Some(std::time::Instant::now() - std::time::Duration::from_millis(400));
+        assert!(app.maybe_flush_search_debounce());
+        assert_eq!(app.search_debounce_pending, None);
+        assert_eq!(app.search_debounce_deadline, None);
 
         assert!(
             app.search_rx
                 .recv_timeout(std::time::Duration::from_secs(2))
                 .is_ok(),
-            "typing a character in global mode must dispatch a new server query"
+            "debounced query must dispatch after flush"
         );
     }
 

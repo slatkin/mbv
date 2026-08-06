@@ -388,6 +388,10 @@ impl App {
                 }
                 true
             }
+            KeyCode::Char('/') => {
+                self.handle_search_key(0, true);
+                true
+            }
             _ => false,
         }
     }

@@ -244,6 +244,8 @@ pub(crate) fn make_app_stub() -> App {
         search_modal: None,
         search_modal_prior_focus: None,
         last_slash_at: None,
+        search_debounce_deadline: None,
+        search_debounce_pending: None,
         force_clear: false,
         tab_scroll: 0,
         ui_volume: 100,

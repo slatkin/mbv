@@ -37,11 +37,6 @@ impl App {
     pub(super) fn open_search_modal_global(&mut self) {
         self.search_modal_prior_focus = Some(self.panel_focus);
         self.search_modal = Some(SearchModal::new(SearchMode::Global));
-        if let Some(modal) = self.search_modal.as_mut() {
-            modal.loading = true;
-        }
-        let client = self.client.lock().unwrap().clone();
-        self.spawn_search_modal_query(client, String::new());
     }
 
     pub(super) fn library_tabs_for_nav(&self) -> Vec<(usize, String, String)> {

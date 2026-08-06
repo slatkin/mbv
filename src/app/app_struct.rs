@@ -199,6 +199,8 @@ pub struct App {
     pub(super) search_modal: Option<SearchModal>,
     pub(super) search_modal_prior_focus: Option<PanelFocus>,
     pub(super) last_slash_at: Option<Instant>,
+    pub(super) search_debounce_deadline: Option<Instant>,
+    pub(super) search_debounce_pending: Option<String>,
     pub(super) sessions: Vec<mbv_core::api::SessionInfo>,
     pub(super) sessions_cursor: usize,
     pub(super) sessions_scroll: usize,
