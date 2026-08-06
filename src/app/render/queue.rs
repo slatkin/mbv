@@ -137,12 +137,9 @@ impl App {
             height: 1,
         };
         let (_icon, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
-        let target_bg = palette::BG_GREEN_SOFT;
-        let target_fg = palette::QUEUE_BUTTON_FOCUSED_BG;
-        let target_label_style = Style::default()
-            .fg(target_fg)
-            .bg(target_bg)
-            .add_modifier(Modifier::BOLD);
+        let target_bg = palette::DARK_BG;
+        let target_fg = palette::AQUA;
+        let target_label_style = Style::default().fg(target_fg).bg(target_bg);
         let tracking = if has_attached {
             self.remote_tracker
                 .as_ref()
@@ -199,20 +196,18 @@ impl App {
             height: 1,
         };
         let base_bg = palette::QUEUE_BUTTON_FOCUSED_BG;
-        let local_btn_bg = if local_selected {
-            palette::QUEUE_SCOPE_BUTTON_ACTIVE_BG
-        } else {
-            palette::QUEUE_BUTTON_FOCUSED_BG
-        };
-        let remote_btn_bg = if local_selected {
-            palette::QUEUE_BUTTON_FOCUSED_BG
-        } else {
-            palette::QUEUE_SCOPE_BUTTON_ACTIVE_BG
-        };
+        let active_fg = palette::GREEN;
+        let inactive_fg = palette::PILL_SELECTOR_FG;
         let spans = vec![
             Span::styled(
                 local_btn_text,
-                Style::default().fg(palette::YELLOW).bg(local_btn_bg),
+                Style::default()
+                    .fg(if local_selected {
+                        active_fg
+                    } else {
+                        inactive_fg
+                    })
+                    .bg(base_bg),
             ),
             Span::styled(
                 divider_text,
@@ -220,7 +215,13 @@ impl App {
             ),
             Span::styled(
                 remote_btn_text,
-                Style::default().fg(palette::AQUA).bg(remote_btn_bg),
+                Style::default()
+                    .fg(if local_selected {
+                        inactive_fg
+                    } else {
+                        active_fg
+                    })
+                    .bg(base_bg),
             ),
         ];
         f.render_widget(
