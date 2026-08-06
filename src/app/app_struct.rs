@@ -279,6 +279,12 @@ pub struct App {
     pub(super) last_scroll_at: Instant,
     pub(super) last_nav_at: Instant,
     pub(super) last_power_library_nav_at: Instant,
+    /// Set once `library_position_state` has an unflushed in-memory change.
+    /// The disk write + shared-document sync are debounced off this rather
+    /// than run synchronously on every cursor move -- see
+    /// `save_default_library_position`'s doc comment.
+    pub(super) library_position_dirty: bool,
+    pub(super) library_position_dirty_at: Instant,
     /// Set when the terminal reports FocusGained; used to swallow the
     /// single click that merely refocused the window. `None` until the
     /// first focus event is ever seen (terminals that never report focus

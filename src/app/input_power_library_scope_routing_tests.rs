@@ -60,6 +60,9 @@ fn left_panel_movement_saves_position_via_real_key_path() {
     let handled = app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
     assert!(!handled);
+    // The disk write is deferred (see `save_default_library_position`'s doc
+    // comment); force it now so this test can read it back.
+    app.flush_library_position_now();
     let position = crate::config::load_library_position_state()
         .libraries
         .get("lib-movies")
@@ -192,6 +195,7 @@ fn left_panel_mouse_events_save_position() {
 
         app.handle_mouse(make_power_library_mouse_event(kind, 12, 6));
 
+        app.flush_library_position_now();
         let position = crate::config::load_library_position_state()
             .libraries
             .get("lib-movies")
@@ -374,6 +378,7 @@ fn breadcrumb_click_saves_position() {
         2,
     ));
 
+    app.flush_library_position_now();
     let position = crate::config::load_library_position_state()
         .libraries
         .get("lib-movies")

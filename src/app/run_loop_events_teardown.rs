@@ -56,6 +56,11 @@ impl App {
     }
 
     pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration) {
+        // A position saved just before quitting is still only in memory --
+        // `save_default_library_position` defers the disk write (see its
+        // doc comment) -- so flush it now rather than waiting for the
+        // run loop's idle check, which won't run again.
+        self.flush_library_position_now();
         self.stop_visualizer_worker();
         // Process-local tracking must not outlive the process: retire the
         // session, its projection, and its unresolved presentation through the
