@@ -283,7 +283,7 @@ impl App {
         {
             return;
         }
-        if self.image_picker.is_none() {
+        if self.picker_and_suffix().is_none() {
             return;
         }
         let Ok(img) = image::load_from_memory(QUEUE_CARD_PLACEHOLDER_BYTES) else {

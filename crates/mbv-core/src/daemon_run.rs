@@ -289,21 +289,48 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
 
         match ev {
             DaemonEvent::Player(PlayerEvent::TrackChanged(idx)) => {
-                cursor = idx;
-                *shared_queue.cursor.lock().unwrap() = idx;
+                // The player's internal queue may lag behind the daemon's
+                // items list when a QueueRemove / QueueMove was sent down
+                // the player command channel but hasn't been processed yet.
+                // Clamp the reported index to the current items length so
+                // the cursor can never point past the validated list.
+                cursor = if items.is_empty() {
+                    0
+                } else {
+                    idx.min(items.len() - 1)
+                };
+                *shared_queue.cursor.lock().unwrap() = cursor;
                 broadcast(
                     &ctrl_clients,
-                    &CtrlEvent::Player(PlayerEvent::TrackChanged(idx)),
+                    &CtrlEvent::Player(PlayerEvent::TrackChanged(cursor)),
                 );
+                // Broadcast full state so CtrlState reflects the
+                // authoritative playback position. Without this, a
+                // CtrlState from a daemon-side list mutation processed
+                // before the player thread acted on it can carry a stale
+                // cursor computed from index arithmetic, and the
+                // TrackChanged that fires between them refers to the old
+                // pre-mutation index.
+                broadcast(
+                    &ctrl_clients,
+                    &CtrlEvent::State(CtrlState {
+                        status: player.status.lock().unwrap().clone(),
+                        items: items.clone(),
+                        cursor,
+                        source: source.clone(),
+                    }),
+                );
+                *shared_queue.items.lock().unwrap() = items.clone();
+                *shared_queue.source.lock().unwrap() = source.clone();
                 if let Some((connection_id, request_id, generation)) = playback_intents
                     .current
                     .as_ref()
                     .filter(|current| match &current.action {
                         PlaybackIntentAction::Play { item_ids, .. } => items
-                            .get(idx)
+                            .get(cursor)
                             .is_some_and(|item| item_ids.iter().any(|id| id == &item.id)),
                         PlaybackIntentAction::Next | PlaybackIntentAction::Previous => {
-                            current.target_idx.is_some_and(|target| target == idx)
+                            current.target_idx.is_some_and(|target| target == cursor)
                         }
                         _ => false,
                     })
@@ -315,7 +342,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                         )
                     })
                 {
-                    if items.get(idx).is_some() {
+                    if items.get(cursor).is_some() {
                         if let Some(event) = playback_intents.applied_if_current(
                             connection_id,
                             request_id,
