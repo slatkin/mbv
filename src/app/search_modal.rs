@@ -115,10 +115,19 @@ impl SearchModal {
 
     pub(super) fn apply_drain(
         &mut self,
+        query: &str,
         result: Result<Vec<MediaItem>, String>,
         errors: &mut Vec<String>,
     ) {
         if !matches!(self.mode, SearchMode::Global) {
+            return;
+        }
+        // A faster keystroke can dispatch a newer query while an older one
+        // is still in flight; responses race on arrival order, not send
+        // order. Discard anything that isn't answering the live query,
+        // and leave `loading` untouched -- a request for the current query
+        // may still be in flight.
+        if query != self.query {
             return;
         }
         self.loading = false;
@@ -305,7 +314,7 @@ mod tests {
             make_item("Series 1", "Series"),
         ];
         let mut errors = Vec::new();
-        modal.apply_drain(Ok(items), &mut errors);
+        modal.apply_drain("", Ok(items), &mut errors);
 
         assert!(errors.is_empty());
         assert!(!modal.loading);
@@ -323,7 +332,7 @@ mod tests {
         modal.results = prior.clone();
 
         let mut errors = Vec::new();
-        modal.apply_drain(Err("API timeout".into()), &mut errors);
+        modal.apply_drain("", Err("API timeout".into()), &mut errors);
 
         assert!(!modal.loading);
         assert_eq!(errors, vec!["API timeout".to_string()]);
@@ -340,7 +349,7 @@ mod tests {
         modal.last_drain_error = Some("API timeout".into());
 
         let mut errors = Vec::new();
-        modal.apply_drain(Ok(vec![make_item("Movie 1", "Movie")]), &mut errors);
+        modal.apply_drain("", Ok(vec![make_item("Movie 1", "Movie")]), &mut errors);
 
         assert!(errors.is_empty());
         assert!(modal.last_drain_error.is_none());
@@ -372,7 +381,7 @@ mod tests {
         ];
 
         let mut errors = Vec::new();
-        modal.apply_drain(Ok(items), &mut errors);
+        modal.apply_drain("", Ok(items), &mut errors);
 
         assert!(errors.is_empty());
         assert_eq!(modal.results.len(), 4);
@@ -396,7 +405,7 @@ mod tests {
         ];
 
         let mut errors = Vec::new();
-        modal.apply_drain(Ok(items), &mut errors);
+        modal.apply_drain("", Ok(items), &mut errors);
 
         assert!(errors.is_empty());
         assert!(modal.results.is_empty());
@@ -409,11 +418,36 @@ mod tests {
         modal.cursor = 3;
 
         let mut errors = Vec::new();
-        modal.apply_drain(Ok(vec![make_item("Anything", "Movie")]), &mut errors);
+        modal.apply_drain("", Ok(vec![make_item("Anything", "Movie")]), &mut errors);
 
         assert!(modal.loading);
         assert_eq!(modal.cursor, 3);
         assert!(modal.results.is_empty());
+    }
+
+    #[test]
+    fn stale_response_is_discarded_current_response_applies() {
+        let mut modal = SearchModal::new(SearchMode::Global);
+        modal.query = "a".into();
+        modal.loading = true;
+        modal.cursor = 5;
+        // A newer keystroke arrives before the "a" response does.
+        modal.query = "ab".into();
+
+        let mut errors = Vec::new();
+        modal.apply_drain("a", Ok(vec![make_item("Stale", "Movie")]), &mut errors);
+
+        assert!(errors.is_empty());
+        assert!(modal.loading, "stale response must not touch loading");
+        assert_eq!(modal.cursor, 5);
+        assert!(modal.results.is_empty());
+
+        modal.apply_drain("ab", Ok(vec![make_item("Fresh", "Movie")]), &mut errors);
+
+        assert!(!modal.loading);
+        assert_eq!(modal.cursor, 0);
+        assert_eq!(modal.results.len(), 1);
+        assert_eq!(modal.results[0].name, "Fresh");
     }
 
     #[test]

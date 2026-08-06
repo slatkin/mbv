@@ -529,16 +529,17 @@ impl App {
     pub(super) fn spawn_search_modal_query(&self, client: EmbyClient, query: String) {
         let tx = self.search_tx.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(client.search_items(&query, 100));
+            let result = client.search_items(&query, 100);
+            let _ = tx.send((query, result));
         });
     }
 
     #[allow(dead_code)]
     pub(super) fn drain_search_modal_results(&mut self, outcome: &mut SearchModalDrainOutcome) {
-        while let Ok(result) = self.search_rx.try_recv() {
+        while let Ok((query, result)) = self.search_rx.try_recv() {
             outcome.received += 1;
             if let Some(modal) = self.search_modal.as_mut() {
-                modal.apply_drain(result, &mut outcome.errors);
+                modal.apply_drain(&query, result, &mut outcome.errors);
             }
         }
     }

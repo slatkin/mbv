@@ -193,8 +193,8 @@ pub struct App {
     pub(super) notif_action_rx: mpsc::Receiver<String>,
     pub(super) lib_tx: mpsc::Sender<LibEvent>,
     pub(super) lib_rx: mpsc::Receiver<LibEvent>,
-    pub(super) search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
-    pub(super) search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
+    pub(super) search_tx: mpsc::Sender<(String, Result<Vec<MediaItem>, String>)>,
+    pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<MediaItem>, String>)>,
     #[allow(dead_code)]
     pub(super) search_modal: Option<SearchModal>,
     pub(super) search_modal_prior_focus: Option<PanelFocus>,
@@ -335,7 +335,7 @@ pub(super) struct AppInit {
     pub(super) card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
     pub(super) notif_action_tx: mpsc::Sender<String>,
     pub(super) notif_action_rx: mpsc::Receiver<String>,
-    pub(super) search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
-    pub(super) search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
+    pub(super) search_tx: mpsc::Sender<(String, Result<Vec<MediaItem>, String>)>,
+    pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<MediaItem>, String>)>,
     pub(super) idle_feed: Option<IdleFeed>,
 }
