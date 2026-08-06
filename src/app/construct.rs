@@ -1,6 +1,6 @@
 use super::types_playback::{HomePane, QueueScope};
 use super::types_player_tab::PlayerTab;
-use super::types_settings::PanelFocus;
+use super::types_settings::{PanelFocus, PanelMode};
 use super::{
     bootstrap_local_daemon_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
     POWER_LEFT_WIDTH_DEFAULT,
@@ -113,7 +113,7 @@ impl App {
                 .or_else(|| prefs["power_left_width"].as_u64())
                 .map(|v| (v as u16).max(POWER_LEFT_WIDTH_DEFAULT))
                 .unwrap_or(POWER_LEFT_WIDTH_DEFAULT),
-            queue_column_collapsed: false,
+            panel_mode: PanelMode::default(),
             // Always start on Home. The saved queue is restored independently;
             // the saved library tab remains available for runtime persistence.
             library_tab_pending: 0,

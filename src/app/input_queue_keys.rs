@@ -1,5 +1,5 @@
 use super::{
-    App, PanelFocus, QueueScope, SavePlaylistDialog, SavePlaylistStage, POWER_LEFT_WIDTH_DEFAULT,
+    App, PanelFocus, PanelMode, QueueScope, SavePlaylistDialog, SavePlaylistStage, POWER_LEFT_WIDTH_DEFAULT,
     POWER_LEFT_WIDTH_STEP,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -20,7 +20,7 @@ impl App {
 
     fn handle_queue_column_width_key(&mut self, key: KeyEvent) -> bool {
         if self.context_menu_open()
-            || self.queue_column_collapsed
+            || self.panel_mode != PanelMode::Both
             || !Self::is_queue_column_width_resize_key(key)
         {
             return false;
@@ -68,7 +68,7 @@ impl App {
             }
             if key.code == KeyCode::Left
                 && matches!(self.panel_focus, PanelFocus::Library)
-                && !self.queue_column_collapsed
+                && self.panel_mode == PanelMode::Both
             {
                 self.set_panel_focus(PanelFocus::Queue);
                 self.last_card_height = 0;

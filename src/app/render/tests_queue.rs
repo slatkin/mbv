@@ -31,3 +31,25 @@ fn short_power_queue_panel_drops_padding_before_rows() {
         layout.queue_area
     );
 }
+
+#[test]
+fn queue_only_layout_spans_full_width() {
+    let mut app = make_power_queue_app(20);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+
+    let (term, layout) = render_view_to_terminal(&mut app, 80, 20);
+
+    assert_eq!(
+        layout.queue_area.width, 76,
+        "queue must span the full width minus inner padding"
+    );
+    assert_eq!(
+        layout.panel_area.width, 80,
+        "left panel must span full width in QueueOnly"
+    );
+    let text = buffer_to_string(&term);
+    assert!(
+        text.contains("Queue Item"),
+        "queue items should render in QueueOnly"
+    );
+}

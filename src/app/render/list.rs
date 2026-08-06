@@ -88,8 +88,8 @@ impl App {
 
         // Column count for the two-column list layout, derived from the list
         // pane width -- the content area this renderer already receives,
-        // which excludes the queue column and widens when
-        // `queue_column_collapsed` is set, so both feed through with no
+        // which excludes the queue column and widens when the panel mode is
+        // not `Both`, so both feed through with no
         // separate code path. Season grids keep their own single-column
         // stride (see `is_viewing_season_grid`).
         let cols = if self.library_tab > 0 && self.is_viewing_season_grid(self.library_tab - 1) {

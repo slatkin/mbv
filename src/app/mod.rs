@@ -103,7 +103,7 @@ use self::types_playback::{
     SuspendedLocalSession, UndoEntry,
 };
 use self::types_player_tab::PlayerTab;
-use self::types_settings::{PanelFocus, SettingKey, SETTING_SECTIONS};
+use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};
 use mbv_core::api::EmbyClient;
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(test)]

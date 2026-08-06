@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus, POWER_LEFT_WIDTH_DEFAULT};
+use crate::app::{BrowseLevel, LibraryTab, PanelFocus, PanelMode, POWER_LEFT_WIDTH_DEFAULT};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -148,7 +148,7 @@ fn down_always_moves_the_list_cursor_never_scrolls_the_banner() {
 // Vim-style navigation for the two-column library list: j/k mirror Up/Down
 // in any column count; h/l move across cells in 2-col mode only and stay
 // unbound (so the user can type 'h' and 'l' as query characters) in 1-col
-// mode. The sidebar-toggle key moved from 'h' to 'x' to free 'h' for this.
+// mode. The panel-mode cycle key moved from 'h' to 'x' to free 'h' for this.
 #[test]
 fn hjkl_navigates_two_column_library_list_via_handle_key() {
     let mut app = make_power_movie_app();
@@ -203,7 +203,7 @@ fn shift_right_resizes_without_switching_focus() {
 #[test]
 fn left_does_not_focus_hidden_queue_when_power_left_column_is_collapsed() {
     let mut app = make_power_movie_app();
-    app.queue_column_collapsed = true;
+    app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
@@ -225,7 +225,7 @@ fn left_does_not_focus_hidden_queue_when_power_left_column_is_collapsed() {
 #[test]
 fn shift_resize_is_ignored_while_power_left_column_is_collapsed() {
     let mut app = make_power_movie_app();
-    app.queue_column_collapsed = true;
+    app.panel_mode = PanelMode::LibraryOnly;
     app.terminal_width = 100;
 
     let handled = app.handle_key(shift(KeyCode::Right));
@@ -233,6 +233,31 @@ fn shift_resize_is_ignored_while_power_left_column_is_collapsed() {
     assert!(!handled);
     assert_eq!(app.queue_column_width, POWER_LEFT_WIDTH_DEFAULT);
     assert!(app.status.is_empty(), "status was {:?}", app.status);
+}
+
+#[test]
+fn shift_resize_is_ignored_in_queue_only() {
+    let mut app = make_power_movie_app();
+    app.panel_mode = PanelMode::QueueOnly;
+    app.terminal_width = 100;
+
+    let handled = app.handle_key(shift(KeyCode::Right));
+
+    assert!(!handled);
+    assert_eq!(app.queue_column_width, POWER_LEFT_WIDTH_DEFAULT);
+    assert!(app.status.is_empty(), "status was {:?}", app.status);
+}
+
+#[test]
+fn left_does_not_focus_hidden_queue_in_queue_only() {
+    let mut app = make_power_movie_app();
+    app.panel_mode = PanelMode::QueueOnly;
+    app.panel_focus = PanelFocus::Library;
+
+    let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
+
+    assert!(!handled);
+    assert_eq!(app.panel_focus, PanelFocus::Library);
 }
 
 #[test]

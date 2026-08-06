@@ -192,8 +192,8 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_search_modal,
     },
     ContextEntry {
-        name: "sidebar_toggle_x",
-        handler: App::handle_key_power_sidebar_toggle,
+        name: "panel_mode_cycle_x",
+        handler: App::handle_key_panel_mode_cycle,
     },
     ContextEntry {
         name: "confirm_skip_intro",

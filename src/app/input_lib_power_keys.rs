@@ -48,11 +48,11 @@ impl App {
         Some(self.dispatch(command))
     }
 
-    pub(super) fn handle_key_power_sidebar_toggle(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_panel_mode_cycle(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code != KeyCode::Char('x') || !key.modifiers.is_empty() || self.context_menu_open() {
             return None;
         }
-        Some(self.dispatch(Command::TogglePowerSidebar))
+        Some(self.dispatch(Command::CyclePanelMode))
     }
 
     /// Global view keys shared by the left-column handlers (`handle_lib_key`,
@@ -154,7 +154,7 @@ impl App {
             //   j/k mirror Up/Down (any column count) -- `j` is down, `k` is up.
             //   h/l mirror Left/Right across cells in 2-col mode; in 1-col
             //   mode h/l are unbound (left as a free input character -- h is
-            //   not a global key now that the sidebar toggle moved to `x`).
+            //   not a global key now that the panel-mode cycle moved to `x`).
             KeyCode::Char('j') => {
                 if self.is_viewing_season_grid(lib_idx) {
                     self.move_lib_cursor(4);

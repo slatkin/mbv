@@ -88,7 +88,7 @@ impl App {
             mk("i", "Go to item in library"),
             mk("Del", "Remove from Queue"),
             mk("Ctrl+Z", "Undo removal"),
-            mk("h", "Collapse/expand queue column"),
+            mk("x", "Cycle panel layout (both / library / queue)"),
             mk("Shift+← / →", "Resize queue column"),
             mk("Ctrl+S", "Save playlist"),
             mk("Ctrl+R", "Re-anchor tracking"),

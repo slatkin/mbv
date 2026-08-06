@@ -51,7 +51,7 @@ pub(super) use sort_filter::{
 pub(crate) use sort_filter::{initial_group_artist_sort_key, LetterFilter, LIBRARY_PILL_THRESHOLD};
 
 use super::ui_util::natural_sort_key;
-use super::{layout::AppLayout, palette, App, PanelFocus};
+use super::{layout::AppLayout, palette, App, PanelFocus, PanelMode};
 use crate::app::layout::{LayoutMain, LayoutPlayback};
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
@@ -272,18 +272,19 @@ impl App {
         }
 
         // Left panel (card + queue) | Right panel (library, remaining).
-        let left_w = if self.queue_column_collapsed {
-            0
-        } else {
-            self.queue_column_width
+        let left_w = match self.panel_mode {
+            PanelMode::Both => self.queue_column_width,
+            PanelMode::LibraryOnly => 0,
+            PanelMode::QueueOnly => area.width,
         };
         let right_w = area.width.saturating_sub(left_w);
+        let right_visible = self.panel_mode != PanelMode::QueueOnly;
 
         // Header row removed — the tab bar above indicates current location.
         layout.breadcrumbs = Vec::new();
         layout.selector_tabs = Vec::new();
         let content_h = area.height;
-        let left_area = if self.queue_column_collapsed {
+        let left_area = if self.panel_mode == PanelMode::LibraryOnly {
             Rect::default()
         } else {
             Rect {
@@ -300,7 +301,7 @@ impl App {
         let left_focused = !queue_focused;
 
         // Full-column background behind the card image and queue list.
-        if !self.queue_column_collapsed {
+        if self.panel_mode != PanelMode::LibraryOnly {
             let left_bg = if queue_focused {
                 palette::QUEUE_COLUMN_FOCUSED_BG
             } else {
@@ -319,10 +320,12 @@ impl App {
             width: right_w.saturating_sub(COLUMN_GAP),
             height: area.height,
         };
-        f.render_widget(
-            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
-            right_full_area,
-        );
+        if right_visible {
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                right_full_area,
+            );
+        }
 
         // Inner content area with padding inside the colored box (queue uses this).
         let left_content = Rect {
@@ -356,10 +359,12 @@ impl App {
             width: right_area.width,
             height: tab_h,
         };
-        self.render_tabs(f, tab_area, tabs_area_out, tabbar_vol_area_out);
+                if right_visible {
+            self.render_tabs(f, tab_area, tabs_area_out, tabbar_vol_area_out);
+        }
 
         // Player panel below the tab bar.
-        if player_h > 0 {
+        if right_visible && player_h > 0 {
             let player_area = Rect {
                 x: right_area.x,
                 y: area.y + tab_h,
@@ -391,7 +396,7 @@ impl App {
         };
 
         let mut visualizer_h: u16 = 0;
-        let (lib_area, queue_area) = if self.queue_column_collapsed {
+        let (lib_area, queue_area) = if self.panel_mode == PanelMode::LibraryOnly {
             (right_area, Rect::default())
         } else {
             // The card fills the top of the left column; the queue list takes
@@ -426,10 +431,9 @@ impl App {
         // instead of each renderer inventing its own. When the left column is
         // collapsed the user has asked to reclaim maximum width, so the gutters
         // are dropped and the library spans the panel edge-to-edge.
-        let lib_area = power_right_panel_content_area(lib_area, self.queue_column_collapsed);
-
-        let mut render_lib_area = lib_area;
-        if self.library_tab > 0 && self.is_music_group_view(self.library_tab - 1) {
+        let lib_area = power_right_panel_content_area(lib_area, self.panel_mode != PanelMode::Both);
+let mut render_lib_area = lib_area;
+        if right_visible && self.library_tab > 0 && self.is_music_group_view(self.library_tab - 1) {
             let lib_idx = self.library_tab - 1;
             if lib_area.height > 0 {
                 let pills_area = Rect {
@@ -447,7 +451,9 @@ impl App {
             } else {
                 layout.selector_tabs = Vec::new();
             }
-        } else if self.library_tab > 0 && self.should_show_letter_pills(self.library_tab - 1) {
+        } else if right_visible && self.library_tab > 0
+            && self.should_show_letter_pills(self.library_tab - 1)
+        {
             let lib_idx = self.library_tab - 1;
             if lib_area.height > 0 {
                 let pills_area = Rect {
@@ -467,7 +473,7 @@ impl App {
             }
         }
 
-        if !self.queue_column_collapsed {
+        if self.panel_mode != PanelMode::LibraryOnly {
             let queue_list_area = render_power_queue_panel_frame(f, queue_area, queue_focused);
             // Render title pills at the top of the queue list panel, replacing the border.
             if queue_list_area.height > 0 {
@@ -548,7 +554,9 @@ impl App {
                 }
             }
         }
-        self.render_power_library(f, render_lib_area, left_focused, layout);
+        if right_visible {
+            self.render_power_library(f, render_lib_area, left_focused, layout);
+        }
 
         // Status bar + toast overlay at the bottom of the right panel.
         if status_area.width > 0 {

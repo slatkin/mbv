@@ -93,9 +93,9 @@ pub(super) enum Command {
         delta: i64,
     },
 
-    /// `h` in the queue column: collapse or expand the physical left column that
-    /// contains the queue card and queue.
-    TogglePowerSidebar,
+    /// `x`: cycle the Power View layout between both panels, library-only, and
+    /// queue-only (see `PanelMode`).
+    CyclePanelMode,
 }
 
 /// Resolve the idle-feed link shortcut separately from transport bindings so
@@ -561,12 +561,22 @@ impl App {
                     }
                 }
             }
-            Command::TogglePowerSidebar => {
-                self.queue_column_collapsed = !self.queue_column_collapsed;
-                if self.queue_column_collapsed
-                    && matches!(self.panel_focus, super::PanelFocus::Queue)
-                {
-                    self.set_panel_focus(super::PanelFocus::Library);
+            Command::CyclePanelMode => {
+                self.panel_mode = match self.panel_mode {
+                    super::PanelMode::Both => super::PanelMode::LibraryOnly,
+                    super::PanelMode::LibraryOnly => super::PanelMode::QueueOnly,
+                    super::PanelMode::QueueOnly => super::PanelMode::Both,
+                };
+                match self.panel_mode {
+                    super::PanelMode::LibraryOnly => {
+                        if matches!(self.panel_focus, super::PanelFocus::Queue) {
+                            self.set_panel_focus(super::PanelFocus::Library);
+                        }
+                    }
+                    super::PanelMode::QueueOnly => {
+                        self.set_panel_focus(super::PanelFocus::Queue);
+                    }
+                    super::PanelMode::Both => {}
                 }
             }
         }

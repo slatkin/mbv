@@ -16,7 +16,7 @@ use super::types_playback::{
     RemoteReanchorPopup, SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
-use super::types_settings::PanelFocus;
+use super::types_settings::{PanelFocus, PanelMode};
 use mbv_core::api::{EmbyClient, MediaItem};
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
@@ -146,7 +146,7 @@ pub struct App {
     pub(super) panel_focus: PanelFocus,
     pub(super) library_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
     pub(super) queue_column_width: u16,
-    pub(super) queue_column_collapsed: bool,
+    pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
     pub(super) queue_scroll: usize,
     pub(super) last_played_item_id: Option<String>,

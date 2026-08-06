@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 impl App {
     /// Whether a context menu is currently open. Shared by every
     /// CONTEXT_STACK layer above it that must yield to it
-    /// (`power_sidebar_toggle_x`, `search_modal`, `clear_queue_prompt_c`,
+    /// (`panel_mode_cycle_x`, `search_modal`, `clear_queue_prompt_c`,
     /// `queue_column_width`) — see
     /// docs/adr/0002-centralized-input-handling.md phase 6 (#135).
     pub(super) fn context_menu_open(&self) -> bool {

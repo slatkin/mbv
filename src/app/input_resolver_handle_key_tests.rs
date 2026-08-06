@@ -197,53 +197,75 @@ fn test_empty_context_menu() -> crate::app::ContextMenu {
 }
 
 #[test]
-fn x_toggles_sidebar_via_handle_key() {
+fn x_cycles_panel_mode_via_handle_key() {
     let mut app = make_app_stub();
-    let before = app.queue_column_collapsed;
+    assert_eq!(app.panel_mode, crate::app::PanelMode::Both);
     app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
-    assert_ne!(app.queue_column_collapsed, before);
+    assert_eq!(app.panel_mode, crate::app::PanelMode::LibraryOnly);
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert_eq!(app.panel_mode, crate::app::PanelMode::QueueOnly);
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert_eq!(app.panel_mode, crate::app::PanelMode::Both);
 }
 
 #[test]
-fn x_does_not_toggle_power_sidebar_while_context_menu_is_open_via_handle_key() {
+fn x_does_not_cycle_panel_mode_while_context_menu_is_open_via_handle_key() {
     let mut app = make_app_stub();
     app.context_menu = Some(test_empty_context_menu());
-    let before = app.queue_column_collapsed;
+    let before = app.panel_mode;
     app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(
-        app.queue_column_collapsed, before,
-        "Sidebar must not toggle while a context menu is open"
+        app.panel_mode, before,
+        "Panel mode must not cycle while a context menu is open"
     );
 }
 
 #[test]
-fn x_moves_queue_focus_to_library_when_collapsing_power_sidebar() {
+fn x_moves_queue_focus_to_library_when_entering_library_only() {
     let mut app = make_app_stub();
     app.panel_focus = crate::app::PanelFocus::Queue;
 
     app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
 
-    assert!(app.queue_column_collapsed);
+    assert_eq!(
+        app.panel_mode, crate::app::PanelMode::LibraryOnly,
+        "first x from Both enters LibraryOnly"
+    );
     assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
 
     app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
 
-    assert!(!app.queue_column_collapsed);
-    assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
+    assert_eq!(app.panel_mode, crate::app::PanelMode::QueueOnly);
+    assert_eq!(app.panel_focus, crate::app::PanelFocus::Queue);
 }
 
-/// Regression guard in the other direction: the sidebar toggle key used to
-/// be 'h'; the toggle moved to 'x' so 'h' could be repurposed for vim-style
-/// horizontal navigation in 2-col library lists. Make sure 'h' no longer
-/// collapses the sidebar on its own.
 #[test]
-fn h_no_longer_toggles_sidebar_via_handle_key() {
+fn x_entering_both_leaves_focus_alone() {
     let mut app = make_app_stub();
-    let before = app.queue_column_collapsed;
+    app.panel_focus = crate::app::PanelFocus::Queue;
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+
+    assert_eq!(app.panel_mode, crate::app::PanelMode::Both);
+    assert_eq!(
+        app.panel_focus, crate::app::PanelFocus::Queue,
+        "returning to Both must not move focus"
+    );
+}
+
+/// Regression guard in the other direction: the panel-mode cycle key used to
+/// be 'h'; the binding moved to 'x' so 'h' could be repurposed for vim-style
+/// horizontal navigation in 2-col library lists. Make sure 'h' no longer
+/// cycles the panel mode on its own.
+#[test]
+fn h_no_longer_cycles_panel_mode_via_handle_key() {
+    let mut app = make_app_stub();
+    let before = app.panel_mode;
     app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
     assert_eq!(
-        app.queue_column_collapsed, before,
-        "Sidebar toggle moved from 'h' to 'x'; 'h' must not toggle the sidebar"
+        app.panel_mode, before,
+        "Panel-mode cycle moved from 'h' to 'x'; 'h' must not change the mode"
     );
 }
 
@@ -336,7 +358,7 @@ fn context_stack_order_is_pinned() {
             "global_overlay_open",
             "queue_column_width",
             "search_modal",
-            "sidebar_toggle_x",
+            "panel_mode_cycle_x",
             "confirm_skip_intro",
             "confirm_next_up",
             "clear_queue_prompt_c",
