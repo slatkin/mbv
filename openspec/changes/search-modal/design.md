@@ -159,11 +159,15 @@ Implementation turns on the cache, not the picker. `card_image_states` (`src/app
 Instead the protocol becomes part of the cache key, and a second halfblock `Picker` is held alongside the configured one:
 
 ```
-card_image_states["abc123@sixel"]     → ThreadProtocol (sixel)
-card_image_states["abc123@halfblock"] → ThreadProtocol (halfblock)
+in-memory   card_image_states["abc123@sixel"]     → ThreadProtocol (sixel)
+            card_image_states["abc123@halfblock"] → ThreadProtocol (halfblock)
+
+on-disk     read/write_image_disk_cache("abc123")  ← NO protocol suffix
 ```
 
-Opening a dimming modal misses the cache and refills from `read_image_disk_cache` (`images.rs:344`) — a decode plus resize-encode, already off the render thread via the existing resize worker, and no network. Closing it hits the still-warm sixel entries instantly. Reopening hits the now-warm halfblock entries instantly. The LRU (`image_lru`, `image_cache_size`) needs headroom for both variants of the visible set, or the two will evict each other and every toggle will pay the decode again.
+**The suffix must apply to the in-memory key only.** The disk cache stores the downloaded source bytes (`write_image_disk_cache(&cache_key, b)`, `images.rs:405`), which are protocol-independent — the same `Vec<u8>` decodes to the same `DynamicImage` whichever picker later encodes it. Suffixing the disk key too would make the first dim miss on disk as well and re-download every visible image from the server, turning a local re-encode into a network round trip. Since `fetch_card_image` currently passes one `cache_key` to both layers, the two keys have to be derived separately at that seam.
+
+Opening a dimming modal then misses only the in-memory cache and refills from disk — a decode plus resize-encode, already off the render thread via the existing resize worker, no network. Closing hits the still-warm sixel entries instantly; reopening hits the now-warm halfblock entries instantly. The LRU (`image_lru`, `image_cache_size`) needs headroom for both variants of the visible set, or the two evict each other and every toggle pays the decode again.
 
 When the configured protocol is already halfblocks, the key is the same in both states and nothing changes.
 
