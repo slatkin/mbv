@@ -33,7 +33,6 @@ fn make_power_library_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -134,7 +133,6 @@ fn ctrl_r_confirmation_targets_active_library() {
                 letter_filter: None,
                 music_grouping: None,
             }],
-            search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
@@ -404,7 +402,6 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
     app.libs.push(LibraryTab {
         library,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -501,7 +498,11 @@ fn single_click_on_hero_only_focuses_the_panel() {
         11,
     ));
 
-    assert_eq!(app.panel_focus, PanelFocus::Library, "click focuses the panel");
+    assert_eq!(
+        app.panel_focus,
+        PanelFocus::Library,
+        "click focuses the panel"
+    );
     assert_eq!(
         app.libs[0].series_selection, None,
         "a single click on the hero must not enter series selection"

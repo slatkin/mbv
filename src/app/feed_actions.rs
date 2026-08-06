@@ -14,14 +14,13 @@ impl App {
         let feed = lib.feed_home_video.as_ref();
         log::debug!(
             target: "feedhv",
-            "{context}: lib_idx={lib_idx} lib={} nav_len={} root_parent={} root_items={} root_loading={} root_cursor={} search={} feed_present={} feed_loading={} selected_group={} groups={} all_items={} video_cursor={} video_scroll={} group_view={}",
+            "{context}: lib_idx={lib_idx} lib={} nav_len={} root_parent={} root_items={} root_loading={} root_cursor={} feed_present={} feed_loading={} selected_group={} groups={} all_items={} video_cursor={} video_scroll={} group_view={}",
             lib.library.name,
             lib.nav_stack.len(),
             root.map(|lvl| lvl.parent_id.as_str()).unwrap_or(""),
             root.map(|lvl| lvl.items.len()).unwrap_or(0),
             root.map(|lvl| lvl.loading).unwrap_or(false),
             root.map(|lvl| lvl.cursor).unwrap_or(0),
-            lib.search.is_some(),
             feed.is_some(),
             feed.map(|state| state.loading).unwrap_or(false),
             feed.map(|state| state.selected_group).unwrap_or(0),
@@ -148,7 +147,7 @@ impl App {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
-        if lib.nav_stack.len() != 1 || lib.search.is_some() {
+        if lib.nav_stack.len() != 1 {
             return;
         }
         let ready = lib
@@ -287,9 +286,6 @@ impl App {
 
     pub(super) fn is_feed_home_video_group_view(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
-        if lib.search.is_some() {
-            return false;
-        }
         let has_state = lib.feed_home_video.as_ref().is_some_and(|state| {
             state.loading || !state.groups.is_empty() || !state.all_items.is_empty()
         });
@@ -338,7 +334,6 @@ impl App {
         let lib_id = self.libs[lib_idx].library.id.clone();
         let lib_name = self.libs[lib_idx].library.name.clone();
         self.libs[lib_idx].nav_stack.clear();
-        self.libs[lib_idx].search = None;
         self.libs[lib_idx].feed_home_video = Some(FeedHomeVideoState {
             loading: true,
             ..self.libs[lib_idx]
@@ -424,7 +419,6 @@ impl App {
         let lib_id = self.libs[lib_idx].library.id.clone();
         let lib_name = self.libs[lib_idx].library.name.clone();
         self.libs[lib_idx].nav_stack.clear();
-        self.libs[lib_idx].search = None;
         self.libs[lib_idx].feed_home_video = Some(FeedHomeVideoState {
             loading: true,
             ..self.libs[lib_idx]

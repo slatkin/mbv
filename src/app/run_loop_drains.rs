@@ -2,6 +2,7 @@ use super::types_confirm::ConfirmAction;
 use super::types_playback::PendingQueueAction;
 use mbv_core::player::PlayerCommand;
 
+use super::search_modal::SearchModalDrainOutcome;
 use super::App;
 
 impl App {
@@ -65,12 +66,14 @@ impl App {
     /// message. Extracted from `run()`'s loop body; returns whether any
     /// results were received so the caller can fold that into `had_events`.
     pub(super) fn drain_search_results(&mut self) -> bool {
-        let search_outcome = self.search.drain_results();
-        let produced = search_outcome.received > 0;
-        if produced {
-            for error in search_outcome.errors {
-                self.flash_status_high(format!("Search error: {error}"));
-            }
+        let mut outcome = SearchModalDrainOutcome {
+            received: 0,
+            errors: Vec::new(),
+        };
+        self.drain_search_modal_results(&mut outcome);
+        let produced = outcome.received > 0;
+        for error in outcome.errors {
+            self.flash_status_high(format!("Search error: {error}"));
         }
         produced
     }

@@ -1,17 +1,24 @@
 use super::super::super::palette;
 use super::backdrop::dim_backdrop;
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use ratatui::widgets::{Block, Borders, Clear};
 use ratatui::Frame;
 
-/// Draws the shared modal chrome used by every blocking modal in the app:
-/// dims the backdrop, draws the `LIBRARY_SIDE_BG` frame padding around the
-/// modal, clears the content area, draws the `BG_GREEN` background block
-/// with the centered title, and returns the inner `Rect` where the modal's
-/// content should be placed.
-pub fn render_modal_frame(f: &mut Frame, title: &str, w: u16, h: u16) -> Rect {
+pub fn render_modal_frame(
+    f: &mut Frame,
+    dim_flag: &mut bool,
+    title: &str,
+    w: u16,
+    h: u16,
+    bg: Color,
+) -> Rect {
+    *dim_flag = true;
+    render_modal_frame_inner(f, title, w, h, bg)
+}
+
+fn render_modal_frame_inner(f: &mut Frame, title: &str, w: u16, h: u16, bg: Color) -> Rect {
     dim_backdrop(f);
 
     let full = f.area();
@@ -26,7 +33,6 @@ pub fn render_modal_frame(f: &mut Frame, title: &str, w: u16, h: u16) -> Rect {
         height: h,
     };
 
-    // Draw frame around modal
     let frame_rect = Rect {
         x: rect.x.saturating_sub(2),
         y: rect.y.saturating_sub(1),
@@ -35,7 +41,6 @@ pub fn render_modal_frame(f: &mut Frame, title: &str, w: u16, h: u16) -> Rect {
     };
     let frame_style = Style::default().bg(palette::LIBRARY_SIDE_BG);
 
-    // Top row
     f.render_widget(
         Block::default().borders(Borders::NONE).style(frame_style),
         Rect {
@@ -45,7 +50,6 @@ pub fn render_modal_frame(f: &mut Frame, title: &str, w: u16, h: u16) -> Rect {
             height: 1,
         },
     );
-    // Bottom row
     f.render_widget(
         Block::default().borders(Borders::NONE).style(frame_style),
         Rect {
@@ -55,7 +59,6 @@ pub fn render_modal_frame(f: &mut Frame, title: &str, w: u16, h: u16) -> Rect {
             height: 1,
         },
     );
-    // Left column
     f.render_widget(
         Block::default().borders(Borders::NONE).style(frame_style),
         Rect {
@@ -65,7 +68,6 @@ pub fn render_modal_frame(f: &mut Frame, title: &str, w: u16, h: u16) -> Rect {
             height: frame_rect.height - 2,
         },
     );
-    // Right column
     f.render_widget(
         Block::default().borders(Borders::NONE).style(frame_style),
         Rect {
@@ -86,7 +88,7 @@ pub fn render_modal_frame(f: &mut Frame, title: &str, w: u16, h: u16) -> Rect {
         ))
         .title_alignment(Alignment::Center)
         .borders(Borders::NONE)
-        .style(Style::default().bg(palette::BG_GREEN));
+        .style(Style::default().bg(bg));
     let inner = block.inner(rect);
     f.render_widget(block, rect);
     inner

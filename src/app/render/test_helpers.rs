@@ -4,7 +4,7 @@ use super::album_plan::GroupedAlbumDisplayRow;
 use super::*;
 use crate::app::layout::{AppLayout, LayoutPlayback, LibraryRowTarget};
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibSearch, LibraryTab, QueueScope, RemoteSlotState};
+use crate::app::{BrowseLevel, LibraryTab, QueueScope, RemoteSlotState};
 use crate::config::Config;
 use mbv_core::api::EmbyClient;
 use mbv_core::api::MediaItem;
@@ -189,7 +189,6 @@ pub fn make_power_movie_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
 
         album_track_focus: None,
@@ -294,7 +293,6 @@ pub fn make_power_music_group_app() -> App {
                 music_grouping: None,
             },
         ],
-        search: None,
         feed_home_video: None,
 
         album_track_focus: None,
@@ -417,7 +415,6 @@ pub fn make_power_home_video_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
 
         album_track_focus: None,
@@ -457,7 +454,6 @@ pub fn make_power_large_movie_library_app(library_total: usize) -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,

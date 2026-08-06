@@ -143,7 +143,8 @@ pub(crate) fn make_app_stub() -> App {
     let (_resize_response_tx, resize_response_rx) = std::sync::mpsc::channel();
     let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
     let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
-    let (search_tx, search_rx) = std::sync::mpsc::channel::<Result<Vec<MediaItem>, String>>();
+    let (search_tx, search_rx) =
+        std::sync::mpsc::channel::<(String, Result<Vec<MediaItem>, String>)>();
 
     let player = PlayerProxy::stub(status.clone());
 
@@ -219,6 +220,9 @@ pub(crate) fn make_app_stub() -> App {
         resize_register_tx,
         resize_response_rx,
         image_picker: None,
+        halfblock_picker: None,
+        dim_backdrop_active: false,
+        image_cache_size_total: 50,
         show_help: false,
         show_settings: false,
         settings_cursor: 0,
@@ -235,7 +239,11 @@ pub(crate) fn make_app_stub() -> App {
         context_menu: None,
         lib_tx,
         lib_rx,
-        search: SearchSubsystem::new(search_tx, search_rx),
+        search_tx,
+        search_rx,
+        search_modal: None,
+        search_modal_prior_focus: None,
+        last_slash_at: None,
         force_clear: false,
         tab_scroll: 0,
         ui_volume: 100,
@@ -335,7 +343,8 @@ pub(crate) fn make_built_app() -> App {
     let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
     let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
     let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
-    let (search_tx, search_rx) = std::sync::mpsc::channel::<Result<Vec<MediaItem>, String>>();
+    let (search_tx, search_rx) =
+        std::sync::mpsc::channel::<(String, Result<Vec<MediaItem>, String>)>();
 
     let player = PlayerProxy::stub(status);
 

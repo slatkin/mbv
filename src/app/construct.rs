@@ -2,8 +2,8 @@ use super::types_playback::{HomePane, QueueScope};
 use super::types_player_tab::PlayerTab;
 use super::types_settings::PanelFocus;
 use super::{
-    bootstrap_local_daemon_queue, layout, render, spawn_resize_worker, App, AppInit,
-    SearchSubsystem, SessionEvent, POWER_LEFT_WIDTH_DEFAULT,
+    bootstrap_local_daemon_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
+    POWER_LEFT_WIDTH_DEFAULT,
 };
 use mbv_core::api::{EmbyClient, MediaItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
@@ -50,7 +50,11 @@ impl App {
             image_cache_size: init.image_cache_size,
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
-            search: SearchSubsystem::new(init.search_tx, init.search_rx),
+            search_tx: init.search_tx,
+            search_rx: init.search_rx,
+            search_modal: None,
+            search_modal_prior_focus: None,
+            last_slash_at: None,
             sessions_tx: init.sessions_tx,
             sessions_rx: init.sessions_rx,
             card_image_tx: init.card_image_tx,
@@ -129,6 +133,9 @@ impl App {
             card_image_loading: std::collections::HashSet::new(),
             last_card_height: 0,
             image_picker: None,
+            halfblock_picker: None,
+            dim_backdrop_active: false,
+            image_cache_size_total: init.image_cache_size.saturating_mul(2),
             show_help: false,
             show_settings: false,
             settings_cursor: 0,
@@ -215,7 +222,7 @@ impl App {
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
-        let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
+        let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<MediaItem>, String>)>();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
@@ -340,7 +347,7 @@ impl App {
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
-        let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
+        let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<MediaItem>, String>)>();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let hidden_libraries = client.config.hidden_libraries.clone();
         let library_routes = client.config.library_routes.clone();

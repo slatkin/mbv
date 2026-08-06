@@ -59,7 +59,6 @@ fn make_music_app(albums: Vec<MediaItem>) -> super::App {
     app.libs.push(LibraryTab {
         library,
         nav_stack: vec![make_group_level(), make_music_album_level(albums)],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,

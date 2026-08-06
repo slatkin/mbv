@@ -5,6 +5,10 @@ use std::time::{Duration, Instant};
 
 pub(super) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
 
+pub(super) fn mem_key(cache_key: &str, suffix: &str) -> String {
+    format!("{cache_key}@{suffix}")
+}
+
 const MAX_IMAGE_FETCHES: usize = 6;
 const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 
@@ -224,8 +228,9 @@ impl App {
         types: &[&str],
         square_crop: bool,
     ) {
+        let mem_key = self.current_mem_key(&cache_key);
         if self.card_image_loading.contains(&cache_key)
-            || self.card_image_states.contains_key(&cache_key)
+            || self.card_image_states.contains_key(&mem_key)
         {
             return;
         }
@@ -278,33 +283,94 @@ impl App {
         {
             return;
         }
-        let Some(picker) = self.image_picker.clone() else {
+        if self.image_picker.is_none() {
+            return;
+        }
+        let Ok(img) = image::load_from_memory(QUEUE_CARD_PLACEHOLDER_BYTES) else {
             return;
         };
-        let state = image::load_from_memory(QUEUE_CARD_PLACEHOLDER_BYTES)
-            .ok()
-            .map(|img| self.new_thread_protocol(&picker, img, QUEUE_CARD_PLACEHOLDER_KEY));
-        self.card_image_states
-            .insert(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), state);
+        let (mem_key, proto) = self.new_thread_protocol(img, QUEUE_CARD_PLACEHOLDER_KEY);
+        self.card_image_states.insert(mem_key, Some(proto));
     }
 
-    /// Builds a [`ratatui_image::thread::ThreadProtocol`] for `cache_key`,
-    /// registering a dedicated request channel with the resize worker thread
-    /// (see `spawn_resize_worker` in `mod.rs`) so responses can be routed
-    /// back to the right `card_image_states` entry. The expensive
-    /// resize+encode step (`StatefulProtocol::resize_encode`) then runs off
-    /// the render thread on first draw, instead of blocking it (#164).
     pub(super) fn new_thread_protocol(
         &self,
-        picker: &Picker,
         img: image::DynamicImage,
         cache_key: &str,
-    ) -> ratatui_image::thread::ThreadProtocol {
+    ) -> (String, ratatui_image::thread::ThreadProtocol) {
+        let (picker, suffix) = self.picker_and_suffix().expect("picker built at startup");
+        let mem_key = mem_key(cache_key, suffix);
         let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
-        let _ = self
-            .resize_register_tx
-            .send((cache_key.to_string(), req_rx));
-        ratatui_image::thread::ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
+        let _ = self.resize_register_tx.send((mem_key.clone(), req_rx));
+        let proto = ratatui_image::thread::ThreadProtocol::new(
+            req_tx,
+            Some(picker.new_resize_protocol(img)),
+        );
+        (mem_key, proto)
+    }
+
+    fn picker_and_suffix(&self) -> Option<(&Picker, &'static str)> {
+        let use_halfblock = self.dim_backdrop_active
+            && self.image_protocol_enabled
+            && !self.is_halfblock_configured();
+        if use_halfblock {
+            self.halfblock_picker.as_ref().map(|p| (p, "halfblock"))
+        } else {
+            self.image_picker
+                .as_ref()
+                .map(|p| (p, self.configured_protocol_name()))
+        }
+    }
+
+    pub(super) fn is_halfblock_configured(&self) -> bool {
+        self.image_protocol
+            .as_deref()
+            .map(|s| s.eq_ignore_ascii_case("halfblocks"))
+            .unwrap_or(false)
+            || self
+                .image_picker
+                .as_ref()
+                .map(|p| p.protocol_type() == ratatui_image::picker::ProtocolType::Halfblocks)
+                .unwrap_or(false)
+    }
+
+    pub(super) fn configured_protocol_name(&self) -> &'static str {
+        use ratatui_image::picker::ProtocolType;
+        match self.image_picker.as_ref().map(|p| p.protocol_type()) {
+            Some(ProtocolType::Sixel) => "sixel",
+            Some(ProtocolType::Kitty) => "kitty",
+            Some(ProtocolType::Iterm2) => "iterm2",
+            Some(ProtocolType::Halfblocks) | None => "halfblock",
+        }
+    }
+
+    pub(super) fn current_mem_key(&self, bare_key: &str) -> String {
+        let suffix = self
+            .picker_and_suffix()
+            .map(|(_, s)| s)
+            .unwrap_or("halfblock");
+        mem_key(bare_key, suffix)
+    }
+
+    pub(super) fn build_protocol_for(
+        &self,
+        bare_key: &str,
+        img: Option<image::DynamicImage>,
+    ) -> (String, Option<ratatui_image::thread::ThreadProtocol>) {
+        let key = self.current_mem_key(bare_key);
+        let Some(img) = img else {
+            return (key, None);
+        };
+        let Some((picker, _)) = self.picker_and_suffix() else {
+            return (key, None);
+        };
+        let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
+        let _ = self.resize_register_tx.send((key.clone(), req_rx));
+        let proto = ratatui_image::thread::ThreadProtocol::new(
+            req_tx,
+            Some(picker.new_resize_protocol(img)),
+        );
+        (key, Some(proto))
     }
 
     /// Spawn queued image fetches until the in-flight limit is reached. Called
@@ -343,6 +409,12 @@ impl App {
                 let bytes: Option<Vec<u8>> = if let Some(cached) =
                     crate::config::read_image_disk_cache(&cache_key)
                 {
+                    // Mem-cache miss satisfied from the on-disk source bytes
+                    // (no network). The protocol-specific re-encode then runs
+                    // off-thread via the resize worker, so this is the
+                    // local-only path that powers dim-then-undim cycles for
+                    // a dimmed modal opening on a warm cache.
+                    log::debug!(target: "images", "image disk cache hit for {cache_key}");
                     Some(cached)
                 } else {
                     let fetch_url = |url: &str| -> Option<Vec<u8>> {

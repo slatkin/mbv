@@ -22,18 +22,9 @@ pub(super) enum LibEvent {
         items: Vec<MediaItem>,
         total_count: usize,
     },
-    SearchItemsLoaded {
-        lib_idx: usize,
-        parent_id: String,
-        items: Vec<MediaItem>,
-    },
     AlbumIndexBuilt {
         library_id: String,
         result: Result<Vec<AlbumSearchEntry>, String>,
-    },
-    RecursiveAlbumActivated {
-        library_id: String,
-        nav_stack: Vec<BrowseLevel>,
     },
     AllItemsPrefetched {
         lib_idx: usize,

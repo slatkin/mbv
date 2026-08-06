@@ -49,8 +49,6 @@ impl App {
                 .cloned()
         } else if power_lib_idx.is_some() {
             self.current_lib_item()
-        } else if self.search.is_open() {
-            self.current_home_item()
         } else if matches!(self.panel_focus, PanelFocus::Queue) {
             let queue = self.displayed_queue();
             queue.items.get(queue.queue_cursor).cloned()
@@ -109,18 +107,10 @@ impl App {
                         ContextAction::MarkPlayed(item.id.clone()),
                     );
                 }
-                if self.search.is_open() {
-                    Self::push_context_action(
-                        &mut entries,
-                        "Go to Library",
-                        ContextAction::GoToLibrary(item.id.clone(), item.item_type.clone()),
-                    );
-                }
             } else {
                 Self::push_context_action(&mut entries, "Play", ContextAction::Play);
                 if cw_focused
                     || power_lib_idx.is_some()
-                    || self.search.is_open()
                     || !matches!(self.panel_focus, PanelFocus::Queue)
                 {
                     Self::push_context_action(&mut entries, "Add to Queue", ContextAction::Enqueue);
@@ -149,19 +139,14 @@ impl App {
                         );
                     }
                 }
-                if cw_focused
-                    || (!self.search.is_open() && self.library_tab == 0 && self.home.section == 0)
-                {
+                if cw_focused || (self.library_tab == 0 && self.home.section == 0) {
                     Self::push_context_action(
                         &mut entries,
                         "Remove from Continue Watching",
                         ContextAction::RemoveFromContinueWatching,
                     );
                 }
-                if !cw_focused
-                    && !self.search.is_open()
-                    && matches!(self.panel_focus, PanelFocus::Queue)
-                {
+                if !cw_focused && matches!(self.panel_focus, PanelFocus::Queue) {
                     let pos = self.displayed_queue().queue_cursor;
                     Self::push_context_action(
                         &mut entries,
@@ -169,7 +154,7 @@ impl App {
                         ContextAction::RemoveFromQueue(pos),
                     );
                 }
-                if self.search.is_open() || matches!(self.panel_focus, PanelFocus::Queue) {
+                if matches!(self.panel_focus, PanelFocus::Queue) {
                     Self::push_context_action(
                         &mut entries,
                         "Go to Library",

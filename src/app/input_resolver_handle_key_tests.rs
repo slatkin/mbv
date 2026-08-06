@@ -55,21 +55,6 @@ fn help_swallows_unbound_key_via_handle_key() {
 }
 
 #[test]
-fn help_overlay_blocks_home_search_char_capture_via_handle_key() {
-    let mut app = make_app_stub();
-    app.show_help = true;
-    app.search.set_state_for_test(Some(test_home_search()));
-    if let Some(hs) = app.search.state_mut() {
-        hs.input_focused = true;
-    }
-    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
-    assert!(
-        app.search.state().unwrap().query.is_empty(),
-        "help sits above home_search in CONTEXT_STACK and must swallow 'x'"
-    );
-}
-
-#[test]
 fn space_toggles_pause_on_first_press_when_active_via_handle_key() {
     let mut app = make_app_stub();
     {
@@ -142,41 +127,11 @@ fn f2_opens_settings_via_handle_key() {
 }
 
 #[test]
-fn settings_overlay_blocks_home_search_char_capture_via_handle_key() {
-    let mut app = make_app_stub();
-    app.show_settings = true;
-    app.search.set_state_for_test(Some(test_home_search()));
-    if let Some(hs) = app.search.state_mut() {
-        hs.input_focused = true;
-    }
-    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
-    assert!(
-        app.search.state().unwrap().query.is_empty(),
-        "settings sits above home_search in CONTEXT_STACK and must swallow 'x'"
-    );
-}
-
-#[test]
 fn f3_opens_sessions_via_handle_key() {
     let mut app = make_app_stub();
     assert!(!app.show_sessions);
     app.handle_key(ev(KeyCode::F(3), KeyModifiers::NONE));
     assert!(app.show_sessions);
-}
-
-#[test]
-fn sessions_overlay_blocks_home_search_char_capture_via_handle_key() {
-    let mut app = make_app_stub();
-    app.show_sessions = true;
-    app.search.set_state_for_test(Some(test_home_search()));
-    if let Some(hs) = app.search.state_mut() {
-        hs.input_focused = true;
-    }
-    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
-    assert!(
-        app.search.state().unwrap().query.is_empty(),
-        "sessions sits above home_search in CONTEXT_STACK and must swallow 'x'"
-    );
 }
 
 #[test]
@@ -232,19 +187,6 @@ fn next_up_confirm_no_dismisses_via_handle_key() {
     assert!(app.next_up_item.is_none());
 }
 
-fn test_home_search() -> crate::app::search::HomeSearch {
-    crate::app::search::HomeSearch {
-        query: String::new(),
-        last_query: String::new(),
-        results: Vec::new(),
-        cursor: 0,
-        loading: false,
-        scroll: 0,
-        type_filter: 0,
-        input_focused: false,
-    }
-}
-
 fn test_empty_context_menu() -> crate::app::ContextMenu {
     crate::app::ContextMenu {
         x: 0,
@@ -252,95 +194,6 @@ fn test_empty_context_menu() -> crate::app::ContextMenu {
         entries: Vec::new(),
         cursor: 0,
     }
-}
-
-fn test_lib_with_search() -> crate::app::LibraryTab {
-    use crate::app::tests::make_item;
-    use crate::app::{BrowseLevel, LibSearch, LibraryTab};
-    let mut library = make_item("Movies", "CollectionFolder");
-    library.id = "lib-movies".into();
-    library.is_folder = true;
-    LibraryTab {
-        library,
-        nav_stack: vec![BrowseLevel {
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: Vec::new(),
-            total_count: 0,
-            cursor: 0,
-            scroll: 0,
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            music_grouping: None,
-        }],
-        search: Some(LibSearch {
-            query: String::new(),
-            items: Vec::new(),
-            results: Vec::new(),
-            cursor: 0,
-            scroll: 0,
-            loading: false,
-        }),
-        feed_home_video: None,
-
-        album_track_focus: None,
-        artist_header_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    }
-}
-
-#[test]
-fn home_search_captures_char_via_handle_key() {
-    let mut app = make_app_stub();
-    app.search.set_state_for_test(Some(test_home_search()));
-    if let Some(hs) = app.search.state_mut() {
-        hs.input_focused = true;
-    }
-    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
-    assert_eq!(app.search.state().unwrap().query, "x");
-}
-
-#[test]
-fn home_search_esc_closes_via_handle_key() {
-    let mut app = make_app_stub();
-    app.search.set_state_for_test(Some(test_home_search()));
-    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(!app.search.is_open());
-}
-
-#[test]
-fn home_search_char_capture_wins_over_x_power_sidebar_toggle_via_handle_key() {
-    // Regression guard: `power_sidebar_toggle_x` must stay ordered after
-    // `home_search` in CONTEXT_STACK (matching the pre-phase-2 source,
-    // where the h-toggle ran after all three search blocks). If it were
-    // ever reordered ahead of home_search, pressing the literal 'x'
-    // character while a search box is focused would toggle the sidebar
-    // instead of typing 'x' into the query — a real behavior change.
-    // (The toggle key used to be 'h' before being moved to 'x' so 'h'
-    // could be repurposed for vim-style horizontal navigation.)
-    let mut app = make_app_stub();
-    app.search.set_state_for_test(Some(test_home_search()));
-    if let Some(hs) = app.search.state_mut() {
-        hs.input_focused = true;
-    }
-    let collapsed_before = app.queue_column_collapsed;
-    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
-    assert_eq!(
-        app.search.state().unwrap().query,
-        "x",
-        "home search must capture the literal 'x' character"
-    );
-    assert_eq!(
-        app.queue_column_collapsed, collapsed_before,
-        "Sidebar must not toggle while home search captures 'x'"
-    );
 }
 
 #[test]
@@ -393,81 +246,6 @@ fn h_no_longer_toggles_sidebar_via_handle_key() {
         "Sidebar toggle moved from 'h' to 'x'; 'h' must not toggle the sidebar"
     );
 }
-
-#[test]
-fn power_lib_search_esc_closes_via_handle_key() {
-    let mut app = make_app_stub();
-    app.panel_focus = crate::app::PanelFocus::Library;
-    app.library_tab = 1;
-    app.libs.push(test_lib_with_search());
-    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.libs[0].search.is_none());
-}
-
-#[test]
-fn power_enter_on_series_search_result_starts_selection_without_drilldown() {
-    use crate::app::{BrowseLevel, LibSearch, LibraryTab};
-
-    let mut app = make_app_stub();
-    app.panel_focus = crate::app::PanelFocus::Library;
-    app.library_tab = 1;
-
-    let mut library = crate::app::tests::make_item("Shows", "CollectionFolder");
-    library.id = "lib-shows".into();
-    library.collection_type = "tvshows".into();
-    library.is_folder = true;
-
-    let mut series = crate::app::tests::make_item("Search Result", "Series");
-    series.id = "series-1".into();
-    series.is_folder = true;
-
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: vec![BrowseLevel {
-            parent_id: "lib-shows".into(),
-            title: "Shows".into(),
-            items: Vec::new(),
-            total_count: 0,
-            cursor: 0,
-            scroll: 0,
-            item_types: Some("Series".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            music_grouping: None,
-        }],
-        search: Some(LibSearch {
-            query: "search".into(),
-            items: vec![series],
-            results: vec![0],
-            cursor: 0,
-            scroll: 0,
-            loading: false,
-        }),
-        feed_home_video: None,
-        album_track_focus: None,
-        artist_header_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
-    app.series_detail_loading.insert("series-1".into());
-
-    let nav_depth = app.libs[0].nav_stack.len();
-    app.handle_key(ev(KeyCode::Enter, KeyModifiers::NONE));
-
-    assert_eq!(app.libs[0].series_selection, Some(0));
-    assert_eq!(app.libs[0].nav_stack.len(), nav_depth);
-}
-
-// `lib_search_esc_closes_via_handle_key` (deleted): identical scenario
-// to `power_lib_search_esc_closes_via_handle_key` above but without
-// setting `panel_focus`/`library_tab`, which is how it used to reach
-// Standard's now-deleted `lib_search` CONTEXT_STACK entry. Power's
-// equivalent handler is already covered by the test above.
 
 #[test]
 fn c_prompts_clear_queue_confirmation_via_handle_key() {
@@ -537,25 +315,12 @@ fn enter_on_queue_tab_dispatches_queue_play_cursor_via_handle_key() {
 
 #[test]
 fn context_stack_order_is_pinned() {
-    // Updated for #361: the Standard-only `lib_search` entry (and its
-    // handler `handle_key_lib_search`) was deleted along with the rest
-    // of the Standard view. `power_lib_search` is Power's equivalent and
-    // was already present above it in the stack, so removing the
-    // now-nonexistent entry doesn't change any surviving precedence.
-    //
-    // Updated for the shared-confirmation-modal change: `save_modal`,
-    // `confirm_clear_queue`, and `confirm_rescan` collapsed into one
-    // `confirm_modal` entry (dispatching on `App::confirm_modal`), placed
-    // at the topmost rank of the ranks it replaces (`save_modal`'s), per
-    // design.md decision 2. The remote re-anchor picker is another blocking
-    // queue modal and therefore follows the shared confirmation modal. The
-    // visualizer is a global action and therefore
-    // sits after modal/context-menu handlers but before playback dispatch.
-    //
-    // Updated for the retire-pty-relay-for-local-daemon-stay-alive change
-    // (group 7): `daemon_lost_modal` sits above every other entry, including
-    // `confirm_modal` -- an unannounced local-daemon loss must block input
-    // even if some other confirmation happened to be showing when it hit.
+    // Updated for the unified search modal: the per-view inline search
+    // entries (`home_search`, `lib_search`) and the per-menu
+    // `context_menu` entry were retired along with the inline search
+    // path. The new `search_modal` entry handles all search keys
+    // (any home/library tab) and the context menu's keys (`Esc` and
+    // friends) are caught by the existing modal layers above it.
     let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
     assert_eq!(
         names,
@@ -570,13 +335,11 @@ fn context_stack_order_is_pinned() {
             "playlists",
             "global_overlay_open",
             "queue_column_width",
-            "home_search",
-            "lib_search",
+            "search_modal",
             "sidebar_toggle_x",
             "confirm_skip_intro",
             "confirm_next_up",
             "clear_queue_prompt_c",
-            "context_menu",
             "visualizer",
             "playback",
             "ctrl_l_force_clear",

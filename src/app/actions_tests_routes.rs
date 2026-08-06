@@ -39,7 +39,6 @@ fn recursive_music_app() -> App {
     app.libs.push(LibraryTab {
         library,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -202,7 +201,6 @@ fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
     app.libs.push(LibraryTab {
         library: movies_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -307,7 +305,6 @@ fn play_item_swaps_to_library_route_before_replacing_queue() {
     app.libs.push(LibraryTab {
         library: lib_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -336,7 +333,6 @@ fn play_item_skips_library_routing_when_attached_to_a_session() {
     app.libs.push(LibraryTab {
         library: lib_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -383,7 +379,6 @@ fn play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel
     app.libs.push(LibraryTab {
         library: lib_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,

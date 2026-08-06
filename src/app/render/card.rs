@@ -35,8 +35,9 @@ impl App {
         // On short terminals (<= 30 rows) cap the card image at 12 rows so the queue
         // list keeps adequate space; taller terminals cap at 18 rows.
         let max_h = max_h.min(if self.terminal_height <= 30 { 12 } else { 24 });
+        let mem_key = self.current_mem_key(cache_key);
         let image_loading = self.card_image_loading.contains(cache_key);
-        if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
+        if let Some(Some(state)) = self.card_image_states.get_mut(&mem_key) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             let avail = ratatui::layout::Size {
                 width: area.width,
@@ -140,7 +141,11 @@ impl App {
         if self.images_enabled() || is_music_item {
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
         }
-        let use_placeholder = matches!(self.card_image_states.get(&cache_key), Some(None));
+        let use_placeholder = matches!(
+            self.card_image_states
+                .get(&self.current_mem_key(&cache_key)),
+            Some(None)
+        );
 
         // Prefetch images for nearby items so they are ready before the cursor reaches them.
         // Collect data first (releasing the borrow on items) then call fetch (&mut self).
@@ -224,7 +229,6 @@ mod tests {
                 letter_filter: None,
                 music_grouping: None,
             }],
-            search: None,
             feed_home_video: None,
 
             album_track_focus: None,
@@ -336,13 +340,14 @@ mod tests {
         let mut app = make_direct_remote_app(local_items, remote_items);
         app.set_queue_scope(QueueScope::Local);
         app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
         app.player.status.lock().unwrap().active = false;
 
         render_power_card(&mut app);
 
         assert!(app
             .card_image_states
-            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
+            .contains_key(&app.current_mem_key(QUEUE_CARD_PLACEHOLDER_KEY)));
         assert!(!fetch_triggered(&app, "remote-hidden:P"));
     }
 
@@ -374,13 +379,15 @@ mod tests {
         let mut app = make_queue_app(6, 2);
         app.image_protocol_enabled = true;
         app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
-        app.card_image_states.insert("id2:P".into(), None);
+        app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.card_image_states
+            .insert(app.current_mem_key("id2:P"), None);
 
         render_power_card(&mut app);
 
         assert!(app
             .card_image_states
-            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
+            .contains_key(&app.current_mem_key(QUEUE_CARD_PLACEHOLDER_KEY)));
         assert!(!app.card_image_loading.contains("id2:P"));
     }
 
@@ -389,14 +396,16 @@ mod tests {
         let mut app = make_queue_app(6, 0);
         app.image_protocol_enabled = true;
         app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
-        app.card_image_states.insert("id3:P".into(), None);
+        app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.card_image_states
+            .insert(app.current_mem_key("id3:P"), None);
         set_playback(&mut app, 3, false);
 
         render_power_card(&mut app);
 
         assert!(app
             .card_image_states
-            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
+            .contains_key(&app.current_mem_key(QUEUE_CARD_PLACEHOLDER_KEY)));
         assert!(!app.card_image_loading.contains("id3:P"));
     }
 

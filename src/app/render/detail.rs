@@ -139,9 +139,6 @@ impl App {
 
         let item = if self.is_feed_home_video_group_view(lib_idx) {
             self.selected_feed_home_video_item(lib_idx)?
-        } else if let Some(search) = &lib.search {
-            let &idx = search.results.get(search.cursor)?;
-            search.items.get(idx)?.clone()
         } else {
             let level = lib.nav_stack.last()?;
             level.items.get(level.cursor)?.clone()
@@ -166,10 +163,7 @@ impl App {
             return None;
         }
 
-        let item = if let Some(search) = &lib.search {
-            let &idx = search.results.get(search.cursor)?;
-            search.items.get(idx)?.clone()
-        } else {
+        let item = {
             let level = lib.nav_stack.last()?;
             level.items.get(level.cursor)?.clone()
         };
@@ -231,7 +225,10 @@ impl App {
             if !self.images_enabled() {
                 (0, 0, false)
             } else {
-                match self.card_image_states.get_mut(&primary_cache_key) {
+                match self
+                    .card_image_states
+                    .get_mut(&self.current_mem_key(&primary_cache_key))
+                {
                     // Fetch resolved with no image for this movie -- nothing to
                     // reserve space for.
                     Some(None) => (0, 0, false),
@@ -404,7 +401,15 @@ impl App {
         // above the hero already shows the name (and reserving the row there
         // would not have been budgeted for).
         if show_title {
-            row = render_hero_title_row(f, inner_x, row, max_y, inner_w16, &item.display_name(), focused);
+            row = render_hero_title_row(
+                f,
+                inner_x,
+                row,
+                max_y,
+                inner_w16,
+                &item.display_name(),
+                focused,
+            );
         }
 
         let img_actual_w = content.img_actual_w;
@@ -541,7 +546,10 @@ impl App {
                 );
             } else {
                 let primary_cache_key = compact_banner_image_cache_key(&item.id);
-                if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
+                if let Some(Some(state)) = self
+                    .card_image_states
+                    .get_mut(&self.current_mem_key(&primary_cache_key))
+                {
                     type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                     f.render_stateful_widget(
                         SImg::default()

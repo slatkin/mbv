@@ -395,7 +395,9 @@ impl App {
                 }
             }
             KeyCode::Char('/') => {
-                self.search.open(true);
+                let from_home = self.library_tab == 0;
+                let lib_idx_for_fuzzy = if from_home { 0 } else { self.library_tab - 1 };
+                self.handle_search_key(lib_idx_for_fuzzy, from_home);
                 return false;
             }
             KeyCode::Char('p') => {

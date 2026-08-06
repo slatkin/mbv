@@ -267,7 +267,14 @@ impl App {
             SavePlaylistStage::RenamePlaylist { .. } => " Rename Playlist ",
             _ => " Save as Playlist ",
         };
-        let inner = render_modal_frame(f, title_text, 52, 7);
+        let inner = render_modal_frame(
+            f,
+            &mut self.dim_backdrop_active,
+            title_text,
+            52,
+            7,
+            palette::BG_GREEN,
+        );
         let label = "Name: ";
         let cursor = "▏";
         let max_input = inner.width as usize - label.len() - cursor.len() - 2;

@@ -115,6 +115,12 @@ impl App {
             self.save_prefs();
         }
 
+        // Set the dim flag from the modal state before any content is drawn,
+        // so every image lookup and fetch trigger in this frame sees the right
+        // mem-key. `render_modal_frame` resets it on entry so it stays accurate
+        // for the receiver between frames too.
+        self.dim_backdrop_active = self.any_dim_modal_open();
+
         // Every render sub-call below writes into this fresh, local value
         // instead of `self.layout` directly. It's swapped into `self.layout`
         // in one atomic assignment only once this pass completes in full, so
@@ -218,10 +224,23 @@ impl App {
         if self.daemon_lost_modal.is_some() {
             self.render_daemon_lost_modal(f);
         }
+        if self.search_modal.is_some() {
+            overlays::search_modal::render_search_modal(self, f, area);
+        }
 
         // One atomic replace, reached only once the full pass above has
         // completed -- `self.layout` never observes a half-updated frame.
         self.layout = layout;
+    }
+
+    fn any_dim_modal_open(&self) -> bool {
+        self.confirm_modal.is_some()
+            || self.daemon_lost_modal.is_some()
+            || self.remote_reanchor_popup.is_some()
+            || self.multiselect_popup.is_some()
+            || self.save_playlist_dialog.is_some()
+            || self.library_routes_popup.is_some()
+            || self.search_modal.is_some()
     }
 }
 

@@ -137,7 +137,13 @@ impl App {
                 palette::PLAYBACK_PANEL_BG
             };
             super::render_selected_block_background(
-                f, area, offset, visible, top_pad_abs, bottom_pad_abs, bg,
+                f,
+                area,
+                offset,
+                visible,
+                top_pad_abs,
+                bottom_pad_abs,
+                bg,
             );
         }
 

@@ -14,27 +14,39 @@ impl App {
     /// shows diagnostics (last playing title, daemon log path, and an
     /// optional restart-failure line) above a 3-choice hint instead of a
     /// yes/no one.
-    pub(in crate::app::render) fn render_daemon_lost_modal(&self, f: &mut Frame) {
-        let Some(ref modal) = self.daemon_lost_modal else {
-            return;
+    pub(in crate::app::render) fn render_daemon_lost_modal(&mut self, f: &mut Frame) {
+        let (last_playing_title, daemon_log_path, restart_error) = match &self.daemon_lost_modal {
+            Some(m) => (
+                m.last_playing_title.clone(),
+                m.daemon_log_path.clone(),
+                m.restart_error.clone(),
+            ),
+            None => return,
         };
-        let inner = render_modal_frame(f, " Daemon Lost ", 64, 10);
+        let inner = render_modal_frame(
+            f,
+            &mut self.dim_backdrop_active,
+            " Daemon Lost ",
+            64,
+            10,
+            palette::BG_GREEN,
+        );
 
         let mut lines = vec![Line::from(Span::styled(
             "The local daemon connection was lost unexpectedly.",
             Style::default().fg(palette::WHITE),
         ))];
-        if let Some(title) = &modal.last_playing_title {
+        if let Some(title) = &last_playing_title {
             lines.push(Line::from(Span::styled(
                 format!("Was playing: {title}"),
                 Style::default().fg(palette::SUBTLE),
             )));
         }
         lines.push(Line::from(Span::styled(
-            format!("Daemon log: {}", modal.daemon_log_path),
+            format!("Daemon log: {daemon_log_path}"),
             Style::default().fg(palette::SUBTLE),
         )));
-        if let Some(error) = &modal.restart_error {
+        if let Some(error) = &restart_error {
             lines.push(Line::from(Span::styled(
                 format!("Restart failed: {error}"),
                 Style::default().fg(palette::RED),

@@ -1,8 +1,27 @@
 use super::action::{power_album_track_command_for_key, Command};
 use super::input_resolver::KeyChord;
-use super::{App, ConfirmAction, ConfirmModal, LibSearch, PanelFocus};
+use super::{App, ConfirmAction, ConfirmModal, PanelFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::{Duration, Instant};
+
+impl App {
+    /// Dispatch the `/` search key: open the modal in fuzzy mode from a
+    /// library tab, or hand off to the modal's own handler when one is
+    /// already open (promote-to-global on a quick second press, otherwise
+    /// append the `/` as a literal query character).
+    pub(super) fn handle_search_key(&mut self, lib_idx_for_fuzzy: usize, from_home: bool) {
+        if self.search_modal.is_some() {
+            self.search_modal_promote_or_append_slash();
+            return;
+        }
+        if from_home {
+            self.open_search_modal_global();
+        } else {
+            self.open_search_modal_fuzzy(lib_idx_for_fuzzy);
+        }
+        self.last_slash_at = Some(Instant::now());
+    }
+}
 
 impl App {
     pub(super) fn active_power_album_track_lib_idx(&self) -> Option<usize> {
@@ -34,31 +53,6 @@ impl App {
             return None;
         }
         Some(self.dispatch(Command::TogglePowerSidebar))
-    }
-
-    pub(super) fn handle_key_power_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
-        if key.modifiers.contains(KeyModifiers::ALT)
-            || key.modifiers.contains(KeyModifiers::CONTROL)
-            || self.context_menu_open()
-            || !matches!(self.panel_focus, PanelFocus::Library)
-            || self.library_tab == 0
-        {
-            return None;
-        }
-        // Let the shared Tab/BackTab cycling path claim these keys.
-        if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
-            return None;
-        }
-        let lib_idx = self.library_tab - 1;
-        if key.code == KeyCode::Enter && self.power_selected_series_item(lib_idx).is_some() {
-            return None;
-        }
-        if self.libs[lib_idx].search.is_some() {
-            self.handle_lib_search_key(lib_idx, key);
-            Some(false)
-        } else {
-            None
-        }
     }
 
     /// Global view keys shared by the left-column handlers (`handle_lib_key`,
@@ -124,31 +118,6 @@ impl App {
     /// into the query and moving the result cursor must not interleave.
     /// To navigate results, close the search (Esc) and use the flat-list
     /// bindings, which include h/j/k/l in 2-col mode.
-    fn handle_lib_search_key(&mut self, lib_idx: usize, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc => {
-                self.libs[lib_idx].search = None;
-            }
-            KeyCode::Backspace => {
-                let empty = self.libs[lib_idx]
-                    .search
-                    .as_ref()
-                    .is_none_or(|s| s.query.is_empty());
-                if empty {
-                    self.libs[lib_idx].search = None;
-                } else {
-                    self.libs[lib_idx].search.as_mut().unwrap().query.pop();
-                    self.update_lib_search(lib_idx);
-                }
-            }
-            KeyCode::Char(c) => {
-                self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
-                self.update_lib_search(lib_idx);
-            }
-            _ => {}
-        }
-    }
-
     pub(super) fn handle_lib_key(&mut self, lib_idx: usize, key: KeyEvent) -> Option<bool> {
         if let Some(quit) = self.handle_enqueue_selected_key(key) {
             return Some(quit);
@@ -271,46 +240,8 @@ impl App {
             }
             KeyCode::Char('r') => self.refresh_lib(),
             KeyCode::Char('/') => {
-                if self.open_recursive_album_search(lib_idx) {
-                    return Some(false);
-                }
-                let (items, needs_full_load) = if self.is_feed_home_video_group_view(lib_idx) {
-                    (self.feed_home_video_selected_items(lib_idx), false)
-                } else {
-                    self.libs[lib_idx]
-                        .nav_stack
-                        .last()
-                        .map(|l| {
-                            let all = l.all_items.clone().unwrap_or_else(|| l.items.clone());
-                            // With a letter-range pill active, `l.total_count`
-                            // is the FILTERED range's count, not the whole
-                            // library's -- `l.items.len() < l.total_count`
-                            // alone would read a fully-loaded small range as
-                            // "nothing more to fetch" and search would run
-                            // over just that range. Force the full-library
-                            // fetch whenever a filter is active and it
-                            // hasn't already happened (`all_items` still
-                            // unset); `spawn_search_items_load` always fetches
-                            // the whole library unfiltered (see there).
-                            let needs = l.all_items.is_none()
-                                && (l.letter_filter.is_some() || l.items.len() < l.total_count);
-                            (all, needs)
-                        })
-                        .unwrap_or_default()
-                };
-                let n = items.len();
-                self.libs[lib_idx].search = Some(LibSearch {
-                    query: String::new(),
-                    items,
-                    results: (0..n).collect(),
-                    cursor: 0,
-                    scroll: 0,
-                    loading: needs_full_load,
-                });
-                if needs_full_load {
-                    self.spawn_search_items_load(lib_idx);
-                }
-                self.update_lib_search(lib_idx);
+                self.handle_search_key(lib_idx, false);
+                return Some(false);
             }
             // Any other Ctrl/Alt-modified character is claimed here as a
             // no-op. This mirrors the pre-phase-3 `is_lib_key` mirror's

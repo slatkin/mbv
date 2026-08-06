@@ -144,7 +144,6 @@ fn apply_route_for_playback_swaps_to_routed_daemon_on_success() {
     app.libs.push(LibraryTab {
         library: lib_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -191,7 +190,6 @@ fn apply_route_for_playback_falls_back_to_local_with_warning_on_connect_failure(
     app.libs.push(LibraryTab {
         library: lib_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -226,7 +224,6 @@ fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
     app.libs.push(LibraryTab {
         library: lib_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -262,7 +259,6 @@ fn apply_route_for_playback_restores_local_when_item_has_no_route() {
     app.libs.push(LibraryTab {
         library: movies_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -325,7 +321,6 @@ fn apply_route_for_playback_restores_local_via_restore_local_mode_when_swap_to_a
     app.libs.push(LibraryTab {
         library: lib_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,

@@ -42,7 +42,6 @@ fn make_power_movie_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
 
         album_track_focus: None,
@@ -82,7 +81,6 @@ fn push_power_library(app: &mut App, id: &str, name: &str) {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -185,36 +183,6 @@ fn hjkl_navigates_two_column_library_list_via_handle_key() {
         app.libs[0].nav_stack[0].cursor, 0,
         "'k' should move up one row"
     );
-}
-
-#[test]
-fn lib_search_ignores_navigation_keys_and_only_accepts_query_editing() {
-    // Regression: per design, when the lib search box is open and the user
-    // is typing into the query, NO navigation key should fire -- not
-    // Up/Down/PageUp/PageDown, not Enter, not h/j/k/l. Only Esc, Backspace,
-    // and printable characters are recognised. This prevents "h" typed into
-    // a query for "Harry Potter" from being silently consumed as nav.
-    let mut app = make_power_movie_app();
-    app.libs[0].search = Some(crate::app::LibSearch {
-        query: String::new(),
-        items: app.libs[0].nav_stack[0].items.clone(),
-        results: (0..app.libs[0].nav_stack[0].items.len()).collect(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    // Type a multi-letter query that uses every previously-bound letter.
-    for c in "hjklll".chars() {
-        let _ = app.handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
-    }
-    assert_eq!(
-        app.libs[0].search.as_ref().unwrap().query,
-        "hjklll",
-        "h/j/k/l must be typed into the query, not consumed as nav"
-    );
-    // Cursor stays at 0 -- nothing has moved it.
-    assert_eq!(app.libs[0].search.as_ref().unwrap().cursor, 0);
 }
 
 #[test]
@@ -362,7 +330,6 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
 
         album_track_focus: None,
@@ -414,7 +381,6 @@ fn ctrl_a_enqueues_selected_from_library_view() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
 
         album_track_focus: None,
@@ -470,61 +436,6 @@ fn tab_cycles_from_right_panel_when_search_is_closed() {
 }
 
 #[test]
-fn tab_cycles_from_right_panel_with_search_open() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_tab_cycle_app();
-    app.libs[0].search = Some(LibSearch {
-        query: "mov".into(),
-        items: app.libs[0].nav_stack[0].items.clone(),
-        results: vec![0],
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-
-    assert!(!handled);
-    assert_eq!(app.library_tab, 2);
-    assert_eq!(app.panel_focus, PanelFocus::Library);
-    let search = app.libs[0]
-        .search
-        .as_ref()
-        .expect("source search state should be untouched");
-    assert_eq!(search.query, "mov");
-    assert_eq!(search.cursor, 0);
-    assert_eq!(search.results, vec![0]);
-}
-
-#[test]
-fn backtab_cycles_from_right_panel_with_search_open() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_tab_cycle_app();
-    app.library_tab = 2;
-    app.libs[1].search = Some(LibSearch {
-        query: "sho".into(),
-        items: app.libs[1].nav_stack[0].items.clone(),
-        results: vec![0],
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-
-    assert!(!handled);
-    assert_eq!(app.library_tab, 1);
-    assert_eq!(app.panel_focus, PanelFocus::Library);
-    let search = app.libs[1]
-        .search
-        .as_ref()
-        .expect("source search state should be untouched");
-    assert_eq!(search.query, "sho");
-    assert_eq!(search.cursor, 0);
-    assert_eq!(search.results, vec![0]);
-}
-
-#[test]
 fn selecting_the_last_tab_scrolls_it_into_view_with_correct_arrows() {
     // Task 5 (#361): with more libraries than fit in the tab bar, the
     // tab bar must scroll the selected tab into view rather than
@@ -562,34 +473,6 @@ fn selecting_the_last_tab_scrolls_it_into_view_with_correct_arrows() {
     // The last tab is visible and nothing follows it, so the
     // right-scroll arrow must not falsely claim there's more.
     assert_eq!(vis_end, app.tab_count());
-}
-
-#[test]
-fn library_search_on_an_unfocused_library_survives_tab_cycling() {
-    let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
-    push_power_library(&mut app, "lib-movies", "Movies");
-    push_power_library(&mut app, "lib-shows", "Shows");
-    app.libs[0].search = Some(LibSearch {
-        query: "mov".into(),
-        items: app.libs[0].nav_stack[0].items.clone(),
-        results: vec![0],
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-
-    assert!(!handled);
-    let search = app.libs[0]
-        .search
-        .as_ref()
-        .expect("plain library search should stay open");
-    assert_eq!(search.query, "mov");
-    assert_eq!(search.cursor, 0);
-    assert_eq!(search.results, vec![0]);
 }
 
 #[test]
@@ -712,35 +595,43 @@ fn movie_context_menu_offers_unaffected_non_folder_verbs() {
 }
 
 // Regression coverage for the letter-pills PR review finding: opening
-// `/`-search while a letter-range pill is active must always trigger a
-// full-library fetch, even when the active range's slice is already
-// "fully loaded" by its own (small, filtered) total_count. Before the
-// fix, `needs_full_load` compared `items.len()` against the level's
+// `/`-search while a letter-range pill is active must always target the
+// full library, even when the active range's slice is already "fully
+// loaded" by its own (small, filtered) total_count. Before the fix,
+// `needs_full_load` compared `items.len()` against the level's
 // (filtered) `total_count`, so a fully-loaded small range read as
 // "nothing more to fetch" and search silently ran over just that range.
+//
+// Retargeted for the unified search modal (Round 6): the modal's
+// `corpus` is sourced from the root level's `all_items` regardless of
+// the current letter filter, so a fully-loaded M–O range must NOT
+// convince the modal that its corpus is ready when `all_items` is
+// still `None` -- it should report `loading` and wait for the
+// full-library fetch to arrive.
 #[test]
 fn opening_search_with_an_active_letter_pill_always_needs_a_full_library_fetch() {
     let mut app = make_power_movie_app();
     {
         let lvl = app.libs[0].nav_stack.last_mut().unwrap();
-        // Simulate a selected, fully-loaded M–O range: only 2 items, and
-        // the level's own total_count (what get_items_sorted_ranged
-        // reported for that range) matches items.len() exactly -- the
-        // state that used to wrongly look "fully loaded" for search.
         lvl.letter_filter = crate::app::render::LetterFilter::for_index(4);
         lvl.total_count = lvl.items.len();
+        // Root level has no prefetched full library yet, so the modal
+        // must report loading instead of serving the M–O range as the
+        // full corpus.
+        lvl.all_items = None;
     }
-    app.libs[0].library_total = Some(3000); // the library's true size
+    app.libs[0].library_total = Some(3000);
 
-    // `handle_key` returns whether the app should quit, not whether the
-    // key was "handled" -- the `/` handler returns `Some(false)`, so a
-    // successful (non-quitting) key press yields `false` here.
     let should_quit = app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
 
     assert!(!should_quit);
-    let search = app.libs[0].search.as_ref().expect("search should open");
+    let modal = app.search_modal.as_ref().expect("search modal should open");
     assert!(
-        search.loading,
+        modal.loading,
         "a full-library fetch must be in flight, not just the active M–O range"
+    );
+    assert!(
+        modal.corpus.is_empty(),
+        "an unloaded full library must not silently become the M–O range"
     );
 }
