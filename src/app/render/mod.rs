@@ -417,9 +417,7 @@ impl App {
             if self.visualizer_enabled && visualizer_h == 0 && left_remaining > 0 {
                 self.flash_status("Terminal too short for left visualizer".into());
             }
-            let queue_h = left_remaining
-                .saturating_sub(visualizer_h)
-                .saturating_sub(1);
+            let queue_h = left_remaining.saturating_sub(visualizer_h);
             (
                 right_area,
                 Rect {
@@ -481,25 +479,65 @@ impl App {
 
         if self.panel_mode != PanelMode::LibraryOnly {
             let queue_list_area = render_power_queue_panel_frame(f, queue_area, queue_focused);
-            // Render title pills at the top of the queue list panel, replacing the border.
-            if queue_list_area.height > 0 {
+            let qla = queue_list_area;
+
+            // Title and status bar panels float within the queue panel with
+            // 2 columns left/right indent and 1 row of space on all sides.
+            let title_overhead = if qla.height >= 4 { 3 } else { 0 };
+            let status_overhead = if qla.height >= title_overhead + 3 { 2 } else { 0 };
+
+            if title_overhead > 0 {
                 self.render_power_queue_title(
                     f,
                     Rect {
-                        x: queue_list_area.x,
-                        y: queue_list_area.y,
-                        width: queue_list_area.width,
+                        x: qla.x + 2,
+                        y: qla.y + 1,
+                        width: qla.width.saturating_sub(4),
                         height: 1,
                     },
                     layout,
                 );
             }
             let queue_content_area = Rect {
-                y: queue_list_area.y + 1,
-                height: queue_list_area.height.saturating_sub(1),
-                ..queue_list_area
+                y: qla.y + title_overhead,
+                height: qla.height.saturating_sub(title_overhead + status_overhead),
+                ..qla
             };
             self.render_power_queue(f, queue_content_area, queue_focused, layout);
+
+            if status_overhead > 0 {
+                let pill_row = Rect {
+                    x: qla.x + 2,
+                    y: qla.y + qla.height.saturating_sub(2),
+                    width: qla.width.saturating_sub(4),
+                    height: 1,
+                };
+                let pill_bg = palette::DARK_BG;
+                f.render_widget(
+                    Block::default().style(Style::default().bg(pill_bg)),
+                    pill_row,
+                );
+                f.render_widget(
+                    Paragraph::new(Line::from(self.playlist_status_spans())),
+                    pill_row,
+                );
+                if let Some(autosave_spans) = self.autosave_status_spans() {
+                    let autosave_w = Self::status_width(&autosave_spans);
+                    let autosave_x = pill_row.x + pill_row.width.saturating_sub(autosave_w);
+                    if autosave_x > pill_row.x {
+                        f.render_widget(
+                            Paragraph::new(Line::from(autosave_spans)),
+                            Rect {
+                                x: autosave_x,
+                                y: pill_row.y,
+                                width: autosave_w,
+                                height: 1,
+                            },
+                        );
+                    }
+                }
+            }
+
             // Render visualizer at the bottom of the left panel (within queue panel bounds)
             if self.visualizer_enabled && visualizer_h >= 3 {
                 let left_viz_area = Rect {
@@ -525,39 +563,6 @@ impl App {
                     height: 1,
                 };
                 f.render_widget(Paragraph::new(vec![hr_line]), hr_area);
-            }
-            // Playlist status pill floats at the bottom of the left panel,
-            // below the queue panel frame, on the queue panel background.
-            let pill_row = Rect {
-                x: left_content.x,
-                y: left_area.y + left_area.height - 2,
-                width: left_content.width,
-                height: 1,
-            };
-            let pill_bg = palette::DARK_BG;
-            f.render_widget(
-                Block::default().style(Style::default().bg(pill_bg)),
-                pill_row,
-            );
-            f.render_widget(
-                Paragraph::new(Line::from(self.playlist_status_spans())),
-                pill_row,
-            );
-            // Autosave/UNSAVED pill on the right side of the same row.
-            if let Some(autosave_spans) = self.autosave_status_spans() {
-                let autosave_w = Self::status_width(&autosave_spans);
-                let autosave_x = pill_row.x + pill_row.width.saturating_sub(autosave_w);
-                if autosave_x > pill_row.x {
-                    f.render_widget(
-                        Paragraph::new(Line::from(autosave_spans)),
-                        Rect {
-                            x: autosave_x,
-                            y: pill_row.y,
-                            width: autosave_w,
-                            height: 1,
-                        },
-                    );
-                }
             }
         }
         if right_visible {

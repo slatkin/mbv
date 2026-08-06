@@ -84,7 +84,7 @@ impl App {
         }
         Self::set_status_pill_style(&mut local_spans, local_fg, local_bg);
         if let Some(icon) = local_spans.get_mut(1) {
-            icon.style = icon.style.fg(local_fg);
+            icon.style = icon.style.fg(palette::FOAM);
         }
         Self::uppercase_status_label(&mut local_spans);
 
