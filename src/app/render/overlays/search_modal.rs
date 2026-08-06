@@ -1,12 +1,3 @@
-// The search-modal renderer is being introduced in stages. This file ships
-// the new `render_search_modal` function and its helpers; Round 4 (input)
-// is responsible for dispatching it from `App::render` when
-// `app.search_modal.is_some()`. Until then, every helper here is unused
-// outside this file. Remove the module-level `#[allow(dead_code)]` in the
-// change that adds the first non-test call site.
-
-#![allow(dead_code)]
-
 use super::super::super::palette;
 use super::super::super::search_modal::SearchMode;
 use super::super::super::ui_util::{fmt_duration_approx, trunc_str};
@@ -124,11 +115,11 @@ pub(in crate::app::render) fn render_search_modal(app: &mut App, f: &mut Frame, 
     let selected = &results[modal.cursor.min(n - 1)];
     let hero_h = compute_hero_height(selected, body_area.width, body_area.height);
     if let Some(modal_mut) = app.search_modal.as_mut() {
-        adjust_scroll(modal_mut, body_area.height, hero_h);
+        adjust_scroll(modal_mut, n, body_area.height, hero_h);
     }
     let modal = app.search_modal.as_ref().unwrap();
     let results = modal.filtered_results();
-    let selected = &results[modal.cursor.min(results.len() - 1)];
+    let selected = &results[modal.cursor.min(n - 1)];
     render_results(f, body_area, modal, &results, selected, hero_h);
 }
 
@@ -304,13 +295,13 @@ fn render_state_message(
 
 fn adjust_scroll(
     modal: &mut super::super::super::search_modal::SearchModal,
+    total_rows: usize,
     body_height: u16,
     hero_h: u16,
 ) {
     if body_height == 0 {
         return;
     }
-    let total_rows = modal.filtered_results().len();
     if total_rows == 0 {
         modal.scroll = 0;
         return;
@@ -427,7 +418,7 @@ fn render_results(
         ));
         title_spans.push(Span::styled(title_text, title_style));
         f.render_widget(Paragraph::new(Line::from(title_spans)), title_row);
-        let meta_text = row_meta_for(item);
+        let meta_text = meta_for(item, true, true);
         let meta_indent = " ".repeat(BADGE_COL_W as usize);
         let meta_trunc = trunc_str(&meta_text, body_area.width as usize);
         f.render_widget(
@@ -518,7 +509,7 @@ fn render_hero(f: &mut Frame, area: Rect, item: &MediaItem, full_width: u16) {
         row += 1;
     }
     if row < max_y {
-        let meta = trunc_str(&hero_meta_for(item), text_w);
+        let meta = trunc_str(&meta_for(item, false, false), text_w);
         f.render_widget(
             Paragraph::new(Span::styled(
                 meta,
@@ -585,7 +576,12 @@ fn badge_for(item_type: &str) -> &'static str {
     }
 }
 
-fn row_meta_for(item: &MediaItem) -> String {
+/// `include_series_name` adds the series name to Episode rows (list context,
+/// where the hero title above the row already doesn't show it); the hero
+/// view omits it since the series name is already shown as the hero title.
+/// `include_track_count` adds the track count to MusicAlbum rows, which the
+/// hero view leaves out since it already shows a full track listing below.
+fn meta_for(item: &MediaItem, include_series_name: bool, include_track_count: bool) -> String {
     let mut parts: Vec<String> = Vec::new();
     match item.item_type.as_str() {
         "Movie" => {
@@ -609,7 +605,7 @@ fn row_meta_for(item: &MediaItem) -> String {
             }
         }
         "Episode" => {
-            if !item.series_name.is_empty() {
+            if include_series_name && !item.series_name.is_empty() {
                 parts.push(item.series_name.clone());
             }
             let se = se_label(item);
@@ -636,82 +632,8 @@ fn row_meta_for(item: &MediaItem) -> String {
             if item.production_year > 0 {
                 parts.push(item.production_year.to_string());
             }
-            if item.total_count > 0 {
+            if include_track_count && item.total_count > 0 {
                 parts.push(format!("{} tracks", item.total_count));
-            }
-        }
-        "Audio" => {
-            if !item.artist.is_empty() {
-                parts.push(item.artist.clone());
-            }
-            if !item.album.is_empty() {
-                parts.push(item.album.clone());
-            }
-            let dur = runtime_mmss(item);
-            if !dur.is_empty() {
-                parts.push(dur);
-            }
-        }
-        "MusicArtist" => {
-            if item.total_count > 0 {
-                parts.push(format!("{} albums", item.total_count));
-            }
-        }
-        "BoxSet" if item.total_count > 0 => {
-            parts.push(format!("{} items", item.total_count));
-        }
-        _ => {}
-    }
-    parts.join(" \u{00b7} ")
-}
-
-fn hero_meta_for(item: &MediaItem) -> String {
-    let mut parts: Vec<String> = Vec::new();
-    match item.item_type.as_str() {
-        "Movie" => {
-            if item.production_year > 0 {
-                parts.push(item.production_year.to_string());
-            }
-            let dur = runtime_approx(item);
-            if !dur.is_empty() {
-                parts.push(dur);
-            }
-            if !item.genre.is_empty() {
-                parts.push(item.genre.clone());
-            }
-        }
-        "Series" => {
-            if item.production_year > 0 {
-                parts.push(item.production_year.to_string());
-            }
-            if item.total_count > 0 {
-                parts.push(format!("{} seasons", item.total_count));
-            }
-        }
-        "Episode" => {
-            let se = se_label(item);
-            if !se.is_empty() {
-                parts.push(se);
-            }
-            let dur = runtime_approx(item);
-            if !dur.is_empty() {
-                parts.push(dur);
-            }
-        }
-        "Season" => {
-            if !item.series_name.is_empty() {
-                parts.push(item.series_name.clone());
-            }
-            if item.index_number > 0 {
-                parts.push(format!("Season {}", item.index_number));
-            }
-        }
-        "MusicAlbum" => {
-            if !item.album.is_empty() {
-                parts.push(item.album.clone());
-            }
-            if item.production_year > 0 {
-                parts.push(item.production_year.to_string());
             }
         }
         "Audio" => {

@@ -79,7 +79,7 @@ pub use self::app_struct::App;
 use self::app_struct::AppInit;
 use self::bootstrap::bootstrap_local_daemon_queue;
 use self::resize::spawn_resize_worker;
-use self::search_modal::{SearchModal, SearchModalDrainOutcome};
+use self::search_modal::SearchModalDrainOutcome;
 use self::types_browse::{
     restore_library_position, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel,
     SeriesDetail,
@@ -515,17 +515,6 @@ impl App {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub(super) fn search_modal(&self) -> Option<&SearchModal> {
-        self.search_modal.as_ref()
-    }
-
-    #[allow(dead_code)]
-    pub(super) fn search_modal_mut(&mut self) -> Option<&mut SearchModal> {
-        self.search_modal.as_mut()
-    }
-
-    #[allow(dead_code)]
     pub(super) fn spawn_search_modal_query(&self, client: EmbyClient, query: String) {
         let tx = self.search_tx.clone();
         std::thread::spawn(move || {
@@ -534,7 +523,6 @@ impl App {
         });
     }
 
-    #[allow(dead_code)]
     pub(super) fn drain_search_modal_results(&mut self, outcome: &mut SearchModalDrainOutcome) {
         while let Ok((query, result)) = self.search_rx.try_recv() {
             outcome.received += 1;

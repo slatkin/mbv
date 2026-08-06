@@ -1,19 +1,9 @@
-// The search-modal module is being introduced in stages. This file ships
-// the new `SearchModal` struct, fuzzy/global scoring, and the
-// channel-based dispatch/drain for Global mode. The keymap (Round 5)
-// and render path (Round 4) are separate changes that wire these
-// symbols in; until then, every method, field, variant, and helper
-// here is unused outside of its own `#[cfg(test)] mod tests`. Remove
-// the per-item `#[allow(dead_code)]` attributes in the change that
-// adds the first non-test call site.
-
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use mbv_core::api::MediaItem;
 use std::cmp::Reverse;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) enum SearchMode {
     Fuzzy,
     Global,
@@ -22,7 +12,6 @@ pub(crate) enum SearchMode {
 pub(crate) struct SearchModal {
     pub(super) mode: SearchMode,
     pub(super) query: String,
-    pub(super) last_query: String,
     pub(super) results: Vec<MediaItem>,
     pub(super) corpus: Vec<MediaItem>,
     pub(super) cursor: usize,
@@ -61,13 +50,11 @@ fn score_corpus_against(corpus: &[MediaItem], query: &str) -> Vec<MediaItem> {
     scored.into_iter().map(|(_, item)| item.clone()).collect()
 }
 
-#[allow(dead_code)]
 impl SearchModal {
     pub(super) fn new(mode: SearchMode) -> Self {
         Self {
             mode,
             query: String::new(),
-            last_query: String::new(),
             results: Vec::new(),
             corpus: Vec::new(),
             cursor: 0,
@@ -76,26 +63,6 @@ impl SearchModal {
             type_filter: 0,
             last_drain_error: None,
         }
-    }
-
-    pub(super) fn open(&mut self, mode: SearchMode) {
-        self.mode = mode;
-        self.query.clear();
-        self.last_query.clear();
-        self.results.clear();
-        self.cursor = 0;
-        self.scroll = 0;
-        self.loading = false;
-        self.type_filter = 0;
-        self.last_drain_error = None;
-        if matches!(self.mode, SearchMode::Global) {
-            self.corpus.clear();
-        }
-    }
-
-    pub(super) fn prepare_query(&mut self, query: String) {
-        self.last_query = std::mem::replace(&mut self.query, query);
-        self.on_query_changed();
     }
 
     pub(super) fn on_query_changed(&mut self) {
@@ -359,10 +326,9 @@ mod tests {
     fn on_query_changed_clears_last_drain_error() {
         let mut modal = SearchModal::new(SearchMode::Global);
         modal.last_drain_error = Some("API timeout".into());
-        modal.query = "old".into();
-        modal.last_query = "old".into();
+        modal.query = "new".into();
 
-        modal.prepare_query("new".into());
+        modal.on_query_changed();
 
         assert!(modal.last_drain_error.is_none());
     }
@@ -534,7 +500,8 @@ mod tests {
         assert!(modal.loading);
 
         let mut modal = app.search_modal.take().unwrap();
-        modal.prepare_query("anything".into());
+        modal.query = "anything".into();
+        modal.on_query_changed();
         assert!(modal.results.is_empty());
         assert!(modal.loading);
     }

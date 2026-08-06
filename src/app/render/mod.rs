@@ -364,7 +364,7 @@ impl App {
             width: right_area.width,
             height: tab_h,
         };
-                if right_visible {
+        if right_visible {
             self.render_tabs(f, tab_area, tabs_area_out, tabbar_vol_area_out);
         }
 
@@ -437,7 +437,7 @@ impl App {
         // collapsed the user has asked to reclaim maximum width, so the gutters
         // are dropped and the library spans the panel edge-to-edge.
         let lib_area = power_right_panel_content_area(lib_area, self.panel_mode != PanelMode::Both);
-let mut render_lib_area = lib_area;
+        let mut render_lib_area = lib_area;
         if right_visible && self.library_tab > 0 && self.is_music_group_view(self.library_tab - 1) {
             let lib_idx = self.library_tab - 1;
             if lib_area.height > 0 {
@@ -456,7 +456,8 @@ let mut render_lib_area = lib_area;
             } else {
                 layout.selector_tabs = Vec::new();
             }
-        } else if right_visible && self.library_tab > 0
+        } else if right_visible
+            && self.library_tab > 0
             && self.should_show_letter_pills(self.library_tab - 1)
         {
             let lib_idx = self.library_tab - 1;

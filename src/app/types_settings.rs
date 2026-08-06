@@ -25,7 +25,7 @@ impl PanelFocus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub(super) enum PanelMode {
     #[default]
-    Both,        // both panels: card+queue left, library right
+    Both, // both panels: card+queue left, library right
     LibraryOnly, // left (queue) column hidden; library spans full window
     QueueOnly,   // right (library) column hidden; queue spans full window
 }

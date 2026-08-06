@@ -207,7 +207,7 @@ pub(crate) fn make_app_stub() -> App {
         panel_focus: PanelFocus::default(),
         library_tab: 0,
         queue_column_width: POWER_LEFT_WIDTH_DEFAULT,
-                panel_mode: PanelMode::default(),
+        panel_mode: PanelMode::default(),
         library_tab_pending: 0,
         queue_scroll: 0,
         last_played_item_id: None,

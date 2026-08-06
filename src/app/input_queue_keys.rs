@@ -1,6 +1,6 @@
 use super::{
-    App, PanelFocus, PanelMode, QueueScope, SavePlaylistDialog, SavePlaylistStage, POWER_LEFT_WIDTH_DEFAULT,
-    POWER_LEFT_WIDTH_STEP,
+    App, PanelFocus, PanelMode, QueueScope, SavePlaylistDialog, SavePlaylistStage,
+    POWER_LEFT_WIDTH_DEFAULT, POWER_LEFT_WIDTH_STEP,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::Instant;

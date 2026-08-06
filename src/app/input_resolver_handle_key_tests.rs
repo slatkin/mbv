@@ -228,7 +228,8 @@ fn x_moves_queue_focus_to_library_when_entering_library_only() {
     app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
 
     assert_eq!(
-        app.panel_mode, crate::app::PanelMode::LibraryOnly,
+        app.panel_mode,
+        crate::app::PanelMode::LibraryOnly,
         "first x from Both enters LibraryOnly"
     );
     assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
@@ -249,7 +250,8 @@ fn x_entering_both_leaves_focus_alone() {
 
     assert_eq!(app.panel_mode, crate::app::PanelMode::Both);
     assert_eq!(
-        app.panel_focus, crate::app::PanelFocus::Queue,
+        app.panel_focus,
+        crate::app::PanelFocus::Queue,
         "returning to Both must not move focus"
     );
 }

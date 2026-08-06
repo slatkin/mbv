@@ -8,7 +8,6 @@ impl App {
         })
     }
 
-    #[allow(dead_code)]
     pub(super) fn open_search_modal_fuzzy(&mut self, lib_idx: usize) {
         self.search_modal_prior_focus = Some(self.panel_focus);
         self.search_modal = Some(SearchModal::new(SearchMode::Fuzzy));
@@ -35,7 +34,6 @@ impl App {
         }
     }
 
-    #[allow(dead_code)]
     pub(super) fn open_search_modal_global(&mut self) {
         self.search_modal_prior_focus = Some(self.panel_focus);
         self.search_modal = Some(SearchModal::new(SearchMode::Global));
