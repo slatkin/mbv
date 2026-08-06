@@ -179,11 +179,12 @@ impl SearchModal {
         match t {
             "Movie" => 0,
             "Series" => 1,
-            "Episode" => 2,
-            "Audio" => 3,
-            "MusicAlbum" => 4,
-            "MusicArtist" => 5,
-            _ => 6,
+            "Season" => 2,
+            "Episode" => 3,
+            "Audio" => 4,
+            "MusicAlbum" => 5,
+            "MusicArtist" => 6,
+            _ => 7,
         }
     }
 }
@@ -630,6 +631,26 @@ mod tests {
         assert!(
             app.search_modal.is_none(),
             "Enter on a selectable result closes the modal"
+        );
+    }
+
+    #[test]
+    fn typing_in_global_mode_dispatches_a_new_query() {
+        let mut app = stub_library_with_root(Some(make_items(3)), None);
+        app.open_search_modal_global();
+        // Drain the query dispatched by opening the modal so it doesn't
+        // masquerade as the response to the keystroke below.
+        let _ = app
+            .search_rx
+            .recv_timeout(std::time::Duration::from_secs(2));
+
+        let _ = app.handle_key_search_modal(key(crossterm::event::KeyCode::Char('a')));
+
+        assert!(
+            app.search_rx
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .is_ok(),
+            "typing a character in global mode must dispatch a new server query"
         );
     }
 

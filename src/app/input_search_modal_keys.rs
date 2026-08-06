@@ -146,6 +146,7 @@ impl App {
         }
         modal.query.pop();
         modal.on_query_changed();
+        self.dispatch_search_modal_query_if_global();
     }
 
     fn search_modal_append_char(&mut self, c: char) {
@@ -154,6 +155,23 @@ impl App {
         };
         modal.query.push(c);
         modal.on_query_changed();
+        self.dispatch_search_modal_query_if_global();
+    }
+
+    /// Re-issue the server query as the user types in global mode.
+    /// `on_query_changed` only re-scores locally for fuzzy mode -- global
+    /// mode has no local corpus, so without this the modal would sit in
+    /// its post-`on_query_changed` loading state forever.
+    fn dispatch_search_modal_query_if_global(&mut self) {
+        let Some(modal) = self.search_modal.as_ref() else {
+            return;
+        };
+        if !matches!(modal.mode, SearchMode::Global) {
+            return;
+        }
+        let query = modal.query.clone();
+        let client = self.client.lock().unwrap().clone();
+        self.spawn_search_modal_query(client, query);
     }
 }
 

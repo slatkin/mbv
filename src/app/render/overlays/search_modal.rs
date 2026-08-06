@@ -575,6 +575,7 @@ fn badge_for(item_type: &str) -> &'static str {
     match item_type {
         "Movie" => "MOVIE",
         "Series" => "SERIES",
+        "Season" => "SEASON",
         "Episode" => "EPISODE",
         "MusicAlbum" => "ALBUM",
         "Audio" => "TRACK",
@@ -618,6 +619,14 @@ fn row_meta_for(item: &MediaItem) -> String {
             let dur = runtime_approx(item);
             if !dur.is_empty() {
                 parts.push(dur);
+            }
+        }
+        "Season" => {
+            if !item.series_name.is_empty() {
+                parts.push(item.series_name.clone());
+            }
+            if item.index_number > 0 {
+                parts.push(format!("Season {}", item.index_number));
             }
         }
         "MusicAlbum" => {
@@ -687,6 +696,14 @@ fn hero_meta_for(item: &MediaItem) -> String {
             let dur = runtime_approx(item);
             if !dur.is_empty() {
                 parts.push(dur);
+            }
+        }
+        "Season" => {
+            if !item.series_name.is_empty() {
+                parts.push(item.series_name.clone());
+            }
+            if item.index_number > 0 {
+                parts.push(format!("Season {}", item.index_number));
             }
         }
         "MusicAlbum" => {
