@@ -297,7 +297,12 @@ impl App {
         layout.panel_area = left_area;
         layout.panel_content_area = Self::power_panel_content_area(left_area);
 
-        let queue_focused = matches!(self.panel_focus, PanelFocus::Queue);
+        // The queue panel always renders with the unfocused appearance while
+        // it's the sole visible panel: full-width queue-only keeps the calm,
+        // muted styling instead of the bright focused treatment. Input focus
+        // itself is unaffected -- key handling still routes to the queue.
+        let queue_focused = self.panel_mode != PanelMode::QueueOnly
+            && matches!(self.panel_focus, PanelFocus::Queue);
         let left_focused = !queue_focused;
 
         // Full-column background behind the card image and queue list.

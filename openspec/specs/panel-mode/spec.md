@@ -1,8 +1,10 @@
+# panel-mode Specification
+
 ## Purpose
 
 Controls which of the two Power View panels is visible — both, library-only, or queue-only — through a one-key forward cycle, so the user can give the full window to whichever side matters most.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Panel layout is a three-state cycle on `x`
 
