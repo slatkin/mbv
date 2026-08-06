@@ -199,15 +199,11 @@ impl App {
                         if !self.layout.main.left_item_rows.is_empty() && cols > 1 && cw > 0 {
                             let cell = x / (cw + LIBRARY_COLUMN_GAP as usize);
                             if cell < cols {
-                                let scroll = if self.libs[lib_idx].search.is_some() {
-                                    self.libs[lib_idx].search.as_ref().unwrap().scroll
-                                } else {
-                                    self.libs[lib_idx]
-                                        .nav_stack
-                                        .last()
-                                        .map(|l| l.scroll)
-                                        .unwrap_or(0)
-                                };
+                                let scroll = self.libs[lib_idx]
+                                    .nav_stack
+                                    .last()
+                                    .map(|l| l.scroll)
+                                    .unwrap_or(0);
                                 Some(
                                     self.layout
                                         .main
@@ -256,37 +252,7 @@ impl App {
                     }
                     let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
                     let lib = &mut self.libs[lib_idx];
-                    if let Some(s) = &mut lib.search {
-                        if let Some(cell_item) = cell_target {
-                            // Two-column list: select the item under the
-                            // click's cell; empty cells/gaps leave the
-                            // cursor unchanged.
-                            if let Some(item_idx) = cell_item {
-                                if item_idx < s.results.len() {
-                                    s.cursor = item_idx;
-                                }
-                            }
-                        } else if use_row_map {
-                            // Letter-grouped or banner-adjacent mode: row map gives the
-                            // result index directly (None = header/banner-filler row).
-                            if let Some(Some(item_idx)) = row_map_item {
-                                if item_idx < s.results.len() {
-                                    s.cursor = item_idx;
-                                }
-                            }
-                        } else {
-                            let visible = la.height as usize;
-                            let offset = if s.cursor >= visible {
-                                s.cursor - visible + 1
-                            } else {
-                                0
-                            };
-                            let clicked = offset + click_y;
-                            if clicked < s.results.len() {
-                                s.cursor = clicked;
-                            }
-                        }
-                    } else if is_feed_group {
+                    if is_feed_group {
                         let visible = la.height as usize;
                         if let Some(state) = lib.feed_home_video.as_mut() {
                             let items_len = state.selected_len();

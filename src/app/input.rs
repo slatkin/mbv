@@ -10,8 +10,6 @@ use super::layout::LibraryRowTarget;
 #[cfg(test)]
 use super::ContextAction;
 #[cfg(test)]
-use super::LibSearch;
-#[cfg(test)]
 use mbv_core::player::PlayerCommand;
 #[cfg(test)]
 use ratatui::layout::Rect;
@@ -20,9 +18,9 @@ use std::time::{Duration, Instant};
 
 impl App {
     /// Whether a context menu is currently open. Shared by every
-    /// CONTEXT_STACK layer above `context_menu` that must yield to it
-    /// (`power_sidebar_toggle_h`, `home_search`, `power_lib_search`, `lib_search`,
-    /// `clear_queue_prompt_c`, `queue_column_width`) — see
+    /// CONTEXT_STACK layer above it that must yield to it
+    /// (`power_sidebar_toggle_x`, `search_modal`, `clear_queue_prompt_c`,
+    /// `queue_column_width`) — see
     /// docs/adr/0002-centralized-input-handling.md phase 6 (#135).
     pub(super) fn context_menu_open(&self) -> bool {
         self.context_menu.is_some()

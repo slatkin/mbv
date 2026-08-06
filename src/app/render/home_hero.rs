@@ -101,7 +101,10 @@ impl App {
             return;
         }
         let img_area = area;
-        if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
+        if let Some(Some(state)) = self
+            .card_image_states
+            .get_mut(&self.current_mem_key(cache_key))
+        {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             let avail = Size {
                 width: img_area.width,

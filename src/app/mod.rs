@@ -16,7 +16,6 @@ mod input;
 mod input_confirm_keys;
 mod input_context_menu;
 mod input_daemon_lost_keys;
-mod input_home_search_keys;
 mod input_lib_power_keys;
 mod input_mouse;
 mod input_mouse_dispatch;
@@ -25,6 +24,7 @@ mod input_playlist_keys;
 mod input_queue_keys;
 mod input_remote_reanchor;
 mod input_resolver;
+mod input_search_modal_keys;
 mod input_settings_keys;
 pub(crate) mod layout;
 mod lib_cursor_actions;
@@ -55,7 +55,7 @@ mod render_cadence;
 mod resize;
 mod run_loop_drains;
 mod run_loop_events;
-mod search;
+mod search_modal;
 mod session_command_actions;
 mod session_connect;
 mod settings;
@@ -79,10 +79,10 @@ pub use self::app_struct::App;
 use self::app_struct::AppInit;
 use self::bootstrap::bootstrap_local_daemon_queue;
 use self::resize::spawn_resize_worker;
-use self::search::SearchSubsystem;
+use self::search_modal::{SearchModal, SearchModalDrainOutcome};
 use self::types_browse::{
     restore_library_position, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel,
-    LibSearch, SeriesDetail,
+    SeriesDetail,
 };
 use self::types_confirm::{ConfirmAction, ConfirmModal};
 use self::types_context_menu::{
@@ -104,6 +104,7 @@ use self::types_playback::{
 };
 use self::types_player_tab::PlayerTab;
 use self::types_settings::{PanelFocus, SettingKey, SETTING_SECTIONS};
+use mbv_core::api::EmbyClient;
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(test)]
 use std::sync::{mpsc, Arc, Mutex};
@@ -346,30 +347,18 @@ impl App {
             while let Ok((item_id, img_opt)) = self.card_image_rx.try_recv() {
                 had_events = true;
                 self.card_image_loading.remove(&item_id);
-                // A spawned fetch always sends exactly one result, so the in-flight
-                // count is balanced here; free the slot and start any queued fetch.
                 self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
-                // Image was decoded off-thread; wrap it in a ThreadProtocol.
-                // The expensive resize+encode (StatefulProtocol::resize_encode,
-                // including kitty's base64 payload encode) now happens lazily
-                // off the render thread on first draw instead of blocking it
-                // — see `spawn_resize_worker` and the `ResizeResponse` drain
-                // below (#164). This only builds the cheap unresized protocol.
-                let state: Option<ratatui_image::thread::ThreadProtocol> =
-                    img_opt.and_then(|dyn_img| {
-                        let picker = self.image_picker.clone()?;
-                        Some(self.new_thread_protocol(&picker, dyn_img, &item_id))
-                    });
+                let (mem_key, state) = self.build_protocol_for(&item_id, img_opt);
                 if state.is_some() {
-                    self.image_lru.retain(|k| k != &item_id);
-                    self.image_lru.push_back(item_id.clone());
-                    while self.image_lru.len() > self.image_cache_size {
+                    self.image_lru.retain(|k| k != &mem_key);
+                    self.image_lru.push_back(mem_key.clone());
+                    while self.image_lru.len() > self.image_cache_size_total {
                         if let Some(evict) = self.image_lru.pop_front() {
                             self.card_image_states.remove(&evict);
                         }
                     }
                 }
-                self.card_image_states.insert(item_id, state);
+                self.card_image_states.insert(mem_key, state);
             }
             self.drain_image_fetches();
 
@@ -524,6 +513,34 @@ impl App {
             println!("{msg}");
         }
         Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn search_modal(&self) -> Option<&SearchModal> {
+        self.search_modal.as_ref()
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn search_modal_mut(&mut self) -> Option<&mut SearchModal> {
+        self.search_modal.as_mut()
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn spawn_search_modal_query(&self, client: EmbyClient, query: String) {
+        let tx = self.search_tx.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(client.search_items(&query, 100));
+        });
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn drain_search_modal_results(&mut self, outcome: &mut SearchModalDrainOutcome) {
+        while let Ok(result) = self.search_rx.try_recv() {
+            outcome.received += 1;
+            if let Some(modal) = self.search_modal.as_mut() {
+                modal.apply_drain(result, &mut outcome.errors);
+            }
+        }
     }
 }
 

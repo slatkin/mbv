@@ -30,7 +30,6 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             loading: true,
             ..FeedHomeVideoState::default()
@@ -97,7 +96,6 @@ fn feed_home_video_group_view_stays_enabled_with_cached_groups() {
                 music_grouping: None,
             },
         ],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![video.clone()],
             groups: vec![FeedHomeVideoGroup {
@@ -152,7 +150,6 @@ fn fetch_home_preserves_feed_home_video_state() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![video.clone()],
             groups: vec![FeedHomeVideoGroup {
@@ -215,7 +212,6 @@ fn select_feed_folder_group_pushes_video_level_for_selected_folder() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![second_video.clone()],
             groups: vec![FeedHomeVideoGroup {
@@ -278,7 +274,6 @@ fn select_feed_folder_group_zero_pushes_all_videos_level() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![video.clone()],
             groups: vec![FeedHomeVideoGroup {
@@ -352,7 +347,6 @@ fn select_feed_folder_group_uses_client_side_all_items_cache() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![a_video.clone(), b_video.clone()],
             groups: vec![
@@ -431,7 +425,6 @@ fn select_feed_folder_group_updates_feed_state_when_detail_level_exists() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![a_video.clone(), b_video.clone()],
             groups: vec![
@@ -502,7 +495,6 @@ fn go_back_keeps_feed_home_video_group_view_intact() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![video.clone()],
             groups: vec![FeedHomeVideoGroup {
@@ -568,7 +560,6 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![video.clone()],
             groups: vec![FeedHomeVideoGroup {
@@ -634,7 +625,6 @@ fn refresh_lib_targets_power_feed_selection() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![video.clone()],
             groups: vec![FeedHomeVideoGroup {

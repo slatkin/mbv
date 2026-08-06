@@ -207,18 +207,16 @@ impl App {
                         // Double-click activates the row under the cursor
                         // (the first click of the pair already focused it).
                         // Mirrors the Enter key's activation for the same
-                        // row so the two gestures can't drift: recursive
-                        // album search jump, album-folder track mode,
-                        // series selection, then `select()` (plays media
-                        // items and drills into folders). The inline hero is
-                        // just another surface over the selected item, so a
-                        // double-click there activates it the same way --
-                        // including entering a Series' season/episode
-                        // selection, which a single click never did.
+                        // row so the two gestures can't drift: album-folder
+                        // track mode, series selection, then `select()`
+                        // (plays media items and drills into folders). The
+                        // inline hero is just another surface over the
+                        // selected item, so a double-click there activates
+                        // it the same way -- including entering a Series'
+                        // season/episode selection, which a single click
+                        // never did.
                         let lib_idx = self.library_tab - 1;
-                        if self.activate_recursive_album(lib_idx) {
-                            // active-search jump; unchanged
-                        } else if self.is_viewing_album_folders(lib_idx) {
+                        if self.is_viewing_album_folders(lib_idx) {
                             self.activate_album_folder_row(lib_idx);
                         } else if self.libs[lib_idx].series_selection.is_some() {
                             // Play the focused episode in selection mode.
@@ -302,7 +300,6 @@ impl App {
                     for (x_start, x_end, crumb_row, target_depth) in crumbs {
                         if row == crumb_row && col >= x_start && col < x_end {
                             self.libs[lib_idx].nav_stack.truncate(target_depth);
-                            self.libs[lib_idx].search = None;
                             self.save_default_library_position(lib_idx);
                             return;
                         }

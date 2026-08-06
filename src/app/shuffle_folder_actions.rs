@@ -13,14 +13,10 @@ impl App {
         let lib_idx = self.library_tab - 1;
         let parent_id = {
             let lib = &self.libs[lib_idx];
-            let item = lib.nav_stack.last().and_then(|lvl| {
-                let idx = lib
-                    .search
-                    .as_ref()
-                    .and_then(|s| s.results.get(s.cursor).copied())
-                    .unwrap_or(lvl.cursor);
-                lvl.items.get(idx)
-            });
+            let item = lib
+                .nav_stack
+                .last()
+                .and_then(|lvl| lvl.items.get(lvl.cursor));
             item.filter(|i| i.is_folder)
                 .map(|i| i.id.clone())
                 .or_else(|| lib.nav_stack.last().map(|l| l.parent_id.clone()))

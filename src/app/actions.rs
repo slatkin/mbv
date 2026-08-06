@@ -116,9 +116,6 @@ impl App {
     }
 
     pub(super) fn current_home_item(&self) -> Option<MediaItem> {
-        if let Some(hs) = self.search.state() {
-            return hs.filtered_results().get(hs.cursor).copied().cloned();
-        }
         let sec = self.home.section;
         if sec == 0 {
             self.home
@@ -131,21 +128,12 @@ impl App {
         }
     }
 
-    pub(super) fn spawn_global_search(&mut self, query: String) {
-        let client = self.client.lock().unwrap().clone();
-        self.search.spawn_global_search(client, query);
-    }
-
     pub(super) fn current_lib_item(&self) -> Option<MediaItem> {
         let lib_idx = self.library_tab.checked_sub(1)?;
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
         } else {
-            if let Some(s) = &lib.search {
-                let idx = *s.results.get(s.cursor)?;
-                return s.items.get(idx).cloned();
-            }
             if self.is_feed_home_video_group_view(lib_idx) {
                 return self.selected_feed_home_video_item(lib_idx);
             }
@@ -353,7 +341,6 @@ impl App {
                 if let Some(lib_id) = self.home.latest.get(sec - 1).map(|c| c.1.clone()) {
                     if let Some(lib_idx) = self.libs.iter().position(|l| l.library.id == lib_id) {
                         let lib = &mut self.libs[lib_idx];
-                        lib.search = None;
                         lib.nav_stack.push(BrowseLevel {
                             parent_id: item.id.clone(),
                             title: item.name.clone(),
@@ -410,7 +397,6 @@ impl App {
         if item.is_folder {
             let lib_idx = self.library_tab - 1;
             let lib = &mut self.libs[lib_idx];
-            lib.search = None;
             lib.nav_stack.push(BrowseLevel {
                 parent_id: item.id.clone(),
                 title: item.name.clone(),
@@ -439,25 +425,6 @@ impl App {
             );
         } else if is_playable(&item) {
             let lib_idx = self.library_tab - 1;
-            if self.libs[lib_idx].search.is_some() {
-                self.libs[lib_idx].search = None;
-                if self.is_feed_home_video_group_view(lib_idx) {
-                    let pos = self
-                        .feed_home_video_selected_items(lib_idx)
-                        .iter()
-                        .position(|i| i.id == item.id);
-                    if let (Some(pos), Some(state)) =
-                        (pos, self.libs[lib_idx].feed_home_video.as_mut())
-                    {
-                        state.video_cursor = pos;
-                    }
-                } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-                    if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
-                        lvl.cursor = pos;
-                    }
-                }
-                self.save_default_library_position(lib_idx);
-            }
             let fresh = {
                 let c = self.client.lock().unwrap();
                 c.get_items_by_ids(std::slice::from_ref(&item.id))
@@ -473,7 +440,7 @@ impl App {
             };
             let in_track_focus_mode = self.is_viewing_album_folders(lib_idx)
                 && self.libs[lib_idx].album_track_focus.is_some();
-            if self.libs[lib_idx].search.is_none() && in_track_focus_mode {
+            if in_track_focus_mode {
                 let level_items = self
                     .selected_album_item(lib_idx)
                     .and_then(|album| self.album_tracks_cache.get(&album.id).cloned())
@@ -572,10 +539,8 @@ impl App {
             // Guard: don't pop when already at the root of a synthetic "group" view
             // (music groups: nav_stack[0]=groups, nav_stack[1]=albums; feed home
             // videos: nav_stack[0]=folders, nav_stack[1]=grouped videos) -- there is
-            // no list above to go back to. Search-clearing still falls through
-            // because this guard only fires when search is None.
-            if self.libs[lib_idx].search.is_none()
-                && self.libs[lib_idx].nav_stack.len() == 2
+            // no list above to go back to.
+            if self.libs[lib_idx].nav_stack.len() == 2
                 && (self.is_music_group_view(lib_idx)
                     || self.is_feed_home_video_group_view(lib_idx))
             {
@@ -585,7 +550,7 @@ impl App {
             // Primary pop -- scoped so the mutable borrow of libs[lib_idx] ends here.
             let did_pop = {
                 let lib = &mut self.libs[lib_idx];
-                if lib.search.take().is_none() && lib.nav_stack.len() > 1 {
+                if lib.nav_stack.len() > 1 {
                     let child_folder_id = lib.nav_stack.last().map(|l| l.parent_id.clone());
                     lib.nav_stack.pop();
                     if let (Some(folder_id), Some(parent)) =

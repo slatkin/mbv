@@ -232,7 +232,6 @@ impl App {
         label.content = label.content.to_uppercase().into();
     }
 
-
     pub(super) fn render_remote_status_hitbox(
         &self,
         layout: &mut LayoutPlayback,

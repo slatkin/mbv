@@ -8,14 +8,21 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 impl App {
-    pub(in crate::app::render) fn render_remote_reanchor_popup(&self, f: &mut Frame) {
+    pub(in crate::app::render) fn render_remote_reanchor_popup(&mut self, f: &mut Frame) {
         let Some(popup) = &self.remote_reanchor_popup else {
             return;
         };
         let title = " Re-anchor Remote Tracking ";
         let width = 46;
         let height = (popup.targets.len() as u16 + 3).min(12);
-        let inner = render_modal_frame(f, title, width, height + 2);
+        let inner = render_modal_frame(
+            f,
+            &mut self.dim_backdrop_active,
+            title,
+            width,
+            height + 2,
+            palette::BG_GREEN,
+        );
         f.render_widget(
             Paragraph::new(Span::styled(
                 "Choose the observed occurrence",

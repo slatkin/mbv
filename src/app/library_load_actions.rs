@@ -1,6 +1,4 @@
-use super::{
-    AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus, PendingQueueAction,
-};
+use super::{App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus, PendingQueueAction};
 use mbv_core::api::MediaItem;
 use std::collections::HashMap;
 
@@ -249,7 +247,6 @@ impl App {
             self.libs.push(super::LibraryTab {
                 library: view.clone(),
                 nav_stack: stack,
-                search: None,
                 feed_home_video,
 
                 album_track_focus: None,
@@ -325,62 +322,6 @@ impl App {
             self.settings_scroll = cursor_line;
         } else if cursor_line >= self.settings_scroll + visible {
             self.settings_scroll = cursor_line + 1 - visible;
-        }
-    }
-
-    pub(super) fn update_lib_search(&mut self, lib_idx: usize) {
-        use fuzzy_matcher::skim::SkimMatcherV2;
-        use fuzzy_matcher::FuzzyMatcher;
-
-        let query = match self.libs[lib_idx].search.as_ref() {
-            Some(s) => s.query.clone(),
-            None => return,
-        };
-
-        if query.is_empty() {
-            if let Some(s) = self.libs[lib_idx].search.as_mut() {
-                let n = s.items.len();
-                s.results = (0..n).collect();
-                s.cursor = 0;
-            }
-            return;
-        }
-
-        let recursive_entries = self
-            .libs
-            .get(lib_idx)
-            .and_then(|lib| self.album_indexes.get(&lib.library.id))
-            .and_then(|state| match state {
-                AlbumIndexState::Ready(entries) => Some(entries),
-                _ => None,
-            });
-        let scored: Vec<(i64, usize)> = {
-            let items = self.libs[lib_idx]
-                .search
-                .as_ref()
-                .map(|s| s.items.as_slice())
-                .unwrap_or(&[]);
-            let matcher = SkimMatcherV2::default();
-            items
-                .iter()
-                .enumerate()
-                .filter_map(|(i, item)| {
-                    let score = recursive_entries
-                        .and_then(|entries| entries.get(i))
-                        .map(|entry| matcher.fuzzy_match(&entry.search_text, &query))
-                        .unwrap_or_else(|| matcher.fuzzy_match(&item.display_name(), &query));
-                    score.map(|score| (score, i))
-                })
-                .collect()
-        };
-
-        let mut results: Vec<(i64, usize)> = scored;
-        results.sort_unstable_by_key(|b| std::cmp::Reverse(b.0));
-        let results: Vec<usize> = results.into_iter().map(|(_, i)| i).collect();
-
-        if let Some(s) = self.libs[lib_idx].search.as_mut() {
-            s.results = results;
-            s.cursor = 0;
         }
     }
 }

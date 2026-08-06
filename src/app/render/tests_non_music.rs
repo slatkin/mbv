@@ -101,7 +101,6 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,

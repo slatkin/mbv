@@ -200,20 +200,11 @@ impl App {
         // CONTEXT_STACK with no guard, so pressing 'c' while a context menu was
         // open silently opened the clear-queue confirmation instead of being
         // swallowed by the menu (which has no 'c' binding of its own). See
-        // docs/adr/0002-centralized-input-handling.md phase 6 and phase-2's
-        // `home_search`, which already guards the same way.
+        // docs/adr/0002-centralized-input-handling.md phase 6.
         if key.code != KeyCode::Char('c')
             || key.modifiers.contains(KeyModifiers::ALT)
             || self.context_menu_open()
         {
-            return None;
-        }
-        let in_lib_search = self.library_tab > 0
-            && self
-                .libs
-                .get(self.library_tab - 1)
-                .is_some_and(|l| l.search.is_some());
-        if in_lib_search {
             return None;
         }
         if matches!(self.panel_focus, PanelFocus::Queue)

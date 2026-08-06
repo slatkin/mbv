@@ -1,14 +1,5 @@
 use mbv_core::api::MediaItem;
 
-pub(super) struct LibSearch {
-    pub(super) query: String,
-    pub(super) items: Vec<mbv_core::api::MediaItem>,
-    pub(super) results: Vec<usize>, // indices into items, sorted by score desc
-    pub(super) cursor: usize,       // position within results
-    pub(super) scroll: usize,       // viewport scroll offset for the results list
-    pub(super) loading: bool,       // true while full-library fetch is in flight
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct AlbumPathPart {
     pub(super) id: String,
@@ -18,9 +9,6 @@ pub(super) struct AlbumPathPart {
 #[derive(Clone, Debug)]
 pub(super) struct AlbumSearchEntry {
     pub(super) album: MediaItem,
-    pub(super) ancestors: Vec<AlbumPathPart>,
-    pub(super) display_label: String,
-    pub(super) search_text: String,
 }
 
 #[derive(Clone, Debug)]

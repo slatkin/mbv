@@ -21,14 +21,6 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: Some(LibSearch {
-            query: "ignored".into(),
-            items: make_items(2),
-            results: vec![0],
-            cursor: 0,
-            scroll: 0,
-            loading: false,
-        }),
         feed_home_video: Some(FeedHomeVideoState {
             selected_group: 2,
             video_cursor: 4,
@@ -265,14 +257,6 @@ fn applying_library_position_clears_non_position_ui_state() {
     let mut lib = LibraryTab {
         library: make_item("Movies", "CollectionFolder"),
         nav_stack: Vec::new(),
-        search: Some(LibSearch {
-            query: "ignored".into(),
-            items: make_items(2),
-            results: vec![0],
-            cursor: 0,
-            scroll: 0,
-            loading: false,
-        }),
         feed_home_video: Some(FeedHomeVideoState::default()),
         album_track_focus: Some(2),
         artist_header_focus: None,
@@ -308,7 +292,6 @@ fn applying_library_position_clears_non_position_ui_state() {
     );
 
     assert_eq!(lib.nav_stack.len(), 1);
-    assert!(lib.search.is_none());
     assert!(lib.album_track_focus.is_none());
     let feed = lib.feed_home_video.as_ref().unwrap();
     assert_eq!(feed.selected_group, 3);
@@ -344,7 +327,6 @@ fn save_default_library_position_persists_focused_item() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -386,7 +368,6 @@ fn move_lib_cursor_persists_default_library_position() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -428,7 +409,6 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -487,7 +467,6 @@ fn refresh_lib_clears_saved_position_for_active_library() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -547,7 +526,6 @@ fn trigger_lib_rescan_clears_only_active_scope() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,

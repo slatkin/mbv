@@ -2,7 +2,7 @@ use super::images;
 use super::layout;
 use super::render;
 use super::resize::{ResizeRegisterTx, ResizeResponseRx};
-use super::search::SearchSubsystem;
+use super::search_modal::SearchModal;
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_confirm::ConfirmModal;
 use super::types_context_menu::{ContextMenu, LibraryRoutePopup, MultiSelectPopup};
@@ -174,6 +174,9 @@ pub struct App {
     /// event-loop tick alongside `card_image_rx` (#164).
     pub(super) resize_response_rx: ResizeResponseRx,
     pub(super) image_picker: Option<Picker>,
+    pub(super) halfblock_picker: Option<Picker>,
+    pub(super) dim_backdrop_active: bool,
+    pub(super) image_cache_size_total: usize,
     pub(super) context_menu: Option<ContextMenu>,
     pub(super) show_help: bool,
     pub(super) show_settings: bool,
@@ -190,7 +193,12 @@ pub struct App {
     pub(super) notif_action_rx: mpsc::Receiver<String>,
     pub(super) lib_tx: mpsc::Sender<LibEvent>,
     pub(super) lib_rx: mpsc::Receiver<LibEvent>,
-    pub(super) search: SearchSubsystem,
+    pub(super) search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
+    pub(super) search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
+    #[allow(dead_code)]
+    pub(super) search_modal: Option<SearchModal>,
+    pub(super) search_modal_prior_focus: Option<PanelFocus>,
+    pub(super) last_slash_at: Option<Instant>,
     pub(super) sessions: Vec<mbv_core::api::SessionInfo>,
     pub(super) sessions_cursor: usize,
     pub(super) sessions_scroll: usize,

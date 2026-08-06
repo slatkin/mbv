@@ -168,7 +168,14 @@ impl App {
         let content_h = popup.items.len() as u16 + 1;
         let height = content_h + 2;
 
-        let inner = render_modal_frame(f, title, width, height);
+        let inner = render_modal_frame(
+            f,
+            &mut self.dim_backdrop_active,
+            title,
+            width,
+            height,
+            palette::BG_GREEN,
+        );
 
         let hint = "Space toggle  ·  Esc / Enter close";
         f.render_widget(

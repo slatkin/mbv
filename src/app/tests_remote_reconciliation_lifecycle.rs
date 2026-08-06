@@ -238,7 +238,6 @@ fn library_focus_rescan_does_not_trigger_tracking_controls() {
     app.libs.push(LibraryTab {
         library: lib_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,

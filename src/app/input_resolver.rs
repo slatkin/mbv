@@ -188,12 +188,8 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_queue_column_width,
     },
     ContextEntry {
-        name: "home_search",
-        handler: App::handle_key_home_search,
-    },
-    ContextEntry {
-        name: "lib_search",
-        handler: App::handle_key_power_lib_search,
+        name: "search_modal",
+        handler: App::handle_key_search_modal,
     },
     ContextEntry {
         name: "sidebar_toggle_x",
@@ -210,10 +206,6 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
         name: "clear_queue_prompt_c",
         handler: App::handle_key_clear_queue_prompt,
-    },
-    ContextEntry {
-        name: "context_menu",
-        handler: App::handle_key_context_menu,
     },
     ContextEntry {
         name: "visualizer",

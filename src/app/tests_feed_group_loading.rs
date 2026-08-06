@@ -30,7 +30,6 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             loading: true,
             ..FeedHomeVideoState::default()
@@ -113,7 +112,6 @@ fn make_home_video_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             loading: true,
             ..FeedHomeVideoState::default()
@@ -275,7 +273,6 @@ fn refreshed_does_not_overwrite_feed_root_with_video_items() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             all_items: vec![video.clone()],
             groups: vec![FeedHomeVideoGroup {
@@ -343,7 +340,6 @@ fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
 
         album_track_focus: None,

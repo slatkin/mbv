@@ -39,7 +39,6 @@ fn recursive_music_app() -> App {
     app.libs.push(LibraryTab {
         library,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -261,7 +260,6 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
 
         album_track_focus: None,
@@ -328,7 +326,6 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
 
         album_track_focus: None,
@@ -358,7 +355,6 @@ fn ensure_power_feed_library_preserves_saved_feed_position() {
     app.libs.push(LibraryTab {
         library,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             selected_group: 2,
             video_cursor: 3,
@@ -394,7 +390,6 @@ fn ensure_power_podcast_library_preserves_saved_feed_position() {
     app.libs.push(LibraryTab {
         library,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: Some(FeedHomeVideoState {
             selected_group: 1,
             video_cursor: 5,

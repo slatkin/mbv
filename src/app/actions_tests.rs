@@ -39,7 +39,6 @@ fn recursive_music_app() -> App {
     app.libs.push(LibraryTab {
         library,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,
@@ -109,134 +108,10 @@ fn album_index_traverses_deep_branches_pages_and_ignores_non_albums() {
     .unwrap();
 
     assert_eq!(entries.len(), 202);
-    assert_eq!(
-        entries.last().unwrap().display_label,
-        "B / Artist B / Record 0"
-    );
-    assert_eq!(
-        entries.last().unwrap().ancestors,
-        vec![
-            AlbumPathPart {
-                id: "group-b".into(),
-                name: "B".into()
-            },
-            AlbumPathPart {
-                id: "artist-b".into(),
-                name: "Artist B".into()
-            }
-        ]
-    );
     assert!(calls.contains(&("artist-a".into(), 200)));
     assert!(entries
         .iter()
         .all(|entry| entry.album.item_type == "MusicAlbum"));
-}
-
-#[test]
-fn recursive_album_search_matches_ancestor_labels() {
-    let mut app = recursive_music_app();
-    let target = album("album-1", "Needle Record");
-    app.album_indexes.insert(
-        "music-lib".into(),
-        AlbumIndexState::Ready(vec![AlbumSearchEntry {
-            album: target,
-            ancestors: vec![AlbumPathPart {
-                id: "group-a".into(),
-                name: "Deep Group".into(),
-            }],
-            display_label: "Deep Group / Needle Record".into(),
-            search_text: "Deep Group / Needle Record".into(),
-        }]),
-    );
-
-    assert!(app.open_recursive_album_search(0));
-    app.libs[0].search.as_mut().unwrap().query = "deep grp".into();
-    app.update_lib_search(0);
-
-    assert_eq!(app.libs[0].search.as_ref().unwrap().results, vec![0]);
-    assert_eq!(
-        app.recursive_album_display_item(0, 0, album("album-1", "Needle Record"))
-            .name,
-        "Deep Group / Needle Record"
-    );
-
-    app.libs[0].search.as_mut().unwrap().query = "needle rec".into();
-    app.update_lib_search(0);
-    assert_eq!(app.libs[0].search.as_ref().unwrap().results, vec![0]);
-}
-
-#[test]
-fn album_only_music_keeps_visible_list_search() {
-    let mut app = recursive_music_app();
-    app.music_levels = vec!["album".into()];
-    app.libs[0].search = Some(super::super::LibSearch {
-        query: "visible rec".into(),
-        items: vec![album("album-1", "Visible Record")],
-        results: Vec::new(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    assert!(!app.open_recursive_album_search(0));
-    app.update_lib_search(0);
-
-    assert_eq!(app.libs[0].search.as_ref().unwrap().results, vec![0]);
-}
-
-#[test]
-fn album_index_completion_updates_the_open_current_query() {
-    let mut app = recursive_music_app();
-    app.album_indexes.insert(
-        "music-lib".into(),
-        AlbumIndexState::Loading {
-            rebuild_pending: false,
-        },
-    );
-    assert!(app.open_recursive_album_search(0));
-    app.libs[0].search.as_mut().unwrap().query = "remote group".into();
-
-    app.handle_lib_event(LibEvent::AlbumIndexBuilt {
-        library_id: "music-lib".into(),
-        result: Ok(vec![AlbumSearchEntry {
-            album: album("album-1", "Record"),
-            ancestors: vec![AlbumPathPart {
-                id: "group-a".into(),
-                name: "Remote Group".into(),
-            }],
-            display_label: "Remote Group / Record".into(),
-            search_text: "Remote Group / Record".into(),
-        }]),
-    });
-
-    let search = app.libs[0].search.as_ref().unwrap();
-    assert!(!search.loading);
-    assert_eq!(search.query, "remote group");
-    assert_eq!(search.results, vec![0]);
-}
-
-#[test]
-fn failed_album_index_becomes_unavailable_and_clears_search_loading() {
-    let mut app = recursive_music_app();
-    app.album_indexes.insert(
-        "music-lib".into(),
-        AlbumIndexState::Loading {
-            rebuild_pending: false,
-        },
-    );
-    assert!(app.open_recursive_album_search(0));
-
-    app.handle_lib_event(LibEvent::AlbumIndexBuilt {
-        library_id: "music-lib".into(),
-        result: Err("index failed".into()),
-    });
-
-    assert!(matches!(
-        app.album_indexes.get("music-lib"),
-        Some(AlbumIndexState::Unavailable)
-    ));
-    assert!(!app.libs[0].search.as_ref().unwrap().loading);
-    assert!(app.status.contains("index failed"));
 }
 
 #[test]
@@ -258,74 +133,4 @@ fn refresh_while_album_index_loads_coalesces_one_replacement() {
             rebuild_pending: true
         })
     ));
-}
-
-#[test]
-fn recursive_activation_keeps_panel_focus_and_enters_inline_tracks() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = recursive_music_app();
-    app.library_tab = 1;
-    app.panel_focus = PanelFocus::Library;
-    app.libs[0].nav_stack.push(BrowseLevel {
-        parent_id: "group-a".into(),
-        title: "Group A".into(),
-        items: vec![folder("artist-a", "Artist A")],
-        total_count: 1,
-        cursor: 0,
-        item_types: None,
-        unplayed_only: false,
-        sort_by: "SortName".into(),
-        sort_order: "Ascending".into(),
-        loading: false,
-        scroll: 0,
-        all_items: None,
-        letter_filter: None,
-        music_grouping: None,
-    });
-    let default_position = app.libs[0].library_position_snapshot();
-    app.library_position_state
-        .libraries
-        .insert("music-lib".into(), default_position.clone());
-    app.libs[0].search = Some(super::super::LibSearch {
-        query: String::new(),
-        items: Vec::new(),
-        results: Vec::new(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-    let level = BrowseLevel {
-        parent_id: "artist-c".into(),
-        title: "Artist C".into(),
-        items: vec![album("album-1", "Record")],
-        total_count: 1,
-        cursor: 0,
-        item_types: None,
-        unplayed_only: false,
-        sort_by: "SortName".into(),
-        sort_order: "Ascending".into(),
-        loading: false,
-        scroll: 0,
-        all_items: None,
-        letter_filter: None,
-        music_grouping: None,
-    };
-
-    app.handle_lib_event(LibEvent::RecursiveAlbumActivated {
-        library_id: "music-lib".into(),
-        nav_stack: vec![level],
-    });
-
-    assert!(app.libs[0].search.is_none());
-    assert_eq!(app.libs[0].album_track_focus, Some(0));
-    assert_eq!(app.libs[0].nav_stack.last().unwrap().parent_id, "artist-c");
-    let position = app
-        .library_position_state
-        .libraries
-        .get("music-lib")
-        .unwrap();
-    assert_eq!(
-        position.levels.last().map(|level| level.parent_id.as_str()),
-        Some("artist-c")
-    );
 }

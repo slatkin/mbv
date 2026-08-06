@@ -10,9 +10,6 @@ impl App {
         if lib.library.collection_type != "music" {
             return false;
         }
-        if lib.search.is_some() {
-            return false;
-        }
         // Only when the first configured level is "group".
         if self
             .music_levels
@@ -151,9 +148,9 @@ impl App {
     }
 
     /// Whether the letter-range pill row applies to `lib_idx`
-    /// right now: a non-music library, not searching, at the top browse
-    /// level of its nav stack (`nav_stack.len() == 1`), with a captured true
-    /// total (`LibraryTab.library_total`) over `LIBRARY_PILL_THRESHOLD`. See
+    /// right now: a non-music library at the top browse level of its nav
+    /// stack (`nav_stack.len() == 1`), with a captured true total
+    /// (`LibraryTab.library_total`) over `LIBRARY_PILL_THRESHOLD`. See
     /// `render::LetterFilter` and
     /// `maybe_capture_library_total_and_apply_default_pill`, which populates
     /// `library_total` on a library's first load.
@@ -165,9 +162,6 @@ impl App {
             return false;
         }
         if self.is_home_video_view(lib_idx) {
-            return false;
-        }
-        if lib.search.is_some() {
             return false;
         }
         if lib.nav_stack.len() != 1 {

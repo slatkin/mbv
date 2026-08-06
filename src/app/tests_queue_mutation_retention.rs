@@ -95,7 +95,6 @@ fn rejected_route_enqueue_leaves_tracking_active() {
     app.libs.push(LibraryTab {
         library: movies_item,
         nav_stack: Vec::new(),
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         artist_header_focus: None,

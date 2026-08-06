@@ -79,22 +79,4 @@ impl ContextMenu {
             .position(|entry| entry.action.is_some())
             .unwrap_or(0)
     }
-
-    pub(super) fn move_cursor(&mut self, delta: i64) {
-        if self.entries.is_empty() {
-            return;
-        }
-        let mut idx = self.cursor as i64;
-        loop {
-            let next = idx + delta;
-            if next < 0 || next >= self.entries.len() as i64 {
-                return;
-            }
-            idx = next;
-            if self.entries[idx as usize].action.is_some() {
-                self.cursor = idx as usize;
-                return;
-            }
-        }
-    }
 }

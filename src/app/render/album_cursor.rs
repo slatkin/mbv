@@ -406,7 +406,6 @@ impl App {
     ) -> bool {
         if self.library_tab != lib_idx + 1
             || !matches!(self.panel_focus, crate::app::PanelFocus::Library)
-            || self.libs[lib_idx].search.is_some()
             || self.libs[lib_idx].album_track_focus.is_some()
             || !self.is_viewing_album_folders(lib_idx)
         {

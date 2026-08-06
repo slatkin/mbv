@@ -39,7 +39,8 @@ const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
 /// 1-row yellow title, a 1-row gap, and the meta block. The hero grows with
 /// the terminal until it hits the cap.
 fn hero_height_for_width(width: u16, show_title: bool) -> u16 {
-    let image_height = ((width as u32 * 9 + 31) / 32)
+    let image_height = (width as u32 * 9)
+        .div_ceil(32)
         .max(1)
         .min(HERO_IMAGE_CAP_ROWS as u32) as u16;
     image_height
@@ -67,7 +68,7 @@ impl App {
             self.ensure_lib_loaded_for(self.library_tab - 1);
         }
 
-        let mut content_area = area;
+        let content_area = area;
 
         // Selected movie/Series item, computed once and reused below for the
         // prefetch gate, the hero row-count calc, and the hero paint --
@@ -108,28 +109,12 @@ impl App {
         } else {
             let lib_idx = self.library_tab - 1;
             let lib = &self.libs[lib_idx];
-            let (items, cur, scroll, total) = if let Some(s) = &lib.search {
-                let items: Vec<mbv_core::api::MediaItem> = s
-                    .results
-                    .iter()
-                    .filter_map(|&i| {
-                        s.items
-                            .get(i)
-                            .map(|item| self.recursive_album_display_item(lib_idx, i, item.clone()))
-                    })
-                    .collect();
-                // Search results are already the full locally-filtered match set,
-                // not paginated, so their length is already the true total.
-                let total = items.len();
-                (items, s.cursor, s.scroll, total)
-            } else {
-                match lib.nav_stack.last() {
-                    // `total_count` comes from Emby's TotalRecordCount, not
-                    // `items.len()` -- with lazy pagination `items` may only hold
-                    // a subset of the library until the user scrolls further.
-                    Some(lvl) => (lvl.items.clone(), lvl.cursor, lvl.scroll, lvl.total_count),
-                    None => (vec![], 0, 0, 0),
-                }
+            let (items, cur, scroll, total) = match lib.nav_stack.last() {
+                // `total_count` comes from Emby's TotalRecordCount, not
+                // `items.len()` -- with lazy pagination `items` may only hold
+                // a subset of the library until the user scrolls further.
+                Some(lvl) => (lvl.items.clone(), lvl.cursor, lvl.scroll, lvl.total_count),
+                None => (vec![], 0, 0, 0),
             };
             (items, cur, scroll, total)
         };
@@ -208,63 +193,14 @@ impl App {
             && {
                 let lib_idx = self.library_tab - 1;
                 self.libs[lib_idx].library.collection_type != "music"
-                    && self.libs[lib_idx].search.is_none()
             };
 
-        // First row area: search input box (when searching).
-        if focused && self.library_tab > 0 && content_area.height > 0 {
-            let lib_idx = self.library_tab - 1;
-            let has_search = self.libs[lib_idx].search.is_some();
-            if has_search && content_area.height >= 3 {
-                // 3-row bordered search input, matching the home-search visual style.
-                let search_area = Rect {
-                    height: 3,
-                    ..content_area
-                };
-                content_area = Rect {
-                    y: content_area.y + 3,
-                    height: content_area.height.saturating_sub(3),
-                    ..content_area
-                };
-                let s = self.libs[lib_idx].search.as_ref().unwrap();
-                let input_text = if s.loading {
-                    format!("{}█ [loading…]", s.query)
-                } else {
-                    format!("{}█", s.query)
-                };
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        input_text,
-                        Style::default().fg(palette::BG_GREEN),
-                    ))
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .border_type(BorderType::Rounded)
-                            .border_style(Style::default().fg(palette::IRIS))
-                            .title(Span::styled(
-                                " Search ",
-                                Style::default().fg(palette::YELLOW),
-                            )),
-                    ),
-                    search_area,
-                );
-            }
-        }
-
-        // The list (and its row map / click targets) is indexed against the
-        // post-search content area; the hero is inserted inline inside it.
         layout.left_area = content_area;
 
         if n == 0 {
             let msg = if self.library_tab > 0 {
                 let lib_idx = self.library_tab - 1;
-                if self.recursive_album_search_enabled(lib_idx)
-                    && self.libs[lib_idx]
-                        .search
-                        .as_ref()
-                        .is_some_and(|search| search.loading)
-                {
+                if self.recursive_album_search_enabled(lib_idx) {
                     "Indexing music library..."
                 } else if self.libs[lib_idx]
                     .nav_stack
@@ -446,11 +382,21 @@ impl App {
             // instead of the generic compact banner.
             if selected_movie_item.is_some() {
                 self.render_power_compact_detail(
-                    f, content_rect, lib_idx, focused, cols > 1, layout,
+                    f,
+                    content_rect,
+                    lib_idx,
+                    focused,
+                    cols > 1,
+                    layout,
                 );
             } else {
                 self.render_series_inline_detail(
-                    f, content_rect, lib_idx, focused, cols > 1, layout,
+                    f,
+                    content_rect,
+                    lib_idx,
+                    focused,
+                    cols > 1,
+                    layout,
                 );
             }
             layout.cursor_screen_y = saved_cursor_y;
@@ -460,9 +406,7 @@ impl App {
         // library_tab is always > 0 here (tab == 0 uses render_power_home_list).
         if self.library_tab > 0 {
             let lib_idx = self.library_tab - 1;
-            if let Some(s) = &mut self.libs[lib_idx].search {
-                s.scroll = final_offset;
-            } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+            if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                 lvl.scroll = final_offset;
             }
         }
