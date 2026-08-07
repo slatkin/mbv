@@ -160,6 +160,11 @@ impl App {
         } else {
             None
         };
+        let selected_album_item = if selected_series_item.is_none() && self.library_tab > 0 {
+            self.power_selected_album_item(self.library_tab - 1)
+        } else {
+            None
+        };
 
         // Column count for the two-column list layout, derived from the list
         // pane width -- the content area this renderer already receives,
@@ -219,20 +224,51 @@ impl App {
                     episode_count,
                 ) as u16
                     + HERO_BLOCK_EXTRA_ROWS
+            } else if let Some(item) = &selected_album_item {
+                // Album hero: art + tracks + metadata + block chrome.
+                let track_count = self
+                    .album_tracks_cache
+                    .get(&item.id)
+                    .map(|t| t.len())
+                    .unwrap_or(0);
+                let art_rows = if self.images_enabled() {
+                    super::album_art::INLINE_ALBUM_ART_ROWS
+                } else {
+                    0
+                };
+                let panel_width =
+                    content_area.width.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
+                super::album_plan::album_hero_content_rows(
+                    track_count,
+                    art_rows,
+                    panel_width,
+                    self.images_enabled(),
+                ) + HERO_BLOCK_EXTRA_ROWS
             } else {
                 // No banner content to size to. If we're at the top browse
                 // level of a hero-capable collection (movies/homevideos/
-                // podcasts/tvshows), keep the fixed placeholder panel reserved
-                // instead of collapsing to zero -- a letter-pill switch clears
-                // the slice before its replacement loads, and this keeps the
-                // slot from jumping away and back. The placeholder size is
-                // just the stand-in; once content lands the block sizes to it.
+                // podcasts/tvshows/music), keep the fixed placeholder panel
+                // reserved instead of collapsing to zero -- a letter-pill
+                // switch clears the slice before its replacement loads, and
+                // this keeps the slot from jumping away and back. The
+                // placeholder size is just the stand-in; once content lands
+                // the block sizes to it.
                 let top_hero_level = self.libs[lib_idx].nav_stack.len() == 1
                     && matches!(
                         self.libs[lib_idx].library.collection_type.as_str(),
-                        "movies" | "homevideos" | "podcasts" | "tvshows"
+                        "movies" | "homevideos" | "podcasts" | "tvshows" | "music"
                     );
-                if top_hero_level {
+                // Music with levels shows its hero at the album-browsing
+                // level (nav_stack.len() >= 2) instead of the top browse
+                // level, so it gets its own placeholder gate while the
+                // album list is still loading.
+                let music_hero_placeholder = self.is_music_group_view(lib_idx)
+                    && self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .map(|l| l.items.is_empty())
+                        .unwrap_or(false);
+                if top_hero_level || music_hero_placeholder {
                     HERO_PLACEHOLDER_ROWS
                 } else {
                     0

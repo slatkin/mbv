@@ -175,6 +175,25 @@ impl App {
         Some(item)
     }
 
+    pub(crate) fn power_selected_album_item(
+        &self,
+        lib_idx: usize,
+    ) -> Option<mbv_core::api::MediaItem> {
+        let lib = self.libs.get(lib_idx)?;
+        if lib.library.collection_type != "music" {
+            return None;
+        }
+        if !self.is_viewing_album_folders(lib_idx) {
+            return None;
+        }
+        if !self.is_music_group_view(lib_idx) {
+            return None;
+        }
+
+        let level = lib.nav_stack.last()?;
+        Some(level.items.get(level.cursor)?.clone())
+    }
+
     /// Computes the compact banner's content for `item`, given the panel
     /// width it will render into (i.e. the eventual `area.width` passed to
     /// `render_power_compact_detail`). Pure function of `item` + width aside
