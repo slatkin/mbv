@@ -31,12 +31,13 @@ impl App {
         area: Rect,
         cache_key: &str,
         max_h: u16,
-    ) -> (u16, bool) {
+        left_align: bool,
+    ) -> (u16, u16, bool) {
         // On short terminals (<= 30 rows) cap the card image at 12 rows so the queue
         // list keeps adequate space; taller terminals cap at 18 rows.
         let max_h = max_h.min(if self.terminal_height <= 30 { 12 } else { 24 });
         let image_loading = self.card_image_loading.contains(cache_key);
-        let actual_height = if let Some(state) = self.cached_image_protocol_mut(cache_key) {
+        let actual_size = if let Some(state) = self.cached_image_protocol_mut(cache_key) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             let avail = ratatui::layout::Size {
                 width: area.width,
@@ -51,7 +52,11 @@ impl App {
                 ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
                 avail,
             ) {
-                let img_x = area.x + (area.width.saturating_sub(actual.width)) / 2;
+                let img_x = if left_align {
+                    area.x
+                } else {
+                    area.x + (area.width.saturating_sub(actual.width)) / 2
+                };
                 let img_rect = Rect {
                     x: img_x,
                     y: area.y,
@@ -63,16 +68,17 @@ impl App {
                     img_rect,
                     state,
                 );
-                Some(actual.height)
+                Some((actual.height, actual.width))
             } else {
                 None
             }
         } else {
             None
         };
-        if let Some(height) = actual_height {
+        if let Some((height, width)) = actual_size {
             self.last_card_height = height;
-            return (height, false);
+            self.last_card_width = width;
+            return (height, width, false);
         }
         // No image loaded yet — if a fetch is in-flight and we have never
         // rendered a card before, reserve the full height cap so the queue
@@ -81,6 +87,11 @@ impl App {
             max_h
         } else {
             self.last_card_height
+        };
+        let placeholder_w = if self.last_card_width == 0 && image_loading {
+            area.width
+        } else {
+            self.last_card_width
         };
         // The reserved area above was otherwise left visually blank while
         // loading -- paint a dim block over it instead, matching the
@@ -99,17 +110,28 @@ impl App {
                 },
             );
         }
-        (placeholder, image_loading)
+        (placeholder, placeholder_w, image_loading)
     }
 
-    fn render_power_card_placeholder(&mut self, f: &mut Frame, area: Rect) -> (u16, bool) {
+    fn render_power_card_placeholder(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        left_align: bool,
+    ) -> (u16, u16, bool) {
         self.ensure_placeholder_card_image();
-        let rendered =
-            self.render_card_image(f, area, QUEUE_CARD_PLACEHOLDER_KEY, area.height.min(24));
-        if rendered == (0, false) {
+        let rendered = self.render_card_image(
+            f,
+            area,
+            QUEUE_CARD_PLACEHOLDER_KEY,
+            area.height.min(24),
+            left_align,
+        );
+        if rendered == (0, 0, false) {
             (
                 area.height
                     .min(if self.terminal_height <= 30 { 12 } else { 24 }),
+                area.width,
                 false,
             )
         } else {
@@ -117,11 +139,16 @@ impl App {
         }
     }
 
-    /// Renders the card image and returns `(rows_used, image_loading)`.
-    /// `rows_used` is 0 if the queue is empty or the image is not yet ready.
-    /// `image_loading` is true when a fetch is in-flight (caller should defer
-    /// rendering the rest of the view until the image arrives).
-    pub(super) fn render_power_card(&mut self, f: &mut Frame, area: Rect) -> (u16, bool) {
+    /// Renders the card image and returns `(rows_used, cols_used, image_loading)`.
+    /// `rows_used`/`cols_used` are 0 if the queue is empty or the image is not
+    /// yet ready. `image_loading` is true when a fetch is in-flight (caller
+    /// should defer rendering the rest of the view until the image arrives).
+    pub(super) fn render_power_card(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        left_align: bool,
+    ) -> (u16, u16, bool) {
         let playback = self.effective_playback_state();
         let active_source = if playback.active {
             let queue = self.playback_queue();
@@ -136,7 +163,7 @@ impl App {
                 .then(|| (queue.queue_cursor, queue.items.clone()))
         };
         let Some((cursor, items)) = active_source.or_else(selected_source) else {
-            return self.render_power_card_placeholder(f, area);
+            return self.render_power_card_placeholder(f, area, left_align);
         };
 
         let item = &items[cursor];
@@ -180,9 +207,9 @@ impl App {
             }
         }
         if use_placeholder {
-            return self.render_power_card_placeholder(f, area);
+            return self.render_power_card_placeholder(f, area, left_align);
         }
-        self.render_card_image(f, area, &cache_key, area.height)
+        self.render_card_image(f, area, &cache_key, area.height, left_align)
     }
 }
 
@@ -246,12 +273,12 @@ mod tests {
         app
     }
 
-    fn render_power_card(app: &mut App) -> (u16, bool) {
+    fn render_power_card(app: &mut App) -> (u16, u16, bool) {
         let backend = TestBackend::new(30, 20);
         let mut term = Terminal::new(backend).unwrap();
-        let mut result = (0u16, false);
+        let mut result = (0u16, 0u16, false);
         term.draw(|f| {
-            result = app.render_power_card(f, Rect::new(0, 0, 30, 20));
+            result = app.render_power_card(f, Rect::new(0, 0, 30, 20), false);
         })
         .unwrap();
         result

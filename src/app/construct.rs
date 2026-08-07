@@ -134,6 +134,7 @@ impl App {
             card_image_states: std::collections::HashMap::new(),
             card_image_loading: std::collections::HashSet::new(),
             last_card_height: 0,
+            last_card_width: 0,
             image_picker: None,
             halfblock_picker: None,
             dim_backdrop_active: false,

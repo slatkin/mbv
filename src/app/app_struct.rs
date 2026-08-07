@@ -156,6 +156,7 @@ pub struct App {
     pub(super) image_cache_size: usize,
     pub(super) card_image_loading: std::collections::HashSet<String>,
     pub(super) last_card_height: u16,
+    pub(super) last_card_width: u16,
     pub(super) pending_image_fetches: std::collections::VecDeque<images::ImageFetchReq>,
     pub(super) image_fetches_active: usize,
     pub(super) card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
