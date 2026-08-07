@@ -8,16 +8,6 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 
-/// Cap on the hero image's height in rows (design decision 3, option a): at
-/// full content width the 16:9 formula would otherwise grow the hero to the
-/// whole list in wide terminals. 12 image rows + 1 gap + 5 meta rows keeps
-/// the hero at ≤ 18 rows and leaves the list a few rows at any width.
-const HERO_IMAGE_CAP_ROWS: u16 = 12;
-/// Blank row between the hero image and the meta block below it.
-const HERO_GAP_ROWS: u16 = 1;
-/// Row budget for the meta block under the hero image (meta line, spacer,
-/// overview/director lines).
-const HERO_META_ROWS: u16 = 5;
 /// Row budget for the selected item's title on the hero's top row, rendered
 /// in yellow. Reserved only in two-column lists (`show_title`), where the
 /// list row's own title is truncated to a narrow cell; one-column lists
@@ -33,23 +23,6 @@ const HERO_TITLE_ROWS: u16 = 1;
 const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
 /// Blank row separating the hero block from the list below it.
 const HERO_SEPARATOR_ROWS: u16 = 1;
-
-/// Height of the top hero banner for a content area `width` columns wide:
-/// the poster image at 16:9 in terminal cells (cells are roughly twice as
-/// tall as they are wide, so 9 rows per 32 columns — the home view's
-/// formula), capped at `HERO_IMAGE_CAP_ROWS`, plus (in two-column lists) a
-/// 1-row yellow title, a 1-row gap, and the meta block. The hero grows with
-/// the terminal until it hits the cap.
-fn hero_height_for_width(width: u16, show_title: bool) -> u16 {
-    let image_height = (width as u32 * 9)
-        .div_ceil(32)
-        .max(1)
-        .min(HERO_IMAGE_CAP_ROWS as u32) as u16;
-    image_height
-        + HERO_TITLE_ROWS.saturating_mul(show_title as u16)
-        + HERO_GAP_ROWS
-        + HERO_META_ROWS
-}
 
 impl App {
     /// Renders the Continue/library list items into `area`.
@@ -125,8 +98,25 @@ impl App {
         // movie hero's row math.
         let hero_rows: u16 = if self.library_tab > 0 {
             let lib_idx = self.library_tab - 1;
-            if selected_movie_item.is_some() {
-                hero_height_for_width(content_area.width, cols > 1) + HERO_BLOCK_EXTRA_ROWS
+            if let Some(item) = &selected_movie_item {
+                // Actual content rows the banner will paint (meta line,
+                // overview/director text, never fewer than the poster's own
+                // rendered height -- `CompactBannerLayout::content_rows`),
+                // not a width-derived guess: a 16:9-shaped estimate badly
+                // overshot real posters, which are portrait (2:3) and sized
+                // by `IMG_COLS x IMG_ROWS` (detail.rs), leaving a block full
+                // of empty rows below short overviews.
+                let panel_width = content_area
+                    .width
+                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
+                let truncate_overview =
+                    self.is_home_video_view(lib_idx) || self.is_podcast_library(lib_idx);
+                let content_rows = self
+                    .compact_banner_layout_with_overview(item, panel_width, truncate_overview)
+                    .content_rows() as u16;
+                content_rows
+                    + HERO_TITLE_ROWS.saturating_mul((cols > 1) as u16)
+                    + HERO_BLOCK_EXTRA_ROWS
             } else if let Some(item) = &selected_series_item {
                 let (in_selection, episode_count) = self.series_selection_state(lib_idx, &item.id);
                 self.series_inline_detail_rows(
