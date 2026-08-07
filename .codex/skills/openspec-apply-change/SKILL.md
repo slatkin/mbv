@@ -12,9 +12,9 @@ metadata:
 
 Implement tasks from an OpenSpec change.
 
-**Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `view`). Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.
+**Store selection:** This repo has no stores registered — commands act on the local `openspec/` root by default. Only run `openspec store list --json` and pass `--store <id>` if the user explicitly names a store.
 
-**Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
+**Input**: Optionally specify a change name or a GitHub issue URL/number (`slatkin/mbv`). If omitted, check if it can be inferred from conversation context. If given an issue instead of a change name, resolve it: check the issue body/comments (`gh issue view <n>`) for a referenced change slug, then confirm against `openspec list --json` — change names don't follow a fixed issue-number convention, so don't guess a slug. Ask the user if no single match is clear. If vague or ambiguous you MUST prompt for available changes.
 
 **Steps**
 
@@ -26,6 +26,10 @@ Implement tasks from an OpenSpec change.
    - If ambiguous, run `openspec list --json` to get available changes and ask the user to select one
 
    Always announce: "Using change: <name>" and how to override (e.g., `$openspec-apply-change <other>`).
+
+   If the user asks to confirm the change is ready before implementing (e.g. it just came out of propose), run `openspec validate "<name>" --strict --json` first and surface any failures before proceeding.
+
+   If the user asks for isolation or delegation, or the change has more than a handful of tasks/files (see AGENTS.md's ~3-file plan-first threshold), use the `worktrees` skill to set up an isolated workspace before implementing — and prefer running the implementation loop as a background subagent there rather than in the current session.
 
 2. **Check status to understand the schema**
    ```bash
@@ -176,6 +180,9 @@ What would you like to do?
 - Consider every guidance entry; explain any inapplicable or conflicting advice
 - Do not copy runtime context or operation guidance into implementation files or planning artifacts
 - Preserve CLI-controlled blocked/ready/all-done behavior and completion criteria
+- Preserve pre-existing unrelated uncommitted changes in the working tree; never fold them into this change's edits or commits
+- Run this repo's checks as tasks complete or at pause/completion: `cargo check -p mbv-core` (prefer over full workspace builds), `cargo test -p mbv-core`, `cargo clippy --workspace --all-targets`, and `make check-code-file-lines` for any touched file near the 800-line cap
+- When running as a delegated or background-subagent implementer, the final report must include: files changed, tasks completed, and command evidence (not just a summary)
 
 **Fluid Workflow Integration**
 
