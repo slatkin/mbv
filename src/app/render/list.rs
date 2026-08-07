@@ -155,15 +155,13 @@ impl App {
         // list"). Below `HERO_BLOCK_EXTRA_ROWS` there isn't room for even
         // the hero's own border/padding rows, so suppress it entirely
         // rather than paint a malformed block.
-        let hero_rows = hero_rows.min(
+        let hero_rows = match hero_rows.min(
             content_area
                 .height
                 .saturating_sub(1 + separator_reserve + pills_reserved),
-        );
-        let hero_rows = if hero_rows < HERO_BLOCK_EXTRA_ROWS {
-            0
-        } else {
-            hero_rows
+        ) {
+            r if r < HERO_BLOCK_EXTRA_ROWS => 0,
+            r => r,
         };
         let separator_rows = if hero_rows > 0 { separator_reserve } else { 0 };
 
