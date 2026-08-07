@@ -354,12 +354,12 @@ impl PlayerProxy {
 
 /// Retry mark_played in a detached thread with exponential backoff.
 /// Max 3 attempts (initial + 2 retries), delays: 500ms, 2s.
-fn retry_mark_played(client: Arc<EmbyClient>, item_id: String) {
+fn retry_mark_played(client: Arc<EmbyClient>, item_id: ItemId) {
     std::thread::spawn(move || {
         let delays = [500, 2000]; // ms
         for (i, delay_ms) in delays.iter().enumerate() {
             std::thread::sleep(Duration::from_millis(*delay_ms));
-            match client.mark_played(&item_id) {
+            match client.mark_played(item_id.as_str()) {
                 Ok(()) => {
                     log::info!(target: "player", "mark_played retry {} ok id={item_id}", i + 1);
                     return;

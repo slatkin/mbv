@@ -1,7 +1,7 @@
 impl EmbyClient {
     /// Returns all episodes of a series starting from `from_item_id` (inclusive), in air order.
     /// Mirrors Emby Web's `getEpisodes(seriesId)` + filter pattern.
-    pub fn get_episodes_from(&self, series_id: &str, from_item_id: &str) -> Vec<MediaItem> {
+    pub fn get_episodes_from(&self, series_id: &ItemId, from_item_id: &ItemId) -> Vec<MediaItem> {
         log::debug!(target: "api", "outbound: EpisodesFrom series={series_id} from={from_item_id}");
         let resp: Value = match self
             .get(&format!("/Shows/{}/Episodes", series_id))
@@ -34,7 +34,7 @@ impl EmbyClient {
                 if found {
                     return Some(parse_item(v));
                 }
-                if v["Id"].as_str().unwrap_or("") == from_item_id {
+                if v["Id"].as_str().unwrap_or("") == from_item_id.as_str() {
                     found = true;
                     Some(parse_item(v))
                 } else {
@@ -52,12 +52,12 @@ impl EmbyClient {
     }
 
     #[allow(dead_code)]
-    pub fn get_next_up(&self, series_id: &str) -> Option<MediaItem> {
+    pub fn get_next_up(&self, series_id: &ItemId) -> Option<MediaItem> {
         log::debug!(target: "api", "outbound: NextUp series={series_id}");
         let resp: Value = match self
             .get("/Shows/NextUp")
             .query("UserId", &self.user_id)
-            .query("SeriesId", series_id)
+            .query("SeriesId", series_id.as_str())
             .query("Limit", "1")
             .query(
                 "Fields",

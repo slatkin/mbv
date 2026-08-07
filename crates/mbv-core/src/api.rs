@@ -1,3 +1,5 @@
+use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
+
 include!("api_types.rs");
 include!("api_client_auth.rs");
 include!("api_client_library.rs");

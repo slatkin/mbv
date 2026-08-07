@@ -1,10 +1,15 @@
 impl EmbyClient {
-    pub fn report_start(&self, item: &MediaItem, media_source_id: &str, session_id: &str) -> bool {
+    pub fn report_start(
+        &self,
+        item: &MediaItem,
+        media_source_id: &MediaSourceId,
+        session_id: &EmbySessionId,
+    ) -> bool {
         let body = ureq::json!({
             "UserId": self.user_id,
             "ItemId": item.id,
-            "MediaSourceId": media_source_id,
-            "PlaySessionId": session_id,
+            "MediaSourceId": media_source_id.as_str(),
+            "PlaySessionId": session_id.as_str(),
             "CanSeek": true,
             "IsPaused": false,
             "IsMuted": false,
@@ -39,20 +44,20 @@ impl EmbyClient {
     #[allow(clippy::too_many_arguments)]
     pub fn report_progress_ws(
         &self,
-        item_id: &str,
-        media_source_id: &str,
+        item_id: &ItemId,
+        media_source_id: &MediaSourceId,
         position_ticks: i64,
         runtime_ticks: i64,
         is_paused: bool,
-        session_id: &str,
+        session_id: &EmbySessionId,
         event_name: &str,
         ws_tx: &crate::ws::WsSender,
     ) {
         let data = serde_json::json!({
             "UserId": self.user_id,
-            "ItemId": item_id,
-            "MediaSourceId": media_source_id,
-            "PlaySessionId": session_id,
+            "ItemId": item_id.as_str(),
+            "MediaSourceId": media_source_id.as_str(),
+            "PlaySessionId": session_id.as_str(),
             "CanSeek": true,
             "IsPaused": is_paused,
             "IsMuted": false,
@@ -85,18 +90,18 @@ impl EmbyClient {
     #[allow(clippy::too_many_arguments)]
     pub fn report_progress_http(
         &self,
-        item_id: &str,
-        media_source_id: &str,
+        item_id: &ItemId,
+        media_source_id: &MediaSourceId,
         position_ticks: i64,
         is_paused: bool,
-        session_id: &str,
+        session_id: &EmbySessionId,
         event_name: &str,
     ) {
         let body = ureq::json!({
             "UserId": self.user_id,
-            "ItemId": item_id,
-            "MediaSourceId": media_source_id,
-            "PlaySessionId": session_id,
+            "ItemId": item_id.as_str(),
+            "MediaSourceId": media_source_id.as_str(),
+            "PlaySessionId": session_id.as_str(),
             "CanSeek": true,
             "IsPaused": is_paused,
             "IsMuted": false,
@@ -112,11 +117,11 @@ impl EmbyClient {
         }
     }
 
-    pub fn report_ping(&self, session_id: &str) {
+    pub fn report_ping(&self, session_id: &EmbySessionId) {
         log::debug!(target: "api", "outbound: Ping session={session_id}");
         match self
             .post("/Sessions/Playing/Ping")
-            .query("PlaySessionId", session_id)
+            .query("PlaySessionId", session_id.as_str())
             .send_string("")
         {
             Ok(r) => log::debug!(target: "api", "inbound: {} Ping", r.status()),
@@ -126,10 +131,10 @@ impl EmbyClient {
 
     pub fn report_stopped(
         &self,
-        item_id: &str,
-        media_source_id: &str,
+        item_id: &ItemId,
+        media_source_id: &MediaSourceId,
         position_ticks: i64,
-        session_id: &str,
+        session_id: &EmbySessionId,
         runtime_ticks: i64,
     ) -> bool {
         let body = self.stopped_request_body(
@@ -167,17 +172,17 @@ impl EmbyClient {
 
     fn stopped_request_body(
         &self,
-        item_id: &str,
-        media_source_id: &str,
+        item_id: &ItemId,
+        media_source_id: &MediaSourceId,
         position_ticks: i64,
-        session_id: &str,
+        session_id: &EmbySessionId,
         runtime_ticks: i64,
     ) -> serde_json::Value {
         ureq::json!({
             "UserId": self.user_id,
-            "ItemId": item_id,
-            "MediaSourceId": media_source_id,
-            "PlaySessionId": session_id,
+            "ItemId": item_id.as_str(),
+            "MediaSourceId": media_source_id.as_str(),
+            "PlaySessionId": session_id.as_str(),
             "PositionTicks": position_ticks,
             "RunTimeTicks": runtime_ticks,
             "CanSeek": true,
@@ -190,10 +195,10 @@ impl EmbyClient {
 
     pub fn report_stopped_for_shutdown(
         &self,
-        item_id: &str,
-        media_source_id: &str,
+        item_id: &ItemId,
+        media_source_id: &MediaSourceId,
         position_ticks: i64,
-        session_id: &str,
+        session_id: &EmbySessionId,
         runtime_ticks: i64,
         hard_bound: std::time::Duration,
     ) -> bool {

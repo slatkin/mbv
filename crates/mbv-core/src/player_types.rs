@@ -177,7 +177,7 @@ pub enum PlayerEvent {
         progress_report_accepted: bool,
     },
     NextUpThreshold {
-        series_id: String,
+        series_id: ItemId,
         season: i64,
         episode: i64,
     },
