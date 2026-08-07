@@ -1,3 +1,4 @@
+use super::album_art::INLINE_ALBUM_ART_RESERVED;
 use super::detail::compact_banner_image_cache_key;
 use super::list_rows::{ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING};
 use crate::app::layout::LayoutMain;
@@ -160,6 +161,11 @@ impl App {
         } else {
             None
         };
+        let selected_album_item = if selected_series_item.is_none() && self.library_tab > 0 {
+            self.selected_album_hero_item(self.library_tab - 1)
+        } else {
+            None
+        };
 
         // Column count for the two-column list layout, derived from the list
         // pane width -- the content area this renderer already receives,
@@ -219,20 +225,52 @@ impl App {
                     episode_count,
                 ) as u16
                     + HERO_BLOCK_EXTRA_ROWS
+            } else if let Some(item) = &selected_album_item {
+                // Album hero: art + tracks + metadata + block chrome.
+                let track_count = self
+                    .album_tracks_cache
+                    .get(&item.id)
+                    .map(|t| t.len())
+                    .unwrap_or(0);
+                let art_rows = if self.images_enabled() {
+                    super::album_art::INLINE_ALBUM_ART_ROWS
+                } else {
+                    0
+                };
+                let panel_width = content_area
+                    .width
+                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
+                super::album_plan::album_hero_content_rows(
+                    track_count,
+                    art_rows,
+                    panel_width,
+                    self.images_enabled(),
+                ) + HERO_BLOCK_EXTRA_ROWS
             } else {
                 // No banner content to size to. If we're at the top browse
                 // level of a hero-capable collection (movies/homevideos/
-                // podcasts/tvshows), keep the fixed placeholder panel reserved
-                // instead of collapsing to zero -- a letter-pill switch clears
-                // the slice before its replacement loads, and this keeps the
-                // slot from jumping away and back. The placeholder size is
-                // just the stand-in; once content lands the block sizes to it.
+                // podcasts/tvshows/music), keep the fixed placeholder panel
+                // reserved instead of collapsing to zero -- a letter-pill
+                // switch clears the slice before its replacement loads, and
+                // this keeps the slot from jumping away and back. The
+                // placeholder size is just the stand-in; once content lands
+                // the block sizes to it.
                 let top_hero_level = self.libs[lib_idx].nav_stack.len() == 1
                     && matches!(
                         self.libs[lib_idx].library.collection_type.as_str(),
-                        "movies" | "homevideos" | "podcasts" | "tvshows"
+                        "movies" | "homevideos" | "podcasts" | "tvshows" | "music"
                     );
-                if top_hero_level {
+                // Music with levels shows its hero at the album-browsing
+                // level (nav_stack.len() >= 2) instead of the top browse
+                // level, so it gets its own placeholder gate while the
+                // album list is still loading.
+                let music_hero_placeholder = self.is_music_group_view(lib_idx)
+                    && self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .map(|l| l.items.is_empty())
+                        .unwrap_or(false);
+                if top_hero_level || music_hero_placeholder {
                     HERO_PLACEHOLDER_ROWS
                 } else {
                     0
@@ -432,7 +470,31 @@ impl App {
             layout.hero_area = hero_area;
             let msg = if self.library_tab > 0 {
                 let lib_idx = self.library_tab - 1;
-                if self.recursive_album_search_enabled(lib_idx)
+                if self.is_music_group_view(lib_idx) {
+                    // Music-group view messages (moved from the deleted
+                    // `render_power_music_group_view`): while the first
+                    // grouping snapshot resolves (a candidate exists but no
+                    // settled catalog yet), show the organizing message
+                    // instead of an empty list; otherwise keep the old view's
+                    // loading/empty wording.
+                    if self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .and_then(|l| l.music_grouping.as_ref())
+                        .is_some_and(|s| s.candidate.is_some() && s.settled.is_none())
+                    {
+                        " Movin, doin it"
+                    } else if self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .map(|l| l.loading)
+                        .unwrap_or(false)
+                    {
+                        " Loading\u{2026}"
+                    } else {
+                        " (empty)"
+                    }
+                } else if self.recursive_album_search_enabled(lib_idx)
                     && self.libs[lib_idx]
                         .search
                         .as_ref()
@@ -477,6 +539,8 @@ impl App {
                 cursor,
                 stored_scroll,
                 focused,
+                true, // hero_handles_detail: the hero panel renders the detail
+                cols as u16,
                 layout,
             );
         } else if use_letter_groups {
@@ -543,6 +607,54 @@ impl App {
                     cols > 1,
                     layout,
                 );
+            } else if let Some(item) = &selected_album_item {
+                // Album hero: art + track list + metadata, mirroring the
+                // movie/series branch -- reserved and painted here instead of
+                // in `render_power_grouped_album_rows`' inline block. Art
+                // sits right-aligned in `content_rect`; the detail reserves
+                // its width so the track table never overlaps it.
+                let art_reserved_w = if self.images_enabled()
+                    && content_rect.width >= INLINE_ALBUM_ART_RESERVED + 20
+                {
+                    INLINE_ALBUM_ART_RESERVED
+                } else {
+                    0
+                };
+                let track_cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
+                if let Some(tracks) = self.album_tracks_cache.get(&item.id).cloned() {
+                    self.render_album_detail(
+                        f,
+                        content_rect,
+                        &tracks,
+                        track_cursor,
+                        focused,
+                        true,  // show_title: the hero has no Album(idx) row above
+                        true,  // selected_region_gutter: hero block context
+                        false, // flush_left
+                        true,  // show_hint: show the action hint
+                        art_reserved_w,
+                        None,
+                        layout,
+                    );
+                } else {
+                    // Tracks not fetched yet: kick off the fetch and show a
+                    // loading stand-in (art still reserved on the right).
+                    self.fetch_album_tracks(item.id.clone());
+                    let loading_rect = Rect {
+                        width: content_rect.width.saturating_sub(art_reserved_w),
+                        ..content_rect
+                    };
+                    super::render_placeholder(f, loading_rect, " Loading…");
+                }
+                if art_reserved_w > 0 {
+                    let art_rect = Rect {
+                        x: content_rect.x + content_rect.width.saturating_sub(art_reserved_w),
+                        y: content_rect.y,
+                        width: art_reserved_w,
+                        height: content_rect.height,
+                    };
+                    self.render_inline_album_art(f, art_rect, item, layout);
+                }
             }
         }
 

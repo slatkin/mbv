@@ -197,9 +197,10 @@ impl App {
             }
             KeyCode::Left if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(-1),
             KeyCode::Right if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(1),
-            // Arrow-key column navigation: in 2-col flat lists Left/Right
-            // mirror h/l (Up/Down already mirror j/k). Season-grid Left/Right
-            // are covered above.
+            // Arrow-key column navigation: in 2-col lists (flat,
+            // letter-grouped, and grouped-album views) Left/Right mirror h/l
+            // (Up/Down already mirror j/k). Season-grid Left/Right are
+            // covered above.
             KeyCode::Left if self.current_library_columns(lib_idx) > 1 => self.move_lib_cursor(-1),
             KeyCode::Right if self.current_library_columns(lib_idx) > 1 => self.move_lib_cursor(1),
             // Vim-style navigation. Complements the arrow keys (Left/Right

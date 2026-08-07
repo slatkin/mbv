@@ -65,6 +65,11 @@ pub(crate) struct LayoutMain {
     /// right (empty for headers/fillers). Column-aware cursor movement and
     /// mouse hit-testing resolve cells from this between frames.
     pub left_item_rows: Vec<Vec<usize>>,
+    /// Screen-row offset for `left_item_rows` when the renderer packs display
+    /// rows into screen rows (e.g. grouped album views with two-column
+    /// layout). The mouse handler adds this (instead of `lvl.scroll`) to
+    /// `click_y` to index into `left_item_rows`.
+    pub left_screen_offset: usize,
     pub left_row_targets: Vec<Option<LibraryRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,

@@ -184,14 +184,14 @@ fn escape_outside_track_mode_still_calls_go_back_unchanged() {
 }
 
 #[test]
-fn page_down_in_album_list_mode_pages_by_rendered_rows_with_inline_detail() {
+fn page_down_in_album_list_mode_pages_by_rendered_rows_with_hero() {
     let mut app = make_music_album_list_app(60, 0);
     push_tracks(&mut app, "album-0", 4);
     render_full_app(&mut app, 100, 40);
     let viewport_rows = app.layout.main.left_area.height as usize;
     assert_eq!(
-        viewport_rows, 30,
-        "fixture sanity: expected 30 rendered list rows"
+        viewport_rows, 19,
+        "fixture sanity: expected 19 rendered list rows below the hero panel"
     );
     assert!(app.right_panel_image_renders_allowed());
 
@@ -199,36 +199,37 @@ fn page_down_in_album_list_mode_pages_by_rendered_rows_with_inline_detail() {
 
     assert!(!handled);
     assert!(!app.right_panel_image_renders_allowed());
-    // The selected artist block starts with its border, padding, header, and
-    // pinned hint, then renders every album. A 30-row page from album 0's
-    // display row lands on album 30.
+    // The hero panel above the list renders the selected album's detail;
+    // the list still starts with the artist header, then renders every
+    // album. A 19-row page from album 0's display row lands on album 19.
     assert_eq!(
         app.libs[0].nav_stack.last().unwrap().cursor,
-        30,
+        19,
         "PageDown should move by rendered display rows, not raw album count"
     );
     assert!(app.libs[0].album_track_focus.is_none());
 }
 
 #[test]
-fn page_up_in_album_list_mode_pages_by_rendered_rows_with_inline_detail() {
+fn page_up_in_album_list_mode_pages_by_rendered_rows_with_hero() {
     let mut app = make_music_album_list_app(60, 35);
     push_tracks(&mut app, "album-35", 4);
     render_full_app(&mut app, 100, 40);
     let viewport_rows = app.layout.main.left_area.height as usize;
     assert_eq!(
-        viewport_rows, 30,
-        "fixture sanity: expected 30 rendered list rows"
+        viewport_rows, 19,
+        "fixture sanity: expected 19 rendered list rows below the hero panel"
     );
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
     assert!(!handled);
-    // The selected artist block contains the header, pinned hint, and every
-    // album. A 30-row page up from album 35 lands on album 5.
+    // The hero panel above the list renders the selected album's detail;
+    // the list still starts with the artist header, then renders every
+    // album. A 19-row page up from album 35 lands on album 16.
     assert_eq!(
         app.libs[0].nav_stack.last().unwrap().cursor,
-        5,
+        16,
         "PageUp should move by rendered display rows, not raw album count"
     );
     assert!(app.libs[0].album_track_focus.is_none());
@@ -353,12 +354,46 @@ fn oversized_artist_block_scrolls_inline_without_moving_the_outer_block() {
 }
 
 #[test]
+fn two_column_album_navigation_strides_rows_and_crosses_groups() {
+    let mut app = make_music_album_list_app(4, 0);
+    add_following_artist_albums(&mut app, 2);
+    render_full_app(&mut app, 100, 40);
+    // Force the two-column layout the movement derives from the pane width
+    // (82 is POWER_TWO_COLUMN_THRESHOLD); the 100-wide render above lands
+    // at 1 column behind the 40-wide queue column.
+    app.layout.main.left_area.width = 82;
+
+    // Down strides one row (cols = 2) within the Alpha group.
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 2);
+    assert!(app.libs[0].artist_header_focus.is_none());
+
+    // Left/right move by a single album.
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 3);
+
+    // Down from Alpha's last row jumps to the first album of the next
+    // group (Beta), never resting on the artist header.
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 4);
+    assert!(app.libs[0].artist_header_focus.is_none());
+
+    // Up from Beta's first row lands on the previous group's last row.
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 3);
+}
+
+#[test]
 fn oversized_artist_navigation_reaches_hidden_albums_before_following_artist() {
     let mut app = make_music_album_list_app(60, 0);
     add_following_artist_albums(&mut app, 2);
     render_full_app(&mut app, 100, 40);
 
-    for expected_cursor in 1..60 {
+    // All 60 Alpha albums are traversed before the cursor leaves the
+    // oversized artist; the following artist's first album is reached
+    // directly, since the Beta artist header is not a navigation stop
+    // for arrow movement (see `grouped_cursor_target`).
+    for expected_cursor in 1..=60 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
@@ -366,17 +401,6 @@ fn oversized_artist_navigation_reaches_hidden_albums_before_following_artist() {
         );
         assert!(app.libs[0].artist_header_focus.is_none());
     }
-
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    let beta_header = app.libs[0]
-        .artist_header_focus
-        .as_ref()
-        .expect("expected navigation to reach the following artist header");
-    assert_eq!(beta_header.artist_label, "Beta");
-
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert!(app.libs[0].artist_header_focus.is_none());
-    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 60);
 }
 
 #[test]

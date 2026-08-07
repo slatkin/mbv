@@ -127,6 +127,7 @@ impl App {
             selected,
             expand_selected,
             None,
+            false, // hero_handles_detail: cursor needs the full plan
         );
         let targets = Self::grouped_album_navigation_targets(albums, &plan);
         (targets, plan.selected_artist_header_valid)
@@ -137,7 +138,7 @@ impl App {
         lib_idx: usize,
         delta: i64,
     ) -> bool {
-        if !self.is_music_group_view(lib_idx) {
+        if !self.is_viewing_album_folders(lib_idx) {
             return false;
         }
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
@@ -168,7 +169,7 @@ impl App {
                         && matches!(target, LibraryRowTarget::Album(idx) if *idx == cursor))
             })
             .unwrap_or(0);
-        let new_pos = (current_pos as i64 + delta).clamp(0, targets.len() as i64 - 1) as usize;
+        let new_pos = Self::grouped_cursor_target(&targets, current_pos, delta);
         let target = targets[new_pos].clone();
         match target {
             LibraryRowTarget::ArtistHeader(selection) => {
@@ -185,6 +186,42 @@ impl App {
             }
         }
         true
+    }
+
+    /// Target position for a `delta`-item move within a grouped album
+    /// list. `delta` is already column-scaled by the caller: `±cols` for
+    /// vertical up/down moves (one rendered row) and `±1` for horizontal
+    /// left/right moves (one album). With `cols == 1` the two coincide.
+    ///
+    /// Artist headers are never a resting position for arrow movement: a
+    /// move that lands on one continues to the nearest album in the
+    /// movement direction. That makes "down from a group's last row" land
+    /// on the first album of the next group and "up from a group's first
+    /// row" land on the last album of the previous group -- the same
+    /// column-wrapping the letter-group cursor uses. When the cursor
+    /// already rests on a header (reached via Ctrl+PgUp/PgDn or a click),
+    /// up/down step into the adjacent album row.
+    fn grouped_cursor_target(targets: &[LibraryRowTarget], pos: usize, delta: i64) -> usize {
+        let len = targets.len();
+        if len == 0 {
+            return pos;
+        }
+        if matches!(targets[pos], LibraryRowTarget::ArtistHeader(_)) {
+            // A header spans the full row: step into the row of albums
+            // that follows it (down) or precedes it (up).
+            if delta > 0 {
+                return next_album_target(targets, pos).unwrap_or(pos);
+            }
+            return prev_album_target(targets, pos).unwrap_or(pos);
+        }
+        let naive = (pos as i64 + delta).clamp(0, len as i64 - 1) as usize;
+        match targets[naive] {
+            LibraryRowTarget::ArtistHeader(_) if delta > 0 => {
+                next_album_target(targets, naive).unwrap_or(pos)
+            }
+            LibraryRowTarget::ArtistHeader(_) => prev_album_target(targets, naive).unwrap_or(pos),
+            _ => naive,
+        }
     }
 
     pub(in crate::app) fn jump_music_group_display_cursor(
@@ -360,6 +397,7 @@ impl App {
             Some(selection),
             expand_selected,
             None,
+            false, // hero_handles_detail: cursor needs the full plan
         );
         if !plan.selected_artist_header_valid {
             if self.libs[lib_idx]
@@ -426,7 +464,10 @@ impl App {
 
         let cursor = level.cursor;
         let albums = level.items.clone();
-        let page = (self.layout.main.left_area.height as usize).max(1);
+        let cols = self.current_library_columns(lib_idx);
+        // A page is one viewport of *rows*, each holding `cols` albums.
+        let page_rows = (self.layout.main.left_area.height as usize).max(1);
+        let page = cols.max(1).saturating_mul(page_rows);
         let selected = self.selected_music_artist_header(lib_idx);
         let (targets, header_valid) =
             self.music_group_navigation(lib_idx, &albums, cursor, selected.as_ref());
@@ -486,4 +527,16 @@ impl App {
         }
         true
     }
+}
+
+/// Index of the first album target strictly after `from`, or `None`.
+fn next_album_target(targets: &[LibraryRowTarget], from: usize) -> Option<usize> {
+    (from + 1..targets.len()).find(|&i| matches!(targets[i], LibraryRowTarget::Album(_)))
+}
+
+/// Index of the last album target strictly before `from`, or `None`.
+fn prev_album_target(targets: &[LibraryRowTarget], from: usize) -> Option<usize> {
+    (0..from)
+        .rev()
+        .find(|&i| matches!(targets[i], LibraryRowTarget::Album(_)))
 }

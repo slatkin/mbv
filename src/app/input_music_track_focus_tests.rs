@@ -146,30 +146,33 @@ fn focus_lost_clears_pending_refocus() {
 }
 
 #[test]
-fn selectable_artist_header_keyboard_up_down_selects_headers() {
-    let mut app = make_music_album_app();
-    add_beta_album(&mut app);
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = 2;
+fn up_down_at_group_boundary_moves_between_groups_skipping_headers() {
+    let mut app = make_music_album_list_app(2, 1);
+    add_following_artist_albums(&mut app, 2);
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
 
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-
-    assert_eq!(
-        app.libs[0].artist_header_focus,
-        Some(crate::app::ArtistHeaderSelection {
-            first_album_id: "album-beta".into(),
-            artist_label: "Beta".into(),
-        })
-    );
-    assert_eq!(
-        app.libs[0].nav_stack.last().unwrap().cursor,
-        2,
-        "selecting a header must not rewrite the album cursor"
-    );
-
+    // Down from Alpha's last album (the last row of its group) jumps to
+    // the first album of the next group (Beta) -- the artist header is
+    // not a resting position for arrow movement (see `grouped_cursor_target`).
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
     assert!(app.libs[0].artist_header_focus.is_none());
-    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 2);
+    assert_eq!(
+        app.libs[0].nav_stack.last().unwrap().cursor,
+        2,
+        "down from a group's last row moves to the next group's first album"
+    );
+
+    // Up from Beta's first album (the first row of its group) returns to
+    // the previous group's last album.
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+
+    assert!(app.libs[0].artist_header_focus.is_none());
+    assert_eq!(
+        app.libs[0].nav_stack.last().unwrap().cursor,
+        1,
+        "up from a group's first row moves to the previous group's last album"
+    );
 }
 
 #[test]
@@ -239,7 +242,9 @@ fn selectable_artist_header_enter_is_consumed_noop() {
 fn selectable_artist_header_mouse_click_selects_header() {
     let mut app = make_music_album_app();
     add_beta_album(&mut app);
-    render_full_app(&mut app, 100, 24);
+    // Tall enough that the album hero leaves the Beta header visible in the
+    // list below it.
+    render_full_app(&mut app, 100, 40);
     let row = app
         .layout
         .main

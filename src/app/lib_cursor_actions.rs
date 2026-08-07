@@ -5,22 +5,21 @@ use std::time::Instant;
 
 impl App {
     /// Number of columns the currently-rendered library list uses: 1 for
-    /// every single-column renderer (season grids, grouped album views,
-    /// music group views, feed home-video group views) and the
-    /// pane-derived count for the plain and letter-grouped list renderers.
-    /// Search results always render through the plain (column-aware)
-    /// renderer, so they use the pane-derived count even inside a music
-    /// library at the album-folder level.
+    /// every single-column renderer (season grids, feed home-video group
+    /// views) and the pane-derived count for the plain, letter-grouped,
+    /// and grouped-album list renderers. Grouped album views (album-folder
+    /// listings and the music-group view) render through
+    /// `render_power_grouped_album_rows`, which packs `cols` albums per
+    /// row, so they stride by the pane-derived count like the other
+    /// column-aware renderers. Search results always render through the
+    /// plain (column-aware) renderer, so they use the pane-derived count
+    /// even inside a music library at the album-folder level.
     pub(super) fn current_library_columns(&self, lib_idx: usize) -> usize {
         use crate::app::library_column_width::library_column_count;
         if self.libs[lib_idx].search.is_some() {
             return library_column_count(self.layout.main.left_area.width);
         }
-        if self.is_viewing_season_grid(lib_idx)
-            || self.is_viewing_album_folders(lib_idx)
-            || self.is_music_group_view(lib_idx)
-            || self.is_feed_home_video_group_view(lib_idx)
-        {
+        if self.is_viewing_season_grid(lib_idx) || self.is_feed_home_video_group_view(lib_idx) {
             return 1;
         }
         library_column_count(self.layout.main.left_area.width)
@@ -30,16 +29,16 @@ impl App {
     /// (1 for up/down, one viewport for page keys). Flat lists stride by
     /// `cols` items per row; letter-grouped lists move through the laid-out
     /// row map, since independent bucket packing means item index no longer
-    /// maps to row by division. Single-column views (music groups, grouped
-    /// albums, feed home-video groups, season grids) receive `item_rows`
-    /// exactly as they do today.
+    /// maps to row by division. Grouped album views stride by `cols` too;
+    /// the single-column views (feed home-video groups, season grids)
+    /// receive `item_rows` exactly as they do today.
     pub(super) fn move_lib_cursor_rows(&mut self, item_rows: i64) {
         let lib_idx = self.library_tab.saturating_sub(1);
 
         // Letter-grouped lists: resolve the target item through the last
         // frame's laid-out item rows. The grouped-album view also publishes
-        // `left_sorted_indices` but renders single-column, so it is excluded
-        // (its own display-order cursor handling keeps working unchanged).
+        // `left_sorted_indices` but resolves movement through its own
+        // column-aware cursor (see `album_cursor.rs`), so it is excluded.
         if self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
             && !self.is_viewing_album_folders(lib_idx)

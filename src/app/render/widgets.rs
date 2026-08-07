@@ -551,13 +551,10 @@ impl App {
         }
         let lib_idx = self.library_tab.saturating_sub(1);
         let is_feed_group = self.library_tab > 0 && self.is_feed_home_video_group_view(lib_idx);
-        let is_music_group = self.library_tab > 0 && self.is_music_group_view(lib_idx);
         let is_album_folders = self.library_tab > 0 && self.is_viewing_album_folders(lib_idx);
         let is_home_video = self.library_tab > 0 && self.is_home_video_view(lib_idx);
         if is_feed_group {
             self.render_feed_home_video_group_view(f, area, lib_idx, focused, layout);
-        } else if is_album_folders && is_music_group {
-            self.render_music_group_view(f, area, lib_idx, focused, layout);
         } else if is_album_folders {
             self.render_list(f, area, focused, layout);
         } else if is_home_video {
@@ -572,8 +569,8 @@ impl App {
     /// holds), if any. The cursor field always indexes into the raw
     /// `items` array in the order it was fetched (SortName-by-album-title)
     /// -- *not* the artist-grouped display order that
-    /// `render_music_group_view` builds for rendering -- so a plain
-    /// `items.get(cursor)` is correct even for the grouped music view.
+    /// `render_list`'s grouped branch builds for rendering -- so a
+    /// plain `items.get(cursor)` is correct even for the grouped music view.
     pub(in crate::app) fn selected_album_item(
         &self,
         lib_idx: usize,

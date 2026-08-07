@@ -18,6 +18,32 @@ pub(crate) fn sorted_group_album_order(album_info: &[(String, String, String)]) 
     order
 }
 
+/// Total content rows the album hero needs: album art + metadata (title +
+/// action hint) + the track list. A sizing estimate, not pixel-perfect -- the
+/// renderer fills the allocated space. The caller adds the hero block's own
+/// chrome rows (`HERO_BLOCK_EXTRA_ROWS` in list.rs) on top of this.
+pub(super) fn album_hero_content_rows(
+    track_count: usize,
+    art_rows: u16,
+    panel_width: u16,
+    images_enabled: bool,
+) -> u16 {
+    // Metadata: a title row plus an action-hint row.
+    let meta_rows = 2u16;
+    // Album art block, when images are enabled.
+    let art = if images_enabled { art_rows } else { 0 };
+    // Track names run ~TRACK_NAME_ESTIMATE_CHARS chars and wrap at
+    // `panel_width` columns, so each track contributes one row at reasonable
+    // panel widths.
+    const TRACK_NAME_ESTIMATE_CHARS: usize = 60;
+    let cols_per_track = TRACK_NAME_ESTIMATE_CHARS;
+    let cols_per_line = panel_width.max(1) as usize;
+    let track_rows = track_count
+        .saturating_mul(cols_per_track)
+        .div_ceil(cols_per_line);
+    meta_rows + art + track_rows as u16
+}
+
 #[derive(Clone)]
 pub(super) enum GroupedAlbumDisplayRow {
     ArtistHeader(ArtistHeaderSelection),
@@ -101,6 +127,7 @@ impl App {
         selected_artist_header: Option<&ArtistHeaderSelection>,
         expand_selected: bool,
         wrap_widths: Option<(u16, u16)>,
+        hero_handles_detail: bool,
     ) -> GroupedAlbumDisplayPlan {
         let header_selected = selectable_headers && selected_artist_header.is_some();
         let inline_art_rows_after_album = if self.images_enabled() {
@@ -441,6 +468,31 @@ impl App {
                     matches!(row, GroupedAlbumDisplayRow::ArtistHeader(selection) if selection == selected)
                 })
         });
+
+        // When the hero panel handles the detail rendering, suppress the
+        // inline detail rows and clear the bounds that reference them.
+        if hero_handles_detail {
+            rows.retain(|row| {
+                !matches!(
+                    row,
+                    GroupedAlbumDisplayRow::AlbumDetailStart(_)
+                        | GroupedAlbumDisplayRow::AlbumDetailContinuation
+                        | GroupedAlbumDisplayRow::AlbumDetailRule
+                        | GroupedAlbumDisplayRow::AlbumLoading
+                        | GroupedAlbumDisplayRow::AlbumActionHint
+                )
+            });
+            let clamped_cursor = display_cursor.min(rows.len().saturating_sub(1));
+            return GroupedAlbumDisplayPlan {
+                order: order.to_vec(),
+                rows,
+                display_cursor: clamped_cursor,
+                selected_artist_header_valid,
+                selected_group_indices,
+                selected_block_bounds: None,
+                track_detail_bounds: None,
+            };
+        }
 
         GroupedAlbumDisplayPlan {
             order: order.to_vec(),

@@ -3,6 +3,7 @@ mod album_art;
 mod album_cursor;
 mod album_detail;
 mod album_plan;
+mod album_rows;
 mod card;
 mod chrome;
 mod chrome_player;
