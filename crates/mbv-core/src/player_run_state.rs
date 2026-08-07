@@ -148,10 +148,6 @@ impl IntroState {
     pub(crate) fn is_pending(&self) -> bool {
         matches!(self, IntroState::Pending)
     }
-
-    pub(crate) fn is_dismissed(&self) -> bool {
-        matches!(self, IntroState::Dismissed)
-    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

@@ -60,7 +60,7 @@ impl App {
             && self.layout.tabs_area.contains((col, row).into())
         {
             // Tab clicks change the left-panel selection.
-            if let Some(idx) = self.power_tab_idx_at(col) {
+            if let Some(idx) = self.tab_idx_at(col) {
                 if idx == usize::MAX - 1 {
                     self.tab_scroll = self.tab_scroll.saturating_sub(1);
                 } else if idx == usize::MAX {
@@ -107,7 +107,7 @@ impl App {
                     }
                 } else if left_area.contains((col, row).into()) {
                     if self.library_tab == 0 {
-                        self.power_cw_move_cursor(delta);
+                        self.cw_move_cursor(delta);
                     } else {
                         self.move_lib_cursor(delta);
                     }
@@ -160,7 +160,7 @@ impl App {
                     for (rect, target) in self.layout.main.selector_tabs.clone() {
                         if rect.contains((col, row).into()) {
                             if self.library_tab == 0 {
-                                self.power_home_select_section(target);
+                                self.home_select_section(target);
                             } else {
                                 let lib_idx = self.library_tab - 1;
                                 if self.is_music_group_view(lib_idx) {
@@ -200,7 +200,7 @@ impl App {
                             self.dispatch(Command::QueuePlayCursor);
                         }
                     } else if self.library_tab == 0 {
-                        self.power_home_play();
+                        self.home_play();
                     } else if self.layout.main.left_area.contains((col, row).into())
                         || self.layout.main.hero_area.contains((col, row).into())
                     {
@@ -230,7 +230,7 @@ impl App {
                                     self.play_item(ep);
                                 }
                             }
-                        } else if let Some(item) = self.power_selected_series_item(lib_idx) {
+                        } else if let Some(item) = self.selected_series_item(lib_idx) {
                             self.enter_series_selection(lib_idx, &item);
                         } else {
                             self.select();

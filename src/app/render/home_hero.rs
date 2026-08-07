@@ -1,6 +1,6 @@
 use super::super::ui_util::*;
 use super::home_video::format_release_date;
-use super::POWER_RENDER_FILTER;
+use super::RENDER_FILTER;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
@@ -25,7 +25,7 @@ pub(super) struct KeepWatchingHeroLayout {
 
 impl App {
     /// Image types to request for the Keep Watching hero panel, mirroring
-    /// the per-type conventions used for the queue card (`render_power_card`).
+    /// the per-type conventions used for the queue card (`render_card`).
     pub(super) fn keep_watching_hero_image_types(
         item: &mbv_core::api::MediaItem,
     ) -> &'static [&'static str] {
@@ -107,10 +107,9 @@ impl App {
                 width: img_area.width,
                 height: img_area.height,
             };
-            if let Some(actual) = state.size_for(
-                ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
-                avail,
-            ) {
+            if let Some(actual) =
+                state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
+            {
                 let img_rect = Rect {
                     x: if centered {
                         img_area.x + img_area.width.saturating_sub(actual.width) / 2
@@ -122,7 +121,7 @@ impl App {
                     height: actual.height,
                 };
                 f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
                     img_rect,
                     state,
                 );

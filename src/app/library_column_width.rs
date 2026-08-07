@@ -9,13 +9,13 @@
 
 use ratatui::layout::Rect;
 
-use super::POWER_TWO_COLUMN_THRESHOLD;
+use super::TWO_COLUMN_THRESHOLD;
 
 /// Narrowest width (columns) at which one library list cell is readable;
-/// anchors the two-column cell sizing. Mirrors `POWER_LEFT_WIDTH_DEFAULT`
+/// anchors the two-column cell sizing. Mirrors `LEFT_WIDTH_DEFAULT`
 /// (`src/app/mod.rs`), the established narrowest comfortable width for a
 /// media title row. The shared two-column threshold
-/// (`POWER_TWO_COLUMN_THRESHOLD`) is `2 * LIBRARY_COLUMN_MIN_WIDTH +
+/// (`TWO_COLUMN_THRESHOLD`) is `2 * LIBRARY_COLUMN_MIN_WIDTH +
 /// LIBRARY_COLUMN_GAP`; the assert below pins the relationship at compile
 /// time so they cannot drift.
 pub(super) const LIBRARY_COLUMN_MIN_WIDTH: u16 = 40;
@@ -26,15 +26,14 @@ pub(super) const LIBRARY_MAX_COLUMNS: usize = 2;
 
 /// Compile-time guard: the shared threshold must equal two min cells plus
 /// one gap. If you change any of the three values, change all of them.
-const _: () =
-    assert!(POWER_TWO_COLUMN_THRESHOLD == 2 * LIBRARY_COLUMN_MIN_WIDTH + LIBRARY_COLUMN_GAP);
+const _: () = assert!(TWO_COLUMN_THRESHOLD == 2 * LIBRARY_COLUMN_MIN_WIDTH + LIBRARY_COLUMN_GAP);
 
 /// Column count for a list pane of the given width: two when the pane meets
-/// `POWER_TWO_COLUMN_THRESHOLD` (the shared Power View two-column threshold
+/// `TWO_COLUMN_THRESHOLD` (the shared two-column threshold
 /// also used by the Home view's hero/list split), else one. Capped at
 /// `LIBRARY_MAX_COLUMNS`.
 pub(super) fn library_column_count(list_width: u16) -> usize {
-    if list_width >= POWER_TWO_COLUMN_THRESHOLD {
+    if list_width >= TWO_COLUMN_THRESHOLD {
         LIBRARY_MAX_COLUMNS
     } else {
         1

@@ -89,7 +89,7 @@ fn playback_context_esc_stops_when_track_select_inactive() {
 fn playback_context_esc_falls_through_when_track_select_active() {
     // Esc must not stop a playing track while inline album
     // track-selection mode is active -- it should fall through so the
-    // `power_album_track_mode` context can treat it as "exit
+    // `album_track_mode` context can treat it as "exit
     // track-selection mode" instead (same as Backspace).
     let mut snapshot = snap(true, false);
     snapshot.track_select_active = true;

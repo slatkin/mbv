@@ -6,7 +6,7 @@ use crate::app::tests::make_item;
 
 #[test]
 fn selectable_artist_headers_are_typed_row_targets() {
-    let mut app = make_power_music_group_app();
+    let mut app = make_music_group_app();
     let mut alpha_album2 = make_item("Second Alpha Album", "MusicAlbum");
     alpha_album2.id = "album-1b".into();
     alpha_album2.artist = "Alpha".into();
@@ -29,7 +29,7 @@ fn selectable_artist_headers_are_typed_row_targets() {
         .push(beta_album);
 
     let mut layout = LayoutMain::default();
-    let out = render_power_library_to_string(&mut app, &mut layout);
+    let out = render_library_to_string(&mut app, &mut layout);
 
     assert!(
         out.contains("Alpha") && out.contains("Beta"),
@@ -55,7 +55,7 @@ fn selectable_artist_headers_are_typed_row_targets() {
 
 #[test]
 fn artist_and_album_focus_share_one_selected_group_bounds() {
-    let mut app = make_power_music_group_app();
+    let mut app = make_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");
     second.id = "album-2".into();
     second.artist = "Alpha".into();
@@ -114,7 +114,7 @@ fn artist_and_album_focus_share_one_selected_group_bounds() {
 
 #[test]
 fn grouped_target_marker_and_inline_art_follow_album_or_artist_focus() {
-    let mut album_app = make_power_music_group_app();
+    let mut album_app = make_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");
     second.id = "album-2".into();
     second.artist = "Alpha".into();
@@ -127,12 +127,12 @@ fn grouped_target_marker_and_inline_art_follow_album_or_artist_focus() {
     album_app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     album_app.image_protocol_enabled = true;
     let mut layout = LayoutMain::default();
-    let out = render_power_library_to_string(&mut album_app, &mut layout);
+    let out = render_library_to_string(&mut album_app, &mut layout);
     assert!(out.contains("First Album"));
     assert!(album_app.card_image_loading.contains("album-2:P"));
     assert!(!album_app.card_image_loading.contains("album-2:sq"));
 
-    let mut header_app = make_power_music_group_app();
+    let mut header_app = make_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");
     second.id = "album-2".into();
     second.artist = "Alpha".into();
@@ -148,6 +148,6 @@ fn grouped_target_marker_and_inline_art_follow_album_or_artist_focus() {
         artist_label: "Alpha".into(),
     });
     let mut header_layout = LayoutMain::default();
-    let _header_out = render_power_library_to_string(&mut header_app, &mut header_layout);
+    let _header_out = render_library_to_string(&mut header_app, &mut header_layout);
     assert!(header_app.card_image_loading.contains("album-1:sq"));
 }

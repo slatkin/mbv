@@ -85,7 +85,7 @@ fn hero_block_shell(f: &mut Frame, hero_area: Rect, hero_rows: u16, focused: boo
 impl App {
     /// Renders the Continue/library list items into `area`.
     /// The title header is now drawn in the top-of-screen FOAM bar.
-    pub(super) fn render_power_list(
+    pub(super) fn render_list(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -147,16 +147,16 @@ impl App {
 
         // Selected movie/Series item, computed once and reused below for the
         // prefetch gate, the hero row-count calc, and the hero paint --
-        // `power_selected_movie_item`/`power_selected_series_item` each clone
+        // `selected_movie_item`/`selected_series_item` each clone
         // the whole `MediaItem`, so one call keeps that to a single clone per
         // frame instead of three.
         let selected_movie_item = if self.library_tab > 0 {
-            self.power_selected_movie_item(self.library_tab - 1)
+            self.selected_movie_item(self.library_tab - 1)
         } else {
             None
         };
         let selected_series_item = if selected_movie_item.is_none() && self.library_tab > 0 {
-            self.power_selected_series_item(self.library_tab - 1)
+            self.selected_series_item(self.library_tab - 1)
         } else {
             None
         };
@@ -305,7 +305,7 @@ impl App {
 
         if show_pills {
             let lib_idx = self.library_tab - 1;
-            self.render_power_letter_pills_row(f, pills_area, lib_idx, layout);
+            self.render_letter_pills_row(f, pills_area, lib_idx, layout);
         }
 
         // Gather items, cursor, stored scroll offset, and the *true* library total
@@ -347,7 +347,7 @@ impl App {
 
         // Pre-warm nearby movies' poster images so they're already cached by
         // the time the cursor reaches them (#287) -- mirrors the prefetch
-        // window `render_power_card` already uses for the home-card
+        // window `render_card` already uses for the home-card
         // carousel. Only applies when a movie banner is actually showing
         // (i.e. this is a movies library with a leaf Movie selected); if
         // there's no banner, there's nothing to prefetch for.
@@ -383,7 +383,7 @@ impl App {
         }
 
         // When at the album level of a music library, group albums under artist headers.
-        // Suppressed while search is active: `render_power_grouped_album_rows` reads
+        // Suppressed while search is active: `render_grouped_album_rows` reads
         // its catalog from `nav_stack.last().music_grouping.settled`, whose `order`
         // indexes the unfiltered nav-level item vector -- `items` here is the
         // filtered search-result vector, so the catalog's positions would no longer
@@ -459,7 +459,7 @@ impl App {
             if hero_rows > 0 {
                 hero_block_shell(f, hero_area, hero_rows, focused);
             }
-            super::render_power_placeholder(f, list_area, msg);
+            super::render_placeholder(f, list_area, msg);
             return;
         }
 
@@ -469,7 +469,7 @@ impl App {
 
         if show_grouped {
             let lib_idx = self.library_tab - 1;
-            final_offset = self.render_power_grouped_album_rows(
+            final_offset = self.render_grouped_album_rows(
                 f,
                 list_area,
                 lib_idx,
@@ -488,7 +488,7 @@ impl App {
                 cols,
                 focused,
             };
-            final_offset = self.render_power_letter_grouped_rows(
+            final_offset = self.render_letter_grouped_rows(
                 f,
                 ctx,
                 active_letter_filter,
@@ -504,7 +504,7 @@ impl App {
                 cols,
                 focused,
             };
-            final_offset = self.render_power_plain_rows(f, ctx, layout);
+            final_offset = self.render_plain_rows(f, ctx, layout);
         }
 
         // Paint the hero into its fixed top-edge rect, after the list has
@@ -533,14 +533,7 @@ impl App {
             // letter-pill switch has the slice loading), the panel stays as
             // its empty placeholder -- reserved but not painted over.
             if selected_movie_item.is_some() {
-                self.render_power_compact_detail(
-                    f,
-                    content_rect,
-                    lib_idx,
-                    focused,
-                    cols > 1,
-                    layout,
-                );
+                self.render_compact_detail(f, content_rect, lib_idx, focused, cols > 1, layout);
             } else if selected_series_item.is_some() {
                 self.render_series_inline_detail(
                     f,
@@ -554,7 +547,7 @@ impl App {
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.
-        // library_tab is always > 0 here (tab == 0 uses render_power_home_list).
+        // library_tab is always > 0 here (tab == 0 uses render_home_list).
         if self.library_tab > 0 {
             let lib_idx = self.library_tab - 1;
             if let Some(s) = &mut self.libs[lib_idx].search {

@@ -51,8 +51,8 @@ impl App {
         self.save_prefs();
     }
 
-    /// Move the cursor in the Continue Watching power column, clamped to its bounds.
-    pub(super) fn power_cw_move_cursor(&mut self, delta: i64) {
+    /// Move the cursor in the Continue Watching column, clamped to its bounds.
+    pub(super) fn cw_move_cursor(&mut self, delta: i64) {
         let n = self.home.continue_items.len();
         if n == 0 {
             return;
@@ -61,10 +61,10 @@ impl App {
         self.home.continue_cursor = (cur + delta).clamp(0, n as i64 - 1) as usize;
     }
 
-    // The Continue Watching power column shares state with the Home tab's
+    // The Continue Watching column shares state with the Home tab's
     // Continue Watching section, so these reuse the Home actions by briefly
     // pointing the Home context at that section.
-    pub(super) fn power_cw_play(&mut self) {
+    pub(super) fn cw_play(&mut self) {
         let Some(item) = self
             .home
             .continue_items
@@ -82,14 +82,14 @@ impl App {
         self.home.section = saved_sec;
     }
 
-    pub(super) fn power_cw_enqueue(&mut self) {
+    pub(super) fn cw_enqueue(&mut self) {
         let saved_sec = self.home.section;
         self.home.section = 0;
         self.enqueue_selected();
         self.home.section = saved_sec;
     }
 
-    pub(super) fn power_cw_toggle_watched(&mut self) {
+    pub(super) fn cw_toggle_watched(&mut self) {
         let saved_sec = self.home.section;
         self.home.section = 0;
         self.toggle_watched_home();

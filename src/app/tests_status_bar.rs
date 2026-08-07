@@ -7,9 +7,9 @@ fn home_section_cycle_includes_continue_watching_in_both_directions() {
     app.home.latest = sections(2);
 
     app.home.section = 2;
-    app.power_home_move_section(1);
+    app.home_move_section(1);
     assert_eq!(app.home.section, 0);
 
-    app.power_home_move_section(-1);
+    app.home_move_section(-1);
     assert_eq!(app.home.section, 2);
 }

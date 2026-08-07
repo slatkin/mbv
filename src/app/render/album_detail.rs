@@ -15,7 +15,7 @@ const INLINE_ALBUM_TRACK_EXTRA_INDENT: u16 = 2;
 impl App {
     /// Renders the music album detail panel (track list) into `area` — the lib
     /// slot below the card. The card itself already shows the album art (handled
-    /// in `render_power_card`). Mirrors `render_power_compact_detail` for movies.
+    /// in `render_card`). Mirrors `render_compact_detail` for movies.
     ///
     /// Takes `items`/`cursor` explicitly rather than reading `nav_stack`
     /// internally (#145) so it can render either the legacy drilled-in
@@ -23,7 +23,7 @@ impl App {
     /// highlighted album in the album-folder listing, fetched proactively
     /// via `fetch_album_tracks`) with the same code path.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn render_power_album_detail(
+    pub(super) fn render_album_detail(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -319,7 +319,7 @@ impl App {
         let visible_rows = table_area.height as usize;
         if !selected_region_gutter && n > visible_rows {
             let max_offset = n.saturating_sub(visible_rows);
-            super::render_power_right_scrollbar(f, table_area, max_offset, state.offset());
+            super::render_right_scrollbar(f, table_area, max_offset, state.offset());
         }
     }
 }

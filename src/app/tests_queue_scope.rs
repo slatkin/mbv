@@ -70,7 +70,7 @@ fn queue_scope_resolution_matrix_direct_remote_displaying_remote() {
 }
 
 #[test]
-fn power_queue_scope_switch_via_keyboard_works_from_queue_focus() {
+fn queue_scope_switch_via_keyboard_works_from_queue_focus() {
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
     app.panel_focus = PanelFocus::Queue;
     app.set_queue_scope(QueueScope::Local);
@@ -85,7 +85,7 @@ fn power_queue_scope_switch_via_keyboard_works_from_queue_focus() {
 }
 
 #[test]
-fn power_left_focus_brackets_do_not_switch_queue_scope() {
+fn left_focus_brackets_do_not_switch_queue_scope() {
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
     app.panel_focus = PanelFocus::Library;
     app.set_queue_scope(QueueScope::Local);
@@ -97,7 +97,7 @@ fn power_left_focus_brackets_do_not_switch_queue_scope() {
 }
 
 #[test]
-fn power_queue_scope_switch_via_click_uses_rendered_hitboxes() {
+fn queue_scope_switch_via_click_uses_rendered_hitboxes() {
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
     app.panel_focus = PanelFocus::Library;
     app.set_queue_scope(QueueScope::Local);
@@ -113,7 +113,7 @@ fn power_queue_scope_switch_via_click_uses_rendered_hitboxes() {
 }
 
 #[test]
-fn power_scope_keys_are_ignored_outside_queue_tab() {
+fn scope_keys_are_ignored_outside_queue_tab() {
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
     app.set_queue_scope(QueueScope::Local);
 

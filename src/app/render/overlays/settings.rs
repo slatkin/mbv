@@ -145,10 +145,10 @@ impl App {
         &mut self,
         f: &mut Frame,
         layout: &mut AppLayout,
-        power_area: Option<ratatui::layout::Rect>,
+        area: Option<ratatui::layout::Rect>,
     ) {
-        let power_panel = power_area.is_some();
-        let content = match power_area {
+        let panel = area.is_some();
+        let content = match area {
             Some(area) => {
                 Self::render_panel_shell_at(f, area, "SETTINGS", "[Space]toggle [Esc]close", true)
             }
@@ -160,7 +160,7 @@ impl App {
                 "[Space]toggle [Esc]close",
             ),
         };
-        let content = if power_panel {
+        let content = if panel {
             content
         } else {
             Self::settings_content_area(content)

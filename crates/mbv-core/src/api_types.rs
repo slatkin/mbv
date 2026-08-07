@@ -12,14 +12,14 @@ fn decode_html_entities(s: &str) -> String {
         .replace("&amp;", "&")
 }
 
-pub fn gen_session_id() -> String {
+pub fn gen_session_id() -> EmbySessionId {
     use std::time::{SystemTime, UNIX_EPOCH};
     let t = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
     let pid = std::process::id();
     let r: u32 = rand::random();
-    format!("{:x}{:x}{:x}{:x}", t.as_secs(), t.subsec_nanos(), pid, r)
+    EmbySessionId::new(format!("{:x}{:x}{:x}{:x}", t.as_secs(), t.subsec_nanos(), pid, r))
 }
 
 pub fn device_name() -> String {
@@ -258,8 +258,8 @@ pub struct SessionSubtitleStream {
 /// Result of a PlaybackInfo lookup for an item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaybackInfo {
-    pub session_id: String,
-    pub media_source_id: String,
+    pub session_id: EmbySessionId,
+    pub media_source_id: MediaSourceId,
     pub external_subtitle_urls: Vec<String>,
 }
 

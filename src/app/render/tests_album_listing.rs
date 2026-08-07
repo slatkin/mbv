@@ -4,7 +4,7 @@ use crate::app::LibSearch;
 
 #[test]
 fn searched_album_listing_does_not_duplicate_artist_row_in_plain_framing() {
-    let mut app = make_power_music_group_app();
+    let mut app = make_music_group_app();
     let items = app.libs[0].nav_stack.last().unwrap().items.clone();
     app.libs[0].search = Some(LibSearch {
         query: "First Album".into(),
@@ -15,7 +15,7 @@ fn searched_album_listing_does_not_duplicate_artist_row_in_plain_framing() {
         loading: false,
     });
 
-    let out = render_power_library_to_string(&mut app, &mut LayoutMain::default());
+    let out = render_library_to_string(&mut app, &mut LayoutMain::default());
 
     assert_eq!(
         out.lines().filter(|line| line.trim() == "Alpha").count(),

@@ -14,10 +14,10 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 impl App {
-    /// Letter-grouped list kind of `render_power_list`: non-music library
+    /// Letter-grouped list kind of `render_list`: non-music library
     /// lists with 50+ items (or an active letter-range pill), bucketed under
     /// `LetterHeader` rows. Returns the scroll offset to persist.
-    pub(super) fn render_power_letter_grouped_rows(
+    pub(super) fn render_letter_grouped_rows(
         &mut self,
         f: &mut Frame,
         ctx: ListRenderCtx,
@@ -224,7 +224,7 @@ impl App {
 
         if show_scrollbar {
             let max_off = total_display.saturating_sub(visible);
-            super::render_power_right_scrollbar(f, content_area, max_off, offset);
+            super::render_right_scrollbar(f, content_area, max_off, offset);
         }
 
         draw_column_selection_markers(f, content_area, cursor, cols, &layout.left_item_rows);

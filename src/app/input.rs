@@ -34,7 +34,7 @@ impl App {
         }
     }
 
-    pub(super) fn context_menu_power_lib_idx(&self) -> Option<usize> {
+    pub(super) fn context_menu_lib_idx(&self) -> Option<usize> {
         if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
             Some(self.library_tab - 1)
         } else {
@@ -151,9 +151,9 @@ impl App {
 
     pub(super) fn handle_key_view_dispatch(&mut self, key: KeyEvent) -> Option<bool> {
         // `handle_queue_key` (despite its name -- a holdover from when this
-        // was Standard's Queue-tab handler) is Power's single left-column
+        // was Standard's Queue-tab handler) is the view's single left-column
         // dispatch: it branches internally on `panel_focus`/`library_tab`
-        // to route to Home (`handle_power_cw_key`), a library
+        // to route to Home (`handle_cw_key`), a library
         // (`handle_lib_key`), or genuine queue-cursor movement.
         Some(self.handle_queue_key(key))
     }
@@ -244,25 +244,25 @@ impl App {
 mod playback_header_mouse_tests;
 
 #[cfg(test)]
-#[path = "input_power_movie_detail_tests.rs"]
-mod power_movie_detail_tests;
+#[path = "input_movie_detail_tests.rs"]
+mod movie_detail_tests;
 
 #[cfg(test)]
-#[path = "input_power_music_track_artist_fetch_tests.rs"]
-mod power_music_track_artist_fetch_tests;
+#[path = "input_music_track_artist_fetch_tests.rs"]
+mod music_track_artist_fetch_tests;
 #[cfg(test)]
-#[path = "input_power_music_track_focus_tests.rs"]
-mod power_music_track_focus_tests;
+#[path = "input_music_track_focus_tests.rs"]
+mod music_track_focus_tests;
 #[cfg(test)]
-#[path = "input_power_music_track_navigation_tests.rs"]
-mod power_music_track_navigation_tests;
+#[path = "input_music_track_navigation_tests.rs"]
+mod music_track_navigation_tests;
 #[cfg(test)]
-#[path = "input_power_music_track_scope_tests.rs"]
-mod power_music_track_scope_tests;
+#[path = "input_music_track_scope_tests.rs"]
+mod music_track_scope_tests;
 #[cfg(test)]
-#[path = "input_power_music_track_test_support.rs"]
-mod power_music_track_test_support;
+#[path = "input_music_track_test_support.rs"]
+mod music_track_test_support;
 
 #[cfg(test)]
-#[path = "input_power_library_scope_routing_tests.rs"]
-mod power_library_scope_routing_tests;
+#[path = "input_library_scope_routing_tests.rs"]
+mod library_scope_routing_tests;

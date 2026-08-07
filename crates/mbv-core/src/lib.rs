@@ -4,6 +4,8 @@ pub(crate) mod bounded;
 pub mod config;
 pub mod ctrl;
 pub mod daemon;
+pub mod id_types;
+pub use id_types::{EmbySessionId, ItemId, MediaSourceId};
 pub mod playback_queue;
 pub mod player;
 pub mod remote_player;

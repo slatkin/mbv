@@ -4,7 +4,7 @@ use super::detail_series::{
     SERIES_DETAIL_EPISODE_ROWS_ESTIMATE, SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS,
     SERIES_IMAGE_PLACEHOLDER_ROWS, SERIES_IMAGE_ROWS,
 };
-use super::POWER_RENDER_FILTER;
+use super::RENDER_FILTER;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -17,10 +17,10 @@ use unicode_width::UnicodeWidthStr;
 
 impl App {
     /// Renders the selected Series' season pills + episode table into the
-    /// inline hero slot (`render_power_list` reserves `area`'s rows via
+    /// inline hero slot (`render_list` reserves `area`'s rows via
     /// `series_inline_detail_rows` and paints the surrounding block
     /// border/background itself -- this draws only the content, mirroring
-    /// how `render_power_compact_detail` is the movie hero's content-only
+    /// how `render_compact_detail` is the movie hero's content-only
     /// counterpart).
     pub(super) fn render_series_inline_detail(
         &mut self,
@@ -35,7 +35,7 @@ impl App {
             return;
         }
 
-        let Some(item) = self.power_selected_series_item(lib_idx) else {
+        let Some(item) = self.selected_series_item(lib_idx) else {
             return;
         };
         let (in_selection, _) = self.series_selection_state(lib_idx, &item.id);
@@ -58,7 +58,7 @@ impl App {
         };
 
         // — Title row (two-column lists only) —
-        // Mirrors the movie hero's top-row title (`render_power_compact_detail`
+        // Mirrors the movie hero's top-row title (`render_compact_detail`
         // in `detail.rs`): the selected item's name in yellow, pushing the
         // poster/meta content down a row. Skipped for one-column lists, where
         // the full-width list-row title directly above the block already
@@ -95,10 +95,7 @@ impl App {
                     width: SERIES_IMAGE_COLS,
                     height: SERIES_IMAGE_ROWS,
                 };
-                match state.size_for(
-                    ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
-                    avail,
-                ) {
+                match state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail) {
                     Some(actual) => (actual.width, actual.height, false),
                     None => (SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS, true),
                 }
@@ -202,7 +199,7 @@ impl App {
             } else if let Some(state) = self.cached_image_protocol_mut(&primary_cache_key) {
                 type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                 f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
                     img_rect,
                     state,
                 );
@@ -405,7 +402,7 @@ impl App {
             }
         } else if row < max_y {
             // Loading state
-            super::render_power_placeholder(
+            super::render_placeholder(
                 f,
                 Rect {
                     x: area.x,

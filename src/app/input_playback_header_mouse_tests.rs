@@ -181,7 +181,7 @@ fn scroll_wheel_on_volume_pill_dispatches_the_same_command_as_the_keys() {
 }
 
 #[test]
-fn power_panel_bounds_consume_clicks_over_the_physical_sidebar() {
+fn panel_bounds_consume_clicks_over_the_physical_sidebar() {
     let mut app = make_app_stub();
     app.show_help = true;
     app.layout.main.panel_area = Rect::new(0, 0, 31, 24);

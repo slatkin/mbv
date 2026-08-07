@@ -12,7 +12,7 @@ use ratatui::Frame;
 /// Clamp the panel scroll offset (in terminal rows, content-space) so the grid row
 /// spanning `[cur_top, cur_bot)` is fully visible within a viewport of `view_h` rows,
 /// and never scrolls past the end of `total_h` rows of content.
-pub(super) fn power_home_panel_scroll(
+pub(super) fn home_panel_scroll(
     current: u16,
     cur_top: u16,
     cur_bot: u16,
@@ -173,7 +173,7 @@ impl App {
             return;
         }
 
-        self.render_power_compact_detail(
+        self.render_compact_detail(
             f,
             Rect {
                 x: content_area.x + SELECTED_BLOCK_SIDE_PADDING,
@@ -191,7 +191,7 @@ impl App {
         layout.cursor_screen_y = Some(row_y + 1);
     }
 
-    pub(super) fn render_power_home_video_list(
+    pub(super) fn render_home_video_list(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -220,10 +220,10 @@ impl App {
 
         let n = items.len();
 
-        // Item count label (matches render_power_list style). Uses the
+        // Item count label (matches render_list style). Uses the
         // server-reported total, not `n`, for the reason above.
         if focused && content_area.height > 0 {
-            content_area = super::render_power_count_label(f, content_area, total_count);
+            content_area = super::render_count_label(f, content_area, total_count);
         }
 
         if n == 0 {
@@ -245,7 +245,7 @@ impl App {
         item_heights[selected_index] = selected_height;
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > content_area.height;
-        let text_w = super::power_content_width(content_area.width, needs_scrollbar);
+        let text_w = super::content_width(content_area.width, needs_scrollbar);
 
         let mut scroll = {
             let mut s = 0usize;
@@ -313,7 +313,7 @@ impl App {
 
         // Scrollbar (hidden when unfocused, consistent with queue panel).
         if needs_scrollbar && focused {
-            super::render_power_right_scrollbar_with_viewport(
+            super::render_right_scrollbar_with_viewport(
                 f,
                 content_area,
                 n,

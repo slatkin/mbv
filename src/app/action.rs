@@ -82,18 +82,18 @@ pub(super) enum Command {
     /// from this index if the visible queue isn't the one currently playing.
     QueuePlayCursor,
 
-    // ── Power inline album track mode ───────────────────────────────────
+    // ──  inline album track mode ───────────────────────────────────
     /// `Enter` while an inline album track is focused.
-    PowerAlbumTrackEnter(usize),
+    AlbumTrackEnter(usize),
     /// `Esc`/`Backspace` while an inline album track is focused.
-    PowerAlbumTrackDismiss(usize),
+    AlbumTrackDismiss(usize),
     /// `Up`/`Down` while an inline album track is focused.
-    PowerAlbumTrackMove {
+    AlbumTrackMove {
         lib_idx: usize,
         delta: i64,
     },
 
-    /// `x`: cycle the Power View layout between both panels, library-only, and
+    /// `x`: cycle the  View layout between both panels, library-only, and
     /// queue-only (see `PanelMode`).
     CyclePanelMode,
 }
@@ -361,23 +361,20 @@ pub(super) fn help_command_for_key(chord: KeyChord) -> Option<Command> {
 /// entering track mode from the album row remains in the library-panel view
 /// handler. The command keeps `lib_idx` because the library panel can
 /// point at any library tab.
-pub(super) fn power_album_track_command_for_key(
-    chord: KeyChord,
-    lib_idx: usize,
-) -> Option<Command> {
-    let is_power_nav = matches!(
+pub(super) fn album_track_command_for_key(chord: KeyChord, lib_idx: usize) -> Option<Command> {
+    let is_nav = matches!(
         chord.code,
         KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
     ) && chord.mods.contains(KeyModifiers::ALT);
-    if is_power_nav {
+    if is_nav {
         return None;
     }
 
     match chord.code {
-        KeyCode::Enter => Some(Command::PowerAlbumTrackEnter(lib_idx)),
-        KeyCode::Esc | KeyCode::Backspace => Some(Command::PowerAlbumTrackDismiss(lib_idx)),
-        KeyCode::Up => Some(Command::PowerAlbumTrackMove { lib_idx, delta: -1 }),
-        KeyCode::Down => Some(Command::PowerAlbumTrackMove { lib_idx, delta: 1 }),
+        KeyCode::Enter => Some(Command::AlbumTrackEnter(lib_idx)),
+        KeyCode::Esc | KeyCode::Backspace => Some(Command::AlbumTrackDismiss(lib_idx)),
+        KeyCode::Up => Some(Command::AlbumTrackMove { lib_idx, delta: -1 }),
+        KeyCode::Down => Some(Command::AlbumTrackMove { lib_idx, delta: 1 }),
         _ => None,
     }
 }
@@ -529,7 +526,7 @@ impl App {
                 }
             }
 
-            Command::PowerAlbumTrackEnter(lib_idx) => {
+            Command::AlbumTrackEnter(lib_idx) => {
                 if self
                     .selected_album_item(lib_idx)
                     .and_then(|album| {
@@ -544,10 +541,10 @@ impl App {
                     self.select();
                 }
             }
-            Command::PowerAlbumTrackDismiss(lib_idx) => {
+            Command::AlbumTrackDismiss(lib_idx) => {
                 self.libs[lib_idx].album_track_focus = None;
             }
-            Command::PowerAlbumTrackMove { lib_idx, delta } => {
+            Command::AlbumTrackMove { lib_idx, delta } => {
                 if let Some(idx) = self.libs[lib_idx].album_track_focus {
                     let track_count = self
                         .selected_album_item(lib_idx)

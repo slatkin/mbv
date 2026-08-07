@@ -32,23 +32,23 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
         series_season_cursor: 0,
         library_total: None,
     });
-    let power_level = crate::config::LibraryPositionLevel {
+    let level = crate::config::LibraryPositionLevel {
         parent_id: "lib-movies".into(),
         title: "Power".into(),
         focused_item_id: Some("id1".into()),
         ..Default::default()
     };
-    let power_position = crate::config::LibraryPosition {
-        levels: vec![power_level.clone()],
+    let position = crate::config::LibraryPosition {
+        levels: vec![level.clone()],
         ..Default::default()
     };
-    app.replace_saved_library_position(0, power_position.clone());
+    app.replace_saved_library_position(0, position.clone());
     // 2 items / 50 total: not fully loaded, so `spawn_all_items_prefetch` would do I/O.
-    let level = BrowseLevel::from_position_level(&power_level, make_items(2), 50, 10);
+    let level = BrowseLevel::from_position_level(&level, make_items(2), 50, 10);
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
-        requested_position: power_position.clone(),
-        position: power_position,
+        requested_position: position.clone(),
+        position,
         nav_stack: vec![level],
     });
     let connected = rx
@@ -339,7 +339,7 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
         series_season_cursor: 0,
         library_total: None,
     });
-    let power_position = crate::config::LibraryPosition {
+    let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
             title: "Power".into(),
@@ -354,12 +354,12 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
         }],
         ..Default::default()
     };
-    app.replace_saved_library_position(0, power_position.clone());
+    app.replace_saved_library_position(0, position.clone());
 
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
-        requested_position: power_position.clone(),
-        position: power_position.clone(),
+        requested_position: position.clone(),
+        position: position.clone(),
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Power restored".into(),
@@ -383,8 +383,5 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
     // library and the restore must be ignored.
     assert_eq!(app.libs[0].nav_stack[0].title, "Power");
     let saved = crate::config::load_library_position_state();
-    assert_eq!(
-        saved.libraries.get("lib-movies").cloned(),
-        Some(power_position)
-    );
+    assert_eq!(saved.libraries.get("lib-movies").cloned(), Some(position));
 }

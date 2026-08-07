@@ -5,8 +5,8 @@ impl App {
     fn handle_lib_loaded(&mut self, lib_idx: usize, parent_id: String, level: BrowseLevel) {
         self.handle_loaded_level(lib_idx, parent_id, level);
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
-        self.maybe_auto_push_power_tv_season_level(lib_idx);
-        self.maybe_auto_push_power_music_group_level(lib_idx);
+        self.maybe_auto_push_tv_season_level(lib_idx);
+        self.maybe_auto_push_music_group_level(lib_idx);
         self.maybe_aggregate_feed_after_loaded(lib_idx);
         self.maybe_fetch_next_page(lib_idx);
         self.spawn_all_items_prefetch(lib_idx);

@@ -174,11 +174,11 @@ impl PlaybackRun {
     ) {
         self.cancel_pending_quit();
         if new_items.is_empty() {
-            self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
+            self.stop_report =
+                StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
             let _ = mpv.command("playlist-clear", &[]);
             self.origin = PlaybackOrigin::Queue;
-            self.set_origin(self.origin);
             self.queue = PlaybackQueue::default();
             self.current_idx = 0;
             self.sync_status_position();
@@ -234,7 +234,6 @@ impl PlaybackRun {
         }
 
         self.origin = PlaybackOrigin::Queue;
-        self.set_origin(self.origin);
         self.queue = PlaybackQueue::from_items(new_items, Some(start_idx));
         self.current_idx = start_idx;
         self.load_active_item_state();
@@ -302,7 +301,6 @@ impl PlaybackRun {
     ) {
         self.cancel_pending_quit();
         self.origin = PlaybackOrigin::Standalone;
-        self.set_origin(self.origin);
         // Loading a new item should always start playing it, even if mpv
         // was left paused on the previous item (reused-window fast path).
         let _ = mpv.set_property("pause", false);
@@ -352,5 +350,4 @@ impl PlaybackRun {
         }
         send_ep_info(mpv, &item);
     }
-
 }

@@ -18,7 +18,7 @@ impl EmbyClient {
                     log::warn!(target: "api", "err: PlaybackInfo parse: {e}");
                     return PlaybackInfo {
                         session_id: gen_session_id(),
-                        media_source_id: item_id.to_string(),
+                        media_source_id: MediaSourceId::new(item_id.to_string()),
                         external_subtitle_urls: vec![],
                     };
                 }
@@ -27,7 +27,7 @@ impl EmbyClient {
                 log::warn!(target: "api", "err: PlaybackInfo: {e}");
                 return PlaybackInfo {
                     session_id: gen_session_id(),
-                    media_source_id: item_id.to_string(),
+                    media_source_id: MediaSourceId::new(item_id.to_string()),
                     external_subtitle_urls: vec![],
                 };
             }
@@ -53,11 +53,11 @@ impl EmbyClient {
         let session_id = if sid.is_empty() {
             gen_session_id()
         } else {
-            sid
+            EmbySessionId::new(sid)
         };
         PlaybackInfo {
             session_id,
-            media_source_id: msid,
+            media_source_id: MediaSourceId::new(msid),
             external_subtitle_urls: sub_urls,
         }
     }

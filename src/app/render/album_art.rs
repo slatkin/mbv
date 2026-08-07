@@ -87,7 +87,7 @@ impl App {
         }
 
         let box_rect = inline_art_box_rect(area);
-        let nav_gate_open = self.power_right_panel_image_renders_allowed();
+        let nav_gate_open = self.right_panel_image_renders_allowed();
         let img_rect = self.render_inline_art_cell(
             f,
             box_rect,
@@ -197,7 +197,7 @@ impl App {
             ]
         };
 
-        let nav_gate_open = self.power_right_panel_image_renders_allowed();
+        let nav_gate_open = self.right_panel_image_renders_allowed();
         for ((cell, anchor), album) in cells.iter().zip(albums.iter().take(4)) {
             self.render_inline_art_cell(
                 f,
@@ -257,7 +257,7 @@ impl App {
         if nav_gate_open {
             if let Some(state) = self.cached_image_protocol_mut(&cache_key) {
                 if let Some(actual) = state.size_for(
-                    ratatui_image::Resize::Scale(Some(super::POWER_RENDER_FILTER)),
+                    ratatui_image::Resize::Scale(Some(super::RENDER_FILTER)),
                     ratatui::layout::Size {
                         width: cell.width,
                         height: cell.height,
@@ -277,9 +277,7 @@ impl App {
         } else if let Some(state) = self.cached_image_protocol_mut(&cache_key) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             f.render_stateful_widget(
-                SImg::default().resize(ratatui_image::Resize::Scale(Some(
-                    super::POWER_RENDER_FILTER,
-                ))),
+                SImg::default().resize(ratatui_image::Resize::Scale(Some(super::RENDER_FILTER))),
                 img_rect,
                 state,
             );

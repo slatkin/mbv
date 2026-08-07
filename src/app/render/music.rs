@@ -26,7 +26,7 @@ impl App {
     /// rather than appearing to sit on a divider line. `row_area` must
     /// already be confined to the right column and exclude the fixed
     /// `Music` marker reserved by the caller (#180).
-    pub(super) fn render_power_music_group_pills_row(
+    pub(super) fn render_music_group_pills_row(
         &mut self,
         f: &mut Frame,
         row_area: Rect,
@@ -66,9 +66,9 @@ impl App {
 
     /// Renders the grouped-by-artist album list for a music group library. The
     /// group-selector pills for this view are rendered by the caller on their
-    /// own row above this list (`render_power_music_group_pills_row`) -- this
+    /// own row above this list (`render_music_group_pills_row`) -- this
     /// method starts directly with the album list.
-    pub(super) fn render_power_music_group_view(
+    pub(super) fn render_music_group_view(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -106,7 +106,7 @@ impl App {
                 } else {
                     " (empty)"
                 };
-                super::render_power_placeholder(
+                super::render_placeholder(
                     f,
                     Rect {
                         x: area.x,
@@ -131,7 +131,7 @@ impl App {
             .is_some_and(|s| s.candidate.is_some() && s.settled.is_none());
         if organizing {
             if row < max_y {
-                super::render_power_placeholder(
+                super::render_placeholder(
                     f,
                     Rect {
                         x: area.x,
@@ -164,7 +164,7 @@ impl App {
             .last()
             .map(|lvl| lvl.scroll)
             .unwrap_or(0);
-        let offset = self.render_power_grouped_album_rows(
+        let offset = self.render_grouped_album_rows(
             f,
             list_area,
             lib_idx,
