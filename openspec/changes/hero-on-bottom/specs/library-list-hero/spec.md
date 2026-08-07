@@ -43,6 +43,12 @@ not just a reflection of the list selection.
 ### Invariant preserved
 
 The maintenance rule that the library list is one renderer
-parameterized by column count MUST still hold. The invariant test
-(one-and-two-column render the same per-cell content) MUST still pass
-when updated to compare the `list_area` content at width 81 and 82.
+parameterized by column count MUST still hold: `list_area` at width 81
+(1-col) and width 82 (2-col) MUST render the same per-cell content,
+modulo cell-width truncation and the right cell's trailing-column
+absorption. There is no existing test enforcing this on `main` today —
+`one_and_two_column_render_the_same_per_cell_content` was added when
+column packing landed (#448) and deliberately deleted in the same PR
+as one of several brittle layout tests. This change MUST add a new
+test enforcing the invariant against `list_area` (not the full
+`content_area`, since that now includes the hero).

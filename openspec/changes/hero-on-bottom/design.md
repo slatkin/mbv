@@ -22,9 +22,17 @@ split direction flipped; no other decision changes by edge.
 ### 1. List area, then hero area
 
 `render_power_list` splits its `content_area` vertically into two
-stacked rects: `list_area` on top, `hero_area` on the bottom edge. The
-row renderer is given `list_area`; the hero is painted into
-`hero_area` afterward.
+stacked rects: `list_area` on top, `hero_area` on the bottom edge,
+using the existing `hero_height_for_width` calculation (unchanged) to
+size `hero_area`. This replaces today's mechanism, where the row
+renderer takes the *full* `content_area` and `render_power_list` passes
+a `hero_rows` count through `ListRenderCtx` for the row renderer to
+leave as blank `DisplayRow::Hero` filler rows immediately below the
+cursor's row. Here there's no filler-row insertion at all: the row
+renderer is simply given a shorter rect (`list_area`) and renders a
+normal grid into it; the hero is painted into `hero_area` afterward,
+same "paint last" step as today just at a fixed rect instead of
+wherever the filler rows landed.
 
 ```
    content_area
@@ -44,50 +52,60 @@ the same `POWER_TWO_COLUMN_THRESHOLD` (82).
 
 ### 2. Hero height from the image's natural aspect ratio
 
-Unchanged from `hero-on-top`. The hero's height is governed by the
-poster image, reusing the home view's formula:
+Already implemented, not a new decision: `hero_height_for_width` in
+`list.rs` derives the hero's height from the poster image, reusing the
+home view's formula (16:9 aspect ratio in terminal cells, where cells
+are roughly twice as tall as they are wide):
 
 ```
-image_height = max(1, (hero_width * 9 + 31) / 32)
+image_height = div_ceil(width * 9, 32), capped at HERO_IMAGE_CAP_ROWS (12)
 ```
 
-(16:9 aspect ratio in terminal cells, where cells are roughly twice as
-tall as they are wide.) The hero's total height is
-`image_height + meta_height + 1` (image + 1-row gap + meta block).
+Total hero rows = `image_height + title_rows + gap_rows + meta_rows +
+block_extra_rows`, where (per the constants already in `list.rs`):
+`HERO_TITLE_ROWS = 1` (2-col lists only — the yellow title row; 1-col
+lists skip it since the row above the hero already shows the full
+title), `HERO_GAP_ROWS = 1`, `HERO_META_ROWS = 5`,
+`HERO_BLOCK_EXTRA_ROWS = 4` (the existing `▁`/`▔` border rows plus their
+inner padding rows).
 
-The hero's width is the full content width, so the hero grows taller as
-the terminal gets wider — same table as `hero-on-top`:
+Because `HERO_IMAGE_CAP_ROWS` is only 12, and the uncapped formula
+already exceeds 12 at any width above ~43 columns, **the image is
+capped at every terminal width the list is realistically used at** —
+the hero does not keep growing as the terminal gets wider, unlike what
+`hero-on-top`'s original design doc assumed:
 
-| content_width | image_height | meta_height | total hero |
-|---|---|---|---|
-| 60 (1-col) | 17 | 5 | 23 |
-| 82 (2-col kick-in) | 23 | 5 | 29 |
-| 100 | 28 | 5 | 34 |
-| 150 | 42 | 5 | 48 |
+| content_width | cols | image_height | title | gap | meta | border/pad | total hero |
+|---|---|---|---|---|---|---|---|
+| 60 (1-col) | 1 | 12 (capped) | 0 | 1 | 5 | 4 | 22 |
+| 82 (2-col kick-in) | 2 | 12 (capped) | 1 | 1 | 5 | 4 | 23 |
+| 100 | 2 | 12 (capped) | 1 | 1 | 5 | 4 | 23 |
+| 150 | 2 | 12 (capped) | 1 | 1 | 5 | 4 | 23 |
 
-In a 60-col terminal this leaves ~1 row for the list — a problem in
-narrow terminals, see decision 3.
+The hero is effectively a constant ~22-23 rows regardless of terminal
+width. In a 60-col terminal (`list_area.height >= ~5` after subtracting
+22 rows plus tab bar/borders) this can still be tight — see decision 3.
 
-### 3. Hero width scales with content width, but caps at a max
+### 3. Image height cap: already decided, carried forward
 
-Unchanged from `hero-on-top`. Cap the image height so the list always
-keeps a few rows regardless of terminal width:
-
-a) **Cap the image height** at e.g. 12 rows regardless of width. The
-   image is letterboxed; the meta block sits below it.
-
-b) **Cap the hero width** at a value that leaves at least 6 rows for
-   the list.
-
-c) **Don't have a hero at all** in narrow terminals (< 70 cols).
-
-Default: (a), cap the image height at 12 rows — same as `hero-on-top`.
-Pick (a) or (c) based on visual feedback.
+`hero-on-top`'s design doc framed the cap as an open a/b/c choice; it's
+no longer open — `HERO_IMAGE_CAP_ROWS = 12` is already shipped on
+`main` and used by today's inline hero. Carry it forward unchanged
+unless visual feedback at narrow widths (near 60 cols, where 22 hero
+rows can leave very few list rows in a short terminal) says otherwise.
+If it doesn't read well, the two documented fallbacks remain available:
+cap the hero *width* instead (leaving more list rows), or suppress the
+hero entirely below some minimum terminal width.
 
 ### 4. Selected cell indicator
 
-Unchanged from `hero-on-top`. The selected cell loses the tab but
-keeps its identity:
+Unchanged from `hero-on-top`, but a real change from what's on `main`
+today: the current selected cell (`build_list_row_spans` in
+list_rows.rs) uses a `▍` grabber mark plus the same
+`PLAYBACK_PANEL_BG`/`MEDIA_SELECTED_BG` background as the inline hero
+block, so the row and the hero read as one continuous selected block.
+That coupling goes away here since the hero is no longer adjacent to
+the selected row. The selected cell instead gets:
 
 - `##` (2 cols) prefix in the title for selected cells.
 - A `▌` mark on the left edge of the selected cell.
@@ -109,15 +127,22 @@ in the row renderer enforces it structurally.
 Unchanged from `hero-on-top`. Clicking inside `hero_area` is an Enter
 equivalent — it opens the selected item.
 
-### 7. Series inline detail goes away
+### 7. Series inline detail keeps its content, loses its inline position
 
-Unchanged from `hero-on-top`. The series inline detail (overview +
-episode count) below the selected series row is replaced by the
-bottom hero, which shows the series' overview, year, episode count,
-etc. — everything the inline detail showed, just wider and pinned to
-the panel floor instead of interleaved with the row it followed.
+The series detail (season pills + episode table, painted by
+`render_series_inline_detail` and sized by `series_inline_detail_rows`
+in `detail_series.rs`/`detail_series_view.rs`) is not deleted — #448
+restored it after an earlier attempt (`hero-on-top`) dropped it and
+regressed the ability to browse/play an episode without leaving the
+list. It keeps rendering the same content, just into the fixed
+`hero_area` instead of the inline slot below the cursor row.
 
-`series_detail_rows` is no longer reserved in `render_power_list`.
+The row-count reservation for it moves out of `render_power_list`'s
+per-frame `hero_rows` calc (list.rs:244-263 today) since there's no
+more "reserve N blank rows below the cursor" step — `hero_area`'s
+height is `hero_height_for_width(...)` for a movie or
+`series_inline_detail_rows(...)` for a series, same branch as today,
+just used to size a fixed rect instead of a filler-row count.
 
 ### 8. Compact banner layout extends to wider widths
 
@@ -130,44 +155,56 @@ with the hero's (larger) width. No change to the function itself.
 ```
 ┌─── Touch points ─────────────────────────────────────────────────┐
 │  render_power_list (src/app/render/list.rs)                     │
-│    - split content_area into [list_area, hero_area]             │
-│      (hero_area is the bottom slice, not the top)                │
+│    - split content_area into [list_area, hero_area] using the   │
+│      existing hero_height_for_width / series_inline_detail_rows │
+│      calc (hero_area is the bottom slice, not inline)            │
 │    - call the row renderer with list_area instead of            │
-│      content_area                                                │
+│      content_area, and drop the hero_rows field from             │
+│      ListRenderCtx entirely (list_rows.rs)                       │
 │    - paint the selected item's banner into hero_area, after      │
-│      the list has rendered                                       │
-│    - drop banner_rows, series_detail_rows, selected_block_bounds│
+│      the list has rendered (same render_power_compact_detail /   │
+│      render_series_inline_detail call as today, new rect)        │
+│    - drop the DisplayRow::Hero variant, the ▁/▔ border paint     │
+│      currently in render_power_list (list.rs:311-403), and the  │
+│      hero_rows calc block (list.rs:244-263)                      │
 │                                                                    │
 │  render_power_plain_rows (src/app/render/list_plain.rs)          │
 │  render_power_letter_grouped_rows (list_letter_groups.rs)        │
-│    - remove the inline selected-block painting                  │
-│    - selected cell becomes bg + ▌ + ## prefix                    │
+│    - remove the hero_rows param and DisplayRow::Hero filler-row  │
+│      insertion (list_plain.rs:58-71, list_letter_groups.rs:104-117)│
+│    - selected cell becomes ▌ + ## prefix, ordinary list bg        │
+│      (build_list_row_spans in list_rows.rs currently uses a ▍    │
+│      grabber + PLAYBACK_PANEL_BG bg — both go away)               │
 │                                                                    │
 │  render_power_compact_detail (src/app/render/detail.rs)          │
 │    - already takes panel_width; just gets called with a larger   │
-│      value from render_power_list                                │
+│      value from render_power_list, same as today                 │
 │                                                                    │
 │  input handling                                                  │
-│    - mouse click in hero_area → Enter equivalent                 │
+│    - mouse click in hero_area → Enter equivalent (already the    │
+│      case today per input_mouse_dispatch.rs; just a different    │
+│      rect now)                                                   │
 │    - keyboard Enter unchanged (still opens selected item)        │
 │                                                                    │
 │  tests                                                           │
-│    - list_tests.rs: drop the notched-block tests (the tab/panel  │
-│      are gone); keep the per-cell tests; the invariant test      │
-│      still applies (now comparing list_area at 1-col and 2-col) │
+│    - list_tests.rs has 4 tests today (packing, letter buckets,   │
+│      cursor wrap/clamp, mouse-click-selects-cell); none reference │
+│      a notched block or an invariant test to drop -- both were   │
+│      removed from list_tests.rs in #448 as "brittle"              │
 │    - add new tests for the hero area split, anchored at the      │
-│      bottom of content_area                                      │
+│      bottom of content_area, and a fresh 1-col/2-col parity test │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
 ## What stays the same
 
-- `library_column_count`, `library_cell_rect`, `library_cell_slot`,
-  `library_cell_width`, `LIBRARY_COLUMN_GAP`, `POWER_TWO_COLUMN_THRESHOLD`.
+- `library_column_count`, `library_cell_width`, `LIBRARY_COLUMN_GAP`,
+  `POWER_TWO_COLUMN_THRESHOLD`.
 - hjkl nav, the sidebar h→x, the lib search input.
 - The maintenance rule: list above the hero is the same renderer
-  parameterized by `cols`. The invariant test still applies; it just
-  compares `list_area` content at width 81 and 82.
+  parameterized by `cols`. There's no standing invariant test to
+  preserve (see touch points above) — this change should add one
+  comparing `list_area` content at width 81 and 82.
 - The 2-col padding in `power_right_panel_content_area` (smaller left
   pad in 2-col mode).
 
@@ -182,14 +219,19 @@ with the hero's (larger) width. No change to the function itself.
 
 ## Open questions for the implementer
 
-1. Image height cap: (a) cap at 12 rows, (b) no cap, (c) drop hero at
-   narrow widths. Pick based on what looks right.
-2. Hero meta line: what fields go in it? Title + year + runtime + genres
-   in one line? Just title + runtime? Try a few and see.
-3. The `▌` mark — is it visible enough? Or do we need something more
-   distinct? E.g. a thin colored bar at the top of the cell, or a
-   different bg shade for the selected cell.
-4. Does the hero need a visible top border (`▁`) to separate it from
-   the list above, given there's no gap row otherwise? `hero-on-top`
-   didn't need this (the tab bar above served as the separator); here
-   the list's last row sits directly above the hero.
+1. Image height cap: already 12 rows, already shipped (decision 3) —
+   not open. Revisit only if visual feedback says the constant ~22-23
+   row hero is wrong for this layout.
+2. Hero meta line: what fields go in it? This is unchanged from what
+   `compact_banner_layout_with_overview` already renders today for the
+   inline hero — confirm it still reads well at the wider bottom-hero
+   width, don't redesign it from scratch.
+3. The `▌` mark — is it visible enough on its own, now that it's no
+   longer paired with a matching-bg block right below it (today's `▍` +
+   colored-bg combo makes the row and hero read as one shape)? Or do we
+   need something more distinct once the hero is no longer adjacent to
+   the selected row?
+4. Keep, drop, or simplify the existing `▁`/`▔` `SEEK_TRACK` borders
+   now that the hero sits at a fixed screen edge rather than inline
+   between list rows — a fixed bottom edge may not need the same visual
+   separation the inline version relied on.
