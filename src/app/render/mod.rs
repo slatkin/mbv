@@ -406,22 +406,87 @@ impl App {
         } else {
             // The card fills the top of the left column; the queue list takes
             // the rows below it. Short terminals keep that same structure.
-            let (card_h, _) = self.render_power_card(f, card_area);
-            let left_remaining = left_content.height.saturating_sub(card_h);
-            // Reserve space for visualizer at the bottom of the queue panel
-            visualizer_h = if self.visualizer_enabled && left_remaining >= 3 {
+            let is_queue_only = self.panel_mode == PanelMode::QueueOnly;
+            let is_wide = is_queue_only && left_area.width >= 100;
+            let (card_h, card_w, _) = self.render_power_card(f, card_area, is_wide);
+            let mut left_remaining = left_content.height.saturating_sub(card_h);
+
+            // Queue-only mode has no right column, so the playback panel
+            // (seekbar + title + controls) renders here instead: stacked
+            // below the card on narrow terminals, or beside it on wide ones.
+            let mut narrow_player_h = 0;
+            if is_queue_only {
+                if is_wide {
+                    let panel_area = Rect {
+                        x: card_area.x + card_w + 2,
+                        y: card_area.y,
+                        width: left_content.width.saturating_sub(card_w + 2),
+                        height: card_h,
+                    };
+                    f.render_widget(
+                        Block::default().style(Style::default().bg(palette::DARK_BG)),
+                        panel_area,
+                    );
+                    self.render_player_panel(
+                        f,
+                        panel_area,
+                        playback,
+                        player_h,
+                        show_controls,
+                        now_playing_title,
+                        palette::DARK_BG,
+                    );
+                    // Fill leftover space below the playback content with the
+                    // visualizer when enabled; otherwise it stays DARK_BG.
+                    let wide_viz_h = card_h.saturating_sub(player_h);
+                    if self.visualizer_enabled && wide_viz_h >= 3 {
+                        let wide_viz_area = Rect {
+                            x: panel_area.x,
+                            y: panel_area.y + player_h,
+                            width: panel_area.width,
+                            height: wide_viz_h,
+                        };
+                        self.render_visualizer(f, wide_viz_area, palette::DARK_BG);
+                    }
+                } else {
+                    let panel_area = Rect {
+                        x: left_content.x,
+                        y: left_content.y + card_h,
+                        width: left_content.width,
+                        height: player_h,
+                    };
+                    self.render_player_panel(
+                        f,
+                        panel_area,
+                        playback,
+                        player_h,
+                        show_controls,
+                        now_playing_title,
+                        palette::DARK_BG,
+                    );
+                    narrow_player_h = player_h;
+                    left_remaining = left_remaining.saturating_sub(player_h);
+                }
+            }
+
+            // Reserve space for visualizer at the bottom of the queue panel.
+            // Wide queue-only mode shows the visualizer inside the playback
+            // panel instead, so it's not duplicated here.
+            visualizer_h = if !is_wide && self.visualizer_enabled && left_remaining >= 3 {
                 left_remaining.min(VISUALIZER_HEIGHT)
             } else {
                 0
             };
-            if self.visualizer_enabled && visualizer_h == 0 && left_remaining > 0 {
+            if !is_wide && self.visualizer_enabled && visualizer_h == 0 && left_remaining > 0 {
                 self.flash_status("Terminal too short for left visualizer".into());
             }
-            let queue_h = left_remaining.saturating_sub(visualizer_h).saturating_sub(1);
+            let queue_h = left_remaining
+                .saturating_sub(visualizer_h)
+                .saturating_sub(1);
             (
                 right_area,
                 Rect {
-                    y: left_content.y + card_h + 1,
+                    y: left_content.y + card_h + narrow_player_h + 1,
                     height: queue_h,
                     ..left_content
                 },
@@ -534,7 +599,7 @@ impl App {
                     width: left_content.width,
                     height: visualizer_h,
                 };
-                self.render_visualizer(f, left_viz_area);
+                self.render_visualizer(f, left_viz_area, palette::LIBRARY_SIDE_BG);
                 // Render horizontal rule at the bottom of the left visualizer
                 let bottom_y = left_viz_area.y + left_viz_area.height - 1;
                 let hr_text = "▁".repeat(left_viz_area.width as usize);

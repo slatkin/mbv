@@ -14,6 +14,7 @@ impl App {
         }
         self.library_tab = idx;
         self.last_card_height = 0; // reset stale image height for new view
+        self.last_card_width = 0;
         if idx > 0 {
             self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position(idx - 1);
@@ -27,6 +28,7 @@ impl App {
         let n = self.library_tab_count();
         self.library_tab = (self.library_tab + 1) % n;
         self.last_card_height = 0; // reset stale image height for new view
+        self.last_card_width = 0;
         if self.library_tab > 0 {
             self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position(self.library_tab - 1);
@@ -40,6 +42,7 @@ impl App {
         let n = self.library_tab_count();
         self.library_tab = (self.library_tab + n - 1) % n;
         self.last_card_height = 0;
+        self.last_card_width = 0;
         if self.library_tab > 0 {
             self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position(self.library_tab - 1);

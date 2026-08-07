@@ -43,7 +43,7 @@ When the terminal width is 100 columns or more, the hero image and playback pane
 
 ### Requirement: Wide layout playback panel height matches image height
 
-In the wide two-column layout, the playback panel area SHALL have the same height as the rendered hero image. Playback content SHALL be top-aligned within that area and `DARK_BG` SHALL fill any remaining vertical space below the content.
+In the wide two-column layout, the playback panel area SHALL have the same height as the rendered hero image. Playback content SHALL be top-aligned within that area. Any remaining vertical space below the content SHALL be filled by the visualizer when enabled, and by `DARK_BG` otherwise.
 
 #### Scenario: Panel height matches image
 
@@ -52,8 +52,27 @@ In the wide two-column layout, the playback panel area SHALL have the same heigh
 
 #### Scenario: Content top-aligned with dark fill
 
-- **WHEN** the playback panel area is taller than the playback content (seekbar + title + controls)
+- **WHEN** the playback panel area is taller than the playback content (seekbar + title + controls) and the visualizer is disabled
 - **THEN** the playback content SHALL start at the top of the area and `DARK_BG` SHALL fill the rows below it
+
+### Requirement: Wide layout leftover space shows the visualizer when enabled
+
+In the wide two-column layout, when the visualizer is enabled and at least 3 rows remain below the playback content, the visualizer SHALL render in that leftover space instead of `DARK_BG`, using the same background color as the playback panel. This replaces the bottom-of-queue visualizer that would otherwise render below the queue list — in wide queue-only mode, only the playback-panel visualizer SHALL render, not both.
+
+#### Scenario: Visualizer fills leftover space
+
+- **WHEN** the wide two-column layout is active, the visualizer is enabled, and at least 3 rows remain below the playback content
+- **THEN** the visualizer SHALL render across the full width of the playback panel in the leftover rows, with the playback panel's background color
+
+#### Scenario: Too little space for the visualizer
+
+- **WHEN** the wide two-column layout is active, the visualizer is enabled, and fewer than 3 rows remain below the playback content
+- **THEN** the leftover rows SHALL remain `DARK_BG`
+
+#### Scenario: Bottom-of-queue visualizer suppressed in wide mode
+
+- **WHEN** the wide two-column layout is active
+- **THEN** the visualizer SHALL NOT also render at the bottom of the queue column, regardless of leftover space there
 
 ### Requirement: Hero image left-aligned in wide layout
 

@@ -49,6 +49,14 @@ The playback panel is rendered with `DARK_BG` in both cases, not the conditional
 
 The existing `right_visible && player_h > 0` guard stays for the right-column rendering. The queue-only playback panel is a separate render call in the queue-only layout branch, independent of `right_visible`.
 
+### 6. Wide-mode leftover space reuses the existing left-column visualizer
+
+In wide mode the panel area is `card_h` rows tall but playback content only uses `player_h` rows, leaving `card_h - player_h` rows of `DARK_BG` below it. When `self.visualizer_enabled` and that leftover is `>= 3` rows (the same minimum `render_visualizer` already requires elsewhere, since it reserves a 1-row margin top and bottom), call the existing `render_visualizer(f, area)` into that leftover rect instead of leaving it flat `DARK_BG`. Below 3 rows, or when the visualizer is disabled, the space stays `DARK_BG` (already painted by the panel background fill, no extra code needed).
+
+This is a second call site for `render_visualizer`, which now takes a `bg: Color` parameter (previously hardcoded to `LIBRARY_SIDE_BG`) so each call site can match its surroundings: the panel-embedded call passes `DARK_BG`, the existing bottom-of-queue call keeps passing `LIBRARY_SIDE_BG`.
+
+In wide queue-only mode the panel-embedded visualizer replaces the bottom-of-queue one rather than adding to it — showing both would be redundant and visually noisy in a mode with limited vertical room. `visualizer_h` (which drives the bottom-of-queue reservation and render) is forced to `0` whenever `is_wide`, regardless of `visualizer_enabled` or leftover space. Narrow queue-only mode is unaffected — it never had the panel-embedded visualizer to begin with, so the bottom-of-queue one keeps rendering there as before.
+
 ## Risks / Trade-offs
 
 - **Image width instability during loading**: Before the image loads, `last_card_width` may be 0 (first render) or stale (item changed). Using `area.width` as the placeholder width means the playback panel gets zero width until the image loads. This matches the existing behavior where the card area reserves full height while loading — the playback panel simply appears once the image settles. Acceptable for an initial implementation.

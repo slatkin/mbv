@@ -215,6 +215,7 @@ pub(crate) fn make_app_stub() -> App {
         card_image_states: std::collections::HashMap::new(),
         card_image_loading: std::collections::HashSet::new(),
         last_card_height: 0,
+        last_card_width: 0,
         card_image_tx,
         card_image_rx,
         resize_register_tx,

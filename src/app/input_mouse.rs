@@ -126,6 +126,7 @@ impl App {
             if qa.contains((col, row).into()) {
                 if !matches!(self.panel_focus, PanelFocus::Queue) {
                     self.last_card_height = 0;
+                    self.last_card_width = 0;
                 }
                 self.set_panel_focus(PanelFocus::Queue);
                 let content_y = (row - qa.y) as usize;
@@ -139,6 +140,7 @@ impl App {
             if la.contains((col, row).into()) {
                 if !matches!(self.panel_focus, PanelFocus::Library) {
                     self.last_card_height = 0;
+                    self.last_card_width = 0;
                 }
                 self.set_panel_focus(PanelFocus::Library);
                 if self.library_tab == 0 {

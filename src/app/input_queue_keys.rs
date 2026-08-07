@@ -64,6 +64,7 @@ impl App {
             if key.code == KeyCode::Right && matches!(self.panel_focus, PanelFocus::Queue) {
                 self.set_panel_focus(PanelFocus::Library);
                 self.last_card_height = 0; // reset stale image height for new view
+                self.last_card_width = 0;
                 return false;
             }
             if key.code == KeyCode::Left
@@ -72,6 +73,7 @@ impl App {
             {
                 self.set_panel_focus(PanelFocus::Queue);
                 self.last_card_height = 0;
+                self.last_card_width = 0;
                 return false;
             }
         }
