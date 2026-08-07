@@ -139,7 +139,12 @@ pub(super) fn item_cell_spans(
     let used: usize = spans.iter().map(|s| s.width()).sum();
     let pad = pad_to.saturating_sub(used);
     if pad > 0 {
-        spans.push(Span::raw(" ".repeat(pad)));
+        let pad_span = if selected && cols > 1 {
+            Span::styled(" ".repeat(pad), Style::default().bg(palette::PLAYBACK_PANEL_BG))
+        } else {
+            Span::raw(" ".repeat(pad))
+        };
+        spans.push(pad_span);
     }
     spans
 }
@@ -172,9 +177,9 @@ pub(super) fn draw_column_selection_markers(
     let marker_style = Style::default().fg(palette::AQUA);
     if col_in_row == 0 {
         f.render_widget(
-            Paragraph::new(Line::from(Span::styled("\u{258c}", marker_style))),
+            Paragraph::new(Line::from(Span::styled("\u{258e}", marker_style))),
             Rect {
-                x: content_area.x.saturating_sub(1),
+                x: content_area.x.saturating_sub(2),
                 y: content_area.y + row_idx as u16,
                 width: 1,
                 height: 1,
@@ -182,9 +187,9 @@ pub(super) fn draw_column_selection_markers(
         );
     } else {
         f.render_widget(
-            Paragraph::new(Line::from(Span::styled("\u{2590}", marker_style))),
+            Paragraph::new(Line::from(Span::styled("\u{1fb87}", marker_style))),
             Rect {
-                x: content_area.x + content_area.width,
+                x: content_area.x + content_area.width + 1,
                 y: content_area.y + row_idx as u16,
                 width: 1,
                 height: 1,

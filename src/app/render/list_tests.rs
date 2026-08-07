@@ -397,8 +397,8 @@ fn selected_cell_uses_carat_no_double_hash_in_two_column_mode() {
         .nth(layout.left_area.y as usize)
         .expect("list_area's first row should exist in the rendered buffer");
     assert!(
-        list_line.contains('\u{258c}'),
-        "selected cell's left edge should carry the ▌ mark: {list_line:?}"
+        list_line.contains('\u{258e}'),
+        "selected cell's left edge should carry the ▎ mark: {list_line:?}"
     );
     assert!(
         !list_line.contains("##Alpha"),
