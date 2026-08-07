@@ -286,6 +286,8 @@ impl App {
                 self.libs[lib_idx].library.collection_type != "music"
             };
 
+        layout.left_area = list_area;
+
         if n == 0 {
             let msg = if self.library_tab > 0 {
                 let lib_idx = self.library_tab - 1;
@@ -308,7 +310,6 @@ impl App {
             return;
         }
 
-        layout.left_area = list_area;
         layout.hero_area = hero_area;
 
         let final_offset: usize;

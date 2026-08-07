@@ -258,6 +258,22 @@ fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
 // ── Top hero area (hero-on-top) ─────────────────────────────────────────
 
 #[test]
+fn left_area_is_set_for_an_empty_library_list() {
+    let mut app = make_power_movie_list_app(vec![]);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+
+    assert!(
+        layout.left_area.height > 0,
+        "left_area must be set even when the library list is empty, so clicking it can focus the panel"
+    );
+    assert!(
+        layout.left_area.width > 0,
+        "left_area must have nonzero width"
+    );
+}
+
+#[test]
 fn list_area_renders_the_same_per_cell_content_at_one_and_two_columns() {
     // width 81 stays under POWER_TWO_COLUMN_THRESHOLD (82) -> 1 col; 82
     // crosses it -> 2 col. Same items, same order; only the packing shape
