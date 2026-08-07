@@ -436,6 +436,18 @@ impl App {
                         now_playing_title,
                         palette::DARK_BG,
                     );
+                    // Fill leftover space below the playback content with the
+                    // visualizer when enabled; otherwise it stays DARK_BG.
+                    let wide_viz_h = card_h.saturating_sub(player_h);
+                    if self.visualizer_enabled && wide_viz_h >= 3 {
+                        let wide_viz_area = Rect {
+                            x: panel_area.x,
+                            y: panel_area.y + player_h,
+                            width: panel_area.width,
+                            height: wide_viz_h,
+                        };
+                        self.render_visualizer(f, wide_viz_area);
+                    }
                 } else {
                     let panel_area = Rect {
                         x: left_content.x,

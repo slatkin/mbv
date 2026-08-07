@@ -19,3 +19,8 @@
 
 - [x] 3.1 Run `cargo test -p mbv` — all existing tests pass with the new return types and layout changes.
 - [x] 3.2 Run `make check-code-file-lines` — no file exceeds the 800-line cap.
+
+## 4. Visualizer in wide-mode leftover space
+
+- [x] 4.1 In the wide path in `render_main` (`src/app/render/mod.rs`), after `render_player_panel` fills the panel content, compute `wide_viz_h = card_h.saturating_sub(player_h)`. When `self.visualizer_enabled && wide_viz_h >= 3`, call `self.render_visualizer(f, area)` with `area` positioned at `panel_area.x`, `panel_area.y + player_h`, full `panel_area.width`, height `wide_viz_h`. Otherwise leave the existing `DARK_BG` fill as-is.
+- [x] 4.2 Verify: `cargo check -p mbv` compiles. `cargo clippy --workspace --all-targets` clean. `cargo test -p mbv` passes.
