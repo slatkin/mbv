@@ -45,6 +45,24 @@ impl App {
             });
             return;
         }
+        if controls_playback_queue && !active {
+            let is_now_playing_remote = self
+                .connected_session_state
+                .as_ref()
+                .and_then(|s| s.now_playing_item_id.as_ref())
+                .zip(self.queue_for_scope(scope).items.get(pos))
+                .map(|(npid, item)| item.id == *npid)
+                .unwrap_or(false);
+            if is_now_playing_remote {
+                self.confirm_modal = Some(ConfirmModal {
+                    title: " Remove Item ".into(),
+                    message: "Remove now-playing item and stop playback?".into(),
+                    hint: "[y] Confirm    [Esc] Cancel".into(),
+                    on_confirm: ConfirmAction::RemoveActiveQueueItem(pos),
+                });
+                return;
+            }
+        }
         let cursor_before = self.queue_for_scope(scope).queue_cursor;
         let Some(item) = self.queue_for_scope_mut(scope).remove_slot_at(pos) else {
             return;

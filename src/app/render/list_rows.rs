@@ -112,7 +112,9 @@ pub(super) fn build_list_row_spans(
     };
     if !dur_str.is_empty() {
         let dur_style = if selected && cols > 1 {
-            Style::default().fg(palette::MUTED).bg(palette::PLAYBACK_PANEL_BG)
+            Style::default()
+                .fg(palette::MUTED)
+                .bg(palette::PLAYBACK_PANEL_BG)
         } else {
             Style::default().fg(palette::MUTED)
         };
@@ -141,7 +143,10 @@ pub(super) fn item_cell_spans(
     let pad = pad_to.saturating_sub(used);
     if pad > 0 {
         let pad_span = if selected && cols > 1 {
-            Span::styled(" ".repeat(pad), Style::default().bg(palette::PLAYBACK_PANEL_BG))
+            Span::styled(
+                " ".repeat(pad),
+                Style::default().bg(palette::PLAYBACK_PANEL_BG),
+            )
         } else {
             Span::raw(" ".repeat(pad))
         };
@@ -165,9 +170,7 @@ pub(super) fn draw_column_selection_markers(
     if cols <= 1 {
         return;
     }
-    let cursor_row = item_rows
-        .iter()
-        .position(|row| row.contains(&cursor));
+    let cursor_row = item_rows.iter().position(|row| row.contains(&cursor));
     let Some(row_idx) = cursor_row else {
         return;
     };

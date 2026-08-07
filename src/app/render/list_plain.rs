@@ -1,5 +1,7 @@
 use super::super::ui_util::*;
-use super::list_rows::{draw_column_selection_markers, focused_or_subtle, item_cell_spans, DisplayRow, ListRenderCtx};
+use super::list_rows::{
+    draw_column_selection_markers, focused_or_subtle, item_cell_spans, DisplayRow, ListRenderCtx,
+};
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::App;

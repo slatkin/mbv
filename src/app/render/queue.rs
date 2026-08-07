@@ -381,8 +381,8 @@ impl App {
                     let pct_visible = !pct_str.is_empty();
                     let pct_w = if pct_visible { 1 + pct_str.width() } else { 0 };
                     let right_w = if dur_visible { dur.width() } else { 0 };
-                    let title_w =
-                        track_content_w.saturating_sub(indent + pct_w + right_w + QUEUE_TITLE_QUIET_COLUMNS);
+                    let title_w = track_content_w
+                        .saturating_sub(indent + pct_w + right_w + QUEUE_TITLE_QUIET_COLUMNS);
                     let title = trunc_str(&item.name, title_w);
 
                     if is_cursor {

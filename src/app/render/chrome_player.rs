@@ -220,10 +220,7 @@ impl App {
         let throbber = self.now_playing_throbber_span();
         let mut progress_spans: Vec<Span<'static>> = vec![
             Span::styled(throbber.content, throbber.style.bg(pill_bg)),
-            Span::styled(
-                pct_str,
-                Style::default().fg(palette::FOAM).bg(pill_bg),
-            ),
+            Span::styled(pct_str, Style::default().fg(palette::FOAM).bg(pill_bg)),
         ];
         if right.is_empty() {
             right = progress_spans;

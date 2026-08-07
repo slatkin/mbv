@@ -70,7 +70,11 @@ impl App {
                             // can outlive a queue refresh, making the slot
                             // stale by the time the user confirms it.
                             self.pending_delete_slot = Some(slot_id);
-                            self.player.stop();
+                            if self.connected_session_id.is_some() {
+                                self.playback_target().stop(self);
+                            } else {
+                                self.player.stop();
+                            }
                             if self.local_queue_metadata_applies(scope) {
                                 self.queue_dirty = true;
                             }

@@ -252,7 +252,10 @@ impl App {
             ..content_area
         };
         let list_area = Rect {
-            y: content_area.y.saturating_sub(hero_shift) + hero_rows + separator_rows + pills_reserved,
+            y: content_area.y.saturating_sub(hero_shift)
+                + hero_rows
+                + separator_rows
+                + pills_reserved,
             height: (content_area.height + hero_shift)
                 .saturating_sub(hero_rows + separator_rows + pills_reserved),
             ..content_area

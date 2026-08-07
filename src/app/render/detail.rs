@@ -417,10 +417,10 @@ impl App {
         let img_height = content.img_height;
         let img_is_placeholder = content.img_is_placeholder;
         let img_x = area.x + area.width.saturating_sub(img_actual_w);
-        // In two-column lists the title row above pushes the poster down a
-        // row; one-column lists have no title row so it stays flush with the
-        // hero's top border, as before.
-        let img_y = (area.y + show_title as u16).min(area.y + area.height.saturating_sub(1));
+        // The poster is right-aligned on the hero's top row, sharing that
+        // row with the title in two-column lists or flush with the hero's
+        // top border in one-column lists.
+        let img_y = area.y.min(area.y + area.height.saturating_sub(1));
         let img_end_row = img_y + img_height;
         layout.inline_image_rect = if img_height > 0 {
             Some(Rect {
