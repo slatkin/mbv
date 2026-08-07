@@ -1,3 +1,4 @@
+use super::album_art::INLINE_ALBUM_ART_RESERVED;
 use super::detail::compact_banner_image_cache_key;
 use super::list_rows::{ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING};
 use crate::app::layout::LayoutMain;
@@ -586,6 +587,54 @@ impl App {
                     cols > 1,
                     layout,
                 );
+            } else if let Some(item) = &selected_album_item {
+                // Album hero: art + track list + metadata, mirroring the
+                // movie/series branch -- reserved and painted here instead of
+                // in `render_power_grouped_album_rows`' inline block. Art
+                // sits right-aligned in `content_rect`; the detail reserves
+                // its width so the track table never overlaps it.
+                let art_reserved_w = if self.images_enabled()
+                    && content_rect.width >= INLINE_ALBUM_ART_RESERVED + 20
+                {
+                    INLINE_ALBUM_ART_RESERVED
+                } else {
+                    0
+                };
+                let track_cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
+                if let Some(tracks) = self.album_tracks_cache.get(&item.id).cloned() {
+                    self.render_power_album_detail(
+                        f,
+                        content_rect,
+                        &tracks,
+                        track_cursor,
+                        focused,
+                        true,  // show_title: the hero has no Album(idx) row above
+                        true,  // selected_region_gutter: hero block context
+                        false, // flush_left
+                        true,  // show_hint: show the action hint
+                        art_reserved_w,
+                        None,
+                        layout,
+                    );
+                } else {
+                    // Tracks not fetched yet: kick off the fetch and show a
+                    // loading stand-in (art still reserved on the right).
+                    self.fetch_album_tracks(item.id.clone());
+                    let loading_rect = Rect {
+                        width: content_rect.width.saturating_sub(art_reserved_w),
+                        ..content_rect
+                    };
+                    super::render_power_placeholder(f, loading_rect, " Loading…");
+                }
+                if art_reserved_w > 0 {
+                    let art_rect = Rect {
+                        x: content_rect.x + content_rect.width.saturating_sub(art_reserved_w),
+                        y: content_rect.y,
+                        width: art_reserved_w,
+                        height: content_rect.height,
+                    };
+                    self.render_inline_album_art(f, art_rect, item, layout);
+                }
             }
         }
 
