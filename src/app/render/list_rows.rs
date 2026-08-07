@@ -49,13 +49,6 @@ pub(super) enum DisplayRow {
     /// one-column mode every such row carries exactly one index, so both
     /// modes share a single rendering path with no `cols == 1` branch.
     Item(Vec<usize>),
-    /// A display row occupied by the inline hero banner's block (top `▁`
-    /// border, colored bg padding + content, bottom `▔` border — painted
-    /// afterwards by `render_power_list` over the blank rows the List
-    /// widget leaves here). Maps to `None` in the row map and an empty row
-    /// in `left_item_rows`, so mouse clicks on it hit the hero, not an
-    /// item.
-    Hero,
 }
 
 /// Shared inputs to the per-kind row-rendering bodies of `render_power_list`
@@ -63,9 +56,10 @@ pub(super) enum DisplayRow {
 /// prelude values both kinds' bodies read, factored out so each callee takes
 /// one struct instead of the same six-plus positional arguments.
 pub(super) struct ListRenderCtx<'a> {
-    /// The list's own area: the full content area (`render_power_list` no
-    /// longer splits it into a hero area plus a list area -- the hero is
-    /// inserted inline below the selected row as `DisplayRow::Hero` rows).
+    /// The list's own area: `render_power_list` splits `content_area` into
+    /// this (the top slice, above the hero) and a separate `hero_area` (the
+    /// bottom slice) -- the row renderer only ever sees `list_area` and has
+    /// no notion of the hero at all.
     pub(super) content_area: Rect,
     pub(super) items: &'a [mbv_core::api::MediaItem],
     pub(super) cursor: usize,
@@ -73,22 +67,16 @@ pub(super) struct ListRenderCtx<'a> {
     /// Column count for this frame's list pane width (1 or 2).
     pub(super) cols: usize,
     pub(super) focused: bool,
-    /// Height in rows of the inline hero banner to insert below the row
-    /// containing the cursor; 0 when no hero is shown (the list then takes
-    /// the whole content area).
-    pub(super) hero_rows: u16,
 }
 
 /// Builds the title (+ optional duration) spans for one list row, shared by
 /// both the letter-grouped and plain-list rendering branches (identical
 /// styling logic, only how `title`/`dur_str`/`avail` are computed differs
 /// between the two call sites). Every cell starts with a 1-column leading
-/// separator; for the selected cell that separator is the `▍` grabber in
-/// `palette::AQUA` (matching the queue list panel and Home tab list), so the
-/// title begins at the same x as unselected rows. The selected cell sits on
-/// the same block background as the inline hero below it
-/// (`palette::PLAYBACK_PANEL_BG`), so the two read as one selected block;
-/// every other cell stays on the ordinary list background.
+/// separator; for the selected cell that separator is a `▌` mark in
+/// `palette::AQUA` and the title gets a `##` prefix, so the selected cell is
+/// identifiable without a colored background -- the hero (not the row) now
+/// owns `MEDIA_SELECTED_BG`, since the two are no longer adjacent.
 pub(super) fn build_list_row_spans(
     title: String,
     dur_str: String,
@@ -96,34 +84,22 @@ pub(super) fn build_list_row_spans(
     focused: bool,
     fg: Color,
 ) -> Vec<Span<'static>> {
-    // Applies the selected-block background to a style when this span
-    // belongs to the selected cell, leaves other spans untouched.
-    let on_block = |style: Style| -> Style {
-        if selected {
-            style.bg(palette::PLAYBACK_PANEL_BG)
-        } else {
-            style
-        }
-    };
     let mut spans: Vec<Span> = if selected {
-        let marker_style = on_block(Style::default().fg(palette::AQUA));
-        let title_style = on_block(if focused {
+        let marker_style = Style::default().fg(palette::AQUA);
+        let title_style = if focused {
             Style::default().fg(fg).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(fg)
-        });
+        };
         vec![
-            Span::styled("\u{258d}", marker_style),
-            Span::styled(title, title_style),
+            Span::styled("\u{258c}", marker_style),
+            Span::styled(format!("##{title}"), title_style),
         ]
     } else {
         vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
     };
     if !dur_str.is_empty() {
-        spans.push(Span::styled(
-            dur_str,
-            on_block(Style::default().fg(palette::MUTED)),
-        ));
+        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
     }
     spans
 }
@@ -146,15 +122,7 @@ pub(super) fn item_cell_spans(
     let used: usize = spans.iter().map(|s| s.width()).sum();
     let pad = pad_to.saturating_sub(used);
     if pad > 0 {
-        let pad_span = if selected {
-            Span::styled(
-                " ".repeat(pad),
-                Style::default().bg(palette::PLAYBACK_PANEL_BG),
-            )
-        } else {
-            Span::raw(" ".repeat(pad))
-        };
-        spans.push(pad_span);
+        spans.push(Span::raw(" ".repeat(pad)));
     }
     spans
 }
