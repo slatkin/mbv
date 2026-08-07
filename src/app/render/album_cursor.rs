@@ -136,7 +136,6 @@ impl App {
     pub(in crate::app) fn move_power_music_group_display_cursor(
         &mut self,
         lib_idx: usize,
-        cols: usize,
         delta: i64,
     ) -> bool {
         if !self.is_viewing_album_folders(lib_idx) {
@@ -170,7 +169,7 @@ impl App {
                         && matches!(target, LibraryRowTarget::Album(idx) if *idx == cursor))
             })
             .unwrap_or(0);
-        let new_pos = Self::grouped_cursor_target(&targets, current_pos, cols, delta);
+        let new_pos = Self::grouped_cursor_target(&targets, current_pos, delta);
         let target = targets[new_pos].clone();
         match target {
             LibraryRowTarget::ArtistHeader(selection) => {
@@ -202,17 +201,11 @@ impl App {
     /// column-wrapping the letter-group cursor uses. When the cursor
     /// already rests on a header (reached via Ctrl+PgUp/PgDn or a click),
     /// up/down step into the adjacent album row.
-    fn grouped_cursor_target(
-        targets: &[LibraryRowTarget],
-        pos: usize,
-        cols: usize,
-        delta: i64,
-    ) -> usize {
+    fn grouped_cursor_target(targets: &[LibraryRowTarget], pos: usize, delta: i64) -> usize {
         let len = targets.len();
         if len == 0 {
             return pos;
         }
-        debug_assert!(cols >= 1, "column count must be positive");
         if matches!(targets[pos], LibraryRowTarget::ArtistHeader(_)) {
             // A header spans the full row: step into the row of albums
             // that follows it (down) or precedes it (up).
@@ -447,7 +440,6 @@ impl App {
     pub(in crate::app) fn page_power_grouped_album_cursor(
         &mut self,
         lib_idx: usize,
-        cols: usize,
         page_down: bool,
     ) -> bool {
         if self.library_tab != lib_idx + 1
@@ -472,6 +464,7 @@ impl App {
 
         let cursor = level.cursor;
         let albums = level.items.clone();
+        let cols = self.current_library_columns(lib_idx);
         // A page is one viewport of *rows*, each holding `cols` albums.
         let page_rows = (self.layout.main.left_area.height as usize).max(1);
         let page = cols.max(1).saturating_mul(page_rows);

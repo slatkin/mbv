@@ -32,10 +32,12 @@ pub(super) fn album_hero_content_rows(
     let meta_rows = 2u16;
     // Album art block, when images are enabled.
     let art = if images_enabled { art_rows } else { 0 };
-    // Track names run ~60 chars and wrap at `panel_width` columns, so each
-    // track contributes one row at reasonable panel widths.
-    let cols_per_track = 60usize;
-    let cols_per_line = (panel_width.max(1) as usize).max(1);
+    // Track names run ~TRACK_NAME_ESTIMATE_CHARS chars and wrap at
+    // `panel_width` columns, so each track contributes one row at reasonable
+    // panel widths.
+    const TRACK_NAME_ESTIMATE_CHARS: usize = 60;
+    let cols_per_track = TRACK_NAME_ESTIMATE_CHARS;
+    let cols_per_line = panel_width.max(1) as usize;
     let track_rows = track_count
         .saturating_mul(cols_per_track)
         .div_ceil(cols_per_line);

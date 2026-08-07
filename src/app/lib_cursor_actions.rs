@@ -120,11 +120,7 @@ impl App {
         if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
-            && self.move_power_music_group_display_cursor(
-                lib_idx,
-                self.current_library_columns(lib_idx),
-                delta,
-            )
+            && self.move_power_music_group_display_cursor(lib_idx, delta)
         {
             self.save_default_library_position(lib_idx);
             if idle {

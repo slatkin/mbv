@@ -201,11 +201,18 @@ impl App {
                         if !self.layout.main.left_item_rows.is_empty() && cols > 1 && cw > 0 {
                             let cell = x / (cw + LIBRARY_COLUMN_GAP as usize);
                             if cell < cols {
-                                let scroll = self.libs[lib_idx]
-                                    .nav_stack
-                                    .last()
-                                    .map(|l| l.scroll)
-                                    .unwrap_or(0);
+                                // Grouped album views pack display rows into screen
+                                // rows; use the screen-row offset from the last
+                                // render so the Y index matches left_item_rows.
+                                let scroll = if self.is_music_group_view(lib_idx) {
+                                    self.layout.main.left_screen_offset
+                                } else {
+                                    self.libs[lib_idx]
+                                        .nav_stack
+                                        .last()
+                                        .map(|l| l.scroll)
+                                        .unwrap_or(0)
+                                };
                                 Some(
                                     self.layout
                                         .main

@@ -242,21 +242,13 @@ impl App {
                 self.jump_power_music_group_display_cursor_to_artist(lib_idx, true);
             }
             KeyCode::PageUp => {
-                if !self.page_power_grouped_album_cursor(
-                    lib_idx,
-                    self.current_library_columns(lib_idx),
-                    false,
-                ) {
+                if !self.page_power_grouped_album_cursor(lib_idx, false) {
                     let p = self.lib_page_size();
                     self.move_lib_cursor_rows(-(p as i64));
                 }
             }
             KeyCode::PageDown => {
-                if !self.page_power_grouped_album_cursor(
-                    lib_idx,
-                    self.current_library_columns(lib_idx),
-                    true,
-                ) {
+                if !self.page_power_grouped_album_cursor(lib_idx, true) {
                     let p = self.lib_page_size();
                     self.move_lib_cursor_rows(p as i64);
                 }
