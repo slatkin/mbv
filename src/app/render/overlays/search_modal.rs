@@ -22,6 +22,13 @@ const BADGE_COL_W: u16 = 11;
 
 const TITLE: &str = " Search ";
 
+fn body_bg(mode: SearchMode) -> Color {
+    match mode {
+        SearchMode::Global => palette::LIBRARY_SIDE_BG,
+        SearchMode::Fuzzy => palette::BG_GREEN,
+    }
+}
+
 pub(in crate::app::render) fn render_search_modal(app: &mut App, f: &mut Frame, area: Rect) {
     let modal = match app.search_modal.as_ref() {
         Some(m) => m,
@@ -34,7 +41,7 @@ pub(in crate::app::render) fn render_search_modal(app: &mut App, f: &mut Frame, 
         TITLE,
         w,
         h,
-        palette::LIBRARY_SIDE_BG,
+        body_bg(modal.mode),
     );
     let (input_area, filter_area, body_area) = layout_inner(inner, modal.mode);
 
@@ -63,7 +70,7 @@ pub(in crate::app::render) fn render_search_modal(app: &mut App, f: &mut Frame, 
             "Loading…",
             &[],
             palette::SUBTLE,
-            palette::LIBRARY_SIDE_BG,
+            body_bg(modal.mode),
         );
         return;
     }
@@ -78,7 +85,7 @@ pub(in crate::app::render) fn render_search_modal(app: &mut App, f: &mut Frame, 
                 "Type to search",
                 &[],
                 palette::SUBTLE,
-                palette::LIBRARY_SIDE_BG,
+                body_bg(modal.mode),
             );
             return;
         }
@@ -97,7 +104,7 @@ pub(in crate::app::render) fn render_search_modal(app: &mut App, f: &mut Frame, 
                 "Search failed",
                 &[err],
                 palette::RED,
-                palette::LIBRARY_SIDE_BG,
+                body_bg(modal.mode),
             );
             return;
         }
@@ -107,7 +114,7 @@ pub(in crate::app::render) fn render_search_modal(app: &mut App, f: &mut Frame, 
             primary,
             secondary,
             palette::SOFT_WHITE,
-            palette::LIBRARY_SIDE_BG,
+            body_bg(modal.mode),
         );
         return;
     }
@@ -216,10 +223,7 @@ fn render_type_filter(
     }
     for (i, (label, is_selected)) in chips.iter().enumerate() {
         if i > 0 {
-            spans.push(Span::styled(
-                " ",
-                Style::default().bg(palette::LIBRARY_SIDE_BG),
-            ));
+            spans.push(Span::styled(" ", Style::default().bg(body_bg(modal.mode))));
         }
         let style = if *is_selected {
             Style::default()
@@ -229,7 +233,7 @@ fn render_type_filter(
         } else {
             Style::default()
                 .fg(palette::PILL_SELECTOR_FG)
-                .bg(palette::LIBRARY_SIDE_BG)
+                .bg(body_bg(modal.mode))
         };
         spans.push(Span::styled(format!(" {} ", label), style));
     }
@@ -334,7 +338,7 @@ fn render_results(
         return;
     }
     f.render_widget(
-        Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+        Block::default().style(Style::default().bg(body_bg(modal.mode))),
         body_area,
     );
     let total = results.len();
@@ -358,7 +362,7 @@ fn render_results(
         let line_bg = if is_selected {
             palette::MEDIA_SELECTED_BG
         } else {
-            palette::LIBRARY_SIDE_BG
+            body_bg(modal.mode)
         };
         let line_fg = if is_selected {
             palette::SOFT_WHITE

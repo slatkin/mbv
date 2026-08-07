@@ -35,9 +35,8 @@ impl App {
         // On short terminals (<= 30 rows) cap the card image at 12 rows so the queue
         // list keeps adequate space; taller terminals cap at 18 rows.
         let max_h = max_h.min(if self.terminal_height <= 30 { 12 } else { 24 });
-        let mem_key = self.current_mem_key(cache_key);
         let image_loading = self.card_image_loading.contains(cache_key);
-        if let Some(Some(state)) = self.card_image_states.get_mut(&mem_key) {
+        let actual_height = if let Some(state) = self.cached_image_protocol_mut(cache_key) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             let avail = ratatui::layout::Size {
                 width: area.width,
@@ -64,9 +63,16 @@ impl App {
                     img_rect,
                     state,
                 );
-                self.last_card_height = actual.height;
-                return (actual.height, false);
+                Some(actual.height)
+            } else {
+                None
             }
+        } else {
+            None
+        };
+        if let Some(height) = actual_height {
+            self.last_card_height = height;
+            return (height, false);
         }
         // No image loaded yet — if a fetch is in-flight and we have never
         // rendered a card before, reserve the full height cap so the queue
@@ -141,11 +147,10 @@ impl App {
         if self.images_enabled() || is_music_item {
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
         }
-        let use_placeholder = matches!(
-            self.card_image_states
-                .get(&self.current_mem_key(&cache_key)),
-            Some(None)
-        );
+        let use_placeholder = self
+            .card_image_states
+            .get(&cache_key)
+            .is_some_and(|e| e.img.is_none());
 
         // Prefetch images for nearby items so they are ready before the cursor reaches them.
         // Collect data first (releasing the borrow on items) then call fetch (&mut self).
@@ -183,7 +188,7 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::images::QUEUE_CARD_PLACEHOLDER_KEY;
+    use crate::app::images::{CachedImage, QUEUE_CARD_PLACEHOLDER_KEY};
     use crate::app::tests::{make_app_stub, make_item, make_items};
     use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, QueueScope};
     use crate::config::Config;
@@ -347,7 +352,7 @@ mod tests {
 
         assert!(app
             .card_image_states
-            .contains_key(&app.current_mem_key(QUEUE_CARD_PLACEHOLDER_KEY)));
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
         assert!(!fetch_triggered(&app, "remote-hidden:P"));
     }
 
@@ -381,13 +386,13 @@ mod tests {
         app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
         app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
         app.card_image_states
-            .insert(app.current_mem_key("id2:P"), None);
+            .insert("id2:P".into(), CachedImage::empty());
 
         render_power_card(&mut app);
 
         assert!(app
             .card_image_states
-            .contains_key(&app.current_mem_key(QUEUE_CARD_PLACEHOLDER_KEY)));
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
         assert!(!app.card_image_loading.contains("id2:P"));
     }
 
@@ -398,14 +403,14 @@ mod tests {
         app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
         app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
         app.card_image_states
-            .insert(app.current_mem_key("id3:P"), None);
+            .insert("id3:P".into(), CachedImage::empty());
         set_playback(&mut app, 3, false);
 
         render_power_card(&mut app);
 
         assert!(app
             .card_image_states
-            .contains_key(&app.current_mem_key(QUEUE_CARD_PLACEHOLDER_KEY)));
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
         assert!(!app.card_image_loading.contains("id3:P"));
     }
 

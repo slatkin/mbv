@@ -221,38 +221,39 @@ impl App {
             .map(|picker| poster_placeholder_size(picker.font_size()))
             .unwrap_or((IMG_COLS, IMG_ROWS));
 
+        let has_no_art = self
+            .card_image_states
+            .get(&primary_cache_key)
+            .is_some_and(|e| e.img.is_none());
         let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) =
             if !self.images_enabled() {
                 (0, 0, false)
-            } else {
-                match self
-                    .card_image_states
-                    .get_mut(&self.current_mem_key(&primary_cache_key))
-                {
-                    // Fetch resolved with no image for this movie -- nothing to
-                    // reserve space for.
-                    Some(None) => (0, 0, false),
-                    // Fetch resolved with a real image, and the nav-idle gate is
-                    // open: show it (or, if resize+encode is still running on
-                    // the worker thread -- `size_for` is `None` -- keep showing
-                    // the placeholder a beat longer).
-                    Some(Some(state)) if nav_gate_open => {
-                        match state.size_for(
-                            ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
-                            ratatui::layout::Size {
-                                width: IMG_COLS,
-                                height: IMG_ROWS,
-                            },
-                        ) {
-                            Some(actual) => (actual.width, actual.height, false),
-                            None => (placeholder_w, placeholder_h, true),
-                        }
-                    }
+            } else if has_no_art {
+                // Fetch resolved with no image for this movie -- nothing to
+                // reserve space for.
+                (0, 0, false)
+            } else if nav_gate_open {
+                match self.cached_image_protocol_mut(&primary_cache_key) {
+                    // A real image resolved; show it (or, if resize+encode is
+                    // still running on the worker thread -- `size_for` is
+                    // `None` -- keep showing the placeholder a beat longer).
+                    Some(state) => match state.size_for(
+                        ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
+                        ratatui::layout::Size {
+                            width: IMG_COLS,
+                            height: IMG_ROWS,
+                        },
+                    ) {
+                        Some(actual) => (actual.width, actual.height, false),
+                        None => (placeholder_w, placeholder_h, true),
+                    },
                     // Either the fetch is still in flight (no entry yet), or a
                     // real image already resolved but the nav-idle gate hasn't
                     // opened yet -- either way, reserve the placeholder now.
-                    _ => (placeholder_w, placeholder_h, true),
+                    None => (placeholder_w, placeholder_h, true),
                 }
+            } else {
+                (placeholder_w, placeholder_h, true)
             };
 
         let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
@@ -546,10 +547,7 @@ impl App {
                 );
             } else {
                 let primary_cache_key = compact_banner_image_cache_key(&item.id);
-                if let Some(Some(state)) = self
-                    .card_image_states
-                    .get_mut(&self.current_mem_key(&primary_cache_key))
-                {
+                if let Some(state) = self.cached_image_protocol_mut(&primary_cache_key) {
                     type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                     f.render_stateful_widget(
                         SImg::default()

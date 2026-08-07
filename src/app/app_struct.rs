@@ -151,8 +151,7 @@ pub struct App {
     pub(super) queue_scroll: usize,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
-    pub(super) card_image_states:
-        std::collections::HashMap<String, Option<ratatui_image::thread::ThreadProtocol>>,
+    pub(super) card_image_states: std::collections::HashMap<String, images::CachedImage>,
     pub(super) image_lru: std::collections::VecDeque<String>,
     pub(super) image_cache_size: usize,
     pub(super) card_image_loading: std::collections::HashSet<String>,

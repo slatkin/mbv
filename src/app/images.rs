@@ -23,6 +23,29 @@ pub(super) const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__"
 static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
     include_bytes!("../../assets/power-card-placeholder.webp");
 
+/// One `card_image_states` cache entry: the decoded source image (retained so
+/// it can be re-encoded with a different protocol picker without refetching —
+/// e.g. the halfblock picker used while a backdrop is dimmed, #451) plus one
+/// encoded `ThreadProtocol` per protocol suffix (e.g. `sixel`, `halfblock`).
+/// The active suffix's protocol is built on fetch; the others are created
+/// lazily on first render under that suffix.
+pub(super) struct CachedImage {
+    /// `None` marks a fetch that resolved without artwork.
+    pub img: Option<image::DynamicImage>,
+    pub protocols: std::collections::HashMap<&'static str, ratatui_image::thread::ThreadProtocol>,
+}
+
+impl CachedImage {
+    /// An entry for a fetch that resolved with no image.
+    #[cfg(test)]
+    pub(super) fn empty() -> Self {
+        Self {
+            img: None,
+            protocols: std::collections::HashMap::new(),
+        }
+    }
+}
+
 /// A pending card-image fetch, queued when the in-flight limit is reached.
 pub(super) struct ImageFetchReq {
     pub cache_key: String,
@@ -228,9 +251,8 @@ impl App {
         types: &[&str],
         square_crop: bool,
     ) {
-        let mem_key = self.current_mem_key(&cache_key);
         if self.card_image_loading.contains(&cache_key)
-            || self.card_image_states.contains_key(&mem_key)
+            || self.card_image_states.contains_key(&cache_key)
         {
             return;
         }
@@ -289,24 +311,9 @@ impl App {
         let Ok(img) = image::load_from_memory(QUEUE_CARD_PLACEHOLDER_BYTES) else {
             return;
         };
-        let (mem_key, proto) = self.new_thread_protocol(img, QUEUE_CARD_PLACEHOLDER_KEY);
-        self.card_image_states.insert(mem_key, Some(proto));
-    }
-
-    pub(super) fn new_thread_protocol(
-        &self,
-        img: image::DynamicImage,
-        cache_key: &str,
-    ) -> (String, ratatui_image::thread::ThreadProtocol) {
-        let (picker, suffix) = self.picker_and_suffix().expect("picker built at startup");
-        let mem_key = mem_key(cache_key, suffix);
-        let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
-        let _ = self.resize_register_tx.send((mem_key.clone(), req_rx));
-        let proto = ratatui_image::thread::ThreadProtocol::new(
-            req_tx,
-            Some(picker.new_resize_protocol(img)),
-        );
-        (mem_key, proto)
+        let entry = self.build_cached_image(QUEUE_CARD_PLACEHOLDER_KEY, Some(img));
+        self.card_image_states
+            .insert(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), entry);
     }
 
     fn picker_and_suffix(&self) -> Option<(&Picker, &'static str)> {
@@ -320,6 +327,94 @@ impl App {
                 .as_ref()
                 .map(|p| (p, self.configured_protocol_name()))
         }
+    }
+
+    /// The suffix of the protocol currently active: the halfblock picker's
+    /// while a dimmed backdrop is up, else the configured picker's.
+    pub(super) fn current_protocol_suffix(&self) -> &'static str {
+        self.picker_and_suffix()
+            .map(|(_, s)| s)
+            .unwrap_or("halfblock")
+    }
+
+    /// The picker that encodes the given protocol suffix.
+    fn picker_for_suffix(&self, suffix: &'static str) -> Option<&Picker> {
+        if suffix == "halfblock" {
+            self.halfblock_picker
+                .as_ref()
+                .or(self.image_picker.as_ref())
+        } else {
+            self.image_picker.as_ref()
+        }
+    }
+
+    /// Builds a fresh cache entry for a just-fetched image: keeps the decoded
+    /// source so it can be re-encoded with a different protocol picker later
+    /// (#451), and encodes the protocol for the currently active suffix.
+    /// `img: None` records a resolved-but-empty fetch (the "no art" marker
+    /// renderers branch on).
+    pub(super) fn build_cached_image(
+        &self,
+        bare_key: &str,
+        img: Option<image::DynamicImage>,
+    ) -> CachedImage {
+        let mut entry = CachedImage {
+            img,
+            protocols: std::collections::HashMap::new(),
+        };
+        if let Some(img) = entry.img.clone() {
+            let suffix = self.current_protocol_suffix();
+            if let Some(picker) = self.picker_for_suffix(suffix) {
+                let proto = self.build_protocol(bare_key, suffix, picker, img);
+                entry.protocols.insert(suffix, proto);
+            }
+        }
+        entry
+    }
+
+    /// Returns the protocol to render `bare_key` with under the currently
+    /// active suffix, lazily re-encoding the retained source image when that
+    /// suffix's protocol isn't cached yet (#451). The re-encode runs off the
+    /// render thread (via the resize worker), so the first frame after a
+    /// protocol switch still shows the placeholder while it completes.
+    pub(super) fn cached_image_protocol_mut(
+        &mut self,
+        bare_key: &str,
+    ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
+        let suffix = self.current_protocol_suffix();
+        let picker = self.picker_for_suffix(suffix)?;
+        let reencode = self
+            .card_image_states
+            .get(bare_key)
+            .is_some_and(|e| e.img.is_some() && !e.protocols.contains_key(suffix));
+        if reencode {
+            let img = self
+                .card_image_states
+                .get(bare_key)
+                .and_then(|e| e.img.clone())
+                .expect("img present, just checked");
+            let proto = self.build_protocol(bare_key, suffix, picker, img);
+            if let Some(entry) = self.card_image_states.get_mut(bare_key) {
+                entry.protocols.insert(suffix, proto);
+            }
+        }
+        self.card_image_states
+            .get_mut(bare_key)?
+            .protocols
+            .get_mut(suffix)
+    }
+
+    fn build_protocol(
+        &self,
+        bare_key: &str,
+        suffix: &'static str,
+        picker: &Picker,
+        img: image::DynamicImage,
+    ) -> ratatui_image::thread::ThreadProtocol {
+        let mem_key = mem_key(bare_key, suffix);
+        let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
+        let _ = self.resize_register_tx.send((mem_key, req_rx));
+        ratatui_image::thread::ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
     }
 
     pub(super) fn is_halfblock_configured(&self) -> bool {
@@ -342,35 +437,6 @@ impl App {
             Some(ProtocolType::Iterm2) => "iterm2",
             Some(ProtocolType::Halfblocks) | None => "halfblock",
         }
-    }
-
-    pub(super) fn current_mem_key(&self, bare_key: &str) -> String {
-        let suffix = self
-            .picker_and_suffix()
-            .map(|(_, s)| s)
-            .unwrap_or("halfblock");
-        mem_key(bare_key, suffix)
-    }
-
-    pub(super) fn build_protocol_for(
-        &self,
-        bare_key: &str,
-        img: Option<image::DynamicImage>,
-    ) -> (String, Option<ratatui_image::thread::ThreadProtocol>) {
-        let key = self.current_mem_key(bare_key);
-        let Some(img) = img else {
-            return (key, None);
-        };
-        let Some((picker, _)) = self.picker_and_suffix() else {
-            return (key, None);
-        };
-        let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
-        let _ = self.resize_register_tx.send((key.clone(), req_rx));
-        let proto = ratatui_image::thread::ThreadProtocol::new(
-            req_tx,
-            Some(picker.new_resize_protocol(img)),
-        );
-        (key, Some(proto))
     }
 
     /// Spawn queued image fetches until the in-flight limit is reached. Called

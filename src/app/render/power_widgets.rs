@@ -31,14 +31,10 @@ pub(super) const COLUMN_GAP: u16 = 0;
 /// Detail surfaces that need additional internal alignment can add their own
 /// indentation relative to this padded edge.
 pub(super) const POWER_TAB_LEFT_PAD: u16 = 2;
-/// Left-edge padding when the library list renders in two columns. The
-/// single-column `POWER_TAB_LEFT_PAD` reads as comfortable breathing
-/// room around one full-width list, but in 2-col mode it doubles the
-/// visual indent between the queue column and the left cell and makes
-/// the notched selected block read as pushed in from the panel edge.
-/// One column of indent in 2-col mode is enough visual separation and
-/// keeps the left cell aligned with the user's reading origin.
-const POWER_TAB_LEFT_PAD_TWO_COL: u16 = 1;
+/// Left-edge padding when the library list renders in two columns. Matches
+/// the single-column `POWER_TAB_LEFT_PAD` so both modes share a consistent
+/// two-column indent from the panel edge.
+const POWER_TAB_LEFT_PAD_TWO_COL: u16 = 2;
 
 pub(super) fn power_right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
     if left_collapsed {

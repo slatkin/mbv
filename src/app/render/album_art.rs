@@ -254,9 +254,8 @@ impl App {
         let mut img_rect = cell;
         let mut use_placeholder = true;
 
-        let mem_key = self.current_mem_key(&cache_key);
         if nav_gate_open {
-            if let Some(Some(state)) = self.card_image_states.get_mut(&mem_key) {
+            if let Some(state) = self.cached_image_protocol_mut(&cache_key) {
                 if let Some(actual) = state.size_for(
                     ratatui_image::Resize::Scale(Some(super::POWER_RENDER_FILTER)),
                     ratatui::layout::Size {
@@ -275,7 +274,7 @@ impl App {
                 Block::default().style(Style::default().bg(palette::OVERLAY)),
                 img_rect,
             );
-        } else if let Some(Some(state)) = self.card_image_states.get_mut(&mem_key) {
+        } else if let Some(state) = self.cached_image_protocol_mut(&cache_key) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             f.render_stateful_widget(
                 SImg::default().resize(ratatui_image::Resize::Scale(Some(
