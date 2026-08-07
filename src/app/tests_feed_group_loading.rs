@@ -14,6 +14,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -96,6 +97,7 @@ fn make_home_video_app() -> App {
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -257,6 +259,7 @@ fn refreshed_does_not_overwrite_feed_root_with_video_items() {
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -324,6 +327,7 @@ fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),

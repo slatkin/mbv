@@ -8,6 +8,5 @@ mod modal_frame;
 mod multiselect;
 mod playlists;
 mod remote_reanchor;
-pub(super) mod search_modal;
 mod sessions;
 mod settings;

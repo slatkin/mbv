@@ -38,6 +38,7 @@ fn recursive_music_app() -> App {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -127,6 +128,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),

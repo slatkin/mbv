@@ -1,42 +1,27 @@
-use super::library_browse_actions::{build_album_index_with, recursive_album_search_eligible};
-use super::search_modal::{SearchModal, SearchMode};
-use super::{AlbumIndexState, App, LibEvent, PAGE_SIZE, PREFETCH_AHEAD};
+use super::library_browse_actions::{
+    build_album_index_with, fetch_all_album_index_items, recursive_album_search_eligible,
+};
+use super::search_sidebar::SearchSidebar;
+use super::{
+    AlbumIndexState, AlbumSearchEntry, App, BrowseLevel, LibEvent, PAGE_SIZE, PREFETCH_AHEAD,
+};
 impl App {
+    /// Open the global search sidebar. Does not touch `panel_focus` --
+    /// see `design.md` Decision 4: the sidebar locks input via its
+    /// `CONTEXT_STACK` position, not a saved/restored focus.
+    pub(super) fn open_search_sidebar(&mut self) {
+        self.search_sidebar = Some(SearchSidebar::new());
+    }
+
+    /// Close the search sidebar without navigating.
+    pub(super) fn dismiss_search_sidebar(&mut self) {
+        self.search_sidebar = None;
+    }
+
     pub(super) fn recursive_album_search_enabled(&self, lib_idx: usize) -> bool {
         self.libs.get(lib_idx).is_some_and(|lib| {
             recursive_album_search_eligible(&lib.library.collection_type, &self.music_levels)
         })
-    }
-
-    pub(super) fn open_search_modal_fuzzy(&mut self, lib_idx: usize) {
-        self.search_modal_prior_focus = Some(self.panel_focus);
-        self.search_modal = Some(SearchModal::new(SearchMode::Fuzzy));
-        if self.recursive_album_search_enabled(lib_idx) {
-            self.fill_search_modal_corpus_from_album_index(lib_idx);
-            return;
-        }
-        let all_items = self.libs[lib_idx]
-            .nav_stack
-            .first()
-            .and_then(|lvl| lvl.all_items.clone());
-        match all_items {
-            Some(items) => {
-                if let Some(modal) = self.search_modal.as_mut() {
-                    modal.corpus = items;
-                    modal.loading = false;
-                }
-            }
-            None => {
-                if let Some(modal) = self.search_modal.as_mut() {
-                    modal.loading = true;
-                }
-            }
-        }
-    }
-
-    pub(super) fn open_search_modal_global(&mut self) {
-        self.search_modal_prior_focus = Some(self.panel_focus);
-        self.search_modal = Some(SearchModal::new(SearchMode::Global));
     }
 
     pub(super) fn library_tabs_for_nav(&self) -> Vec<(usize, String, String)> {
@@ -51,21 +36,6 @@ impl App {
                 )
             })
             .collect()
-    }
-
-    pub(super) fn fill_search_modal_corpus_from_album_index(&mut self, lib_idx: usize) {
-        let library_id = self.libs[lib_idx].library.id.clone();
-        let (items, loading) = match self.album_indexes.get(&library_id) {
-            Some(AlbumIndexState::Ready(entries)) => {
-                (entries.iter().map(|e| e.album.clone()).collect(), false)
-            }
-            Some(AlbumIndexState::Loading { .. }) => (Vec::new(), true),
-            _ => (Vec::new(), false),
-        };
-        if let Some(modal) = self.search_modal.as_mut() {
-            modal.corpus = items;
-            modal.loading = loading;
-        }
     }
 
     pub(super) fn start_album_index(&mut self, lib_idx: usize, refresh: bool) {
@@ -95,6 +65,9 @@ impl App {
             }
             Some(_) => false,
         };
+        if refresh {
+            self.sync_recursive_album_search(lib_idx);
+        }
         if should_spawn {
             self.spawn_album_index_build(library_id);
         }
@@ -122,6 +95,125 @@ impl App {
             let result = build_album_index_with(&library_id, &levels, &mut fetch);
             let _ = tx.send(LibEvent::AlbumIndexBuilt { library_id, result });
         });
+    }
+
+    pub(super) fn open_recursive_album_search(&mut self, lib_idx: usize) -> bool {
+        if !self.recursive_album_search_enabled(lib_idx) {
+            return false;
+        }
+        self.libs[lib_idx].search = Some(super::LibSearch {
+            query: String::new(),
+            items: Vec::new(),
+            results: Vec::new(),
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        });
+        self.sync_recursive_album_search(lib_idx);
+        true
+    }
+
+    // Visibility bump: private -> `pub(super)`. Called from
+    // `handle_lib_event`'s `AlbumIndexBuilt` handler, which stays behind in
+    // `actions.rs`.
+    pub(super) fn sync_recursive_album_search(&mut self, lib_idx: usize) {
+        if !self.recursive_album_search_enabled(lib_idx) || self.libs[lib_idx].search.is_none() {
+            return;
+        }
+        let library_id = self.libs[lib_idx].library.id.clone();
+        let (items, loading) = match self.album_indexes.get(&library_id) {
+            Some(AlbumIndexState::Ready(entries)) => (
+                entries.iter().map(|entry| entry.album.clone()).collect(),
+                false,
+            ),
+            Some(AlbumIndexState::Loading { .. }) => (Vec::new(), true),
+            _ => (Vec::new(), false),
+        };
+        if let Some(search) = self.libs[lib_idx].search.as_mut() {
+            search.items = items;
+            search.loading = loading;
+        }
+        self.update_lib_search(lib_idx);
+    }
+
+    pub(super) fn recursive_album_search_entry(&self, lib_idx: usize) -> Option<AlbumSearchEntry> {
+        if !self.recursive_album_search_enabled(lib_idx) {
+            return None;
+        }
+        let lib = self.libs.get(lib_idx)?;
+        let search = lib.search.as_ref()?;
+        let item_idx = *search.results.get(search.cursor)?;
+        let entries = match self.album_indexes.get(&lib.library.id)? {
+            AlbumIndexState::Ready(entries) => entries,
+            _ => return None,
+        };
+        entries.get(item_idx).cloned()
+    }
+
+    pub(super) fn activate_recursive_album(&mut self, lib_idx: usize) -> bool {
+        let Some(entry) = self.recursive_album_search_entry(lib_idx) else {
+            return false;
+        };
+        let library_id = self.libs[lib_idx].library.id.clone();
+        let library_name = self.libs[lib_idx].library.display_name();
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let fetch = |parent_id: &str| {
+                let mut call = |id: &str, start: usize, limit: usize| {
+                    client.get_items_sorted(id, None, false, start, limit, "SortName", "Ascending")
+                };
+                fetch_all_album_index_items(parent_id, &mut call)
+            };
+            let mut parents = vec![(library_id.clone(), library_name)];
+            parents.extend(
+                entry
+                    .ancestors
+                    .iter()
+                    .map(|part| (part.id.clone(), part.name.clone())),
+            );
+            let mut targets: Vec<String> =
+                entry.ancestors.iter().map(|part| part.id.clone()).collect();
+            targets.push(entry.album.id.clone());
+            let mut nav_stack = Vec::new();
+            for ((parent_id, title), target_id) in parents.into_iter().zip(targets) {
+                let items = match fetch(&parent_id) {
+                    Ok(items) => items,
+                    Err(error) => {
+                        let _ = tx.send(LibEvent::Error(error));
+                        return;
+                    }
+                };
+                let total_count = items.len();
+                let Some(cursor) = items.iter().position(|item| item.id == target_id) else {
+                    let _ = tx.send(LibEvent::Error(format!(
+                        "Album path changed before activation: missing {target_id}"
+                    )));
+                    return;
+                };
+                nav_stack.push(BrowseLevel {
+                    parent_id,
+                    title,
+                    items,
+                    total_count,
+                    cursor,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    scroll: 0,
+                    all_items: None,
+                    letter_filter: None,
+                    music_grouping: None,
+                });
+            }
+            let _ = tx.send(LibEvent::RecursiveAlbumActivated {
+                library_id,
+                nav_stack,
+            });
+        });
+        true
     }
 
     // Visibility bump: private -> `pub(super)`. Called from
@@ -181,6 +273,9 @@ impl App {
 
     pub(in crate::app) fn maybe_fetch_next_page(&mut self, lib_idx: usize) {
         let lib = &self.libs[lib_idx];
+        if lib.search.is_some() {
+            return;
+        }
         let lvl = match lib.nav_stack.last() {
             Some(l) => l,
             None => return,

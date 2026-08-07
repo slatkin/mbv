@@ -2,7 +2,7 @@ use super::images;
 use super::layout;
 use super::render;
 use super::resize::{ResizeRegisterTx, ResizeResponseRx};
-use super::search_modal::SearchModal;
+use super::search_sidebar::SearchSidebar;
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_confirm::ConfirmModal;
 use super::types_context_menu::{ContextMenu, LibraryRoutePopup, MultiSelectPopup};
@@ -195,12 +195,9 @@ pub struct App {
     pub(super) lib_rx: mpsc::Receiver<LibEvent>,
     pub(super) search_tx: mpsc::Sender<(String, Result<Vec<MediaItem>, String>)>,
     pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<MediaItem>, String>)>,
-    #[allow(dead_code)]
-    pub(super) search_modal: Option<SearchModal>,
-    pub(super) search_modal_prior_focus: Option<PanelFocus>,
-    pub(super) last_slash_at: Option<Instant>,
     pub(super) search_debounce_deadline: Option<Instant>,
     pub(super) search_debounce_pending: Option<String>,
+    pub(super) search_sidebar: Option<SearchSidebar>,
     pub(super) sessions: Vec<mbv_core::api::SessionInfo>,
     pub(super) sessions_cursor: usize,
     pub(super) sessions_scroll: usize,

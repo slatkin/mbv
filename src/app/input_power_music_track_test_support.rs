@@ -37,6 +37,7 @@ pub(super) fn make_power_music_album_app() -> App {
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![
             BrowseLevel {
                 parent_id: "lib-music".into(),
@@ -136,6 +137,7 @@ pub(super) fn make_power_music_album_list_app(album_count: usize, cursor: usize)
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![
             BrowseLevel {
                 parent_id: "lib-music".into(),

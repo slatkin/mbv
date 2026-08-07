@@ -164,6 +164,9 @@ impl App {
         if self.is_home_video_view(lib_idx) {
             return false;
         }
+        if lib.search.is_some() {
+            return false;
+        }
         if lib.nav_stack.len() != 1 {
             return false;
         }

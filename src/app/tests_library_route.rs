@@ -143,6 +143,7 @@ fn apply_route_for_playback_swaps_to_routed_daemon_on_success() {
     lib_item.id = "lib-music".to_string();
     app.libs.push(LibraryTab {
         library: lib_item,
+        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -189,6 +190,7 @@ fn apply_route_for_playback_falls_back_to_local_with_warning_on_connect_failure(
     lib_item.id = "lib-music".to_string();
     app.libs.push(LibraryTab {
         library: lib_item,
+        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -223,6 +225,7 @@ fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
     lib_item.id = "lib-music".to_string();
     app.libs.push(LibraryTab {
         library: lib_item,
+        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -258,6 +261,7 @@ fn apply_route_for_playback_restores_local_when_item_has_no_route() {
     movies_item.id = "lib-movies".to_string();
     app.libs.push(LibraryTab {
         library: movies_item,
+        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -320,6 +324,7 @@ fn apply_route_for_playback_restores_local_via_restore_local_mode_when_swap_to_a
     lib_item.id = "lib-movies".to_string();
     app.libs.push(LibraryTab {
         library: lib_item,
+        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,

@@ -396,12 +396,6 @@ impl App {
                     self.spawn_navigate_to_item(item_id, item_type, libs);
                 }
             }
-            KeyCode::Char('/') => {
-                let from_home = self.library_tab == 0;
-                let lib_idx_for_fuzzy = if from_home { 0 } else { self.library_tab - 1 };
-                self.handle_search_key(lib_idx_for_fuzzy, from_home);
-                return false;
-            }
             KeyCode::Char('p') => {
                 let (active, current_idx) = {
                     let s = self.player.status.lock().unwrap();

@@ -1,4 +1,3 @@
-use super::search_modal::SearchMode;
 use super::{AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent, QueueScope};
 use mbv_core::api::MediaItem;
 
@@ -201,6 +200,22 @@ impl App {
                 position,
                 nav_stack,
             ),
+            LibEvent::SearchItemsLoaded {
+                lib_idx,
+                parent_id,
+                items,
+            } => {
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    let current_parent = lib.nav_stack.last().map(|l| l.parent_id.as_str());
+                    if current_parent == Some(&parent_id) {
+                        if let Some(s) = lib.search.as_mut() {
+                            s.items = items;
+                            s.loading = false;
+                        }
+                    }
+                }
+                self.update_lib_search(lib_idx);
+            }
             LibEvent::AlbumIndexBuilt { library_id, result } => {
                 let rebuild_pending = matches!(
                     self.album_indexes.get(&library_id),
@@ -233,37 +248,38 @@ impl App {
                         .iter()
                         .position(|lib| lib.library.id == library_id)
                     {
-                        let modal_fuzzy = self
-                            .search_modal
-                            .as_ref()
-                            .is_some_and(|m| matches!(m.mode, SearchMode::Fuzzy));
-                        if modal_fuzzy && self.recursive_album_search_enabled(lib_idx) {
-                            self.fill_search_modal_corpus_from_album_index(lib_idx);
-                        }
+                        self.sync_recursive_album_search(lib_idx);
                     }
                 }
+            }
+            LibEvent::RecursiveAlbumActivated {
+                library_id,
+                nav_stack,
+            } => {
+                let Some(lib_idx) = self
+                    .libs
+                    .iter()
+                    .position(|lib| lib.library.id == library_id)
+                else {
+                    return;
+                };
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    lib.nav_stack = nav_stack;
+                    lib.search = None;
+                    lib.album_track_focus = Some(0);
+                }
+                self.save_default_library_position(lib_idx);
             }
             LibEvent::AllItemsPrefetched {
                 lib_idx,
                 parent_id,
                 items,
             } => {
-                let items_for_modal = items.clone();
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     if let Some(last) = lib.nav_stack.last_mut() {
                         if last.parent_id == parent_id {
                             last.all_items = Some(items);
                         }
-                    }
-                }
-                let needs_fill =
-                    self.search_modal.as_ref().is_some_and(|m| {
-                        matches!(m.mode, SearchMode::Fuzzy) && m.corpus.is_empty()
-                    }) && !self.recursive_album_search_enabled(lib_idx);
-                if needs_fill {
-                    if let Some(modal) = self.search_modal.as_mut() {
-                        modal.corpus = items_for_modal;
-                        modal.loading = false;
                     }
                 }
             }
@@ -338,6 +354,7 @@ impl App {
             } => {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack = nav_stack;
+                    lib.search = None;
                 }
                 if switch_tab {
                     self.set_library_tab(lib_idx + 1);

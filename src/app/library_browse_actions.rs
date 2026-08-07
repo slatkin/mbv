@@ -27,14 +27,14 @@ pub(super) fn recursive_album_search_eligible(collection_type: &str, levels: &[S
 }
 
 /// The correct fetch `limit` for an unfiltered whole-library fetch, used by
-/// `spawn_all_items_prefetch` so `all_items` always spans the entire
-/// library. `lvl.total_count` alone is NOT enough: with a letter-range pill
-/// active it's the FILTERED range's count (e.g. ~40 for `A–C` out of a
-/// 3,000-item library), which would silently truncate `all_items` to the
-/// active range and make the unified search modal miss everything outside
-/// it. `lib.library_total` (the true count captured on the library's first,
-/// unfiltered load) is the right number; `.max` is just a defensive fallback
-/// for the moment before it's been captured.
+/// `spawn_all_items_prefetch`/`spawn_search_items_load` so `all_items` (the
+/// set `/`-search runs over) always spans the entire library. `lvl.total_count`
+/// alone is NOT enough: with a letter-range pill active it's the FILTERED
+/// range's count (e.g. ~40 for `A–C` out of a 3,000-item library), which
+/// would silently truncate `all_items` to the active range and make search
+/// miss everything outside it. `lib.library_total` (the true count captured
+/// on the library's first, unfiltered load) is the right number; `.max` is
+/// just a defensive fallback for the moment before it's been captured.
 // Visibility bump: private -> `pub(super)`. Same reason as
 // `recursive_album_search_eligible` above -- exercised directly by
 // `actions_tests.rs`.
@@ -84,7 +84,16 @@ pub(super) fn build_album_index_with(
                 .into_iter()
                 .filter(|item| item.item_type == "MusicAlbum")
             {
-                entries.push(AlbumSearchEntry { album });
+                let mut labels: Vec<String> =
+                    ancestors.iter().map(|part| part.name.clone()).collect();
+                labels.push(album.display_name());
+                let display_label = labels.join(" / ");
+                entries.push(AlbumSearchEntry {
+                    album,
+                    ancestors: ancestors.clone(),
+                    search_text: display_label.clone(),
+                    display_label,
+                });
             }
             return Ok(());
         }
@@ -532,9 +541,9 @@ impl App {
         // `lvl.total_count` -- with a letter-range pill active, that count
         // is the FILTERED range's total, not the whole library's, so a
         // fully-loaded small range (e.g. 40 items in `A–C`) would wrongly
-        // read as "nothing more to prefetch". `all_items` backs the unified
-        // search modal's fuzzy path, so it must never be satisfied by just
-        // the active range.
+        // read as "nothing more to prefetch". `all_items` backs whole-library
+        // search (see `input.rs`'s `/` handler and `spawn_search_items_load`
+        // below), so it must never be satisfied by just the active range.
         if lvl.letter_filter.is_none() && lvl.is_fully_loaded() {
             return;
         }
@@ -557,6 +566,42 @@ impl App {
                 &sort_order,
             ) {
                 let _ = tx.send(LibEvent::AllItemsPrefetched {
+                    lib_idx,
+                    parent_id,
+                    items,
+                });
+            }
+        });
+    }
+
+    pub(super) fn spawn_search_items_load(&self, lib_idx: usize) {
+        let lib = &self.libs[lib_idx];
+        let lvl = match lib.nav_stack.last() {
+            Some(l) => l,
+            None => return,
+        };
+        let parent_id = lvl.parent_id.clone();
+        // See `spawn_all_items_prefetch` above: always fetch the WHOLE
+        // library unfiltered so search covers everything, not just an
+        // active letter-range pill's slice.
+        let total_count = full_library_fetch_limit(lib, lvl);
+        let item_types = lvl.item_types.clone();
+        let unplayed_only = lvl.unplayed_only;
+        let sort_by = lvl.sort_by.clone();
+        let sort_order = lvl.sort_order.clone();
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            if let Ok((items, _)) = client.get_items_sorted(
+                &parent_id,
+                item_types.as_deref(),
+                unplayed_only,
+                0,
+                total_count,
+                &sort_by,
+                &sort_order,
+            ) {
+                let _ = tx.send(LibEvent::SearchItemsLoaded {
                     lib_idx,
                     parent_id,
                     items,

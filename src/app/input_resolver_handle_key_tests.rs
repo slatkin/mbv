@@ -339,12 +339,12 @@ fn enter_on_queue_tab_dispatches_queue_play_cursor_via_handle_key() {
 
 #[test]
 fn context_stack_order_is_pinned() {
-    // Updated for the unified search modal: the per-view inline search
-    // entries (`home_search`, `lib_search`) and the per-menu
-    // `context_menu` entry were retired along with the inline search
-    // path. The new `search_modal` entry handles all search keys
-    // (any home/library tab) and the context menu's keys (`Esc` and
-    // friends) are caught by the existing modal layers above it.
+    // The unified search modal was retired in favor of two surfaces: an
+    // inline `lib_search` entry per library tab (restoring the pre-modal
+    // in-list search box) and a `search_sidebar` entry for the global
+    // `Ctrl+/` panel. Both sit where `search_modal` used to, and the
+    // context menu's keys (`Esc` and friends) are still caught by the
+    // modal layers above them.
     let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
     assert_eq!(
         names,
@@ -359,7 +359,8 @@ fn context_stack_order_is_pinned() {
             "playlists",
             "global_overlay_open",
             "queue_column_width",
-            "search_modal",
+            "search_sidebar",
+            "lib_search",
             "panel_mode_cycle_x",
             "confirm_skip_intro",
             "confirm_next_up",

@@ -280,6 +280,7 @@ mod tests {
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
             library: lib_item,
+            search: None,
             nav_stack: Vec::new(),
             feed_home_video: None,
             album_track_focus: None,
@@ -301,6 +302,7 @@ mod tests {
         lib_item.id = "lib-movies".to_string();
         app.libs.push(LibraryTab {
             library: lib_item,
+            search: None,
             nav_stack: Vec::new(),
             feed_home_video: None,
             album_track_focus: None,
@@ -322,6 +324,7 @@ mod tests {
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
             library: lib_item,
+            search: None,
             nav_stack: Vec::new(),
             feed_home_video: None,
             album_track_focus: None,
@@ -349,6 +352,7 @@ mod tests {
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
             library: lib_item,
+            search: None,
             nav_stack: Vec::new(),
             feed_home_video: None,
             album_track_focus: None,

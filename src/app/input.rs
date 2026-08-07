@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 impl App {
     /// Whether a context menu is currently open. Shared by every
     /// CONTEXT_STACK layer above it that must yield to it
-    /// (`panel_mode_cycle_x`, `search_modal`, `clear_queue_prompt_c`,
+    /// (`panel_mode_cycle_x`, `search_sidebar`, `lib_search`, `clear_queue_prompt_c`,
     /// `queue_column_width`) — see
     /// docs/adr/0002-centralized-input-handling.md phase 6 (#135).
     pub(super) fn context_menu_open(&self) -> bool {
@@ -101,6 +101,19 @@ impl App {
         }
         if key.code == KeyCode::F(4) {
             self.open_playlists_panel();
+            return Some(false);
+        }
+        // Terminals disagree on how they send Ctrl+/: most send the ASCII
+        // unit-separator, which crossterm surfaces as either `Char('/')` or
+        // `Char('_')` with CONTROL depending on the terminal and whether the
+        // kitty keyboard protocol is active. Match both encodings.
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            && matches!(key.code, KeyCode::Char('/') | KeyCode::Char('_'))
+        {
+            if self.search_sidebar.is_some() {
+                return Some(false);
+            }
+            self.open_search_sidebar();
             return Some(false);
         }
         None

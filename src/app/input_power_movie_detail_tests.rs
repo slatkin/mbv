@@ -26,6 +26,7 @@ fn make_power_movie_app() -> App {
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -65,6 +66,7 @@ fn push_power_library(app: &mut App, id: &str, name: &str) {
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: id.into(),
             title: name.into(),
@@ -339,6 +341,7 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
     library.is_folder = true;
     lib.libs.push(crate::app::LibraryTab {
         library,
+        search: None,
         nav_stack: vec![crate::app::BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -390,6 +393,7 @@ fn ctrl_a_enqueues_selected_from_library_view() {
     movie.id = "movie-1".into();
     app.libs.push(crate::app::LibraryTab {
         library,
+        search: None,
         nav_stack: vec![crate::app::BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -626,13 +630,6 @@ fn movie_context_menu_offers_unaffected_non_folder_verbs() {
 // `needs_full_load` compared `items.len()` against the level's
 // (filtered) `total_count`, so a fully-loaded small range read as
 // "nothing more to fetch" and search silently ran over just that range.
-//
-// Retargeted for the unified search modal (Round 6): the modal's
-// `corpus` is sourced from the root level's `all_items` regardless of
-// the current letter filter, so a fully-loaded M–O range must NOT
-// convince the modal that its corpus is ready when `all_items` is
-// still `None` -- it should report `loading` and wait for the
-// full-library fetch to arrive.
 #[test]
 fn opening_search_with_an_active_letter_pill_always_needs_a_full_library_fetch() {
     let mut app = make_power_movie_app();
@@ -640,9 +637,8 @@ fn opening_search_with_an_active_letter_pill_always_needs_a_full_library_fetch()
         let lvl = app.libs[0].nav_stack.last_mut().unwrap();
         lvl.letter_filter = crate::app::render::LetterFilter::for_index(4);
         lvl.total_count = lvl.items.len();
-        // Root level has no prefetched full library yet, so the modal
-        // must report loading instead of serving the M–O range as the
-        // full corpus.
+        // Root level has no prefetched full library yet, so search must
+        // report loading instead of serving the M–O range as complete.
         lvl.all_items = None;
     }
     app.libs[0].library_total = Some(3000);
@@ -650,13 +646,9 @@ fn opening_search_with_an_active_letter_pill_always_needs_a_full_library_fetch()
     let should_quit = app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
 
     assert!(!should_quit);
-    let modal = app.search_modal.as_ref().expect("search modal should open");
+    let search = app.libs[0].search.as_ref().expect("search should open");
     assert!(
-        modal.loading,
+        search.loading,
         "a full-library fetch must be in flight, not just the active M–O range"
-    );
-    assert!(
-        modal.corpus.is_empty(),
-        "an unloaded full library must not silently become the M–O range"
     );
 }
