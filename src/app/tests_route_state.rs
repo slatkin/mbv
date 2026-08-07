@@ -672,6 +672,54 @@ fn restore_local_mode_reconnects_local_daemon_when_no_suspended_local_player_exi
 }
 
 #[test]
+fn restore_local_mode_clears_remote_queue_presentation_for_local_daemon_home() {
+    // Regression guard for #424: a stay-alive client (`home_is_local_daemon`)
+    // that routed to a remote mbvd via `switch_to_library_route` must land
+    // back on the plain local-daemon presentation after `restore_local_mode` --
+    // the reconnected daemon's items go into the unified `player_tab`,
+    // `remote_player_tab` is cleared, and scope stays `Local` (no scope pill).
+    // Before the fix the reconnected items were stuffed back into
+    // `remote_player_tab`, leaving `has_remote_queue()` true and
+    // `remote_slot_state()` reporting `DirectRemote`.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    fn route_connect_success(
+        _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        _auth_token: &str,
+    ) -> Result<
+        (
+            mbv_core::remote_player::RemotePlayer,
+            mpsc::Receiver<PlayerEvent>,
+        ),
+        String,
+    > {
+        Ok(mbv_core::remote_player::RemotePlayer::stub(
+            make_items(2),
+            1,
+        ))
+    }
+
+    let mut app = make_local_daemon_app_stub(make_items(2));
+    assert!(app.home_is_local_daemon);
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(3), 0);
+    app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
+    assert!(app.remote_player_tab.is_some());
+    assert_eq!(app.remote_slot_state(), RemoteSlotState::DirectRemote);
+
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
+    app.restore_local_mode("test: route no longer resolves");
+    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+    assert!(app.player.is_remote());
+    assert!(app.is_local_daemon());
+    assert_eq!(app.remote_slot_state(), RemoteSlotState::LocalDaemon);
+    assert!(app.remote_player_tab.is_none());
+    // The reconnected daemon's items land in the unified queue, not emptied.
+    assert_eq!(app.displayed_queue().items.len(), 2);
+    assert_eq!(app.displayed_queue().queue_cursor, 1);
+}
+
+#[test]
 fn restore_local_mode_flashes_combined_status_when_local_daemon_reconnect_fails() {
     // Same starting scenario as above, but the local-daemon reconnect
     // attempt itself fails -- confirms `restore_local_mode` folds that
