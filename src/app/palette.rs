@@ -42,4 +42,3 @@ pub const ORANGE: Color = Color::Rgb(229, 152, 117); // warm orange (#e59875)
 pub const PRUPLE: Color = Color::Rgb(214, 153, 182); // muted purple (#d699b6)
 pub const TRACK_BLOCK_BG: Color = BG_GREEN_SOFT; // track block background
 pub const QUEUE_LIST_BG: Color = BG_GREEN_SOFT; // queue list panel background
-pub const QUEUE_SCOPE_BUTTON_ACTIVE_BG: Color = Color::Rgb(55, 65, 69); // active local/remote scope button bg (#374145)

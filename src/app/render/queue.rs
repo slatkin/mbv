@@ -115,13 +115,11 @@ impl App {
             "\u{1F5A7}"
         };
         let local_btn_text = " \u{2302} ";
-        let divider_text = "\u{29F8}";
         let remote_btn_text = format!(" {remote_icon} ");
         let remote_btn_text_w = remote_btn_text.width() as u16;
-        let divider_w = divider_text.width() as u16;
         let local_btn_w = local_btn_text.width() as u16;
         let button_pill_w = if is_mbv_session {
-            (local_btn_w + divider_w + remote_btn_text_w).min(area.width.saturating_sub(local_w))
+            (local_btn_w + remote_btn_text_w).min(area.width.saturating_sub(local_w))
         } else {
             0
         };
@@ -200,27 +198,33 @@ impl App {
         };
         let base_bg = palette::QUEUE_BUTTON_FOCUSED_BG;
         let local_btn_bg = if local_selected {
-            palette::QUEUE_SCOPE_BUTTON_ACTIVE_BG
+            palette::AQUA
         } else {
-            palette::QUEUE_BUTTON_FOCUSED_BG
+            palette::PILL_SELECTOR_BG
+        };
+        let local_btn_fg = if local_selected {
+            palette::YELLOW
+        } else {
+            palette::PILL_SELECTOR_FG
         };
         let remote_btn_bg = if local_selected {
-            palette::QUEUE_BUTTON_FOCUSED_BG
+            palette::PILL_SELECTOR_BG
         } else {
-            palette::QUEUE_SCOPE_BUTTON_ACTIVE_BG
+            palette::AQUA
+        };
+        let remote_btn_fg = if local_selected {
+            palette::PILL_SELECTOR_FG
+        } else {
+            palette::YELLOW
         };
         let spans = vec![
             Span::styled(
                 local_btn_text,
-                Style::default().fg(palette::YELLOW).bg(local_btn_bg),
-            ),
-            Span::styled(
-                divider_text,
-                Style::default().fg(palette::WHITE).bg(base_bg),
+                Style::default().fg(local_btn_fg).bg(local_btn_bg),
             ),
             Span::styled(
                 remote_btn_text,
-                Style::default().fg(palette::AQUA).bg(remote_btn_bg),
+                Style::default().fg(remote_btn_fg).bg(remote_btn_bg),
             ),
         ];
         f.render_widget(
@@ -236,8 +240,8 @@ impl App {
             width: local_btn_w,
             height: 1,
         };
-        let remote_btn_x = button_area.x + local_btn_w + divider_w;
-        let remote_btn_w = button_area.width.saturating_sub(local_btn_w + divider_w);
+        let remote_btn_x = button_area.x + local_btn_w;
+        let remote_btn_w = button_area.width.saturating_sub(local_btn_w);
         layout.queue_scope_remote_area = Rect {
             x: remote_btn_x,
             y: button_area.y,
