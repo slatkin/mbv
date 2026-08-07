@@ -123,6 +123,24 @@ pub fn render_power_library_to_string(app: &mut App, layout: &mut LayoutMain) ->
     buffer_to_string(&term)
 }
 
+/// Like `render_power_library_to_string` but at an explicit terminal size, for
+/// tests that need more rows than the default 60x20 (e.g. music-group views
+/// whose hero panel reserves most of a short terminal).
+pub fn render_power_library_to_string_sized(
+    app: &mut App,
+    layout: &mut LayoutMain,
+    width: u16,
+    height: u16,
+) -> String {
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        app.render_power_library(f, Rect::new(0, 0, width, height), true, layout);
+    })
+    .unwrap();
+    buffer_to_string(&term)
+}
+
 pub fn render_view_to_terminal(
     app: &mut App,
     width: u16,

@@ -470,7 +470,31 @@ impl App {
             layout.hero_area = hero_area;
             let msg = if self.library_tab > 0 {
                 let lib_idx = self.library_tab - 1;
-                if self.recursive_album_search_enabled(lib_idx)
+                if self.is_music_group_view(lib_idx) {
+                    // Music-group view messages (moved from the deleted
+                    // `render_power_music_group_view`): while the first
+                    // grouping snapshot resolves (a candidate exists but no
+                    // settled catalog yet), show the organizing message
+                    // instead of an empty list; otherwise keep the old view's
+                    // loading/empty wording.
+                    if self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .and_then(|l| l.music_grouping.as_ref())
+                        .is_some_and(|s| s.candidate.is_some() && s.settled.is_none())
+                    {
+                        " Movin, doin it"
+                    } else if self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .map(|l| l.loading)
+                        .unwrap_or(false)
+                    {
+                        " Loading\u{2026}"
+                    } else {
+                        " (empty)"
+                    }
+                } else if self.recursive_album_search_enabled(lib_idx)
                     && self.libs[lib_idx]
                         .search
                         .as_ref()

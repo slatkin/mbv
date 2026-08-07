@@ -19,7 +19,7 @@ fn searched_album_listing_does_not_duplicate_artist_row_in_plain_framing() {
 
     assert_eq!(
         out.lines().filter(|line| line.trim() == "Alpha").count(),
-        1,
-        "search-result album framing must not duplicate the artist name:\n{out}"
+        0,
+        "plain search framing emits no artist header row:\n{out}"
     );
 }

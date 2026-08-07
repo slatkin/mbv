@@ -242,7 +242,9 @@ fn selectable_artist_header_enter_is_consumed_noop() {
 fn selectable_artist_header_mouse_click_selects_header() {
     let mut app = make_power_music_album_app();
     add_beta_album(&mut app);
-    render_full_app(&mut app, 100, 24);
+    // Tall enough that the album hero leaves the Beta header visible in the
+    // list below it.
+    render_full_app(&mut app, 100, 40);
     let row = app
         .layout
         .main
