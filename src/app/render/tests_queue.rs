@@ -3,7 +3,7 @@ use crate::app::palette;
 
 #[test]
 fn short_window_keeps_queue_in_left_column() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
     app.queue_column_width = 40;
 
     let layout = render_view(&mut app, 100, 12);
@@ -21,8 +21,8 @@ fn short_window_keeps_queue_in_left_column() {
 }
 
 #[test]
-fn short_power_queue_panel_drops_padding_before_rows() {
-    let mut app = make_power_queue_app(20);
+fn short_queue_panel_drops_padding_before_rows() {
+    let mut app = make_queue_app(20);
 
     let (_term, layout) = render_view_to_terminal(&mut app, 100, 12);
 
@@ -35,7 +35,7 @@ fn short_power_queue_panel_drops_padding_before_rows() {
 
 #[test]
 fn queue_only_layout_spans_full_width() {
-    let mut app = make_power_queue_app(20);
+    let mut app = make_queue_app(20);
     app.panel_mode = crate::app::PanelMode::QueueOnly;
 
     let (term, layout) = render_view_to_terminal(&mut app, 80, 20);
@@ -57,7 +57,7 @@ fn queue_only_layout_spans_full_width() {
 
 #[test]
 fn queue_only_renders_queue_unfocused() {
-    let mut app = make_power_queue_app(20);
+    let mut app = make_queue_app(20);
     app.panel_mode = crate::app::PanelMode::QueueOnly;
 
     let (term, layout) = render_view_to_terminal(&mut app, 80, 20);
@@ -73,7 +73,7 @@ fn queue_only_renders_queue_unfocused() {
 
 #[test]
 fn both_mode_focused_queue_keeps_focused_styling() {
-    let mut app = make_power_queue_app(20);
+    let mut app = make_queue_app(20);
 
     let (term, layout) = render_view_to_terminal(&mut app, 80, 20);
     let buf = term.backend().buffer();

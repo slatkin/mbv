@@ -19,11 +19,6 @@ impl PlaybackRun {
         self.queue.active_slot_id()
     }
 
-    fn set_origin(&self, origin: PlaybackOrigin) {
-        self.is_queue_mode
-            .store(origin == PlaybackOrigin::Queue, Ordering::Relaxed);
-    }
-
     fn report_stopped_for_current_context(&self) -> bool {
         if let Some(timeout) = *self.shutdown_report_timeout.lock().unwrap() {
             self.reporter
@@ -166,7 +161,7 @@ impl PlaybackRun {
             None
         };
         if item.item_type == "Episode" {
-            self.series_id = item.series_id.clone();
+            self.series_id = ItemId::new(item.series_id.clone());
             self.season = item.parent_index_number;
             self.episode = item.index_number;
         } else {
@@ -192,7 +187,6 @@ impl PlaybackRun {
         status: Arc<Mutex<PlayerStatus>>,
         event_tx: mpsc::Sender<PlayerEvent>,
         subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
-        is_queue_mode: Arc<AtomicBool>,
         shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
         server_url: String,
         token: String,
@@ -223,18 +217,17 @@ impl PlaybackRun {
         );
         let osd_title = initial_item.display_name();
         let series_id = if initial_item.item_type == "Episode" {
-            initial_item.series_id.clone()
+            ItemId::new(initial_item.series_id.clone())
         } else {
-            String::new()
+            ItemId::empty()
         };
-        let session = PlaybackRun {
+        PlaybackRun {
             origin,
             config,
             reporter,
             event_tx,
             status,
             subtitle_prefs,
-            is_queue_mode,
             server_url,
             token,
             queue,
@@ -265,9 +258,7 @@ impl PlaybackRun {
             intro_state: IntroState::new(past),
             osd_title,
             pending_resume_secs,
-        };
-        session.set_origin(origin);
-        session
+        }
     }
 
     fn set_intro(&mut self, start: i64, end: i64, pos: i64) {

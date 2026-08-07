@@ -120,8 +120,8 @@ pub fn trunc_overview(s: &str) -> String {
     trunc_str(stripped.trim(), 400)
 }
 
-/// URL-stripped, trimmed overview text with no length cap. Used by the power
-/// view's compact movie-detail banner, which grows to fit its full content
+/// URL-stripped, trimmed overview text with no length cap. Used by the view's
+/// compact movie-detail banner, which grows to fit its full content
 /// instead of truncating (#204, #263) -- unlike `trunc_overview`, still used
 /// by the legacy library table row and the home-video list, which
 /// render through a fixed-height surface.

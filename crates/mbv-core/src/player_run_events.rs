@@ -46,7 +46,7 @@ impl PlaybackRun {
             }
         } else if !self.next_up.is_fired() {
             const NEXT_UP_TICKS: i64 = 60 * TICKS_PER_SECOND;
-            if self.series_id.is_empty() {
+            if self.series_id.as_str().is_empty() {
                 if self.next_up == NextUp::Idle && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
                     self.next_up.arm();
                     log::warn!(target: "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
@@ -265,7 +265,7 @@ impl PlaybackRun {
             }
             if (natural_end || near_end) && !completed_is_audio {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
-                if let Err(e) = self.reporter.client.mark_played(&id) {
+                if let Err(e) = self.reporter.client.mark_played(id.as_str()) {
                     log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
                     retry_mark_played(self.reporter.client.clone(), id);
                 }
@@ -283,7 +283,7 @@ impl PlaybackRun {
             if natural_end {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
                 if !completed_is_audio {
-                    match self.reporter.client.mark_played(&id) {
+                    match self.reporter.client.mark_played(id.as_str()) {
                         Ok(()) => log::info!(target: "player", "mark_played ok id={id}"),
                         Err(e) => {
                             log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
@@ -361,7 +361,7 @@ impl PlaybackRun {
                 let id = completed_item.id.clone();
                 if let Err(e) = self.reporter.client.mark_played(&id) {
                     log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
-                    retry_mark_played(self.reporter.client.clone(), id);
+                    retry_mark_played(self.reporter.client.clone(), ItemId::new(id));
                 }
             }
             let _ = self.event_tx.send(PlayerEvent::Stopped {
@@ -404,7 +404,7 @@ impl PlaybackRun {
             let id = completed_item.id.clone();
             if let Err(e) = self.reporter.client.mark_played(&id) {
                 log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
-                retry_mark_played(self.reporter.client.clone(), id);
+                retry_mark_played(self.reporter.client.clone(), ItemId::new(id));
             }
         }
 

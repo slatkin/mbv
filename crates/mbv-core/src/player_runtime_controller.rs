@@ -67,7 +67,7 @@ pub struct Player {
     pub always_play_next: bool,
     pub always_skip_intro: bool,
     pub subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
-    is_queue_mode: Arc<AtomicBool>,
+    origin: Mutex<PlaybackOrigin>,
     current_is_headless: Arc<AtomicBool>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
@@ -102,7 +102,7 @@ impl Player {
             always_play_next,
             always_skip_intro,
             subtitle_prefs: Arc::new(Mutex::new(subtitle_prefs)),
-            is_queue_mode: Arc::new(AtomicBool::new(false)),
+            origin: Mutex::new(PlaybackOrigin::Standalone),
             current_is_headless: Arc::new(AtomicBool::new(false)),
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
@@ -309,10 +309,11 @@ impl Player {
         let event_tx = self.event_tx.clone();
         let ws_tx = self.ws_tx.clone();
         let subtitle_prefs = self.subtitle_prefs.clone();
-        let is_queue_mode = self.is_queue_mode.clone();
         let shutdown_report_timeout = self.shutdown_report_timeout.clone();
         let server_url = self.server_url.clone();
         let token = self.token.clone();
+        let origin = PlaybackOrigin::Standalone;
+        *self.origin.lock().unwrap() = origin;
         self.current_is_headless.store(headless, Ordering::Relaxed);
 
         {
@@ -338,8 +339,6 @@ impl Player {
         let pre_warmed = self.pre_warmed_mpv.lock().unwrap().take();
 
         let handle = thread::spawn(move || {
-            is_queue_mode.store(false, Ordering::Relaxed);
-
             let (mpv, startup_pause_for_pipe) = match pre_warmed {
                 Some(w) => w,
                 None => match init_mpv(&config) {
@@ -383,7 +382,7 @@ impl Player {
             let reporter = SessionReporter::new(
                 client,
                 ws_tx,
-                item.id.clone(),
+                ItemId::new(item.id.clone()),
                 info.media_source_id,
                 info.session_id,
                 is_audio,
@@ -393,20 +392,26 @@ impl Player {
             let session = PlaybackRun::new(
                 vec![item.clone()],
                 0,
-                PlaybackOrigin::Standalone,
+                origin,
                 reporter,
                 config,
                 startup_pause_for_pipe,
                 status,
                 event_tx,
                 subtitle_prefs,
-                is_queue_mode.clone(),
                 shutdown_report_timeout,
                 server_url,
                 token,
                 info.external_subtitle_urls,
             );
-            session.run(mpv, stop_rx, cmd_rx, progress, wakeup_read_fd, wakeup_write_fd);
+            session.run(
+                mpv,
+                stop_rx,
+                cmd_rx,
+                progress,
+                wakeup_read_fd,
+                wakeup_write_fd,
+            );
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
     }
@@ -431,7 +436,7 @@ impl Player {
         // place (no window close). Mismatched state (e.g. video→audio-only or
         // vice-versa) always spawns a new process so visibility is correct.
         if self.status.lock().unwrap().active
-            && self.is_queue_mode.load(Ordering::Relaxed)
+            && *self.origin.lock().unwrap() == PlaybackOrigin::Queue
             && (self.current_is_headless.load(Ordering::Relaxed) == new_is_headless)
         {
             let start_idx = start_idx.min(items.len() - 1);
@@ -467,10 +472,11 @@ impl Player {
         let event_tx = self.event_tx.clone();
         let ws_tx = self.ws_tx.clone();
         let subtitle_prefs = self.subtitle_prefs.clone();
-        let is_queue_mode = self.is_queue_mode.clone();
         let shutdown_report_timeout = self.shutdown_report_timeout.clone();
         let server_url = self.server_url.clone();
         let token = self.token.clone();
+        let origin = PlaybackOrigin::Queue;
+        *self.origin.lock().unwrap() = origin;
         self.current_is_headless.store(headless, Ordering::Relaxed);
 
         {
@@ -496,8 +502,6 @@ impl Player {
         let pre_warmed = self.pre_warmed_mpv.lock().unwrap().take();
 
         let handle = thread::spawn(move || {
-            is_queue_mode.store(true, Ordering::Relaxed);
-
             let (mpv, startup_pause_for_pipe) = match pre_warmed {
                 Some(w) => w,
                 None => match init_mpv(&config) {
@@ -550,7 +554,7 @@ impl Player {
             let reporter = SessionReporter::new(
                 client,
                 ws_tx,
-                items[start_idx].id.clone(),
+                ItemId::new(items[start_idx].id.clone()),
                 info.media_source_id,
                 info.session_id,
                 items[start_idx].is_audio(),
@@ -560,20 +564,26 @@ impl Player {
             let session = PlaybackRun::new(
                 items,
                 start_idx,
-                PlaybackOrigin::Queue,
+                origin,
                 reporter,
                 config,
                 startup_pause_for_pipe,
                 status,
                 event_tx,
                 subtitle_prefs,
-                is_queue_mode.clone(),
                 shutdown_report_timeout,
                 server_url,
                 token,
                 info.external_subtitle_urls,
             );
-            session.run(mpv, stop_rx, cmd_rx, progress, wakeup_read_fd, wakeup_write_fd);
+            session.run(
+                mpv,
+                stop_rx,
+                cmd_rx,
+                progress,
+                wakeup_read_fd,
+                wakeup_write_fd,
+            );
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
     }

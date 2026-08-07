@@ -23,10 +23,10 @@ impl App {
         let mut entries: Vec<ContextMenuEntry> = vec![];
 
         let cw_focused = matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0;
-        let power_lib_idx = self.context_menu_power_lib_idx();
-        let in_podcast = power_lib_idx.is_some_and(|idx| self.is_podcast_library(idx))
-            || self.is_in_podcast_library();
-        let podcast_bulk_ids = power_lib_idx.and_then(|lib_idx| {
+        let lib_idx = self.context_menu_lib_idx();
+        let in_podcast =
+            lib_idx.is_some_and(|idx| self.is_podcast_library(idx)) || self.is_in_podcast_library();
+        let podcast_bulk_ids = lib_idx.and_then(|lib_idx| {
             if in_podcast && self.is_feed_home_video_group_view(lib_idx) {
                 Some((
                     self.podcast_mark_all_ids(lib_idx),
@@ -36,7 +36,7 @@ impl App {
                 None
             }
         });
-        let artist_header_context = power_lib_idx
+        let artist_header_context = lib_idx
             .and_then(|lib_idx| self.selected_artist_header_album_items(lib_idx))
             .map(|(selection, _)| selection);
 
@@ -47,7 +47,7 @@ impl App {
                 .continue_items
                 .get(self.home.continue_cursor)
                 .cloned()
-        } else if power_lib_idx.is_some() {
+        } else if lib_idx.is_some() {
             self.current_lib_item()
         } else if matches!(self.panel_focus, PanelFocus::Queue) {
             let queue = self.displayed_queue();
@@ -109,9 +109,7 @@ impl App {
                 }
             } else {
                 Self::push_context_action(&mut entries, "Play", ContextAction::Play);
-                if cw_focused
-                    || power_lib_idx.is_some()
-                    || !matches!(self.panel_focus, PanelFocus::Queue)
+                if cw_focused || lib_idx.is_some() || !matches!(self.panel_focus, PanelFocus::Queue)
                 {
                     Self::push_context_action(&mut entries, "Add to Queue", ContextAction::Enqueue);
                 }

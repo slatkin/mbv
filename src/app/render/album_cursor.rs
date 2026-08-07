@@ -5,7 +5,7 @@ use crate::app::{App, ArtistHeaderSelection};
 use mbv_core::api::MediaItem;
 
 impl App {
-    pub(super) fn selected_power_music_artist_header(
+    pub(super) fn selected_music_artist_header(
         &self,
         lib_idx: usize,
     ) -> Option<ArtistHeaderSelection> {
@@ -133,7 +133,7 @@ impl App {
         (targets, plan.selected_artist_header_valid)
     }
 
-    pub(in crate::app) fn move_power_music_group_display_cursor(
+    pub(in crate::app) fn move_music_group_display_cursor(
         &mut self,
         lib_idx: usize,
         delta: i64,
@@ -150,7 +150,7 @@ impl App {
         }
         let cursor = level.cursor;
         let albums = level.items.clone();
-        let selected = self.selected_power_music_artist_header(lib_idx);
+        let selected = self.selected_music_artist_header(lib_idx);
         let (targets, header_valid) =
             self.music_group_navigation(lib_idx, &albums, cursor, selected.as_ref());
         if selected.is_some() && !header_valid {
@@ -224,7 +224,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn jump_power_music_group_display_cursor(
+    pub(in crate::app) fn jump_music_group_display_cursor(
         &mut self,
         lib_idx: usize,
         to_end: bool,
@@ -240,7 +240,7 @@ impl App {
             return true;
         }
         let albums = level.items.clone();
-        let selected = self.selected_power_music_artist_header(lib_idx);
+        let selected = self.selected_music_artist_header(lib_idx);
         let (targets, _) =
             self.music_group_navigation(lib_idx, &albums, level.cursor, selected.as_ref());
         let Some(target) = (if to_end {
@@ -265,7 +265,7 @@ impl App {
         true
     }
 
-    pub(in crate::app) fn jump_power_music_group_display_cursor_to_artist(
+    pub(in crate::app) fn jump_music_group_display_cursor_to_artist(
         &mut self,
         lib_idx: usize,
         forward: bool,
@@ -282,7 +282,7 @@ impl App {
         }
         let cursor = level.cursor;
         let albums = level.items.clone();
-        let selected = self.selected_power_music_artist_header(lib_idx);
+        let selected = self.selected_music_artist_header(lib_idx);
         let (targets, header_valid) =
             self.music_group_navigation(lib_idx, &albums, cursor, selected.as_ref());
         if selected.is_some() && !header_valid {
@@ -337,7 +337,7 @@ impl App {
         &mut self,
         lib_idx: usize,
     ) -> Option<(ArtistHeaderSelection, Vec<mbv_core::api::MediaItem>)> {
-        let selection = self.selected_power_music_artist_header(lib_idx)?;
+        let selection = self.selected_music_artist_header(lib_idx)?;
         self.artist_header_album_items_for_selection(lib_idx, &selection)
             .map(|items| (selection, items))
     }
@@ -437,7 +437,7 @@ impl App {
         Some(members)
     }
 
-    pub(in crate::app) fn page_power_grouped_album_cursor(
+    pub(in crate::app) fn page_grouped_album_cursor(
         &mut self,
         lib_idx: usize,
         page_down: bool,
@@ -453,7 +453,7 @@ impl App {
         let idle = self.list_image_fetches_allowed();
         let now = std::time::Instant::now();
         self.last_nav_at = now;
-        self.mark_power_library_navigation(now);
+        self.mark_library_navigation(now);
 
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
             return false;
@@ -468,7 +468,7 @@ impl App {
         // A page is one viewport of *rows*, each holding `cols` albums.
         let page_rows = (self.layout.main.left_area.height as usize).max(1);
         let page = cols.max(1).saturating_mul(page_rows);
-        let selected = self.selected_power_music_artist_header(lib_idx);
+        let selected = self.selected_music_artist_header(lib_idx);
         let (targets, header_valid) =
             self.music_group_navigation(lib_idx, &albums, cursor, selected.as_ref());
         if selected.is_some() && !header_valid {

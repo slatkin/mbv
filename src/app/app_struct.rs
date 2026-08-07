@@ -275,7 +275,7 @@ pub struct App {
     pub(super) last_throbber_advance: std::time::Instant,
     pub(super) last_scroll_at: Instant,
     pub(super) last_nav_at: Instant,
-    pub(super) last_power_library_nav_at: Instant,
+    pub(super) last_library_nav_at: Instant,
     /// Set once `library_position_state` has an unflushed in-memory change.
     /// The disk write + shared-document sync are debounced off this rather
     /// than run synchronously on every cursor move -- see

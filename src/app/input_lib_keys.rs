@@ -1,11 +1,11 @@
-use super::action::{power_album_track_command_for_key, Command};
+use super::action::{album_track_command_for_key, Command};
 use super::input_resolver::KeyChord;
 use super::{App, ConfirmAction, ConfirmModal, LibSearch, PanelFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::{Duration, Instant};
 
 impl App {
-    pub(super) fn active_power_album_track_lib_idx(&self) -> Option<usize> {
+    pub(super) fn active_album_track_lib_idx(&self) -> Option<usize> {
         if self.library_tab == 0 {
             return None;
         }
@@ -27,7 +27,7 @@ impl App {
     /// (see `lib_cursor_actions.rs`), and `select()` resolves the current
     /// item through `current_lib_item()`'s search branch, so no separate
     /// result-cursor logic is needed here.
-    pub(super) fn handle_key_power_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
         if key.modifiers.contains(KeyModifiers::ALT)
             || key.modifiers.contains(KeyModifiers::CONTROL)
             || self.context_menu_open()
@@ -41,7 +41,7 @@ impl App {
             return None;
         }
         let lib_idx = self.library_tab - 1;
-        if key.code == KeyCode::Enter && self.power_selected_series_item(lib_idx).is_some() {
+        if key.code == KeyCode::Enter && self.selected_series_item(lib_idx).is_some() {
             return None;
         }
         if self.libs[lib_idx].search.is_some() {
@@ -90,14 +90,14 @@ impl App {
         }
     }
 
-    pub(super) fn handle_key_power_album_track_mode(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_album_track_mode(&mut self, key: KeyEvent) -> Option<bool> {
         if matches!(self.panel_focus, PanelFocus::Queue)
             && matches!(key.code, KeyCode::Up | KeyCode::Down)
         {
             return None;
         }
-        let lib_idx = self.active_power_album_track_lib_idx()?;
-        let command = power_album_track_command_for_key(KeyChord::from_key(key), lib_idx)?;
+        let lib_idx = self.active_album_track_lib_idx()?;
+        let command = album_track_command_for_key(KeyChord::from_key(key), lib_idx)?;
         Some(self.dispatch(command))
     }
 
@@ -109,7 +109,7 @@ impl App {
     }
 
     /// Global view keys shared by the left-column handlers (`handle_lib_key`,
-    /// `handle_queue_key`, and Home nav via `handle_power_cw_key`): quit, tab
+    /// `handle_queue_key`, and Home nav via `handle_cw_key`): quit, tab
     /// cycling, digit tab-jump, and the context-menu key. Each handler calls
     /// this at the point in its own precedence order where these keys used
     /// to be independently matched; genuinely per-view behavior (`/` search,
@@ -233,22 +233,22 @@ impl App {
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && self.is_music_group_view(lib_idx) =>
             {
-                self.jump_power_music_group_display_cursor_to_artist(lib_idx, false);
+                self.jump_music_group_display_cursor_to_artist(lib_idx, false);
             }
             KeyCode::PageDown
                 if key.modifiers.contains(KeyModifiers::CONTROL)
                     && self.is_music_group_view(lib_idx) =>
             {
-                self.jump_power_music_group_display_cursor_to_artist(lib_idx, true);
+                self.jump_music_group_display_cursor_to_artist(lib_idx, true);
             }
             KeyCode::PageUp => {
-                if !self.page_power_grouped_album_cursor(lib_idx, false) {
+                if !self.page_grouped_album_cursor(lib_idx, false) {
                     let p = self.lib_page_size();
                     self.move_lib_cursor_rows(-(p as i64));
                 }
             }
             KeyCode::PageDown => {
-                if !self.page_power_grouped_album_cursor(lib_idx, true) {
+                if !self.page_grouped_album_cursor(lib_idx, true) {
                     let p = self.lib_page_size();
                     self.move_lib_cursor_rows(p as i64);
                 }
@@ -337,7 +337,7 @@ impl App {
             }
             // Any other Ctrl/Alt-modified character is claimed here as a
             // no-op. This mirrors the pre-phase-3 `is_lib_key` mirror's
-            // broad catch-all in `handle_queue_key`'s power-left-panel
+            // broad catch-all in `handle_queue_key`'s left-panel
             // routing: unmapped Ctrl/Alt combos are swallowed while a
             // library sub-panel is focused, rather than leaking through to
             // an unrelated queue-view shortcut with the same bare key
@@ -410,47 +410,47 @@ impl App {
 
     /// Handle a key for the focused home list (all groups: CW + library latest).
     /// Returns true if the key was consumed (others fall through to focus nav).
-    pub(super) fn handle_power_cw_key(&mut self, key: KeyEvent) -> bool {
+    pub(super) fn handle_cw_key(&mut self, key: KeyEvent) -> bool {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         match key.code {
             KeyCode::Up => {
-                self.power_home_move_up();
+                self.home_move_up();
                 true
             }
             KeyCode::Down => {
-                self.power_home_move_down();
+                self.home_move_down();
                 true
             }
             KeyCode::Char('[') if !ctrl => {
-                self.power_home_move_section(-1);
+                self.home_move_section(-1);
                 true
             }
             KeyCode::Char(']') if !ctrl => {
-                self.power_home_move_section(1);
+                self.home_move_section(1);
                 true
             }
             KeyCode::PageUp => {
-                self.power_home_move_cursor(-(self.power_cw_page() as i64));
+                self.home_move_cursor(-(self.cw_page() as i64));
                 true
             }
             KeyCode::PageDown => {
-                self.power_home_move_cursor(self.power_cw_page() as i64);
+                self.home_move_cursor(self.cw_page() as i64);
                 true
             }
             KeyCode::Home => {
-                self.power_home_select_start();
+                self.home_select_start();
                 true
             }
             KeyCode::End => {
-                self.power_home_select_end();
+                self.home_select_end();
                 true
             }
             KeyCode::Enter if ctrl => {
-                self.power_home_enqueue();
+                self.home_enqueue();
                 true
             }
             KeyCode::Enter => {
-                self.power_home_play();
+                self.home_play();
                 true
             }
             // Ctrl+a: enqueue (issue #209). Replaces the old Ctrl+q/Alt+q
@@ -458,11 +458,11 @@ impl App {
             // `handle_enqueue_selected_key`'s doc comment for why Ctrl+a
             // specifically had to become the enqueue key here.
             KeyCode::Char('a') if ctrl => {
-                self.power_home_enqueue();
+                self.home_enqueue();
                 true
             }
             KeyCode::Char('w') if ctrl => {
-                self.power_cw_toggle_watched();
+                self.cw_toggle_watched();
                 true
             }
             KeyCode::Char('.') => {
@@ -484,7 +484,7 @@ impl App {
         }
     }
 
-    fn power_cw_page(&self) -> usize {
+    fn cw_page(&self) -> usize {
         (self.layout.main.left_area.height as usize).max(1)
     }
 }

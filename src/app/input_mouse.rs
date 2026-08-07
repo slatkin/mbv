@@ -15,7 +15,7 @@ impl App {
     /// Map a column click to a left-panel tab index (0 = Home, 1+ = library),
     /// scroll-aware: returns `usize::MAX - 1` for a click on the `«` arrow
     /// and `usize::MAX` for a click on the `»` arrow (see `handle_mouse`).
-    pub(super) fn power_tab_idx_at(&self, col: u16) -> Option<usize> {
+    pub(super) fn tab_idx_at(&self, col: u16) -> Option<usize> {
         let area = self.layout.tabs_area;
         if col < area.x || col >= area.x + area.width {
             return None;

@@ -5,7 +5,7 @@ use crate::app::{BrowseLevel, LibraryTab};
 
 #[test]
 fn home_video_library_is_never_album_folders_and_renders_via_original_list_path() {
-    let mut app = make_power_home_video_app();
+    let mut app = make_home_video_app();
     let lib_idx = 0;
 
     assert!(
@@ -16,7 +16,7 @@ fn home_video_library_is_never_album_folders_and_renders_via_original_list_path(
     assert!(app.libs[lib_idx].album_track_focus.is_none());
 
     let mut layout = LayoutMain::default();
-    let out = render_power_library_to_string(&mut app, &mut layout);
+    let out = render_library_to_string(&mut app, &mut layout);
 
     assert!(
         out.contains("Birthday Clip"),
@@ -111,7 +111,7 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
     });
 
     let mut layout = LayoutMain::default();
-    let _ = render_power_library_to_terminal(&mut app, &mut layout);
+    let _ = render_library_to_terminal(&mut app, &mut layout);
 
     assert!(
         !layout.left_sorted_indices.is_empty(),

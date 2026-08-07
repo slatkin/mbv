@@ -3,7 +3,7 @@ use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
 use super::{
     bootstrap_local_daemon_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
-    POWER_LEFT_WIDTH_DEFAULT,
+    LEFT_WIDTH_DEFAULT,
 };
 use mbv_core::api::{EmbyClient, MediaItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
@@ -111,8 +111,8 @@ impl App {
             queue_column_width: prefs["queue_column_width"]
                 .as_u64()
                 .or_else(|| prefs["power_left_width"].as_u64())
-                .map(|v| (v as u16).max(POWER_LEFT_WIDTH_DEFAULT))
-                .unwrap_or(POWER_LEFT_WIDTH_DEFAULT),
+                .map(|v| (v as u16).max(LEFT_WIDTH_DEFAULT))
+                .unwrap_or(LEFT_WIDTH_DEFAULT),
             panel_mode: PanelMode::default(),
             // Always start on Home. The saved queue is restored independently;
             // the saved library tab remains available for runtime persistence.
@@ -193,7 +193,7 @@ impl App {
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
-            last_power_library_nav_at: Instant::now() - Duration::from_secs(1),
+            last_library_nav_at: Instant::now() - Duration::from_secs(1),
             library_position_dirty: false,
             library_position_dirty_at: Instant::now() - Duration::from_secs(1),
             refocus_at: None,

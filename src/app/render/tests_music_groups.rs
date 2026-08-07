@@ -6,7 +6,7 @@ use crate::app::tests::make_item;
 
 #[test]
 fn selectable_artist_headers_are_typed_row_targets() {
-    let mut app = make_power_music_group_app();
+    let mut app = make_music_group_app();
     let mut alpha_album2 = make_item("Second Alpha Album", "MusicAlbum");
     alpha_album2.id = "album-1b".into();
     alpha_album2.artist = "Alpha".into();
@@ -29,7 +29,7 @@ fn selectable_artist_headers_are_typed_row_targets() {
         .push(beta_album);
 
     let mut layout = LayoutMain::default();
-    let out = render_power_library_to_string(&mut app, &mut layout);
+    let out = render_library_to_string(&mut app, &mut layout);
 
     assert!(
         out.contains("Alpha") && out.contains("Beta"),
@@ -55,7 +55,7 @@ fn selectable_artist_headers_are_typed_row_targets() {
 
 #[test]
 fn artist_and_album_focus_share_one_selected_group_bounds() {
-    let mut app = make_power_music_group_app();
+    let mut app = make_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");
     second.id = "album-2".into();
     second.artist = "Alpha".into();
@@ -116,7 +116,7 @@ fn artist_and_album_focus_share_one_selected_group_bounds() {
 
 #[test]
 fn grouped_hero_art_follows_album_focus() {
-    let mut album_app = make_power_music_group_app();
+    let mut album_app = make_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");
     second.id = "album-2".into();
     second.artist = "Alpha".into();
@@ -130,7 +130,7 @@ fn grouped_hero_art_follows_album_focus() {
     album_app.image_protocol_enabled = true;
     let mut layout = LayoutMain::default();
     // 60x30 so the list below the album hero still shows both albums.
-    let out = render_power_library_to_string_sized(&mut album_app, &mut layout, 60, 30);
+    let out = render_library_to_string_sized(&mut album_app, &mut layout, 60, 30);
     assert!(out.contains("First Album"));
     // The hero renders the *selected* album's art (portrait `:P`), never a
     // square collage tile (`:sq`).
@@ -139,7 +139,7 @@ fn grouped_hero_art_follows_album_focus() {
 
     // With an artist header focused, the cursor album still anchors the hero,
     // so the same portrait art is fetched -- no square collage in the hero flow.
-    let mut header_app = make_power_music_group_app();
+    let mut header_app = make_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");
     second.id = "album-2".into();
     second.artist = "Alpha".into();
@@ -155,8 +155,7 @@ fn grouped_hero_art_follows_album_focus() {
         artist_label: "Alpha".into(),
     });
     let mut header_layout = LayoutMain::default();
-    let _header_out =
-        render_power_library_to_string_sized(&mut header_app, &mut header_layout, 60, 30);
+    let _header_out = render_library_to_string_sized(&mut header_app, &mut header_layout, 60, 30);
     assert!(header_app.card_image_loading.contains("album-1:P"));
     assert!(!header_app.card_image_loading.contains("album-1:sq"));
 }

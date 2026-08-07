@@ -19,7 +19,7 @@ const TRACK_BLOCK_MARGIN: u16 = 2;
 const TRACK_TEXT_MARGIN: u16 = 2;
 
 impl App {
-    pub(super) fn render_power_grouped_album_rows(
+    pub(super) fn render_grouped_album_rows(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -61,7 +61,7 @@ impl App {
 
         layout.inline_image_rect = None;
 
-        let selected = self.selected_power_music_artist_header(lib_idx);
+        let selected = self.selected_music_artist_header(lib_idx);
         let selectable_headers = self.is_music_group_view(lib_idx);
         // When an artist header is the focused row, the album under the
         // cursor must not also render as selected -- only one row group
@@ -401,7 +401,7 @@ impl App {
                                 },
                             );
                         }
-                        self.render_power_album_detail(
+                        self.render_album_detail(
                             f,
                             track_area,
                             &tracks,
@@ -457,7 +457,7 @@ impl App {
 
         if focused && total_screen_rows > visible {
             let max_off = total_screen_rows.saturating_sub(visible);
-            super::render_power_right_scrollbar(f, area, max_off, screen_offset);
+            super::render_right_scrollbar(f, area, max_off, screen_offset);
         }
 
         if let Some((art_top, art_bottom)) = selected_art_abs_rows {

@@ -34,11 +34,11 @@ pub fn render_sidebar_scrollbar_column(total: usize, visible: u16, scroll: usize
     buffer_to_string(&term)
 }
 
-pub fn render_power_scrollbar_column(height: u16, max_offset: usize, offset: usize) -> String {
+pub fn render_scrollbar_column(height: u16, max_offset: usize, offset: usize) -> String {
     let backend = TestBackend::new(1, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        render_power_scrollbar(
+        render_scrollbar(
             f,
             Rect::new(0, 0, 1, height),
             max_offset,
@@ -50,7 +50,7 @@ pub fn render_power_scrollbar_column(height: u16, max_offset: usize, offset: usi
     buffer_to_string(&term)
 }
 
-pub fn render_power_scrollbar_column_with_viewport(
+pub fn render_scrollbar_column_with_viewport(
     height: u16,
     content_length: usize,
     viewport_content_length: usize,
@@ -59,7 +59,7 @@ pub fn render_power_scrollbar_column_with_viewport(
     let backend = TestBackend::new(1, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        render_power_scrollbar_with_viewport(
+        render_scrollbar_with_viewport(
             f,
             Rect::new(0, 0, 1, height),
             content_length,
@@ -97,14 +97,11 @@ pub fn render_pill_bar_hitboxes(
     tabs
 }
 
-pub fn render_power_library_to_terminal(
-    app: &mut App,
-    layout: &mut LayoutMain,
-) -> Terminal<TestBackend> {
-    render_power_library_to_terminal_focused(app, layout, true)
+pub fn render_library_to_terminal(app: &mut App, layout: &mut LayoutMain) -> Terminal<TestBackend> {
+    render_library_to_terminal_focused(app, layout, true)
 }
 
-pub fn render_power_library_to_terminal_focused(
+pub fn render_library_to_terminal_focused(
     app: &mut App,
     layout: &mut LayoutMain,
     focused: bool,
@@ -112,21 +109,21 @@ pub fn render_power_library_to_terminal_focused(
     let backend = TestBackend::new(60, 20);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        app.render_power_library(f, Rect::new(0, 0, 60, 20), focused, layout);
+        app.render_library(f, Rect::new(0, 0, 60, 20), focused, layout);
     })
     .unwrap();
     term
 }
 
-pub fn render_power_library_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
-    let term = render_power_library_to_terminal(app, layout);
+pub fn render_library_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
+    let term = render_library_to_terminal(app, layout);
     buffer_to_string(&term)
 }
 
-/// Like `render_power_library_to_string` but at an explicit terminal size, for
+/// Like `render_library_to_string` but at an explicit terminal size, for
 /// tests that need more rows than the default 60x20 (e.g. music-group views
 /// whose hero panel reserves most of a short terminal).
-pub fn render_power_library_to_string_sized(
+pub fn render_library_to_string_sized(
     app: &mut App,
     layout: &mut LayoutMain,
     width: u16,
@@ -135,7 +132,7 @@ pub fn render_power_library_to_string_sized(
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        app.render_power_library(f, Rect::new(0, 0, width, height), true, layout);
+        app.render_library(f, Rect::new(0, 0, width, height), true, layout);
     })
     .unwrap();
     buffer_to_string(&term)
@@ -170,7 +167,7 @@ pub fn render_view(app: &mut App, width: u16, height: u16) -> LayoutMain {
     render_view_to_terminal(app, width, height).1
 }
 
-pub fn make_power_movie_app() -> App {
+pub fn make_movie_app() -> App {
     let mut app = make_app_stub();
     app.library_tab = 1;
 
@@ -220,8 +217,8 @@ pub fn make_power_movie_app() -> App {
     app
 }
 
-pub fn make_power_queue_app(item_count: usize) -> App {
-    let mut app = make_power_movie_app();
+pub fn make_queue_app(item_count: usize) -> App {
+    let mut app = make_movie_app();
     app.panel_focus = PanelFocus::Queue;
     app.player_tab.set_items(
         (0..item_count)
@@ -232,7 +229,7 @@ pub fn make_power_queue_app(item_count: usize) -> App {
     app
 }
 
-pub fn make_power_remote_queue_app() -> App {
+pub fn make_remote_queue_app() -> App {
     let local_items = vec![make_item("Local Queue Item", "Movie")];
     let remote_items = vec![make_item("Remote Queue Item", "Movie")];
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
@@ -249,7 +246,7 @@ pub fn make_power_remote_queue_app() -> App {
     app
 }
 
-pub fn make_power_music_group_app() -> App {
+pub fn make_music_group_app() -> App {
     let mut app = make_app_stub();
     app.library_tab = 1;
     app.music_levels = vec!["group".into(), "album".into()];
@@ -325,12 +322,12 @@ pub fn make_power_music_group_app() -> App {
     app
 }
 
-/// Builds on `make_power_music_group_app` by adding a second sibling album
+/// Builds on `make_music_group_app` by adding a second sibling album
 /// ("Second Album", also by "Alpha") to the same nav level. Shared by the
 /// cache-miss/loading and cache-hit/rendered inline-detail tests, which
 /// both need a following album to assert framing around the selected one.
-pub fn make_power_music_group_app_with_second_album() -> App {
-    let mut app = make_power_music_group_app();
+pub fn make_music_group_app_with_second_album() -> App {
+    let mut app = make_music_group_app();
     let mut second_album = make_item("Second Album", "MusicAlbum");
     second_album.id = "album-2".into();
     second_album.artist = "Alpha".into();
@@ -403,7 +400,7 @@ pub fn assert_inline_detail_frames_between_albums(
     );
 }
 
-pub fn make_power_home_video_app() -> App {
+pub fn make_home_video_app() -> App {
     let mut app = make_app_stub();
     app.library_tab = 1;
 
@@ -448,7 +445,7 @@ pub fn make_power_home_video_app() -> App {
     app
 }
 
-pub fn make_power_large_movie_library_app(library_total: usize) -> App {
+pub fn make_large_movie_library_app(library_total: usize) -> App {
     let mut app = make_app_stub();
     app.library_tab = 1;
 

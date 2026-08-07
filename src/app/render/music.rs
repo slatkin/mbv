@@ -26,7 +26,7 @@ impl App {
     /// rather than appearing to sit on a divider line. `row_area` must
     /// already be confined to the right column and exclude the fixed
     /// `Music` marker reserved by the caller (#180).
-    pub(super) fn render_power_music_group_pills_row(
+    pub(super) fn render_music_group_pills_row(
         &mut self,
         f: &mut Frame,
         row_area: Rect,

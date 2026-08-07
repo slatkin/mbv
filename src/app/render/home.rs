@@ -1,9 +1,9 @@
 use super::super::ui_util::*;
 use super::home_hero::KeepWatchingHeroLayout;
-use super::home_video::power_home_panel_scroll;
+use super::home_video::home_panel_scroll;
 
 use crate::app::layout::LayoutMain;
-use crate::app::{palette, App, POWER_TWO_COLUMN_THRESHOLD};
+use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -13,7 +13,7 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 impl App {
-    pub(super) fn render_power_home_list(
+    pub(super) fn render_home_list(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -109,10 +109,10 @@ impl App {
         // Shared hero above the selected Home list. It reflects the current
         // flat cursor item whether the active pill is Continue Watching or one
         // of the Newest sections.
-        let hero_item = self.power_home_current_item();
+        let hero_item = self.home_current_item();
         // Same threshold the library list uses to switch to two columns, so
         // Home's hero/list split and the library list cross over together.
-        let two_column = area.width >= POWER_TWO_COLUMN_THRESHOLD;
+        let two_column = area.width >= TWO_COLUMN_THRESHOLD;
 
         // Hero data: (item, meta_area, img_area, meta_layout)
         let hero_data: Option<(mbv_core::api::MediaItem, Rect, Rect, KeepWatchingHeroLayout)>;
@@ -232,7 +232,7 @@ impl App {
                 height: 1,
             }
         };
-        self.render_power_home_section_pills_row(f, pills_area, layout);
+        self.render_home_section_pills_row(f, pills_area, layout);
 
         // In the wide Home layout, the list body is a separate right-column
         // green surface directly below the pill row. Keep one blank green row
@@ -331,12 +331,12 @@ impl App {
 
         let wide_home_panel_unfocused = two_column && hero_data.is_some() && !focused;
         let needs_scrollbar = content_h > list_area.height;
-        let list_w = super::power_content_width(list_area.width, needs_scrollbar) as u16;
+        let list_w = super::content_width(list_area.width, needs_scrollbar) as u16;
         let cursor_row = rows
             .iter()
             .position(|row| matches!(row, DisplayRow::Item(flat_idx, _) if *flat_idx == cursor))
             .unwrap_or(0) as u16;
-        let scroll_y = power_home_panel_scroll(
+        let scroll_y = home_panel_scroll(
             self.home.home_scroll as u16,
             cursor_row,
             cursor_row + 1,
@@ -556,7 +556,7 @@ impl App {
 
         if needs_scrollbar && focused {
             let max_off = content_h.saturating_sub(list_area.height) as usize;
-            super::render_power_right_scrollbar(f, list_area, max_off, scroll_y as usize);
+            super::render_right_scrollbar(f, list_area, max_off, scroll_y as usize);
         }
 
         if let Some(panel) = green_panel_full {
@@ -582,7 +582,7 @@ impl App {
         }
     }
 
-    pub(super) fn render_power_home_section_pills_row(
+    pub(super) fn render_home_section_pills_row(
         &mut self,
         f: &mut Frame,
         area: Rect,

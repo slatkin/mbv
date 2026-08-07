@@ -1,5 +1,5 @@
 use super::super::ui_util::*;
-use super::POWER_RENDER_FILTER;
+use super::RENDER_FILTER;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -17,7 +17,7 @@ const IMG_ROWS: u16 = 14;
 /// `fetch_card_image`/`fetch_list_card_image_when_idle` store and look up the
 /// resized/encoded image state. Shared by the eager fetch in
 /// `compact_banner_layout` and the prefetch loop in `list.rs`'s
-/// `render_power_list` (#287) so the two can never format the key
+/// `render_list` (#287) so the two can never format the key
 /// differently and silently miss each other's cache entries.
 pub(super) fn compact_banner_image_cache_key(item_id: &str) -> String {
     format!("{item_id}:cmp_primary")
@@ -25,7 +25,7 @@ pub(super) fn compact_banner_image_cache_key(item_id: &str) -> String {
 
 /// Paints the hero's top-row title (two-column lists only, when `show_title`
 /// is set at the call site): the selected item's name in yellow, bold when
-/// focused. Shared by the movie hero (`render_power_compact_detail`) and the
+/// focused. Shared by the movie hero (`render_compact_detail`) and the
 /// Series inline hero (`render_series_inline_detail`), which otherwise
 /// duplicated this block with only the geometry differing. Returns `row + 1`
 /// if the title was painted, else `row` unchanged, so callers push
@@ -75,7 +75,7 @@ pub(super) fn render_hero_title_row(
 /// frame effectively free.
 fn poster_placeholder_size(font_size: ratatui_image::FontSize) -> (u16, u16) {
     let canonical_poster_aspect = image::DynamicImage::new_rgb8(2, 3);
-    let size = ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)).size_for(
+    let size = ratatui_image::Resize::Scale(Some(RENDER_FILTER)).size_for(
         &canonical_poster_aspect,
         font_size,
         ratatui::layout::Size {
@@ -90,7 +90,7 @@ fn poster_placeholder_size(font_size: ratatui_image::FontSize) -> (u16, u16) {
 /// meta line, the "Playing" indicator, and the overview + director text
 /// wrapped to the banner's actual panel width. Computed once by
 /// `App::compact_banner_layout_with_overview` and consumed by
-/// `render_power_compact_detail` to actually render the banner, so the
+/// `render_compact_detail` to actually render the banner, so the
 /// row-count estimate and the render never duplicate the wrapping logic.
 pub(super) struct CompactBannerLayout {
     meta_line: Option<String>,
@@ -127,10 +127,7 @@ impl CompactBannerLayout {
 }
 
 impl App {
-    pub(crate) fn power_selected_movie_item(
-        &self,
-        lib_idx: usize,
-    ) -> Option<mbv_core::api::MediaItem> {
+    pub(crate) fn selected_movie_item(&self, lib_idx: usize) -> Option<mbv_core::api::MediaItem> {
         let lib = self.libs.get(lib_idx)?;
         let coll = lib.library.collection_type.as_str();
         if coll != "movies" && coll != "homevideos" && coll != "podcasts" {
@@ -154,10 +151,7 @@ impl App {
         Some(item)
     }
 
-    pub(crate) fn power_selected_series_item(
-        &self,
-        lib_idx: usize,
-    ) -> Option<mbv_core::api::MediaItem> {
+    pub(crate) fn selected_series_item(&self, lib_idx: usize) -> Option<mbv_core::api::MediaItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.library.collection_type != "tvshows" {
             return None;
@@ -175,7 +169,7 @@ impl App {
         Some(item)
     }
 
-    pub(crate) fn power_selected_album_item(
+    pub(crate) fn selected_album_hero_item(
         &self,
         lib_idx: usize,
     ) -> Option<mbv_core::api::MediaItem> {
@@ -196,7 +190,7 @@ impl App {
 
     /// Computes the compact banner's content for `item`, given the panel
     /// width it will render into (i.e. the eventual `area.width` passed to
-    /// `render_power_compact_detail`). Pure function of `item` + width aside
+    /// `render_compact_detail`). Pure function of `item` + width aside
     /// from the image-state cache lookup/fetch-trigger, so calling it twice
     /// per frame (once to measure, once to render) is safe and idempotent.
     pub(super) fn compact_banner_layout_with_overview(
@@ -217,7 +211,7 @@ impl App {
             );
         }
 
-        // `power_right_panel_image_renders_allowed()` (the 150ms nav-idle debounce) exists
+        // `right_panel_image_renders_allowed()` (the 150ms nav-idle debounce) exists
         // to stop the *real* poster from flickering in and out while rapidly
         // scrolling through many different movies -- it must keep gating
         // which image is actually substituted in. But the placeholder box's
@@ -229,7 +223,7 @@ impl App {
         // placeholder is reserved unconditionally here whenever a real image
         // isn't yet ready to show, and only the "is it the real image or the
         // placeholder" choice below still depends on the nav-idle gate.
-        let nav_gate_open = self.power_right_panel_image_renders_allowed();
+        let nav_gate_open = self.right_panel_image_renders_allowed();
         // `image_picker` is only `None` before the run loop's one-time init
         // (or in tests that don't set one up) -- fall back to the full
         // bounding box in that case, since there's no real font metrics yet
@@ -257,7 +251,7 @@ impl App {
                     // still running on the worker thread -- `size_for` is
                     // `None` -- keep showing the placeholder a beat longer).
                     Some(state) => match state.size_for(
-                        ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
+                        ratatui_image::Resize::Scale(Some(RENDER_FILTER)),
                         ratatui::layout::Size {
                             width: IMG_COLS,
                             height: IMG_ROWS,
@@ -372,7 +366,7 @@ impl App {
         }
     }
 
-    pub(crate) fn render_power_compact_detail(
+    pub(crate) fn render_compact_detail(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -386,8 +380,8 @@ impl App {
         // layout is generic over the item, so a Series renders its meta +
         // overview the same way a Movie does (design decision 6).
         let Some(item) = self
-            .power_selected_movie_item(lib_idx)
-            .or_else(|| self.power_selected_series_item(lib_idx))
+            .selected_movie_item(lib_idx)
+            .or_else(|| self.selected_series_item(lib_idx))
         else {
             return;
         };
@@ -569,8 +563,7 @@ impl App {
                 if let Some(state) = self.cached_image_protocol_mut(&primary_cache_key) {
                     type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                     f.render_stateful_widget(
-                        SImg::default()
-                            .resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
+                        SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
                         img_rect,
                         state,
                     );

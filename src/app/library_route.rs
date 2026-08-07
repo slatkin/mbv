@@ -172,7 +172,7 @@ impl App {
 
     /// Resolves the daemon route (if any) that a play/enqueue of `item`
     /// should target: nav-scoped lookup for library-scoped views
-    /// (`tab_idx >= 2` -- Library/Power/Album/Artist/in-library search),
+    /// (`tab_idx >= 2` -- Library/Album/Artist/in-library search),
     /// ancestor-lookup for cross-library aggregate views (`tab_idx == 0`
     /// -- Home tab). No match in either case means local playback,
     /// unaffected (#223).
@@ -316,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_route_for_play_uses_power_library_context_when_library_side_is_focused() {
+    fn resolve_route_for_play_uses_library_context_when_library_side_is_focused() {
         let mut app = make_app_stub();
         app.library_routes
             .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
@@ -344,7 +344,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_route_for_play_does_not_inherit_power_library_route_from_queue_side() {
+    fn resolve_route_for_play_does_not_inherit_library_route_from_queue_side() {
         let mut app = make_app_stub();
         app.library_routes
             .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());

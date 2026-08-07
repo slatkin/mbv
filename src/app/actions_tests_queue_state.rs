@@ -346,7 +346,7 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
 }
 
 #[test]
-fn ensure_power_feed_library_preserves_saved_feed_position() {
+fn ensure_feed_library_preserves_saved_feed_position() {
     let mut app = crate::app::tests::make_app_stub();
     app.library_tab = 1;
     app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
@@ -383,7 +383,7 @@ fn ensure_power_feed_library_preserves_saved_feed_position() {
 }
 
 #[test]
-fn ensure_power_podcast_library_preserves_saved_feed_position() {
+fn ensure_podcast_library_preserves_saved_feed_position() {
     let mut app = crate::app::tests::make_app_stub();
     app.library_tab = 1;
 

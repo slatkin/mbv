@@ -114,13 +114,13 @@ impl App {
         let now = Instant::now();
         let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
         self.last_nav_at = now;
-        self.mark_power_library_navigation(now);
+        self.mark_library_navigation(now);
         let lib_idx = self.library_tab.saturating_sub(1);
 
         if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
-            && self.move_power_music_group_display_cursor(lib_idx, delta)
+            && self.move_music_group_display_cursor(lib_idx, delta)
         {
             self.save_default_library_position(lib_idx);
             if idle {
@@ -195,7 +195,7 @@ impl App {
         if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
-            && self.jump_power_music_group_display_cursor(lib_idx, to_end)
+            && self.jump_music_group_display_cursor(lib_idx, to_end)
         {
             self.save_default_library_position(lib_idx);
             self.maybe_fetch_next_page(lib_idx);
@@ -297,7 +297,7 @@ impl App {
     /// mode, or `None` if not in selection mode.
     pub(super) fn series_selection_episodes(&self, lib_idx: usize) -> Option<Vec<MediaItem>> {
         let _ep_idx = self.libs[lib_idx].series_selection?;
-        let item = self.power_selected_series_item(lib_idx)?;
+        let item = self.selected_series_item(lib_idx)?;
         let detail = self.series_detail_cache.get(&item.id)?;
         let season = detail
             .seasons
@@ -309,7 +309,7 @@ impl App {
     /// season while in series-selection mode. Adjusts the season cursor
     /// and ensures episodes for the new season are fetched.
     pub(super) fn switch_series_selection_season(&mut self, lib_idx: usize, delta: i64) {
-        let Some(item) = self.power_selected_series_item(lib_idx) else {
+        let Some(item) = self.selected_series_item(lib_idx) else {
             return;
         };
         let Some(detail) = self.series_detail_cache.get(&item.id).cloned() else {

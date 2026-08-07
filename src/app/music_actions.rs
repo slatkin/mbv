@@ -43,7 +43,7 @@ impl App {
             return;
         }
 
-        self.libs[lib_idx].clear_power_music_focus();
+        self.libs[lib_idx].clear_music_focus();
 
         // Pop the album level.
         self.libs[lib_idx].nav_stack.pop();
@@ -106,7 +106,7 @@ impl App {
         if group_cursor >= n {
             return;
         }
-        self.libs[lib_idx].clear_power_music_focus();
+        self.libs[lib_idx].clear_music_focus();
         self.libs[lib_idx].nav_stack.pop();
         if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             group_lvl.cursor = group_cursor;
@@ -306,7 +306,7 @@ impl App {
 
     // Visibility bump: private -> `pub(super)`. Called from
     // `handle_lib_loaded`, which stays behind in `actions.rs`.
-    pub(super) fn maybe_auto_push_power_music_group_level(&mut self, lib_idx: usize) {
+    pub(super) fn maybe_auto_push_music_group_level(&mut self, lib_idx: usize) {
         // When the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.

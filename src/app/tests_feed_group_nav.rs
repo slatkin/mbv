@@ -600,7 +600,7 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
 }
 
 #[test]
-fn refresh_lib_targets_power_feed_selection() {
+fn refresh_lib_targets_feed_selection() {
     let mut app = make_app_stub();
     app.library_tab = 1;
     app.panel_focus = PanelFocus::Library;

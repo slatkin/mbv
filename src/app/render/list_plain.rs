@@ -13,11 +13,11 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 impl App {
-    /// Plain list kind of `render_power_list`: the catch-all covering the
+    /// Plain list kind of `render_list`: the catch-all covering the
     /// Home "Continue Watching" tab, search result sets, small libraries,
     /// and non-album music levels, all of which render identically without
     /// letter grouping. Returns the scroll offset to persist.
-    pub(super) fn render_power_plain_rows(
+    pub(super) fn render_plain_rows(
         &mut self,
         f: &mut Frame,
         ctx: ListRenderCtx,
@@ -155,7 +155,7 @@ impl App {
 
         if show_scrollbar {
             let max_off = total_display.saturating_sub(visible);
-            super::render_power_right_scrollbar(f, content_area, max_off, offset);
+            super::render_right_scrollbar(f, content_area, max_off, offset);
         }
 
         draw_column_selection_markers(f, content_area, cursor, cols, &layout.left_item_rows);

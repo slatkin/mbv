@@ -19,7 +19,7 @@ impl App {
             return;
         }
         if matches!(focus, PanelFocus::Queue) {
-            self.focus_power_queue_initial_item();
+            self.focus_queue_initial_item();
         }
         self.panel_focus = focus;
         self.save_prefs();

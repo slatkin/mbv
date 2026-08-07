@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_imports)]
 
-use super::power_music_track_test_support::*;
+use super::music_track_test_support::*;
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
@@ -17,7 +17,7 @@ fn current_lib_item_in_list_mode_returns_album_folder_not_a_track() {
     // Regression: album-list mode (`album_track_focus == None`) must
     // keep resolving to the selected album folder itself, exactly as
     // before Task 4.
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 3);
     assert!(app.libs[0].album_track_focus.is_none());
 
@@ -30,7 +30,7 @@ fn current_lib_item_in_list_mode_returns_album_folder_not_a_track() {
 
 #[test]
 fn current_lib_item_in_track_mode_returns_focused_track() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 3);
     app.libs[0].album_track_focus = Some(1);
 
@@ -48,7 +48,7 @@ fn current_lib_item_in_track_mode_returns_focused_track() {
 fn current_lib_item_in_track_mode_falls_back_safely_when_cache_missing() {
     // Async fetch still in flight: `album_tracks_cache` has no entry for
     // "album-1" yet. Must not panic and must not index out of bounds.
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     app.libs[0].album_track_focus = Some(0);
     assert!(!app.album_tracks_cache.contains_key("album-1"));
 
@@ -61,7 +61,7 @@ fn current_lib_item_in_track_mode_falls_back_safely_when_cache_missing() {
 
 #[test]
 fn enter_again_in_track_mode_plays_focused_track_from_cached_queue() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 3);
     app.libs[0].album_track_focus = Some(1);
 
@@ -103,7 +103,7 @@ fn enter_again_in_track_mode_plays_focused_track_from_cached_queue() {
 
 #[test]
 fn enter_again_in_track_mode_with_missing_cache_does_not_panic() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     // No `push_tracks` -- cache miss, async fetch still in flight.
     app.libs[0].album_track_focus = Some(0);
     let nav_len_before = app.libs[0].nav_stack.len();
@@ -119,7 +119,7 @@ fn enter_again_in_track_mode_with_missing_cache_does_not_panic() {
 fn context_menu_in_list_mode_offers_folder_scoped_actions_for_selected_album() {
     // Regression: album-list mode's context menu must still target the
     // selected ALBUM's id via the folder-scoped actions.
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     assert!(app.libs[0].album_track_focus.is_none());
 
     app.open_context_menu();
@@ -152,7 +152,7 @@ fn context_menu_in_list_mode_offers_folder_scoped_actions_for_selected_album() {
 
 #[test]
 fn context_menu_in_track_mode_offers_track_scoped_actions_not_folder_actions() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 3);
     app.libs[0].album_track_focus = Some(1);
 

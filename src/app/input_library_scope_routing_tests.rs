@@ -4,7 +4,7 @@ use crate::app::{BrowseLevel, ConfirmAction, LibraryTab, PanelFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
-fn make_power_library_app() -> App {
+fn make_library_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.library_tab = 1;
@@ -44,7 +44,7 @@ fn make_power_library_app() -> App {
     app
 }
 
-fn make_power_library_mouse_event(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+fn make_library_mouse_event(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
     MouseEvent {
         kind,
         column,
@@ -56,7 +56,7 @@ fn make_power_library_mouse_event(kind: MouseEventKind, column: u16, row: u16) -
 #[test]
 fn left_panel_movement_saves_position_via_real_key_path() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_library_app();
+    let mut app = make_library_app();
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
@@ -81,7 +81,7 @@ fn left_panel_movement_saves_position_via_real_key_path() {
 #[test]
 fn left_panel_refresh_clears_saved_position_via_real_key_path() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_library_app();
+    let mut app = make_library_app();
     let saved_position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
@@ -187,7 +187,7 @@ fn left_panel_mouse_events_save_position() {
         MouseEventKind::Down(MouseButton::Left),
     ] {
         let _guard = crate::config::TestStateDirGuard::new();
-        let mut app = make_power_library_app();
+        let mut app = make_library_app();
         app.layout.main.left_area = Rect {
             x: 10,
             y: 5,
@@ -195,7 +195,7 @@ fn left_panel_mouse_events_save_position() {
             height: 5,
         };
 
-        app.handle_mouse(make_power_library_mouse_event(kind, 12, 6));
+        app.handle_mouse(make_library_mouse_event(kind, 12, 6));
 
         app.flush_library_position_now();
         let position = crate::config::load_library_position_state()
@@ -223,7 +223,7 @@ fn mouse_click_on_already_selected_folder_row_is_a_noop() {
     // sufficient to drill in even when the click landed on the row
     // already under the cursor, producing an unrequested navigation.
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_library_app();
+    let mut app = make_library_app();
     for item in app.libs[0].nav_stack[0].items.iter_mut() {
         item.is_folder = true;
     }
@@ -236,7 +236,7 @@ fn mouse_click_on_already_selected_folder_row_is_a_noop() {
     };
 
     // Row 5 -> click_y 0 -> item index 0, the row already selected.
-    app.handle_mouse(make_power_library_mouse_event(
+    app.handle_mouse(make_library_mouse_event(
         MouseEventKind::Down(MouseButton::Left),
         12,
         5,
@@ -255,7 +255,7 @@ fn mouse_click_on_a_different_folder_row_only_focuses_it() {
     // A single click never drills into a folder -- it only moves the
     // cursor/highlight. Drilling in is a double-click gesture.
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_library_app();
+    let mut app = make_library_app();
     for item in app.libs[0].nav_stack[0].items.iter_mut() {
         item.is_folder = true;
     }
@@ -268,7 +268,7 @@ fn mouse_click_on_a_different_folder_row_only_focuses_it() {
     };
 
     // Row 6 -> click_y 1 -> item index 1, not the previously-selected row.
-    app.handle_mouse(make_power_library_mouse_event(
+    app.handle_mouse(make_library_mouse_event(
         MouseEventKind::Down(MouseButton::Left),
         12,
         6,
@@ -287,7 +287,7 @@ fn double_click_on_a_folder_row_drills_in() {
     // The second click of a double-click on a folder row is the
     // activation gesture: it must drill into the folder just like Enter.
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_library_app();
+    let mut app = make_library_app();
     for item in app.libs[0].nav_stack[0].items.iter_mut() {
         item.is_folder = true;
     }
@@ -301,7 +301,7 @@ fn double_click_on_a_folder_row_drills_in() {
 
     // Two Down(Left) events at the same cell, back to back: the first
     // focuses row 1, the second is the activation.
-    let click = make_power_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 6);
+    let click = make_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 6);
     app.handle_mouse(click);
     assert_eq!(app.libs[0].nav_stack[0].cursor, 1, "first click focuses");
     app.handle_mouse(click);
@@ -323,7 +323,7 @@ fn mouse_click_on_a_new_series_row_only_moves_the_cursor() {
     // a mouse click has no equivalent gesture for that, so it should
     // only move the cursor/highlight onto the clicked row.
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_library_app();
+    let mut app = make_library_app();
     for item in app.libs[0].nav_stack[0].items.iter_mut() {
         item.is_folder = true;
         item.item_type = "Series".into();
@@ -338,7 +338,7 @@ fn mouse_click_on_a_new_series_row_only_moves_the_cursor() {
     };
 
     // Row 6 -> click_y 1 -> item index 1, not the previously-selected row.
-    app.handle_mouse(make_power_library_mouse_event(
+    app.handle_mouse(make_library_mouse_event(
         MouseEventKind::Down(MouseButton::Left),
         12,
         6,
@@ -355,7 +355,7 @@ fn mouse_click_on_a_new_series_row_only_moves_the_cursor() {
 #[test]
 fn breadcrumb_click_saves_position() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_library_app();
+    let mut app = make_library_app();
     app.libs[0].nav_stack.push(BrowseLevel {
         parent_id: "folder-1".into(),
         title: "Folder".into(),
@@ -374,7 +374,7 @@ fn breadcrumb_click_saves_position() {
     });
     app.layout.main.breadcrumbs = vec![(10, 20, 2, 1)];
 
-    app.handle_mouse(make_power_library_mouse_event(
+    app.handle_mouse(make_library_mouse_event(
         MouseEventKind::Down(MouseButton::Left),
         12,
         2,
@@ -417,7 +417,7 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
         series_season_cursor: 0,
         library_total: None,
     });
-    let power_position = crate::config::LibraryPosition {
+    let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
             title: "Power".into(),
@@ -432,9 +432,9 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
         }],
         ..Default::default()
     };
-    app.replace_saved_library_position(0, power_position.clone());
+    app.replace_saved_library_position(0, position.clone());
 
-    app.handle_mouse(make_power_library_mouse_event(
+    app.handle_mouse(make_library_mouse_event(
         MouseEventKind::Down(MouseButton::Left),
         8,
         0,
@@ -447,8 +447,8 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
 
     app.handle_lib_event(crate::app::LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
-        requested_position: power_position.clone(),
-        position: power_position,
+        requested_position: position.clone(),
+        position,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Power restored".into(),
@@ -471,8 +471,8 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
     assert!(!app.libs[0].nav_stack[0].loading);
 }
 
-fn make_power_series_app() -> App {
-    let mut app = make_power_library_app();
+fn make_series_app() -> App {
+    let mut app = make_library_app();
     for item in app.libs[0].nav_stack[0].items.iter_mut() {
         item.is_folder = true;
         item.item_type = "Series".into();
@@ -491,7 +491,7 @@ fn make_power_series_app() -> App {
 #[test]
 fn single_click_on_hero_only_focuses_the_panel() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_series_app();
+    let mut app = make_series_app();
     app.panel_focus = PanelFocus::Queue;
     app.layout.main.hero_area = Rect {
         x: 10,
@@ -500,7 +500,7 @@ fn single_click_on_hero_only_focuses_the_panel() {
         height: 5,
     };
 
-    app.handle_mouse(make_power_library_mouse_event(
+    app.handle_mouse(make_library_mouse_event(
         MouseEventKind::Down(MouseButton::Left),
         12,
         11,
@@ -521,7 +521,7 @@ fn single_click_on_hero_only_focuses_the_panel() {
 #[test]
 fn double_click_on_hero_activates_the_selected_item() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_series_app();
+    let mut app = make_series_app();
     app.layout.main.hero_area = Rect {
         x: 10,
         y: 10,
@@ -529,7 +529,7 @@ fn double_click_on_hero_activates_the_selected_item() {
         height: 5,
     };
 
-    let click = make_power_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 11);
+    let click = make_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 11);
     app.handle_mouse(click);
     assert_eq!(
         app.libs[0].series_selection, None,

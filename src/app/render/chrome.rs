@@ -127,7 +127,7 @@ impl App {
         }
     }
 
-    pub(super) fn power_panel_content_area(sidebar: Rect) -> Rect {
+    pub(super) fn left_panel_content_area(sidebar: Rect) -> Rect {
         Rect {
             x: sidebar.x + 2,
             y: sidebar.y + 3,
@@ -150,28 +150,28 @@ impl App {
         sidebar: Rect,
         title: &str,
         hints: &str,
-        power_style: bool,
+        style: bool,
     ) -> Rect {
         f.render_widget(Clear, sidebar);
         // Too short to fit a title row, a content row, and the 2-row footer;
         // bail out rather than let `footer_y = sidebar.y + sidebar.height - 2`
         // underflow below.
         if sidebar.height < 4 || sidebar.width == 0 {
-            return if power_style {
-                Self::power_panel_content_area(sidebar)
+            return if style {
+                Self::left_panel_content_area(sidebar)
             } else {
                 sidebar
             };
         }
         f.render_widget(
-            Block::default().style(Style::default().bg(if power_style {
+            Block::default().style(Style::default().bg(if style {
                 palette::PLAYBACK_PANEL_BG
             } else {
                 palette::PANEL_BG
             })),
             sidebar,
         );
-        if !power_style {
+        if !style {
             for row in sidebar.y..sidebar.y + sidebar.height {
                 f.render_widget(
                     Paragraph::new(Span::styled(
@@ -187,20 +187,20 @@ impl App {
                 );
             }
         }
-        let (inner_w, ix) = if power_style {
+        let (inner_w, ix) = if style {
             (sidebar.width.saturating_sub(4), sidebar.x + 2)
         } else {
             (sidebar.width.saturating_sub(1), sidebar.x)
         };
         let header_style = Style::default()
             .fg(palette::TEXT)
-            .bg(if power_style {
+            .bg(if style {
                 palette::QUEUE_BUTTON_FOCUSED_BG
             } else {
                 palette::FOCUSED
             })
             .add_modifier(Modifier::BOLD);
-        let header_area = if power_style {
+        let header_area = if style {
             Rect {
                 x: sidebar.x + 2,
                 y: sidebar.y + 1,
@@ -215,14 +215,14 @@ impl App {
                 height: 1,
             }
         };
-        let title_text = if power_style {
+        let title_text = if style {
             format!(" {}", title)
         } else {
             title.to_owned()
         };
         f.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(title_text, header_style)])).style(
-                if power_style {
+                if style {
                     Style::default().bg(palette::QUEUE_BUTTON_FOCUSED_BG)
                 } else {
                     Style::default().bg(palette::FOCUSED)
@@ -230,7 +230,7 @@ impl App {
             ),
             header_area,
         );
-        if !power_style {
+        if !style {
             f.render_widget(
                 Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
                 Rect {
@@ -242,7 +242,7 @@ impl App {
             );
         }
         let footer_y = sidebar.y + sidebar.height - 2;
-        if !power_style {
+        if !style {
             f.render_widget(
                 Paragraph::new(Span::styled(
                     "\u{2500}".repeat(inner_w as usize),
@@ -256,7 +256,7 @@ impl App {
                 },
             );
         }
-        let footer_bg = if power_style {
+        let footer_bg = if style {
             palette::DARK_BG
         } else {
             palette::FOCUSED
@@ -274,7 +274,7 @@ impl App {
                 height: 1,
             },
         );
-        if power_style {
+        if style {
             f.render_widget(
                 Paragraph::new(Span::raw(""))
                     .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
@@ -286,7 +286,7 @@ impl App {
                 },
             );
         }
-        if !power_style {
+        if !style {
             f.render_widget(
                 Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
                 Rect {
@@ -297,8 +297,8 @@ impl App {
                 },
             );
         }
-        if power_style {
-            Self::power_panel_content_area(sidebar)
+        if style {
+            Self::left_panel_content_area(sidebar)
         } else {
             Self::panel_content_area(sidebar)
         }

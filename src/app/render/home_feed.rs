@@ -6,7 +6,7 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 impl App {
-    pub(super) fn render_power_feed_home_video_group_view(
+    pub(super) fn render_feed_home_video_group_view(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -98,7 +98,7 @@ impl App {
                 } else {
                     " (empty)"
                 };
-                super::render_power_placeholder(
+                super::render_placeholder(
                     f,
                     Rect {
                         x: list_area.x,
@@ -125,7 +125,7 @@ impl App {
         item_heights[current_pos] = selected_height;
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > list_area.height;
-        let text_w = super::power_content_width(list_area.width, needs_scrollbar);
+        let text_w = super::content_width(list_area.width, needs_scrollbar);
 
         let mut scroll = stored_scroll.min(items.len().saturating_sub(1));
         if current_pos < scroll {
@@ -182,7 +182,7 @@ impl App {
         layout.left_row_map = row_map;
 
         if needs_scrollbar && focused {
-            super::render_power_right_scrollbar_with_viewport(
+            super::render_right_scrollbar_with_viewport(
                 f,
                 list_area,
                 items.len(),

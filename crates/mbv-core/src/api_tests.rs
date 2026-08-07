@@ -248,10 +248,10 @@ fn report_stopped_for_shutdown_stalls_with_one_attempt_and_no_retry() {
 
     let started = std::time::Instant::now();
     let ok = client_with_url(&url).report_stopped_for_shutdown(
-        "item",
-        "msid",
+        &ItemId::new("item"),
+        &MediaSourceId::new("msid"),
         123,
-        "sid",
+        &EmbySessionId::new("sid"),
         456,
         std::time::Duration::from_millis(150),
     );
@@ -275,7 +275,13 @@ fn ordinary_report_stopped_still_retries_once() {
         }
     });
 
-    let ok = client_with_url(&url).report_stopped("item", "msid", 123, "sid", 456);
+    let ok = client_with_url(&url).report_stopped(
+        &ItemId::new("item"),
+        &MediaSourceId::new("msid"),
+        123,
+        &EmbySessionId::new("sid"),
+        456,
+    );
 
     assert!(!ok);
     assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);

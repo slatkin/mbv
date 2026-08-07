@@ -1,4 +1,4 @@
-use super::POWER_RENDER_FILTER;
+use super::RENDER_FILTER;
 use crate::app::images::QUEUE_CARD_PLACEHOLDER_KEY;
 use crate::app::{palette, App};
 use mbv_core::api::MediaItem;
@@ -7,7 +7,7 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::Frame;
 
-fn power_card_image_types(item_type: &str) -> &'static [&'static str] {
+fn card_image_types(item_type: &str) -> &'static [&'static str] {
     match item_type {
         "MusicAlbum" => super::MUSIC_ALBUM_IMAGE_TYPES,
         "Audio" => &["Primary"],
@@ -16,7 +16,7 @@ fn power_card_image_types(item_type: &str) -> &'static [&'static str] {
     }
 }
 
-fn power_card_cache_key(item: &MediaItem) -> String {
+fn card_cache_key(item: &MediaItem) -> String {
     if item.item_type == "Audio" && !item.album_id.is_empty() {
         format!("{}:P", item.album_id)
     } else {
@@ -48,10 +48,9 @@ impl App {
             // inner protocol to send it off). Fall through to the
             // loading/placeholder path below for that frame; the next
             // frame after the response arrives will have a size again.
-            if let Some(actual) = state.size_for(
-                ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
-                avail,
-            ) {
+            if let Some(actual) =
+                state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
+            {
                 let img_x = if left_align {
                     area.x
                 } else {
@@ -64,7 +63,7 @@ impl App {
                     height: actual.height,
                 };
                 f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
                     img_rect,
                     state,
                 );
@@ -113,7 +112,7 @@ impl App {
         (placeholder, placeholder_w, image_loading)
     }
 
-    fn render_power_card_placeholder(
+    fn render_card_placeholder(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -143,7 +142,7 @@ impl App {
     /// `rows_used`/`cols_used` are 0 if the queue is empty or the image is not
     /// yet ready. `image_loading` is true when a fetch is in-flight (caller
     /// should defer rendering the rest of the view until the image arrives).
-    pub(super) fn render_power_card(
+    pub(super) fn render_card(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -163,13 +162,13 @@ impl App {
                 .then(|| (queue.queue_cursor, queue.items.clone()))
         };
         let Some((cursor, items)) = active_source.or_else(selected_source) else {
-            return self.render_power_card_placeholder(f, area, left_align);
+            return self.render_card_placeholder(f, area, left_align);
         };
 
         let item = &items[cursor];
-        let img_types = power_card_image_types(&item.item_type);
+        let img_types = card_image_types(&item.item_type);
         let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
-        let cache_key = power_card_cache_key(item);
+        let cache_key = card_cache_key(item);
         let is_music_item = matches!(img_types, &["Primary"] | &["AudioChild"]);
         if self.images_enabled() || is_music_item {
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
@@ -192,7 +191,7 @@ impl App {
             .filter(|(i, _)| start + i != cursor)
             .map(|(_, p)| {
                 (
-                    power_card_cache_key(p),
+                    card_cache_key(p),
                     p.id.clone(),
                     p.series_id.clone(),
                     p.item_type.clone(),
@@ -200,14 +199,14 @@ impl App {
             })
             .collect();
         for (pkey, pid, psid, ptype) in prefetch {
-            let ptypes = power_card_image_types(&ptype);
+            let ptypes = card_image_types(&ptype);
             let is_music = matches!(ptypes, &["Primary"] | &["AudioChild"]);
             if self.images_enabled() || is_music {
                 self.fetch_list_card_image_when_idle(pkey, pid, psid, ptypes);
             }
         }
         if use_placeholder {
-            return self.render_power_card_placeholder(f, area, left_align);
+            return self.render_card_placeholder(f, area, left_align);
         }
         self.render_card_image(f, area, &cache_key, area.height, left_align)
     }
@@ -274,12 +273,12 @@ mod tests {
         app
     }
 
-    fn render_power_card(app: &mut App) -> (u16, u16, bool) {
+    fn render_card(app: &mut App) -> (u16, u16, bool) {
         let backend = TestBackend::new(30, 20);
         let mut term = Terminal::new(backend).unwrap();
         let mut result = (0u16, 0u16, false);
         term.draw(|f| {
-            result = app.render_power_card(f, Rect::new(0, 0, 30, 20), false);
+            result = app.render_card(f, Rect::new(0, 0, 30, 20), false);
         })
         .unwrap();
         result
@@ -317,7 +316,7 @@ mod tests {
         app.image_protocol_enabled = true;
         set_playback(&mut app, 2, false);
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(fetch_triggered(&app, "id2:P"));
         assert!(!fetch_triggered(&app, "id0:P"));
@@ -329,7 +328,7 @@ mod tests {
         app.image_protocol_enabled = true;
         set_playback(&mut app, 1, true);
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(fetch_triggered(&app, "id1:P"));
     }
@@ -339,7 +338,7 @@ mod tests {
         let mut app = make_queue_app(4, 2);
         app.image_protocol_enabled = true;
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(fetch_triggered(&app, "id2:P"));
         assert!(!fetch_triggered(&app, "id0:P"));
@@ -359,7 +358,7 @@ mod tests {
         app.image_protocol_enabled = true;
         set_playback(&mut app, 1, false);
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(fetch_triggered(&app, "remote-1:P"));
         assert!(!fetch_triggered(&app, "local-0:P"));
@@ -376,7 +375,7 @@ mod tests {
         app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
         app.player.status.lock().unwrap().active = false;
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(app
             .card_image_states
@@ -390,7 +389,7 @@ mod tests {
         app.player_tab.set_items(make_items(2), 1);
         app.image_protocol_enabled = true;
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(fetch_triggered(&app, "id1:P"));
         assert!(!fetch_triggered(&app, "movie-focused:P"));
@@ -402,13 +401,13 @@ mod tests {
         app.image_protocol_enabled = true;
         set_playback(&mut app, 99, false);
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(fetch_triggered(&app, "id1:P"));
     }
 
     #[test]
-    fn completed_no_art_uses_power_card_placeholder() {
+    fn completed_no_art_uses_card_placeholder() {
         let mut app = make_queue_app(6, 2);
         app.image_protocol_enabled = true;
         app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
@@ -416,7 +415,7 @@ mod tests {
         app.card_image_states
             .insert("id2:P".into(), CachedImage::empty());
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(app
             .card_image_states
@@ -434,7 +433,7 @@ mod tests {
             .insert("id3:P".into(), CachedImage::empty());
         set_playback(&mut app, 3, false);
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(app
             .card_image_states
@@ -448,7 +447,7 @@ mod tests {
         app.image_protocol_enabled = true;
         set_playback(&mut app, 3, false);
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(fetch_triggered(&app, "id3:P"));
         assert!(fetch_triggered(&app, "id2:P"));
@@ -462,7 +461,7 @@ mod tests {
         let mut app = make_queue_app(6, 2);
         app.image_protocol_enabled = true;
 
-        render_power_card(&mut app);
+        render_card(&mut app);
 
         assert!(fetch_triggered(&app, "id2:P"));
         assert!(fetch_triggered(&app, "id1:P"));

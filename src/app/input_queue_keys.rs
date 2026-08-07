@@ -1,6 +1,6 @@
 use super::{
     App, PanelFocus, PanelMode, QueueScope, SavePlaylistDialog, SavePlaylistStage,
-    POWER_LEFT_WIDTH_DEFAULT, POWER_LEFT_WIDTH_STEP,
+    LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::Instant;
@@ -28,16 +28,14 @@ impl App {
 
         let max_width = Self::queue_column_width_max_for_terminal(self.terminal_width);
         let next_width = if key.code == KeyCode::Left {
-            self.queue_column_width
-                .saturating_sub(POWER_LEFT_WIDTH_STEP)
+            self.queue_column_width.saturating_sub(LEFT_WIDTH_STEP)
         } else {
-            self.queue_column_width
-                .saturating_add(POWER_LEFT_WIDTH_STEP)
+            self.queue_column_width.saturating_add(LEFT_WIDTH_STEP)
         };
         let normalized = Self::normalize_queue_column_width(next_width, self.terminal_width);
         if normalized == self.queue_column_width {
             let limit = if key.code == KeyCode::Left {
-                format!("Queue column width already at minimum ({POWER_LEFT_WIDTH_DEFAULT} cols)")
+                format!("Queue column width already at minimum ({LEFT_WIDTH_DEFAULT} cols)")
             } else {
                 format!("Queue column width already at maximum ({max_width} cols)")
             };
@@ -105,7 +103,7 @@ impl App {
 
         // Route nav keys to the focused library panel.
         if matches!(self.panel_focus, PanelFocus::Library) {
-            if self.library_tab == 0 && self.handle_power_cw_key(key) {
+            if self.library_tab == 0 && self.handle_cw_key(key) {
                 return false;
             }
             if self.library_tab > 0 {
@@ -145,11 +143,11 @@ impl App {
                     }
                 }
 
-                let is_power_nav = matches!(
+                let is_nav = matches!(
                     key.code,
                     KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
                 ) && key.modifiers.contains(KeyModifiers::ALT);
-                // Route non-power-nav keys to the library handler for this
+                // Route non-nav keys to the library handler for this
                 // panel. `handle_lib_key`'s own `Some`/`None` is now the
                 // single source of truth for "did the library view claim
                 // this key" — no more hand-maintained mirror of its key set.
@@ -164,22 +162,22 @@ impl App {
                 // `enqueue_selected`, `select`, and `toggle_watched`
                 // (HIGH risk) — parameterizing all of them is a separate,
                 // larger follow-up, not in scope for #132.
-                // Track-selection mode (#145 task 3): while the power-left
+                // Track-selection mode (#145 task 3): while the left
                 // panel is sitting on the album-folder-listing nav level
-                // (the level `render_power_library` shows inline album
+                // (the level `render_library` shows inline album
                 // detail for, per task 2), Enter/Escape/Up/Down are
                 // reinterpreted for moving a track focus within the
                 // currently-displayed album instead of drilling into
                 // `nav_stack` (`select`) or moving the album cursor
-                // (`move_lib_cursor`). Scoped strictly to `!is_power_nav`
+                // (`move_lib_cursor`). Scoped strictly to `!is_nav`
                 // (so the Alt+arrow panel-switch / tab-cycling bindings above
                 // are untouched) and to
                 // `is_viewing_album_folders` (so movies/series/home-video
-                // panels and non-power tabs are completely unaffected; the
+                // panels and other tabs are completely unaffected; the
                 // legacy `is_album_level` drilldown this used to also
                 // exclude was removed entirely -- Enter now always routes
                 // here via `activate_album_folder_row`).
-                if !is_power_nav && self.is_viewing_album_folders(lib_idx) {
+                if !is_nav && self.is_viewing_album_folders(lib_idx) {
                     match key.code {
                         KeyCode::Enter => {
                             self.activate_album_folder_row(lib_idx);
@@ -212,13 +210,13 @@ impl App {
                     }
                 }
 
-                // Series-selection mode: while the power-left panel has a
+                // Series-selection mode: while the left panel has a
                 // Series item selected and selection mode is active, Enter/
                 // Escape/Up/Down/[/] are intercepted for navigating within
                 // the inline series detail (season pills + episode list)
                 // instead of drilling into `nav_stack` (`select`) or
                 // moving the list cursor (`move_lib_cursor`).
-                if !is_power_nav && self.libs[lib_idx].series_selection.is_some() {
+                if !is_nav && self.libs[lib_idx].series_selection.is_some() {
                     match key.code {
                         KeyCode::Enter => {
                             // Play the focused episode in selection mode.
@@ -262,18 +260,18 @@ impl App {
                 }
                 // Activate series-selection mode on Enter when the cursor is
                 // on a Series item (instead of drilling down via `select`).
-                if !is_power_nav
+                if !is_nav
                     && key.code == KeyCode::Enter
                     && self.libs[lib_idx].series_selection.is_none()
                 {
-                    if let Some(item) = self.power_selected_series_item(lib_idx) {
+                    if let Some(item) = self.selected_series_item(lib_idx) {
                         self.enter_series_selection(lib_idx, &item);
                         return false;
                     }
                 }
 
                 // Let the shared Tab/BackTab cycling path run after this block.
-                if !is_power_nav && !matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
+                if !is_nav && !matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
                     if let Some(quit) = self.handle_lib_key(lib_idx, key) {
                         return quit;
                     }

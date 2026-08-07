@@ -4,7 +4,7 @@ use mbv_core::api::MediaItem;
 use rand::seq::SliceRandom;
 
 impl App {
-    pub(super) fn power_artist_header_action_lib_idx(&self) -> Option<usize> {
+    pub(super) fn artist_header_action_lib_idx(&self) -> Option<usize> {
         if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
             Some(self.library_tab - 1)
         } else {
@@ -13,7 +13,7 @@ impl App {
     }
 
     fn selected_artist_header_action(&mut self) -> Option<(usize, ArtistHeaderSelection)> {
-        let lib_idx = self.power_artist_header_action_lib_idx()?;
+        let lib_idx = self.artist_header_action_lib_idx()?;
         self.selected_artist_header_album_items(lib_idx)
             .map(|(selection, _)| (lib_idx, selection))
     }

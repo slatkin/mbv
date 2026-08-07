@@ -197,7 +197,7 @@ struct SessionReporter {
     ws_tx: Option<crate::ws::WsSender>,
     // (item_id, msid, sid) in a single lock so progress and event-loop threads never
     // observe a torn triple during item transitions.
-    ids: Arc<Mutex<(String, String, String)>>,
+    ids: Arc<Mutex<(ItemId, MediaSourceId, EmbySessionId)>>,
     // Shared with progress thread so it knows whether to send progress or just ping.
     is_audio: Arc<AtomicBool>,
     status: Arc<Mutex<PlayerStatus>>,
@@ -207,9 +207,9 @@ impl SessionReporter {
     fn new(
         client: Arc<EmbyClient>,
         ws_tx: Option<crate::ws::WsSender>,
-        item_id: String,
-        msid: String,
-        sid: String,
+        item_id: ItemId,
+        msid: MediaSourceId,
+        sid: EmbySessionId,
         is_audio: bool,
         status: Arc<Mutex<PlayerStatus>>,
     ) -> Self {
@@ -292,11 +292,16 @@ impl SessionReporter {
     // Fire-and-forget report_start for a new item. Used once transition_to has
     // already updated self.ids synchronously via get_playback_info, so this
     // call is pure Emby bookkeeping the session doesn't need to wait on.
-    fn report_start_background(&self, item: &MediaItem, media_source_id: &str, session_id: &str) {
+    fn report_start_background(
+        &self,
+        item: &MediaItem,
+        media_source_id: &MediaSourceId,
+        session_id: &EmbySessionId,
+    ) {
         let client = self.client.clone();
         let item = item.clone();
-        let media_source_id = media_source_id.to_string();
-        let session_id = session_id.to_string();
+        let media_source_id = media_source_id.clone();
+        let session_id = session_id.clone();
         thread::spawn(move || {
             let ok = client.report_start(&item, &media_source_id, &session_id);
             if !ok {
@@ -340,7 +345,7 @@ impl SessionReporter {
         // ids on a 10-second timer) always sees the new item.
         {
             let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
-            ids.0 = item.id.clone();
+            ids.0 = ItemId::new(item.id.clone());
             ids.1 = info.media_source_id.clone();
             ids.2 = info.session_id.clone();
         }
@@ -361,7 +366,7 @@ impl SessionReporter {
         let ext_sub_urls = info.external_subtitle_urls;
         {
             let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
-            ids.0 = new_item.id.clone();
+            ids.0 = ItemId::new(new_item.id.clone());
             ids.1 = info.media_source_id.clone();
             ids.2 = info.session_id.clone();
         }
@@ -385,7 +390,7 @@ impl SessionReporter {
             let info = client.get_playback_info(&item.id);
             {
                 let mut locked = ids.lock().unwrap_or_else(|e| e.into_inner());
-                locked.0 = item.id.clone();
+                locked.0 = ItemId::new(item.id.clone());
                 locked.1 = info.media_source_id.clone();
                 locked.2 = info.session_id.clone();
             }

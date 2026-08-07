@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_imports)]
 
-use super::power_music_track_test_support::*;
+use super::music_track_test_support::*;
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
@@ -11,7 +11,7 @@ use ratatui::Terminal;
 use std::io::{Read, Write};
 #[test]
 fn up_down_in_track_mode_move_only_track_focus_and_clamp() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 3);
     app.libs[0].album_track_focus = Some(1);
     let album_cursor_before = app.libs[0].nav_stack.last().unwrap().cursor;
@@ -38,7 +38,7 @@ fn up_down_in_track_mode_move_only_track_focus_and_clamp() {
 
 #[test]
 fn track_mode_down_does_not_move_track_focus_when_queue_panel_has_focus() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 3);
     app.libs[0].album_track_focus = Some(1);
     app.panel_focus = PanelFocus::Queue;
@@ -55,7 +55,7 @@ fn track_mode_down_does_not_move_track_focus_when_queue_panel_has_focus() {
 
 #[test]
 fn mouse_clicking_another_album_clears_track_focus() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 3);
     app.libs[0].album_track_focus = Some(1);
     app.layout.main.left_area = Rect::new(10, 5, 29, 4);
@@ -70,7 +70,7 @@ fn mouse_clicking_another_album_clears_track_focus() {
 
 #[test]
 fn selecting_music_group_clears_track_focus() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     let mut group2 = make_item("Beta", "MusicArtist");
     group2.id = "group-1".into();
     group2.is_folder = true;
@@ -89,7 +89,7 @@ fn selecting_music_group_clears_track_focus() {
 
 #[test]
 fn switching_music_group_clears_track_focus() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     let mut group2 = make_item("Beta", "MusicArtist");
     group2.id = "group-1".into();
     group2.is_folder = true;
@@ -108,7 +108,7 @@ fn switching_music_group_clears_track_focus() {
 
 #[test]
 fn up_down_in_track_mode_with_no_cached_tracks_is_noop() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     // No `push_tracks` call -- album_tracks_cache has no entry for
     // "album-1", mirroring "not yet loaded".
     app.libs[0].album_track_focus = Some(0);
@@ -121,7 +121,7 @@ fn up_down_in_track_mode_with_no_cached_tracks_is_noop() {
 
 #[test]
 fn escape_in_track_mode_clears_focus_without_go_back() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 3);
     app.libs[0].album_track_focus = Some(2);
     let nav_len_before = app.libs[0].nav_stack.len();
@@ -144,7 +144,7 @@ fn escape_in_track_mode_clears_focus_without_go_back() {
 
 #[test]
 fn up_down_outside_track_mode_still_move_album_cursor() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     assert!(app.libs[0].album_track_focus.is_none());
 
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
@@ -155,7 +155,7 @@ fn up_down_outside_track_mode_still_move_album_cursor() {
 
 #[test]
 fn escape_outside_track_mode_still_calls_go_back_unchanged() {
-    // `make_power_music_album_app`'s grouped `["group","album"]` fixture
+    // `make_music_album_app`'s grouped `["group","album"]` fixture
     // sits at the *root* of the synthetic music-group view (nav_stack
     // len == 2), which `go_back`'s own pre-existing guard already
     // no-ops on ("don't pop when already at the root of a synthetic
@@ -165,10 +165,10 @@ fn escape_outside_track_mode_still_calls_go_back_unchanged() {
     // `album_track_focus` is `None`, whatever `go_back()` itself does --
     // demonstrated by comparing `handle_key(Esc)` against calling
     // `go_back()` directly on an identical, freshly-built app.
-    let mut via_go_back = make_power_music_album_app();
+    let mut via_go_back = make_music_album_app();
     via_go_back.go_back();
 
-    let mut via_escape_key = make_power_music_album_app();
+    let mut via_escape_key = make_music_album_app();
     assert!(via_escape_key.libs[0].album_track_focus.is_none());
     let handled = via_escape_key.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
@@ -185,7 +185,7 @@ fn escape_outside_track_mode_still_calls_go_back_unchanged() {
 
 #[test]
 fn page_down_in_album_list_mode_pages_by_rendered_rows_with_hero() {
-    let mut app = make_power_music_album_list_app(60, 0);
+    let mut app = make_music_album_list_app(60, 0);
     push_tracks(&mut app, "album-0", 4);
     render_full_app(&mut app, 100, 40);
     let viewport_rows = app.layout.main.left_area.height as usize;
@@ -193,12 +193,12 @@ fn page_down_in_album_list_mode_pages_by_rendered_rows_with_hero() {
         viewport_rows, 19,
         "fixture sanity: expected 19 rendered list rows below the hero panel"
     );
-    assert!(app.power_right_panel_image_renders_allowed());
+    assert!(app.right_panel_image_renders_allowed());
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
     assert!(!handled);
-    assert!(!app.power_right_panel_image_renders_allowed());
+    assert!(!app.right_panel_image_renders_allowed());
     // The hero panel above the list renders the selected album's detail;
     // the list still starts with the artist header, then renders every
     // album. A 19-row page from album 0's display row lands on album 19.
@@ -212,7 +212,7 @@ fn page_down_in_album_list_mode_pages_by_rendered_rows_with_hero() {
 
 #[test]
 fn page_up_in_album_list_mode_pages_by_rendered_rows_with_hero() {
-    let mut app = make_power_music_album_list_app(60, 35);
+    let mut app = make_music_album_list_app(60, 35);
     push_tracks(&mut app, "album-35", 4);
     render_full_app(&mut app, 100, 40);
     let viewport_rows = app.layout.main.left_area.height as usize;
@@ -237,7 +237,7 @@ fn page_up_in_album_list_mode_pages_by_rendered_rows_with_hero() {
 
 #[test]
 fn paging_past_display_edges_clamps_in_display_order_not_api_order() {
-    let mut app = make_power_music_album_list_app(3, 0);
+    let mut app = make_music_album_list_app(3, 0);
     app.libs[0].nav_stack.last_mut().unwrap().items[0].artist = "Zulu".into();
     app.libs[0].nav_stack.last_mut().unwrap().items[1].artist = "Alpha".into();
     app.libs[0].nav_stack.last_mut().unwrap().items[2].artist = "Bravo".into();
@@ -254,7 +254,7 @@ fn paging_past_display_edges_clamps_in_display_order_not_api_order() {
         "PageDown past the last display row should clamp to the last display-order album"
     );
 
-    let mut app = make_power_music_album_list_app(3, 1);
+    let mut app = make_music_album_list_app(3, 1);
     app.libs[0].nav_stack.last_mut().unwrap().items[0].artist = "Zulu".into();
     app.libs[0].nav_stack.last_mut().unwrap().items[1].artist = "Alpha".into();
     app.libs[0].nav_stack.last_mut().unwrap().items[2].artist = "Bravo".into();
@@ -278,12 +278,12 @@ fn paging_from_non_selectable_hint_and_header_rows_chooses_nearest_album_by_dire
     // render in the music-group view until track-selection mode is
     // entered (Enter pressed), so paging can no longer land on those --
     // browsing-mode paging is disabled entirely once track-selection
-    // mode is active (see `page_power_grouped_album_cursor`'s
+    // mode is active (see `page_grouped_album_cursor`'s
     // `album_track_focus.is_some()` guard). The two non-selectable rows
     // paging can still land on while merely *browsing* the album list
     // are: the artist header, and the collapsed action-hint row that
     // sits directly under the selected album.
-    let mut down_app = make_power_music_album_list_app(10, 0);
+    let mut down_app = make_music_album_list_app(10, 0);
     render_full_app(&mut down_app, 100, 40);
     assert!(down_app.libs[0].album_track_focus.is_none());
     down_app.layout.main.left_area.height = 1;
@@ -299,7 +299,7 @@ fn paging_from_non_selectable_hint_and_header_rows_chooses_nearest_album_by_dire
     // album 1.
     assert_eq!(down_app.libs[0].nav_stack.last().unwrap().cursor, 1);
 
-    let mut up_app = make_power_music_album_list_app(10, 3);
+    let mut up_app = make_music_album_list_app(10, 3);
     render_full_app(&mut up_app, 100, 40);
     assert!(up_app.libs[0].album_track_focus.is_none());
     up_app.layout.main.left_area.height = 4;
@@ -315,7 +315,7 @@ fn paging_from_non_selectable_hint_and_header_rows_chooses_nearest_album_by_dire
 
 #[test]
 fn oversized_artist_block_scrolls_inline_without_moving_the_outer_block() {
-    let mut app = make_power_music_album_list_app(60, 0);
+    let mut app = make_music_album_list_app(60, 0);
     render_full_app(&mut app, 100, 40);
     let initial_offset = app.libs[0].nav_stack.last().unwrap().scroll;
 
@@ -355,7 +355,7 @@ fn oversized_artist_block_scrolls_inline_without_moving_the_outer_block() {
 
 #[test]
 fn two_column_album_navigation_strides_rows_and_crosses_groups() {
-    let mut app = make_power_music_album_list_app(4, 0);
+    let mut app = make_music_album_list_app(4, 0);
     add_following_artist_albums(&mut app, 2);
     render_full_app(&mut app, 100, 40);
     // Force the two-column layout the movement derives from the pane width
@@ -385,7 +385,7 @@ fn two_column_album_navigation_strides_rows_and_crosses_groups() {
 
 #[test]
 fn oversized_artist_navigation_reaches_hidden_albums_before_following_artist() {
-    let mut app = make_power_music_album_list_app(60, 0);
+    let mut app = make_music_album_list_app(60, 0);
     add_following_artist_albums(&mut app, 2);
     render_full_app(&mut app, 100, 40);
 
@@ -405,7 +405,7 @@ fn oversized_artist_navigation_reaches_hidden_albums_before_following_artist() {
 
 #[test]
 fn page_down_crosses_oversized_artist_window_to_following_artist() {
-    let mut app = make_power_music_album_list_app(60, 59);
+    let mut app = make_music_album_list_app(60, 59);
     add_following_artist_albums(&mut app, 2);
     render_full_app(&mut app, 100, 40);
     app.layout.main.left_area.height = 1;

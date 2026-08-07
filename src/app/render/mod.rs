@@ -25,11 +25,11 @@ mod list_rows;
 mod music;
 mod overlays;
 mod pills;
-mod power_widgets;
 mod queue;
 mod search_sidebar;
 mod sort_filter;
 mod visualizer;
+mod widgets;
 
 // Re-exports so paths that resolved at `render::X` (or, from render's other
 // submodules, `super::X`) before the render/mod.rs split (issue #365 step 2,
@@ -40,17 +40,17 @@ mod visualizer;
 // and/or `use super::*` in render/tests.rs.
 pub(super) use album_plan::sorted_group_album_order;
 use chrome::LIST_PLAY_ICON;
-use power_widgets::{
-    power_content_width, power_right_panel_content_area, render_pill_bar, render_power_count_label,
-    render_power_placeholder, render_power_queue_panel_frame, render_power_right_scrollbar,
-    render_power_right_scrollbar_with_viewport, render_power_scrollbar,
-    render_selected_block_background, render_selected_block_borders, selection_marker, PillBar,
-    COLUMN_GAP, MUSIC_ALBUM_IMAGE_TYPES, POWER_RENDER_FILTER,
-};
 pub(super) use sort_filter::{
     effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,
 };
 pub(crate) use sort_filter::{initial_group_artist_sort_key, LetterFilter, LIBRARY_PILL_THRESHOLD};
+use widgets::{
+    content_width, render_count_label, render_pill_bar, render_placeholder,
+    render_queue_panel_frame, render_right_scrollbar, render_right_scrollbar_with_viewport,
+    render_scrollbar, render_selected_block_background, render_selected_block_borders,
+    right_panel_content_area, selection_marker, PillBar, COLUMN_GAP, MUSIC_ALBUM_IMAGE_TYPES,
+    RENDER_FILTER,
+};
 
 use super::ui_util::natural_sort_key;
 use super::{layout::AppLayout, palette, App, PanelFocus, PanelMode};
@@ -64,15 +64,15 @@ use std::time::Instant;
 use visualizer::VISUALIZER_HEIGHT;
 
 // Test-only: these names are otherwise unused in the production build (their
-// only production callers moved into chrome.rs/power_widgets.rs, which
+// only production callers moved into chrome.rs/widgets.rs, which
 // import them directly), but render/tests.rs still reaches them via
 // `use super::*`.
 #[cfg(test)]
 use mbv_core::api::TICKS_PER_SECOND;
 #[cfg(test)]
-use power_widgets::render_power_scrollbar_with_viewport;
-#[cfg(test)]
 use unicode_width::UnicodeWidthStr;
+#[cfg(test)]
+use widgets::render_scrollbar_with_viewport;
 
 /// Height of the tab-bar box: 1 row padding + 1 row tab + 1 row spacer.
 pub(super) const TAB_BAR_BOX_HEIGHT: u16 = 3;
@@ -197,21 +197,21 @@ impl App {
 
         self.render_context_menu(f, &mut layout);
 
-        let power_panel_area = (layout.main.panel_area.width > 0).then_some(layout.main.panel_area);
+        let panel_area = (layout.main.panel_area.width > 0).then_some(layout.main.panel_area);
         if self.show_sessions {
-            self.render_sessions_overlay(f, power_panel_area);
+            self.render_sessions_overlay(f, panel_area);
         }
         if self.show_playlists {
-            self.render_playlists_panel(f, power_panel_area);
+            self.render_playlists_panel(f, panel_area);
         }
         if self.search_sidebar.is_some() {
-            self.render_search_sidebar(f, power_panel_area);
+            self.render_search_sidebar(f, panel_area);
         }
         if self.show_help {
-            self.render_help_panel(f, power_panel_area);
+            self.render_help_panel(f, panel_area);
         }
         if self.show_settings {
-            self.render_settings_panel(f, &mut layout, power_panel_area);
+            self.render_settings_panel(f, &mut layout, panel_area);
             if self.multiselect_popup.is_some() {
                 self.render_multiselect_popup(f);
             }
@@ -303,7 +303,7 @@ impl App {
             }
         };
         layout.panel_area = left_area;
-        layout.panel_content_area = Self::power_panel_content_area(left_area);
+        layout.panel_content_area = Self::left_panel_content_area(left_area);
 
         // The queue panel always renders with the unfocused appearance while
         // it's the sole visible panel: full-width queue-only keeps the calm,
@@ -416,7 +416,7 @@ impl App {
             // the rows below it. Short terminals keep that same structure.
             let is_queue_only = self.panel_mode == PanelMode::QueueOnly;
             let is_wide = is_queue_only && left_area.width >= 100;
-            let (card_h, card_w, _) = self.render_power_card(f, card_area, is_wide);
+            let (card_h, card_w, _) = self.render_card(f, card_area, is_wide);
             let mut left_remaining = left_content.height.saturating_sub(card_h);
 
             // Queue-only mode has no right column, so the playback panel
@@ -507,7 +507,7 @@ impl App {
         // instead of each renderer inventing its own. When the left column is
         // collapsed the user has asked to reclaim maximum width, so the gutters
         // are dropped and the library spans the panel edge-to-edge.
-        let lib_area = power_right_panel_content_area(lib_area, self.panel_mode != PanelMode::Both);
+        let lib_area = right_panel_content_area(lib_area, self.panel_mode != PanelMode::Both);
         let mut render_lib_area = lib_area;
         if right_visible && self.library_tab > 0 && self.is_music_group_view(self.library_tab - 1) {
             let lib_idx = self.library_tab - 1;
@@ -518,7 +518,7 @@ impl App {
                     width: lib_area.width,
                     height: 1,
                 };
-                self.render_power_music_group_pills_row(f, pills_area, lib_idx, layout);
+                self.render_music_group_pills_row(f, pills_area, lib_idx, layout);
                 render_lib_area = Rect {
                     y: lib_area.y + 2,
                     height: lib_area.height.saturating_sub(2),
@@ -529,13 +529,13 @@ impl App {
             }
         }
         // Letter-range pills for large non-music libraries render inside
-        // `render_power_list` itself now, below the hero (`list.rs`), not
+        // `render_list` itself now, below the hero (`list.rs`), not
         // carved out of `lib_area` here -- unlike the music-group pills
         // above, letter pills only ever gate libraries that can show a
         // hero, so the ordering has to live where the hero split happens.
 
         if self.panel_mode != PanelMode::LibraryOnly {
-            let queue_list_area = render_power_queue_panel_frame(f, queue_area, queue_focused);
+            let queue_list_area = render_queue_panel_frame(f, queue_area, queue_focused);
             let qla = queue_list_area;
 
             // Title and status bar panels float within the queue panel with
@@ -548,7 +548,7 @@ impl App {
             };
 
             if title_overhead > 0 {
-                self.render_power_queue_title(
+                self.render_queue_title(
                     f,
                     Rect {
                         x: qla.x + 2,
@@ -564,7 +564,7 @@ impl App {
                 height: qla.height.saturating_sub(title_overhead + status_overhead),
                 ..qla
             };
-            self.render_power_queue(f, queue_content_area, queue_focused, layout);
+            self.render_queue(f, queue_content_area, queue_focused, layout);
 
             if status_overhead > 0 {
                 let pill_row = Rect {
@@ -627,7 +627,7 @@ impl App {
             }
         }
         if right_visible {
-            self.render_power_library(f, render_lib_area, left_focused, layout);
+            self.render_library(f, render_lib_area, left_focused, layout);
         }
 
         // Status bar + toast overlay at the bottom of the right panel.

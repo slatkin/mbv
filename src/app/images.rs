@@ -59,8 +59,8 @@ pub(super) struct ImageFetchReq {
 }
 
 impl App {
-    /// Proactively fetches the full track list for `album_id` so the Power
-    /// View inline album detail pane (#145) can render it without the user
+    /// Proactively fetches the full track list for `album_id` so the view's
+    /// inline album detail pane (#145) can render it without the user
     /// drilling in first. A simple one-shot fetch (no throttle queue) —
     /// only one album is ever highlighted at a time, so there is no fan-out
     /// to bound.
@@ -277,12 +277,12 @@ impl App {
         self.last_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
     }
 
-    pub(super) fn power_right_panel_image_renders_allowed(&self) -> bool {
-        self.last_power_library_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
+    pub(super) fn right_panel_image_renders_allowed(&self) -> bool {
+        self.last_library_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
     }
 
-    pub(super) fn mark_power_library_navigation(&mut self, at: Instant) {
-        self.last_power_library_nav_at = at;
+    pub(super) fn mark_library_navigation(&mut self, at: Instant) {
+        self.last_library_nav_at = at;
     }
 
     pub(super) fn fetch_list_card_image_when_idle(

@@ -5,7 +5,7 @@ impl App {
         match action {
             Some(ContextAction::Play) => {
                 if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0 {
-                    self.power_cw_play();
+                    self.cw_play();
                 } else if matches!(self.panel_focus, PanelFocus::Queue) {
                     // Was its own third copy of queue-cursor activation, with
                     // a subtly narrower `else` branch than the keyboard/mouse
@@ -36,24 +36,24 @@ impl App {
                 self.shuffle_folder(&id);
             }
             Some(ContextAction::PlayArtistHeader(selection)) => {
-                if let Some(lib_idx) = self.power_artist_header_action_lib_idx() {
+                if let Some(lib_idx) = self.artist_header_action_lib_idx() {
                     self.play_artist_header_selection(lib_idx, &selection, false);
                 }
             }
             Some(ContextAction::ShuffleArtistHeader(selection)) => {
-                if let Some(lib_idx) = self.power_artist_header_action_lib_idx() {
+                if let Some(lib_idx) = self.artist_header_action_lib_idx() {
                     self.play_artist_header_selection(lib_idx, &selection, true);
                 }
             }
             Some(ContextAction::Enqueue) => {
                 if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0 {
-                    self.power_cw_enqueue();
+                    self.cw_enqueue();
                 } else {
                     self.enqueue_selected();
                 }
             }
             Some(ContextAction::EnqueueArtistHeader(selection)) => {
-                if let Some(lib_idx) = self.power_artist_header_action_lib_idx() {
+                if let Some(lib_idx) = self.artist_header_action_lib_idx() {
                     self.enqueue_artist_header_selection(lib_idx, &selection);
                 }
             }
