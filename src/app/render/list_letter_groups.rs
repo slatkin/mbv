@@ -5,7 +5,6 @@ use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
-use ratatui::layout::Rect;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
@@ -31,7 +30,6 @@ impl App {
             stored_scroll,
             cols,
             focused,
-            hero_rows,
         } = ctx;
         let n = items.len();
         let visible = content_area.height as usize;
@@ -95,26 +93,11 @@ impl App {
             .position(|r| matches!(r, DisplayRow::Item(idxs) if idxs.contains(&cursor)))
             .unwrap_or(0);
 
-        // Insert the inline hero just below the row containing the cursor:
-        // the top section ends at the cursor's row, the hero fills the next
-        // `hero_rows` display rows (blank in the List widget -- the hero is
-        // painted separately over them), and the bottom section continues
-        // below. `display_cursor` is unchanged because the rows are inserted
-        // after it.
-        if hero_rows > 0 {
-            let insert_at = display_cursor + 1;
-            display_rows.splice(
-                insert_at..insert_at,
-                (0..hero_rows).map(|_| DisplayRow::Hero),
-            );
-        }
         let total_display = display_rows.len();
 
-        // Keep the cursor row and the hero below it visible: never scroll
-        // the cursor row above the viewport's top, and never scroll the
-        // hero's bottom row past the viewport's bottom. Without a hero
-        // (`hero_rows == 0`) this is exactly the old cursor-row clamp.
-        let lower_bound = (display_cursor + hero_rows as usize + 1)
+        // Keep the cursor row visible: never scroll it above the viewport's
+        // top.
+        let lower_bound = (display_cursor + 1)
             .saturating_sub(visible)
             .min(display_cursor);
         let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
@@ -139,7 +122,7 @@ impl App {
         // cell via `left_item_rows`).
         for row in display_rows.iter().skip(offset).take(visible) {
             layout.left_row_map.push(match row {
-                DisplayRow::Spacer | DisplayRow::LetterHeader(_) | DisplayRow::Hero => None,
+                DisplayRow::Spacer | DisplayRow::LetterHeader(_) => None,
                 DisplayRow::Item(idxs) => idxs.first().copied(),
             });
         }
@@ -165,7 +148,7 @@ impl App {
             .skip(offset)
             .take(visible)
             .map(|(_abs_idx, row)| match row {
-                DisplayRow::Spacer | DisplayRow::Hero => ListItem::new(Line::default()),
+                DisplayRow::Spacer => ListItem::new(Line::default()),
                 DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                     Span::raw(" "),
                     Span::styled(
@@ -231,17 +214,6 @@ impl App {
         state.select(Some(display_cursor.saturating_sub(offset)));
         layout.cursor_screen_y =
             Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
-        // Publish the inline hero's rect (below the selected row) so mouse
-        // clicks on it are Enter-equivalents and the hero is painted over
-        // its blank display rows afterwards.
-        if hero_rows > 0 {
-            layout.hero_area = Rect {
-                x: content_area.x,
-                y: content_area.y + (display_cursor.saturating_sub(offset)) as u16 + 1,
-                width: content_area.width,
-                height: hero_rows,
-            };
-        }
         f.render_stateful_widget(
             List::new(list_items).highlight_style(Style::default()),
             content_area,

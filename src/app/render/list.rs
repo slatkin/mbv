@@ -31,6 +31,8 @@ const HERO_TITLE_ROWS: u16 = 1;
 /// the hero block's reserved rows (the list makes room), not painted over
 /// list content like `render_selected_block_borders` does.
 const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
+/// Blank row separating the hero block from the list below it.
+const HERO_SEPARATOR_ROWS: u16 = 1;
 
 /// Height of the top hero banner for a content area `width` columns wide:
 /// the poster image at 16:9 in terminal cells (cells are roughly twice as
@@ -97,6 +99,105 @@ impl App {
         } else {
             crate::app::library_column_width::library_column_count(content_area.width)
         };
+
+        // ── Fixed hero area pinned to the top of content_area, letter pills
+        //    below it ──────────────────────────────────────────────────────
+        // The selected item's banner (poster + meta + overview, or -- for a
+        // selected Series -- the season pills + episode table) is painted
+        // into a fixed-height rect at the top of the content area, followed
+        // by a blank separator row. Below that, the letter-range pill row
+        // (large non-music libraries' top browse level) gets its own row
+        // plus a blank gap -- the same reservation `mod.rs` used to carve
+        // out of `lib_area` before calling into this renderer; it lives
+        // here now so the pills land below the hero, not above it. The
+        // list below everything (`list_area`) is a plain grid that never
+        // reflows as the cursor moves. No hero when nothing is selected
+        // (e.g. an empty list) or when the selected item has no banner
+        // (folders, music) -- the list then takes the whole remaining area.
+        //
+        // Movies get the poster/meta/overview content sized by the image's
+        // 16:9 aspect, capped so the list keeps a few rows in wide
+        // terminals (design decision 3, option a). A selected Series keeps
+        // its own inline detail (season pills + episode table,
+        // `series_inline_detail_rows` / `render_series_inline_detail`) --
+        // that's a distinct, taller, interactive content shape the generic
+        // compact banner can't represent, so it isn't folded into the
+        // movie hero's row math.
+        let hero_rows: u16 = if self.library_tab > 0 {
+            let lib_idx = self.library_tab - 1;
+            if selected_movie_item.is_some() {
+                hero_height_for_width(content_area.width, cols > 1) + HERO_BLOCK_EXTRA_ROWS
+            } else if let Some(item) = &selected_series_item {
+                let (in_selection, episode_count) = self.series_selection_state(lib_idx, &item.id);
+                self.series_inline_detail_rows(
+                    item,
+                    content_area.width,
+                    cols > 1,
+                    in_selection,
+                    episode_count,
+                ) as u16
+                    + HERO_BLOCK_EXTRA_ROWS
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
+        // Letter-range pill row: same non-music, top-browse-level gate the
+        // caller (`mod.rs`) used to check before this renderer ran.
+        // Reserves 1 row for the pills plus 1 blank gap row below them.
+        let show_pills =
+            self.library_tab > 0 && self.should_show_letter_pills(self.library_tab - 1);
+        let pills_reserved: u16 = if show_pills {
+            2.min(content_area.height)
+        } else {
+            0
+        };
+
+        // The blank separator row only applies between the hero and the
+        // list. When the pill row is shown it sits immediately below the
+        // hero's own bottom border -- no extra gap between them.
+        let separator_reserve = if show_pills { 0 } else { HERO_SEPARATOR_ROWS };
+
+        // Clamp the hero to leave at least 1 row for the list, per the spec
+        // ("...capped at a maximum that leaves at least 1 row for the
+        // list"). Below `HERO_BLOCK_EXTRA_ROWS` there isn't room for even
+        // the hero's own border/padding rows, so suppress it entirely
+        // rather than paint a malformed block.
+        let hero_rows = hero_rows.min(
+            content_area
+                .height
+                .saturating_sub(1 + separator_reserve + pills_reserved),
+        );
+        let hero_rows = if hero_rows < HERO_BLOCK_EXTRA_ROWS {
+            0
+        } else {
+            hero_rows
+        };
+        let separator_rows = if hero_rows > 0 { separator_reserve } else { 0 };
+
+        let hero_area = Rect {
+            height: hero_rows,
+            ..content_area
+        };
+        let pills_area = Rect {
+            y: content_area.y + hero_rows + separator_rows,
+            height: if show_pills { 1 } else { 0 },
+            ..content_area
+        };
+        let list_area = Rect {
+            y: content_area.y + hero_rows + separator_rows + pills_reserved,
+            height: content_area
+                .height
+                .saturating_sub(hero_rows + separator_rows + pills_reserved),
+            ..content_area
+        };
+
+        if show_pills {
+            let lib_idx = self.library_tab - 1;
+            self.render_power_letter_pills_row(f, pills_area, lib_idx, layout);
+        }
 
         // Gather items, cursor, stored scroll offset, and the *true* library total
         // (not just how many pages have been fetched so far) from the appropriate
@@ -195,8 +296,6 @@ impl App {
                 self.libs[lib_idx].library.collection_type != "music"
             };
 
-        layout.left_area = content_area;
-
         if n == 0 {
             let msg = if self.library_tab > 0 {
                 let lib_idx = self.library_tab - 1;
@@ -215,62 +314,20 @@ impl App {
             } else {
                 "(empty)"
             };
-            super::render_power_placeholder(f, content_area, msg);
+            super::render_power_placeholder(f, list_area, msg);
             return;
         }
 
-        // ── Hero inline, list wraps around it ──────────────────────────
-        // The selected item's banner (poster + meta + overview, or --  for a
-        // selected Series -- the season pills + episode table) is painted
-        // full-width just below the row containing the selected item; the
-        // list renderer packs rows above and below it (the hero occupies
-        // `hero_rows` blank `DisplayRow::Hero` rows, painted over
-        // afterwards). The block grows the content height by 4 so the
-        // `▁`/`▔` SEEK_TRACK borders and the two bare colored-bg padding
-        // rows are *inside* the hero block's reserved rows (the list makes
-        // room; nothing gets painted over). No hero when nothing is
-        // selected (e.g. an empty list) or when the selected item has no
-        // banner (folders, music) — the list then takes the whole content
-        // area.
-        //
-        // Movies get the poster/meta/overview content sized by the image's
-        // 16:9 aspect, capped so the list keeps a few rows in wide
-        // terminals (design decision 3, option a). A selected Series keeps
-        // its own inline detail (season pills + episode table,
-        // `series_inline_detail_rows` / `render_series_inline_detail`) --
-        // that's a distinct, taller, interactive content shape the generic
-        // compact banner can't represent, so it isn't folded into the
-        // movie hero's row math.
-        let hero_rows: u16 = if self.library_tab > 0 {
-            let lib_idx = self.library_tab - 1;
-            if selected_movie_item.is_some() {
-                hero_height_for_width(content_area.width, cols > 1) + HERO_BLOCK_EXTRA_ROWS
-            } else if let Some(item) = &selected_series_item {
-                let (in_selection, episode_count) = self.series_selection_state(lib_idx, &item.id);
-                self.series_inline_detail_rows(
-                    item,
-                    content_area.width,
-                    cols > 1,
-                    in_selection,
-                    episode_count,
-                ) as u16
-                    + HERO_BLOCK_EXTRA_ROWS
-            } else {
-                0
-            }
-        } else {
-            0
-        };
+        layout.left_area = list_area;
+        layout.hero_area = hero_area;
 
-        // The list renderer gets the whole content area; the hero is
-        // inserted inline below the selected row, not above the list.
         let final_offset: usize;
 
         if show_grouped {
             let lib_idx = self.library_tab - 1;
             final_offset = self.render_power_grouped_album_rows(
                 f,
-                content_area,
+                list_area,
                 lib_idx,
                 &items,
                 cursor,
@@ -280,13 +337,12 @@ impl App {
             );
         } else if use_letter_groups {
             let ctx = ListRenderCtx {
-                content_area,
+                content_area: list_area,
                 items: &items,
                 cursor,
                 stored_scroll,
                 cols,
                 focused,
-                hero_rows,
             };
             final_offset = self.render_power_letter_grouped_rows(
                 f,
@@ -297,28 +353,23 @@ impl App {
             );
         } else {
             let ctx = ListRenderCtx {
-                content_area,
+                content_area: list_area,
                 items: &items,
                 cursor,
                 stored_scroll,
                 cols,
                 focused,
-                hero_rows,
             };
             final_offset = self.render_power_plain_rows(f, ctx, layout);
         }
 
-        // Paint the hero last, over the blank `DisplayRow::Hero` rows the
-        // list renderer left: the colored bg (focused/unfocused pattern,
-        // matching music/homevideo's selected block), then the `▁` top and
-        // `▔` bottom borders in SEEK_TRACK on the block's outer rows, then
-        // the content offset 2 rows down past the top border + top padding.
-        // The row renderer has already overwritten `cursor_screen_y` with
-        // the selected list row (the blinking cursor / mouse hit target
-        // stays on the list row, not the hero), so save and restore it
-        // around the hero paint.
+        // Paint the hero into its fixed top-edge rect, after the list has
+        // rendered: the colored bg (focused/unfocused pattern), then the
+        // `▁` top and `▔` bottom borders in SEEK_TRACK on the block's outer
+        // rows, then the content offset 2 rows down past the top border +
+        // top padding. The row renderer set `cursor_screen_y` to the
+        // selected list row; the hero paint doesn't touch it.
         if hero_rows > 0 {
-            let saved_cursor_y = layout.cursor_screen_y;
             let bg = if focused {
                 palette::MEDIA_SELECTED_BG
             } else {
@@ -329,37 +380,36 @@ impl App {
             f.render_widget(
                 Block::default().style(Style::default().bg(bg)),
                 Rect {
-                    x: layout.hero_area.x,
-                    y: layout.hero_area.y + 1,
-                    width: layout.hero_area.width,
+                    x: hero_area.x,
+                    y: hero_area.y + 1,
+                    width: hero_area.width,
                     height: hero_rows - 2,
                 },
             );
             // Top `▁` / bottom `▔` borders in SEEK_TRACK, painted on the
-            // hero block's own outer rows (the list above and below made
-            // room for them).
+            // hero block's own outer rows.
             let border_style = Style::default().fg(palette::SEEK_TRACK);
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2581}".repeat(layout.hero_area.width as usize),
+                    "\u{2581}".repeat(hero_area.width as usize),
                     border_style,
                 ))),
                 Rect {
-                    x: layout.hero_area.x,
-                    y: layout.hero_area.y,
-                    width: layout.hero_area.width,
+                    x: hero_area.x,
+                    y: hero_area.y,
+                    width: hero_area.width,
                     height: 1,
                 },
             );
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2594}".repeat(layout.hero_area.width as usize),
+                    "\u{2594}".repeat(hero_area.width as usize),
                     border_style,
                 ))),
                 Rect {
-                    x: layout.hero_area.x,
-                    y: layout.hero_area.y + hero_rows - 1,
-                    width: layout.hero_area.width,
+                    x: hero_area.x,
+                    y: hero_area.y + hero_rows - 1,
+                    width: hero_area.width,
                     height: 1,
                 },
             );
@@ -368,10 +418,9 @@ impl App {
             // selected blocks; the banner layout is a pure function of the
             // panel width, so this paints the same content as before.
             let content_rect = Rect {
-                x: layout.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                y: layout.hero_area.y + 2,
-                width: layout
-                    .hero_area
+                x: hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
+                y: hero_area.y + 2,
+                width: hero_area
                     .width
                     .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
                 height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
@@ -399,7 +448,6 @@ impl App {
                     layout,
                 );
             }
-            layout.cursor_screen_y = saved_cursor_y;
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.
