@@ -188,7 +188,7 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-use crate::app::images::{CachedImage, QUEUE_CARD_PLACEHOLDER_KEY};
+    use crate::app::images::{CachedImage, QUEUE_CARD_PLACEHOLDER_KEY};
     use crate::app::tests::{make_app_stub, make_item, make_items};
     use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, QueueScope};
     use crate::config::Config;
@@ -385,7 +385,8 @@ use crate::app::images::{CachedImage, QUEUE_CARD_PLACEHOLDER_KEY};
         app.image_protocol_enabled = true;
         app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
         app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
-        app.card_image_states.insert("id2:P".into(), CachedImage::empty());
+        app.card_image_states
+            .insert("id2:P".into(), CachedImage::empty());
 
         render_power_card(&mut app);
 
@@ -401,7 +402,8 @@ use crate::app::images::{CachedImage, QUEUE_CARD_PLACEHOLDER_KEY};
         app.image_protocol_enabled = true;
         app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
         app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
-        app.card_image_states.insert("id3:P".into(), CachedImage::empty());
+        app.card_image_states
+            .insert("id3:P".into(), CachedImage::empty());
         set_playback(&mut app, 3, false);
 
         render_power_card(&mut app);

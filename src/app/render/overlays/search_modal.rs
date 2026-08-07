@@ -223,10 +223,7 @@ fn render_type_filter(
     }
     for (i, (label, is_selected)) in chips.iter().enumerate() {
         if i > 0 {
-            spans.push(Span::styled(
-                " ",
-                Style::default().bg(body_bg(modal.mode)),
-            ));
+            spans.push(Span::styled(" ", Style::default().bg(body_bg(modal.mode))));
         }
         let style = if *is_selected {
             Style::default()

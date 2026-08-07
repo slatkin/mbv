@@ -32,8 +32,7 @@ static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
 pub(super) struct CachedImage {
     /// `None` marks a fetch that resolved without artwork.
     pub img: Option<image::DynamicImage>,
-    pub protocols:
-        std::collections::HashMap<&'static str, ratatui_image::thread::ThreadProtocol>,
+    pub protocols: std::collections::HashMap<&'static str, ratatui_image::thread::ThreadProtocol>,
 }
 
 impl CachedImage {
@@ -300,7 +299,10 @@ impl App {
     }
 
     pub(super) fn ensure_placeholder_card_image(&mut self) {
-        if self.card_image_states.contains_key(QUEUE_CARD_PLACEHOLDER_KEY) {
+        if self
+            .card_image_states
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY)
+        {
             return;
         }
         if self.picker_and_suffix().is_none() {
@@ -338,7 +340,9 @@ impl App {
     /// The picker that encodes the given protocol suffix.
     fn picker_for_suffix(&self, suffix: &'static str) -> Option<&Picker> {
         if suffix == "halfblock" {
-            self.halfblock_picker.as_ref().or(self.image_picker.as_ref())
+            self.halfblock_picker
+                .as_ref()
+                .or(self.image_picker.as_ref())
         } else {
             self.image_picker.as_ref()
         }
@@ -410,10 +414,7 @@ impl App {
         let mem_key = mem_key(bare_key, suffix);
         let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
         let _ = self.resize_register_tx.send((mem_key, req_rx));
-        ratatui_image::thread::ThreadProtocol::new(
-            req_tx,
-            Some(picker.new_resize_protocol(img)),
-        )
+        ratatui_image::thread::ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
     }
 
     pub(super) fn is_halfblock_configured(&self) -> bool {

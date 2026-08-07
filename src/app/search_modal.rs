@@ -653,7 +653,8 @@ mod tests {
         assert!(app.search_rx.try_recv().is_err());
 
         // Advance past the debounce deadline and flush.
-        app.search_debounce_deadline = Some(std::time::Instant::now() - std::time::Duration::from_millis(400));
+        app.search_debounce_deadline =
+            Some(std::time::Instant::now() - std::time::Duration::from_millis(400));
         assert!(app.maybe_flush_search_debounce());
         assert_eq!(app.search_debounce_pending, None);
         assert_eq!(app.search_debounce_deadline, None);
