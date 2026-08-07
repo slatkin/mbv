@@ -2,7 +2,7 @@ use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 
 /// Standard inset for every selected detail block.
@@ -95,9 +95,10 @@ pub(super) fn build_list_row_spans(
         };
         if cols > 1 {
             let bg = palette::PLAYBACK_PANEL_BG;
+            let title_style = Style::default().fg(palette::YELLOW).bg(bg);
             vec![
                 Span::styled(" ", Style::default().bg(bg)),
-                Span::styled(title, title_style.bg(bg)),
+                Span::styled(title, title_style),
             ]
         } else {
             let marker_style = Style::default().fg(palette::AQUA);
@@ -151,8 +152,9 @@ pub(super) fn item_cell_spans(
 
 /// Draws the column selection marker after the list has rendered.
 /// In two-column mode, the selected cell's marker is drawn at the panel
-/// edge: `▌` at the left edge for a left-column selection, `▐` at the
-/// right edge for a right-column selection (symmetric).
+/// edge: `▎` at the left edge for a left-column selection, `▏` at the
+/// right edge for a right-column selection (symmetric). The background
+/// is extended to cover the gap between the marker and the cell content.
 pub(super) fn draw_column_selection_markers(
     f: &mut Frame,
     content_area: Rect,
@@ -174,23 +176,44 @@ pub(super) fn draw_column_selection_markers(
         .position(|&idx| idx == cursor)
         .unwrap_or(0);
 
+    let bg = palette::PLAYBACK_PANEL_BG;
     let marker_style = Style::default().fg(palette::AQUA);
+    let row_y = content_area.y + row_idx as u16;
+
     if col_in_row == 0 {
+        f.render_widget(
+            Block::default().style(Style::default().bg(bg)),
+            Rect {
+                x: content_area.x.saturating_sub(2),
+                y: row_y,
+                width: 2,
+                height: 1,
+            },
+        );
         f.render_widget(
             Paragraph::new(Line::from(Span::styled("\u{258e}", marker_style))),
             Rect {
                 x: content_area.x.saturating_sub(2),
-                y: content_area.y + row_idx as u16,
+                y: row_y,
                 width: 1,
                 height: 1,
             },
         );
     } else {
         f.render_widget(
+            Block::default().style(Style::default().bg(bg)),
+            Rect {
+                x: content_area.x + content_area.width,
+                y: row_y,
+                width: 2,
+                height: 1,
+            },
+        );
+        f.render_widget(
             Paragraph::new(Line::from(Span::styled("\u{1fb87}", marker_style))),
             Rect {
                 x: content_area.x + content_area.width + 1,
-                y: content_area.y + row_idx as u16,
+                y: row_y,
                 width: 1,
                 height: 1,
             },
