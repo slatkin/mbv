@@ -56,6 +56,11 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         Some(ws_send_tx.clone()),
     );
 
+    player.pre_warm(
+        client_locked.config.audio_pipe_target(),
+        client_locked.config.audio_pipe_samplerate,
+        client_locked.config.audio_pipe_bitdepth,
+    );
     let player_status = player.status.clone();
     let player_cmd_tx = player.cmd_tx.clone();
     (hooks.on_player_ready)(DaemonPlayerHandle {
@@ -267,7 +272,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
             last_capabilities = Instant::now();
         }
 
-        let ev = match merged_rx.recv_timeout(Duration::from_millis(250)) {
+        let ev = match merged_rx.recv_timeout(Duration::from_millis(25)) {
             Ok(ev) => ev,
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 if let Some((connection_id, event)) = playback_intents.settle_buffering_if_due() {

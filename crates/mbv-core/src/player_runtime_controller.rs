@@ -1,3 +1,42 @@
+// Write end of a self-pipe used to wake the player event loop immediately
+// (see player_session_run.rs) instead of it polling on a fixed timeout.
+// Closes the fd on drop so replacing it (each play()/play_queue() call makes
+// a fresh pipe) never leaks fds.
+struct WakeupWriter(RawFd);
+
+impl WakeupWriter {
+    fn notify(&self) {
+        let byte = [0u8; 1];
+        unsafe {
+            libc::write(self.0, byte.as_ptr() as *const libc::c_void, 1);
+        }
+    }
+}
+
+impl Drop for WakeupWriter {
+    fn drop(&mut self) {
+        unsafe {
+            libc::close(self.0);
+        }
+    }
+}
+
+// Returns (read_fd, write end) on success. Both fds are non-blocking. `None`
+// on pipe(2) failure; callers fall back to bounded polling in that case.
+fn make_wakeup_pipe() -> Option<(RawFd, WakeupWriter)> {
+    let mut fds = [-1i32; 2];
+    if unsafe { libc::pipe(fds.as_mut_ptr()) } != 0 {
+        log::warn!(target: "player", "wakeup pipe: pipe(2) failed: {}", std::io::Error::last_os_error());
+        return None;
+    }
+    for fd in fds {
+        unsafe {
+            libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK);
+        }
+    }
+    Some((fds[0], WakeupWriter(fds[1])))
+}
+
 pub struct QuitHandle {
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
@@ -34,6 +73,8 @@ pub struct Player {
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
     pub cmd_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
+    wakeup_fd: Arc<Mutex<Option<WakeupWriter>>>,
+    pre_warmed_mpv: Arc<Mutex<Option<(Mpv, bool)>>>,
     pub status: Arc<Mutex<PlayerStatus>>,
     thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
     ws_tx: Option<crate::ws::WsSender>,
@@ -67,9 +108,35 @@ impl Player {
             stop_tx: Arc::new(Mutex::new(None)),
             shutdown_report_timeout: Arc::new(Mutex::new(None)),
             cmd_tx: Arc::new(Mutex::new(None)),
+            wakeup_fd: Arc::new(Mutex::new(None)),
+            pre_warmed_mpv: Arc::new(Mutex::new(None)),
             status: Arc::new(Mutex::new(PlayerStatus::default())),
             thread_handle: Mutex::new(None),
             ws_tx,
+        }
+    }
+
+    pub fn pre_warm(&self, pipe_path: Option<String>, samplerate: u32, bitdepth: u8) {
+        if pipe_path.is_none() {
+            return;
+        }
+        let config = MpvSessionConfig {
+            headless: true,
+            use_mpv_config: self.use_mpv_config,
+            no_scripts: self.no_scripts,
+            always_skip_intro: self.always_skip_intro,
+            audio_pipe_path: pipe_path,
+            audio_pipe_samplerate: samplerate,
+            audio_pipe_bitdepth: bitdepth,
+        };
+        match init_mpv(&config) {
+            Ok(warmed) => {
+                log::info!(target: "player", "pre-warmed mpv for pipe output");
+                *self.pre_warmed_mpv.lock().unwrap() = Some(warmed);
+            }
+            Err(e) => {
+                log::warn!(target: "player", "pre-warm failed: {e}");
+            }
         }
     }
 
@@ -96,11 +163,17 @@ impl Player {
 
     /// Returns `true` if the command was sent, `false` if the player thread is gone.
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
-        if let Some(tx) = self.cmd_tx.lock().unwrap().as_ref() {
+        let sent = if let Some(tx) = self.cmd_tx.lock().unwrap().as_ref() {
             tx.send(cmd).is_ok()
         } else {
             false
+        };
+        if sent {
+            if let Some(w) = self.wakeup_fd.lock().unwrap().as_ref() {
+                w.notify();
+            }
         }
+        sent
     }
 
     #[cfg(test)]
@@ -258,16 +331,24 @@ impl Player {
         *self.shutdown_report_timeout.lock().unwrap() = None;
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
+        let wakeup_pipe = make_wakeup_pipe();
+        let wakeup_read_fd = wakeup_pipe.as_ref().map(|(r, _)| *r).unwrap_or(-1);
+        let wakeup_write_fd = wakeup_pipe.as_ref().map(|(_, w)| w.0).unwrap_or(-1);
+        *self.wakeup_fd.lock().unwrap() = wakeup_pipe.map(|(_, w)| w);
+        let pre_warmed = self.pre_warmed_mpv.lock().unwrap().take();
 
         let handle = thread::spawn(move || {
             is_queue_mode.store(false, Ordering::Relaxed);
 
-            let (mpv, startup_pause_for_pipe) = match init_mpv(&config) {
-                Ok(v) => v,
-                Err(e) => {
-                    log::error!(target: "player", "{}", e);
-                    return;
-                }
+            let (mpv, startup_pause_for_pipe) = match pre_warmed {
+                Some(w) => w,
+                None => match init_mpv(&config) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        log::error!(target: "player", "{}", e);
+                        return;
+                    }
+                },
             };
             init_volume(&mpv, &status, initial_volume);
 
@@ -287,7 +368,18 @@ impl Player {
             observe_properties(&mpv, config.use_mpv_config);
 
             let info = client.get_playback_info(&item.id);
-            client.report_start(&item, &info.media_source_id, &info.session_id);
+            {
+                let client = client.clone();
+                let item = item.clone();
+                let media_source_id = info.media_source_id.clone();
+                let session_id = info.session_id.clone();
+                thread::spawn(move || {
+                    let ok = client.report_start(&item, &media_source_id, &session_id);
+                    if !ok {
+                        log::warn!(target: "player", "report_start failed for item={}", item.id);
+                    }
+                });
+            }
             let reporter = SessionReporter::new(
                 client,
                 ws_tx,
@@ -314,7 +406,7 @@ impl Player {
                 token,
                 info.external_subtitle_urls,
             );
-            session.run(mpv, stop_rx, cmd_rx, progress);
+            session.run(mpv, stop_rx, cmd_rx, progress, wakeup_read_fd, wakeup_write_fd);
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
     }
@@ -397,16 +489,24 @@ impl Player {
         *self.shutdown_report_timeout.lock().unwrap() = None;
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
+        let wakeup_pipe = make_wakeup_pipe();
+        let wakeup_read_fd = wakeup_pipe.as_ref().map(|(r, _)| *r).unwrap_or(-1);
+        let wakeup_write_fd = wakeup_pipe.as_ref().map(|(_, w)| w.0).unwrap_or(-1);
+        *self.wakeup_fd.lock().unwrap() = wakeup_pipe.map(|(_, w)| w);
+        let pre_warmed = self.pre_warmed_mpv.lock().unwrap().take();
 
         let handle = thread::spawn(move || {
             is_queue_mode.store(true, Ordering::Relaxed);
 
-            let (mpv, startup_pause_for_pipe) = match init_mpv(&config) {
-                Ok(v) => v,
-                Err(e) => {
-                    log::error!(target: "player", "{}", e);
-                    return;
-                }
+            let (mpv, startup_pause_for_pipe) = match pre_warmed {
+                Some(w) => w,
+                None => match init_mpv(&config) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        log::error!(target: "player", "{}", e);
+                        return;
+                    }
+                },
             };
             init_volume(&mpv, &status, initial_volume);
 
@@ -435,7 +535,18 @@ impl Player {
             observe_properties(&mpv, config.use_mpv_config);
 
             let info = client.get_playback_info(&items[start_idx].id);
-            client.report_start(&items[start_idx], &info.media_source_id, &info.session_id);
+            {
+                let client = client.clone();
+                let item = items[start_idx].clone();
+                let media_source_id = info.media_source_id.clone();
+                let session_id = info.session_id.clone();
+                thread::spawn(move || {
+                    let ok = client.report_start(&item, &media_source_id, &session_id);
+                    if !ok {
+                        log::warn!(target: "player", "report_start failed for item={}", item.id);
+                    }
+                });
+            }
             let reporter = SessionReporter::new(
                 client,
                 ws_tx,
@@ -462,7 +573,7 @@ impl Player {
                 token,
                 info.external_subtitle_urls,
             );
-            session.run(mpv, stop_rx, cmd_rx, progress);
+            session.run(mpv, stop_rx, cmd_rx, progress, wakeup_read_fd, wakeup_write_fd);
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
     }
@@ -470,6 +581,9 @@ impl Player {
     pub fn stop(&self) {
         if let Some(tx) = self.stop_tx.lock().unwrap().take() {
             let _ = tx.send(());
+        }
+        if let Some(w) = self.wakeup_fd.lock().unwrap().as_ref() {
+            w.notify();
         }
         // Don't clear cmd_tx here: a LoadNew command sent after stop() must still
         // reach the thread so it can cancel the quit and load the new file instead.
