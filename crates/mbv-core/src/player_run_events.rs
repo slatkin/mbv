@@ -1,4 +1,4 @@
-impl PlaybackSession {
+impl PlaybackRun {
     fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
         let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
         {
@@ -25,45 +25,44 @@ impl PlaybackSession {
                 if runtime > 0 {
                     let show_at = runtime - 60 * TICKS_PER_SECOND;
                     let remaining = runtime - ticks;
-                    if self.queue_next_up_fired && ticks < show_at {
-                        self.queue_next_up_fired = false;
-                        self.queue_next_up_armed = false;
+                    if self.queue_next_up.is_fired() && ticks < show_at {
+                        self.queue_next_up.reset();
                     }
-                    if !self.queue_next_up_fired && runtime >= MIN_RUNTIME_TICKS {
+                    if !self.queue_next_up.is_fired() && runtime >= MIN_RUNTIME_TICKS {
                         if remaining >= MIN_REMAIN_TICKS && ticks >= show_at {
-                            self.queue_next_up_fired = true;
+                            self.queue_next_up.fire();
                             let _ = self.event_tx.send(PlayerEvent::QueueNextUp {
                                 next_idx: self.current_idx + 1,
                             });
-                        } else if !self.queue_next_up_armed
+                        } else if self.queue_next_up == NextUp::Idle
                             && ticks > 0
                             && ticks < TICKS_PER_SECOND * 5
                         {
-                            self.queue_next_up_armed = true;
+                            self.queue_next_up.arm();
                             log::info!(target: "player", "queue next-up armed idx={}", self.current_idx + 1);
                         }
                     }
                 }
             }
-        } else if !self.next_up_fired {
+        } else if !self.next_up.is_fired() {
             const NEXT_UP_TICKS: i64 = 60 * TICKS_PER_SECOND;
             if self.series_id.is_empty() {
-                if !self.next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
-                    self.next_up_armed = true;
+                if self.next_up == NextUp::Idle && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
+                    self.next_up.arm();
                     log::warn!(target: "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
                 }
             } else {
                 let runtime = self.status.lock().unwrap().runtime_ticks;
                 if runtime > NEXT_UP_TICKS && ticks > runtime - NEXT_UP_TICKS {
-                    self.next_up_fired = true;
+                    self.next_up.fire();
                     log::warn!(target: "player", "next-up: threshold reached series={}", self.series_id);
                     let _ = self.event_tx.send(PlayerEvent::NextUpThreshold {
                         series_id: self.series_id.clone(),
                         season: self.season,
                         episode: self.episode,
                     });
-                } else if !self.next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
-                    self.next_up_armed = true;
+                } else if self.next_up == NextUp::Idle && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
+                    self.next_up.arm();
                     log::info!(target: "player", "next-up: armed series={} runtime={}s", self.series_id, runtime / TICKS_PER_SECOND);
                 }
             }
@@ -73,8 +72,7 @@ impl PlaybackSession {
             ticks,
             self.intro_start,
             self.intro_end,
-            &mut self.intro_show,
-            &mut self.intro_hide,
+            &mut self.intro_state,
             self.config.always_skip_intro,
             mpv,
             &self.event_tx,
@@ -86,7 +84,7 @@ impl PlaybackSession {
             return;
         }
         let pos = pos as usize;
-        if self.pending_initial_jump || self.pending_load > 0 || self.forced_slot_id.is_some() {
+        if self.pending_initial_jump || !self.load_state.is_ready() || self.forced_slot_id.is_some() {
             log::debug!(
                 target: "player",
                 "ignoring transient playlist-pos={pos} while queue transition is pending"
@@ -166,13 +164,13 @@ impl PlaybackSession {
             // mpv ignored playlist-pos before the event loop started; now that
             // playback is live (first PlaybackRestart), the jump is honored.
             self.pending_initial_jump = false;
-            self.pending_load += 1;
+            self.load_state = self.load_state.increment();
             let _ = mpv.set_property("playlist-pos", self.current_idx as i64);
             // Skip normal handling; wait for the next PlaybackRestart (for start_idx item).
             return;
         }
-        if self.startup_pause_release_pending {
-            self.startup_pause_release_pending = false;
+        if self.startup_pause.is_holding() {
+            self.startup_pause.clear();
             log::info!(
                 target: "player",
                 "audio pipe: startup gate cleared on PlaybackRestart (playlist)"
@@ -204,8 +202,7 @@ impl PlaybackSession {
             }
         } else {
             if self.origin == PlaybackOrigin::Standalone {
-                self.next_up_fired = false;
-                self.next_up_armed = false;
+                self.next_up.reset();
                 event_name = "Seek";
             }
             if self.last_seek_at.take().is_some() && self.config.use_mpv_config {
@@ -235,13 +232,14 @@ impl PlaybackSession {
         if self.quit_at.is_some() {
             return true;
         }
-        if self.pending_load > 0 {
-            self.pending_load -= 1;
-            // Once all pending EndFiles from a ReplaceQueue are drained, the new item's
-            // lifecycle begins — reset stop_reported so on_end_file/on_shutdown can report it.
-            if self.pending_load == 0 {
-                self.stop_reported = false;
-                self.stop_report_accepted = false;
+        if !self.load_state.is_ready() {
+            match self.load_state.drain() {
+                Drained::HitZero => {
+                    // Once all pending EndFiles from a ReplaceQueue are drained, the new item's
+                    // lifecycle begins — reset stop_report so on_end_file/on_shutdown can report it.
+                    self.stop_report.reset();
+                }
+                Drained::StillPending | Drained::AlreadyReady => {}
             }
             return true;
         }
@@ -259,12 +257,11 @@ impl PlaybackSession {
                 && !completed_is_audio
                 && runtime > 0
                 && self.last_valid_pos * 20 / runtime >= 19;
-            log::warn!(target: "player", "quit path: last_valid_pos={} runtime={} pending_resume={} stop_reported={}",
-                self.last_valid_pos, runtime, self.pending_resume_secs.is_some(), self.stop_reported);
-            if !self.stop_reported {
+            log::warn!(target: "player", "quit path: last_valid_pos={} runtime={} pending_resume={} stop_report={:?}",
+                self.last_valid_pos, runtime, self.pending_resume_secs.is_some(), self.stop_report);
+            if self.stop_report == StopReport::NotSent {
                 progress.stop_and_join(self.progress_join_budget());
-                self.stop_report_accepted = self.report_stopped_for_end_file(reason);
-                self.stop_reported = true;
+                self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
             }
             if (natural_end || near_end) && !completed_is_audio {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
@@ -281,8 +278,7 @@ impl PlaybackSession {
             let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
 
             progress.stop_and_join(self.progress_join_budget());
-            self.stop_report_accepted = self.report_stopped_for_end_file(reason);
-            self.stop_reported = true;
+            self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
 
             if natural_end {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
@@ -300,7 +296,7 @@ impl PlaybackSession {
                     position_ticks: 0,
                     played: !completed_is_audio,
                     consume: false,
-                    progress_report_accepted: self.stop_report_accepted,
+                    progress_report_accepted: self.stop_report.is_accepted(),
                     error: None,
                 });
                 self.stopped_event_sent = true;
@@ -318,13 +314,13 @@ impl PlaybackSession {
                 self.queue_len());
             progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
-            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 idx: completed_idx.min(self.queue_len().saturating_sub(1)),
                 position_ticks: self.last_valid_pos,
                 played: false,
                 consume: false,
-                progress_report_accepted: self.stop_report_accepted,
+                progress_report_accepted: self.stop_report.is_accepted(),
                 error: None,
             });
             return false;
@@ -360,7 +356,7 @@ impl PlaybackSession {
         if next_idx >= self.queue_len() {
             progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
-            self.stop_report_accepted = self.reporter.report_stopped(completed_pos);
+            self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(completed_pos));
             if played_out {
                 let id = completed_item.id.clone();
                 if let Err(e) = self.reporter.client.mark_played(&id) {
@@ -373,7 +369,7 @@ impl PlaybackSession {
                 position_ticks: completed_pos,
                 played: played_out,
                 consume: consume_track,
-                progress_report_accepted: self.stop_report_accepted,
+                progress_report_accepted: self.stop_report.is_accepted(),
                 error: None,
             });
             return false; // signals run() to return
@@ -413,8 +409,7 @@ impl PlaybackSession {
         }
 
         let _ = mpv.set_property("start", "0");
-        self.queue_next_up_fired = false;
-        self.queue_next_up_armed = false;
+        self.queue_next_up.reset();
         send_ep_info(mpv, &next_item);
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
 
@@ -443,12 +438,11 @@ impl PlaybackSession {
     }
 
     fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
-        log::warn!(target: "player", "shutdown: last_valid_pos={} stop_reported={} pending_resume={}",
-            self.last_valid_pos, self.stop_reported, self.pending_resume_secs.is_some());
-        if !self.stop_reported {
+        log::warn!(target: "player", "shutdown: last_valid_pos={} stop_report={:?} pending_resume={}",
+            self.last_valid_pos, self.stop_report, self.pending_resume_secs.is_some());
+        if self.stop_report == StopReport::NotSent {
             progress.stop_and_join(self.progress_join_budget());
-            self.stop_report_accepted = self.report_stopped_for_current_context();
-            self.stop_reported = true;
+            self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
         }
         let client = self.reporter.client.clone();
         if self.origin == PlaybackOrigin::Standalone {
@@ -470,7 +464,7 @@ impl PlaybackSession {
                     position_ticks: self.last_valid_pos,
                     played: near_end,
                     consume: false,
-                    progress_report_accepted: self.stop_report_accepted,
+                    progress_report_accepted: self.stop_report.is_accepted(),
                     error: None,
                 });
             }
@@ -493,7 +487,7 @@ impl PlaybackSession {
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
             consume: self.stopped_near_end,
-            progress_report_accepted: self.stop_report_accepted,
+            progress_report_accepted: self.stop_report.is_accepted(),
             error: None,
         });
         // mpv exited on its own (not via our stop command) — tell the app to quit.

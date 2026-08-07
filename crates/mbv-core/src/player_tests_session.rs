@@ -42,7 +42,7 @@
     fn playlist_pos_does_not_clobber_pending_replace_queue_load() {
         let (mut session, status) = make_queue_session_for_pos_tests(1);
         session.pending_initial_jump = false;
-        session.pending_load = 1;
+        session.load_state = LoadState::begin_single();
 
         session.on_playlist_pos_changed(0);
 

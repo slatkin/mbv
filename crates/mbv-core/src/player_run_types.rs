@@ -4,9 +4,9 @@ enum PlaybackOrigin {
     Queue,
 }
 
-struct PlaybackSession {
+struct PlaybackRun {
     origin: PlaybackOrigin,
-    config: MpvSessionConfig,
+    config: MpvRunConfig,
     reporter: SessionReporter,
     event_tx: mpsc::Sender<PlayerEvent>,
     status: Arc<Mutex<PlayerStatus>>,
@@ -23,10 +23,9 @@ struct PlaybackSession {
     last_seek_at: Option<Instant>,
     last_valid_pos: i64,
     tracks_initialized: bool,
-    pending_load: u8,
+    load_state: LoadState,
     pending_initial_jump: bool,
-    stop_reported: bool,
-    stop_report_accepted: bool,
+    stop_report: StopReport,
     stopped_event_sent: bool,
     mark_played_id: Option<String>,
     osd_title: String,
@@ -35,18 +34,14 @@ struct PlaybackSession {
     series_id: String,
     season: i64,
     episode: i64,
-    next_up_fired: bool,
-    next_up_armed: bool,
-    queue_next_up_fired: bool,
-    queue_next_up_armed: bool,
+    next_up: NextUp,
+    queue_next_up: NextUp,
     next_up_jump: bool,
     stopped_near_end: bool,
     shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
-    startup_pause_release_pending: bool,
-    startup_pause_events_to_skip: u8,
+    startup_pause: StartupPause,
     // intro
     intro_start: i64,
     intro_end: i64,
-    intro_show: bool,
-    intro_hide: bool,
+    intro_state: IntroState,
 }

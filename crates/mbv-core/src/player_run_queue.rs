@@ -1,4 +1,4 @@
-impl PlaybackSession {
+impl PlaybackRun {
     fn queue_len(&self) -> usize {
         self.queue.slots().len()
     }
@@ -68,7 +68,7 @@ impl PlaybackSession {
     /// `quit_at`, but also the shutdown-scoped report budget set by
     /// `Player::stop_for_shutdown`. Without resetting
     /// `shutdown_report_timeout` here too, a cancelled quit would leave it
-    /// `Some` for the rest of this `PlaybackSession`'s lifetime (nothing
+    /// `Some` for the rest of this `PlaybackRun`'s lifetime (nothing
     /// else clears it once set), so every subsequent track transition
     /// would silently keep using the tight shutdown budget/no-retry
     /// behavior via `progress_join_budget`/`report_stopped_for_current_context`
@@ -114,11 +114,22 @@ impl PlaybackSession {
     }
 
     fn reset_next_up_state(&mut self) {
-        self.next_up_fired = false;
-        self.next_up_armed = false;
-        self.queue_next_up_fired = false;
-        self.queue_next_up_armed = false;
+        self.next_up.reset();
+        self.queue_next_up.reset();
         self.next_up_jump = false;
+    }
+
+    /// Reset per-item lifecycle flags shared by all three reset sites in
+    /// `player_run_commands.rs` (`cmd_replace_queue` empty, non-empty,
+    /// and `cmd_load_new`). The caller must set `stop_report` and
+    /// `load_state` itself because those differ per call site.
+    fn begin_item_lifecycle(&mut self) {
+        self.tracks_initialized = false;
+        self.forced_slot_id = None;
+        self.reset_next_up_state();
+        self.stopped_event_sent = false;
+        self.mark_played_id = None;
+        self.stopped_near_end = false;
     }
 
     fn load_active_item_state(&mut self) {
@@ -131,8 +142,7 @@ impl PlaybackSession {
             self.episode = 0;
             self.intro_start = 0;
             self.intro_end = 0;
-            self.intro_show = false;
-            self.intro_hide = false;
+            self.intro_state = IntroState::Pending;
             return;
         };
 
@@ -177,7 +187,7 @@ impl PlaybackSession {
         start_idx: usize,
         origin: PlaybackOrigin,
         reporter: SessionReporter,
-        config: MpvSessionConfig,
+        config: MpvRunConfig,
         startup_pause_for_pipe: bool,
         status: Arc<Mutex<PlayerStatus>>,
         event_tx: mpsc::Sender<PlayerEvent>,
@@ -193,7 +203,7 @@ impl PlaybackSession {
         let initial_item = queue
             .active_slot()
             .map(|slot| slot.item.clone())
-            .expect("PlaybackSession::new requires at least one item");
+            .expect("PlaybackRun::new requires at least one item");
         let initial_pos = if initial_item.is_audio() {
             0
         } else {
@@ -217,7 +227,7 @@ impl PlaybackSession {
         } else {
             String::new()
         };
-        let session = PlaybackSession {
+        let session = PlaybackRun {
             origin,
             config,
             reporter,
@@ -235,29 +245,24 @@ impl PlaybackSession {
             last_seek_at: None,
             last_valid_pos: initial_pos,
             tracks_initialized: false,
-            pending_load: 0,
+            load_state: LoadState::Ready,
             pending_initial_jump: start_idx > 0,
-            stop_reported: false,
-            stop_report_accepted: false,
+            stop_report: StopReport::NotSent,
             stopped_event_sent: false,
             mark_played_id: None,
             last_mouse_osd: None,
             series_id,
             season: initial_item.parent_index_number,
             episode: initial_item.index_number,
-            next_up_fired: false,
-            next_up_armed: false,
-            queue_next_up_fired: false,
-            queue_next_up_armed: false,
+            next_up: NextUp::Idle,
+            queue_next_up: NextUp::Idle,
             next_up_jump: false,
             stopped_near_end: false,
             shutdown_report_timeout,
-            startup_pause_release_pending: startup_pause_for_pipe,
-            startup_pause_events_to_skip: if startup_pause_for_pipe { 2 } else { 0 },
+            startup_pause: StartupPause::new(startup_pause_for_pipe),
             intro_start,
             intro_end,
-            intro_show: past,
-            intro_hide: past,
+            intro_state: IntroState::new(past),
             osd_title,
             pending_resume_secs,
         };
@@ -269,7 +274,6 @@ impl PlaybackSession {
         self.intro_start = start;
         self.intro_end = end;
         let past = end > 0 && pos >= end;
-        self.intro_show = past;
-        self.intro_hide = past;
+        self.intro_state.reset(past);
     }
 }

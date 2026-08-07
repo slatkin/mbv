@@ -30,7 +30,7 @@ impl ProgressGuard {
     }
 }
 
-struct MpvSessionConfig {
+struct MpvRunConfig {
     headless: bool,
     use_mpv_config: bool,
     no_scripts: bool,
@@ -398,7 +398,7 @@ impl SessionReporter {
     }
 }
 
-fn init_mpv(config: &MpvSessionConfig) -> Result<(Mpv, bool), String> {
+fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
     let ipc_path = crate::config::mpv_ipc_path();
     let private_config_dir = prepare_mpv_config_dir(config.use_mpv_config, &ipc_path)?;
     let ipc_existed = Path::new(&ipc_path).exists();
@@ -593,8 +593,7 @@ fn handle_intro(
     ticks: i64,
     start: i64,
     end: i64,
-    show_fired: &mut bool,
-    hide_fired: &mut bool,
+    intro_state: &mut IntroState,
     always_skip: bool,
     mpv: &Mpv,
     event_tx: &mpsc::Sender<PlayerEvent>,
@@ -602,8 +601,8 @@ fn handle_intro(
     if end <= start {
         return;
     }
-    if !*show_fired && ticks >= start {
-        *show_fired = true;
+    if intro_state.is_pending() && ticks >= start {
+        intro_state.shown();
         if ticks < end {
             let end_secs = end as f64 / TICKS_PER_SECOND as f64;
             if always_skip {
@@ -615,17 +614,17 @@ fn handle_intro(
                 let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
             }
         } else {
-            *hide_fired = true;
+            intro_state.dismissed();
         }
     }
-    if !*hide_fired && ticks >= end {
-        *hide_fired = true;
+    if intro_state == &IntroState::Shown && ticks >= end {
+        intro_state.dismissed();
         let _ = event_tx.send(PlayerEvent::IntroEnded);
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
     }
 }
 
-// ── PlaybackSession ────────────────────────────────────────────────────────
+// ── PlaybackRun ─────────────────────────────────────────────────────────
 
 /// Where index `idx` ends up after moving the entry at `from` to `to`
 /// (both 0-based positions in the same list, `from != to`).
