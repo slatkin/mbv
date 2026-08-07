@@ -28,6 +28,8 @@ Builds and tests run_in_background.
 - `cargo clippy --workspace --all-targets`
 - `make check-code-file-lines`
 
+You run in an environment where ast-grep is available; whenever a search requires syntax-aware or structural matching, default to ast-grep --lang rust -p '<pattern>' (or set --lang appropriately) and avoid falling back to text-only tools like rg or grep unless I explicitly request a plain-text search.
+
 Prefix every command with `rtk`. It filters when it has a filter and passes
 through unchanged when it doesn't, so it is always safe. Prefix each command in
 a chain, not just the first. `rtk grep` with a format flag (`-c`, `-l`, `-L`,
