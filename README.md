@@ -12,10 +12,10 @@ The release package is built from the `PKGBUILD` in this repository and does not
 
 ```sh
 sudo pacman -S --needed base-devel curl
-mkdir -p mbv-package && cd mbv-package
+mkdir -p /tmp/mbv-package && cd /tmp/mbv-package
 curl -fLO https://raw.githubusercontent.com/slatkin/mbv/main/PKGBUILD
 makepkg -si
-cd .. && rm -rf mbv-package/
+cd ~/ && rm -rf /tmp/mbv-package/
 ```
 
 The recipe downloads the matching release binary directly from GitHub and verifies its SHA-256 checksum before creating the pacman package. Refresh the `PKGBUILD` before rebuilding to pick up a newer release.
