@@ -184,14 +184,14 @@ fn escape_outside_track_mode_still_calls_go_back_unchanged() {
 }
 
 #[test]
-fn page_down_in_album_list_mode_pages_by_rendered_rows_with_inline_detail() {
+fn page_down_in_album_list_mode_pages_by_rendered_rows_with_hero() {
     let mut app = make_power_music_album_list_app(60, 0);
     push_tracks(&mut app, "album-0", 4);
     render_full_app(&mut app, 100, 40);
     let viewport_rows = app.layout.main.left_area.height as usize;
     assert_eq!(
-        viewport_rows, 30,
-        "fixture sanity: expected 30 rendered list rows"
+        viewport_rows, 19,
+        "fixture sanity: expected 19 rendered list rows below the hero panel"
     );
     assert!(app.power_right_panel_image_renders_allowed());
 
@@ -199,36 +199,37 @@ fn page_down_in_album_list_mode_pages_by_rendered_rows_with_inline_detail() {
 
     assert!(!handled);
     assert!(!app.power_right_panel_image_renders_allowed());
-    // The selected artist block starts with its border, padding, header, and
-    // pinned hint, then renders every album. A 30-row page from album 0's
-    // display row lands on album 30.
+    // The hero panel above the list renders the selected album's detail;
+    // the list still starts with the artist header, then renders every
+    // album. A 19-row page from album 0's display row lands on album 19.
     assert_eq!(
         app.libs[0].nav_stack.last().unwrap().cursor,
-        30,
+        19,
         "PageDown should move by rendered display rows, not raw album count"
     );
     assert!(app.libs[0].album_track_focus.is_none());
 }
 
 #[test]
-fn page_up_in_album_list_mode_pages_by_rendered_rows_with_inline_detail() {
+fn page_up_in_album_list_mode_pages_by_rendered_rows_with_hero() {
     let mut app = make_power_music_album_list_app(60, 35);
     push_tracks(&mut app, "album-35", 4);
     render_full_app(&mut app, 100, 40);
     let viewport_rows = app.layout.main.left_area.height as usize;
     assert_eq!(
-        viewport_rows, 30,
-        "fixture sanity: expected 30 rendered list rows"
+        viewport_rows, 19,
+        "fixture sanity: expected 19 rendered list rows below the hero panel"
     );
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
     assert!(!handled);
-    // The selected artist block contains the header, pinned hint, and every
-    // album. A 30-row page up from album 35 lands on album 5.
+    // The hero panel above the list renders the selected album's detail;
+    // the list still starts with the artist header, then renders every
+    // album. A 19-row page up from album 35 lands on album 16.
     assert_eq!(
         app.libs[0].nav_stack.last().unwrap().cursor,
-        5,
+        16,
         "PageUp should move by rendered display rows, not raw album count"
     );
     assert!(app.libs[0].album_track_focus.is_none());
