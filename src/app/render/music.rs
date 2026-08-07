@@ -173,6 +173,7 @@ impl App {
             stored_scroll,
             focused,
             false, // hero_handles_detail: old music group view, no hero
+            1,     // cols: single column for old view
             layout,
         );
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {

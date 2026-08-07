@@ -516,6 +516,7 @@ impl App {
                 stored_scroll,
                 focused,
                 true, // hero_handles_detail: the hero panel renders the detail
+                cols as u16,
                 layout,
             );
         } else if use_letter_groups {

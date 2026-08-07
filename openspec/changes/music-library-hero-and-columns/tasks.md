@@ -20,11 +20,11 @@
 
 ## 4. Two-column packing for grouped album rows
 
-- [ ] 4.1 Add `cols` parameter to `render_power_grouped_album_rows` in `album.rs`
+- [x] 4.1 Add `cols` parameter to `render_power_grouped_album_rows` in `album.rs`
 - [ ] 4.2 Batch consecutive `Album` rows into column pairs at render time — album `i` within an artist group occupies column `i % cols`, each pair shares a terminal row
 - [ ] 4.3 Render `ArtistHeader` and `ArtistGroupSpacer` rows at full width, starting a fresh row (same pattern as letter headers in `list_letter_groups.rs`)
 - [ ] 4.4 Each artist group packs independently — a row never mixes albums from two groups; a trailing odd album in a group leaves the partner cell empty
-- [ ] 4.5 Pass the column count from `render_power_list` through to `render_power_grouped_album_rows` via the `cols` variable already computed in `list.rs:170-174`
+- [x] 4.5 Pass the column count from `render_power_list` through to `render_power_grouped_album_rows` via the `cols` variable already computed in `list.rs:170-174`
 
 ## 5. Cursor movement with columns in grouped view
 

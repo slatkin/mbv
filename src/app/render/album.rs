@@ -33,6 +33,7 @@ impl App {
         stored_scroll: usize,
         focused: bool,
         hero_handles_detail: bool,
+        cols: u16,
         layout: &mut LayoutMain,
     ) -> usize {
         let visible = area.height as usize;
