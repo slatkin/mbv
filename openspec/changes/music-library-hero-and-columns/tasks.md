@@ -28,10 +28,10 @@
 
 ## 5. Cursor movement with columns in grouped view
 
-- [ ] 5.1 Update `album_cursor.rs` cursor movement to accept `cols` — up/down moves by `cols` items within a group, left/right moves by 1 item
-- [ ] 5.2 Handle group boundaries: down from the last row of a group moves to the first album of the next group; up from the first row moves to the last row of the previous group
-- [ ] 5.3 Update `page_power_grouped_album_cursor` to page by `cols × page_rows` items
-- [ ] 5.4 Update key handling in `input_lib_power_keys.rs` to pass the column count to grouped-view cursor movement
+- [x] 5.1 Update `album_cursor.rs` cursor movement to accept `cols` — up/down moves by `cols` items within a group, left/right moves by 1 item
+- [x] 5.2 Handle group boundaries: down from the last row of a group moves to the first album of the next group; up from the first row moves to the last row of the previous group
+- [x] 5.3 Update `page_power_grouped_album_cursor` to page by `cols × page_rows` items
+- [x] 5.4 Update key handling in `input_lib_power_keys.rs` to pass the column count to grouped-view cursor movement
 
 ## 6. Dispatch change and music.rs cleanup
 

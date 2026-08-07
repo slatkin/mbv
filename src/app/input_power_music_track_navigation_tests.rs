@@ -353,12 +353,46 @@ fn oversized_artist_block_scrolls_inline_without_moving_the_outer_block() {
 }
 
 #[test]
+fn two_column_album_navigation_strides_rows_and_crosses_groups() {
+    let mut app = make_power_music_album_list_app(4, 0);
+    add_following_artist_albums(&mut app, 2);
+    render_full_app(&mut app, 100, 40);
+    // Force the two-column layout the movement derives from the pane width
+    // (82 is POWER_TWO_COLUMN_THRESHOLD); the 100-wide render above lands
+    // at 1 column behind the 40-wide queue column.
+    app.layout.main.left_area.width = 82;
+
+    // Down strides one row (cols = 2) within the Alpha group.
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 2);
+    assert!(app.libs[0].artist_header_focus.is_none());
+
+    // Left/right move by a single album.
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 3);
+
+    // Down from Alpha's last row jumps to the first album of the next
+    // group (Beta), never resting on the artist header.
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 4);
+    assert!(app.libs[0].artist_header_focus.is_none());
+
+    // Up from Beta's first row lands on the previous group's last row.
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 3);
+}
+
+#[test]
 fn oversized_artist_navigation_reaches_hidden_albums_before_following_artist() {
     let mut app = make_power_music_album_list_app(60, 0);
     add_following_artist_albums(&mut app, 2);
     render_full_app(&mut app, 100, 40);
 
-    for expected_cursor in 1..60 {
+    // All 60 Alpha albums are traversed before the cursor leaves the
+    // oversized artist; the following artist's first album is reached
+    // directly, since the Beta artist header is not a navigation stop
+    // for arrow movement (see `grouped_cursor_target`).
+    for expected_cursor in 1..=60 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
@@ -366,17 +400,6 @@ fn oversized_artist_navigation_reaches_hidden_albums_before_following_artist() {
         );
         assert!(app.libs[0].artist_header_focus.is_none());
     }
-
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    let beta_header = app.libs[0]
-        .artist_header_focus
-        .as_ref()
-        .expect("expected navigation to reach the following artist header");
-    assert_eq!(beta_header.artist_label, "Beta");
-
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert!(app.libs[0].artist_header_focus.is_none());
-    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 60);
 }
 
 #[test]

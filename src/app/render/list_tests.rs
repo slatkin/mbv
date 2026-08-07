@@ -439,15 +439,19 @@ fn hero_stays_reserved_while_the_slice_is_loading() {
 }
 
 #[test]
-fn no_hero_placeholder_for_music_libraries() {
+fn music_library_top_level_reserves_hero_placeholder() {
+    // The top browse level of a hero-capable collection (music included)
+    // keeps the placeholder panel reserved even before content loads, so
+    // a letter-pill switch doesn't make the slot jump away and back.
     let mut app = make_power_movie_list_app(vec!["Album A", "Album B"]);
     app.libs[0].library.collection_type = "music".into();
     let mut layout = LayoutMain::default();
     let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
 
     assert_eq!(
-        layout.hero_area.height, 0,
-        "no hero placeholder in a music library"
+        layout.hero_area.height,
+        super::HERO_PLACEHOLDER_ROWS,
+        "a music library at its top browse level reserves the hero placeholder"
     );
 }
 

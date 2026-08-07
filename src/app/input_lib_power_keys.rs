@@ -197,9 +197,10 @@ impl App {
             }
             KeyCode::Left if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(-1),
             KeyCode::Right if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(1),
-            // Arrow-key column navigation: in 2-col flat lists Left/Right
-            // mirror h/l (Up/Down already mirror j/k). Season-grid Left/Right
-            // are covered above.
+            // Arrow-key column navigation: in 2-col lists (flat,
+            // letter-grouped, and grouped-album views) Left/Right mirror h/l
+            // (Up/Down already mirror j/k). Season-grid Left/Right are
+            // covered above.
             KeyCode::Left if self.current_library_columns(lib_idx) > 1 => self.move_lib_cursor(-1),
             KeyCode::Right if self.current_library_columns(lib_idx) > 1 => self.move_lib_cursor(1),
             // Vim-style navigation. Complements the arrow keys (Left/Right
@@ -241,13 +242,21 @@ impl App {
                 self.jump_power_music_group_display_cursor_to_artist(lib_idx, true);
             }
             KeyCode::PageUp => {
-                if !self.page_power_grouped_album_cursor(lib_idx, false) {
+                if !self.page_power_grouped_album_cursor(
+                    lib_idx,
+                    self.current_library_columns(lib_idx),
+                    false,
+                ) {
                     let p = self.lib_page_size();
                     self.move_lib_cursor_rows(-(p as i64));
                 }
             }
             KeyCode::PageDown => {
-                if !self.page_power_grouped_album_cursor(lib_idx, true) {
+                if !self.page_power_grouped_album_cursor(
+                    lib_idx,
+                    self.current_library_columns(lib_idx),
+                    true,
+                ) {
                     let p = self.lib_page_size();
                     self.move_lib_cursor_rows(p as i64);
                 }
