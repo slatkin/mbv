@@ -222,10 +222,7 @@ impl App {
         let pct_str = fmt_playback_pct(pos_ticks, rt_ticks);
         let throbber = self.now_playing_throbber_span();
         let mut progress_spans: Vec<Span<'static>> = vec![
-            Span::styled(
-                format!("{} ", throbber.content.trim_end()),
-                throbber.style.bg(pill_bg),
-            ),
+            Span::styled(throbber.content, throbber.style.bg(pill_bg)),
             Span::styled(
                 pct_str,
                 Style::default().fg(palette::FOAM).bg(pill_bg),
@@ -242,10 +239,6 @@ impl App {
             right = progress_spans;
         }
         if !right.is_empty() {
-            right.insert(
-                0,
-                Span::styled(" ", Style::default().bg(palette::PLAYBACK_INDICATOR_BG)),
-            );
             right.push(Span::styled(
                 " ",
                 Style::default().bg(palette::PLAYBACK_INDICATOR_BG),

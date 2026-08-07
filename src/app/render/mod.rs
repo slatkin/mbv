@@ -77,8 +77,15 @@ pub(super) const TAB_BAR_BOX_HEIGHT: u16 = 3;
 
 impl App {
     pub(super) fn now_playing_throbber_span(&self) -> Span<'static> {
+        const HORIZONTAL_BLOCK: throbber_widgets_tui::symbols::throbber::Set =
+            throbber_widgets_tui::symbols::throbber::Set {
+                full: "█",
+                empty: " ",
+                symbols: &[" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"],
+            };
+
         throbber_widgets_tui::Throbber::default()
-            .throbber_set(throbber_widgets_tui::HORIZONTAL_BLOCK)
+            .throbber_set(HORIZONTAL_BLOCK)
             .throbber_style(Style::default().fg(palette::AQUA))
             .to_symbol_span(&self.now_playing_throbber)
     }
