@@ -237,8 +237,9 @@ impl App {
                 } else {
                     0
                 };
-                let panel_width =
-                    content_area.width.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
+                let panel_width = content_area
+                    .width
+                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
                 super::album_plan::album_hero_content_rows(
                     track_count,
                     art_rows,
@@ -514,6 +515,7 @@ impl App {
                 cursor,
                 stored_scroll,
                 focused,
+                true, // hero_handles_detail: the hero panel renders the detail
                 layout,
             );
         } else if use_letter_groups {

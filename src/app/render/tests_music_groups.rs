@@ -79,6 +79,7 @@ fn artist_and_album_focus_share_one_selected_group_bounds() {
             None,
             false,
             Some((120, 0)),
+            false, // hero_handles_detail
         )
     };
     let header_plan = {
@@ -94,6 +95,7 @@ fn artist_and_album_focus_share_one_selected_group_bounds() {
             Some(&header),
             false,
             Some((120, 0)),
+            false, // hero_handles_detail
         )
     };
 

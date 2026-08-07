@@ -32,6 +32,7 @@ impl App {
         cursor: usize,
         stored_scroll: usize,
         focused: bool,
+        hero_handles_detail: bool,
         layout: &mut LayoutMain,
     ) -> usize {
         let visible = area.height as usize;
@@ -92,6 +93,7 @@ impl App {
                     0
                 },
             )),
+            hero_handles_detail,
         );
         if selected.is_some() && !plan.selected_artist_header_valid {
             self.clear_artist_header_focus(lib_idx);

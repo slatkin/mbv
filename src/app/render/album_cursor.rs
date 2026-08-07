@@ -127,6 +127,7 @@ impl App {
             selected,
             expand_selected,
             None,
+            false, // hero_handles_detail: cursor needs the full plan
         );
         let targets = Self::grouped_album_navigation_targets(albums, &plan);
         (targets, plan.selected_artist_header_valid)
@@ -360,6 +361,7 @@ impl App {
             Some(selection),
             expand_selected,
             None,
+            false, // hero_handles_detail: cursor needs the full plan
         );
         if !plan.selected_artist_header_valid {
             if self.libs[lib_idx]

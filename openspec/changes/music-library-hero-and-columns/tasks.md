@@ -1,22 +1,22 @@
 ## 1. Album hero sizing and helper
 
-- [ ] 1.1 Add `power_selected_album_item` helper in `detail.rs` — returns the selected album `MediaItem` when `collection_type == "music"` and `is_viewing_album_folders`, parallel to `power_selected_movie_item`
-- [ ] 1.2 Extract album hero height computation from `album_plan.rs` inline expansion sizing into a standalone function: given track count, art dimensions, and panel width, return the total hero rows needed (art + metadata + tracks + `HERO_BLOCK_EXTRA_ROWS`)
-- [ ] 1.3 Add the album branch to the hero height computation in `list.rs:191-243` — after `selected_movie_item` and `selected_series_item`, check `selected_album_item` and call the new sizing function
-- [ ] 1.4 Add `"music"` to the `top_hero_level` placeholder match in `list.rs:232-234` so the hero placeholder renders while the album list is loading
+- [x] 1.1 Add `power_selected_album_item` helper in `detail.rs` — returns the selected album `MediaItem` when `collection_type == "music"` and `is_viewing_album_folders`, parallel to `power_selected_movie_item`
+- [x] 1.2 Extract album hero height computation from `album_plan.rs` inline expansion sizing into a standalone function: given track count, art dimensions, and panel width, return the total hero rows needed (art + metadata + tracks + `HERO_BLOCK_EXTRA_ROWS`)
+- [x] 1.3 Add the album branch to the hero height computation in `list.rs:191-243` — after `selected_movie_item` and `selected_series_item`, check `selected_album_item` and call the new sizing function
+- [x] 1.4 Add `"music"` to the `top_hero_level` placeholder match in `list.rs:232-234` so the hero placeholder renders while the album list is loading
 
 ## 2. Album hero content painting
 
-- [ ] 2.1 Add the album branch to the hero content painting in `list.rs:515-553` — call `render_power_album_detail` with the hero's content rect when `selected_album_item` is present
-- [ ] 2.2 Render album art in the hero via the existing `inline_album_art` path, positioned within the hero rect
+- [x] 2.1 Add the album branch to the hero content painting in `list.rs:515-553` — call `render_power_album_detail` with the hero's content rect when `selected_album_item` is present
+- [x] 2.2 Render album art in the hero via the existing `inline_album_art` path, positioned within the hero rect
 - [ ] 2.3 Verify track focus interaction works in the hero context: Enter activates track cursor, track navigation moves within the hero's track list, Escape exits track focus
 
 ## 3. Album plan: suppress inline expansion
 
-- [ ] 3.1 Add `hero_handles_detail: bool` parameter to `build_grouped_album_display_plan` in `album_plan.rs`
-- [ ] 3.2 When `hero_handles_detail` is true, suppress `AlbumDetailStart`, `AlbumDetailContinuation`, `AlbumDetailRule`, `AlbumLoading`, and `AlbumActionHint` rows from the plan output
-- [ ] 3.3 Set `selected_block_bounds` and `track_detail_bounds` to `None` when `hero_handles_detail` is true
-- [ ] 3.4 Update callers of `build_grouped_album_display_plan` to pass `hero_handles_detail: true` when rendering through `render_power_list`, `false` for any remaining non-hero callers
+- [x] 3.1 Add `hero_handles_detail: bool` parameter to `build_grouped_album_display_plan` in `album_plan.rs`
+- [x] 3.2 When `hero_handles_detail` is true, suppress `AlbumDetailStart`, `AlbumDetailContinuation`, `AlbumDetailRule`, `AlbumLoading`, and `AlbumActionHint` rows from the plan output
+- [x] 3.3 Set `selected_block_bounds` and `track_detail_bounds` to `None` when `hero_handles_detail` is true
+- [x] 3.4 Update callers of `build_grouped_album_display_plan` to pass `hero_handles_detail: true` when rendering through `render_power_list`, `false` for any remaining non-hero callers
 
 ## 4. Two-column packing for grouped album rows
 
