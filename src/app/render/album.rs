@@ -176,14 +176,64 @@ impl App {
 
         let visible_rows: Vec<&GroupedAlbumDisplayRow> =
             display_rows.iter().skip(offset).take(visible).collect();
+
+        // Two-column packing state: track album position within artist groups
+        // to pack consecutive Album rows into columns.
+        let mut current_y = 0u16;
+        let mut group_album_idx = 0usize;
+
         for (row_idx, row) in visible_rows.iter().enumerate() {
-            let row_area = Rect {
-                x: area.x,
-                y: area.y + row_idx as u16,
-                width: area.width,
-                height: 1,
-            };
             let abs_row_idx = offset + row_idx;
+
+            // Determine if this row should start a new terminal row or continue
+            // in the current row (for two-column packing).
+            let (row_area, advance_after) = match row {
+                GroupedAlbumDisplayRow::Album(_) => {
+                    let col = group_album_idx % cols.max(1) as usize;
+                    let col_width = area.width / cols.max(1);
+                    let col_x = area.x + (col as u16 * col_width);
+                    // Last column gets remaining width to avoid rounding errors
+                    let actual_width = if col == (cols.max(1) as usize - 1) {
+                        area.width.saturating_sub(col as u16 * col_width)
+                    } else {
+                        col_width
+                    };
+
+                    let row_area = Rect {
+                        x: col_x,
+                        y: area.y + current_y,
+                        width: actual_width,
+                        height: 1,
+                    };
+                    let advance_after = (col + 1) % cols.max(1) as usize == 0;
+                    group_album_idx += 1;
+                    (row_area, advance_after)
+                }
+                GroupedAlbumDisplayRow::ArtistHeader(_)
+                | GroupedAlbumDisplayRow::ArtistGroupSpacer => {
+                    // These always get full width and start a new row
+                    group_album_idx = 0;
+                    let row_area = Rect {
+                        x: area.x,
+                        y: area.y + current_y,
+                        width: area.width,
+                        height: 1,
+                    };
+                    (row_area, true)
+                }
+                _ => {
+                    // Other rows (AlbumDetailRule, AlbumWrappedContinuation, etc.)
+                    // get full width and start a new row
+                    let row_area = Rect {
+                        x: area.x,
+                        y: area.y + current_y,
+                        width: area.width,
+                        height: 1,
+                    };
+                    (row_area, true)
+                }
+            };
+
             match row {
                 GroupedAlbumDisplayRow::ArtistHeader(selection) => {
                     self.render_artist_header_row(
@@ -329,6 +379,11 @@ impl App {
                     );
                 }
                 GroupedAlbumDisplayRow::AlbumDetailContinuation => {}
+            }
+
+            // Advance y after rendering if this row completes a column group
+            if advance_after {
+                current_y += 1;
             }
         }
 
