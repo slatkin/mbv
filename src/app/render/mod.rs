@@ -446,7 +446,7 @@ impl App {
                             width: panel_area.width,
                             height: wide_viz_h,
                         };
-                        self.render_visualizer(f, wide_viz_area);
+                        self.render_visualizer(f, wide_viz_area, palette::DARK_BG);
                     }
                 } else {
                     let panel_area = Rect {
@@ -469,13 +469,15 @@ impl App {
                 }
             }
 
-            // Reserve space for visualizer at the bottom of the queue panel
-            visualizer_h = if self.visualizer_enabled && left_remaining >= 3 {
+            // Reserve space for visualizer at the bottom of the queue panel.
+            // Wide queue-only mode shows the visualizer inside the playback
+            // panel instead, so it's not duplicated here.
+            visualizer_h = if !is_wide && self.visualizer_enabled && left_remaining >= 3 {
                 left_remaining.min(VISUALIZER_HEIGHT)
             } else {
                 0
             };
-            if self.visualizer_enabled && visualizer_h == 0 && left_remaining > 0 {
+            if !is_wide && self.visualizer_enabled && visualizer_h == 0 && left_remaining > 0 {
                 self.flash_status("Terminal too short for left visualizer".into());
             }
             let queue_h = left_remaining.saturating_sub(visualizer_h);
@@ -611,7 +613,7 @@ impl App {
                     width: left_content.width,
                     height: visualizer_h,
                 };
-                self.render_visualizer(f, left_viz_area);
+                self.render_visualizer(f, left_viz_area, palette::LIBRARY_SIDE_BG);
                 // Render horizontal rule at the bottom of the left visualizer
                 let bottom_y = left_viz_area.y + left_viz_area.height - 1;
                 let hr_text = "▁".repeat(left_viz_area.width as usize);

@@ -24,3 +24,7 @@
 
 - [x] 4.1 In the wide path in `render_main` (`src/app/render/mod.rs`), after `render_player_panel` fills the panel content, compute `wide_viz_h = card_h.saturating_sub(player_h)`. When `self.visualizer_enabled && wide_viz_h >= 3`, call `self.render_visualizer(f, area)` with `area` positioned at `panel_area.x`, `panel_area.y + player_h`, full `panel_area.width`, height `wide_viz_h`. Otherwise leave the existing `DARK_BG` fill as-is.
 - [x] 4.2 Verify: `cargo check -p mbv` compiles. `cargo clippy --workspace --all-targets` clean. `cargo test -p mbv` passes.
+- [x] 4.3 Add a `bg: Color` parameter to `render_visualizer` in `src/app/render/visualizer.rs`, replacing the hardcoded `LIBRARY_SIDE_BG` in both the cell background fill and the bar text style. Update the test call site.
+- [x] 4.4 Pass `palette::DARK_BG` at the new wide-mode call site; pass `palette::LIBRARY_SIDE_BG` at the existing bottom-of-queue call site (`left_viz_area`) to preserve current behavior there.
+- [x] 4.5 Suppress the bottom-of-queue visualizer in wide queue-only mode: force `visualizer_h = 0` when `is_wide`, so the existing reservation and render at the bottom of the queue column don't run — the panel-embedded visualizer replaces it instead of adding to it.
+- [x] 4.6 Verify: `cargo check -p mbv` compiles. `cargo clippy --workspace --all-targets` clean. `cargo test -p mbv` passes.

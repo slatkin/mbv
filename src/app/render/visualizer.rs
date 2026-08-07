@@ -1,6 +1,6 @@
 use super::super::{palette, App};
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 use ratatui::Frame;
@@ -8,11 +8,11 @@ use ratatui::Frame;
 pub(super) const VISUALIZER_HEIGHT: u16 = 11;
 
 impl App {
-    pub(super) fn render_visualizer(&self, f: &mut Frame, area: Rect) {
+    pub(super) fn render_visualizer(&self, f: &mut Frame, area: Rect, bg: Color) {
         if area.width == 0 || area.height == 0 {
             return;
         }
-        let bg_style = Style::default().bg(palette::LIBRARY_SIDE_BG);
+        let bg_style = Style::default().bg(bg);
         for y in area.y..area.y + area.height {
             for x in area.x..area.x + area.width {
                 if let Some(cell) = f.buffer_mut().cell_mut((x, y)) {
@@ -57,9 +57,7 @@ impl App {
                     .collect::<String>();
                 Line::from(Span::styled(
                     text,
-                    Style::default()
-                        .fg(palette::AQUA)
-                        .bg(palette::LIBRARY_SIDE_BG),
+                    Style::default().fg(palette::AQUA).bg(bg),
                 ))
             })
             .collect::<Vec<_>>();
@@ -83,7 +81,7 @@ mod tests {
         let backend = TestBackend::new(20, 10);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_visualizer(f, Rect::default());
+            app.render_visualizer(f, Rect::default(), crate::app::palette::LIBRARY_SIDE_BG);
         })
         .unwrap();
     }
