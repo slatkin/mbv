@@ -204,9 +204,8 @@ fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
 
 #[test]
 fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
-    // Tall enough viewport that the 23-row hero block (at 82 wide, 2-col)
-    // leaves real list rows below it, so `lib_page_size` reflects the list,
-    // not 0.
+    // Tall enough viewport that the 18-row hero block leaves real list rows
+    // below it, so `lib_page_size` reflects the list, not 0.
     let mut app = make_power_movie_list_app(vec!["M0", "M1", "M2", "M3", "M4", "M5", "M6"]);
     let mut layout = LayoutMain::default();
     let _ = render_power_list_term(&mut app, &mut layout, 82, 30);
@@ -383,6 +382,71 @@ fn hero_height_is_constant_above_the_image_cap() {
     assert_eq!(
         heights[1], heights[2],
         "hero height at 100 and 150 cols should be equal (image already capped)"
+    );
+}
+
+#[test]
+fn hero_sizes_to_content_when_a_movie_is_selected() {
+    // A selected Movie's banner sizes the panel from its own content
+    // (poster + meta + overview), not from the fixed placeholder reserved
+    // while the slice is loading -- the placeholder is only the stand-in
+    // for the no-content state.
+    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+
+    let item = app.libs[0].nav_stack.last().unwrap().items[1].clone();
+    let panel_width = 82 - 2 * super::SELECTED_BLOCK_SIDE_PADDING;
+    let content_rows = app
+        .compact_banner_layout_with_overview(&item, panel_width, false)
+        .content_rows() as u16;
+    let cols = crate::app::library_column_width::library_column_count(82);
+    let expected = content_rows
+        + super::HERO_TITLE_ROWS.saturating_mul((cols > 1) as u16)
+        + super::HERO_BLOCK_EXTRA_ROWS;
+    assert_eq!(
+        layout.hero_area.height, expected,
+        "selected Movie banner sizes the panel to its own content"
+    );
+    assert_ne!(
+        layout.hero_area.height,
+        super::HERO_PLACEHOLDER_ROWS,
+        "the placeholder is only the no-content stand-in"
+    );
+}
+
+#[test]
+fn hero_stays_reserved_while_the_slice_is_loading() {
+    // A letter-pill switch clears the level's items; the hero placeholder
+    // must stay reserved so the panel doesn't collapse mid-switch.
+    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    app.libs[0].nav_stack.last_mut().unwrap().items.clear();
+    app.libs[0].nav_stack.last_mut().unwrap().loading = true;
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+
+    assert_eq!(
+        layout.hero_area.height,
+        super::HERO_PLACEHOLDER_ROWS,
+        "hero stays reserved with empty, loading items"
+    );
+    assert!(
+        layout.left_area.height >= 1,
+        "list area must keep at least 1 row while loading"
+    );
+}
+
+#[test]
+fn no_hero_placeholder_for_music_libraries() {
+    let mut app = make_power_movie_list_app(vec!["Album A", "Album B"]);
+    app.libs[0].library.collection_type = "music".into();
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+
+    assert_eq!(
+        layout.hero_area.height, 0,
+        "no hero placeholder in a music library"
     );
 }
 

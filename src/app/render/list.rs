@@ -8,6 +8,13 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 
+/// Height reserved for the hero panel while it has no content to size to.
+/// A letter-pill switch clears the slice (so the selected item disappears)
+/// before the new one loads in; without a reserved slot the panel collapses
+/// to zero rows and the whole list jumps up each switch. The placeholder is
+/// a minimum stand-in only -- the panel grows to fit its content once a
+/// Movie/Series is actually selected.
+const HERO_PLACEHOLDER_ROWS: u16 = 18;
 /// Row budget for the selected item's title on the hero's top row, rendered
 /// in yellow. Reserved only in two-column lists (`show_title`), where the
 /// list row's own title is truncated to a narrow cell; one-column lists
@@ -23,6 +30,57 @@ const HERO_TITLE_ROWS: u16 = 1;
 const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
 /// Blank row separating the hero block from the list below it.
 const HERO_SEPARATOR_ROWS: u16 = 1;
+
+/// Paints the hero block's outer shell -- the colored bg (focused/unfocused
+/// pattern) plus the `▁` top and `▔` bottom borders in SEEK_TRACK on the
+/// block's outer-row one -- shared by the normal hero path and the empty
+/// "placeholder panel" path (slice loading after a pill switch) so the block
+/// is always drawn identically while it's reserved.
+fn hero_block_shell(f: &mut Frame, hero_area: Rect, hero_rows: u16, focused: bool) {
+    let bg = if focused {
+        palette::MEDIA_SELECTED_BG
+    } else {
+        palette::PLAYBACK_PANEL_BG
+    };
+    // Colored bg across the padding + content rows (inside the borders, i.e.
+    // `hero_rows - 2` rows starting one row down).
+    f.render_widget(
+        Block::default().style(Style::default().bg(bg)),
+        Rect {
+            x: hero_area.x,
+            y: hero_area.y + 1,
+            width: hero_area.width,
+            height: hero_rows - 2,
+        },
+    );
+    // Top `▁` / bottom `▔` borders in SEEK_TRACK, painted on the hero
+    // block's own outer rows.
+    let border_style = Style::default().fg(palette::SEEK_TRACK);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "\u{2581}".repeat(hero_area.width as usize),
+            border_style,
+        ))),
+        Rect {
+            x: hero_area.x,
+            y: hero_area.y,
+            width: hero_area.width,
+            height: 1,
+        },
+    );
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "\u{2594}".repeat(hero_area.width as usize),
+            border_style,
+        ))),
+        Rect {
+            x: hero_area.x,
+            y: hero_area.y + hero_rows - 1,
+            width: hero_area.width,
+            height: 1,
+        },
+    );
+}
 
 impl App {
     /// Renders the Continue/library list items into `area`.
@@ -84,18 +142,10 @@ impl App {
         // out of `lib_area` before calling into this renderer; it lives
         // here now so the pills land below the hero, not above it. The
         // list below everything (`list_area`) is a plain grid that never
-        // reflows as the cursor moves. No hero when nothing is selected
-        // (e.g. an empty list) or when the selected item has no banner
-        // (folders, music) -- the list then takes the whole remaining area.
+        // reflows as the cursor moves. No hero when the level has no
+        // hero-capable content (folders, music, non-hero collections) --
+        // the list then takes the whole remaining area.
         //
-        // Movies get the poster/meta/overview content sized by the image's
-        // 16:9 aspect, capped so the list keeps a few rows in wide
-        // terminals (design decision 3, option a). A selected Series keeps
-        // its own inline detail (season pills + episode table,
-        // `series_inline_detail_rows` / `render_series_inline_detail`) --
-        // that's a distinct, taller, interactive content shape the generic
-        // compact banner can't represent, so it isn't folded into the
-        // movie hero's row math.
         let hero_rows: u16 = if self.library_tab > 0 {
             let lib_idx = self.library_tab - 1;
             if let Some(item) = &selected_movie_item {
@@ -128,7 +178,23 @@ impl App {
                 ) as u16
                     + HERO_BLOCK_EXTRA_ROWS
             } else {
-                0
+                // No banner content to size to. If we're at the top browse
+                // level of a hero-capable collection (movies/homevideos/
+                // podcasts/tvshows), keep the fixed placeholder panel reserved
+                // instead of collapsing to zero -- a letter-pill switch clears
+                // the slice before its replacement loads, and this keeps the
+                // slot from jumping away and back. The placeholder size is
+                // just the stand-in; once content lands the block sizes to it.
+                let top_hero_level = self.libs[lib_idx].nav_stack.len() == 1
+                    && matches!(
+                        self.libs[lib_idx].library.collection_type.as_str(),
+                        "movies" | "homevideos" | "podcasts" | "tvshows"
+                    );
+                if top_hero_level {
+                    HERO_PLACEHOLDER_ROWS
+                } else {
+                    0
+                }
             }
         } else {
             0
@@ -287,6 +353,7 @@ impl App {
         layout.left_area = list_area;
 
         if n == 0 {
+            layout.hero_area = hero_area;
             let msg = if self.library_tab > 0 {
                 let lib_idx = self.library_tab - 1;
                 if self.recursive_album_search_enabled(lib_idx) {
@@ -304,6 +371,13 @@ impl App {
             } else {
                 "(empty)"
             };
+            // Reserve and paint the hero's placeholder panel so the block
+            // stays put even while a letter-pill switch has the slice
+            // cleared and loading (see `top_hero_level` above), then show
+            // the status message in the list area below it.
+            if hero_rows > 0 {
+                hero_block_shell(f, hero_area, hero_rows, focused);
+            }
             super::render_power_placeholder(f, list_area, msg);
             return;
         }
@@ -353,55 +427,12 @@ impl App {
         }
 
         // Paint the hero into its fixed top-edge rect, after the list has
-        // rendered: the colored bg (focused/unfocused pattern), then the
-        // `▁` top and `▔` bottom borders in SEEK_TRACK on the block's outer
-        // rows, then the content offset 2 rows down past the top border +
-        // top padding. The row renderer set `cursor_screen_y` to the
-        // selected list row; the hero paint doesn't touch it.
+        // rendered: the outer shell (colored bg + `▁`/`▔` borders), then the
+        // content offset 2 rows down past the top border + top padding. The
+        // row renderer set `cursor_screen_y` to the selected list row; the
+        // hero paint doesn't touch it.
         if hero_rows > 0 {
-            let bg = if focused {
-                palette::MEDIA_SELECTED_BG
-            } else {
-                palette::PLAYBACK_PANEL_BG
-            };
-            // Colored bg across the padding + content rows (inside the
-            // borders, i.e. `hero_rows - 2` rows starting one row down).
-            f.render_widget(
-                Block::default().style(Style::default().bg(bg)),
-                Rect {
-                    x: hero_area.x,
-                    y: hero_area.y + 1,
-                    width: hero_area.width,
-                    height: hero_rows - 2,
-                },
-            );
-            // Top `▁` / bottom `▔` borders in SEEK_TRACK, painted on the
-            // hero block's own outer rows.
-            let border_style = Style::default().fg(palette::SEEK_TRACK);
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    "\u{2581}".repeat(hero_area.width as usize),
-                    border_style,
-                ))),
-                Rect {
-                    x: hero_area.x,
-                    y: hero_area.y,
-                    width: hero_area.width,
-                    height: 1,
-                },
-            );
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    "\u{2594}".repeat(hero_area.width as usize),
-                    border_style,
-                ))),
-                Rect {
-                    x: hero_area.x,
-                    y: hero_area.y + hero_rows - 1,
-                    width: hero_area.width,
-                    height: 1,
-                },
-            );
+            hero_block_shell(f, hero_area, hero_rows, focused);
             // Content, offset 2 rows down past the top border + top
             // padding, and inset 2 cols on each side like music/homevideo's
             // selected blocks; the banner layout is a pure function of the
@@ -415,9 +446,11 @@ impl App {
                 height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
             };
             let lib_idx = self.library_tab - 1;
-            // Same movie/Series branch as the row-count calc above: a
-            // selected Series renders its season pills + episode table
-            // instead of the generic compact banner.
+            // Same movie/Series branch as the row spacing above: a selected
+            // Series renders its season pills + episode table instead of the
+            // generic compact banner. When neither is selected (e.g. a
+            // letter-pill switch has the slice loading), the panel stays as
+            // its empty placeholder -- reserved but not painted over.
             if selected_movie_item.is_some() {
                 self.render_power_compact_detail(
                     f,
@@ -427,7 +460,7 @@ impl App {
                     cols > 1,
                     layout,
                 );
-            } else {
+            } else if selected_series_item.is_some() {
                 self.render_series_inline_detail(
                     f,
                     content_rect,
