@@ -283,16 +283,31 @@ fn restore_local_mode_disconnects_the_remote_before_restoring_local() {
 
     app.restore_local_mode("test: ending library route session");
 
+    // The client may still have in-flight protocol traffic queued ahead of
+    // the close (e.g. a trailing status message), so drain reads until the
+    // socket actually reaches EOF rather than asserting on a single read.
     let mut daemon_stream = daemon.join().unwrap();
     daemon_stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
+        .set_read_timeout(Some(Duration::from_millis(200)))
         .unwrap();
-    let mut buf = [0u8; 8];
-    let n = daemon_stream.read(&mut buf).unwrap_or(usize::MAX);
-    assert_eq!(
-        n, 0,
-        "old remote's client socket must be shut down after restore_local_mode"
-    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    let mut buf = [0u8; 256];
+    loop {
+        match daemon_stream.read(&mut buf) {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) => {}
+            Err(e) => panic!("unexpected read error: {e}"),
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "old remote's client socket must be shut down after restore_local_mode"
+        );
+    }
 }
 
 #[test]
