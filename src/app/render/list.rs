@@ -101,7 +101,49 @@ impl App {
             self.ensure_lib_loaded_for(self.library_tab - 1);
         }
 
-        let content_area = area;
+        let mut content_area = area;
+
+        // First row area: search input box (when searching).
+        if focused
+            && self.library_tab > 0
+            && self.libs[self.library_tab - 1].search.is_some()
+            && content_area.height >= 3
+        {
+            let lib_idx = self.library_tab - 1;
+            // 3-row bordered search input, matching the home-search visual style.
+            let search_area = Rect {
+                height: 3,
+                ..content_area
+            };
+            content_area = Rect {
+                y: content_area.y + 3,
+                height: content_area.height.saturating_sub(3),
+                ..content_area
+            };
+            let s = self.libs[lib_idx].search.as_ref().unwrap();
+            let input_text = if s.loading {
+                format!("{}█ [loading…]", s.query)
+            } else {
+                format!("{}█", s.query)
+            };
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    input_text,
+                    Style::default().fg(palette::BG_GREEN),
+                ))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded)
+                        .border_style(Style::default().fg(palette::IRIS))
+                        .title(Span::styled(
+                            " Search ",
+                            Style::default().fg(palette::YELLOW),
+                        )),
+                ),
+                search_area,
+            );
+        }
 
         // Selected movie/Series item, computed once and reused below for the
         // prefetch gate, the hero row-count calc, and the hero paint --
@@ -277,12 +319,28 @@ impl App {
         } else {
             let lib_idx = self.library_tab - 1;
             let lib = &self.libs[lib_idx];
-            let (items, cur, scroll, total) = match lib.nav_stack.last() {
-                // `total_count` comes from Emby's TotalRecordCount, not
-                // `items.len()` -- with lazy pagination `items` may only hold
-                // a subset of the library until the user scrolls further.
-                Some(lvl) => (lvl.items.clone(), lvl.cursor, lvl.scroll, lvl.total_count),
-                None => (vec![], 0, 0, 0),
+            let (items, cur, scroll, total) = if let Some(s) = &lib.search {
+                let items: Vec<mbv_core::api::MediaItem> = s
+                    .results
+                    .iter()
+                    .filter_map(|&i| {
+                        s.items
+                            .get(i)
+                            .map(|item| self.recursive_album_display_item(lib_idx, i, item.clone()))
+                    })
+                    .collect();
+                // Search results are already the full locally-filtered match set,
+                // not paginated, so their length is already the true total.
+                let total = items.len();
+                (items, s.cursor, s.scroll, total)
+            } else {
+                match lib.nav_stack.last() {
+                    // `total_count` comes from Emby's TotalRecordCount, not
+                    // `items.len()` -- with lazy pagination `items` may only hold
+                    // a subset of the library until the user scrolls further.
+                    Some(lvl) => (lvl.items.clone(), lvl.cursor, lvl.scroll, lvl.total_count),
+                    None => (vec![], 0, 0, 0),
+                }
             };
             (items, cur, scroll, total)
         };
@@ -325,10 +383,14 @@ impl App {
         }
 
         // When at the album level of a music library, group albums under artist headers.
-        let show_grouped = if self.library_tab > 0 {
-            self.is_viewing_album_folders(self.library_tab - 1)
-        } else {
-            false
+        // Suppressed while search is active: `render_power_grouped_album_rows` reads
+        // its catalog from `nav_stack.last().music_grouping.settled`, whose `order`
+        // indexes the unfiltered nav-level item vector -- `items` here is the
+        // filtered search-result vector, so the catalog's positions would no longer
+        // refer to the same albums.
+        let show_grouped = self.library_tab > 0 && {
+            let lib_idx = self.library_tab - 1;
+            self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none()
         };
 
         let n = items.len();
@@ -361,6 +423,7 @@ impl App {
             && {
                 let lib_idx = self.library_tab - 1;
                 self.libs[lib_idx].library.collection_type != "music"
+                    && self.libs[lib_idx].search.is_none()
             };
 
         layout.left_area = list_area;
@@ -369,7 +432,12 @@ impl App {
             layout.hero_area = hero_area;
             let msg = if self.library_tab > 0 {
                 let lib_idx = self.library_tab - 1;
-                if self.recursive_album_search_enabled(lib_idx) {
+                if self.recursive_album_search_enabled(lib_idx)
+                    && self.libs[lib_idx]
+                        .search
+                        .as_ref()
+                        .is_some_and(|search| search.loading)
+                {
                     "Indexing music library..."
                 } else if self.libs[lib_idx]
                     .nav_stack
@@ -489,7 +557,9 @@ impl App {
         // library_tab is always > 0 here (tab == 0 uses render_power_home_list).
         if self.library_tab > 0 {
             let lib_idx = self.library_tab - 1;
-            if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+            if let Some(s) = &mut self.libs[lib_idx].search {
+                s.scroll = final_offset;
+            } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                 lvl.scroll = final_offset;
             }
         }

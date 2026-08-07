@@ -24,7 +24,7 @@ mod input_playlist_keys;
 mod input_queue_keys;
 mod input_remote_reanchor;
 mod input_resolver;
-mod input_search_modal_keys;
+mod input_search_sidebar_keys;
 mod input_settings_keys;
 pub(crate) mod layout;
 mod lib_cursor_actions;
@@ -55,7 +55,7 @@ mod render_cadence;
 mod resize;
 mod run_loop_drains;
 mod run_loop_events;
-mod search_modal;
+mod search_sidebar;
 mod session_command_actions;
 mod session_connect;
 mod settings;
@@ -79,10 +79,10 @@ pub use self::app_struct::App;
 use self::app_struct::AppInit;
 use self::bootstrap::bootstrap_local_daemon_queue;
 use self::resize::spawn_resize_worker;
-use self::search_modal::SearchModalDrainOutcome;
+use self::search_sidebar::SearchDrainOutcome;
 use self::types_browse::{
     restore_library_position, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel,
-    SeriesDetail,
+    LibSearch, SeriesDetail,
 };
 use self::types_confirm::{ConfirmAction, ConfirmModal};
 use self::types_context_menu::{
@@ -252,6 +252,7 @@ const SESSIONS_PANEL_W: u16 = 40;
 const HELP_PANEL_W: u16 = 40;
 const SETTINGS_PANEL_W: u16 = 40;
 const PLAYLISTS_PANEL_W: u16 = 40;
+const SEARCH_PANEL_W: u16 = 40;
 impl App {
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mut terminal = init_terminal()?;
@@ -529,7 +530,7 @@ impl App {
         Ok(())
     }
 
-    pub(super) fn spawn_search_modal_query(&self, client: EmbyClient, query: String) {
+    pub(super) fn spawn_search_sidebar_query(&self, client: EmbyClient, query: String) {
         let tx = self.search_tx.clone();
         std::thread::spawn(move || {
             let result = client.search_items(&query, 100);
@@ -537,11 +538,11 @@ impl App {
         });
     }
 
-    pub(super) fn drain_search_modal_results(&mut self, outcome: &mut SearchModalDrainOutcome) {
+    pub(super) fn drain_search_sidebar_results(&mut self, outcome: &mut SearchDrainOutcome) {
         while let Ok((query, result)) = self.search_rx.try_recv() {
             outcome.received += 1;
-            if let Some(modal) = self.search_modal.as_mut() {
-                modal.apply_drain(&query, result, &mut outcome.errors);
+            if let Some(sidebar) = self.search_sidebar.as_mut() {
+                sidebar.apply_drain(&query, result, &mut outcome.errors);
             }
         }
     }

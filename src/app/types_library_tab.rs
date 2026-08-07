@@ -1,4 +1,5 @@
 use super::types_browse::BrowseLevel;
+use super::types_browse::LibSearch;
 use super::types_feed::FeedHomeVideoState;
 use super::types_playback::ArtistHeaderSelection;
 use mbv_core::api::MediaItem;
@@ -6,6 +7,7 @@ use mbv_core::api::MediaItem;
 pub(super) struct LibraryTab {
     pub(super) library: MediaItem,
     pub(super) nav_stack: Vec<BrowseLevel>,
+    pub(super) search: Option<LibSearch>,
     pub(super) feed_home_video: Option<FeedHomeVideoState>,
     /// `Some(idx)` = track-selection mode is active for the album currently
     /// shown inline at the album-folder-listing nav level (#145 task 3);
@@ -67,6 +69,7 @@ impl LibraryTab {
     ) {
         self.library_total = position.levels.first().and_then(|l| l.library_total);
         self.nav_stack = nav_stack;
+        self.search = None;
         self.clear_power_music_focus();
         if let Some(state) = self.feed_home_video.as_mut() {
             state.selected_group = position.feed_selected_group;

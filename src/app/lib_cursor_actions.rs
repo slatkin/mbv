@@ -1,4 +1,4 @@
-use super::{App, LibEvent, PanelFocus};
+use super::{AlbumIndexState, App, LibEvent, PanelFocus};
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use mbv_core::api::MediaItem;
 use std::time::Instant;
@@ -8,8 +8,14 @@ impl App {
     /// every single-column renderer (season grids, grouped album views,
     /// music group views, feed home-video group views) and the
     /// pane-derived count for the plain and letter-grouped list renderers.
+    /// Search results always render through the plain (column-aware)
+    /// renderer, so they use the pane-derived count even inside a music
+    /// library at the album-folder level.
     pub(super) fn current_library_columns(&self, lib_idx: usize) -> usize {
         use crate::app::library_column_width::library_column_count;
+        if self.libs[lib_idx].search.is_some() {
+            return library_column_count(self.layout.main.left_area.width);
+        }
         if self.is_viewing_season_grid(lib_idx)
             || self.is_viewing_album_folders(lib_idx)
             || self.is_music_group_view(lib_idx)
@@ -34,7 +40,8 @@ impl App {
         // frame's laid-out item rows. The grouped-album view also publishes
         // `left_sorted_indices` but renders single-column, so it is excluded
         // (its own display-order cursor handling keeps working unchanged).
-        if self.libs[lib_idx].album_track_focus.is_none()
+        if self.libs[lib_idx].search.is_none()
+            && self.libs[lib_idx].album_track_focus.is_none()
             && !self.is_viewing_album_folders(lib_idx)
             && !self.layout.main.left_sorted_indices.is_empty()
         {
@@ -112,6 +119,7 @@ impl App {
         let lib_idx = self.library_tab.saturating_sub(1);
 
         if matches!(self.panel_focus, PanelFocus::Library)
+            && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
             && self.move_power_music_group_display_cursor(lib_idx, delta)
         {
@@ -122,7 +130,7 @@ impl App {
             return;
         }
 
-        if self.is_feed_home_video_group_view(lib_idx) {
+        if self.libs[lib_idx].search.is_none() && self.is_feed_home_video_group_view(lib_idx) {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                 let n = state.selected_len();
                 if n > 0 {
@@ -137,7 +145,8 @@ impl App {
         // With letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
         if !self.layout.main.left_sorted_indices.is_empty() {
-            let needs_sorted = self.libs[lib_idx].nav_stack.last().is_some();
+            let needs_sorted = self.libs[lib_idx].search.is_none()
+                && self.libs[lib_idx].nav_stack.last().is_some();
             if needs_sorted {
                 let current = self.libs[lib_idx].nav_stack.last().unwrap().cursor;
                 let sorted_n = self.layout.main.left_sorted_indices.len();
@@ -162,6 +171,13 @@ impl App {
         }
 
         let lib = &mut self.libs[lib_idx];
+        if let Some(s) = &mut lib.search {
+            let n = s.results.len();
+            if n > 0 {
+                s.cursor = (s.cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+            }
+            return;
+        }
         if let Some(lvl) = lib.nav_stack.last_mut() {
             let n = lvl.items.len();
             if n > 0 {
@@ -178,6 +194,7 @@ impl App {
         let lib_idx = self.library_tab.saturating_sub(1);
 
         if matches!(self.panel_focus, PanelFocus::Library)
+            && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
             && self.jump_power_music_group_display_cursor(lib_idx, to_end)
         {
@@ -186,7 +203,7 @@ impl App {
             return;
         }
 
-        if self.is_feed_home_video_group_view(lib_idx) {
+        if self.libs[lib_idx].search.is_none() && self.is_feed_home_video_group_view(lib_idx) {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                 let n = state.selected_len();
                 if n > 0 {
@@ -200,17 +217,29 @@ impl App {
         // With letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
         if !self.layout.main.left_sorted_indices.is_empty() {
-            let n = self.layout.main.left_sorted_indices.len();
-            let new_cursor = self.layout.main.left_sorted_indices[if to_end { n - 1 } else { 0 }];
-            if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-                lvl.cursor = new_cursor;
+            let needs_sorted = self.libs[lib_idx].search.is_none()
+                && !self.layout.main.left_sorted_indices.is_empty();
+            if needs_sorted {
+                let n = self.layout.main.left_sorted_indices.len();
+                let new_cursor =
+                    self.layout.main.left_sorted_indices[if to_end { n - 1 } else { 0 }];
+                if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+                    lvl.cursor = new_cursor;
+                }
+                self.save_default_library_position(lib_idx);
+                self.maybe_fetch_next_page(lib_idx);
+                return;
             }
-            self.save_default_library_position(lib_idx);
-            self.maybe_fetch_next_page(lib_idx);
-            return;
         }
 
         let lib = &mut self.libs[lib_idx];
+        if let Some(s) = &mut lib.search {
+            let n = s.results.len();
+            if n > 0 {
+                s.cursor = if to_end { n - 1 } else { 0 };
+            }
+            return;
+        }
         if let Some(lvl) = lib.nav_stack.last_mut() {
             let n = lvl.items.len();
             if n > 0 {
@@ -241,6 +270,9 @@ impl App {
 
     pub(super) fn is_viewing_season_grid(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
+        if lib.search.is_some() {
+            return false;
+        }
         let lvl = match lib.nav_stack.last() {
             Some(l) => l,
             None => return false,
@@ -354,5 +386,27 @@ impl App {
                 last.cursor = order[0];
             }
         }
+    }
+
+    pub(super) fn recursive_album_display_item(
+        &self,
+        lib_idx: usize,
+        item_idx: usize,
+        mut item: MediaItem,
+    ) -> MediaItem {
+        let Some(AlbumIndexState::Ready(entries)) = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| self.album_indexes.get(&lib.library.id))
+        else {
+            return item;
+        };
+        if let Some(entry) = entries
+            .get(item_idx)
+            .filter(|entry| entry.album.id == item.id)
+        {
+            item.name = entry.display_label.clone();
+        }
+        item
     }
 }

@@ -5,6 +5,14 @@ use crate::app::tests::*;
 fn library_position_snapshot_captures_path_focus_and_feed_group() {
     let mut lib = LibraryTab {
         library: make_item("Movies", "CollectionFolder"),
+        search: Some(LibSearch {
+            query: "ignored".into(),
+            items: make_items(2),
+            results: vec![0],
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        }),
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -256,6 +264,14 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
 fn applying_library_position_clears_non_position_ui_state() {
     let mut lib = LibraryTab {
         library: make_item("Movies", "CollectionFolder"),
+        search: Some(LibSearch {
+            query: "ignored".into(),
+            items: make_items(2),
+            results: vec![0],
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        }),
         nav_stack: Vec::new(),
         feed_home_video: Some(FeedHomeVideoState::default()),
         album_track_focus: Some(2),
@@ -292,6 +308,7 @@ fn applying_library_position_clears_non_position_ui_state() {
     );
 
     assert_eq!(lib.nav_stack.len(), 1);
+    assert!(lib.search.is_none());
     assert!(lib.album_track_focus.is_none());
     let feed = lib.feed_home_video.as_ref().unwrap();
     assert_eq!(feed.selected_group, 3);
@@ -311,6 +328,7 @@ fn save_default_library_position_persists_focused_item() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -352,6 +370,7 @@ fn move_lib_cursor_persists_default_library_position() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -393,6 +412,7 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -451,6 +471,7 @@ fn refresh_lib_clears_saved_position_for_active_library() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -510,6 +531,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),

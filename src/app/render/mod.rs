@@ -26,6 +26,7 @@ mod overlays;
 mod pills;
 mod power_widgets;
 mod queue;
+mod search_sidebar;
 mod sort_filter;
 mod visualizer;
 
@@ -202,6 +203,9 @@ impl App {
         if self.show_playlists {
             self.render_playlists_panel(f, power_panel_area);
         }
+        if self.search_sidebar.is_some() {
+            self.render_search_sidebar(f, power_panel_area);
+        }
         if self.show_help {
             self.render_help_panel(f, power_panel_area);
         }
@@ -231,9 +235,6 @@ impl App {
         if self.daemon_lost_modal.is_some() {
             self.render_daemon_lost_modal(f);
         }
-        if self.search_modal.is_some() {
-            overlays::search_modal::render_search_modal(self, f, area);
-        }
 
         // One atomic replace, reached only once the full pass above has
         // completed -- `self.layout` never observes a half-updated frame.
@@ -247,7 +248,6 @@ impl App {
             || self.multiselect_popup.is_some()
             || self.save_playlist_dialog.is_some()
             || self.library_routes_popup.is_some()
-            || self.search_modal.is_some()
     }
 }
 

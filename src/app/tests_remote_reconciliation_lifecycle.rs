@@ -237,6 +237,7 @@ fn library_focus_rescan_does_not_trigger_tracking_controls() {
     lib_item.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library: lib_item,
+        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,

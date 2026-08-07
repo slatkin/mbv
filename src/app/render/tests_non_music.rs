@@ -85,6 +85,7 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-shows".into(),
             title: "Shows".into(),

@@ -54,6 +54,7 @@ fn make_power_movie_list_app(titles: Vec<&str>) -> App {
 
     app.libs.push(LibraryTab {
         library,
+        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -509,5 +510,41 @@ fn two_column_mouse_click_selects_the_clicked_cell_not_the_row_first_item() {
         cursor_of(&app),
         1,
         "click on the right cell must select the second item of the row"
+    );
+}
+
+// Regression gate for the `show_grouped` fix (design.md Decision 6): without
+// the `search.is_none()` guard, `render_power_grouped_album_rows` would pair
+// its unfiltered `GroupedAlbumCatalog` with the filtered search-result
+// vector, mislabeling every row. This pins the guard's two inputs directly
+// rather than the rendered output, since `show_grouped` itself is a local
+// binding inside `render_power_list`, not a standalone function.
+#[test]
+fn show_grouped_guard_is_false_while_search_is_active_on_album_folders() {
+    let mut app = crate::app::render::test_helpers::make_power_music_group_app();
+    let lib_idx = app.library_tab - 1;
+
+    assert!(
+        app.is_viewing_album_folders(lib_idx),
+        "fixture must sit at the album-folder level for this guard to matter"
+    );
+    assert!(app.libs[lib_idx].search.is_none());
+    assert!(
+        app.is_viewing_album_folders(lib_idx) && app.libs[lib_idx].search.is_none(),
+        "baseline: show_grouped's condition holds with no active search"
+    );
+
+    app.libs[lib_idx].search = Some(crate::app::LibSearch {
+        query: "x".into(),
+        items: Vec::new(),
+        results: Vec::new(),
+        cursor: 0,
+        scroll: 0,
+        loading: false,
+    });
+
+    assert!(
+        !(app.is_viewing_album_folders(lib_idx) && app.libs[lib_idx].search.is_none()),
+        "show_grouped's condition must go false once a search is active"
     );
 }
