@@ -21,5 +21,18 @@
   },
   "enabledPlugins": {
     "agent-skills@addy-agent-skills": false
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=$(jq -r '.tool_input.file_path // empty'); case \"$file\" in *.rs) rustfmt --edition 2021 \"$file\" ;; esac; exit 0"
+          }
+        ]
+      }
+    ]
   }
 }
