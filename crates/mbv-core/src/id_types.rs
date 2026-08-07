@@ -17,6 +17,17 @@ impl ItemId {
         Self(s.into())
     }
 
+    /// Create an empty identifier, reusing the existing heap allocation when used
+    /// via [`clear`](Self::clear) on an already-initialized value.
+    pub fn empty() -> Self {
+        Self(String::new())
+    }
+
+    /// Clear the identifier in place, reusing the internal buffer.
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -37,6 +48,14 @@ impl MediaSourceId {
         Self(s.into())
     }
 
+    pub fn empty() -> Self {
+        Self(String::new())
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -55,6 +74,14 @@ pub struct EmbySessionId(String);
 impl EmbySessionId {
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())
+    }
+
+    pub fn empty() -> Self {
+        Self(String::new())
+    }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
     }
 
     pub fn as_str(&self) -> &str {

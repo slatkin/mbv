@@ -19,13 +19,7 @@ pub fn gen_session_id() -> EmbySessionId {
         .unwrap_or_default();
     let pid = std::process::id();
     let r: u32 = rand::random();
-    EmbySessionId::new(format!(
-        "{:x}{:x}{:x}{:x}",
-        t.as_secs(),
-        t.subsec_nanos(),
-        pid,
-        r
-    ))
+    EmbySessionId::new(format!("{:x}{:x}{:x}{:x}", t.as_secs(), t.subsec_nanos(), pid, r))
 }
 
 pub fn device_name() -> String {

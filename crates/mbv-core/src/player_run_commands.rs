@@ -61,7 +61,7 @@ impl PlaybackRun {
                         // Currently playing track removed — clear reporter item_id to prevent
                         // stale progress reports until on_end_file transitions to the next track.
                         let mut ids = self.reporter.ids.lock().unwrap();
-                        ids.0 = ItemId::new("");
+                        ids.0.clear();
                     }
                 }
             }
@@ -188,7 +188,7 @@ impl PlaybackRun {
             self.begin_item_lifecycle();
             self.osd_title.clear();
             self.pending_resume_secs = None;
-            self.series_id = ItemId::new("");
+            self.series_id.clear();
             self.season = 0;
             self.episode = 0;
             return;

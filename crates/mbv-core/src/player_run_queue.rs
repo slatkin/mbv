@@ -132,7 +132,7 @@ impl PlaybackRun {
             self.osd_title.clear();
             self.pending_resume_secs = None;
             self.last_valid_pos = 0;
-            self.series_id = ItemId::new("");
+            self.series_id.clear();
             self.season = 0;
             self.episode = 0;
             self.intro_start = 0;
@@ -165,7 +165,7 @@ impl PlaybackRun {
             self.season = item.parent_index_number;
             self.episode = item.index_number;
         } else {
-            self.series_id = ItemId::new("");
+            self.series_id.clear();
             self.season = 0;
             self.episode = 0;
         }
@@ -219,7 +219,7 @@ impl PlaybackRun {
         let series_id = if initial_item.item_type == "Episode" {
             ItemId::new(initial_item.series_id.clone())
         } else {
-            ItemId::new("")
+            ItemId::empty()
         };
         PlaybackRun {
             origin,
