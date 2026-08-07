@@ -177,7 +177,7 @@ impl App {
         } else {
             String::new()
         };
-        let target_label_text = format!(" {}{}", label.trim_start(), tracking);
+        let target_label_text = format!("{}{}", label.trim_start(), tracking);
         f.render_widget(
             Block::default().style(Style::default().bg(target_bg)),
             target_area,
