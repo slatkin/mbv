@@ -218,17 +218,16 @@ impl App {
                 )
             })
             .collect::<Vec<_>>();
-        const PILL_PCT_SLOT_W: usize = 3;
         let pill_bg = palette::PLAYBACK_INDICATOR_BG;
         let pct_str = fmt_playback_pct(pos_ticks, rt_ticks);
         let throbber = self.now_playing_throbber_span();
         let mut progress_spans: Vec<Span<'static>> = vec![
             Span::styled(
-                throbber.content.trim_end().to_string(),
+                format!("{} ", throbber.content.trim_end()),
                 throbber.style.bg(pill_bg),
             ),
             Span::styled(
-                format!("{:>PILL_PCT_SLOT_W$}", pct_str),
+                pct_str,
                 Style::default().fg(palette::FOAM).bg(pill_bg),
             ),
         ];
@@ -236,7 +235,7 @@ impl App {
             right = progress_spans;
         } else {
             progress_spans.push(Span::styled(
-                "\u{29F8}",
+                " \u{29F8} ",
                 Style::default().fg(palette::OVERLAY).bg(pill_bg),
             ));
             progress_spans.extend(right);
