@@ -52,10 +52,11 @@ impl App {
         let max = n as i64 - 1;
         let new = (cur + delta).clamp(0, max) as usize;
         sidebar.cursor = new;
+        let page = sidebar.list_height.max(1);
         if sidebar.cursor < sidebar.scroll {
             sidebar.scroll = sidebar.cursor;
-        } else if sidebar.cursor >= sidebar.scroll + n {
-            sidebar.scroll = sidebar.cursor + 1 - n;
+        } else if sidebar.cursor >= sidebar.scroll + page {
+            sidebar.scroll = sidebar.cursor + 1 - page;
         }
     }
 

@@ -35,7 +35,7 @@ impl App {
             Some(area) => Self::render_panel_shell_at(f, area, "SEARCH", HINTS, true),
             None => Self::render_panel_shell(f, f.area(), SEARCH_PANEL_W, "SEARCH", HINTS),
         };
-        let Some(sidebar) = self.search_sidebar.as_ref() else {
+        let Some(sidebar) = self.search_sidebar.as_mut() else {
             return;
         };
         if content.height == 0 || content.width == 0 {
@@ -122,14 +122,15 @@ fn render_type_chips(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) {
     f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
-fn render_results(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) {
+fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) {
+    let list_h = area.height as usize;
+    sidebar.list_height = list_h;
     let filtered: Vec<&MediaItem> = sidebar.filtered_results();
     if filtered.is_empty() {
         render_empty_state(f, area, sidebar);
         return;
     }
 
-    let list_h = area.height as usize;
     for (vi, item) in filtered.iter().skip(sidebar.scroll).enumerate() {
         if vi >= list_h {
             break;

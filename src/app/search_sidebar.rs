@@ -8,6 +8,8 @@ pub(crate) struct SearchSidebar {
     pub(super) loading: bool,
     pub(super) type_filter: usize,
     pub(super) last_drain_error: Option<String>,
+    /// Visible list rows; written by the renderer, read by cursor movement.
+    pub(super) list_height: usize,
 }
 
 pub(crate) struct SearchDrainOutcome {
@@ -32,6 +34,7 @@ impl SearchSidebar {
             loading: false,
             type_filter: 0,
             last_drain_error: None,
+            list_height: 0,
         }
     }
 
