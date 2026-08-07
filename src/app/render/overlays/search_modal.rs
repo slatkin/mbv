@@ -7,7 +7,7 @@ use mbv_core::api::{MediaItem, TICKS_PER_SECOND};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 use textwrap::wrap;
 
@@ -180,15 +180,12 @@ fn render_input_row(
     } else {
         format!("{}\u{2588}", modal.query)
     };
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(palette::SEEK_TRACK))
-        .style(Style::default().bg(palette::PLAYBACK_PANEL_BG));
+    let block = Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG));
     f.render_widget(block, area);
     let inner = Rect {
-        x: area.x + 1,
-        y: area.y + 1,
-        width: area.width.saturating_sub(2),
+        x: area.x,
+        y: area.y,
+        width: area.width,
         height: 1,
     };
     if inner.width == 0 {

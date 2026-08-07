@@ -3,7 +3,7 @@ use super::super::super::palette;
 use super::super::super::App;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem};
+use ratatui::widgets::{Clear, List, ListItem};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -36,13 +36,6 @@ impl App {
         };
         layout.context_menu_rect = Some(rect);
         f.render_widget(Clear, rect);
-        f.render_widget(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(palette::IRIS)),
-            rect,
-        );
         let list_items: Vec<ListItem> = menu
             .entries
             .iter()
@@ -59,10 +52,10 @@ impl App {
             })
             .collect();
         let inner = Rect {
-            x: x + 1,
-            y: y + 1,
-            width: width - 2,
-            height: height - 2,
+            x,
+            y,
+            width,
+            height,
         };
         f.render_widget(List::new(list_items), inner);
     }
