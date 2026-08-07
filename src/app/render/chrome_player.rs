@@ -104,18 +104,15 @@ impl App {
         }
 
         if player_h >= 4 {
-            let border_area = Rect {
+            let bottom_area = Rect {
                 y: area.y + 3,
                 height: 1,
                 ..area
             };
-            let border = "\u{2594}".repeat(border_area.width as usize);
             f.render_widget(
-                Paragraph::new(Span::styled(
-                    border,
-                    Style::default().fg(palette::SEEK_TRACK),
-                )),
-                border_area,
+                Paragraph::new(Span::raw(" ".repeat(bottom_area.width as usize)))
+                    .style(Style::default().bg(palette::PLAYBACK_INDICATOR_BG)),
+                bottom_area,
             );
         }
     }

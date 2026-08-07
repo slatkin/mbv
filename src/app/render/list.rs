@@ -231,19 +231,29 @@ impl App {
         };
         let separator_rows = if hero_rows > 0 { separator_reserve } else { 0 };
 
+        // The row directly above `content_area` is the player panel's own
+        // trailing blank row (painted in `chrome_player.rs`). When a hero
+        // renders here, its top border can reuse that row instead of adding
+        // a second one right below it -- shift everything up by 1 to borrow
+        // it back for the list. Only possible when there's a row to borrow.
+        let hero_shift: u16 = if hero_rows > 0 && content_area.y > 0 {
+            1
+        } else {
+            0
+        };
         let hero_area = Rect {
+            y: content_area.y.saturating_sub(hero_shift),
             height: hero_rows,
             ..content_area
         };
         let pills_area = Rect {
-            y: content_area.y + hero_rows + separator_rows,
+            y: content_area.y.saturating_sub(hero_shift) + hero_rows + separator_rows,
             height: if show_pills { 1 } else { 0 },
             ..content_area
         };
         let list_area = Rect {
-            y: content_area.y + hero_rows + separator_rows + pills_reserved,
-            height: content_area
-                .height
+            y: content_area.y.saturating_sub(hero_shift) + hero_rows + separator_rows + pills_reserved,
+            height: (content_area.height + hero_shift)
                 .saturating_sub(hero_rows + separator_rows + pills_reserved),
             ..content_area
         };
