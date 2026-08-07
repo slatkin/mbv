@@ -353,14 +353,6 @@ impl App {
                         fmt_playback_pct(pt, rt)
                     };
 
-                    // Show queue position (1-based) for all items, right-aligned
-                    // so single-digit numbers line up with double-digit ones.
-                    // The trailing space is the left padding of the now-playing
-                    // gutter (1 cell on each side of the 4-cell column).
-                    let queue_pos = idx + 1;
-                    let num_w = items.len().to_string().len();
-                    let prefix = format!("{:>num_w$}. ", queue_pos);
-
                     let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
                     let dur = if len_secs > 0 {
                         fmt_duration_short(len_secs)
@@ -373,17 +365,16 @@ impl App {
                         palette::MUTED
                     };
 
-                    // Title truncated to leave room for indent, the "N. "
-                    // prefix, the inline progress percent (always reserved
-                    // when present, even once the title itself is cut off),
-                    // the right-aligned duration, and quiet columns.
+                    // Title truncated to leave room for indent, the inline
+                    // progress percent (always reserved when present, even once
+                    // the title itself is cut off), the right-aligned duration,
+                    // and quiet columns.
                     let dur_visible = show_length && !dur.is_empty();
                     let pct_visible = !pct_str.is_empty();
                     let pct_w = if pct_visible { 1 + pct_str.width() } else { 0 };
                     let right_w = if dur_visible { dur.width() } else { 0 };
-                    let title_w = track_content_w.saturating_sub(
-                        indent + num_w + 2 + pct_w + right_w + QUEUE_TITLE_QUIET_COLUMNS,
-                    );
+                    let title_w =
+                        track_content_w.saturating_sub(indent + pct_w + right_w + QUEUE_TITLE_QUIET_COLUMNS);
                     let title = trunc_str(&item.name, title_w);
 
                     if is_cursor {
@@ -399,10 +390,9 @@ impl App {
                     }
 
                     // The now-playing row's title is always aqua, focused or
-                    // not. Other inactive rows match the dimmed index-number/
-                    // duration color when the queue panel is unfocused,
-                    // instead of standing out in the brighter unfocused row
-                    // color.
+                    // not. Other inactive rows match the dimmed duration color
+                    // when the queue panel is unfocused, instead of standing
+                    // out in the brighter unfocused row color.
                     let title_color = if is_active {
                         palette::AQUA
                     } else if !focused {
@@ -420,7 +410,6 @@ impl App {
                             spans.push(Span::raw("  "));
                         }
                     }
-                    spans.push(Span::styled(prefix, Style::default().fg(dim_color)));
                     let title_w_actual = title.width();
                     spans.push(Span::styled(title, Style::default().fg(title_color)));
                     if pct_visible {
@@ -429,7 +418,7 @@ impl App {
                     }
 
                     if dur_visible {
-                        let used = indent + num_w + 2 + title_w_actual + pct_w;
+                        let used = indent + title_w_actual + pct_w;
                         let pad = track_content_w.saturating_sub(used + right_w);
                         spans.push(Span::raw(" ".repeat(pad)));
                         spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));

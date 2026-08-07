@@ -132,14 +132,14 @@
 - [x] 7.2 Run `cargo check --workspace --all-targets`.
 - [x] 7.3 Run the library list renderer tests:
       `cargo test -p mbv --bin mbv library_column_width list_tests panel_tests`
-- [ ] 7.4 Visual verification in a real terminal at several widths:
+- [x] 7.4 Visual verification in a real terminal at several widths:
       60, 82, 100, 150. Confirm the hero reads as "below the list" and
       the list above reads as a clean 1-or-2-col grid with no gap
       relative to the tab bar above it.
-- [ ] 7.5 Visual verification with the queue column collapsed and
+- [x] 7.5 Visual verification with the queue column collapsed and
       expanded, at default width. Confirm the hero position doesn't
       depend on queue state.
-- [ ] 7.6 If the image cap or hero meta line don't read well, iterate
+- [x] 7.6 If the image cap or hero meta line don't read well, iterate
       on design decisions 2 and 3.
 
 ## Out of scope
