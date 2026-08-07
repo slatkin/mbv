@@ -21,6 +21,14 @@ The mode in which playback is hosted by a local daemon rather than the terminal
 UI, so playback continues after every terminal window closes.
 _Avoid_: daemon mode, background mode, alive mode, persistent mode
 
+**Playback run**:
+The local mpv playback loop — one per mpv invocation, owned by a Player owner.
+Distinct from Session (the Emby-tracked record that exists independently of
+mbv). Each run holds the mpv instance, playlist, and per-item lifecycle state
+(load pending, stop-report handshake, next-up arming, intro visibility,
+startup-pause holdoff).
+_Avoid_: session, playback session
+
 ## Processes
 
 **Local daemon**:
