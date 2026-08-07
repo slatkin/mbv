@@ -239,7 +239,7 @@ impl PlaybackRun {
                     // lifecycle begins — reset stop_report so on_end_file/on_shutdown can report it.
                     self.stop_report.reset();
                 }
-                Drained::StillPending => {}
+                Drained::StillPending | Drained::AlreadyReady => {}
             }
             return true;
         }

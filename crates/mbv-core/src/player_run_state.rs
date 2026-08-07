@@ -10,6 +10,7 @@ pub(crate) enum LoadState {
 pub(crate) enum Drained {
     HitZero,
     StillPending,
+    AlreadyReady,
 }
 
 impl LoadState {
@@ -26,7 +27,7 @@ impl LoadState {
 
     pub(crate) fn drain(&mut self) -> Drained {
         match self {
-            LoadState::Ready => Drained::StillPending,
+            LoadState::Ready => Drained::AlreadyReady,
             LoadState::Pending(n) => {
                 let v = n.get();
                 if v <= 1 {
