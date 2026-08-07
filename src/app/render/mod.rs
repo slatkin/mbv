@@ -454,28 +454,12 @@ impl App {
             } else {
                 layout.selector_tabs = Vec::new();
             }
-        } else if right_visible
-            && self.library_tab > 0
-            && self.should_show_letter_pills(self.library_tab - 1)
-        {
-            let lib_idx = self.library_tab - 1;
-            if lib_area.height > 0 {
-                let pills_area = Rect {
-                    x: lib_area.x,
-                    y: lib_area.y,
-                    width: lib_area.width,
-                    height: 1,
-                };
-                self.render_power_letter_pills_row(f, pills_area, lib_idx, layout);
-                render_lib_area = Rect {
-                    y: lib_area.y + 2,
-                    height: lib_area.height.saturating_sub(2),
-                    ..lib_area
-                };
-            } else {
-                layout.selector_tabs = Vec::new();
-            }
         }
+        // Letter-range pills for large non-music libraries render inside
+        // `render_power_list` itself now, below the hero (`list.rs`), not
+        // carved out of `lib_area` here -- unlike the music-group pills
+        // above, letter pills only ever gate libraries that can show a
+        // hero, so the ordering has to live where the hero split happens.
 
         if self.panel_mode != PanelMode::LibraryOnly {
             let queue_list_area = render_power_queue_panel_frame(f, queue_area, queue_focused);

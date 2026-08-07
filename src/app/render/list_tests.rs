@@ -255,6 +255,182 @@ fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
     );
 }
 
+// ── Top hero area (hero-on-top) ─────────────────────────────────────────
+
+#[test]
+fn left_area_is_set_for_an_empty_library_list() {
+    let mut app = make_power_movie_list_app(vec![]);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+
+    assert!(
+        layout.left_area.height > 0,
+        "left_area must be set even when the library list is empty, so clicking it can focus the panel"
+    );
+    assert!(
+        layout.left_area.width > 0,
+        "left_area must have nonzero width"
+    );
+}
+
+#[test]
+fn list_area_renders_the_same_per_cell_content_at_one_and_two_columns() {
+    // width 81 stays under POWER_TWO_COLUMN_THRESHOLD (82) -> 1 col; 82
+    // crosses it -> 2 col. Same items, same order; only the packing shape
+    // should differ, not which item occupies which position.
+    let titles: Vec<&str> = vec!["Movie A", "Movie B", "Movie C", "Movie D"];
+    let mut app_1col = make_no_banner_list_app(titles.clone());
+    let mut layout_1col = LayoutMain::default();
+    let _ = render_power_list_term(&mut app_1col, &mut layout_1col, 81, 12);
+
+    let mut app_2col = make_no_banner_list_app(titles);
+    let mut layout_2col = LayoutMain::default();
+    let _ = render_power_list_term(&mut app_2col, &mut layout_2col, 82, 12);
+
+    let flat_1col: Vec<usize> = item_rows(&layout_1col).into_iter().flatten().collect();
+    let flat_2col: Vec<usize> = item_rows(&layout_2col).into_iter().flatten().collect();
+    assert_eq!(
+        flat_1col, flat_2col,
+        "the same items in the same order must appear in list_area regardless of column count"
+    );
+}
+
+#[test]
+fn hero_paints_above_list_area_in_two_column_mode() {
+    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+
+    assert!(layout.hero_area.height > 0, "hero should be shown");
+    assert_eq!(
+        layout.hero_area.y, 0,
+        "hero_area starts at the top of the content area"
+    );
+    assert!(
+        layout.left_area.y > layout.hero_area.y + layout.hero_area.height,
+        "list_area sits below hero_area, separated by at least one blank row"
+    );
+    assert_eq!(
+        layout.left_area.y + layout.left_area.height,
+        40,
+        "hero_area, the separator, and list_area together fill the content area"
+    );
+}
+
+#[test]
+fn letter_pills_render_below_hero_and_above_list_area() {
+    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    // Any captured library total qualifies a top-level, non-music library
+    // for the letter-range pill row (`should_show_letter_pills`).
+    app.libs[0].library_total = Some(1000);
+    let mut layout = LayoutMain::default();
+    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+
+    assert!(layout.hero_area.height > 0, "hero should be shown");
+    assert!(
+        !layout.selector_tabs.is_empty(),
+        "letter pills should render for a large top-level library"
+    );
+    let pills_y = layout.selector_tabs[0].0.y;
+    assert_eq!(
+        pills_y,
+        layout.hero_area.y + layout.hero_area.height,
+        "pill row sits immediately below the hero's own bottom border, no extra gap"
+    );
+    assert!(
+        layout.left_area.y > pills_y,
+        "list_area must sit below the pill row"
+    );
+}
+
+#[test]
+fn hero_height_is_constant_above_the_image_cap() {
+    for width in [60u16, 82, 100, 150] {
+        let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+        app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+        let mut layout = LayoutMain::default();
+        let _ = render_power_list_term(&mut app, &mut layout, width, 40);
+        assert!(
+            layout.hero_area.height <= 23,
+            "hero height at width {width} should stay bounded, got {}",
+            layout.hero_area.height
+        );
+        assert!(
+            layout.left_area.height >= 1,
+            "list area must keep at least 1 row at width {width}"
+        );
+    }
+
+    // Per decision 2, the image cap already kicks in well below 82 columns,
+    // so the hero's height at 82/100/150 should be identical -- it doesn't
+    // keep growing with terminal width.
+    let heights: Vec<u16> = [82u16, 100, 150]
+        .into_iter()
+        .map(|width| {
+            let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+            app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+            let mut layout = LayoutMain::default();
+            let _ = render_power_list_term(&mut app, &mut layout, width, 40);
+            layout.hero_area.height
+        })
+        .collect();
+    assert_eq!(
+        heights[0], heights[1],
+        "hero height at 82 and 100 cols should be equal (image already capped)"
+    );
+    assert_eq!(
+        heights[1], heights[2],
+        "hero height at 100 and 150 cols should be equal (image already capped)"
+    );
+}
+
+#[test]
+fn selected_cell_uses_carat_and_double_hash_in_two_column_mode() {
+    let mut app = make_no_banner_list_app(vec!["Alpha", "Beta", "Gamma", "Delta"]);
+    let mut layout = LayoutMain::default();
+    let term = render_power_list_term(&mut app, &mut layout, 82, 8);
+    let out = buffer_to_string(&term);
+    let list_line = out
+        .lines()
+        .nth(layout.left_area.y as usize)
+        .expect("list_area's first row should exist in the rendered buffer");
+    assert!(
+        list_line.contains('\u{258c}'),
+        "selected cell's left edge should carry the ▌ mark: {list_line:?}"
+    );
+    assert!(
+        list_line.contains("##Alpha"),
+        "selected cell's title should be prefixed with ##: {list_line:?}"
+    );
+}
+
+#[test]
+fn hero_content_tracks_cursor_when_selection_scrolled_offscreen() {
+    let mut titles: Vec<String> = (0..40).map(|i| format!("Movie {i}")).collect();
+    titles[39] = "Movie 39 Selected".to_string();
+    let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
+    let mut app = make_power_movie_list_app(title_refs);
+    let mut layout = LayoutMain::default();
+
+    // Move the cursor far down the list, past what a short viewport shows,
+    // so the cursor's row scrolls out of list_area.
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 39;
+    let term = render_power_list_term(&mut app, &mut layout, 82, 20);
+    let out = buffer_to_string(&term);
+
+    assert!(layout.hero_area.height > 0, "hero should still be shown");
+    assert!(
+        !layout.left_row_map.iter().any(|r| r == &Some(39)),
+        "selected row 39 should be scrolled out of the visible list_area"
+    );
+    assert!(
+        out.contains("Movie 39"),
+        "the hero should still show the cursor's item even though its row is offscreen"
+    );
+}
+
 #[test]
 fn two_column_mouse_click_selects_the_clicked_cell_not_the_row_first_item() {
     let mut app = make_no_banner_list_app(vec!["Click A", "Click B", "Click C"]);
