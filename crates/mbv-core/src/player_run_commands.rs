@@ -1,4 +1,4 @@
-impl PlaybackSession {
+impl PlaybackRun {
     fn handle_command(
         &mut self,
         cmd: PlayerCommand,
@@ -174,8 +174,7 @@ impl PlaybackSession {
     ) {
         self.cancel_pending_quit();
         if new_items.is_empty() {
-            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
-            self.stop_reported = true;
+            self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
             let _ = mpv.command("playlist-clear", &[]);
             self.origin = PlaybackOrigin::Queue;
@@ -185,13 +184,8 @@ impl PlaybackSession {
             self.sync_status_position();
             self.last_valid_pos = 0;
             self.pending_initial_jump = false;
-            self.pending_load = 0;
-            self.tracks_initialized = false;
-            self.forced_slot_id = None;
-            self.reset_next_up_state();
-            self.stopped_event_sent = false;
-            self.mark_played_id = None;
-            self.stopped_near_end = false;
+            self.load_state = LoadState::Ready;
+            self.begin_item_lifecycle();
             self.osd_title.clear();
             self.pending_resume_secs = None;
             self.series_id.clear();
@@ -200,8 +194,7 @@ impl PlaybackSession {
             return;
         }
         // report_stopped for current item; is_audio zeroing handled inside.
-        self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
-        self.stop_reported = true;
+        self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
         // Replacing the playlist should always start playing it, even if mpv
         // was left paused on the previous item (reused-window fast path).
         let _ = mpv.set_property("pause", false);
@@ -232,10 +225,10 @@ impl PlaybackSession {
         send_ep_info(mpv, &active_item);
         // loadfile "replace" displaces the current file (EndFile #1).
         // If start_idx > 0 we also set playlist-pos which displaces item[0] (EndFile #2).
-        // Use = not += so a stale pending_load from a prior operation never stacks.
+        // Use = not += so a stale load_state from a prior operation never stacks.
         // Clear pending_initial_jump too since any in-flight initial jump is superseded.
         self.pending_initial_jump = false;
-        self.pending_load = if start_idx > 0 { 2 } else { 1 };
+        self.load_state = LoadState::begin_replace(if start_idx > 0 { 2 } else { 1 });
         if start_idx > 0 {
             let _ = mpv.set_property("playlist-pos", start_idx as i64);
         }
@@ -245,14 +238,9 @@ impl PlaybackSession {
         self.queue = PlaybackQueue::from_items(new_items, Some(start_idx));
         self.current_idx = start_idx;
         self.load_active_item_state();
-        self.tracks_initialized = false;
-        // stop_reported stays true until pending_load drains to 0 in on_end_file,
+        // stop_report stays Sent until load_state drains to Ready in on_end_file,
         // preventing a duplicate report_stopped for the displaced file's EndFile(Quit).
-        self.forced_slot_id = None;
-        self.reset_next_up_state();
-        self.stopped_event_sent = false;
-        self.mark_played_id = None;
-        self.stopped_near_end = false;
+        self.begin_item_lifecycle();
         log::info!(target: "player", "playlist queue-replace idx={start_idx} pending_resume={:?}s", self.pending_resume_secs);
         {
             let mut s = self.status.lock().unwrap();
@@ -333,16 +321,10 @@ impl PlaybackSession {
         self.queue = PlaybackQueue::from_items(vec![item.as_ref().clone()], Some(0));
         self.current_idx = 0;
         self.load_active_item_state();
-        self.tracks_initialized = false;
-        self.stop_reported = false;
-        self.stop_report_accepted = false;
-        self.pending_load = 1;
+        self.stop_report = StopReport::NotSent;
+        self.load_state = LoadState::begin_single();
         self.pending_initial_jump = false;
-        self.forced_slot_id = None;
-        self.reset_next_up_state();
-        self.stopped_event_sent = false;
-        self.mark_played_id = None;
-        self.stopped_near_end = false;
+        self.begin_item_lifecycle();
         {
             let mut st = self.status.lock().unwrap();
             st.runtime_ticks = item.runtime_ticks;

@@ -46,11 +46,12 @@ fn send_ep_info(mpv: &Mpv, item: &crate::api::MediaItem) {
 
 include!("player_types.rs");
 include!("player_runtime.rs");
-include!("player_session_types.rs");
-include!("player_session_queue.rs");
-include!("player_session_commands.rs");
-include!("player_session_events.rs");
-include!("player_session_run.rs");
+include!("player_run_state.rs");
+include!("player_run_types.rs");
+include!("player_run_queue.rs");
+include!("player_run_commands.rs");
+include!("player_run_events.rs");
+include!("player_run_run.rs");
 include!("player_runtime_controller.rs");
 include!("player_proxy.rs");
 

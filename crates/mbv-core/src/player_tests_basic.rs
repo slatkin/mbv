@@ -199,7 +199,7 @@ input-ipc-server=/tmp/user.sock
 
     fn make_queue_session_for_pos_tests(
         start_idx: usize,
-    ) -> (PlaybackSession, Arc<Mutex<PlayerStatus>>) {
+    ) -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
         let items = vec![
             make_media_item("ep1"),
             make_media_item("ep2"),
@@ -224,12 +224,12 @@ input-ipc-server=/tmp/user.sock
             status.clone(),
         );
         let (event_tx, _event_rx) = mpsc::channel();
-        let session = PlaybackSession::new(
+        let session = PlaybackRun::new(
             items,
             start_idx,
             PlaybackOrigin::Queue,
             reporter,
-            MpvSessionConfig {
+            MpvRunConfig {
                 headless: false,
                 use_mpv_config: false,
                 no_scripts: true,

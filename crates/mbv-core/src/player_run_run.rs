@@ -21,7 +21,7 @@ fn drain_wakeup(fd: RawFd) {
     }
 }
 
-impl PlaybackSession {
+impl PlaybackRun {
     // wakeup_read_fd/wakeup_write_fd are the two ends of a self-pipe created by
     // the caller (Player::play/play_queue). -1 means pipe(2) creation failed;
     // the loop falls back to a bounded sleep so it still makes progress, just
@@ -63,10 +63,9 @@ impl PlaybackSession {
                     .quit_at
                     .is_some_and(|t| t.elapsed() > Duration::from_secs(2))
                 {
-                    if !self.stop_reported {
+                    if !self.stop_report.is_sent() {
                         progress.stop_and_join(self.progress_join_budget());
-                        self.stop_report_accepted = self.report_stopped_for_current_context();
-                        self.stop_reported = true;
+                        self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
                     }
                     let runtime = self.status.lock().unwrap().runtime_ticks;
                     let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
@@ -83,7 +82,7 @@ impl PlaybackSession {
                         position_ticks: self.last_valid_pos,
                         played,
                         consume,
-                        progress_report_accepted: self.stop_report_accepted,
+                        progress_report_accepted: self.stop_report.is_accepted(),
                         error: None,
                     });
                     return;
@@ -112,8 +111,7 @@ impl PlaybackSession {
                             ..
                         }) => {
                             self.status.lock().unwrap().paused = paused;
-                            if self.startup_pause_events_to_skip > 0 {
-                                self.startup_pause_events_to_skip -= 1;
+                            if self.startup_pause.consume_event() {
                                 continue;
                             }
                             let _ = self.event_tx.send(PlayerEvent::PausedChanged(paused));
@@ -187,7 +185,7 @@ impl PlaybackSession {
                             change: PropertyData::Int64(count),
                             ..
                         }) => {
-                            if self.pending_load == 0 {
+                            if self.load_state.is_ready() {
                                 self.on_playlist_count_changed(count as usize);
                             }
                         }
@@ -273,7 +271,7 @@ impl PlaybackSession {
                 .map(|s| s.to_string())
                 .or_else(|| panic.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "unknown panic".to_string());
-            log::error!(target: "player", "PlaybackSession panicked: {msg}");
+            log::error!(target: "player", "PlaybackRun panicked: {msg}");
             let _ = event_tx_panic.send(PlayerEvent::Stopped {
                 idx: current_idx_panic,
                 position_ticks: 0,

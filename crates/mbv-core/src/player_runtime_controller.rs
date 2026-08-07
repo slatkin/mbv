@@ -120,7 +120,7 @@ impl Player {
         if pipe_path.is_none() {
             return;
         }
-        let config = MpvSessionConfig {
+        let config = MpvRunConfig {
             headless: true,
             use_mpv_config: self.use_mpv_config,
             no_scripts: self.no_scripts,
@@ -296,7 +296,7 @@ impl Player {
         );
         let title = item.display_name();
 
-        let config = MpvSessionConfig {
+        let config = MpvRunConfig {
             headless,
             use_mpv_config: self.use_mpv_config,
             no_scripts: self.no_scripts,
@@ -390,7 +390,7 @@ impl Player {
                 status.clone(),
             );
             let progress = spawn_progress_reporter(reporter.clone());
-            let session = PlaybackSession::new(
+            let session = PlaybackRun::new(
                 vec![item.clone()],
                 0,
                 PlaybackOrigin::Standalone,
@@ -454,7 +454,7 @@ impl Player {
         let start_idx = start_idx.min(items.len() - 1);
         let headless = new_is_headless;
 
-        let config = MpvSessionConfig {
+        let config = MpvRunConfig {
             headless,
             use_mpv_config: self.use_mpv_config,
             no_scripts: self.no_scripts,
@@ -557,7 +557,7 @@ impl Player {
                 status.clone(),
             );
             let progress = spawn_progress_reporter(reporter.clone());
-            let session = PlaybackSession::new(
+            let session = PlaybackRun::new(
                 items,
                 start_idx,
                 PlaybackOrigin::Queue,
