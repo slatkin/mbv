@@ -1,5 +1,5 @@
 use super::super::ui_util::*;
-use super::list_rows::{focused_or_subtle, item_cell_spans, DisplayRow, ListRenderCtx};
+use super::list_rows::{draw_column_selection_markers, focused_or_subtle, item_cell_spans, DisplayRow, ListRenderCtx};
 use super::{effective_sort_str, letter_bucket, LetterFilter};
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
@@ -202,7 +202,7 @@ impl App {
                             cell_w + LIBRARY_COLUMN_GAP as usize
                         };
                         spans.extend(item_cell_spans(
-                            title, dur_str, selected, focused, fg, pad_to,
+                            title, dur_str, selected, focused, fg, pad_to, cols,
                         ));
                     }
                     ListItem::new(Line::from(spans))
@@ -224,6 +224,8 @@ impl App {
             let max_off = total_display.saturating_sub(visible);
             super::render_power_right_scrollbar(f, content_area, max_off, offset);
         }
+
+        draw_column_selection_markers(f, content_area, cursor, cols, &layout.left_item_rows);
 
         final_offset
     }

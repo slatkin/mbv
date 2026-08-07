@@ -155,7 +155,7 @@ impl LocalPlaybackTarget {
         }
         let video_is_image = pst.video_is_image;
         let res_h = pst.video_height;
-        let is_audio_only = video_is_image;
+        let is_audio_only = video_is_image || res_h == 0;
         let res_str = if video_is_image || res_h == 0 {
             if pst.audio_codec.is_empty() {
                 "--".to_string()

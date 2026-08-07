@@ -1,7 +1,9 @@
 use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::Span;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::Paragraph;
+use ratatui::Frame;
 
 /// Standard inset for every selected detail block.
 pub(super) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
@@ -73,33 +75,47 @@ pub(super) struct ListRenderCtx<'a> {
 /// both the letter-grouped and plain-list rendering branches (identical
 /// styling logic, only how `title`/`dur_str`/`avail` are computed differs
 /// between the two call sites). Every cell starts with a 1-column leading
-/// separator; for the selected cell that separator is a `▌` mark in
-/// `palette::AQUA` and the title gets a `##` prefix, so the selected cell is
-/// identifiable without a colored background -- the hero (not the row) now
-/// owns `MEDIA_SELECTED_BG`, since the two are no longer adjacent.
+/// space. In single-column mode the title gets a `##` prefix; in
+/// two-column mode (`cols > 1`) the selected cell instead carries a
+/// `palette::PLAYBACK_PANEL_BG` background. Column selection markers
+/// (`▌` / `▐`) are drawn separately by `draw_column_selection_markers`.
 pub(super) fn build_list_row_spans(
     title: String,
     dur_str: String,
     selected: bool,
     focused: bool,
     fg: Color,
+    cols: usize,
 ) -> Vec<Span<'static>> {
     let mut spans: Vec<Span> = if selected {
-        let marker_style = Style::default().fg(palette::AQUA);
         let title_style = if focused {
             Style::default().fg(fg).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(fg)
         };
-        vec![
-            Span::styled("\u{258c}", marker_style),
-            Span::styled(format!("##{title}"), title_style),
-        ]
+        if cols > 1 {
+            let bg = palette::PLAYBACK_PANEL_BG;
+            vec![
+                Span::styled(" ", Style::default().bg(bg)),
+                Span::styled(title, title_style.bg(bg)),
+            ]
+        } else {
+            let marker_style = Style::default().fg(palette::AQUA);
+            vec![
+                Span::styled("\u{258c}", marker_style),
+                Span::styled(format!("##{title}"), title_style),
+            ]
+        }
     } else {
         vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
     };
     if !dur_str.is_empty() {
-        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+        let dur_style = if selected && cols > 1 {
+            Style::default().fg(palette::MUTED).bg(palette::PLAYBACK_PANEL_BG)
+        } else {
+            Style::default().fg(palette::MUTED)
+        };
+        spans.push(Span::styled(dur_str, dur_style));
     }
     spans
 }
@@ -117,12 +133,62 @@ pub(super) fn item_cell_spans(
     focused: bool,
     fg: Color,
     pad_to: usize,
+    cols: usize,
 ) -> Vec<Span<'static>> {
-    let mut spans = build_list_row_spans(title, dur_str, selected, focused, fg);
+    let mut spans = build_list_row_spans(title, dur_str, selected, focused, fg, cols);
     let used: usize = spans.iter().map(|s| s.width()).sum();
     let pad = pad_to.saturating_sub(used);
     if pad > 0 {
         spans.push(Span::raw(" ".repeat(pad)));
     }
     spans
+}
+
+/// Draws the column selection marker after the list has rendered.
+/// In two-column mode, the selected cell's marker is drawn at the panel
+/// edge: `▌` at the left edge for a left-column selection, `▐` at the
+/// right edge for a right-column selection (symmetric).
+pub(super) fn draw_column_selection_markers(
+    f: &mut Frame,
+    content_area: Rect,
+    cursor: usize,
+    cols: usize,
+    item_rows: &[Vec<usize>],
+) {
+    if cols <= 1 {
+        return;
+    }
+    let cursor_row = item_rows
+        .iter()
+        .position(|row| row.contains(&cursor));
+    let Some(row_idx) = cursor_row else {
+        return;
+    };
+    let col_in_row = item_rows[row_idx]
+        .iter()
+        .position(|&idx| idx == cursor)
+        .unwrap_or(0);
+
+    let marker_style = Style::default().fg(palette::AQUA);
+    if col_in_row == 0 {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled("\u{258c}", marker_style))),
+            Rect {
+                x: content_area.x.saturating_sub(1),
+                y: content_area.y + row_idx as u16,
+                width: 1,
+                height: 1,
+            },
+        );
+    } else {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled("\u{2590}", marker_style))),
+            Rect {
+                x: content_area.x + content_area.width,
+                y: content_area.y + row_idx as u16,
+                width: 1,
+                height: 1,
+            },
+        );
+    }
 }

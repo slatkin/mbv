@@ -387,7 +387,7 @@ fn hero_height_is_constant_above_the_image_cap() {
 }
 
 #[test]
-fn selected_cell_uses_carat_and_double_hash_in_two_column_mode() {
+fn selected_cell_uses_carat_no_double_hash_in_two_column_mode() {
     let mut app = make_no_banner_list_app(vec!["Alpha", "Beta", "Gamma", "Delta"]);
     let mut layout = LayoutMain::default();
     let term = render_power_list_term(&mut app, &mut layout, 82, 8);
@@ -401,8 +401,8 @@ fn selected_cell_uses_carat_and_double_hash_in_two_column_mode() {
         "selected cell's left edge should carry the ▌ mark: {list_line:?}"
     );
     assert!(
-        list_line.contains("##Alpha"),
-        "selected cell's title should be prefixed with ##: {list_line:?}"
+        !list_line.contains("##Alpha"),
+        "selected cell's title must not be prefixed with ## in two-column mode: {list_line:?}"
     );
 }
 
