@@ -17,7 +17,7 @@ pub(super) type ResizeResponseRx = mpsc::Receiver<(String, ResizeResponse)>;
 /// identifying key of their own, so a single shared request channel can't
 /// tell the worker which `card_image_states` entry a given request came
 /// from. Instead, each cache key gets its own dedicated `ResizeRequest`
-/// channel (created in `App::new_thread_protocol`), registered with this
+/// channel (created in `App::build_protocol`), registered with this
 /// worker over `resize_register_tx`. The worker round-robins a `try_recv`
 /// poll across all registered per-key receivers — still entirely off the
 /// render thread — and tags each result with its key before sending it back

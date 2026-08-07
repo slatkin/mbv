@@ -257,8 +257,12 @@ impl App {
         let mut terminal = init_terminal()?;
         terminal.clear()?;
 
-        // Initialise image picker after terminal is in raw mode.
+        // Initialise image picker after terminal is in raw mode. The
+        // halfblock picker backs the dimmed-backdrop fallback: while a modal
+        // dims the backdrop, images re-encode to halfblocks so the dim
+        // applies uniformly (#451).
         self.image_picker = Some(self.build_image_picker());
+        self.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
 
         // Don't clobber a still-live flash message (e.g. try_auto_reconnect's
         // outcome, set during App::new) -- only show "Loading..." if there's
@@ -350,17 +354,17 @@ impl App {
                 had_events = true;
                 self.card_image_loading.remove(&item_id);
                 self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
-                let (mem_key, state) = self.build_protocol_for(&item_id, img_opt);
-                if state.is_some() {
-                    self.image_lru.retain(|k| k != &mem_key);
-                    self.image_lru.push_back(mem_key.clone());
+                let entry = self.build_cached_image(&item_id, img_opt);
+                if entry.img.is_some() {
+                    self.image_lru.retain(|k| k != &item_id);
+                    self.image_lru.push_back(item_id.clone());
                     while self.image_lru.len() > self.image_cache_size_total {
                         if let Some(evict) = self.image_lru.pop_front() {
                             self.card_image_states.remove(&evict);
                         }
                     }
                 }
-                self.card_image_states.insert(mem_key, state);
+                self.card_image_states.insert(item_id, entry);
             }
             self.drain_image_fetches();
 
@@ -372,8 +376,15 @@ impl App {
             // no-op too.
             while let Ok((key, response)) = self.resize_response_rx.try_recv() {
                 had_events = true;
-                if let Some(Some(state)) = self.card_image_states.get_mut(&key) {
-                    state.update_resized_protocol(response);
+                // Responses are tagged with the per-suffix mem-key
+                // ("bare@suffix"); route them into the matching protocol of
+                // the bare-key cache entry.
+                if let Some((bare_key, suffix)) = key.rsplit_once('@') {
+                    if let Some(entry) = self.card_image_states.get_mut(bare_key) {
+                        if let Some(state) = entry.protocols.get_mut(suffix) {
+                            state.update_resized_protocol(response);
+                        }
+                    }
                 }
             }
 

@@ -90,10 +90,7 @@ impl App {
             && self.images_enabled()
             && self.card_image_loading.contains(&primary_cache_key);
         let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) = {
-            if let Some(Some(state)) = self
-                .card_image_states
-                .get_mut(&self.current_mem_key(&primary_cache_key))
-            {
+            if let Some(state) = self.cached_image_protocol_mut(&primary_cache_key) {
                 let avail = ratatui::layout::Size {
                     width: SERIES_IMAGE_COLS,
                     height: SERIES_IMAGE_ROWS,
@@ -202,10 +199,7 @@ impl App {
                     Block::default().style(Style::default().bg(palette::OVERLAY)),
                     img_rect,
                 );
-            } else if let Some(Some(state)) = self
-                .card_image_states
-                .get_mut(&self.current_mem_key(&primary_cache_key))
-            {
+            } else if let Some(state) = self.cached_image_protocol_mut(&primary_cache_key) {
                 type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                 f.render_stateful_widget(
                     SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
