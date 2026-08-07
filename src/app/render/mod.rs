@@ -417,11 +417,11 @@ impl App {
             if self.visualizer_enabled && visualizer_h == 0 && left_remaining > 0 {
                 self.flash_status("Terminal too short for left visualizer".into());
             }
-            let queue_h = left_remaining.saturating_sub(visualizer_h);
+            let queue_h = left_remaining.saturating_sub(visualizer_h).saturating_sub(1);
             (
                 right_area,
                 Rect {
-                    y: left_content.y + card_h,
+                    y: left_content.y + card_h + 1,
                     height: queue_h,
                     ..left_content
                 },
