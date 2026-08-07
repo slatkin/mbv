@@ -321,7 +321,13 @@ impl PlaybackSession {
 
         // Stop progress reporter during transition to prevent stale reports.
         progress.stop_and_join(self.progress_join_budget());
-        self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
+        if self.config.audio_pipe_path.is_some() {
+            self.reporter
+                .transition_to_deferred(&item, self.last_valid_pos);
+            self.ext_sub_urls = vec![];
+        } else {
+            self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
+        }
         *progress = spawn_progress_reporter(self.reporter.clone());
 
         self.queue = PlaybackQueue::from_items(vec![item.as_ref().clone()], Some(0));

@@ -252,15 +252,57 @@ impl SessionReporter {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .runtime_ticks;
-        if let Some(ref tx) = self.ws_tx {
-            if tx.is_connected() {
-                let _ = tx.flush(Duration::from_secs(1));
-            }
-        }
         log::info!(target: "player", "report_stopped: item={id} is_audio={is_audio} last_valid_pos={}s sending pos={}s",
             last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND);
         self.client
             .report_stopped(&id, &msid, pos, &sid, runtime_ticks)
+    }
+
+    // Fire-and-forget variant of report_stopped for the item being left behind
+    // during a transition, so the player thread can issue loadfile for the new
+    // item immediately instead of waiting on this HTTP call (and the WS flush,
+    // which report_stopped's synchronous callers don't do — it's bookkeeping
+    // that doesn't affect playback).
+    fn report_stopped_background(&self, last_valid_pos: i64) {
+        let client = self.client.clone();
+        let ws_tx = self.ws_tx.clone();
+        let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let is_audio = self.is_audio.load(Ordering::Relaxed);
+        let pos = if is_audio { 0 } else { last_valid_pos };
+        let runtime_ticks = self
+            .status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .runtime_ticks;
+        thread::spawn(move || {
+            if let Some(ref tx) = ws_tx {
+                if tx.is_connected() {
+                    let _ = tx.flush(Duration::from_secs(1));
+                }
+            }
+            log::info!(target: "player", "report_stopped: item={id} is_audio={is_audio} last_valid_pos={}s sending pos={}s",
+                last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND);
+            let ok = client.report_stopped(&id, &msid, pos, &sid, runtime_ticks);
+            if !ok {
+                log::warn!(target: "player", "transition_to: report_stopped failed for prev item");
+            }
+        });
+    }
+
+    // Fire-and-forget report_start for a new item. Used once transition_to has
+    // already updated self.ids synchronously via get_playback_info, so this
+    // call is pure Emby bookkeeping the session doesn't need to wait on.
+    fn report_start_background(&self, item: &MediaItem, media_source_id: &str, session_id: &str) {
+        let client = self.client.clone();
+        let item = item.clone();
+        let media_source_id = media_source_id.to_string();
+        let session_id = session_id.to_string();
+        thread::spawn(move || {
+            let ok = client.report_start(&item, &media_source_id, &session_id);
+            if !ok {
+                log::warn!(target: "player", "transition_to: report_start failed for item={}", item.id);
+            }
+        });
     }
 
     fn report_stopped_for_shutdown(&self, last_valid_pos: i64, timeout: Duration) -> bool {
@@ -309,18 +351,50 @@ impl SessionReporter {
         (info.external_subtitle_urls, ok)
     }
 
-    // report_stopped for current item then start_item for the new one.
-    // Returns ext_sub_urls for the new item. Logs warnings on API failures.
+    // report_stopped for the current item and report_start for the new one are
+    // both pure Emby bookkeeping, so both fire on background threads. Only
+    // get_playback_info runs synchronously here — the session needs its ids
+    // and ext_sub_urls before loadfile can be issued for the new item.
     fn transition_to(&self, new_item: &MediaItem, last_valid_pos: i64) -> Vec<String> {
-        let stop_ok = self.report_stopped(last_valid_pos);
-        if !stop_ok {
-            log::warn!(target: "player", "transition_to: report_stopped failed for prev item");
+        self.report_stopped_background(last_valid_pos);
+        let info = self.client.get_playback_info(&new_item.id);
+        let ext_sub_urls = info.external_subtitle_urls;
+        {
+            let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
+            ids.0 = new_item.id.clone();
+            ids.1 = info.media_source_id.clone();
+            ids.2 = info.session_id.clone();
         }
-        let (ext_sub_urls, start_ok) = self.start_item(new_item);
-        if !start_ok {
-            log::warn!(target: "player", "transition_to: report_start failed for item={}", new_item.id);
-        }
+        self.is_audio.store(new_item.is_audio(), Ordering::Relaxed);
+        self.report_start_background(new_item, &info.media_source_id, &info.session_id);
         ext_sub_urls
+    }
+
+    // Fully deferred variant of transition_to for pipe output, where ext_sub_urls
+    // are irrelevant (audio-only) and the progress reporter can tolerate briefly
+    // stale ids. Moves get_playback_info off the player thread so loadfile can be
+    // issued immediately.
+    fn transition_to_deferred(&self, new_item: &MediaItem, last_valid_pos: i64) {
+        self.report_stopped_background(last_valid_pos);
+        let client = self.client.clone();
+        let ids = self.ids.clone();
+        let is_audio_flag = self.is_audio.clone();
+        let item = new_item.clone();
+        let new_is_audio = new_item.is_audio();
+        thread::spawn(move || {
+            let info = client.get_playback_info(&item.id);
+            {
+                let mut locked = ids.lock().unwrap_or_else(|e| e.into_inner());
+                locked.0 = item.id.clone();
+                locked.1 = info.media_source_id.clone();
+                locked.2 = info.session_id.clone();
+            }
+            is_audio_flag.store(new_is_audio, Ordering::Relaxed);
+            let ok = client.report_start(&item, &info.media_source_id, &info.session_id);
+            if !ok {
+                log::warn!(target: "player", "transition_to: report_start failed for item={}", item.id);
+            }
+        });
     }
 }
 
