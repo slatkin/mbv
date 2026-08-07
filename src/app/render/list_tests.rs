@@ -19,17 +19,17 @@ fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
     out
 }
 
-fn render_power_list_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
+fn render_list_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
     let backend = TestBackend::new(60, 8);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        app.render_power_list(f, Rect::new(0, 0, 60, 8), true, layout);
+        app.render_list(f, Rect::new(0, 0, 60, 8), true, layout);
     })
     .unwrap();
     buffer_to_string(&term)
 }
 
-fn make_power_movie_list_app(titles: Vec<&str>) -> App {
+fn make_movie_list_app(titles: Vec<&str>) -> App {
     let mut app = make_app_stub();
     app.library_tab = 1;
 
@@ -88,11 +88,11 @@ fn compact_banner_prefetches_nearby_movies_but_not_beyond_the_window() {
     let titles: Vec<&str> = vec![
         "Movie 0", "Movie 1", "Movie 2", "Movie 3", "Movie 4", "Movie 5",
     ];
-    let mut app = make_power_movie_list_app(titles);
+    let mut app = make_movie_list_app(titles);
     app.image_protocol_enabled = true;
 
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_to_string(&mut app, &mut layout);
+    let _ = render_list_to_string(&mut app, &mut layout);
 
     let fetch_triggered = |app: &App, key: &str| {
         app.card_image_loading.contains(key) || app.card_image_states.contains_key(key)
@@ -121,9 +121,9 @@ fn compact_banner_prefetches_nearby_movies_but_not_beyond_the_window() {
 
 // ── Two-column list layout (library-list-columns) ─────────────────────────
 
-/// Renders the power list at an explicit width/height and returns the
+/// Renders the list at an explicit width/height and returns the
 /// terminal for buffer (background) inspection.
-fn render_power_list_term(
+fn render_list_term(
     app: &mut App,
     layout: &mut LayoutMain,
     width: u16,
@@ -132,18 +132,18 @@ fn render_power_list_term(
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        app.render_power_list(f, Rect::new(0, 0, width, height), true, layout);
+        app.render_list(f, Rect::new(0, 0, width, height), true, layout);
     })
     .unwrap();
     term
 }
 
-/// Same as `make_power_movie_list_app`, but with a music collection type so
+/// Same as `make_movie_list_app`, but with a music collection type so
 /// no inline movie banner / series detail is attached to the selection (the
 /// compact banner only appears for leaf Movies in movies/homevideos/podcasts
 /// collections, and series detail only in tvshows).
 fn make_no_banner_list_app(titles: Vec<&str>) -> App {
-    let mut app = make_power_movie_list_app(titles);
+    let mut app = make_movie_list_app(titles);
     app.libs[0].library.collection_type = "music".into();
     app
 }
@@ -176,9 +176,9 @@ fn sync_layout_to_app(app: &mut App, layout: &LayoutMain) {
 
 #[test]
 fn two_columns_pack_items_row_major_left_to_right_before_wrapping() {
-    let mut app = make_power_movie_list_app(vec!["A", "B", "C", "D", "E", "F"]);
+    let mut app = make_movie_list_app(vec!["A", "B", "C", "D", "E", "F"]);
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 8);
+    let _ = render_list_term(&mut app, &mut layout, 82, 8);
     assert_eq!(
         item_rows(&layout),
         vec![vec![0, 1], vec![2, 3], vec![4, 5]],
@@ -188,14 +188,14 @@ fn two_columns_pack_items_row_major_left_to_right_before_wrapping() {
 
 #[test]
 fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
-    let mut app = make_power_movie_list_app(vec![
+    let mut app = make_movie_list_app(vec![
         "Aardvark", "Alpha", "Apple", "Banana", "Beta", "Cherry",
     ]);
     // >= 250 switches `letter_bucket` to per-letter headers, giving an odd
     // three-item A bucket to prove ragged trailing cells.
     app.libs[0].library_total = Some(250);
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 20);
+    let _ = render_list_term(&mut app, &mut layout, 82, 20);
     assert_eq!(
         item_rows(&layout),
         vec![vec![0, 1], vec![2], vec![3, 4], vec![5]],
@@ -207,9 +207,9 @@ fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
 fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
     // Tall enough viewport that the 18-row hero block leaves real list rows
     // below it, so `lib_page_size` reflects the list, not 0.
-    let mut app = make_power_movie_list_app(vec!["M0", "M1", "M2", "M3", "M4", "M5", "M6"]);
+    let mut app = make_movie_list_app(vec!["M0", "M1", "M2", "M3", "M4", "M5", "M6"]);
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 30);
+    let _ = render_list_term(&mut app, &mut layout, 82, 30);
     sync_layout_to_app(&mut app, &layout);
     let cur = cursor_of;
 
@@ -259,9 +259,9 @@ fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
 
 #[test]
 fn left_area_is_set_for_an_empty_library_list() {
-    let mut app = make_power_movie_list_app(vec![]);
+    let mut app = make_movie_list_app(vec![]);
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 82, 40);
 
     assert!(
         layout.left_area.height > 0,
@@ -275,17 +275,17 @@ fn left_area_is_set_for_an_empty_library_list() {
 
 #[test]
 fn list_area_renders_the_same_per_cell_content_at_one_and_two_columns() {
-    // width 81 stays under POWER_TWO_COLUMN_THRESHOLD (82) -> 1 col; 82
+    // width 81 stays under TWO_COLUMN_THRESHOLD (82) -> 1 col; 82
     // crosses it -> 2 col. Same items, same order; only the packing shape
     // should differ, not which item occupies which position.
     let titles: Vec<&str> = vec!["Movie A", "Movie B", "Movie C", "Movie D"];
     let mut app_1col = make_no_banner_list_app(titles.clone());
     let mut layout_1col = LayoutMain::default();
-    let _ = render_power_list_term(&mut app_1col, &mut layout_1col, 81, 12);
+    let _ = render_list_term(&mut app_1col, &mut layout_1col, 81, 12);
 
     let mut app_2col = make_no_banner_list_app(titles);
     let mut layout_2col = LayoutMain::default();
-    let _ = render_power_list_term(&mut app_2col, &mut layout_2col, 82, 12);
+    let _ = render_list_term(&mut app_2col, &mut layout_2col, 82, 12);
 
     let flat_1col: Vec<usize> = item_rows(&layout_1col).into_iter().flatten().collect();
     let flat_2col: Vec<usize> = item_rows(&layout_2col).into_iter().flatten().collect();
@@ -297,10 +297,10 @@ fn list_area_renders_the_same_per_cell_content_at_one_and_two_columns() {
 
 #[test]
 fn hero_paints_above_list_area_in_two_column_mode() {
-    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 82, 40);
 
     assert!(layout.hero_area.height > 0, "hero should be shown");
     assert_eq!(
@@ -320,13 +320,13 @@ fn hero_paints_above_list_area_in_two_column_mode() {
 
 #[test]
 fn letter_pills_render_below_hero_and_above_list_area() {
-    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     // Any captured library total qualifies a top-level, non-music library
     // for the letter-range pill row (`should_show_letter_pills`).
     app.libs[0].library_total = Some(1000);
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 82, 40);
 
     assert!(layout.hero_area.height > 0, "hero should be shown");
     assert!(
@@ -348,10 +348,10 @@ fn letter_pills_render_below_hero_and_above_list_area() {
 #[test]
 fn hero_height_is_constant_above_the_image_cap() {
     for width in [60u16, 82, 100, 150] {
-        let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+        let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
         app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
         let mut layout = LayoutMain::default();
-        let _ = render_power_list_term(&mut app, &mut layout, width, 40);
+        let _ = render_list_term(&mut app, &mut layout, width, 40);
         assert!(
             layout.hero_area.height <= 23,
             "hero height at width {width} should stay bounded, got {}",
@@ -369,10 +369,10 @@ fn hero_height_is_constant_above_the_image_cap() {
     let heights: Vec<u16> = [82u16, 100, 150]
         .into_iter()
         .map(|width| {
-            let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+            let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
             app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
             let mut layout = LayoutMain::default();
-            let _ = render_power_list_term(&mut app, &mut layout, width, 40);
+            let _ = render_list_term(&mut app, &mut layout, width, 40);
             layout.hero_area.height
         })
         .collect();
@@ -392,10 +392,10 @@ fn hero_sizes_to_content_when_a_movie_is_selected() {
     // (poster + meta + overview), not from the fixed placeholder reserved
     // while the slice is loading -- the placeholder is only the stand-in
     // for the no-content state.
-    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 82, 40);
 
     let item = app.libs[0].nav_stack.last().unwrap().items[1].clone();
     let panel_width = 82 - 2 * super::SELECTED_BLOCK_SIDE_PADDING;
@@ -421,11 +421,11 @@ fn hero_sizes_to_content_when_a_movie_is_selected() {
 fn hero_stays_reserved_while_the_slice_is_loading() {
     // A letter-pill switch clears the level's items; the hero placeholder
     // must stay reserved so the panel doesn't collapse mid-switch.
-    let mut app = make_power_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().items.clear();
     app.libs[0].nav_stack.last_mut().unwrap().loading = true;
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 82, 40);
 
     assert_eq!(
         layout.hero_area.height,
@@ -440,10 +440,10 @@ fn hero_stays_reserved_while_the_slice_is_loading() {
 
 #[test]
 fn no_hero_placeholder_for_music_libraries() {
-    let mut app = make_power_movie_list_app(vec!["Album A", "Album B"]);
+    let mut app = make_movie_list_app(vec!["Album A", "Album B"]);
     app.libs[0].library.collection_type = "music".into();
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 82, 40);
 
     assert_eq!(
         layout.hero_area.height, 0,
@@ -455,7 +455,7 @@ fn no_hero_placeholder_for_music_libraries() {
 fn selected_cell_uses_carat_no_double_hash_in_two_column_mode() {
     let mut app = make_no_banner_list_app(vec!["Alpha", "Beta", "Gamma", "Delta"]);
     let mut layout = LayoutMain::default();
-    let term = render_power_list_term(&mut app, &mut layout, 82, 8);
+    let term = render_list_term(&mut app, &mut layout, 82, 8);
     let out = buffer_to_string(&term);
     let list_line = out
         .lines()
@@ -476,13 +476,13 @@ fn hero_content_tracks_cursor_when_selection_scrolled_offscreen() {
     let mut titles: Vec<String> = (0..40).map(|i| format!("Movie {i}")).collect();
     titles[39] = "Movie 39 Selected".to_string();
     let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
-    let mut app = make_power_movie_list_app(title_refs);
+    let mut app = make_movie_list_app(title_refs);
     let mut layout = LayoutMain::default();
 
     // Move the cursor far down the list, past what a short viewport shows,
     // so the cursor's row scrolls out of list_area.
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 39;
-    let term = render_power_list_term(&mut app, &mut layout, 82, 20);
+    let term = render_list_term(&mut app, &mut layout, 82, 20);
     let out = buffer_to_string(&term);
 
     assert!(layout.hero_area.height > 0, "hero should still be shown");
@@ -500,7 +500,7 @@ fn hero_content_tracks_cursor_when_selection_scrolled_offscreen() {
 fn two_column_mouse_click_selects_the_clicked_cell_not_the_row_first_item() {
     let mut app = make_no_banner_list_app(vec!["Click A", "Click B", "Click C"]);
     let mut layout = LayoutMain::default();
-    let _ = render_power_list_term(&mut app, &mut layout, 82, 8);
+    let _ = render_list_term(&mut app, &mut layout, 82, 8);
     sync_layout_to_app(&mut app, &layout);
     let la = layout.left_area;
     // Click cell 1 of the first row (x = cell 1 start, y = row 0).
@@ -514,14 +514,14 @@ fn two_column_mouse_click_selects_the_clicked_cell_not_the_row_first_item() {
 }
 
 // Regression gate for the `show_grouped` fix (design.md Decision 6): without
-// the `search.is_none()` guard, `render_power_grouped_album_rows` would pair
+// the `search.is_none()` guard, `render_grouped_album_rows` would pair
 // its unfiltered `GroupedAlbumCatalog` with the filtered search-result
 // vector, mislabeling every row. This pins the guard's two inputs directly
 // rather than the rendered output, since `show_grouped` itself is a local
-// binding inside `render_power_list`, not a standalone function.
+// binding inside `render_list`, not a standalone function.
 #[test]
 fn show_grouped_guard_is_false_while_search_is_active_on_album_folders() {
-    let mut app = crate::app::render::test_helpers::make_power_music_group_app();
+    let mut app = crate::app::render::test_helpers::make_music_group_app();
     let lib_idx = app.library_tab - 1;
 
     assert!(

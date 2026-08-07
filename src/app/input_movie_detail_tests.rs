@@ -1,11 +1,11 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus, PanelMode, POWER_LEFT_WIDTH_DEFAULT};
+use crate::app::{BrowseLevel, LibraryTab, PanelFocus, PanelMode, LEFT_WIDTH_DEFAULT};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
-fn make_power_movie_app() -> App {
+fn make_movie_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.library_tab = 1;
@@ -55,7 +55,7 @@ fn make_power_movie_app() -> App {
     app
 }
 
-fn push_power_library(app: &mut App, id: &str, name: &str) {
+fn push_library(app: &mut App, id: &str, name: &str) {
     let mut library = make_item(name, "CollectionFolder");
     library.id = id.into();
     library.is_folder = true;
@@ -92,12 +92,12 @@ fn push_power_library(app: &mut App, id: &str, name: &str) {
     });
 }
 
-fn make_power_tab_cycle_app() -> App {
+fn make_tab_cycle_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.library_tab = 1;
-    push_power_library(&mut app, "lib-movies", "Movies");
-    push_power_library(&mut app, "lib-shows", "Shows");
+    push_library(&mut app, "lib-movies", "Movies");
+    push_library(&mut app, "lib-shows", "Shows");
     app
 }
 
@@ -107,7 +107,7 @@ fn shift(code: KeyCode) -> KeyEvent {
 
 #[test]
 fn enter_on_movie_plays_without_opening_detail() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -121,8 +121,8 @@ fn enter_on_movie_plays_without_opening_detail() {
 // now, so Alt+M is just an ordinary (unbound) key press that falls
 // through without effect.
 #[test]
-fn alt_m_is_a_no_op_in_power_movie_view() {
-    let mut app = make_power_movie_app();
+fn alt_m_is_a_no_op_in_movie_view() {
+    let mut app = make_movie_app();
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::ALT));
 
@@ -136,7 +136,7 @@ fn alt_m_is_a_no_op_in_power_movie_view() {
 // get intercepted to scroll the banner instead.
 #[test]
 fn down_always_moves_the_list_cursor_never_scrolls_the_banner() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
@@ -153,7 +153,7 @@ fn down_always_moves_the_list_cursor_never_scrolls_the_banner() {
 // mode. The panel-mode cycle key moved from 'h' to 'x' to free 'h' for this.
 #[test]
 fn hjkl_navigates_two_column_library_list_via_handle_key() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
     // Four movies => two 2-col rows: [0,1] / [2,3].
     let mut m2 = make_item("Third Movie", "Movie");
     m2.id = "movie-3".into();
@@ -189,7 +189,7 @@ fn hjkl_navigates_two_column_library_list_via_handle_key() {
 
 #[test]
 fn shift_right_resizes_without_switching_focus() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
     app.panel_focus = PanelFocus::Queue;
     app.terminal_width = 100;
 
@@ -203,8 +203,8 @@ fn shift_right_resizes_without_switching_focus() {
 }
 
 #[test]
-fn left_does_not_focus_hidden_queue_when_power_left_column_is_collapsed() {
-    let mut app = make_power_movie_app();
+fn left_does_not_focus_hidden_queue_when_left_column_is_collapsed() {
+    let mut app = make_movie_app();
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
 
@@ -214,45 +214,45 @@ fn left_does_not_focus_hidden_queue_when_power_left_column_is_collapsed() {
     assert_eq!(app.panel_focus, PanelFocus::Library);
 }
 
-// `shift_resize_is_ignored_outside_power_view` (deleted test, #361): asserted
+// `shift_resize_is_ignored_outside_view` (deleted test, #361): asserted
 // Shift+Right resize does nothing on a plain `make_app_stub()` (i.e.
 // on the Home tab). That state no longer exists -- mbv has one view
 // now, and the queue column
 // it resizes is present on every tab including Home, so Shift+Right
 // correctly resizes it here too. The surviving resize guards (column
 // collapsed, overlay open) are still covered by
-// `shift_resize_is_ignored_while_power_left_column_is_collapsed` and
-// `help_overlay_blocks_power_resize_shortcuts` below/above.
+// `shift_resize_is_ignored_while_left_column_is_collapsed` and
+// `help_overlay_blocks_resize_shortcuts` below/above.
 
 #[test]
-fn shift_resize_is_ignored_while_power_left_column_is_collapsed() {
-    let mut app = make_power_movie_app();
+fn shift_resize_is_ignored_while_left_column_is_collapsed() {
+    let mut app = make_movie_app();
     app.panel_mode = PanelMode::LibraryOnly;
     app.terminal_width = 100;
 
     let handled = app.handle_key(shift(KeyCode::Right));
 
     assert!(!handled);
-    assert_eq!(app.queue_column_width, POWER_LEFT_WIDTH_DEFAULT);
+    assert_eq!(app.queue_column_width, LEFT_WIDTH_DEFAULT);
     assert!(app.status.is_empty(), "status was {:?}", app.status);
 }
 
 #[test]
 fn shift_resize_is_ignored_in_queue_only() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
     app.panel_mode = PanelMode::QueueOnly;
     app.terminal_width = 100;
 
     let handled = app.handle_key(shift(KeyCode::Right));
 
     assert!(!handled);
-    assert_eq!(app.queue_column_width, POWER_LEFT_WIDTH_DEFAULT);
+    assert_eq!(app.queue_column_width, LEFT_WIDTH_DEFAULT);
     assert!(app.status.is_empty(), "status was {:?}", app.status);
 }
 
 #[test]
 fn left_does_not_focus_hidden_queue_in_queue_only() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
     app.panel_mode = PanelMode::QueueOnly;
     app.panel_focus = PanelFocus::Library;
 
@@ -263,24 +263,24 @@ fn left_does_not_focus_hidden_queue_in_queue_only() {
 }
 
 #[test]
-fn help_overlay_blocks_power_resize_shortcuts() {
-    let mut app = make_power_movie_app();
+fn help_overlay_blocks_resize_shortcuts() {
+    let mut app = make_movie_app();
     app.show_help = true;
     app.terminal_width = 100;
 
     let handled = app.handle_key(shift(KeyCode::Right));
 
     assert!(!handled);
-    assert_eq!(app.queue_column_width, POWER_LEFT_WIDTH_DEFAULT);
+    assert_eq!(app.queue_column_width, LEFT_WIDTH_DEFAULT);
 }
 
 #[test]
 fn shift_resize_clamps_at_min_and_max_without_resaving_on_noop() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
     app.terminal_width = 80;
 
     app.handle_key(shift(KeyCode::Left));
-    assert_eq!(app.queue_column_width, POWER_LEFT_WIDTH_DEFAULT);
+    assert_eq!(app.queue_column_width, LEFT_WIDTH_DEFAULT);
     assert!(
         app.status.contains("minimum"),
         "expected minimum toast, got {:?}",
@@ -305,8 +305,8 @@ fn shift_resize_clamps_at_min_and_max_without_resaving_on_noop() {
 }
 
 #[test]
-fn render_normalizes_oversized_saved_power_width_and_persists_it() {
-    let mut app = make_power_movie_app();
+fn render_normalizes_oversized_saved_width_and_persists_it() {
+    let mut app = make_movie_app();
     app.queue_column_width = 80;
 
     let backend = TestBackend::new(70, 24);
@@ -369,7 +369,7 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
     lib.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
     assert!(lib.context_menu.is_some(), "library view");
 
-    let mut queue = make_power_movie_app();
+    let mut queue = make_movie_app();
     queue.panel_focus = PanelFocus::Queue;
     queue
         .player_tab
@@ -430,13 +430,13 @@ fn ctrl_a_enqueues_selected_from_library_view() {
 }
 
 #[test]
-fn ctrl_z_while_power_library_panel_focused_does_not_leak_to_queue_undo() {
+fn ctrl_z_while_library_panel_focused_does_not_leak_to_queue_undo() {
     // Preserved quirk from the pre-phase-3 `is_lib_key` mirror: while a
     // library sub-panel has focus, an unmapped
     // Ctrl/Alt-modified key (library has no Ctrl+z binding) must be
     // swallowed by the library routing, not fall through to the
     // queue's own Ctrl+z undo binding below it in `handle_queue_key`.
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
     app.queue_undo_stack.push(crate::app::UndoEntry::Remove(
         0,
         Box::new(crate::app::tests::make_item("removed", "Movie")),
@@ -455,7 +455,7 @@ fn ctrl_z_while_power_library_panel_focused_does_not_leak_to_queue_undo() {
 #[test]
 fn tab_cycles_from_right_panel_when_search_is_closed() {
     let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_power_tab_cycle_app();
+    let mut app = make_tab_cycle_app();
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
@@ -474,7 +474,7 @@ fn selecting_the_last_tab_scrolls_it_into_view_with_correct_arrows() {
     let mut app = make_app_stub();
     app.terminal_width = 40;
     for i in 0..10 {
-        push_power_library(
+        push_library(
             &mut app,
             &format!("lib-{i}"),
             &format!("Library Number {i}"),
@@ -505,10 +505,10 @@ fn selecting_the_last_tab_scrolls_it_into_view_with_correct_arrows() {
 }
 
 #[test]
-fn ctrl_z_while_power_queue_panel_focused_does_trigger_undo() {
+fn ctrl_z_while_queue_panel_focused_does_trigger_undo() {
     // Positive counterpart: with queue focus (not library focus), the
     // same Ctrl+z reaches `handle_queue_key`'s own binding.
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
     app.panel_focus = PanelFocus::Queue;
     app.queue_undo_stack.push(crate::app::UndoEntry::Remove(
         0,
@@ -526,7 +526,7 @@ fn ctrl_z_while_power_queue_panel_focused_does_trigger_undo() {
 // ── #145 task 5: regression coverage for other library shortcuts ──
 // These paths (queue-panel PageUp/PageDown and the movie context menu)
 // sit in the same functions the new track-focus interception lives in
-// (the power-left key dispatch match block and `open_context_menu`), but
+// (the left-panel key dispatch match block and `open_context_menu`), but
 // are untouched by tasks 1-4: the queue PageUp/PageDown block is a
 // separate `if` gated on `PanelFocus::Queue`, entirely outside the
 // `is_viewing_album_folders`-gated block added for track-selection mode;
@@ -538,7 +538,7 @@ fn ctrl_z_while_power_queue_panel_focused_does_trigger_undo() {
 
 #[test]
 fn queue_page_up_and_down_move_queue_cursor_when_queue_panel_focused() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
     app.panel_focus = PanelFocus::Queue;
     app.layout.main.queue_area = Rect::new(0, 0, 20, 11);
 
@@ -566,20 +566,20 @@ fn queue_page_up_and_down_move_queue_cursor_when_queue_panel_focused() {
 }
 
 #[test]
-fn power_library_navigation_stays_debounced_after_focus_moves_to_queue() {
-    let mut app = make_power_movie_app();
+fn library_navigation_stays_debounced_after_focus_moves_to_queue() {
+    let mut app = make_movie_app();
 
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert!(!app.power_right_panel_image_renders_allowed());
+    assert!(!app.right_panel_image_renders_allowed());
 
     app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
     assert_eq!(app.panel_focus, PanelFocus::Queue);
-    assert!(!app.power_right_panel_image_renders_allowed());
+    assert!(!app.right_panel_image_renders_allowed());
 }
 
 #[test]
-fn power_queue_navigation_keeps_right_panel_gate_open_after_focus_moves_to_library() {
-    let mut app = make_power_movie_app();
+fn queue_navigation_keeps_right_panel_gate_open_after_focus_moves_to_library() {
+    let mut app = make_movie_app();
     app.panel_focus = PanelFocus::Queue;
     app.layout.main.queue_area = Rect::new(0, 0, 20, 4);
     for i in 0..5 {
@@ -588,23 +588,23 @@ fn power_queue_navigation_keeps_right_panel_gate_open_after_focus_moves_to_libra
         app.player_tab.items.push(item);
     }
     app.player_tab.queue_cursor = 0;
-    let power_library_nav_at = app.last_power_library_nav_at;
-    assert!(app.power_right_panel_image_renders_allowed());
+    let library_nav_at = app.last_library_nav_at;
+    assert!(app.right_panel_image_renders_allowed());
 
     app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
     assert_eq!(app.player_tab.queue_cursor, 3);
-    assert_eq!(app.last_power_library_nav_at, power_library_nav_at);
-    assert!(app.power_right_panel_image_renders_allowed());
+    assert_eq!(app.last_library_nav_at, library_nav_at);
+    assert!(app.right_panel_image_renders_allowed());
 
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
 
     assert_eq!(app.panel_focus, PanelFocus::Library);
-    assert!(app.power_right_panel_image_renders_allowed());
+    assert!(app.right_panel_image_renders_allowed());
 }
 
 #[test]
 fn movie_context_menu_offers_unaffected_non_folder_verbs() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
 
     app.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
 
@@ -632,7 +632,7 @@ fn movie_context_menu_offers_unaffected_non_folder_verbs() {
 // "nothing more to fetch" and search silently ran over just that range.
 #[test]
 fn opening_search_with_an_active_letter_pill_always_needs_a_full_library_fetch() {
-    let mut app = make_power_movie_app();
+    let mut app = make_movie_app();
     {
         let lvl = app.libs[0].nav_stack.last_mut().unwrap();
         lvl.letter_filter = crate::app::render::LetterFilter::for_index(4);

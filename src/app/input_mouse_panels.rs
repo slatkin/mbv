@@ -28,8 +28,8 @@ impl App {
         } else {
             return false;
         };
-        let power_panel = self.layout.main.panel_area.width > 0;
-        let panel_area = if power_panel {
+        let panel = self.layout.main.panel_area.width > 0;
+        let panel_area = if panel {
             self.layout.main.panel_area
         } else {
             Rect {
@@ -97,7 +97,7 @@ impl App {
         }
         if self.show_sessions {
             const ENTRY_H: u16 = 4;
-            let content_top = if power_panel { content_area.y } else { 1 };
+            let content_top = if panel { content_area.y } else { 1 };
             match mouse.kind {
                 MouseEventKind::ScrollDown => {
                     if !self.sessions.is_empty() {
@@ -126,7 +126,7 @@ impl App {
             return true;
         }
         if self.show_playlists {
-            let content_top = if power_panel { content_area.y } else { 1 };
+            let content_top = if panel { content_area.y } else { 1 };
             if self.playlists_open.is_some() {
                 match mouse.kind {
                     MouseEventKind::ScrollDown => {
@@ -143,7 +143,7 @@ impl App {
                         let mut y = 0usize;
                         let mut idx = self.playlists_open_scroll;
                         for i in self.playlists_open_items[self.playlists_open_scroll..].iter() {
-                            let text_width = if power_panel {
+                            let text_width = if panel {
                                 content_area.width as usize
                             } else {
                                 PLAYLISTS_PANEL_W.min(self.terminal_width) as usize

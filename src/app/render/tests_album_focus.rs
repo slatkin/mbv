@@ -4,7 +4,7 @@ use crate::app::tests::make_item;
 
 #[test]
 fn selected_album_item_follows_raw_cursor_not_display_order() {
-    let mut app = make_power_music_group_app();
+    let mut app = make_music_group_app();
 
     let mut second_album = make_item("Zero Day", "MusicAlbum");
     second_album.id = "album-2".into();
@@ -27,7 +27,7 @@ fn selected_album_item_follows_raw_cursor_not_display_order() {
     app.libs[0].album_track_focus = Some(0);
 
     let mut layout = LayoutMain::default();
-    let _ = render_power_library_to_string(&mut app, &mut layout);
+    let _ = render_library_to_string(&mut app, &mut layout);
     assert!(
         app.album_tracks_loading.contains("album-2"),
         "expected the fetch triggered by rendering to target the cursor-selected \

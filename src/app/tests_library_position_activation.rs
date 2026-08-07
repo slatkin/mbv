@@ -63,7 +63,7 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
 }
 
 #[test]
-fn activating_saved_power_position_initializes_feed_home_video_state() {
+fn activating_saved_position_initializes_feed_home_video_state() {
     let mut app = make_app_stub();
     app.library_tab = 1;
     app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
@@ -117,7 +117,7 @@ fn activating_saved_power_position_initializes_feed_home_video_state() {
 }
 
 #[test]
-fn ensure_lib_loaded_for_visible_power_library_accepts_restore_from_queue_focus() {
+fn ensure_lib_loaded_for_visible_library_accepts_restore_from_queue_focus() {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
     app.library_tab = 1;
@@ -135,7 +135,7 @@ fn ensure_lib_loaded_for_visible_power_library_accepts_restore_from_queue_focus(
         series_season_cursor: 0,
         library_total: None,
     });
-    let power_position = crate::config::LibraryPosition {
+    let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
             title: "Power".into(),
@@ -150,7 +150,7 @@ fn ensure_lib_loaded_for_visible_power_library_accepts_restore_from_queue_focus(
         }],
         ..Default::default()
     };
-    app.replace_saved_library_position(0, power_position.clone());
+    app.replace_saved_library_position(0, position.clone());
 
     app.ensure_lib_loaded_for(0);
 
@@ -160,8 +160,8 @@ fn ensure_lib_loaded_for_visible_power_library_accepts_restore_from_queue_focus(
 
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
-        requested_position: power_position.clone(),
-        position: power_position,
+        requested_position: position.clone(),
+        position,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Power restored".into(),
@@ -249,7 +249,7 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
         series_season_cursor: 0,
         library_total: None,
     });
-    let power_position = crate::config::LibraryPosition {
+    let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
             title: "Power".into(),
@@ -264,7 +264,7 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
         }],
         ..Default::default()
     };
-    app.replace_saved_library_position(0, power_position.clone());
+    app.replace_saved_library_position(0, position.clone());
     app.panel_focus = PanelFocus::Queue;
     app.library_tab = 0;
 
@@ -277,8 +277,8 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
 
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
-        requested_position: power_position.clone(),
-        position: power_position,
+        requested_position: position.clone(),
+        position,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Power restored".into(),

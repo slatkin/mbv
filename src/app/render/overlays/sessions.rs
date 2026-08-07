@@ -12,10 +12,10 @@ impl App {
     pub(in crate::app::render) fn render_sessions_overlay(
         &mut self,
         f: &mut Frame,
-        power_area: Option<Rect>,
+        area: Option<Rect>,
     ) {
         let footer = self.sessions_overlay_footer();
-        let content = match power_area {
+        let content = match area {
             Some(area) => Self::render_panel_shell_at(f, area, "REMOTE SESSIONS", footer, true),
             None => {
                 Self::render_panel_shell(f, f.area(), SESSIONS_PANEL_W, "REMOTE SESSIONS", footer)

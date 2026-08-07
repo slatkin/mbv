@@ -11,9 +11,9 @@ impl App {
     pub(in crate::app::render) fn render_help_panel(
         &mut self,
         f: &mut Frame,
-        power_area: Option<ratatui::layout::Rect>,
+        area: Option<ratatui::layout::Rect>,
     ) {
-        let content = match power_area {
+        let content = match area {
             Some(area) => Self::render_panel_shell_at(
                 f,
                 area,

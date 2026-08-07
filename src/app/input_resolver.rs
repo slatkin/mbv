@@ -94,7 +94,7 @@ pub(super) fn resolve_key(
             ) {
                 // Esc's Stop binding must not fire while inline album
                 // track-selection mode is active -- fall through so the
-                // lower-priority `power_album_track_mode` context can treat
+                // lower-priority `album_track_mode` context can treat
                 // Esc as "exit track-selection mode" instead (same as
                 // Backspace).
                 Some(super::action::Command::Stop) if snapshot.track_select_active => {
@@ -117,7 +117,7 @@ impl App {
             // before it reports active playback; this keeps Stop available
             // while a guarded Play is resolving.
             has_remote_session: self.connected_session_id.is_some() || self.player.is_remote(),
-            track_select_active: self.active_power_album_track_lib_idx().is_some(),
+            track_select_active: self.active_album_track_lib_idx().is_some(),
         }
     }
 }
@@ -193,7 +193,7 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     },
     ContextEntry {
         name: "lib_search",
-        handler: App::handle_key_power_lib_search,
+        handler: App::handle_key_lib_search,
     },
     ContextEntry {
         name: "panel_mode_cycle_x",
@@ -229,7 +229,7 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     },
     ContextEntry {
         name: "album_track_mode",
-        handler: App::handle_key_power_album_track_mode,
+        handler: App::handle_key_album_track_mode,
     },
     ContextEntry {
         name: "view_dispatch",

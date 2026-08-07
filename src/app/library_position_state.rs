@@ -104,7 +104,7 @@ impl App {
         }
     }
 
-    pub(super) fn focus_power_queue_initial_item(&mut self) {
+    pub(super) fn focus_queue_initial_item(&mut self) {
         let playback = self.displayed_queue_playback_state();
         let queue = self.displayed_queue_mut();
         if playback.active && playback.active_idx < queue.items.len() {

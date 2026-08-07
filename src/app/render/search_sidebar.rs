@@ -29,9 +29,9 @@ impl App {
     pub(in crate::app::render) fn render_search_sidebar(
         &mut self,
         f: &mut Frame,
-        power_area: Option<Rect>,
+        area: Option<Rect>,
     ) {
-        let content = match power_area {
+        let content = match area {
             Some(area) => Self::render_panel_shell_at(f, area, "SEARCH", HINTS, true),
             None => Self::render_panel_shell(f, f.area(), SEARCH_PANEL_W, "SEARCH", HINTS),
         };

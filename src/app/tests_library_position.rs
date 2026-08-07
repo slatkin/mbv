@@ -583,12 +583,12 @@ fn trigger_lib_rescan_clears_only_active_scope() {
 }
 
 #[test]
-fn power_home_navigation_does_not_persist_library_position_state() {
+fn home_navigation_does_not_persist_library_position_state() {
     let mut app = make_app_stub();
     app.library_tab = 0;
     app.home.continue_items = make_items(3);
 
-    app.power_cw_move_cursor(1);
+    app.cw_move_cursor(1);
 
     assert!(app.library_position_state.libraries.is_empty());
 }

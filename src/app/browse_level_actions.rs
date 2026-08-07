@@ -54,7 +54,7 @@ impl App {
         self.start_or_supersede_music_grouping(lib_idx);
     }
 
-    pub(super) fn maybe_auto_push_power_tv_season_level(&mut self, lib_idx: usize) {
+    pub(super) fn maybe_auto_push_tv_season_level(&mut self, lib_idx: usize) {
         // When a season list arrives for a TV library,
         // automatically push a loading placeholder and fetch the first season's
         // episodes so the user lands directly in the combined series view.

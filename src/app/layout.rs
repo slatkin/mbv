@@ -2,7 +2,7 @@
 //! hit-testing in `input.rs`.
 //!
 //! `App` owns a single `AppLayout` value (`app.layout`) instead of ~35
-//! scattered `layout_*`/`power_*`/`queue_*` fields. Grouping by view
+//! scattered `layout_*`/`*`/`queue_*` fields. Grouping by view
 //! mirrors the boundaries `render/` and `input.rs` already use, rather than
 //! inventing a new one.
 //!
@@ -54,7 +54,7 @@ pub(crate) struct LayoutHome {
 /// Library panel, queue panel, and home-grid geometry.
 #[derive(Default)]
 pub(crate) struct LayoutMain {
-    /// Full expanded Power sidebar covered by an F1-F4 panel, when present.
+    /// Full expanded sidebar covered by an F1-F4 panel, when present.
     pub panel_area: Rect,
     /// Content bounds inside `panel_area`, shared with panel mouse hit-testing.
     pub panel_content_area: Rect,

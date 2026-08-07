@@ -4,6 +4,7 @@ use super::{
 };
 use mbv_core::api::MediaItem;
 use mbv_core::player::PlayerCommand;
+use mbv_core::ItemId;
 use std::sync::Arc;
 
 pub(super) fn enqueue_action_context(
@@ -141,7 +142,7 @@ impl App {
             if self.is_feed_home_video_group_view(lib_idx) {
                 return self.selected_feed_home_video_item(lib_idx);
             }
-            // Track-selection mode (#145 task 4): when the power-left panel
+            // Track-selection mode (#145 task 4): when the left panel
             // is sitting on the album-folder-listing nav level AND a track
             // is focused (`album_track_focus = Some(idx)`), resolve to that
             // track instead of the album folder item, so play/enqueue/
@@ -250,7 +251,10 @@ impl App {
         }
         if !item.series_id.is_empty() && self.player.always_play_next {
             let c = self.client.lock().unwrap();
-            let episodes = c.get_episodes_from(&item.series_id, &item.id);
+            let episodes = c.get_episodes_from(
+                &ItemId::new(item.series_id.as_str()),
+                &ItemId::new(item.id.as_str()),
+            );
             drop(c);
             if episodes.len() > 1 {
                 let c = Arc::new(self.client.lock().unwrap().clone());

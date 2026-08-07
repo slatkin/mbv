@@ -32,7 +32,7 @@ pub(super) struct LibraryTab {
 }
 
 impl LibraryTab {
-    pub(super) fn clear_power_music_focus(&mut self) {
+    pub(super) fn clear_music_focus(&mut self) {
         self.album_track_focus = None;
         self.artist_header_focus = None;
     }
@@ -70,7 +70,7 @@ impl LibraryTab {
         self.library_total = position.levels.first().and_then(|l| l.library_total);
         self.nav_stack = nav_stack;
         self.search = None;
-        self.clear_power_music_focus();
+        self.clear_music_focus();
         if let Some(state) = self.feed_home_video.as_mut() {
             state.selected_group = position.feed_selected_group;
             state.video_cursor = position.feed_video_cursor;

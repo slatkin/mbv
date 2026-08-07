@@ -57,7 +57,7 @@ fn save_prefs_persists_panel_focus_for_both_values() {
 }
 
 #[test]
-fn entering_power_queue_focus_selects_now_playing_item() {
+fn entering_queue_focus_selects_now_playing_item() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
@@ -75,7 +75,7 @@ fn entering_power_queue_focus_selects_now_playing_item() {
 }
 
 #[test]
-fn entering_power_queue_focus_preserves_valid_queue_cursor_without_now_playing() {
+fn entering_queue_focus_preserves_valid_queue_cursor_without_now_playing() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
@@ -88,7 +88,7 @@ fn entering_power_queue_focus_preserves_valid_queue_cursor_without_now_playing()
 }
 
 #[test]
-fn entering_power_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
+fn entering_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;

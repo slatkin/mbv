@@ -13,7 +13,7 @@ impl App {
     pub(in crate::app::render) fn render_playlists_panel(
         &mut self,
         f: &mut Frame,
-        power_area: Option<Rect>,
+        area: Option<Rect>,
     ) {
         let (title, hint) = if self.playlists_open.is_some() {
             let name = self
@@ -32,7 +32,7 @@ impl App {
             )
         };
 
-        let content = match power_area {
+        let content = match area {
             Some(area) => Self::render_panel_shell_at(f, area, &title, &hint, true),
             None => Self::render_panel_shell(f, f.area(), PLAYLISTS_PANEL_W, &title, &hint),
         };

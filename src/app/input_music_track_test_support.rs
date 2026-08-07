@@ -11,9 +11,9 @@ use std::io::{Read, Write};
 
 /// Music library sitting on the album-folder-listing nav
 /// level (`is_viewing_album_folders` holds): a grouped `["group",
-/// "album"]` config, mirroring `render_power_library`'s inline-detail
+/// "album"]` config, mirroring `render_library`'s inline-detail
 /// tests, with two albums at the album level and `album-1` selected.
-pub(super) fn make_power_music_album_app() -> App {
+pub(super) fn make_music_album_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.library_tab = 1;
@@ -110,7 +110,7 @@ pub(super) fn push_tracks(app: &mut App, album_id: &str, count: usize) {
     app.album_tracks_cache.insert(album_id.to_string(), tracks);
 }
 
-pub(super) fn make_power_music_album_list_app(album_count: usize, cursor: usize) -> App {
+pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.library_tab = 1;
@@ -350,7 +350,7 @@ pub(super) fn configure_recursive_fetch_server(app: &mut App, server: &Recursive
 }
 
 pub(super) fn make_selectable_artist_header_bulk_app() -> App {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     add_beta_album(&mut app);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 2;
     app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {

@@ -53,12 +53,12 @@ pub(super) enum DisplayRow {
     Item(Vec<usize>),
 }
 
-/// Shared inputs to the per-kind row-rendering bodies of `render_power_list`
-/// (`render_power_letter_grouped_rows`, `render_power_plain_rows`): the
+/// Shared inputs to the per-kind row-rendering bodies of `render_list`
+/// (`render_letter_grouped_rows`, `render_plain_rows`): the
 /// prelude values both kinds' bodies read, factored out so each callee takes
 /// one struct instead of the same six-plus positional arguments.
 pub(super) struct ListRenderCtx<'a> {
-    /// The list's own area: `render_power_list` splits `content_area` into
+    /// The list's own area: `render_list` splits `content_area` into
     /// this (the top slice, above the hero) and a separate `hero_area` (the
     /// bottom slice) -- the row renderer only ever sees `list_area` and has
     /// no notion of the hero at all.

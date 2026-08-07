@@ -17,7 +17,7 @@ const QUEUE_TITLE_QUIET_COLUMNS: usize = 2;
 impl App {
     /// Renders the "Queue" title pill (and optional Local/Remote scope pills)
     /// at the top of the queue column on a single row.
-    pub(super) fn render_power_queue_title(
+    pub(super) fn render_queue_title(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -255,8 +255,8 @@ impl App {
     }
 
     /// Renders the queue list (track items, scrollbar). The title/scope pill
-    /// row is rendered separately by `render_power_queue_title`.
-    pub(super) fn render_power_queue(
+    /// row is rendered separately by `render_queue_title`.
+    pub(super) fn render_queue(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -453,7 +453,7 @@ impl App {
 
         if need_sb {
             let max_off = total.saturating_sub(visible);
-            super::render_power_scrollbar(f, area, max_off, offset, palette::SOFT_WHITE);
+            super::render_scrollbar(f, area, max_off, offset, palette::SOFT_WHITE);
         }
     }
 }
@@ -466,7 +466,7 @@ mod tests {
     use ratatui::Terminal;
 
     #[test]
-    fn render_power_queue_scroll_up_reaches_top_without_regressing() {
+    fn render_queue_scroll_up_reaches_top_without_regressing() {
         // Scrolling up one row at a time from the bottom must monotonically
         // approach the top of the list and land exactly on it.
         let mut app = make_app_stub();
@@ -489,7 +489,7 @@ mod tests {
         for cursor in (0..n).rev() {
             app.player_tab.queue_cursor = cursor;
             term.draw(|f| {
-                app.render_power_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
+                app.render_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
             })
             .unwrap();
             assert!(
@@ -503,7 +503,7 @@ mod tests {
     }
 
     #[test]
-    fn render_power_queue_page_up_from_bottom_reaches_top() {
+    fn render_queue_page_up_from_bottom_reaches_top() {
         let mut app = make_app_stub();
         app.panel_focus = crate::app::PanelFocus::Queue;
 
@@ -520,7 +520,7 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutMain::default();
         term.draw(|f| {
-            app.render_power_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
+            app.render_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
         })
         .unwrap();
 
@@ -531,7 +531,7 @@ mod tests {
             let next = cur.saturating_sub(page);
             app.player_tab.queue_cursor = next;
             term.draw(|f| {
-                app.render_power_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
+                app.render_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
             })
             .unwrap();
             assert!(

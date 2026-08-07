@@ -8,15 +8,17 @@ mod browse_level_actions;
 mod construct;
 mod consume_quit_actions;
 mod context_menu_actions;
+mod cw_library_tab_actions;
 mod daemon_restart;
 mod feed_actions;
 mod feed_parse;
+mod home_actions;
 pub(crate) mod images;
 mod input;
 mod input_confirm_keys;
 mod input_context_menu;
 mod input_daemon_lost_keys;
-mod input_lib_power_keys;
+mod input_lib_keys;
 mod input_mouse;
 mod input_mouse_dispatch;
 mod input_mouse_panels;
@@ -44,8 +46,6 @@ mod playback_target;
 mod playback_target_local;
 mod playback_target_remote;
 mod player_event;
-mod power_cw_library_tab_actions;
-mod power_home_actions;
 mod queue_actions;
 mod queue_column_width;
 mod queue_scope;
@@ -158,14 +158,14 @@ static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
 #[cfg(test)]
 static SESSIONS_LOAD_TEST_LOCK: Mutex<()> = Mutex::new(());
 
-pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
-pub(super) const POWER_LEFT_WIDTH_STEP: u16 = 5;
-/// Minimum list-pane / Home-pane width at which Power View switches to a
+pub(super) const LEFT_WIDTH_DEFAULT: u16 = 40;
+pub(super) const LEFT_WIDTH_STEP: u16 = 5;
+/// Minimum list-pane / Home-pane width at which the view switches to a
 /// two-column layout. Used by both the library list renderer
 /// (`library_column_count`) and the Home view's hero/list split, so they
 /// cross the threshold together. Equals `2 * LIBRARY_COLUMN_MIN_WIDTH +
 /// LIBRARY_COLUMN_GAP`.
-pub(super) const POWER_TWO_COLUMN_THRESHOLD: u16 = 82;
+pub(super) const TWO_COLUMN_THRESHOLD: u16 = 82;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
 pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
 /// Left margin for the tab row. The control pill used to live here (hence

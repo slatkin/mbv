@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_imports)]
 
-use super::power_music_track_test_support::*;
+use super::music_track_test_support::*;
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
@@ -11,7 +11,7 @@ use ratatui::Terminal;
 use std::io::{Read, Write};
 #[test]
 fn enter_at_album_folder_listing_enters_track_mode_without_nav_push() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     let nav_len_before = app.libs[0].nav_stack.len();
     assert!(app.is_viewing_album_folders(0));
     assert!(app.libs[0].album_track_focus.is_none());
@@ -28,8 +28,8 @@ fn mouse_click_on_selected_album_folder_row_does_not_open_track_mode() {
     // Only Enter opens inline track-selection mode. A mouse click on the
     // already-selected album-folder row must not open it (and must not
     // fall back to the legacy nav_stack drilldown either).
-    let mut app_key = make_power_music_album_app();
-    let mut app_mouse = make_power_music_album_app();
+    let mut app_key = make_music_album_app();
+    let mut app_mouse = make_music_album_app();
 
     let nav_len_before = app_key.libs[0].nav_stack.len();
     assert_eq!(nav_len_before, app_mouse.libs[0].nav_stack.len());
@@ -57,7 +57,7 @@ fn mouse_click_on_selected_album_folder_row_does_not_open_track_mode() {
 
 #[test]
 fn refocus_click_after_focus_gained_is_suppressed() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     app.note_focus_gained();
     app.layout.main.left_area = Rect::new(10, 5, 29, 4);
     app.layout.main.left_row_map = vec![Some(1)];
@@ -75,7 +75,7 @@ fn refocus_click_after_focus_gained_is_suppressed() {
 
 #[test]
 fn click_without_focus_event_dispatches_normally() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     assert!(app.refocus_at.is_none());
     app.layout.main.left_area = Rect::new(10, 5, 29, 4);
     app.layout.main.left_row_map = vec![Some(1)];
@@ -92,7 +92,7 @@ fn click_without_focus_event_dispatches_normally() {
 
 #[test]
 fn click_outside_refocus_window_dispatches_normally() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     app.refocus_at = Some(Instant::now() - Duration::from_millis(500));
     app.layout.main.left_area = Rect::new(10, 5, 29, 4);
     app.layout.main.left_row_map = vec![Some(1)];
@@ -109,7 +109,7 @@ fn click_outside_refocus_window_dispatches_normally() {
 
 #[test]
 fn second_click_after_refocus_dispatches() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     app.note_focus_gained();
     app.layout.main.left_area = Rect::new(10, 5, 29, 4);
     app.layout.main.left_row_map = vec![Some(1)];
@@ -129,7 +129,7 @@ fn second_click_after_refocus_dispatches() {
 
 #[test]
 fn focus_lost_clears_pending_refocus() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     app.note_focus_gained();
     app.note_focus_lost();
     app.layout.main.left_area = Rect::new(10, 5, 29, 4);
@@ -147,7 +147,7 @@ fn focus_lost_clears_pending_refocus() {
 
 #[test]
 fn selectable_artist_header_keyboard_up_down_selects_headers() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     add_beta_album(&mut app);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 2;
 
@@ -174,7 +174,7 @@ fn selectable_artist_header_keyboard_up_down_selects_headers() {
 
 #[test]
 fn artist_header_selection_survives_group_size_change() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     let mut zeta_album = make_item("Zeta Album", "MusicAlbum");
     zeta_album.id = "album-zeta".into();
     zeta_album.artist = "Zeta".into();
@@ -220,7 +220,7 @@ fn artist_header_selection_survives_group_size_change() {
 
 #[test]
 fn selectable_artist_header_enter_is_consumed_noop() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
         first_album_id: "album-1".into(),
         artist_label: "Unknown Artist".into(),
@@ -237,7 +237,7 @@ fn selectable_artist_header_enter_is_consumed_noop() {
 
 #[test]
 fn selectable_artist_header_mouse_click_selects_header() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     add_beta_album(&mut app);
     render_full_app(&mut app, 100, 24);
     let row = app
@@ -271,7 +271,7 @@ fn selectable_artist_header_mouse_click_selects_header() {
 
 #[test]
 fn selectable_artist_header_context_menu_uses_header_actions() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
         first_album_id: "album-1".into(),
         artist_label: "Unknown Artist".into(),
@@ -290,7 +290,7 @@ fn selectable_artist_header_context_menu_uses_header_actions() {
 
 #[test]
 fn selectable_artist_header_members_use_current_display_plan_albums_only() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     add_beta_album(&mut app);
     app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
         first_album_id: "album-1".into(),
@@ -311,7 +311,7 @@ fn selectable_artist_header_members_use_current_display_plan_albums_only() {
 
 #[test]
 fn selectable_artist_header_stale_selection_is_cleared_on_revalidation() {
-    let mut app = make_power_music_album_app();
+    let mut app = make_music_album_app();
     app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
         first_album_id: "missing-album".into(),
         artist_label: "Unknown Artist".into(),

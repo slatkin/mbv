@@ -11,8 +11,7 @@ use unicode_width::UnicodeWidthStr;
 
 // The main UI re-renders frequently while scrolling; prefer a cheaper filter in
 // these hot paths to reduce terminal image preparation stalls.
-pub(super) const POWER_RENDER_FILTER: ratatui_image::FilterType =
-    ratatui_image::FilterType::Triangle;
+pub(super) const RENDER_FILTER: ratatui_image::FilterType = ratatui_image::FilterType::Triangle;
 
 // Configured music albums need the image worker's child-audio lookup; their
 // album containers do not reliably expose usable Primary images.
@@ -30,13 +29,13 @@ pub(super) const COLUMN_GAP: u16 = 0;
 ///
 /// Detail surfaces that need additional internal alignment can add their own
 /// indentation relative to this padded edge.
-pub(super) const POWER_TAB_LEFT_PAD: u16 = 2;
+pub(super) const TAB_LEFT_PAD: u16 = 2;
 /// Left-edge padding when the library list renders in two columns. Matches
-/// the single-column `POWER_TAB_LEFT_PAD` so both modes share a consistent
+/// the single-column `TAB_LEFT_PAD` so both modes share a consistent
 /// two-column indent from the panel edge.
-const POWER_TAB_LEFT_PAD_TWO_COL: u16 = 2;
+const TAB_LEFT_PAD_TWO_COL: u16 = 2;
 
-pub(super) fn power_right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
+pub(super) fn right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
     if left_collapsed {
         Rect {
             width: area.width.saturating_sub(1),
@@ -46,12 +45,12 @@ pub(super) fn power_right_panel_content_area(area: Rect, left_collapsed: bool) -
         // Mirror the two-column library threshold: when the right panel is
         // wide enough for the library list to switch to two columns, use
         // the smaller pad so the left cell sits one column in instead of
-        // two. The single-column path keeps the full `POWER_TAB_LEFT_PAD`
+        // two. The single-column path keeps the full `TAB_LEFT_PAD`
         // for visual breathing room around a full-width list.
         let left_pad = if crate::app::library_column_width::library_column_count(area.width) > 1 {
-            POWER_TAB_LEFT_PAD_TWO_COL
+            TAB_LEFT_PAD_TWO_COL
         } else {
-            POWER_TAB_LEFT_PAD
+            TAB_LEFT_PAD
         };
         Rect {
             x: area.x + left_pad,
@@ -61,7 +60,7 @@ pub(super) fn power_right_panel_content_area(area: Rect, left_collapsed: bool) -
     }
 }
 
-pub(super) fn render_power_scrollbar(
+pub(super) fn render_scrollbar(
     f: &mut Frame,
     area: Rect,
     max_offset: usize,
@@ -69,7 +68,7 @@ pub(super) fn render_power_scrollbar(
     color: Color,
 ) {
     let visible = area.height as usize;
-    render_power_scrollbar_with_viewport(
+    render_scrollbar_with_viewport(
         f,
         area,
         max_offset.saturating_add(visible),
@@ -79,7 +78,7 @@ pub(super) fn render_power_scrollbar(
     );
 }
 
-pub(super) fn render_power_scrollbar_with_viewport(
+pub(super) fn render_scrollbar_with_viewport(
     f: &mut Frame,
     area: Rect,
     content_length: usize,
@@ -87,7 +86,7 @@ pub(super) fn render_power_scrollbar_with_viewport(
     offset: usize,
     color: Color,
 ) {
-    render_power_scrollbar_with_viewport_at(
+    render_scrollbar_with_viewport_at(
         f,
         area,
         content_length,
@@ -99,19 +98,14 @@ pub(super) fn render_power_scrollbar_with_viewport(
     );
 }
 
-pub(super) fn render_power_right_scrollbar(
-    f: &mut Frame,
-    area: Rect,
-    max_offset: usize,
-    offset: usize,
-) {
+pub(super) fn render_right_scrollbar(f: &mut Frame, area: Rect, max_offset: usize, offset: usize) {
     let visible = area.height as usize;
     let x = if area.right() < f.area().right() {
         area.right()
     } else {
         area.x + area.width.saturating_sub(1)
     };
-    render_power_scrollbar_with_viewport_at(
+    render_scrollbar_with_viewport_at(
         f,
         area,
         max_offset.saturating_add(visible),
@@ -123,7 +117,7 @@ pub(super) fn render_power_right_scrollbar(
     );
 }
 
-pub(super) fn render_power_right_scrollbar_with_viewport(
+pub(super) fn render_right_scrollbar_with_viewport(
     f: &mut Frame,
     area: Rect,
     content_length: usize,
@@ -135,7 +129,7 @@ pub(super) fn render_power_right_scrollbar_with_viewport(
     } else {
         area.x + area.width.saturating_sub(1)
     };
-    render_power_scrollbar_with_viewport_at(
+    render_scrollbar_with_viewport_at(
         f,
         area,
         content_length,
@@ -147,7 +141,7 @@ pub(super) fn render_power_right_scrollbar_with_viewport(
     );
 }
 
-fn render_power_scrollbar_with_viewport_at(
+fn render_scrollbar_with_viewport_at(
     f: &mut Frame,
     area: Rect,
     content_length: usize,
@@ -261,7 +255,7 @@ pub(super) fn render_selected_block_borders(
     }
 }
 
-pub(super) fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, focused: bool) -> Rect {
+pub(super) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focused: bool) -> Rect {
     if area.width == 0 || area.height == 0 {
         return Rect::default();
     }
@@ -297,8 +291,8 @@ fn selector_pill_style(selected: bool) -> Style {
 /// their list into the remaining space. Used by the home-video tab to keep
 /// the label styling and the one-row consumption identical to other tabs
 /// that once shared it (movies/tv show library lists no longer show this
-/// row; see `render_power_list`).
-pub(super) fn render_power_count_label(f: &mut Frame, area: Rect, count: usize) -> Rect {
+/// row; see `render_list`).
+pub(super) fn render_count_label(f: &mut Frame, area: Rect, count: usize) -> Rect {
     if area.width == 0 || area.height == 0 {
         return area;
     }
@@ -324,17 +318,13 @@ pub(super) fn selection_marker(_active: bool) -> Span<'static> {
 }
 
 /// Width in columns reserved for a list's scrollbar gutter.
-pub(super) const POWER_SCROLLBAR_GUTTER: u16 = 1;
+pub(super) const SCROLLBAR_GUTTER: u16 = 1;
 
 /// Usable text width of a list column of the given `width` once the
 /// scrollbar gutter is reserved (when `needs_scrollbar`). Centralizes the
 /// `width - gutter` arithmetic every scrolling list repeats.
-pub(super) fn power_content_width(width: u16, needs_scrollbar: bool) -> usize {
-    let gutter = if needs_scrollbar {
-        POWER_SCROLLBAR_GUTTER
-    } else {
-        0
-    };
+pub(super) fn content_width(width: u16, needs_scrollbar: bool) -> usize {
+    let gutter = if needs_scrollbar { SCROLLBAR_GUTTER } else { 0 };
     width.saturating_sub(gutter) as usize
 }
 
@@ -527,7 +517,7 @@ pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(R
 /// Callers pass the exact text (`" (empty)"`, `" Loading…"`, or a
 /// context-specific string like `"Indexing music library..."`) so the
 /// wording stays local, but the placeholder styling is defined once.
-pub(super) fn render_power_placeholder(f: &mut Frame, area: Rect, msg: &str) {
+pub(super) fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
     if area.width == 0 || area.height == 0 {
         return;
     }
@@ -541,7 +531,7 @@ pub(super) fn render_power_placeholder(f: &mut Frame, area: Rect, msg: &str) {
 }
 
 impl App {
-    pub(super) fn render_power_library(
+    pub(super) fn render_library(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -556,7 +546,7 @@ impl App {
         }
 
         if self.library_tab == 0 {
-            self.render_power_home_list(f, area, focused, layout);
+            self.render_home_list(f, area, focused, layout);
             return;
         }
         let lib_idx = self.library_tab.saturating_sub(1);
@@ -565,15 +555,15 @@ impl App {
         let is_album_folders = self.library_tab > 0 && self.is_viewing_album_folders(lib_idx);
         let is_home_video = self.library_tab > 0 && self.is_home_video_view(lib_idx);
         if is_feed_group {
-            self.render_power_feed_home_video_group_view(f, area, lib_idx, focused, layout);
+            self.render_feed_home_video_group_view(f, area, lib_idx, focused, layout);
         } else if is_album_folders && is_music_group {
-            self.render_power_music_group_view(f, area, lib_idx, focused, layout);
+            self.render_music_group_view(f, area, lib_idx, focused, layout);
         } else if is_album_folders {
-            self.render_power_list(f, area, focused, layout);
+            self.render_list(f, area, focused, layout);
         } else if is_home_video {
-            self.render_power_home_video_list(f, area, lib_idx, focused, layout);
+            self.render_home_video_list(f, area, lib_idx, focused, layout);
         } else {
-            self.render_power_list(f, area, focused, layout);
+            self.render_list(f, area, focused, layout);
         }
     }
 
@@ -582,7 +572,7 @@ impl App {
     /// holds), if any. The cursor field always indexes into the raw
     /// `items` array in the order it was fetched (SortName-by-album-title)
     /// -- *not* the artist-grouped display order that
-    /// `render_power_music_group_view` builds for rendering -- so a plain
+    /// `render_music_group_view` builds for rendering -- so a plain
     /// `items.get(cursor)` is correct even for the grouped music view.
     pub(in crate::app) fn selected_album_item(
         &self,
@@ -592,8 +582,8 @@ impl App {
         lvl.items.get(lvl.cursor).cloned()
     }
 
-    /// Resolves the display artist for an album item in the grouped power
-    /// music views, synchronously (never schedules artist lookups). Priority
+    /// Resolves the display artist for an album item in the grouped music
+    /// views, synchronously (never schedules artist lookups). Priority
     /// order:
     /// 1. `item.artist` (Emby's Album-entity metadata) if non-empty.
     /// 2. `album_artist_cache` entry if non-empty (fetched from the album's

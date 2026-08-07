@@ -5,7 +5,7 @@ impl App {
     // ── Home flat list ───────────────────────────────────────────────────────
 
     /// The MediaItem at the current flat `home_cursor`, or None.
-    pub(super) fn power_home_current_item(&self) -> Option<MediaItem> {
+    pub(super) fn home_current_item(&self) -> Option<MediaItem> {
         let cursor = self.home.home_cursor;
         let mut pos = 0usize;
         for item in &self.home.continue_items {
@@ -25,9 +25,9 @@ impl App {
         None
     }
 
-    /// Flat cursor range for a power-home section. Section 0 is Keep Watching;
+    /// Flat cursor range for a home section. Section 0 is Keep Watching;
     /// non-empty latest sections keep their regular Home section index.
-    fn power_home_section_range(&self, section_idx: usize) -> Option<(usize, usize)> {
+    fn home_section_range(&self, section_idx: usize) -> Option<(usize, usize)> {
         let mut pos = 0usize;
         if section_idx == 0 {
             return Some((0, self.home.continue_items.len()));
@@ -47,7 +47,7 @@ impl App {
         None
     }
 
-    fn power_home_new_sections(&self) -> Vec<usize> {
+    fn home_new_sections(&self) -> Vec<usize> {
         let mut sections = Vec::new();
         for (idx, (_, _, items, _)) in self.home.latest.iter().enumerate() {
             if !items.is_empty() {
@@ -60,14 +60,14 @@ impl App {
     /// Whether `section_idx` is a selectable Home pill: section 0 (Continue
     /// Watching) is always valid, and any other index is valid iff it has a
     /// non-empty Newest section.
-    pub(super) fn power_home_section_is_valid(&self, section_idx: usize) -> bool {
-        section_idx == 0 || self.power_home_new_sections().contains(&section_idx)
+    pub(super) fn home_section_is_valid(&self, section_idx: usize) -> bool {
+        section_idx == 0 || self.home_new_sections().contains(&section_idx)
     }
 
-    pub(super) fn power_home_select_section(&mut self, section_idx: usize) {
-        let section_idx = if self.power_home_section_is_valid(section_idx) {
+    pub(super) fn home_select_section(&mut self, section_idx: usize) {
+        let section_idx = if self.home_section_is_valid(section_idx) {
             section_idx
-        } else if let Some(first) = self.power_home_new_sections().first() {
+        } else if let Some(first) = self.home_new_sections().first() {
             *first
         } else {
             self.home.section = 0;
@@ -75,7 +75,7 @@ impl App {
         };
         self.home.section = section_idx;
         self.home.home_scroll = 0;
-        if let Some((start, len)) = self.power_home_section_range(section_idx) {
+        if let Some((start, len)) = self.home_section_range(section_idx) {
             self.home.home_cursor = if len == 0 {
                 start
             } else {
@@ -84,23 +84,23 @@ impl App {
         }
     }
 
-    fn power_home_visible_indices(&self) -> Vec<usize> {
+    fn home_visible_indices(&self) -> Vec<usize> {
         let mut indices = Vec::new();
-        let selected = if self.power_home_section_is_valid(self.home.section) {
+        let selected = if self.home_section_is_valid(self.home.section) {
             self.home.section
         } else {
-            self.power_home_new_sections().first().copied().unwrap_or(0)
+            self.home_new_sections().first().copied().unwrap_or(0)
         };
-        if let Some((start, len)) = self.power_home_section_range(selected) {
+        if let Some((start, len)) = self.home_section_range(selected) {
             indices.extend(start..start + len);
         }
         indices
     }
 
-    /// Move the flat power-home cursor by `delta`, clamped to the selected
-    /// power-home section.
-    pub(super) fn power_home_move_cursor(&mut self, delta: i64) {
-        let indices = self.power_home_visible_indices();
+    /// Move the flat home cursor by `delta`, clamped to the selected home
+    /// section.
+    pub(super) fn home_move_cursor(&mut self, delta: i64) {
+        let indices = self.home_visible_indices();
         if indices.is_empty() {
             self.home.home_cursor = 0;
             return;
@@ -113,31 +113,31 @@ impl App {
         self.home.home_cursor = indices[next];
     }
 
-    pub(super) fn power_home_select_start(&mut self) {
-        if let Some(first) = self.power_home_visible_indices().first() {
+    pub(super) fn home_select_start(&mut self) {
+        if let Some(first) = self.home_visible_indices().first() {
             self.home.home_cursor = *first;
         }
     }
 
-    pub(super) fn power_home_select_end(&mut self) {
-        if let Some(last) = self.power_home_visible_indices().last() {
+    pub(super) fn home_select_end(&mut self) {
+        if let Some(last) = self.home_visible_indices().last() {
             self.home.home_cursor = *last;
         }
     }
 
-    pub(super) fn power_home_move_down(&mut self) {
-        self.power_home_move_cursor(1);
+    pub(super) fn home_move_down(&mut self) {
+        self.home_move_cursor(1);
     }
 
-    pub(super) fn power_home_move_up(&mut self) {
-        self.power_home_move_cursor(-1);
+    pub(super) fn home_move_up(&mut self) {
+        self.home_move_cursor(-1);
     }
 
     /// Cycle the selected home section, wrapping at the ends. `dir` = -1 previous,
     /// +1 next.
-    pub(super) fn power_home_move_section(&mut self, dir: i64) {
+    pub(super) fn home_move_section(&mut self, dir: i64) {
         let mut sections = vec![0];
-        sections.extend(self.power_home_new_sections());
+        sections.extend(self.home_new_sections());
         let pos = sections
             .iter()
             .position(|&section_idx| section_idx == self.home.section);
@@ -148,12 +148,12 @@ impl App {
             }
             None => 0,
         };
-        self.power_home_select_section(sections[next_pos]);
+        self.home_select_section(sections[next_pos]);
     }
 
-    /// Play the item under the flat power-home cursor.
-    pub(super) fn power_home_play(&mut self) {
-        let Some(item) = self.power_home_current_item() else {
+    /// Play the item under the flat home cursor.
+    pub(super) fn home_play(&mut self) {
+        let Some(item) = self.home_current_item() else {
             return;
         };
         if item.is_folder {
@@ -174,8 +174,8 @@ impl App {
         }
     }
 
-    /// Enqueue the item under the flat power-home cursor.
-    pub(super) fn power_home_enqueue(&mut self) {
+    /// Enqueue the item under the flat home cursor.
+    pub(super) fn home_enqueue(&mut self) {
         let cursor = self.home.home_cursor;
         let cw_len = self.home.continue_items.len();
         if cursor < cw_len {
@@ -186,7 +186,7 @@ impl App {
             self.home.section = saved_sec;
             self.home.continue_cursor = saved_cursor;
         } else {
-            let Some(item) = self.power_home_current_item() else {
+            let Some(item) = self.home_current_item() else {
                 return;
             };
             self.do_enqueue_folder(item);

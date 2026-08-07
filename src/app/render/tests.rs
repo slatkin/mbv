@@ -94,7 +94,7 @@ fn remote_status_spans_prefers_active_route_label_over_daemon_endpoint() {
 // status bar (`render/mod.rs`) has always passed `show_session_pill:
 // false` -- unchanged by this diff -- because it shows the same
 // remote/session info via the queue column's Local/Remote title pills
-// instead (`render_power_queue_title` in `render/queue.rs`, which calls
+// instead (`render_queue_title` in `render/queue.rs`, which calls
 // this same shared helper). Testing `remote_status_spans` directly, as
 // `remote_status_spans_prefers_..._` above already does, covers the
 // underlying logic without depending on which caller happens to display it.
