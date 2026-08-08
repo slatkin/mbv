@@ -1,82 +1,108 @@
-## 1. Shared Store Extensions
+# RSS Feeds — Tasks
 
-- [ ] 1.1 Add `FeedSubscriptions` and `FeedEntryState` variants to `SharedDocumentKind`
-- [ ] 1.2 Extend `shared_protocol.rs` snapshot/notification handling for new document kinds
-- [ ] 1.3 Extend `shared_store.rs` read/write helpers for new document kinds
-- [ ] 1.4 Extend `shared_client.rs` to track revisions and handle notifications for feed documents
-- [ ] 1.5 Define `FeedSubscription` struct (url, title_override, kind, created_at)
-- [ ] 1.6 Define `FeedEntryState` struct (position_ticks, watched, last_played)
-- [ ] 1.7 Define `FeedEntryStateMap` as HashMap keyed by (feed_url, entry_key)
+## Phase 1: Data model foundation
 
-## 2. Feed Parsing
+- [ ] Create `feed_types.rs` in mbv-core: `FeedSubscription`, `FeedEntry`,
+      `FeedKind` (Audio | Video) structs with serde derives
+- [ ] Create `feed_store.rs` in mbv-core: two new redb tables
+      (`feed_subscriptions`, `feed_entries`), CRUD operations for
+      subscriptions, merge logic for entries (insert new, update existing,
+      preserve position/played state)
+- [ ] Wire feed tables into `open_shared_db` initialization alongside
+      existing `shared_documents` table
+- [ ] Shared-service feed commands/events on the existing shared-service
+      channel (mirroring `SharedDataCmd` / `SharedStoreRequest`) plus the
+      capability string `SHARED_DATA_CAP_FEEDS_V1` (`"shared-mbv-state-feeds-v1"`)
+- [ ] Last-write-wins conflict policy for entry-row writes (position, played);
+      no CAS for feed rows (unlike `shared_documents`)
+- [ ] Tests for feed store: create/read/update/delete subscriptions, entry
+      merge (new entries added, existing entries preserve state, identity
+      fallback chain)
 
-- [ ] 2.1 Add `feed-rs` crate dependency
-- [ ] 2.2 Create `feed_parse.rs` module with async fetch-and-parse function
-- [ ] 2.3 Implement entry key derivation (guid > enclosure_url > title+date hash)
-- [ ] 2.4 Implement feed kind inference from enclosure MIME types
-- [ ] 2.5 Define `ParsedFeed` struct (title, entries) and `ParsedEntry` struct (key, title, enclosure_url, duration, pub_date)
+## Phase 2: QueueItem enum
 
-## 3. QueueItem Abstraction
+- [ ] Rename `MediaItem` → `EmbyItem` across the codebase (api_types.rs and
+      all call sites)
+- [ ] Create `QueueItem` enum in mbv-core with `Emby(EmbyItem)` and
+      `Feed(FeedEntry)` variants
+- [ ] Implement shared accessors: `title()`, `duration()`, `media_kind()`,
+      `position_key()`, `artwork_url()` — no `playback_url()`; URL resolution
+      is variant-specific at the play boundary
+- [ ] Migrate queue internals to use `QueueItem` instead of `EmbyItem`
+      directly
+- [ ] Migrate queue serialization/deserialization (queue state persistence):
+      backward-compatible — legacy bare-`MediaItem` JSON decodes as the Emby
+      variant; serialization always writes the new tagged shape
+- [ ] Migrate ctrl protocol queue messages to carry `QueueItem`; gate feed
+      variants behind the capability string `CTRL_CAP_QUEUE_FEED_ITEMS`
+      (`"queue-feed-items"`) and omit them toward peers that don't announce it
+- [ ] Migrate all rendering code that displays queue items to use accessors
 
-- [ ] 3.1 Define `FeedEntry` struct for queue items (entry_key, title, enclosure_url, duration, feed_url, feed_kind)
-- [ ] 3.2 Define `QueueItem` enum wrapping `MediaItem` and `FeedEntry`
-- [ ] 3.3 Implement accessor trait/methods on `QueueItem` (title, duration, playback_url, position_key, is_audio)
-- [ ] 3.4 Migrate `PlaybackQueue` from `MediaItem` to `QueueItem`
-- [ ] 3.5 Update queue serialization to tag variants (backward-compatible JSON)
-- [ ] 3.6 Update queue deserialization to skip unknown variants gracefully
+## Phase 3: Feed parsing and polling
 
-## 4. Ctrl Protocol Capability
+- [ ] Add `feed-rs` dependency to the root `Cargo.toml` (binary crate, not
+      mbv-core)
+- [ ] Rewrite `feed_parse.rs` as a thin wrapper over `feed-rs`; delete the
+      hand-rolled parser; migrate the existing idle feed to it (feed title +
+      entry title/link only)
+- [ ] Parser result type includes the feed-level title (default subscription
+      name in the add flow) plus per-entry: guid, title, enclosure URL, link,
+      pub_date, duration, description, MIME type
+- [ ] Entry identity resolution: guid → enclosure URL hash → title+date hash
+- [ ] Kind inference: scan enclosure MIME types, default to Video if absent
+- [ ] Polling orchestrator (in new `src/app/feeds_actions.rs`): on app startup,
+      spawn async fetch for all subscriptions past the 30-minute cooldown.
+      Merge results into the store.
+- [ ] Manual refresh keybinding: re-fetch all feeds ignoring cooldown (F5,
+      existing global refresh binding)
+- [ ] Tests for parser integration and entry identity
 
-- [ ] 4.1 Add `queue-feed-items-v1` capability constant
-- [ ] 4.2 Advertise capability in daemon hello
-- [ ] 4.3 Advertise capability in client hello
-- [ ] 4.4 Filter feed items from queue payloads when peer lacks capability
+## Phase 4: Position tracking
 
-## 5. Progress Routing
+- [ ] Branch the player's progress-reporting path on `QueueItem` variant:
+      Emby → Emby API (existing), Feed → store write
+- [ ] Convert feed durations/positions to Emby ticks at parse time (10^7
+      ticks/second)
+- [ ] Write `position_ticks` to `feed_entries` table on progress/stop;
+      write-through only if the (user, feed_id, guid) row still exists,
+      otherwise the write is dropped silently
+- [ ] Set `played = true` using the same completion rule as Emby items (EOF
+      with known runtime, or final position ≥ 95% of known runtime)
+- [ ] On play of a `FeedEntry`, read stored position from the store and seek
+      with `--start=<position_ticks / 10^7>`; honor the same resume threshold
+      as Emby (6% of known runtime; positive resume for unknown runtime)
+- [ ] Tests for position write/read round-trip
 
-- [ ] 5.1 In player progress path, check queue item variant before reporting
-- [ ] 5.2 Route `FeedEntry` progress to shared store `FeedEntryState` document
-- [ ] 5.3 On playback complete, set watched=true in `FeedEntryState`
-- [ ] 5.4 Handle shared-store write failures gracefully (log, continue playback)
+## Phase 5: Feeds tab
 
-## 6. Feed Subscription Management
+- [ ] Add "Feeds" tab to the library tab bar (last position, visible only
+      when subscriptions exist; hidden when the daemon is unreachable)
+- [ ] Generalize `FeedHomeVideoState` and the feed-view renderer
+      (`src/app/render/home_feed.rs`) off `MediaItem` to QueueItem-backed
+      view data — do not reuse the MediaItem-typed state as-is
+- [ ] "All" pill: aggregate all entries sorted by pub_date descending
+      (missing/unparseable dates sort last)
+- [ ] Per-feed groups: entries sorted by pub_date descending
+- [ ] Watched/unwatched filter toggle: `w` (bare, scoped to the Feeds tab;
+      filters on the `played` field)
+- [ ] Play action on an entry: build `QueueItem::Feed`, add to queue, play
 
-- [ ] 6.1 Create sidebar panel component for feed management
-- [ ] 6.2 Implement add-feed flow (URL input, fetch, infer kind, store subscription)
-- [ ] 6.3 Implement remove-feed flow (delete subscription and entry state)
-- [ ] 6.4 Implement edit-feed flow (title override, kind override)
-- [ ] 6.5 Add keybinding to open feed management panel
+## Phase 6: Feed management overlay
 
-## 7. Feeds Tab UI
+- [ ] New conditional overlay (sessions-panel pattern, not a persistent
+      panel): lists subscribed feeds with name and kind; opens from the Feeds
+      tab via `s` (`m` is taken by the global mute binding)
+- [ ] Add flow: enter URL → fetch → show inferred name/kind → confirm → save
+      to the store. A failed fetch/parse means the subscription cannot be
+      saved; surface the error via the existing status/notify mechanism
+- [ ] Edit flow: change name or kind of existing subscription; URL changes
+      create a new subscription
+- [ ] Delete flow: confirm → remove subscription and all entry state from the
+      store (cascade); already-queued snapshots stay playable
+- [ ] Overlay keybindings: `a` add, `e` edit, `d` delete (safe — the overlay
+      captures input); manual refresh via existing F5
 
-- [ ] 7.1 Add Feeds tab to tab bar (after libraries, conditional on subscriptions + shared store)
-- [ ] 7.2 Implement pillbar with "All" + per-feed pills
-- [ ] 7.3 Implement entry list using feed-view layout structure
-- [ ] 7.4 Render entry metadata (title, duration, pub_date) from parsed feed
-- [ ] 7.5 Render watched/unwatched indicator from `FeedEntryState`
-- [ ] 7.6 Implement watched toggle keybinding
-- [ ] 7.7 Hide Feeds tab when shared store disconnects
+## Close out
 
-## 8. Feed Refresh
-
-- [ ] 8.1 Implement async refresh of all feeds on app launch (after shared-store connect)
-- [ ] 8.2 Implement manual refresh keybinding
-- [ ] 8.3 Implement refresh cooldown to prevent redundant fetches
-- [ ] 8.4 Update UI as entries arrive during background refresh
-
-## 9. Feed Entry Playback
-
-- [ ] 9.1 Wire play/enqueue/play-next actions from Feeds tab to queue
-- [ ] 9.2 Pass enclosure URL directly to mpv (no Emby stream resolution)
-- [ ] 9.3 Show error for entries without enclosure URL
-- [ ] 9.4 Apply audio-only owner fall-through for video-kind feed entries
-- [ ] 9.5 Restore feed entry position from `FeedEntryState` on play
-
-## 10. Integration Testing
-
-- [ ] 10.1 Test shared-store round-trip for FeedSubscriptions document
-- [ ] 10.2 Test shared-store round-trip for FeedEntryState document
-- [ ] 10.3 Test queue serialization with mixed Emby and feed items
-- [ ] 10.4 Test old-client compatibility (feed items filtered from queue)
-- [ ] 10.5 Test feed kind inference from MIME types
-- [ ] 10.6 Test entry key stability across re-fetches
+- [ ] Keep CONTEXT.md vocabulary accurate: FeedEntry, FeedSubscription,
+      FeedKind, QueueItem, EmbyItem (renamed from MediaItem)

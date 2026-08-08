@@ -112,6 +112,46 @@ never enters that owner's queue: a controlling client strips it before
 submitting, and the owner discards any that reach it regardless.
 _Avoid_: rejected item, filtered item, invalid item, blocked item
 
+**EmbyItem**:
+The queue's Emby-side item type — the serialized record of an Emby library
+item. Renamed from MediaItem; the rename is wire-invisible because serde
+field names are unchanged. Positions for EmbyItems report to the Emby API.
+_Avoid_: MediaItem, media item, emby entry
+
+**QueueItem**:
+The queue's item enum — either an EmbyItem or a FeedEntry. Queue, rendering,
+and transport code work through its shared accessors (title, duration,
+position_key, artwork_url, media_kind); branching on the variant happens
+only where behavior is genuinely variant-specific: URL resolution at the
+play boundary, and progress reporting at the reporting boundary.
+_Avoid_: queue entry, playable, mixed item
+
+## Feeds
+
+**FeedSubscription**:
+A user's subscription to one RSS/Atom feed: generated id, display name, URL,
+FeedKind, and last-fetched timestamp. Stored per-user in the daemon-hosted
+shared store, so subscriptions roam across machines. Editing never changes
+the URL — a changed URL is a new subscription.
+_Avoid_: feed config, channel, subscription config
+
+**FeedKind**:
+The Audio | Video classification of a FeedSubscription. Inferred from
+enclosure MIME types on first fetch (mixed or absent defaults to Video) and
+overridable by the user. Governs queue admission for entries that carry no
+MIME type of their own; overrides reclassify already-queued entries at play
+time.
+_Avoid_: feed type, media type, category
+
+**FeedEntry**:
+One parsed item from a subscribed feed. Identity is guid, else enclosure-URL
+hash, else title+pub-date hash. Carries enclosure URL, link, pub_date,
+duration in Emby ticks, and description, plus per-user state (position_ticks,
+played) that entry merges never overwrite. Positions report to the shared
+store, not to Emby. Queued FeedEntries are owned snapshots: deleting the
+subscription leaves them playable.
+_Avoid_: episode, post, feed item, rss item
+
 ## Remote sessions
 
 A client can also reach *another* device's playback, discovered through Emby
