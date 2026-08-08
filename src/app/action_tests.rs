@@ -1,5 +1,6 @@
 use super::*;
-use crate::app::tests::make_app_stub;
+use crate::app::tests::{make_app_stub, make_remote_app_stub};
+use crate::app::QueueScope;
 
 fn key(code: KeyCode) -> KeyChord {
     KeyChord::new(code, KeyModifiers::NONE)
@@ -484,6 +485,7 @@ fn dispatch_quit_when_queue_not_dirty_returns_true_and_persists() {
 // (`handle_mouse`); see the `Command::QueuePlayCursor` doc comment.
 
 use crate::app::tests::make_item;
+use crate::app::tests::make_items;
 
 fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_core::api::MediaItem>, cursor: usize) {
     app.player_tab.set_items(items, cursor);
@@ -515,6 +517,54 @@ fn queue_play_cursor_while_attached_to_session_hands_off_to_session() {
         app.status.contains("Playing on remote"),
         "expected a remote-handoff status flash, got {:?}",
         app.status
+    );
+}
+
+#[test]
+fn queue_play_cursor_with_direct_remote_switches_to_remote_scope() {
+    let mut app = make_remote_app_stub(make_items(2), make_items(3));
+    set_local_queue(&mut app, make_items(2), 1);
+    app.set_queue_scope(QueueScope::Local);
+    app.connected_session_id = Some("session-1".into());
+
+    app.dispatch(Command::QueuePlayCursor);
+
+    assert!(
+        app.status.contains("Playing on remote"),
+        "expected a remote-handoff status flash, got {:?}",
+        app.status
+    );
+    assert_eq!(
+        app.visible_queue_scope(),
+        QueueScope::Remote,
+        "queue scope should switch to Remote when Direct remote control is active"
+    );
+}
+
+#[test]
+fn queue_play_cursor_without_direct_remote_stays_on_local_scope() {
+    let mut app = make_app_stub();
+    set_local_queue(
+        &mut app,
+        vec![
+            make_item("Track One", "Audio"),
+            make_item("Track Two", "Audio"),
+        ],
+        1,
+    );
+    app.connected_session_id = Some("session-1".into());
+
+    app.dispatch(Command::QueuePlayCursor);
+
+    assert!(
+        app.status.contains("Playing on remote"),
+        "expected a remote-handoff status flash, got {:?}",
+        app.status
+    );
+    assert_eq!(
+        app.visible_queue_scope(),
+        QueueScope::Local,
+        "queue scope should remain Local when there is no Direct remote control"
     );
 }
 

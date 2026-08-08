@@ -468,6 +468,7 @@ impl App {
                         let item = items[t].clone();
                         let label = item.playback_label();
                         self.flash_status(format!("Playing on remote: {label}"));
+                        self.set_queue_scope(self.playback_target_queue_scope());
                         if let Some(occurrence_id) = self.tracked_occurrence_at_queue_index(t) {
                             self.issue_remote_intent(
                                 mbv_core::remote_reconciliation::RemoteIntent::Select {
