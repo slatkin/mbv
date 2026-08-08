@@ -23,6 +23,18 @@ impl ToastSeverity {
             ToastSeverity::Warning | ToastSeverity::Error => Duration::from_secs(5),
         }
     }
+
+    /// Toast background color for this severity when rendered as a colored
+    /// toast (not status-bar styling). Neutral is never rendered this way,
+    /// but is mapped for exhaustiveness rather than left `unreachable!()`.
+    pub fn toast_bg(&self) -> ratatui::style::Color {
+        match self {
+            ToastSeverity::Neutral => super::palette::DARK_BG,
+            ToastSeverity::Success => super::palette::TOAST_BG_SUCCESS,
+            ToastSeverity::Warning => super::palette::TOAST_BG_WARNING,
+            ToastSeverity::Error => super::palette::TOAST_BG,
+        }
+    }
 }
 
 // #286: `App::ring_terminal_bell()` writes to a thread-local buffer instead
@@ -115,6 +127,11 @@ impl App {
         self.status = msg;
         self.status_severity = severity;
         self.status_expires = Some(Instant::now() + severity.ttl());
+    }
+
+    /// Shorthand for the common `flash(format!("Error: {e}"), ToastSeverity::Error)` case.
+    pub(super) fn flash_error(&mut self, e: impl std::fmt::Display) {
+        self.flash(format!("Error: {e}"), ToastSeverity::Error);
     }
 
     /// Enforces #223's queue-route invariant: an item whose resolved

@@ -54,7 +54,7 @@ impl App {
         let items = match self.resolve_artist_header_playable_items(lib_idx, selection) {
             Ok(items) => items,
             Err(e) => {
-                self.flash(format!("Error: {e}"), ToastSeverity::Error);
+                self.flash_error(e);
                 return true;
             }
         };
@@ -105,7 +105,7 @@ impl App {
         let mut items = match self.resolve_artist_header_playable_items(lib_idx, selection) {
             Ok(items) => items,
             Err(e) => {
-                self.flash(format!("Error: {e}"), ToastSeverity::Error);
+                self.flash_error(e);
                 return true;
             }
         };

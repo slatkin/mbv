@@ -654,13 +654,7 @@ impl App {
                 let (toast_bg, toast_fg) = if styled_as_status_bar {
                     (palette::DARK_BG, palette::TEXT)
                 } else {
-                    let bg = match self.status_severity {
-                        super::notify_actions::ToastSeverity::Success => palette::TOAST_BG_SUCCESS,
-                        super::notify_actions::ToastSeverity::Warning => palette::TOAST_BG_WARNING,
-                        super::notify_actions::ToastSeverity::Error => palette::TOAST_BG,
-                        super::notify_actions::ToastSeverity::Neutral => unreachable!(),
-                    };
-                    (bg, palette::TOAST_FG)
+                    (self.status_severity.toast_bg(), palette::TOAST_FG)
                 };
                 f.render_widget(Clear, status_area);
                 f.render_widget(

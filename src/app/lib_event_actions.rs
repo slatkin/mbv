@@ -394,7 +394,7 @@ impl App {
                 let _ = self.merge_refreshed_queue(QueueScope::Local, items);
             }
             LibEvent::Error(e) => {
-                self.flash(format!("Error: {e}"), ToastSeverity::Error);
+                self.flash_error(e);
             }
         }
     }

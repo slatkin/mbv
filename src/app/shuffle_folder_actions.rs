@@ -54,7 +54,7 @@ impl App {
             }
             Err(e) => {
                 drop(client);
-                self.flash(format!("Error: {e}"), ToastSeverity::Error);
+                self.flash_error(e);
             }
         }
     }
@@ -123,7 +123,7 @@ impl App {
             }
             Err(e) => {
                 drop(client);
-                self.flash(format!("Error: {e}"), ToastSeverity::Error);
+                self.flash_error(e);
             }
         }
     }

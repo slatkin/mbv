@@ -1,4 +1,3 @@
-use super::notify_actions::ToastSeverity;
 use super::{App, ContextAction, PanelFocus};
 
 impl App {
@@ -92,7 +91,7 @@ impl App {
         drop(client);
         match result {
             Ok(()) => self.refresh_lib(),
-            Err(e) => self.flash(format!("Error: {e}"), ToastSeverity::Error),
+            Err(e) => self.flash_error(e),
         }
     }
 
@@ -104,7 +103,7 @@ impl App {
         drop(client);
         match result {
             Ok(()) => self.refresh_lib(),
-            Err(e) => self.flash(format!("Error: {e}"), ToastSeverity::Error),
+            Err(e) => self.flash_error(e),
         }
     }
 
@@ -157,7 +156,7 @@ impl App {
                     self.refresh_lib();
                 }
             }
-            Err(e) => self.flash(format!("Error: {e}"), ToastSeverity::Error),
+            Err(e) => self.flash_error(e),
         }
     }
 
@@ -177,7 +176,7 @@ impl App {
             Ok(()) => {
                 let _ = self.fetch_home();
             }
-            Err(e) => self.flash(format!("Error: {e}"), ToastSeverity::Error),
+            Err(e) => self.flash_error(e),
         }
     }
 
@@ -199,7 +198,7 @@ impl App {
             Ok(()) => {
                 let _ = self.fetch_home();
             }
-            Err(e) => self.flash(format!("Error: {e}"), ToastSeverity::Error),
+            Err(e) => self.flash_error(e),
         }
     }
 
@@ -237,7 +236,7 @@ impl App {
                 }
                 self.refresh_lib();
             }
-            Err(e) => self.flash(format!("Error: {e}"), ToastSeverity::Error),
+            Err(e) => self.flash_error(e),
         }
     }
 }
