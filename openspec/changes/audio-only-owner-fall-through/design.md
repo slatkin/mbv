@@ -1,161 +1,196 @@
 ## Context
 
-See `proposal.md` — Why, and ADR 0017 for the model this implements.
+See `proposal.md` for motivation and ADR 0017 for the domain decision.
 
-The constraints that shape the approach:
+The current client usually lets one binary answer stand for several facts:
+`player.is_remote()` influences which Player receives commands, whether a remote
+queue exists, which Queue scopes are available, and where queue events apply.
+Those facts coincide during ordinary local or remote playback but diverge during
+fall-through: the owner stays attached with a live Bound queue while the local
+Player receives transport controls.
 
-- `audio_only_rejection` (`daemon_core.rs:565`) is load-bearing. `PlayItems`
-  hands the whole fetched list to `play_queue` (`daemon_control.rs:396`), which
-  loads it into mpv as an mpv playlist that mpv advances through unaided. The
-  rejection is the only thing keeping video away from a player with no display.
-- It is reached from three places: `daemon_control.rs:361` (ctrl play),
-  `daemon_run.rs:559` (playback intents), and the ws path via `daemon_ws.rs`.
-- `CtrlHello::current()` takes no arguments and is shared between the daemon
-  hello (`daemon_core.rs:589`) and the client hello (`current_client`). The
-  daemon side has no access to `audio_only` at that point.
-- The client already keeps two queues: `player_tab` (its own) and
-  `remote_player_tab: Option<PlayerTab>` (the owner's), selected by
-  `queue_for_scope` (`queue_scope.rs:15`), with separate undo stacks.
-- The client's local Player is suspended, not discarded, while attached —
-  `suspended_local: Option<SuspendedLocalSession>` (`app_struct.rs:244`),
-  populated by both `switch_to_direct_remote` and `switch_to_library_route`.
-- `restore_local_mode` (`session_connect.rs:417`) is the only path that wakes it,
-  and it also calls `disconnect_remote()` and clears the route.
-- `debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some())`
-  appears at `session_connect.rs:290`, `:380`, and in `restore_local_mode`.
+Relevant current constraints:
+
+- `self.player`, `player_rx`, `ws_rx`, and `ws_send_tx` represent the Player
+  currently driven by the application.
+- `suspended_local` preserves a previously constructed local Player while a
+  remote owner is driven. An explicit-endpoint client may not have constructed a
+  local Player yet; it can construct one when fall-through first needs it.
+- `remote_player_tab` is the attached owner's queue projection, but
+  `has_direct_remote_queue()` currently also requires `player.is_remote()`.
+- The single `handle_player_event` path has no event origin and applies queue and
+  lifecycle effects through the currently driven Player.
+- Library routes and Sessions-panel Direct remote control are deliberately
+  distinct relationships under ADR 0011.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- One admission point per submission path, so the owner's queue and its mpv
-  playlist can never diverge.
-- The client decides routing from an advertised capability, before submitting.
-- Wake the suspended local Player without tearing down the ctrl connection.
-- Leave the attachment fields (`active_route`, `connected_session_id`,
-  `home_is_local_daemon`, `player_endpoint`) with their current meanings.
+- Represent attachment, Transport owner, queue availability, visible Queue
+  scope, Submission destination, and event origin as separate responsibilities.
+- Keep the attached owner and its Bound queue live and commandable while local
+  fall-through playback owns transport controls.
+- Make invalid player arrangements difficult to represent by keeping active and
+  parked session resources behind one typed arrangement boundary.
+- Decide routing synchronously before existing play/enqueue sites mutate state.
+- Preserve the provenance and lifecycle semantics of Direct remote control and
+  explicit remote daemon attachment.
 
 **Non-Goals:**
 
-- Any index mapping between the owner's queue and mpv's playlist. The design
-  exists to avoid needing one.
-- Reporting owner-side discards over ctrl.
-- Both players producing sound at once.
-- Changing library-route resolution order or config.
+- Fall-through through a Library route.
+- A general multi-owner or arbitrary routing framework.
+- Changing Session watch, Library-route resolution, or daemon queue admission.
+- Making Queue scope choose the Transport owner or Submission destination.
+- Changing the ctrl protocol version.
 
 ## Decisions
 
-### Filter at admission, not at advance
+### Player arrangement owns the real sessions
 
-`audio_only_rejection` becomes an admission filter returning the admitted items
-and a discard count, applied where the item list is resolved and before it
-reaches `play_queue`/`play`. The owner's `items`, its cursor, and mpv's playlist
-stay one list.
+Introduce a typed player-arrangement boundary whose states contain the actual
+active and parked session resources. Conceptually it distinguishes:
 
-*Alternative considered:* keep non-audio items in the owner's queue, mark them
-unplayable, and skip at advance. Rejected in ADR 0017 — it splits the owner's
-list from mpv's playlist permanently, for visibility better provided at the
-client.
+- local playback with no qualifying attached owner;
+- an eligible owner receiving transport controls, optionally retaining a local
+  session for reuse; and
+- local fall-through playback with the eligible owner parked but attached.
 
-### One filter, three call sites
+The boundary owns each session's `PlayerProxy`, player-event receiver, and any
+local websocket resources that move with that session. It exposes semantic
+queries and command accessors rather than a global local/remote answer:
 
-The filter is a single pure function over `&[MediaItem]`, called from the ctrl
-play path, the intent path, and the ws path, mirroring how `audio_only_rejection`
-is called today. Keeping it pure preserves the existing property that it is
-testable without a live `Player` or `EmbyClient`.
+- whether an eligible owner is attached;
+- which session is the Transport owner;
+- whether Local and Remote Queue scopes are available;
+- the session that owns a given queue; and
+- whether a fallen-through item is playing.
 
-### Start index is remapped, not clamped
+The exact enum and helper names may follow repository conventions, but it SHALL
+not pair independent `active_target` / `is_fall_through` flags with unrelated
+session fields. Variant/resource placement is the source of truth.
 
-Filtering shifts positions, so a start index computed against the unfiltered
-list is wrong. It is remapped to the first admitted item at or after the
-original position, falling back to the last admitted item. Clamping to
-`len - 1` after filtering, which is what `PlayItems` does today, would silently
-start the wrong track.
+*Alternative considered:* retain the current fields and add checks for
+`suspended_remote.is_some()`. Rejected because the existing helpers would still
+conflate queue availability with command destination, spreading fall-through
+exceptions across callers.
 
-### Capability advertisement gets its own constructor
+*Alternative considered:* add a stored active-target enum beside `self.player`.
+Rejected because it duplicates what the contained active session already says
+and permits contradictory combinations.
 
-`CtrlHello::current()` cannot learn `audio_only` without changing every caller.
-A `CtrlHello::current_daemon(audio_only: bool)` constructor is added and used at
-`daemon_core.rs:589`; `current()` keeps its meaning for the client path.
-`audio_only` is threaded into `spawn_ctrl_client`, which does not receive it
-today.
+### Queue visibility and command destination are independent
 
-*Alternative considered:* push the capability onto the vec at the call site.
-Smaller, but leaves nothing preventing a future daemon hello path from
-forgetting it.
+Remote Queue scope remains available whenever an eligible attached owner has a
+Bound queue, including during local fall-through playback. Visible scope is the
+user's requested Queue scope constrained only by queue availability; it is not
+derived from the Transport owner.
 
-### Routing decision sits with route resolution, not inside PlayerProxy
+Transport commands use the Transport-owner session. Queue mutations use the
+session that owns the selected queue. Therefore a Remote queue append, remove,
+move, or replace reaches the parked owner during fall-through rather than the
+active local Player.
 
-The choice of target happens at the explicit play/enqueue sites alongside
-`apply_route_for_playback` (`actions.rs:186`, `:231`), which is already the
-point where a target is chosen. `PlayerProxy` stays a dumb pair of variants.
+Explicit play/enqueue actions do not infer their Submission destination from
+visible Queue scope. A pure routing decision considers relationship eligibility,
+the owner's advertised capability, action kind, and selection contents.
 
-*Alternative considered:* teach `PlayerProxy` to switch its own `inner`.
-Rejected — it would put a policy decision behind a transport abstraction, and
-the routing inputs (item type, owner capability, explicit-vs-advance) are not
-visible there.
+### Eligibility is relationship-specific
 
-### Fall-through wakes the local Player without disconnecting
+Fall-through is eligible only when either:
 
-A new path takes `suspended_local`, installs it as the active player, and
-rebinds MPRIS — the same three steps `restore_local_mode` performs — but does
-not call `disconnect_remote()`, does not clear `active_route`, and does not
-touch `player_endpoint`. The owner is stopped explicitly before local playback
-starts. Returning reverses it: re-suspend the local Player, restore the remote
-as active target.
+- Sessions-panel Direct remote control has established a ctrl connection; or
+- the application was launched against an explicit non-local daemon endpoint.
 
-`restore_local_mode` is left alone. It remains the disconnect path.
+An active Library route is ineligible even though it also uses ctrl and may
+advertise audio-only. Session watch is ineligible because it has no ctrl queue
+control. The user-session Local daemon does not advertise audio-only.
 
-### Active playback target becomes an explicit value
+Connection code may retain capability facts generically on `RemotePlayer`; the
+fall-through predicate still checks relationship eligibility before using them.
 
-A single value on `App` answers "where does playback go", set when a target is
-chosen and read wherever that question is being asked. The
-`debug_assert_eq!` pairings are replaced by it rather than relaxed.
+### Submission routing is per action
 
-The audit is the bulk of the work: 27 non-test `is_remote()` call sites, each
-read for whether it asks about the connection (keeps `is_remote()`) or about
-the playback target (reads the new value). Sites in `playback_target_local.rs`,
-`queue_actions.rs`, `remote_slot_state.rs` and `consume_quit_actions.rs` are the
-likely target-question cluster; `session_connect.rs` and
-`run_loop_events_teardown.rs` are the likely connection-question cluster.
+For an eligible attached audio-only owner:
 
-### The pinned row is rendered, not stored
+- wholly audio play/enqueue targets the owner;
+- mixed play/enqueue targets the owner after stripping non-audio items and
+  reporting their count; and
+- wholly non-audio play/enqueue targets the client's own queue/Player.
 
-The row is derived at render time from the local player's status plus the
-active-target value. It is not inserted into `remote_player_tab.items`, so
-nothing downstream — cursor bounds, queue mutations, undo, projection slot
-mapping — has to learn about a member that is not really there.
+Every explicit action is evaluated independently. A non-audio enqueue changes no
+transport ownership because it starts nothing. A non-audio play first prepares
+a local Player, constructing one if no reusable session exists. Only after that
+preparation succeeds does it stop the owner, transition the arrangement to local
+fall-through playback, and submit local play. An owner-directed explicit play
+while fall-through is active first ends local playback and transitions transport
+ownership back to the owner.
+
+Preparation or playback-start failure follows the ordinary local playback error
+path. Preparation failure leaves owner playback undisturbed; a later start
+failure may leave the owner stopped but does not end the attachment.
+
+### Player events carry client-side origin
+
+`PlayerEvent` remains unchanged in `mbv-core` and on the wire. The application
+knows which owned session receiver produced each event and supplies an origin of
+Local or Attached-owner to its reducer.
+
+During fall-through:
+
+- a Local terminal event ends fall-through and returns transport ownership to
+  the owner if it remains attached;
+- an Attached-owner `QueueUpdated` refreshes only the Remote queue;
+- an Attached-owner stop/completion updates owner state only and cannot mutate,
+  consume, or stop the Local queue;
+- an Attached-owner rejection is reported as an owner-command failure;
+- an Attached-owner disconnect or shutdown ends the attachment and removes
+  Remote scope while local playback continues; and
+- owner authority notifications do not change local transport ownership.
+
+*Alternative considered:* drain and discard parked-owner events. Rejected
+because the Remote queue must remain live and attachment lifecycle events remain
+material.
+
+*Alternative considered:* add origin to `mbv-core::PlayerEvent`. Rejected
+because Local and Attached-owner are roles relative to one App, not facts known
+by the emitting player or ctrl peer.
+
+### Capability advertisement gets a daemon constructor
+
+Add `CtrlHello::current_daemon(audio_only: bool)`, delegating to `current()` and
+appending the additive capability only for audio-only daemons. `current()` and
+the client-hello constructors keep their existing meanings. Thread `audio_only`
+to daemon hello construction for local and TCP ctrl listeners.
+
+Remote handshake state records whether the peer advertised audio-only. An absent
+capability means false and preserves current mixed-version behavior.
+
+### The pinned row is a projection
+
+When Remote Queue scope is visible during local fall-through playback, render
+the local now-playing item above the owner's items using selected-row styling,
+an explicit client-playing marker, and local progress. Do not insert it into the
+owner's queue model. It has no queue slot, cannot receive cursor focus, and
+cannot be the subject of a queue command.
 
 ## Risks / Trade-offs
 
-- **An `is_remote()` site classified wrongly fails only in fall-through, which
-  nothing currently tests.** → The change adds coverage for the fall-through
-  state specifically; the audit is done site-by-site with the question written
-  down per site rather than in bulk.
-- **`bootstrap.rs` builds `player_tab` from remote items for a client that
-  starts up already attached, so there is no separate local queue on that
-  path.** → Fall-through needs an explicit answer there; treated as a task, not
-  assumed to work.
-- **Stopping the owner discards its position.** → Accepted, per ADR 0017.
-- **A client exiting mid-item leaves the owner stopped.** → Accepted; no
-  recovery is added.
-- **`CtrlHello::current()` is shared with the client path.** → Splitting the
-  daemon constructor out risks the two drifting. Mitigated by `current_daemon`
-  delegating to `current()` and only appending.
-- **Discarding is silent at the owner.** → Accepted, per ADR 0017. The client
-  strips first and reports, so an owner-side discard means the client's type
-  information was wrong or no client was involved.
+- **The arrangement boundary touches many existing helpers.** → Convert callers
+  by responsibility—transport, attachment, queue availability, queue owner, or
+  relationship provenance—and avoid compatibility helpers with ambiguous
+  local/remote meaning.
+- **Late events arrive after an arrangement transition.** → Preserve stable
+  Local/Attached-owner origin from the receiver that produced them and reduce
+  them against that origin, never the currently active variant alone.
+- **The owner disconnects during local playback.** → Continue local playback,
+  remove the attachment and Remote scope, and report the loss prominently.
+- **Stopping the owner discards its position.** → Accepted per ADR 0017.
+- **A client exits during fall-through.** → The owner remains stopped; no
+  recovery or automatic restart is introduced.
 
 ## Migration Plan
 
-No migration. The capability is additive: a daemon that does not advertise it
-produces exactly today's behavior against any client, and a client that does not
-recognise it submits exactly as it does today. The `AudioOnly` rejection stays
-in place throughout, so partial deployment degrades to current behavior rather
-than to a broken state.
-
-## Open Questions
-
-- Whether the pinned row shows elapsed/remaining in the same format the owner's
-  now-playing row uses, or a distinct one. Affects rendering only; specs and
-  tasks are unchanged either way.
+No data migration. The ctrl capability is additive and the protocol version is
+unchanged. Older clients ignore it; newer clients treat its absence as false.

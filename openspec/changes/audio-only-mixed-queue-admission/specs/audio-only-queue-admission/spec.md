@@ -10,8 +10,9 @@ no display.
 ### Requirement: Mixed submissions are admitted minus their non-audio items
 
 An audio-only Player owner SHALL accept a play or enqueue submission that
-contains non-audio items, admitting the audio items and discarding the rest. It
-SHALL NOT refuse the submission on the grounds that it is not wholly audio.
+contains both audio and non-audio items, admitting the audio items and
+discarding the rest. It SHALL NOT refuse such a submission on the grounds that
+it is not wholly audio.
 
 #### Scenario: Playing one track from a mixed selection
 
@@ -21,14 +22,6 @@ SHALL NOT refuse the submission on the grounds that it is not wholly audio.
 - **THEN** playback SHALL begin
 - **THEN** the video item SHALL NOT appear in the owner's queue
 
-#### Scenario: Submission is wholly non-audio
-
-- **WHEN** a submission containing only non-audio items reaches an audio-only
-  owner
-- **THEN** the owner SHALL admit nothing
-- **THEN** the owner SHALL NOT begin playback
-- **THEN** the owner SHALL NOT change the queue it already holds
-
 #### Scenario: Start index points at a discarded item
 
 - **WHEN** a mixed submission is played with its start index on an item that is
@@ -37,6 +30,21 @@ SHALL NOT refuse the submission on the grounds that it is not wholly audio.
   position
 - **THEN** if no admitted item follows, playback SHALL begin at the last
   admitted item
+
+### Requirement: A wholly non-audio submission is still refused
+
+An audio-only Player owner SHALL refuse a submission with no audio items in it,
+with the same structured reason it uses today. Admitting nothing and silently
+starting nothing would leave a submitter that cannot tell the owner is
+audio-only with no signal at all.
+
+#### Scenario: Submission is wholly non-audio
+
+- **WHEN** a submission containing only non-audio items reaches an audio-only
+  owner
+- **THEN** the owner SHALL refuse it with the audio-only reason
+- **THEN** the owner SHALL NOT begin playback
+- **THEN** the owner SHALL NOT change the queue it already holds
 
 ### Requirement: A non-audio item never reaches an audio-only owner's player
 
@@ -67,13 +75,11 @@ started from Emby as to playback submitted over ctrl, with no client involved.
 ### Requirement: An owner-side discard is recorded but not reported
 
 An audio-only Player owner SHALL record a discard in its log. It SHALL NOT send
-a discard notification over ctrl. A controlling client strips non-audio items
-before submitting and is where the user is told, so an owner-side discard means
-the client's view of an item's type was wrong or no client was involved.
+a discard notification over ctrl.
 
-#### Scenario: Owner discards items a client did not strip
+#### Scenario: Owner discards items from a client submission
 
-- **WHEN** a client submits a selection the owner then discards items from
+- **WHEN** a client submits a mixed selection the owner then discards items from
 - **THEN** the owner SHALL log the discard
 - **THEN** the owner SHALL NOT send the submitting connection a notification
   about it

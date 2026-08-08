@@ -1,80 +1,63 @@
 ## Why
 
-An audio-only `mbvd` refuses any play request whose resolved items are not all
-audio, and that refusal covers the whole request — selecting one track from a
-playlist that happens to contain a music video plays nothing. Separately, a
-client connected to `mbvd` cannot play a video at all: everything routes to the
-daemon, the daemon refuses, and the only remedy is to disconnect, play it, and
-reconnect.
+A client directly controlling an audio-only `mbvd` cannot play a video without
+ending that control relationship first. The client needs to keep the owner and
+its Bound queue attached while routing an explicit non-audio action to its own
+Player.
 
-The refusal cannot simply be removed. The daemon hands its whole item list to
-mpv as an mpv playlist and mpv advances through it unaided, so the check is the
-only thing keeping video files away from a player with no display.
+See ADR 0017 for the queue-stage and ownership model.
 
-See ADR 0017 for the model, the rejected alternatives, and the limits this
-change does not address.
+**Depends on `audio-only-mixed-queue-admission`**, which independently ensures
+an audio-only owner never binds an unplayable item and accepts the audio portion
+of a mixed submission. It must ship first, but its implementation status does
+not block implementing this client-side change.
 
 ## What Changes
 
-- An audio-only owner accepts a submission containing non-audio items, minus
-  those items, instead of refusing it whole. Nothing non-audio reaches its mpv.
-- A controlling client strips non-audio items before submitting and reports how
-  many it dropped. The owner discards any that arrive regardless, as a backstop
-  and for Emby-started playback where no client is involved.
-- `mbvd` advertises that it is audio-only during the ctrl handshake, so the
-  client decides before submitting rather than learning by rejection. Additive
-  capability string — no `CTRL_PROTOCOL_VERSION` bump.
-- A non-audio item explicitly played or enqueued while a client holds Direct
-  remote control over an audio-only owner falls through to that client's own
-  queue instead. Explicit user action only, never auto-advance. The control
-  connection stays up.
-- Playing a fallen-through item stops the owner. The owner remains the target
-  for the next queue addition.
-- "Which player is the active playback target" becomes its own value on the
-  client rather than being derived from whether a remote attachment exists.
-  Attachment fields are unchanged.
-- A playing fallen-through item is pinned at the top of the remote queue view in
-  selected-row styling, non-selectable and skipped by cursor navigation.
-- The existing `AudioOnly` rejection stays as a defensive backstop rather than
-  the primary mechanism. Not breaking: an owner that does not advertise the
-  capability produces exactly today's behavior.
+- `mbvd` advertises audio-only capability during the ctrl handshake. This is an
+  additive capability string; `CTRL_PROTOCOL_VERSION` does not change.
+- Fall-through applies to explicit play and enqueue actions made through
+  Sessions-panel Direct remote control or an explicit remote daemon attachment.
+  Library routes, Session watch, auto-advance, resume, and owner-initiated events
+  do not invoke it.
+- Attachment, Transport owner, remote queue availability, visible Queue scope,
+  and per-action Submission destination are modeled independently. Local
+  fall-through playback does not disconnect the owner or hide its Bound queue.
+- Player events retain Local or Attached-owner origin, so events from the parked
+  owner cannot mutate the local fall-through queue or end local playback.
+- A non-audio explicit play prepares a local Player if necessary, then stops the
+  attached owner and plays locally. Ending local playback returns transport
+  control to the still-attached owner.
+- A wholly non-audio enqueue goes to the client's own queue without starting
+  playback. A mixed selection is stripped before owner submission and reports
+  the dropped count; stripped items are not staged.
+- While a fallen-through item plays, the Remote queue view remains available and
+  shows that item as a derived, pinned, non-selectable row.
+- An owner that does not advertise audio-only produces today's behavior,
+  including the structured rejection for wholly non-audio submissions.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `audio-only-queue-admission`: What an audio-only Player owner accepts into its
-  queue, what it discards, and what reaches its mpv. Covers both the ctrl play
-  path and the playback-intent path.
-- `non-audio-fall-through`: A client's decision to route an explicitly launched
-  or enqueued non-audio item to its own queue rather than to the audio-only
-  owner it is controlling, including what happens to the owner and where the
-  item is shown.
+- `non-audio-fall-through`: Per-action routing, ownership, queue visibility, and
+  event-origin behavior when a directly controlled owner is audio-only.
 
 ### Modified Capabilities
 
-- `ctrl-protocol`: A daemon SHALL advertise an audio-only capability during the
-  hello handshake when it cannot play non-audio items, so a client can route
-  before submitting. Additive capability string, no version change.
+- `ctrl-protocol`: An audio-only daemon advertises that capability during the
+  hello handshake without a protocol-version bump.
 
 ## Impact
 
-**Daemon** — `daemon_core.rs` (`audio_only_rejection`, `all_audio`),
-`daemon_control.rs` (`CtrlCmd::PlayItems`), `daemon_run.rs` (playback-intent
-path), `daemon_ws.rs`. Admission filtering replaces whole-request rejection.
+**Protocol** — `crates/mbv-core/src/ctrl.rs`, daemon hello construction, and the
+remote-player connection state gain an additive audio-only capability fact.
 
-**Protocol** — `ctrl.rs`: new capability constant alongside
-`CTRL_CAP_QUEUE_STATE` and friends, advertised in `CtrlHello::current()` when
-the daemon runs audio-only. `CTRL_PROTOCOL_VERSION` unchanged.
+**Client** — player arrangement/session ownership, queue-scope resolution,
+explicit play/enqueue routing, player-event draining, MPRIS rebinding, and the
+remote queue render path change together. Remote queue commands must reach the
+attached-owner session while transport commands reach the Transport owner.
 
-**Client** — `src/app/session_connect.rs` (the `is_remote()`/`player_endpoint`
-pairing, `restore_local_mode`), `src/app/library_route.rs` and
-`src/app/actions.rs` (explicit play/enqueue sites), `src/app/queue_scope.rs`,
-and the queue render path for the pinned row. 27 non-test `is_remote()` call
-sites need reading for which question each asks — "is there a connection" or
-"where does playback go".
-
-**Not affected** — auto-advance within any queue; the local daemon
-(`local_daemon.rs` passes `audio_only: false`, so it never advertises the
-capability and nothing falls through); library routing config and resolution
-order.
+**Not affected** — Library-route selection or lifecycle, Session watch,
+auto-advance within Bound queues, the user-session Local daemon (which is not
+audio-only), or the prerequisite daemon admission filter.

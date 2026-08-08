@@ -28,9 +28,11 @@ capability SHALL ignore it and behave as it does without it.
 ### Requirement: Capability is the primary routing signal, rejection the backstop
 
 A client that recognises the audio-only capability SHALL use it to decide where
-to send playback before submitting. The existing structured rejection SHALL
-remain available for cases the client did not anticipate, and SHALL NOT be the
-mechanism a client relies on to discover that a daemon is audio-only.
+to send eligible explicit playback before submitting. Relationship eligibility
+is a client concern independent of the handshake. The existing structured
+rejection SHALL remain available for cases the client did not anticipate, and
+SHALL NOT be the mechanism a client relies on to discover that a daemon is
+audio-only.
 
 #### Scenario: Client routes before submitting
 

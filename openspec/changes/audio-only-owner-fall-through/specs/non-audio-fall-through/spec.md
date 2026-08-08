@@ -1,147 +1,146 @@
 ## Purpose
 
-Lets a client controlling an audio-only Player owner play or stage a non-audio
-item on itself, without disconnecting from that owner, so a video launched by
-mistake or on purpose plays where there is a display instead of being refused.
+Lets a client directly controlling an audio-only Player owner handle explicit
+non-audio actions locally without ending control of the owner or hiding its
+Bound queue.
 
 ## ADDED Requirements
 
-### Requirement: An explicitly launched non-audio item plays on the client
+### Requirement: Eligible control relationships
 
-When a client holds Direct remote control over a Player owner that has declared
-itself audio-only, and the user explicitly plays a wholly non-audio selection,
-the client SHALL play it on its own player instead of submitting it to the
+Fall-through SHALL apply when an audio-only owner is controlled through
+Sessions-panel Direct remote control or an explicit remote daemon attachment.
+It SHALL NOT apply through a Library route, Session watch, or a peer that has not
+advertised audio-only.
+
+#### Scenario: Direct remote control is eligible
+- **WHEN** the user explicitly plays a non-audio item while Direct remote control targets an owner advertising audio-only
+- **THEN** the client SHALL apply fall-through
+
+#### Scenario: Explicit daemon attachment is eligible
+- **WHEN** a client launched against an explicit remote daemon endpoint explicitly plays a non-audio item and that owner advertises audio-only
+- **THEN** the client SHALL apply fall-through
+
+#### Scenario: Library route is ineligible
+- **WHEN** a Library route targets an owner advertising audio-only
+- **THEN** explicit play and enqueue actions SHALL retain Library-route behavior and SHALL NOT fall through locally
+
+### Requirement: Routing decision for explicit selections
+
+For each eligible explicit play or enqueue, the client SHALL choose a Submission
+destination from the owner's advertised capability and the selection contents
+before submitting or mutating queue presentation state.
+
+#### Scenario: Wholly non-audio selection
+- **WHEN** an eligible explicit selection contains only non-audio items
+- **THEN** the client SHALL send no item from that selection to the owner
+- **THEN** the client SHALL direct the selection to its own queue or Player according to the action
+
+#### Scenario: Mixed selection
+- **WHEN** an eligible explicit selection contains audio and non-audio items
+- **THEN** the client SHALL submit only the audio items to the owner
+- **THEN** the client SHALL report the number of non-audio items dropped
+- **THEN** the client SHALL NOT stage the dropped items locally
+
+#### Scenario: Wholly audio selection
+- **WHEN** an eligible explicit selection contains only audio items
+- **THEN** the client SHALL submit the selection to the owner as it does today
+
+#### Scenario: Peer without the capability
+- **WHEN** the controlled peer has not advertised audio-only
+- **THEN** the client SHALL submit the selection as it does today
+
+### Requirement: Fall-through is per explicit action
+
+The client SHALL evaluate every explicit play or enqueue independently.
+Fall-through SHALL NOT become a persistent routing mode and SHALL NOT be invoked
+by queue auto-advance, resume, or owner-initiated events.
+
+#### Scenario: Action after fall-through
+- **WHEN** the user performs another explicit action after an item has fallen through
+- **THEN** the client SHALL evaluate that action against the still-attached owner's capability and the new selection contents
+
+#### Scenario: Bound queue advances
+- **WHEN** either Player owner advances within its Bound queue
+- **THEN** the client SHALL NOT invoke fall-through routing for that advance
+
+### Requirement: Playing locally preserves the attachment
+
+Before local playback of a fallen-through item begins, the client SHALL prepare
+a local Player, constructing one if necessary. Only after preparation succeeds
+SHALL it stop the attached owner and make the local Player the Transport owner.
+The owner attachment and its Bound queue SHALL remain live.
+
+#### Scenario: Playing a video
+- **WHEN** the user explicitly plays a wholly non-audio selection through an eligible relationship
+- **THEN** the client SHALL prepare local playback and then stop the owner rather than pause it
+- **THEN** the client SHALL play the selection locally
+- **THEN** the owner attachment SHALL remain established
+
+#### Scenario: No local Player has been constructed
+- **WHEN** an eligible fall-through play begins without an existing local Player
+- **THEN** the client SHALL construct the local Player before stopping the owner and attempt normal local playback
+
+### Requirement: Enqueuing locally does not change transport ownership
+
+A wholly non-audio explicit enqueue SHALL add the selection to the client's own
+queue without starting playback, stopping the owner, or changing the Transport
 owner.
 
-#### Scenario: User plays a film while controlling an audio-only owner
+#### Scenario: Enqueue a video
+- **WHEN** the user explicitly enqueues a wholly non-audio selection through an eligible relationship
+- **THEN** the client SHALL add the selection to its own queue
+- **THEN** the client SHALL leave owner playback and transport ownership unchanged
 
-- **WHEN** the user plays a video item from the library while controlling an
-  audio-only owner
-- **THEN** the item SHALL play on the client
-- **THEN** the client SHALL NOT submit the item to the owner
-- **THEN** the control connection to the owner SHALL remain open
+### Requirement: Queue availability is independent of transport ownership
 
-#### Scenario: Owner has not declared itself audio-only
+While a local Player is the Transport owner during fall-through, the client
+SHALL keep Local and Remote Queue scopes available and SHALL direct queue
+commands to the Player owner that owns the selected queue.
 
-- **WHEN** the user plays a video item while controlling an owner that has not
-  declared itself audio-only
-- **THEN** the client SHALL submit the item to the owner as it does today
+#### Scenario: View the owner queue during local playback
+- **WHEN** a fallen-through item is playing locally and the user selects Remote Queue scope
+- **THEN** the client SHALL display the attached owner's current Bound queue
 
-### Requirement: Fall-through applies to explicit action only
+#### Scenario: Mutate the owner queue during local playback
+- **WHEN** a fallen-through item is playing locally and the user performs a queue action in Remote Queue scope
+- **THEN** the client SHALL send that action to the attached owner and SHALL NOT send it to the local Player
 
-The client SHALL route to itself only in response to a deliberate user play or
-enqueue. It SHALL NOT route to itself when a queue advances, when playback
-resumes, or in response to any owner-initiated event.
+### Requirement: Player events retain owner origin
 
-#### Scenario: An owner's queue advances
+The client SHALL apply each player event to the Local or Attached-owner session
+that emitted it rather than inferring its origin from the current Transport
+owner.
 
-- **WHEN** an owner's queue advances to its next item
-- **THEN** the client SHALL take no routing decision
+#### Scenario: Parked owner reports a queue update
+- **WHEN** the attached owner reports a queue update during local fall-through playback
+- **THEN** the client SHALL update only the Remote Bound queue
 
-#### Scenario: A mixed selection is played
-
-- **WHEN** the user plays a selection containing both audio and non-audio items
-- **THEN** the client SHALL submit it to the owner
-- **THEN** the client SHALL strip the non-audio items before submitting
-- **THEN** the client SHALL report how many items it dropped
-- **THEN** the dropped items SHALL NOT be added to the client's own queue
-
-### Requirement: Starting local playback stops the owner
-
-When a client begins playing a fallen-through item, it SHALL stop the owner's
-playback rather than pausing it.
-
-#### Scenario: Owner is playing when the film starts
-
-- **WHEN** the user plays a fallen-through item while the owner is playing
-- **THEN** the owner SHALL stop
-- **THEN** the owner's playback position SHALL NOT be preserved for resumption
-
-#### Scenario: Owner is idle when the film starts
-
-- **WHEN** the user plays a fallen-through item while the owner is idle
-- **THEN** the owner SHALL remain idle
-- **THEN** the owner's queue SHALL be unchanged
-
-### Requirement: The owner remains the target for the next addition
-
-Fall-through SHALL apply to one item at a time. After a fallen-through item
-finishes, is stopped, or fails, the next play or enqueue SHALL be evaluated
-against the owner again on the same terms.
-
-#### Scenario: Audio played after a film ends
-
-- **WHEN** a fallen-through item finishes and the user then plays an audio
-  selection
-- **THEN** the selection SHALL be submitted to the owner
-- **THEN** playback SHALL occur on the owner
-
-#### Scenario: A second film played after the first
-
-- **WHEN** a fallen-through item finishes and the user then plays another
-  non-audio item
-- **THEN** that item SHALL fall through in turn
-
-### Requirement: An enqueued non-audio item is staged, not played
-
-When the user explicitly enqueues a wholly non-audio selection while controlling
-an audio-only owner, the client SHALL add it to its own queue without starting
-playback and without disturbing the owner.
-
-#### Scenario: Enqueuing a film while music plays
-
-- **WHEN** the user enqueues a video item while the owner is playing
-- **THEN** the item SHALL be added to the client's own queue
-- **THEN** the owner SHALL continue playing
-- **THEN** the client SHALL report that the item was added to its own queue
-
-#### Scenario: Disconnecting with a staged queue
-
-- **WHEN** the user disconnects from the owner while the client's own queue
-  holds staged items
-- **THEN** the staged queue SHALL remain
-- **THEN** playback SHALL NOT start on its own
-
-### Requirement: A playing fallen-through item is shown in the owner's queue view
-
-While a fallen-through item is playing, the client SHALL show it pinned above
-the owner's queue, styled as a selected row, and marked as playing on the
-client. The row SHALL NOT be selectable and SHALL be skipped by cursor
-navigation, because the item is not a member of that queue.
-
-#### Scenario: Viewing the owner's queue during local playback
-
-- **WHEN** the user views the owner's queue while a fallen-through item plays
-- **THEN** the item SHALL appear pinned above the owner's items
-- **THEN** the row SHALL carry a marker identifying it as playing on the client
-- **THEN** the row SHALL show position and progress from the client's player
-
-#### Scenario: Navigating the owner's queue during local playback
-
-- **WHEN** the user moves the cursor through the owner's queue
-- **THEN** the cursor SHALL NOT land on the pinned row
-- **THEN** queue actions SHALL NOT target the pinned row
+#### Scenario: Parked owner reports stopped
+- **WHEN** the attached owner reports stop or completion during local fall-through playback
+- **THEN** the client SHALL NOT end local playback or mutate the Local queue
 
 #### Scenario: Local playback ends
+- **WHEN** the Local session reports that fallen-through playback has ended and the owner remains attached
+- **THEN** the client SHALL return transport ownership to the attached owner
 
-- **WHEN** a fallen-through item finishes or is stopped
-- **THEN** the pinned row SHALL be removed from the owner's queue view
+#### Scenario: Attached owner disconnects
+- **WHEN** the attached owner disconnects during local fall-through playback
+- **THEN** the client SHALL remove the attachment and Remote Queue scope
+- **THEN** the client SHALL allow local playback to continue
 
-### Requirement: A remote connection and the active playback target are separate
+### Requirement: Pinned row in the owner queue view
 
-The client SHALL track which player is the active playback target separately
-from whether a remote attachment exists. Holding a connection to an owner SHALL
-NOT by itself mean playback is directed there.
+While a fallen-through item plays and Remote Queue scope is visible, the client
+SHALL render that item above the owner's queue items in selected-row styling,
+marked as playing on the client, with local position and progress. The row SHALL
+be a non-selectable projection rather than a member of the owner's queue.
 
-#### Scenario: Transport control during local playback
+#### Scenario: Remote queue view during fall-through
+- **WHEN** Remote Queue scope is visible while a fallen-through item plays
+- **THEN** the client SHALL render the projected local-playing row above the owner's items
+- **THEN** cursor navigation and queue actions SHALL skip that row
 
-- **WHEN** the user pauses, seeks, or skips while a fallen-through item plays
-- **THEN** the command SHALL act on the client's player
-- **THEN** the command SHALL NOT be sent to the owner
-
-#### Scenario: Owner state during local playback
-
-- **WHEN** a fallen-through item is playing
-- **THEN** the client SHALL continue to receive and display the owner's queue
-  state
-- **THEN** the client SHALL continue to be identified as controlling that owner
+#### Scenario: Local playback ends
+- **WHEN** fallen-through local playback ends
+- **THEN** the client SHALL remove the projected row

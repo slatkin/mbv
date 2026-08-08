@@ -43,8 +43,9 @@ daemon, never started by a terminal UI.
 _Avoid_: system daemon, the daemon
 
 **Client**:
-A terminal UI that owns no Player and reaches one over the control socket. Any
-number may run at once, and each is disposable.
+A terminal UI that reaches a Player owner over the control socket. It does not
+own the Player it attaches to, but its process may also host a local Player owner
+during fall-through. Any number may attach at once, and each is disposable.
 _Avoid_: thin client, terminal client, viewer, attachment
 
 **Tray**:
@@ -138,18 +139,34 @@ indicates.
 _Avoid_: green pill, remote takeover, queue management (alone)
 
 **Queue scope**:
-Local or Remote — which queue (this client's own Player owner, or the
-Direct remote control target) is currently shown in the queue panel. Only
-exists while Direct remote control is active.
+Local or Remote — whether the queue on the controlling terminal's local side or
+the directly controlled remote Player owner's queue is currently shown in the
+queue panel. Exists during Sessions-panel Direct remote control and explicit
+remote daemon attachment, not Session watch or a Library route.
 _Avoid_: split view, pill state
 
 **Fall-through**:
-A non-audio item explicitly played or enqueued while Direct remote control
-targets an audio-only Player owner, landing in the controlling client's own
-Composed queue instead of that owner's. The item falls through; the control
-connection does not — it stays up, and the next queue addition targets the
-owner again. Never applies to items already inside a Bound queue.
+A non-audio item explicitly played or enqueued while a client directly controls
+an audio-only Player owner, landing in the controlling client's own queue
+instead of that owner's. The item falls through; the control attachment does
+not — it stays up, and the next explicit submission is evaluated against the
+owner again. Applies to Sessions-panel Direct remote control and explicit
+remote daemon attachment, never to a Library route or an item already inside a
+Bound queue.
 _Avoid_: local fallback, routing back, handoff, video routing
+
+**Transport owner**:
+The Player owner that currently receives pause, seek, stop, skip, and other
+transport controls. It may be the local Player owner in the controlling terminal
+process while a different owner remains attached and its Bound queue remains
+visible.
+_Avoid_: active target, playback target, current remote
+
+**Submission destination**:
+The Player owner or Composed queue chosen for one explicit play or enqueue
+action. It is decided per action and is not a persistent mode or the visible
+Queue scope.
+_Avoid_: playback target, route, active queue
 
 **Library route**:
 A persistent per-library assignment sending that library's playback to a

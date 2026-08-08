@@ -18,8 +18,8 @@ when it is edited.**
 
 Applied to an audio-only Player owner (`mbvd`):
 
-- It never holds an item it cannot play. A client with Direct remote control
-  strips non-audio items before submitting; the owner discards any that arrive
+- It never holds an item it cannot play. A directly controlling client strips
+  non-audio items before submitting; the owner discards any that arrive
   regardless. Nothing non-audio reaches its mpv.
 - A submission containing non-audio items is accepted minus those items, rather
   than refused whole. Selecting one track from a mixed playlist plays that
@@ -27,27 +27,44 @@ Applied to an audio-only Player owner (`mbvd`):
 - Items are never dispatched from an owner's queue to a client. By the time a
   queue reaches a given item, no client may be running and any that is may be
   unattended.
-- A non-audio item **explicitly** played or enqueued by a controlling client
-  falls through to that client's Composed queue. The owner is not asked and not
-  told; the control connection stays up. Deliberate user action only, never
-  auto-advance.
+- A non-audio item **explicitly** played or enqueued by a client that directly
+  controls an audio-only owner falls through to that client's own queue. The
+  owner is not asked and not told; the control attachment stays up. Deliberate
+  user action only, never auto-advance. Sessions-panel Direct remote control and
+  explicit remote-daemon attachment qualify; Library routes do not.
 - Playing a fallen-through item stops the owner rather than pausing it. Pausing
   would hold an mpv process, an open Emby session, and in audio-pipe mode the
   pipe itself, for the length of a film.
-- The owner stays the target for the next queue addition. Fall-through is a
-  per-item exception, not a mode the client enters and has to leave.
+- The owner remains attached and is reconsidered for the next explicit
+  submission. Fall-through is a per-item exception, not a mode the client enters
+  and has to leave.
 
 Routing is capability-led. The owner declares it is audio-only during the ctrl
-handshake and the client decides before submitting. The existing structured
-rejection stays as a backstop.
+handshake and the client decides before submitting. The alternative — submitting
+and treating the rejection as the signal — needs no protocol change at all, but
+the play sites mutate local state (route, queue, scope, focus, status line)
+before they submit, so an asynchronous bounce would have to unwind all of it. A
+synchronous decision is worth the small protocol addition. The structured
+rejection stays live for a wholly non-audio submission, which is what an owner
+gives a client that predates the capability.
 
-Which player is the active playback target becomes its own value on the client
-rather than something derived from whether a remote attachment exists. The
-attachment fields are left alone: `active_route`, `connected_session_id` /
-`direct_remote_label`, `home_is_local_daemon` and `player_endpoint` keep their
-current meanings and stay separate, per ADR 0011's rule that library routing and
-Sessions-panel direct remote must not be conflated. Merging attachment and
-target into one state would flatten exactly that distinction, so it is not done.
+"An owner is attached", "that owner receives transport controls", "its Bound
+queue is available", and "its queue is visible" are independent facts.
+Fall-through installs a local Player as the Transport owner and parks the
+attached owner without ending the attachment or hiding its queue. A typed player
+arrangement owns the active and parked sessions so those responsibilities are
+derived from one valid arrangement rather than inferred from a binary
+`is_remote()` flag or duplicated in an `active_target` field. Queue scope remains
+independent presentation state, and Submission destination is calculated for
+each explicit action. Attachment provenance remains distinct per ADR 0011;
+Library routes are not eligible for fall-through.
+
+Player events also keep their owner identity. The application tags events as
+Local or Attached-owner when it drains the session that produced them. Only a
+terminal Local event ends fall-through. An Attached-owner queue update refreshes
+the remote Bound queue; its stop/completion cannot mutate the local queue; and
+its disconnect ends the attachment without stopping local playback. This
+provenance is client-side context and does not change the ctrl wire format.
 
 ## Context
 
@@ -83,24 +100,24 @@ is where the user is and where the strip decision is made anyway.
   introduced.
 - The ctrl handshake gains an audio-only capability string. Additive, so no
   `CTRL_PROTOCOL_VERSION` bump, per the rule above that constant.
-- "A remote connection exists" and "the remote player is the active playback
-  target" stop being the same fact. `restore_local_mode` asserts they are
-  identical today; that assertion is replaced by the explicit target value, not
-  relaxed. Every site that reads `player.is_remote()` to answer "where does
-  playback go" has to read the target instead — `is_remote()` keeps its literal
-  meaning and stays correct for questions about the connection. There are 27
-  non-test `is_remote()` call sites and three `debug_assert_eq!` pairings of it
-  with `player_endpoint`; each has to be read to decide which of the two
-  questions it is asking. That audit is the bulk of the client-side work, and
-  a site classified wrongly fails only in the fall-through case, which no
-  existing test covers.
+- Binary `is_remote()` answers are replaced at the application boundary by
+  semantic queries for attachment, Transport owner, available Queue scopes, and
+  Submission destination. `player_endpoint` belongs to the attachment rather
+  than proving which Player receives transport controls.
+- Remote queue commands use the attached-owner session even while it is parked;
+  transport commands use the Transport owner. Queue visibility is derived from
+  queue availability plus the requested Queue scope, not from the Transport
+  owner.
+- Parking the owner is not free: both sessions remain live and their events are
+  drained with explicit origin so owner events cannot be applied to local state.
 - `restore_local_mode` is not the path back for fall-through: it disconnects the
   remote, which is what fall-through exists to avoid, and it deliberately leaves
   a remote playing.
-- A fallen-through item that is playing appears in the Composed queue normally,
-  and pinned at the top of the Bound queue's view in selected-row styling,
-  non-selectable and skipped by cursor navigation. It is not a member of that
-  queue and does not imply a position in it.
+- A fallen-through item that is playing appears in the Local Bound queue
+  normally, and pinned at the top of the attached owner's Bound queue view in
+  selected-row styling, non-selectable and skipped by cursor navigation. It is
+  not a member of the owner's queue and does not imply a position in it. A
+  fallen-through enqueue remains Composed because it starts no playback.
 - Enqueuing starts nothing, in either stage. Disconnecting from an owner leaves
   the client's Composed queue loaded and idle; disconnection is session
   management, not a play command.
@@ -130,15 +147,14 @@ before implementation.
   scope indicator shows this, but no action was taken to move it back.
 - **Emby sees a handoff, not a continuous session.** The owner's session ends
   and the client's begins. Resume points are per item, so they are unaffected.
-- **A client that starts up already attached has one queue, not two.**
-  `bootstrap.rs` builds its `player_tab` from the remote items, so there is no
-  separate local queue on that path for a fallen-through item to land in. A
-  client that attaches after starting locally has both (`player_tab` and
-  `remote_player_tab`, per `queue_scope.rs`) and is unaffected.
-- **Where stripped items go is undecided.** When a mixed batch is submitted to
-  an audio-only owner, the non-audio items are stripped. Whether they are
-  dropped, or land in the client's Composed queue the way a wholly non-audio
-  batch does, is open.
+- **A client may not have constructed a local Player yet.** This is an
+  implementation lifecycle detail, not a missing capability or product mode.
+  Fall-through constructs the local Player when needed; an ordinary playback
+  start failure is reported through the normal error path.
+- **Stripped items are dropped, not staged.** When a mixed batch is submitted to
+  an audio-only owner, the non-audio items are dropped and the count reported.
+  They do not land in the client's Composed queue. A mixed batch has one
+  destination; only a wholly non-audio batch falls through.
 - **Moving items between a Composed and a Bound queue by hand is not included.**
   The model permits it; nothing implements it.
 - **Existing edit-time constraints are left in place**, most visibly the
@@ -146,4 +162,7 @@ before implementation.
   the queue's (ADR 0011). This ADR gives the test by which to revisit them. It
   does not revisit them.
 
-This ADR records the model. Implementation is #431.
+This ADR records the model. Implementation is #431, split in two: the daemon's
+admission filter (`openspec/changes/audio-only-mixed-queue-admission`) ships on
+its own and fixes the mixed-queue refusal; client fall-through
+(`openspec/changes/audio-only-owner-fall-through`) builds on it.
