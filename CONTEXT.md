@@ -92,23 +92,23 @@ playlist; Consume happens with or without it.
 _Avoid_: autosave, consume persistence, playlist sync
 
 **Composed**:
-The stage in which a queue is held in a client's UI and no Player owner is
-executing it. Editing one has no playback consequence, so it doubles as a
-staging area — build it now, play it later. Every queue is Composed before it
-is Bound.
+The stage in which a queue is held in a client's UI and no Player owner holds
+it. Editing one has no playback consequence, so it doubles as a staging area —
+build it now, play it later. Not every queue is Composed first; playback
+started from Emby reaches an owner without passing through a UI.
 _Avoid_: draft, staging queue, pending queue, unplayed queue
 
 **Bound**:
-The stage in which a Player owner has taken a queue up and is executing it. Its
-contents and cursor answer to that owner's rules, including skipping what the
-owner cannot play. A queue may be edited in either stage; only the rules
-differ.
+The stage in which a Player owner holds a queue. Its contents answer to that
+owner's rules — an audio-only owner does not hold items it cannot play. Bound
+does not mean playing: a stopped owner still holds its queue, and queues can be
+Bound to two owners at once while only one of them plays.
 _Avoid_: active queue, live queue, running queue, attached queue
 
 **Unplayable item**:
-An item in a Bound queue that its Player owner cannot play — a video item on an
-audio-only owner. It stays visible in the queue and is skipped on advance,
-rather than being dropped when added or refusing the whole queue.
+An item a Player owner cannot play — a video item on an audio-only owner. It
+never enters that owner's queue: a controlling client strips it before
+submitting, and the owner discards any that reach it regardless.
 _Avoid_: rejected item, filtered item, invalid item, blocked item
 
 ## Remote sessions
