@@ -43,18 +43,19 @@ pub(super) fn bootstrap_local_daemon_queue(
         };
     };
 
+    let emby_items = state.emby_items();
     let cursor = super::actions::queue_restore_cursor(
-        &state.items,
+        &emby_items,
         state.cursor,
         state.last_played_item_id.as_deref(),
         state.last_played_completed,
     );
     LocalDaemonBootstrap {
-        player_tab: PlayerTab::new(state.items.clone(), cursor),
+        player_tab: PlayerTab::new(emby_items.clone(), cursor),
         queue_source: state.source.clone(),
         last_played_item_id: state.last_played_item_id.clone(),
         last_played_completed: state.last_played_completed,
-        adopt_queue: Some((state.items, cursor, state.source)),
+        adopt_queue: Some((emby_items, cursor, state.source)),
         positions: state.positions,
     }
 }

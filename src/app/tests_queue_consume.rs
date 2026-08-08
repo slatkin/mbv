@@ -20,7 +20,8 @@ fn stopped_progress_updates_the_queue_model_not_just_the_shadow() {
 
     let slot = app.player_tab.queue.slot(slot_id).unwrap();
     assert_eq!(
-        slot.item.playback_position_ticks, 600_000_000,
+        slot.item.playback_position_ticks(),
+        600_000_000,
         "progress must be applied to the queue model, not only the display shadow"
     );
 }
@@ -255,7 +256,7 @@ fn track_completed_progress_follows_slot_after_earlier_removal() {
     });
 
     let slot = app.player_tab.queue.slot(slot_b).unwrap();
-    assert_eq!(slot.item.playback_position_ticks, 600_000_000);
+    assert_eq!(slot.item.playback_position_ticks(), 600_000_000);
 }
 
 #[test]

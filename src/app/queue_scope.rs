@@ -252,7 +252,7 @@ impl App {
         };
         self.playback_queue_mut().sync_items_from_queue_model();
         self.player.send_command(PlayerCommand::QueueRemove(idx));
-        Some(removed.item.id)
+        Some(removed.item.id().to_string())
     }
 
     pub(super) fn set_queue_scope(&mut self, scope: QueueScope) {

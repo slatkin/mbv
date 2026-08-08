@@ -1,6 +1,7 @@
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{
-    PlaybackQueue, QueueMutationResult, QueueSlotId, RefreshMergeResult, RemoveSlotResult,
+    PlaybackQueue, QueueItem, QueueMutationResult, QueueSlotId, RefreshMergeResult,
+    RemoveSlotResult,
 };
 
 #[derive(Clone, Default)]
@@ -45,7 +46,7 @@ impl PlayerTab {
                 .map(|(slot, item)| (slot.slot_id, item.clone()))
                 .collect();
             for (slot_id, item) in updates {
-                let _ = self.queue.update_slot_item(slot_id, item);
+                let _ = self.queue.update_slot_item(slot_id, QueueItem::Emby(item));
             }
         } else {
             self.queue = PlaybackQueue::from_items(self.items.clone(), None);
@@ -57,7 +58,10 @@ impl PlayerTab {
             .queue
             .slots()
             .iter()
-            .map(|slot| slot.item.clone())
+            .filter_map(|slot| match &slot.item {
+                QueueItem::Emby(e) => Some(e.clone()),
+                QueueItem::Feed(_) => None,
+            })
             .collect();
         self.clamp_cursor();
     }
@@ -117,26 +121,29 @@ impl PlayerTab {
             }
         };
         self.sync_items_from_queue_model();
-        Some(removed)
+        match removed {
+            QueueItem::Emby(e) => Some(e),
+            QueueItem::Feed(_) => None,
+        }
     }
 
     pub(super) fn insert_item_at(&mut self, index: usize, item: EmbyItem) {
         self.sync_queue_model_from_items_if_needed();
-        self.queue.insert(index, item);
+        self.queue.insert(index, QueueItem::Emby(item));
         self.sync_items_from_queue_model();
         self.queue_cursor = index.min(self.items.len().saturating_sub(1));
     }
 
     pub(super) fn append_item(&mut self, item: EmbyItem) {
         self.sync_queue_model_from_items_if_needed();
-        self.queue.append(item);
+        self.queue.append(QueueItem::Emby(item));
         self.sync_items_from_queue_model();
     }
 
     pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) {
         self.sync_queue_model_from_items_if_needed();
         for item in items {
-            self.queue.append(item);
+            self.queue.append(QueueItem::Emby(item));
         }
         self.sync_items_from_queue_model();
     }
@@ -159,6 +166,9 @@ impl PlayerTab {
     }
 }
 
-pub(super) fn same_queue_occurrence(left: &EmbyItem, right: &EmbyItem) -> bool {
-    left.id == right.id && left.playlist_item_id == right.playlist_item_id
+pub(super) fn same_queue_occurrence(left: &QueueItem, right: &EmbyItem) -> bool {
+    match left {
+        QueueItem::Emby(e) => e.id == right.id && e.playlist_item_id == right.playlist_item_id,
+        QueueItem::Feed(_) => false,
+    }
 }

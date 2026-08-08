@@ -313,7 +313,7 @@ fn completed_remote_occurrence_is_consumed_from_an_ad_hoc_queue() {
     );
     let persisted = crate::config::load_queue_state().expect("projected queue persisted");
     assert_eq!(persisted.items.len(), 1);
-    assert_eq!(persisted.items[0].id, "b");
+    assert_eq!(persisted.items[0].id(), "b");
 }
 
 fn projection(

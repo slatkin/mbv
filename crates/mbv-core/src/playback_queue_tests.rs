@@ -52,7 +52,7 @@ fn duplicate_item_ids_receive_distinct_queue_slot_ids() {
     let queue = PlaybackQueue::from_items(vec![item("same"), item("same")], Some(0));
 
     assert_ne!(queue.slots()[0].slot_id, queue.slots()[1].slot_id);
-    assert_eq!(queue.slots()[0].item.id, queue.slots()[1].item.id);
+    assert_eq!(queue.slots()[0].item.id(), queue.slots()[1].item.id());
 }
 
 #[test]
@@ -135,7 +135,7 @@ fn consume_removes_intended_slot_occurrence() {
     assert_eq!(slot.slot_id, consumed);
     assert!(queue.slot(consumed).is_none());
     assert_eq!(queue.slots().len(), 2);
-    assert_eq!(queue.slots()[0].item.id, "same");
+    assert_eq!(queue.slots()[0].item.id(), "same");
 }
 
 #[test]
@@ -154,7 +154,7 @@ fn progress_applies_to_intended_slot_after_index_shifts() {
     ));
 
     assert_eq!(
-        queue.slot(target).unwrap().item.playback_position_ticks,
+        queue.slot(target).unwrap().item.playback_position_ticks(),
         12 * TICKS_PER_SECOND
     );
 }
@@ -190,7 +190,7 @@ fn active_slot_progress_is_protected_from_server_refresh() {
 
     assert!(result.protected_slots.contains(&active));
     assert_eq!(
-        queue.slot(active).unwrap().item.playback_position_ticks,
+        queue.slot(active).unwrap().item.playback_position_ticks(),
         20 * TICKS_PER_SECOND
     );
 }
@@ -205,7 +205,11 @@ fn refresh_applies_one_fetched_item_to_duplicate_queue_slots() {
     assert!(result.pruned_slots.is_empty());
     assert!(queue.slot(duplicate).is_some());
     assert_eq!(
-        queue.slot(duplicate).unwrap().item.playback_position_ticks,
+        queue
+            .slot(duplicate)
+            .unwrap()
+            .item
+            .playback_position_ticks(),
         5 * TICKS_PER_SECOND
     );
 }
@@ -223,11 +227,11 @@ fn refresh_matches_duplicate_fetched_items_in_queue_order() {
 
     assert!(result.pruned_slots.is_empty());
     assert_eq!(
-        queue.slot(first).unwrap().item.playback_position_ticks,
+        queue.slot(first).unwrap().item.playback_position_ticks(),
         5 * TICKS_PER_SECOND
     );
     assert_eq!(
-        queue.slot(second).unwrap().item.playback_position_ticks,
+        queue.slot(second).unwrap().item.playback_position_ticks(),
         9 * TICKS_PER_SECOND
     );
 }
@@ -249,7 +253,7 @@ fn pending_progress_sync_blocks_stale_server_userdata() {
 
     assert!(result.stale_pending_slots.contains(&slot));
     assert_eq!(
-        queue.slot(slot).unwrap().item.playback_position_ticks,
+        queue.slot(slot).unwrap().item.playback_position_ticks(),
         20 * TICKS_PER_SECOND
     );
     assert!(queue
@@ -284,7 +288,7 @@ fn active_pending_progress_confirmation_clears_pending_but_keeps_local_progress(
         .pending_sync
         .is_none());
     assert_eq!(
-        queue.slot(active).unwrap().item.playback_position_ticks,
+        queue.slot(active).unwrap().item.playback_position_ticks(),
         20 * TICKS_PER_SECOND
     );
 }
@@ -312,7 +316,7 @@ fn pending_progress_sync_clears_when_server_position_matches_within_tolerance() 
         .pending_sync
         .is_none());
     assert_eq!(
-        queue.slot(slot).unwrap().item.playback_position_ticks,
+        queue.slot(slot).unwrap().item.playback_position_ticks(),
         22 * TICKS_PER_SECOND
     );
 }
@@ -339,7 +343,7 @@ fn watched_state_confirmation_requires_exact_match() {
         .progress_state
         .pending_sync
         .is_some());
-    assert!(queue.slot(slot).unwrap().item.played);
+    assert!(queue.slot(slot).unwrap().item.played());
 }
 
 #[test]
@@ -407,7 +411,7 @@ fn structural_mutations_bump_revision() {
     let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
     let initial = queue.revision();
 
-    let inserted = queue.append(item("c"));
+    let inserted = queue.append(QueueItem::Emby(item("c")));
     assert!(queue.revision() > initial);
     let after_insert = queue.revision();
 
@@ -423,4 +427,144 @@ fn structural_mutations_bump_revision() {
         QueueMutationResult::Applied(_)
     ));
     assert!(queue.revision() > after_move);
+}
+
+// ---------------------------------------------------------------------------
+// QueueItem persistence round-trip tests (task 3.3)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn queue_item_serializes_tagged() {
+    let emby = QueueItem::Emby(item("e1"));
+    let json = serde_json::to_string(&emby).unwrap();
+    assert!(json.contains(r#""kind":"Emby""#));
+    assert!(json.contains(r#""id":"e1""#));
+
+    let feed = QueueItem::Feed(FeedEntry {
+        guid: "feed-1".into(),
+        title: "Episode 1".into(),
+        enclosure_url: Some("https://example.com/ep1.mp3".into()),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
+    });
+    let json = serde_json::to_string(&feed).unwrap();
+    assert!(json.contains(r#""kind":"Feed""#));
+    assert!(json.contains(r#""guid":"feed-1""#));
+}
+
+#[test]
+fn queue_item_deserializes_tagged() {
+    let json = r#"{"kind":"Emby","id":"e1","name":"Item e1","item_type":"Episode","is_folder":false,"media_type":"Video","collection_type":"","runtime_ticks":300000000,"played":false,"playback_position_ticks":0,"series_id":"","series_name":"","album_id":"","album":"","index_number":0,"parent_index_number":0,"unplayed_item_count":0,"path":"","artist":"","sort_name":"","production_year":0,"end_year":0,"overview":"","premiere_date":"","date_added":"","total_count":0,"container":"","director":"","video_info":"","audio_info":"","genre":"","playlist_item_id":""}"#;
+    let qi: QueueItem = serde_json::from_str(json).unwrap();
+    assert!(matches!(qi, QueueItem::Emby(_)));
+    assert_eq!(qi.id(), "e1");
+}
+
+#[test]
+fn queue_item_deserializes_legacy_bare_emby_item() {
+    // Legacy format: bare EmbyItem object (no "kind" field)
+    let json = r#"{"id":"legacy-1","name":"Legacy Item","item_type":"Episode","is_folder":false,"media_type":"Video","collection_type":"","runtime_ticks":300000000,"played":false,"playback_position_ticks":0,"series_id":"","series_name":"","album_id":"","album":"","index_number":0,"parent_index_number":0,"unplayed_item_count":0,"path":"","artist":"","sort_name":"","production_year":0,"end_year":0,"overview":"","premiere_date":"","date_added":"","total_count":0,"container":"","director":"","video_info":"","audio_info":"","genre":"","playlist_item_id":""}"#;
+    let qi: QueueItem = serde_json::from_str(json).unwrap();
+    assert!(matches!(qi, QueueItem::Emby(_)));
+    assert_eq!(qi.id(), "legacy-1");
+}
+
+#[test]
+fn queue_item_deserializes_tagged_feed() {
+    let json = r#"{"kind":"Feed","guid":"feed-1","title":"Episode 1","enclosure_url":"https://example.com/ep1.mp3","link":null,"mime_type":"audio/mpeg","duration_ticks":36000000000}"#;
+    let qi: QueueItem = serde_json::from_str(json).unwrap();
+    assert!(matches!(qi, QueueItem::Feed(_)));
+    assert_eq!(qi.id(), "feed-1");
+}
+
+#[test]
+fn queue_state_round_trip_preserves_item_kind() {
+    let emby_item = item("emby-1");
+    let feed_entry = FeedEntry {
+        guid: "feed-1".into(),
+        title: "Podcast Episode".into(),
+        enclosure_url: Some("https://example.com/ep1.mp3".into()),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
+    };
+    let queue_items = vec![
+        QueueItem::Emby(emby_item.clone()),
+        QueueItem::Feed(feed_entry.clone()),
+    ];
+
+    // Serialize
+    let json = serde_json::to_string(&queue_items).unwrap();
+
+    // Deserialize
+    let restored: Vec<QueueItem> = serde_json::from_str(&json).unwrap();
+    assert_eq!(restored.len(), 2);
+
+    // Emby kind preserved
+    match &restored[0] {
+        QueueItem::Emby(e) => assert_eq!(e.id, "emby-1"),
+        QueueItem::Feed(_) => panic!("expected Emby variant"),
+    }
+
+    // Feed kind preserved
+    match &restored[1] {
+        QueueItem::Emby(_) => panic!("expected Feed variant"),
+        QueueItem::Feed(f) => {
+            assert_eq!(f.guid, "feed-1");
+            assert_eq!(f.title, "Podcast Episode");
+            assert_eq!(
+                f.enclosure_url.as_deref(),
+                Some("https://example.com/ep1.mp3")
+            );
+        }
+    }
+}
+
+#[test]
+fn queue_state_legacy_bare_items_load_as_emby() {
+    // Simulate a legacy queue_state.json where items are bare EmbyItem objects
+    let legacy_json = r#"[{"id":"old-1","name":"Old Item","item_type":"Episode","is_folder":false,"media_type":"Video","collection_type":"","runtime_ticks":300000000,"played":false,"playback_position_ticks":0,"series_id":"","series_name":"","album_id":"","album":"","index_number":0,"parent_index_number":0,"unplayed_item_count":0,"path":"","artist":"","sort_name":"","production_year":0,"end_year":0,"overview":"","premiere_date":"","date_added":"","total_count":0,"container":"","director":"","video_info":"","audio_info":"","genre":"","playlist_item_id":""}]"#;
+    let restored: Vec<QueueItem> = serde_json::from_str(legacy_json).unwrap();
+    assert_eq!(restored.len(), 1);
+    assert!(matches!(&restored[0], QueueItem::Emby(e) if e.id == "old-1"));
+}
+
+#[test]
+fn feed_entry_primary_source_returns_enclosure() {
+    let entry = FeedEntry {
+        guid: "g1".into(),
+        title: "T".into(),
+        enclosure_url: Some("https://enc.mp3".into()),
+        link: Some("https://link.html".into()),
+        mime_type: None,
+        duration_ticks: None,
+    };
+    assert_eq!(entry.primary_source(), Some("https://enc.mp3"));
+}
+
+#[test]
+fn feed_entry_primary_source_falls_back_to_link() {
+    let entry = FeedEntry {
+        guid: "g2".into(),
+        title: "T".into(),
+        enclosure_url: None,
+        link: Some("https://link.html".into()),
+        mime_type: None,
+        duration_ticks: None,
+    };
+    assert_eq!(entry.primary_source(), Some("https://link.html"));
+}
+
+#[test]
+fn feed_entry_primary_source_none_when_empty() {
+    let entry = FeedEntry {
+        guid: "g3".into(),
+        title: "T".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+    };
+    assert_eq!(entry.primary_source(), None);
 }
