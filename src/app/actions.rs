@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 use super::{
     App, BrowseLevel, LocalPlaybackTarget, PanelFocus, PlaybackTarget, RemotePlaybackTarget,
@@ -202,14 +203,20 @@ impl App {
                 .get(start_idx)
                 .map(|i| i.playback_label())
                 .unwrap_or_default();
-            self.flash_status(format!("Playing on remote: {label}"));
+            self.flash(
+                format!("Requesting playback: {label}"),
+                ToastSeverity::Neutral,
+            );
             self.submit_attached_sequence(&id, &items, start_idx);
             return;
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
         if direct_remote {
             if let Some(item) = items.get(start_idx) {
-                self.flash_status(format!("Requesting playback: {}", item.playback_label()));
+                self.flash(
+                    format!("Requesting playback: {}", item.playback_label()),
+                    ToastSeverity::Neutral,
+                );
             }
         }
         self.player.play_queue(
@@ -245,7 +252,10 @@ impl App {
             let id = conn_id.clone();
             let item_id = item.id.clone();
             let start_ticks = item.playback_position_ticks;
-            self.flash_status(format!("Playing on remote: {label}"));
+            self.flash(
+                format!("Requesting playback: {label}"),
+                ToastSeverity::Neutral,
+            );
             self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
             return;
         }
@@ -277,7 +287,10 @@ impl App {
         if !direct_remote {
             self.replace_playback_queue(vec![item.clone()], 0);
         } else {
-            self.flash_status(format!("Requesting playback: {label}"));
+            self.flash(
+                format!("Requesting playback: {label}"),
+                ToastSeverity::Neutral,
+            );
         }
         self.player
             .play(&item, self.queue_source.clone(), c, self.ui_volume);
@@ -302,7 +315,7 @@ impl App {
                 let count = items.len();
                 drop(client);
                 if count == 0 {
-                    self.flash_status_high("Nothing to enqueue".into());
+                    self.flash("Nothing to enqueue".into(), ToastSeverity::Error);
                     return;
                 }
                 let scope = self.visible_queue_scope();
@@ -316,10 +329,10 @@ impl App {
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
-                self.flash_status(format!(
-                    "Enqueued {count} items from {}",
-                    item.display_name()
-                ));
+                self.flash(
+                    format!("Enqueued {count} items from {}", item.display_name()),
+                    ToastSeverity::Success,
+                );
                 if self.sync_playback_queue_after_append(scope, appended) {
                     self.persist_local_queue_state_if_needed(scope);
                     self.retire_remote_tracking_after_queue_mutation();
@@ -330,7 +343,7 @@ impl App {
             }
             Err(e) => {
                 drop(client);
-                self.flash_status_high(format!("Error: {e}"));
+                self.flash(format!("Error: {e}"), ToastSeverity::Error);
             }
         }
     }

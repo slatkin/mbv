@@ -74,6 +74,7 @@ impl App {
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
+            status_severity: super::notify_actions::ToastSeverity::default(),
             layout: layout::AppLayout::default(),
             terminal_width: 80,
             terminal_height: 24,

@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::types_playback::RemoteQueueProjection;
 use super::{App, ReconciliationCommand, SessionEvent};
 use mbv_core::api::{EmbyClient, TICKS_PER_SECOND};
@@ -129,7 +130,7 @@ impl App {
                 tracker.stop_tracking();
             }
             self.retire_remote_tracking(false);
-            self.flash_status("Remote tracking stopped".into());
+            self.flash("Remote tracking stopped".into(), ToastSeverity::Success);
         }
     }
 
@@ -158,7 +159,10 @@ impl App {
         };
         let targets = tracker.reanchor_targets();
         if targets.is_empty() {
-            self.flash_status_high("Choose a unique tracked occurrence to re-anchor".into());
+            self.flash(
+                "Choose a unique tracked occurrence to re-anchor".into(),
+                ToastSeverity::Error,
+            );
         } else if targets.len() == 1 {
             let target = targets[0].0;
             let effects = self
@@ -168,9 +172,12 @@ impl App {
                 .unwrap_or_default();
             self.update_remote_projection_epoch();
             if effects.is_empty() {
-                self.flash_status_high("Choose a unique tracked occurrence to re-anchor".into());
+                self.flash(
+                    "Choose a unique tracked occurrence to re-anchor".into(),
+                    ToastSeverity::Error,
+                );
             } else {
-                self.flash_status("Remote tracking re-anchored".into());
+                self.flash("Remote tracking re-anchored".into(), ToastSeverity::Success);
             }
         } else {
             self.remote_reanchor_popup = Some(super::RemoteReanchorPopup { targets, cursor: 0 });
@@ -191,9 +198,12 @@ impl App {
             .unwrap_or_default();
         self.update_remote_projection_epoch();
         if effects.is_empty() {
-            self.flash_status_high("That occurrence is no longer available".into());
+            self.flash(
+                "That occurrence is no longer available".into(),
+                ToastSeverity::Error,
+            );
         } else {
-            self.flash_status("Remote tracking re-anchored".into());
+            self.flash("Remote tracking re-anchored".into(), ToastSeverity::Success);
         }
     }
 

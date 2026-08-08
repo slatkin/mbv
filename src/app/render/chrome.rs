@@ -77,10 +77,8 @@ pub(super) fn server_url_label(server_url: &str) -> Option<String> {
 }
 
 impl App {
-    pub(super) fn toast_line(s: &str) -> Line<'static> {
-        let text_style = Style::default()
-            .fg(palette::TOAST_FG)
-            .add_modifier(Modifier::BOLD);
+    pub(super) fn toast_line(s: &str, fg: Color) -> Line<'static> {
+        let text_style = Style::default().fg(fg).add_modifier(Modifier::BOLD);
         let open = s.find(['[', '(']);
         if let Some(i) = open {
             let close = s[i..].find([']', ')']).map(|j| i + j);

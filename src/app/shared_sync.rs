@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::App;
 use mbv_core::config::Config;
 use mbv_core::shared_client::{SharedClient, SharedClientState, SharedWriteResult};
@@ -24,9 +25,10 @@ impl App {
             Err(error) => {
                 shared.enter_fallback();
                 self.shared_client = Some(shared);
-                self.flash_status_high(format!(
-                    "Shared data unavailable; using local state ({error})"
-                ));
+                self.flash(
+                    format!("Shared data unavailable; using local state ({error})"),
+                    ToastSeverity::Warning,
+                );
                 return;
             }
         };
@@ -37,9 +39,10 @@ impl App {
             Err(error) => {
                 shared.enter_fallback();
                 self.shared_client = Some(shared);
-                self.flash_status_high(format!(
-                    "Shared data restore failed; using local state ({error})"
-                ));
+                self.flash(
+                    format!("Shared data restore failed; using local state ({error})"),
+                    ToastSeverity::Warning,
+                );
                 return;
             }
         };
@@ -47,9 +50,10 @@ impl App {
         if let Err(error) = self.apply_shared_snapshot(&snapshot) {
             shared.enter_fallback();
             self.shared_client = Some(shared);
-            self.flash_status_high(format!(
-                "Shared data mirror failed; using local state ({error})"
-            ));
+            self.flash(
+                format!("Shared data mirror failed; using local state ({error})"),
+                ToastSeverity::Warning,
+            );
             return;
         }
         if let Some(record) = &snapshot.roaming_settings {
@@ -167,19 +171,23 @@ impl App {
             }
             Ok(SharedWriteResult::Stale(record)) => {
                 self.apply_shared_record(kind, &record)?;
-                self.flash_status_high(format!(
-                    "Shared {} changed elsewhere; adopted the newer state",
-                    kind.as_str()
-                ));
+                self.flash(
+                    format!(
+                        "Shared {} changed elsewhere; adopted the newer state",
+                        kind.as_str()
+                    ),
+                    ToastSeverity::Warning,
+                );
                 Ok(())
             }
             Err(error) => {
                 if let Some(shared) = self.shared_client.as_mut() {
                     shared.enter_fallback();
                 }
-                self.flash_status_high(format!(
-                    "Shared data unavailable; using local state ({error})"
-                ));
+                self.flash(
+                    format!("Shared data unavailable; using local state ({error})"),
+                    ToastSeverity::Warning,
+                );
                 Err(error)
             }
         }
@@ -218,8 +226,9 @@ impl App {
                     if let Some(shared) = self.shared_client.as_mut() {
                         shared.enter_fallback();
                     }
-                    self.flash_status_high(
+                    self.flash(
                         "Shared data connection closed; using local state".to_string(),
+                        ToastSeverity::Warning,
                     );
                     changed = true;
                 }
@@ -285,7 +294,10 @@ impl App {
                     }
                 }
                 self.shared_client = Some(shared);
-                self.flash_status("Shared data reconnected".to_string());
+                self.flash(
+                    "Shared data reconnected".to_string(),
+                    ToastSeverity::Success,
+                );
                 true
             }
             Err(error) => {

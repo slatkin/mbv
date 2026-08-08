@@ -1,4 +1,5 @@
 use super::feed_parse::fetch_and_parse_rss;
+use super::notify_actions::ToastSeverity;
 use super::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_core::api::MediaItem;
 use std::collections::{HashMap, HashSet};
@@ -628,7 +629,10 @@ impl App {
 
         if let Err(error) = open_url(&link) {
             log::warn!(target: "idle_feed", "Failed to open feed link {link:?}: {error}");
-            self.flash_status(format!("Unable to open feed link: {error}"));
+            self.flash(
+                format!("Unable to open feed link: {error}"),
+                ToastSeverity::Neutral,
+            );
         }
     }
 

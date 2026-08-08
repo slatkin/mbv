@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
 use mbv_core::api::MediaItem;
 use mbv_core::playback_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
@@ -99,8 +100,9 @@ impl App {
             .player
             .send_command(crate::player::PlayerCommand::QueueAppend { items });
         if !sent && !self.player.supports_queue_append() {
-            self.flash_status_high(
+            self.flash(
                 "Remote append is not supported by this direct mbv peer".to_string(),
+                ToastSeverity::Error,
             );
             return false;
         }

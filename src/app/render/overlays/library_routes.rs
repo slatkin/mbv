@@ -1,3 +1,4 @@
+use super::super::super::notify_actions::ToastSeverity;
 use super::super::super::palette;
 use super::super::super::App;
 use super::super::super::{LibraryRoutePopup, LibraryRouteStage};
@@ -56,9 +57,10 @@ impl App {
             }
             Err(e) => {
                 log::warn!(target: "library_route", "config save failed: {e}");
-                self.flash_status_high(format!(
-                    "⚠ Library route changed but config save failed ({e})"
-                ));
+                self.flash(
+                    format!("⚠ Library route changed but config save failed ({e})"),
+                    ToastSeverity::Error,
+                );
                 false
             }
         }
@@ -75,7 +77,10 @@ impl App {
             Err(e) => {
                 log::warn!(target: "library_route", "F2 library fetch failed: {e}");
                 drop(client);
-                self.flash_status_high(format!("⚠ Library routes couldn't load libraries ({e})"));
+                self.flash(
+                    format!("⚠ Library routes couldn't load libraries ({e})"),
+                    ToastSeverity::Error,
+                );
                 return;
             }
         };
@@ -104,7 +109,10 @@ impl App {
             }
             Err(e) => {
                 log::warn!(target: "library_route", "F2 session fetch failed library={library_lower:?}: {e}");
-                self.flash_status_high(format!("⚠ Library routes couldn't load devices ({e})"));
+                self.flash(
+                    format!("⚠ Library routes couldn't load devices ({e})"),
+                    ToastSeverity::Error,
+                );
                 return;
             }
         };
@@ -189,9 +197,12 @@ impl App {
                 // can't be committed -- there is nothing meaningful to
                 // write to config for it. Flash the reason and stay on
                 // this stage rather than silently doing nothing.
-                self.flash_status(format!(
-                    "{name} is not currently routable (no resolvable direct-connect endpoint)"
-                ));
+                self.flash(
+                    format!(
+                        "{name} is not currently routable (no resolvable direct-connect endpoint)"
+                    ),
+                    ToastSeverity::Neutral,
+                );
                 return;
             }
         }
@@ -231,9 +242,10 @@ impl App {
             Ok(all) => all,
             Err(e) => {
                 log::warn!(target: "library_route", "F2 post-save library refresh failed: {e}");
-                self.flash_status_high(format!(
-                    "⚠ Library route saved but couldn't refresh libraries ({e})"
-                ));
+                self.flash(
+                    format!("⚠ Library route saved but couldn't refresh libraries ({e})"),
+                    ToastSeverity::Error,
+                );
                 return;
             }
         };

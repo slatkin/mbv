@@ -514,7 +514,7 @@ fn queue_play_cursor_while_attached_to_session_hands_off_to_session() {
     app.dispatch(Command::QueuePlayCursor);
 
     assert!(
-        app.status.contains("Playing on remote"),
+        app.status.contains("Requesting playback"),
         "expected a remote-handoff status flash, got {:?}",
         app.status
     );
@@ -530,7 +530,7 @@ fn queue_play_cursor_with_direct_remote_switches_to_remote_scope() {
     app.dispatch(Command::QueuePlayCursor);
 
     assert!(
-        app.status.contains("Playing on remote"),
+        app.status.contains("Requesting playback"),
         "expected a remote-handoff status flash, got {:?}",
         app.status
     );
@@ -557,7 +557,7 @@ fn queue_play_cursor_without_direct_remote_stays_on_local_scope() {
     app.dispatch(Command::QueuePlayCursor);
 
     assert!(
-        app.status.contains("Playing on remote"),
+        app.status.contains("Requesting playback"),
         "expected a remote-handoff status flash, got {:?}",
         app.status
     );

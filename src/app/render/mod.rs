@@ -156,6 +156,7 @@ impl App {
         if self.status_expires.is_some_and(|t| t <= Instant::now()) {
             self.status.clear();
             self.status_expires = None;
+            self.status_severity = super::notify_actions::ToastSeverity::default();
             self.force_clear = true;
         }
 
@@ -486,7 +487,10 @@ impl App {
                 0
             };
             if !is_wide && self.visualizer_enabled && visualizer_h == 0 && left_remaining > 0 {
-                self.flash_status("Terminal too short for left visualizer".into());
+                self.flash(
+                    "Terminal too short for left visualizer".into(),
+                    super::notify_actions::ToastSeverity::Neutral,
+                );
             }
             let queue_h = left_remaining
                 .saturating_sub(visualizer_h)
@@ -633,14 +637,36 @@ impl App {
         // Status bar + toast overlay at the bottom of the right panel.
         if status_area.width > 0 {
             self.render_status_bar(f, status_area, playback, false);
-            let show_toast =
-                !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
+            // Neutral toasts always render in-app (spec: "Neutral toasts …
+            // SHALL always render in-app"). Prompts (status_expires == None)
+            // and non-system-notification fallback toasts follow the existing
+            // gating: visible only when the desktop notification path isn't
+            // working (system notifications disabled or failed).
+            let is_neutral_toast = self.status_expires.is_some()
+                && self.status_severity == super::notify_actions::ToastSeverity::Neutral;
+            let show_toast = !self.status.is_empty()
+                && (is_neutral_toast || !self.system_notifications || self.notif_failed);
             if show_toast {
+                // Prompts (no expiry) and Neutral toasts use standard
+                // status-bar styling; colored toasts use severity palette.
+                let styled_as_status_bar = self.status_expires.is_none()
+                    || self.status_severity == super::notify_actions::ToastSeverity::Neutral;
+                let (toast_bg, toast_fg) = if styled_as_status_bar {
+                    (palette::DARK_BG, palette::TEXT)
+                } else {
+                    let bg = match self.status_severity {
+                        super::notify_actions::ToastSeverity::Success => palette::TOAST_BG_SUCCESS,
+                        super::notify_actions::ToastSeverity::Warning => palette::TOAST_BG_WARNING,
+                        super::notify_actions::ToastSeverity::Error => palette::TOAST_BG,
+                        super::notify_actions::ToastSeverity::Neutral => unreachable!(),
+                    };
+                    (bg, palette::TOAST_FG)
+                };
                 f.render_widget(Clear, status_area);
                 f.render_widget(
-                    Paragraph::new(Self::toast_line(&self.status))
+                    Paragraph::new(Self::toast_line(&self.status, toast_fg))
                         .alignment(Alignment::Center)
-                        .style(Style::default().fg(palette::TOAST_FG).bg(palette::TOAST_BG)),
+                        .style(Style::default().fg(toast_fg).bg(toast_bg)),
                     status_area,
                 );
             }

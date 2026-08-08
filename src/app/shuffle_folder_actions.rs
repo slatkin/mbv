@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::ui_util::natural_sort_key;
 use super::{App, PanelFocus};
 use rand::seq::SliceRandom;
@@ -41,19 +42,19 @@ impl App {
                 items.sort_by_key(|a| natural_sort_key(a.sort_key()));
                 if items.is_empty() {
                     drop(client);
-                    self.flash_status_high("Nothing to play".into());
+                    self.flash("Nothing to play".into(), ToastSeverity::Error);
                     return;
                 }
                 let count = items.len();
                 drop(client);
                 self.replace_playback_queue(items.clone(), 0);
                 self.set_panel_focus(PanelFocus::Queue);
-                self.flash_status(format!("Playing {count} items"));
+                self.flash(format!("Playing {count} items"), ToastSeverity::Success);
                 self.play_items_routed(items, 0);
             }
             Err(e) => {
                 drop(client);
-                self.flash_status_high(format!("Error: {e}"));
+                self.flash(format!("Error: {e}"), ToastSeverity::Error);
             }
         }
     }
@@ -105,7 +106,7 @@ impl App {
                 items.retain(|i| !i.is_folder);
                 if items.is_empty() {
                     drop(client);
-                    self.flash_status_high("Nothing to shuffle".into());
+                    self.flash("Nothing to shuffle".into(), ToastSeverity::Error);
                     return;
                 }
                 items.shuffle(&mut rand::rng());
@@ -113,7 +114,7 @@ impl App {
                 drop(client);
                 self.replace_playback_queue(items.clone(), 0);
                 self.set_panel_focus(PanelFocus::Queue);
-                self.flash_status(format!("Shuffling {count} items"));
+                self.flash(format!("Shuffling {count} items"), ToastSeverity::Success);
                 self.queue_source = crate::config::QueueSource::Shuffle;
                 if !self.has_direct_remote_queue() {
                     self.save_queue_state();
@@ -122,7 +123,7 @@ impl App {
             }
             Err(e) => {
                 drop(client);
-                self.flash_status_high(format!("Error: {e}"));
+                self.flash(format!("Error: {e}"), ToastSeverity::Error);
             }
         }
     }
