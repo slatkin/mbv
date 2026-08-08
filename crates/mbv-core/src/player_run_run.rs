@@ -1,5 +1,13 @@
 use std::os::unix::io::RawFd;
 
+fn command_quit_async(mpv: &Mpv) {
+    let quit = std::ffi::CString::new("quit").unwrap();
+    let mut args = [quit.as_ptr(), std::ptr::null()];
+    unsafe {
+        libmpv2_sys::mpv_command_async(mpv.ctx.as_ptr(), 0, args.as_mut_ptr());
+    }
+}
+
 fn poll_wakeup(fd: RawFd, timeout_ms: i32) {
     let mut pfd = libc::pollfd {
         fd,
@@ -55,7 +63,7 @@ impl PlaybackRun {
                 }
 
                 if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                    let _ = mpv.command("quit", &[]);
+                    command_quit_async(&mpv);
                     self.quit_at = Some(Instant::now());
                 }
 
@@ -63,9 +71,17 @@ impl PlaybackRun {
                     .quit_at
                     .is_some_and(|t| t.elapsed() > Duration::from_secs(2))
                 {
+                    let is_daemon_shutdown = self.shutdown_report_timeout.lock().unwrap().is_some();
                     if !self.stop_report.is_sent() {
-                        progress.stop_and_join(self.progress_join_budget());
-                        self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
+                        if is_daemon_shutdown {
+                            progress.stop_and_join(self.progress_join_budget());
+                            self.stop_report =
+                                StopReport::mark_sent(self.report_stopped_for_current_context());
+                        } else {
+                            let _ = progress.stop_tx.send(());
+                            self.reporter.report_stopped_background(self.last_valid_pos);
+                            self.stop_report = StopReport::Sent;
+                        }
                     }
                     let runtime = self.status.lock().unwrap().runtime_ticks;
                     let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
@@ -117,7 +133,7 @@ impl PlaybackRun {
                             let _ = self.event_tx.send(PlayerEvent::PausedChanged(paused));
                             if self.quit_at.is_none() {
                                 let event_name = if paused { "Pause" } else { "Unpause" };
-                                self.reporter.report_progress(event_name);
+                                self.reporter.report_progress_background(event_name);
                             }
                         }
                         Ok(Event::PropertyChange {

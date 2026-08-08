@@ -61,7 +61,8 @@ impl PlaybackRun {
                         season: self.season,
                         episode: self.episode,
                     });
-                } else if self.next_up == NextUp::Idle && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
+                } else if self.next_up == NextUp::Idle && ticks > 0 && ticks < TICKS_PER_SECOND * 5
+                {
                     self.next_up.arm();
                     log::info!(target: "player", "next-up: armed series={} runtime={}s", self.series_id, runtime / TICKS_PER_SECOND);
                 }
@@ -84,7 +85,8 @@ impl PlaybackRun {
             return;
         }
         let pos = pos as usize;
-        if self.pending_initial_jump || !self.load_state.is_ready() || self.forced_slot_id.is_some() {
+        if self.pending_initial_jump || !self.load_state.is_ready() || self.forced_slot_id.is_some()
+        {
             log::debug!(
                 target: "player",
                 "ignoring transient playlist-pos={pos} while queue transition is pending"
@@ -148,6 +150,9 @@ impl PlaybackRun {
         // `PlaybackRestart` is the concrete mpv-owned event used by mbvd as
         // its output-started boundary. It says nothing about downstream pipe
         // buffers or actual audibility.
+        if let Some(path) = &self.config.audio_pipe_path {
+            enlarge_pipe_buffer(path);
+        }
         let _ = self.event_tx.send(PlayerEvent::OutputStarted);
         {
             let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
@@ -314,7 +319,8 @@ impl PlaybackRun {
                 self.queue_len());
             progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
-            self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
+            self.stop_report =
+                StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 idx: completed_idx.min(self.queue_len().saturating_sub(1)),
                 position_ticks: self.last_valid_pos,
@@ -440,13 +446,19 @@ impl PlaybackRun {
     fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
         log::warn!(target: "player", "shutdown: last_valid_pos={} stop_report={:?} pending_resume={}",
             self.last_valid_pos, self.stop_report, self.pending_resume_secs.is_some());
+        let is_daemon_shutdown = self.shutdown_report_timeout.lock().unwrap().is_some();
         if self.stop_report == StopReport::NotSent {
-            progress.stop_and_join(self.progress_join_budget());
-            self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
+            if is_daemon_shutdown {
+                progress.stop_and_join(self.progress_join_budget());
+                self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
+            } else {
+                let _ = progress.stop_tx.send(());
+                self.reporter.report_stopped_background(self.last_valid_pos);
+                self.stop_report = StopReport::Sent;
+            }
         }
         let client = self.reporter.client.clone();
         if self.origin == PlaybackOrigin::Standalone {
-            // Retry mark_played in a detached thread so Shutdown never blocks.
             if let Some(mid) = self.mark_played_id.take() {
                 retry_mark_played(client.clone(), mid);
             }
@@ -468,20 +480,12 @@ impl PlaybackRun {
                     error: None,
                 });
             }
-            // mpv exited on its own (not via our stop command, e.g. the user
-            // closed the mpv window directly) — despite the event name,
-            // App::handle_player_event's PlayerEvent::MpvQuit arm does not
-            // quit the app; it just clears some UI state and returns false.
             if self.quit_at.is_none() {
                 let _ = self.event_tx.send(PlayerEvent::MpvQuit);
             }
             return;
         }
         self.status.lock().unwrap().active = false;
-        // played and consume are deliberately the same value here: stopped_near_end
-        // is already video-only (see is_near_end's !is_audio gate), so a quit/cancel
-        // near the end of an audio item never sets either — consistent with on_end_file's
-        // normal advance path, where only natural/next-up (not near-end) triggers audio consume.
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             idx: self.current_idx,
             position_ticks: self.last_valid_pos,
@@ -490,10 +494,8 @@ impl PlaybackRun {
             progress_report_accepted: self.stop_report.is_accepted(),
             error: None,
         });
-        // mpv exited on its own (not via our stop command) — tell the app to quit.
         if self.quit_at.is_none() {
             let _ = self.event_tx.send(PlayerEvent::MpvQuit);
         }
     }
-
 }
