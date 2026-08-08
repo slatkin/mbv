@@ -1,7 +1,7 @@
 impl EmbyClient {
     pub fn report_start(
         &self,
-        item: &MediaItem,
+        item: &EmbyItem,
         media_source_id: &MediaSourceId,
         session_id: &EmbySessionId,
     ) -> bool {

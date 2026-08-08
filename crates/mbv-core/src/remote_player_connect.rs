@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use crate::api::MediaItem;
+use crate::api::EmbyItem;
 use crate::ctrl::{
     CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
 };
@@ -260,7 +260,7 @@ pub(crate) fn perform_handshake(
 fn apply_ctrl_event(
     ev: CtrlEvent,
     status: &Arc<Mutex<PlayerStatus>>,
-    items: &Arc<Mutex<Vec<MediaItem>>>,
+    items: &Arc<Mutex<Vec<EmbyItem>>>,
     queue_source: &Arc<Mutex<crate::config::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
@@ -377,7 +377,7 @@ pub(crate) fn connect_endpoint(
 
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
-    let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
+    let items: Arc<Mutex<Vec<EmbyItem>>> = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
     let disconnected = Arc::new(AtomicBool::new(false));
     let shutdown_announced = Arc::new(AtomicBool::new(false));

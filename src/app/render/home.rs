@@ -27,11 +27,11 @@ impl App {
         struct Section {
             section_idx: usize,
             flat_start: usize,
-            items: Vec<mbv_core::api::MediaItem>,
+            items: Vec<mbv_core::api::EmbyItem>,
         }
         enum DisplayRow {
             Empty,
-            Item(usize, Box<mbv_core::api::MediaItem>),
+            Item(usize, Box<mbv_core::api::EmbyItem>),
         }
 
         let continue_items = self.home.continue_items.clone();
@@ -115,7 +115,7 @@ impl App {
         let two_column = area.width >= TWO_COLUMN_THRESHOLD;
 
         // Hero data: (item, meta_area, img_area, meta_layout)
-        let hero_data: Option<(mbv_core::api::MediaItem, Rect, Rect, KeepWatchingHeroLayout)>;
+        let hero_data: Option<(mbv_core::api::EmbyItem, Rect, Rect, KeepWatchingHeroLayout)>;
         let list_area: Rect;
 
         if two_column {

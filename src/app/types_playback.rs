@@ -1,4 +1,4 @@
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
@@ -93,7 +93,7 @@ impl QueueScopeResolution {
 /// made after the move is refused instead of swapping the wrong items.
 #[derive(Debug)]
 pub(super) enum UndoEntry {
-    Remove(usize, Box<MediaItem>),
+    Remove(usize, Box<EmbyItem>),
     Move {
         from: usize,
         to: usize,
@@ -110,9 +110,9 @@ pub(super) enum RemoteSlotState {
 }
 
 pub(super) struct HomePane {
-    pub(super) continue_items: Vec<MediaItem>,
+    pub(super) continue_items: Vec<EmbyItem>,
     pub(super) continue_cursor: usize,
-    pub(super) latest: Vec<(String, String, Vec<MediaItem>, usize)>, // (title, lib_id, items, cursor)
+    pub(super) latest: Vec<(String, String, Vec<EmbyItem>, usize)>, // (title, lib_id, items, cursor)
     pub(super) section: usize,                                       // 0=continue, 1..=latest
     /// Flat cursor for the home list (spans continue_items then all latest sections).
     pub(super) home_cursor: usize,
@@ -135,7 +135,7 @@ pub(super) struct SuspendedLocalSession {
 
 pub(super) enum PendingQueueAction {
     PlayItems {
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         start_idx: usize,
         source: crate::config::QueueSource,
     },

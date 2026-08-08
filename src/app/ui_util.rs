@@ -1,4 +1,4 @@
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use unicode_width::UnicodeWidthStr;
 
 /// Advance subtitle mode through the standard cycle.
@@ -39,15 +39,15 @@ pub fn natural_sort_key(s: &str) -> String {
     out
 }
 
-pub fn is_playable(item: &MediaItem) -> bool {
+pub fn is_playable(item: &EmbyItem) -> bool {
     matches!(item.media_type.as_str(), "Video" | "Audio")
 }
 
-pub fn sort_episodes(items: &mut [MediaItem]) {
+pub fn sort_episodes(items: &mut [EmbyItem]) {
     items.sort_by_key(|i| i.index_number);
 }
 
-pub fn sort_audio_tracks(items: &mut [MediaItem]) {
+pub fn sort_audio_tracks(items: &mut [EmbyItem]) {
     let has_track_nums = items.iter().any(|i| i.index_number > 0);
     if has_track_nums {
         items.sort_by_key(|i| {
@@ -227,7 +227,7 @@ pub(super) enum QueueRow {
 }
 
 /// Build the flat visual rows for the queue: one `Track` row per item, in order.
-pub(super) fn build_queue_rows(items: &[MediaItem]) -> Vec<QueueRow> {
+pub(super) fn build_queue_rows(items: &[EmbyItem]) -> Vec<QueueRow> {
     (0..items.len())
         .map(|idx| QueueRow::Track { idx })
         .collect()
@@ -238,7 +238,7 @@ mod tests {
     use super::*;
     use crate::app::tests::make_item;
 
-    fn make_audio_item(album: &str, album_id: &str, artist: &str) -> MediaItem {
+    fn make_audio_item(album: &str, album_id: &str, artist: &str) -> EmbyItem {
         let mut item = make_item(album, "Audio");
         item.album = album.to_string();
         item.album_id = album_id.to_string();

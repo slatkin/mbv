@@ -574,7 +574,7 @@ impl App {
     pub(in crate::app) fn selected_album_item(
         &self,
         lib_idx: usize,
-    ) -> Option<mbv_core::api::MediaItem> {
+    ) -> Option<mbv_core::api::EmbyItem> {
         let lvl = self.libs[lib_idx].nav_stack.last()?;
         lvl.items.get(lvl.cursor).cloned()
     }
@@ -587,7 +587,7 @@ impl App {
     ///    first few tracks — see `fetch_album_artist` in `images.rs`).
     /// 3. `parse_album_folder_name` heuristic.
     /// 4. Literal "Unknown Artist".
-    pub(super) fn resolve_group_album_artist(&self, item: &mbv_core::api::MediaItem) -> String {
+    pub(super) fn resolve_group_album_artist(&self, item: &mbv_core::api::EmbyItem) -> String {
         crate::app::music_grouping::derive_album_artist(
             item,
             self.album_artist_cache.get(&item.id).map(String::as_str),

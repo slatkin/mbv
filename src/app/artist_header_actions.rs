@@ -1,7 +1,7 @@
 use super::notify_actions::ToastSeverity;
 use super::ui_util::{is_playable, sort_audio_tracks};
 use super::{App, ArtistHeaderSelection, PanelFocus};
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use rand::seq::SliceRandom;
 
 impl App {
@@ -23,7 +23,7 @@ impl App {
         &mut self,
         lib_idx: usize,
         selection: &ArtistHeaderSelection,
-    ) -> Result<Vec<MediaItem>, String> {
+    ) -> Result<Vec<EmbyItem>, String> {
         let albums = self
             .artist_header_album_items_for_selection(lib_idx, selection)
             .unwrap_or_default();

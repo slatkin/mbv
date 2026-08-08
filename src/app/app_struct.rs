@@ -17,7 +17,7 @@ use super::types_playback::{
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
-use mbv_core::api::{EmbyClient, MediaItem};
+use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::visualizer::CavaWorker;
@@ -141,7 +141,7 @@ pub struct App {
     pub(super) pending_queue_edit_cursor: Option<usize>,
     pub(super) pending_active_idx: Option<usize>,
     pub(super) skip_intro_end_ticks: Option<i64>,
-    pub(super) next_up_item: Option<MediaItem>,
+    pub(super) next_up_item: Option<EmbyItem>,
     // Main UI scalars.
     // reuses shared self.libs.
     pub(super) panel_focus: PanelFocus,
@@ -194,8 +194,8 @@ pub struct App {
     pub(super) notif_action_rx: mpsc::Receiver<String>,
     pub(super) lib_tx: mpsc::Sender<LibEvent>,
     pub(super) lib_rx: mpsc::Receiver<LibEvent>,
-    pub(super) search_tx: mpsc::Sender<(String, Result<Vec<MediaItem>, String>)>,
-    pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<MediaItem>, String>)>,
+    pub(super) search_tx: mpsc::Sender<(String, Result<Vec<EmbyItem>, String>)>,
+    pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<EmbyItem>, String>)>,
     pub(super) search_debounce_deadline: Option<Instant>,
     pub(super) search_debounce_pending: Option<String>,
     pub(super) search_sidebar: Option<SearchSidebar>,
@@ -204,13 +204,13 @@ pub struct App {
     pub(super) sessions_scroll: usize,
     pub(super) sessions_loading: bool,
     pub(super) show_sessions: bool,
-    pub(super) playlists: Vec<MediaItem>,
+    pub(super) playlists: Vec<EmbyItem>,
     pub(super) playlists_cursor: usize,
     pub(super) playlists_scroll: usize,
     pub(super) playlists_loading: bool,
     pub(super) show_playlists: bool,
-    pub(super) playlists_open: Option<MediaItem>, // playlist currently being browsed
-    pub(super) playlists_open_items: Vec<MediaItem>,
+    pub(super) playlists_open: Option<EmbyItem>, // playlist currently being browsed
+    pub(super) playlists_open_items: Vec<EmbyItem>,
     pub(super) playlists_open_cursor: usize,
     pub(super) playlists_open_scroll: usize,
     pub(super) playlists_open_loading: bool,
@@ -297,7 +297,7 @@ pub struct App {
     /// pane (#145) has data without requiring the user to drill in first.
     /// Keyed by album id, mirroring `album_artist_cache`'s never-evicted
     /// lifetime.
-    pub(super) album_tracks_cache: std::collections::HashMap<String, Vec<MediaItem>>,
+    pub(super) album_tracks_cache: std::collections::HashMap<String, Vec<EmbyItem>>,
     pub(super) album_tracks_loading: std::collections::HashSet<String>,
     /// TV series detail cache for inline rendering.
     /// When a Series is selected, we proactively fetch seasons and episodes
@@ -341,7 +341,7 @@ pub(super) struct AppInit {
     pub(super) card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
     pub(super) notif_action_tx: mpsc::Sender<String>,
     pub(super) notif_action_rx: mpsc::Receiver<String>,
-    pub(super) search_tx: mpsc::Sender<(String, Result<Vec<MediaItem>, String>)>,
-    pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<MediaItem>, String>)>,
+    pub(super) search_tx: mpsc::Sender<(String, Result<Vec<EmbyItem>, String>)>,
+    pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<EmbyItem>, String>)>,
     pub(super) idle_feed: Option<IdleFeed>,
 }

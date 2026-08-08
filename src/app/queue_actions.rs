@@ -5,7 +5,7 @@ use super::{
     App, ConfirmAction, ConfirmModal, LibEvent, PendingQueueAction, QueueScope, SessionEvent,
     UndoEntry,
 };
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use mbv_core::player::PlayerCommand;
 use std::sync::Arc;
 

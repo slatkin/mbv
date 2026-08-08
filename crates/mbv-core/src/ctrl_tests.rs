@@ -129,8 +129,8 @@ fn wire_command_tags_are_pinned() {
         .unwrap(),
         "{\"ReplacePlaylist\":{\"items\":[],\"start_idx\":0}}"
     );
-    // LoadNew and NextUpShow carry a MediaItem / free-form strings, so
-    // asserting the full JSON body would just restate MediaItem's field
+    // LoadNew and NextUpShow carry a EmbyItem / free-form strings, so
+    // asserting the full JSON body would just restate EmbyItem's field
     // list; instead check the pinned tag key only.
     assert_eq!(
         wire_tag(&WireCommand::LoadNew {
@@ -195,8 +195,8 @@ fn wire_tag(cmd: &WireCommand) -> String {
         .clone()
 }
 
-fn stub_media_item() -> crate::api::MediaItem {
-    crate::api::MediaItem {
+fn stub_media_item() -> crate::api::EmbyItem {
+    crate::api::EmbyItem {
         id: "item1".into(),
         name: "Test Item".into(),
         item_type: "Episode".into(),

@@ -22,7 +22,7 @@ pub(super) const SERIES_IMAGE_PLACEHOLDER_ROWS: u16 = 10;
 /// Builds the "YYYY-YYYY  GENRE" (or any subset present) metadata line for a
 /// Series item, shared by `series_inline_detail_rows` (row-count estimate)
 /// and `render_series_inline_detail` (actual render) so the two can't drift.
-pub(super) fn series_meta_line(item: &mbv_core::api::MediaItem) -> String {
+pub(super) fn series_meta_line(item: &mbv_core::api::EmbyItem) -> String {
     let year_range = match (item.production_year, item.end_year) {
         (s, e) if s > 0 && e > 0 && e != s => format!("{}-{}", s, e),
         (s, _) if s > 0 => format!("{}", s),
@@ -97,7 +97,7 @@ impl App {
     /// `render_series_inline_detail`).
     pub(super) fn series_inline_detail_rows(
         &mut self,
-        item: &mbv_core::api::MediaItem,
+        item: &mbv_core::api::EmbyItem,
         panel_width: u16,
         show_title: bool,
         in_selection: bool,

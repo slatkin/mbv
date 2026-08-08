@@ -27,7 +27,7 @@ impl App {
     /// Image types to request for the Keep Watching hero panel, mirroring
     /// the per-type conventions used for the queue card (`render_card`).
     pub(super) fn keep_watching_hero_image_types(
-        item: &mbv_core::api::MediaItem,
+        item: &mbv_core::api::EmbyItem,
     ) -> &'static [&'static str] {
         match item.item_type.as_str() {
             "Movie" => &["Backdrop", "Primary", "Logo"],
@@ -40,7 +40,7 @@ impl App {
     /// show-name line, the duration/progress line, and the blank separator,
     /// then the wrapped overview.
     pub(super) fn keep_watching_hero_layout(
-        item: &mbv_core::api::MediaItem,
+        item: &mbv_core::api::EmbyItem,
         text_w: usize,
     ) -> KeepWatchingHeroLayout {
         if text_w == 0 {
@@ -143,7 +143,7 @@ impl App {
         &self,
         f: &mut Frame,
         area: Rect,
-        item: &mbv_core::api::MediaItem,
+        item: &mbv_core::api::EmbyItem,
         layout: &KeepWatchingHeroLayout,
         focused: bool,
     ) {

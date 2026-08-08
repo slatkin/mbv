@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::api::MediaItem;
+use crate::api::EmbyItem;
 use crate::config::QueueSource;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
@@ -126,7 +126,7 @@ pub enum CtrlCmd {
     Hello(CtrlHello),
     PlayerCmd(WireCommand),
     AdoptQueue {
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         cursor: usize,
         source: QueueSource,
     },
@@ -185,7 +185,7 @@ pub enum WireCommand {
     #[serde(rename = "JumpTo")]
     JumpTo(usize),
     #[serde(rename = "QueueAppend")]
-    QueueAppend { items: Vec<MediaItem> },
+    QueueAppend { items: Vec<EmbyItem> },
     #[serde(rename = "PlaylistRemove")]
     QueueRemove(usize),
     #[serde(rename = "PlaylistMove")]
@@ -212,7 +212,7 @@ pub enum WireCommand {
     LoadNew {
         url: String,
         start_pos: f64,
-        item: Box<MediaItem>,
+        item: Box<EmbyItem>,
     },
     #[serde(rename = "NextUpShow")]
     NextUpShow {
@@ -227,7 +227,7 @@ pub enum WireCommand {
     SkipIntroDismiss,
     #[serde(rename = "ReplacePlaylist")]
     ReplaceQueue {
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         start_idx: usize,
     },
 }
@@ -427,7 +427,7 @@ pub enum DisconnectReason {
 #[derive(Serialize, Deserialize)]
 pub struct CtrlState {
     pub status: PlayerStatus,
-    pub items: Vec<MediaItem>,
+    pub items: Vec<EmbyItem>,
     pub cursor: usize,
     pub source: QueueSource,
 }

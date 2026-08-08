@@ -127,7 +127,7 @@ impl CompactBannerLayout {
 }
 
 impl App {
-    pub(crate) fn selected_movie_item(&self, lib_idx: usize) -> Option<mbv_core::api::MediaItem> {
+    pub(crate) fn selected_movie_item(&self, lib_idx: usize) -> Option<mbv_core::api::EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         let coll = lib.library.collection_type.as_str();
         if coll != "movies" && coll != "homevideos" && coll != "podcasts" {
@@ -151,7 +151,7 @@ impl App {
         Some(item)
     }
 
-    pub(crate) fn selected_series_item(&self, lib_idx: usize) -> Option<mbv_core::api::MediaItem> {
+    pub(crate) fn selected_series_item(&self, lib_idx: usize) -> Option<mbv_core::api::EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.library.collection_type != "tvshows" {
             return None;
@@ -172,7 +172,7 @@ impl App {
     pub(crate) fn selected_album_hero_item(
         &self,
         lib_idx: usize,
-    ) -> Option<mbv_core::api::MediaItem> {
+    ) -> Option<mbv_core::api::EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.library.collection_type != "music" {
             return None;
@@ -195,7 +195,7 @@ impl App {
     /// per frame (once to measure, once to render) is safe and idempotent.
     pub(super) fn compact_banner_layout_with_overview(
         &mut self,
-        item: &mbv_core::api::MediaItem,
+        item: &mbv_core::api::EmbyItem,
         panel_width: u16,
         truncate_overview: bool,
     ) -> CompactBannerLayout {

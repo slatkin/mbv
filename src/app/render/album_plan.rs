@@ -94,7 +94,7 @@ impl App {
     /// falling back to a synchronous best-effort chain otherwise.
     pub(super) fn group_album_info(
         &self,
-        albums: &[mbv_core::api::MediaItem],
+        albums: &[mbv_core::api::EmbyItem],
         catalog: Option<&GroupedAlbumCatalog>,
     ) -> Vec<(String, String, String)> {
         match catalog {
@@ -118,7 +118,7 @@ impl App {
 
     pub(super) fn build_grouped_album_display_plan(
         &mut self,
-        albums: &[mbv_core::api::MediaItem],
+        albums: &[mbv_core::api::EmbyItem],
         album_info: &[(String, String, String)],
         order: &[usize],
         cursor: usize,
@@ -175,7 +175,7 @@ impl App {
             })
         }
         .flatten();
-        let selected_detail_rows = |tracks: &[mbv_core::api::MediaItem], show_hint: bool| {
+        let selected_detail_rows = |tracks: &[mbv_core::api::EmbyItem], show_hint: bool| {
             let Some((full_width, artwork_width)) = wrap_widths else {
                 return if show_hint {
                     2 + tracks.len()

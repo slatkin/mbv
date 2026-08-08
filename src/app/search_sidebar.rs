@@ -1,8 +1,8 @@
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 
 pub(crate) struct SearchSidebar {
     pub(super) query: String,
-    pub(super) results: Vec<MediaItem>,
+    pub(super) results: Vec<EmbyItem>,
     pub(super) cursor: usize,
     pub(super) scroll: usize,
     pub(super) loading: bool,
@@ -50,7 +50,7 @@ impl SearchSidebar {
     pub(super) fn apply_drain(
         &mut self,
         query: &str,
-        result: Result<Vec<MediaItem>, String>,
+        result: Result<Vec<EmbyItem>, String>,
         errors: &mut Vec<String>,
     ) {
         // A faster keystroke can dispatch a newer query while an older one
@@ -98,7 +98,7 @@ impl SearchSidebar {
         types
     }
 
-    pub(super) fn filtered_results(&self) -> Vec<&MediaItem> {
+    pub(super) fn filtered_results(&self) -> Vec<&EmbyItem> {
         let types = self.available_types();
         let filter = if self.type_filter == 0 {
             None

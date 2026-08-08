@@ -400,7 +400,7 @@ fn context_menu_remove_targets_displayed_remote_queue() {
 
     app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)));
 
-    let item_ids = |items: &[MediaItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+    let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
     assert_eq!(item_ids(&app.player_tab.items), item_ids(&local_items));
     assert_eq!(
         item_ids(&app.remote_player_tab.as_ref().unwrap().items),
@@ -436,7 +436,7 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
 
     app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)));
 
-    let item_ids = |items: &[MediaItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+    let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
     assert_eq!(item_ids(&app.player_tab.items), item_ids(&local_items));
     assert_eq!(
         item_ids(&app.remote_player_tab.as_ref().unwrap().items),

@@ -2,7 +2,7 @@ use super::{
     notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
     QueueScope,
 };
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 
 impl App {
     fn handle_lib_loaded(&mut self, lib_idx: usize, parent_id: String, level: BrowseLevel) {
@@ -75,7 +75,7 @@ impl App {
         &mut self,
         lib_idx: usize,
         parent_id: String,
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         total_count: usize,
     ) {
         let mut items = Some(items);
@@ -96,7 +96,7 @@ impl App {
         parent_id: String,
         item_types: Option<String>,
         unplayed_only: bool,
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         total_count: usize,
     ) {
         let is_feed_video_refresh = self.is_feed_home_video_library(lib_idx)

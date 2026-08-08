@@ -3,7 +3,7 @@ use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 use super::{
     App, BrowseLevel, LocalPlaybackTarget, PanelFocus, PlaybackTarget, RemotePlaybackTarget,
 };
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use mbv_core::player::PlayerCommand;
 use mbv_core::ItemId;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ pub(super) fn enqueue_action_context(
 /// drifted, e.g. if the list was edited before the last save) and falls back
 /// to the saved cursor only when there's no last-played id to anchor on.
 pub(crate) fn queue_restore_cursor(
-    items: &[MediaItem],
+    items: &[EmbyItem],
     saved_cursor: usize,
     last_played_item_id: Option<&str>,
     last_played_completed: bool,
@@ -117,7 +117,7 @@ impl App {
         self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize
     }
 
-    pub(super) fn current_home_item(&self) -> Option<MediaItem> {
+    pub(super) fn current_home_item(&self) -> Option<EmbyItem> {
         let sec = self.home.section;
         if sec == 0 {
             self.home
@@ -130,7 +130,7 @@ impl App {
         }
     }
 
-    pub(super) fn current_lib_item(&self) -> Option<MediaItem> {
+    pub(super) fn current_lib_item(&self) -> Option<EmbyItem> {
         let lib_idx = self.library_tab.checked_sub(1)?;
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
@@ -177,7 +177,7 @@ impl App {
         }
     }
 
-    pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
+    pub(super) fn play_items_routed(&mut self, items: Vec<EmbyItem>, start_idx: usize) {
         if let Some(item) = items.get(start_idx).or_else(|| items.first()) {
             log::info!(target: "library_route", "user action=queue-replace item_id={:?} item_name={:?}", item.id, item.name);
             if self.in_non_library_thin_client_mode() {
@@ -230,7 +230,7 @@ impl App {
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
-    pub(super) fn play_item(&mut self, item: MediaItem) {
+    pub(super) fn play_item(&mut self, item: EmbyItem) {
         log::info!(target: "library_route", "user action=play item_id={:?} item_name={:?}", item.id, item.name);
         if self.in_non_library_thin_client_mode() {
             log::info!(target: "library_route", "route bypass action=play item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
@@ -298,7 +298,7 @@ impl App {
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
-    pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::MediaItem) {
+    pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::EmbyItem) {
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
         if self.in_non_library_thin_client_mode() {
             log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
@@ -487,7 +487,7 @@ impl App {
                     .selected_album_item(lib_idx)
                     .and_then(|album| self.album_tracks_cache.get(&album.id).cloned())
                     .unwrap_or_default();
-                let mut tracks: Vec<MediaItem> =
+                let mut tracks: Vec<EmbyItem> =
                     level_items.into_iter().filter(is_playable).collect();
                 sort_audio_tracks(&mut tracks);
                 if let Some(start_idx) = tracks.iter().position(|i| i.id == fresh.id) {

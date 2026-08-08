@@ -184,7 +184,7 @@ impl App {
     /// missed a live-but-not-yet-visible target session.
     pub(super) fn resolve_route_for_play(
         &mut self,
-        item: &mbv_core::api::MediaItem,
+        item: &mbv_core::api::EmbyItem,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
         log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} library_tab={}", item.id, item.name, self.library_tab);
         if matches!(self.panel_focus, PanelFocus::Queue) {
@@ -212,7 +212,7 @@ impl App {
     /// back to ancestor lookup for a non-root folder.
     pub(super) fn resolve_route_for_enqueue_folder(
         &mut self,
-        item: &mbv_core::api::MediaItem,
+        item: &mbv_core::api::EmbyItem,
     ) -> Option<String> {
         if item.item_type == "CollectionFolder" {
             return self

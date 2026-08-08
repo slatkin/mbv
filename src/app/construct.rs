@@ -5,7 +5,7 @@ use super::{
     bootstrap_local_daemon_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
     LEFT_WIDTH_DEFAULT,
 };
-use mbv_core::api::{EmbyClient, MediaItem};
+use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
 use mbv_core::remote_player::DaemonEndpoint;
 use ratatui_image::picker::Picker;
@@ -226,7 +226,7 @@ impl App {
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
-        let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<MediaItem>, String>)>();
+        let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
@@ -351,7 +351,7 @@ impl App {
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
-        let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<MediaItem>, String>)>();
+        let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let hidden_libraries = client.config.hidden_libraries.clone();
         let library_routes = client.config.library_routes.clone();

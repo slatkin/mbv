@@ -1,6 +1,6 @@
 use super::ui_util::sort_episodes;
 use super::{AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, LibraryTab, PAGE_SIZE};
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 
 type BrowseRefresh = (
     usize,
@@ -13,7 +13,7 @@ type BrowseRefresh = (
     Option<super::render::LetterFilter>,
 );
 type AlbumIndexFetch<'a> =
-    dyn FnMut(&str, usize, usize) -> Result<(Vec<MediaItem>, usize), String> + 'a;
+    dyn FnMut(&str, usize, usize) -> Result<(Vec<EmbyItem>, usize), String> + 'a;
 const ALBUM_INDEX_PAGE_SIZE: usize = 200;
 
 // Visibility bump: private -> `pub(super)`. Exercised directly by
@@ -47,7 +47,7 @@ pub(super) fn full_library_fetch_limit(lib: &LibraryTab, lvl: &BrowseLevel) -> u
 pub(super) fn fetch_all_album_index_items(
     parent_id: &str,
     fetch: &mut AlbumIndexFetch<'_>,
-) -> Result<Vec<MediaItem>, String> {
+) -> Result<Vec<EmbyItem>, String> {
     let mut items = Vec::new();
     loop {
         let (page, total) = fetch(parent_id, items.len(), ALBUM_INDEX_PAGE_SIZE)?;

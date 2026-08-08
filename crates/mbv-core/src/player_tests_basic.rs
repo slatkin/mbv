@@ -161,8 +161,8 @@ fn shift_index_for_move_leaves_unrelated_indices_alone() {
 
 // ── PlayerCommand serde (IPC protocol integrity) ─────────────────────────
 
-fn make_media_item(id: &str) -> crate::api::MediaItem {
-    crate::api::MediaItem {
+fn make_media_item(id: &str) -> crate::api::EmbyItem {
+    crate::api::EmbyItem {
         id: id.into(),
         name: "Test Episode".into(),
         item_type: "Episode".into(),

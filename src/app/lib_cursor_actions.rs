@@ -1,6 +1,6 @@
 use super::{AlbumIndexState, App, LibEvent, PanelFocus};
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use std::time::Instant;
 
 impl App {
@@ -284,7 +284,7 @@ impl App {
     /// Activates series-selection mode for the given Series item.
     /// Ensures the series detail is fetched and sets `series_selection`
     /// to start at the first episode.
-    pub(super) fn enter_series_selection(&mut self, lib_idx: usize, item: &MediaItem) {
+    pub(super) fn enter_series_selection(&mut self, lib_idx: usize, item: &EmbyItem) {
         if item.item_type != "Series" || item.id.is_empty() {
             return;
         }
@@ -295,7 +295,7 @@ impl App {
 
     /// Returns the episodes for the current season in series-selection
     /// mode, or `None` if not in selection mode.
-    pub(super) fn series_selection_episodes(&self, lib_idx: usize) -> Option<Vec<MediaItem>> {
+    pub(super) fn series_selection_episodes(&self, lib_idx: usize) -> Option<Vec<EmbyItem>> {
         let _ep_idx = self.libs[lib_idx].series_selection?;
         let item = self.selected_series_item(lib_idx)?;
         let detail = self.series_detail_cache.get(&item.id)?;
@@ -391,8 +391,8 @@ impl App {
         &self,
         lib_idx: usize,
         item_idx: usize,
-        mut item: MediaItem,
-    ) -> MediaItem {
+        mut item: EmbyItem,
+    ) -> EmbyItem {
         let Some(AlbumIndexState::Ready(entries)) = self
             .libs
             .get(lib_idx)

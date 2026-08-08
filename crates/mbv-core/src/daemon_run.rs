@@ -251,7 +251,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         });
     }
 
-    let mut items: Vec<MediaItem> = Vec::new();
+    let mut items: Vec<EmbyItem> = Vec::new();
     let mut cursor: usize = 0;
     let mut source = crate::config::QueueSource::Unknown;
     let mut playback_intents = PlaybackIntentState::default();

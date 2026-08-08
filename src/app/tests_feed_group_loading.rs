@@ -129,7 +129,7 @@ fn make_home_video_app() -> App {
     app
 }
 
-fn seed_home_video_root_loaded(app: &mut App) -> MediaItem {
+fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
     let mut empty = make_item("Empty Channel", "Folder");
     empty.id = "folder-empty".into();
     empty.is_folder = true;

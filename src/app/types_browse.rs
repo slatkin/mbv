@@ -1,8 +1,8 @@
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 
 pub(super) struct LibSearch {
     pub(super) query: String,
-    pub(super) items: Vec<mbv_core::api::MediaItem>,
+    pub(super) items: Vec<mbv_core::api::EmbyItem>,
     pub(super) results: Vec<usize>, // indices into items, sorted by score desc
     pub(super) cursor: usize,       // position within results
     pub(super) scroll: usize,       // viewport scroll offset for the results list
@@ -17,7 +17,7 @@ pub(super) struct AlbumPathPart {
 
 #[derive(Clone, Debug)]
 pub(super) struct AlbumSearchEntry {
-    pub(super) album: MediaItem,
+    pub(super) album: EmbyItem,
     pub(super) ancestors: Vec<AlbumPathPart>,
     pub(super) display_label: String,
     pub(super) search_text: String,
@@ -35,14 +35,14 @@ pub(super) enum AlbumIndexState {
 /// so the inline detail pane can render without drilling in.
 #[derive(Clone, Debug)]
 pub(super) struct SeriesDetail {
-    pub(super) seasons: Vec<MediaItem>,
-    pub(super) episodes: std::collections::HashMap<String, Vec<MediaItem>>,
+    pub(super) seasons: Vec<EmbyItem>,
+    pub(super) episodes: std::collections::HashMap<String, Vec<EmbyItem>>,
 }
 
 pub(super) struct BrowseLevel {
     pub(super) parent_id: String,
     pub(super) title: String,
-    pub(super) items: Vec<MediaItem>,
+    pub(super) items: Vec<EmbyItem>,
     pub(super) total_count: usize,
     pub(super) cursor: usize,
     pub(super) scroll: usize, // viewport scroll offset for the list
@@ -51,7 +51,7 @@ pub(super) struct BrowseLevel {
     pub(super) sort_by: String,
     pub(super) sort_order: String,
     pub(super) loading: bool,
-    pub(super) all_items: Option<Vec<MediaItem>>, // prefetched full list for instant search
+    pub(super) all_items: Option<Vec<EmbyItem>>, // prefetched full list for instant search
     /// Active letter-range pill scope for a large library's top browse level
     /// (`None` = unfiltered). See `render::LetterFilter`.
     pub(super) letter_filter: Option<crate::app::render::LetterFilter>,
@@ -69,7 +69,7 @@ impl BrowseLevel {
 
     pub(super) fn from_position_level(
         saved: &crate::config::LibraryPositionLevel,
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         total_count: usize,
         visible_rows: usize,
     ) -> Self {
@@ -132,7 +132,7 @@ pub(super) fn restore_library_position<F>(
     mut fetch_level: F,
 ) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
 where
-    F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<MediaItem>, usize), String>,
+    F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize), String>,
 {
     if saved.levels.is_empty() {
         return Ok(None);

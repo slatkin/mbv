@@ -2,10 +2,10 @@ use super::types_browse::BrowseLevel;
 use super::types_browse::LibSearch;
 use super::types_feed::FeedHomeVideoState;
 use super::types_playback::ArtistHeaderSelection;
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 
 pub(super) struct LibraryTab {
-    pub(super) library: MediaItem,
+    pub(super) library: EmbyItem,
     pub(super) nav_stack: Vec<BrowseLevel>,
     pub(super) search: Option<LibSearch>,
     pub(super) feed_home_video: Option<FeedHomeVideoState>,

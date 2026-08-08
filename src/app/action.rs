@@ -513,7 +513,7 @@ impl App {
                             // non-empty, so no `is_empty()` re-check here.
                             //
                             // `replace_playback_queue` and `play_queue` each
-                            // take ownership of their own `Vec<MediaItem>`
+                            // take ownership of their own `Vec<EmbyItem>`
                             // and both run, so two clones of `queue.items`
                             // are the minimum here, not a redundant third.
                             let items = queue.items.clone();

@@ -1,7 +1,7 @@
 use super::*;
 
-fn item(id: &str) -> MediaItem {
-    MediaItem {
+fn item(id: &str) -> EmbyItem {
+    EmbyItem {
         id: id.to_string(),
         name: format!("Item {id}"),
         item_type: "Episode".to_string(),
@@ -36,7 +36,7 @@ fn item(id: &str) -> MediaItem {
     }
 }
 
-fn item_with_progress(id: &str, position_seconds: i64, played: bool) -> MediaItem {
+fn item_with_progress(id: &str, position_seconds: i64, played: bool) -> EmbyItem {
     let mut item = item(id);
     item.playback_position_ticks = position_seconds * TICKS_PER_SECOND;
     item.played = played;

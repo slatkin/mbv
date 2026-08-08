@@ -2,7 +2,7 @@ use super::album_plan::{GroupedAlbumDisplayPlan, GroupedAlbumDisplayRow};
 use crate::app::layout::LibraryRowTarget;
 use crate::app::music_grouping::GroupedAlbumCatalog;
 use crate::app::{App, ArtistHeaderSelection};
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 
 impl App {
     pub(super) fn selected_music_artist_header(
@@ -29,7 +29,7 @@ impl App {
     }
 
     fn grouped_album_navigation_targets(
-        albums: &[mbv_core::api::MediaItem],
+        albums: &[mbv_core::api::EmbyItem],
         plan: &GroupedAlbumDisplayPlan,
     ) -> Vec<LibraryRowTarget> {
         let Some(selected_group) = plan.selected_group_indices.as_ref() else {
@@ -95,7 +95,7 @@ impl App {
     fn music_group_navigation(
         &mut self,
         lib_idx: usize,
-        albums: &[MediaItem],
+        albums: &[EmbyItem],
         cursor: usize,
         selected: Option<&ArtistHeaderSelection>,
     ) -> (Vec<LibraryRowTarget>, bool) {
@@ -336,7 +336,7 @@ impl App {
     pub(in crate::app) fn selected_artist_header_album_items(
         &mut self,
         lib_idx: usize,
-    ) -> Option<(ArtistHeaderSelection, Vec<mbv_core::api::MediaItem>)> {
+    ) -> Option<(ArtistHeaderSelection, Vec<mbv_core::api::EmbyItem>)> {
         let selection = self.selected_music_artist_header(lib_idx)?;
         self.artist_header_album_items_for_selection(lib_idx, &selection)
             .map(|items| (selection, items))
@@ -346,7 +346,7 @@ impl App {
         &mut self,
         lib_idx: usize,
         selection: &ArtistHeaderSelection,
-    ) -> Option<Vec<mbv_core::api::MediaItem>> {
+    ) -> Option<Vec<mbv_core::api::EmbyItem>> {
         if !self.is_music_group_view(lib_idx) {
             return None;
         }

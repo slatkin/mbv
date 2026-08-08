@@ -4,7 +4,7 @@ use super::{
     SavePlaylistStage,
 };
 use crossterm::event::{KeyCode, KeyEvent};
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 
 impl App {
     pub(super) fn handle_key_save_playlist_entry(&mut self, key: KeyEvent) -> Option<bool> {
@@ -134,7 +134,7 @@ impl App {
                             .map(|p| p.name.clone())
                             .unwrap_or_default(),
                     };
-                    let items: Vec<MediaItem> = self
+                    let items: Vec<EmbyItem> = self
                         .playlists_open_items
                         .iter()
                         .filter(|i| !i.is_folder)

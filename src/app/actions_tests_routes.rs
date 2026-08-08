@@ -14,14 +14,14 @@ use mbv_core::player::PlayerEvent;
 use std::collections::HashMap;
 use std::sync::mpsc;
 
-fn folder(id: &str, name: &str) -> MediaItem {
+fn folder(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "Folder");
     item.id = id.into();
     item.is_folder = true;
     item
 }
 
-fn album(id: &str, name: &str) -> MediaItem {
+fn album(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "MusicAlbum");
     item.id = id.into();
     item.is_folder = true;
@@ -211,8 +211,8 @@ fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
 
     app.enqueue_selected();
 
-    // `PlayerTab`/`PlaybackQueue`/`MediaItem` implement neither
-    // `PartialEq` nor `Debug` in this codebase (confirmed: `MediaItem`
+    // `PlayerTab`/`PlaybackQueue`/`EmbyItem` implement neither
+    // `PartialEq` nor `Debug` in this codebase (confirmed: `EmbyItem`
     // derives only `Debug, Clone, Serialize, Deserialize`, and
     // `PlayerTab` derives only `Clone, Default`), so a whole-struct
     // `assert_eq!` against a captured "before" clone will not compile.

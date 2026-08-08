@@ -1,7 +1,7 @@
 use super::feed_parse::fetch_and_parse_rss;
 use super::notify_actions::ToastSeverity;
 use super::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
@@ -49,7 +49,7 @@ impl App {
             .unwrap_or(0)
     }
 
-    pub(super) fn feed_home_video_selected_items(&self, lib_idx: usize) -> Vec<MediaItem> {
+    pub(super) fn feed_home_video_selected_items(&self, lib_idx: usize) -> Vec<EmbyItem> {
         let Some(state) = self
             .libs
             .get(lib_idx)
@@ -88,7 +88,7 @@ impl App {
     /// selected-group item list (see `feed_home_video_selected_items`, which
     /// does clone the full list and remains the right choice for callers that
     /// actually need it).
-    pub(super) fn selected_feed_home_video_item(&self, lib_idx: usize) -> Option<MediaItem> {
+    pub(super) fn selected_feed_home_video_item(&self, lib_idx: usize) -> Option<EmbyItem> {
         let state = self
             .libs
             .get(lib_idx)
@@ -242,7 +242,7 @@ impl App {
                 .iter()
                 .map(|folder| folder.id.clone())
                 .collect();
-            let mut grouped: HashMap<String, Vec<MediaItem>> = HashMap::new();
+            let mut grouped: HashMap<String, Vec<EmbyItem>> = HashMap::new();
             for video in &all_items {
                 if folder_ids.is_empty() {
                     break;
@@ -475,7 +475,7 @@ impl App {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
-            let mut all_items: Vec<MediaItem> = Vec::new();
+            let mut all_items: Vec<EmbyItem> = Vec::new();
             let mut groups: Vec<FeedHomeVideoGroup> = Vec::new();
             for folder in show_folders {
                 let episodes = match client.get_items_sorted(

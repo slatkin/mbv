@@ -23,7 +23,7 @@ impl App {
     pub(super) fn submit_attached_sequence(
         &mut self,
         conn_id: &str,
-        items: &[mbv_core::api::MediaItem],
+        items: &[mbv_core::api::EmbyItem],
         start_idx: usize,
     ) {
         let generation = self.next_session_poll_generation();
@@ -81,7 +81,7 @@ impl App {
 
     pub(super) fn build_remote_tracker_with_source(
         conn_id: &str,
-        items: &[mbv_core::api::MediaItem],
+        items: &[mbv_core::api::EmbyItem],
         start_idx: usize,
         generation: u64,
         playlist_id: Option<String>,
@@ -385,7 +385,7 @@ impl App {
 /// and apply the delta. Tracking must never change this choice, so command
 /// construction routes through this established untracked path first.
 pub(super) fn remote_jump_target(
-    items: &[mbv_core::api::MediaItem],
+    items: &[mbv_core::api::EmbyItem],
     now_playing_item_id: Option<&str>,
     delta: i64,
 ) -> Option<(usize, i64)> {

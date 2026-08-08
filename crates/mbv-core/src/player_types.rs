@@ -55,7 +55,7 @@ pub struct PlayerStatus {
 }
 
 impl PlayerStatus {
-    pub fn set_current_item_metadata(&mut self, item: &MediaItem) {
+    pub fn set_current_item_metadata(&mut self, item: &EmbyItem) {
         self.title = item.display_name();
         self.artist = item.artist.clone();
         self.album = item.album.clone();
@@ -193,7 +193,7 @@ pub enum PlayerEvent {
     },
     /// Emitted by RemotePlayer when CtrlState arrives so App can sync player_tab.
     QueueUpdated {
-        items: Vec<crate::api::MediaItem>,
+        items: Vec<crate::api::EmbyItem>,
         cursor: usize,
         source: crate::config::QueueSource,
     },
@@ -243,7 +243,7 @@ pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),
     QueueAppend {
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
     },
     QueueRemove(usize),
     QueueMove(usize, usize),
@@ -261,7 +261,7 @@ pub enum PlayerCommand {
     LoadNew {
         url: String,
         start_pos: f64,
-        item: Box<MediaItem>,
+        item: Box<EmbyItem>,
     },
     NextUpShow {
         item_id: String,
@@ -272,7 +272,7 @@ pub enum PlayerCommand {
     NextUpDismiss,
     SkipIntroDismiss,
     ReplaceQueue {
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         start_idx: usize,
     },
 }

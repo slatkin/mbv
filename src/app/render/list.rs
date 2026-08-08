@@ -149,7 +149,7 @@ impl App {
         // Selected movie/Series item, computed once and reused below for the
         // prefetch gate, the hero row-count calc, and the hero paint --
         // `selected_movie_item`/`selected_series_item` each clone
-        // the whole `MediaItem`, so one call keeps that to a single clone per
+        // the whole `EmbyItem`, so one call keeps that to a single clone per
         // frame instead of three.
         let selected_movie_item = if self.library_tab > 0 {
             self.selected_movie_item(self.library_tab - 1)
@@ -358,7 +358,7 @@ impl App {
             let lib_idx = self.library_tab - 1;
             let lib = &self.libs[lib_idx];
             let (items, cur, scroll, total) = if let Some(s) = &lib.search {
-                let items: Vec<mbv_core::api::MediaItem> = s
+                let items: Vec<mbv_core::api::EmbyItem> = s
                     .results
                     .iter()
                     .filter_map(|&i| {

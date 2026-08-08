@@ -77,7 +77,7 @@ fn device_id_in(data_home: std::path::PathBuf) -> String {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct MediaItem {
+pub struct EmbyItem {
     pub id: String,
     pub name: String,
     pub item_type: String,
@@ -111,7 +111,7 @@ pub struct MediaItem {
     pub playlist_item_id: String,
 }
 
-impl MediaItem {
+impl EmbyItem {
     pub fn is_audio(&self) -> bool {
         self.media_type == "Audio" || self.item_type == "Audio"
     }
@@ -166,7 +166,7 @@ impl MediaItem {
     }
 
     fn folder(id: String, name: String, collection_type: String) -> Self {
-        MediaItem {
+        EmbyItem {
             id,
             name,
             item_type: "CollectionFolder".to_string(),
@@ -474,7 +474,7 @@ fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
     }
 }
 
-fn parse_item(raw: &Value) -> MediaItem {
+fn parse_item(raw: &Value) -> EmbyItem {
     let ud = raw.get("UserData").unwrap_or(&Value::Null);
     let item_type = raw["Type"].as_str().unwrap_or("").to_string();
     let is_folder = raw["IsFolder"].as_bool().unwrap_or(false)
@@ -494,7 +494,7 @@ fn parse_item(raw: &Value) -> MediaItem {
     } else {
         raw["ChildCount"].as_u64().unwrap_or(0) as u32
     };
-    MediaItem {
+    EmbyItem {
         id: raw["Id"].as_str().unwrap_or("").to_string(),
         name: raw["Name"].as_str().unwrap_or("").to_string(),
         item_type,

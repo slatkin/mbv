@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
+use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
 use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
 use crate::playback_queue::{PlaybackQueue, QueueSlotId};
 use libmpv2::{
@@ -32,7 +32,7 @@ fn mpv_title_opt(title: &str) -> String {
     format!("force-media-title=%{}%{}", title.len(), title)
 }
 
-fn send_ep_info(mpv: &Mpv, item: &crate::api::MediaItem) {
+fn send_ep_info(mpv: &Mpv, item: &crate::api::EmbyItem) {
     let val =
         if item.item_type == "Episode" && item.parent_index_number > 0 && item.index_number > 0 {
             format!(

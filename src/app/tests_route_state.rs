@@ -606,7 +606,7 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
     }
     app.handle_player_event(PlayerEvent::TrackChanged(2));
 
-    let item_ids = |items: &[MediaItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+    let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
     assert_eq!(
         serde_json::to_value(&app.player_tab.items).unwrap(),
         serde_json::to_value(&local_items).unwrap()

@@ -14,14 +14,14 @@ use mbv_core::player::PlayerEvent;
 use std::collections::HashMap;
 use std::sync::mpsc;
 
-fn folder(id: &str, name: &str) -> MediaItem {
+fn folder(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "Folder");
     item.id = id.into();
     item.is_folder = true;
     item
 }
 
-fn album(id: &str, name: &str) -> MediaItem {
+fn album(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "MusicAlbum");
     item.id = id.into();
     item.is_folder = true;
@@ -86,7 +86,7 @@ fn album_index_traverses_deep_branches_pages_and_ignores_non_albums() {
         ],
     );
     tree.insert("artist-empty".to_string(), Vec::new());
-    let mut many_albums: Vec<MediaItem> = (0..201)
+    let mut many_albums: Vec<EmbyItem> = (0..201)
         .map(|index| album(&format!("album-a-{index}"), &format!("Record {index}")))
         .collect();
     many_albums.push(make_item("Not an album", "Audio"));

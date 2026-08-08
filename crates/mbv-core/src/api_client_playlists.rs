@@ -64,7 +64,7 @@ impl EmbyClient {
 
     // ── Playlists ────────────────────────────────────────────────────────────
 
-    pub fn get_playlists(&self) -> Result<Vec<MediaItem>, String> {
+    pub fn get_playlists(&self) -> Result<Vec<EmbyItem>, String> {
         self.fetch_items(
             &format!("/Users/{}/Items", self.user_id),
             &[
@@ -122,7 +122,7 @@ impl EmbyClient {
 
     /// Replace a playlist's contents with the given item ids (in order).
     /// Fetches current entry ids, deletes them all, then adds the new set.
-    pub fn get_playlist_items(&self, playlist_id: &str) -> Result<Vec<MediaItem>, String> {
+    pub fn get_playlist_items(&self, playlist_id: &str) -> Result<Vec<EmbyItem>, String> {
         let resp: serde_json::Value = self.get(&format!("/Playlists/{}/Items", playlist_id))
             .query("UserId", &self.user_id)
             .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres")
@@ -177,7 +177,7 @@ impl EmbyClient {
 
     // ── Series / episodes / chapters ────────────────────────────────────────
 
-    pub fn get_items_by_ids(&self, ids: &[String]) -> Result<Vec<MediaItem>, String> {
+    pub fn get_items_by_ids(&self, ids: &[String]) -> Result<Vec<EmbyItem>, String> {
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -196,7 +196,7 @@ impl EmbyClient {
         Ok(items)
     }
 
-    pub fn get_ancestors(&self, item_id: &str) -> Result<Vec<MediaItem>, String> {
+    pub fn get_ancestors(&self, item_id: &str) -> Result<Vec<EmbyItem>, String> {
         let resp: Value = self
             .get(&format!("/Items/{}/Ancestors", item_id))
             .query("Fields", "SortName")

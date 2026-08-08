@@ -79,7 +79,7 @@ impl App {
         &mut self,
         f: &mut Frame,
         area: Rect,
-        album: &mbv_core::api::MediaItem,
+        album: &mbv_core::api::EmbyItem,
         layout: &mut LayoutMain,
     ) {
         if !self.images_enabled() || area.width < 4 || area.height < 2 {
@@ -118,7 +118,7 @@ impl App {
         &mut self,
         f: &mut Frame,
         area: Rect,
-        albums: &[mbv_core::api::MediaItem],
+        albums: &[mbv_core::api::EmbyItem],
         layout: &mut LayoutMain,
     ) {
         if !self.images_enabled() || area.width < 4 || area.height < 2 || albums.is_empty() {
@@ -225,7 +225,7 @@ impl App {
         &mut self,
         f: &mut Frame,
         cell: Rect,
-        album: &mbv_core::api::MediaItem,
+        album: &mbv_core::api::EmbyItem,
         cache_key: String,
         nav_gate_open: bool,
         square: bool,

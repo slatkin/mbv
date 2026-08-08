@@ -3,7 +3,7 @@ use super::{
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
     CtrlRequest, CtrlTransport, DaemonEvent, PlaybackIntentState, SharedQueueState,
 };
-use crate::api::MediaItem;
+use crate::api::EmbyItem;
 use crate::config::{Config, QueueSource};
 use crate::ctrl::DisconnectReason;
 use crate::ctrl::{
@@ -14,8 +14,8 @@ use crate::ws::WsEvent;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-fn item(name: &str, media_type: &str, item_type: &str) -> MediaItem {
-    MediaItem {
+fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
+    EmbyItem {
         id: name.into(),
         name: name.into(),
         item_type: item_type.into(),

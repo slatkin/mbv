@@ -2,7 +2,7 @@ use super::super::palette;
 use super::super::search_sidebar::SearchSidebar;
 use super::super::ui_util::trunc_str;
 use super::super::{App, SEARCH_PANEL_W};
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -125,7 +125,7 @@ fn render_type_chips(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) {
 fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) {
     let list_h = area.height as usize;
     sidebar.list_height = list_h;
-    let filtered: Vec<&MediaItem> = sidebar.filtered_results();
+    let filtered: Vec<&EmbyItem> = sidebar.filtered_results();
     if filtered.is_empty() {
         render_empty_state(f, area, sidebar);
         return;

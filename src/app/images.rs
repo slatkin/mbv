@@ -111,7 +111,7 @@ impl App {
                 .unwrap_or_default();
 
             // Fetch episodes for the first season (if any)
-            let mut episodes: std::collections::HashMap<String, Vec<mbv_core::api::MediaItem>> =
+            let mut episodes: std::collections::HashMap<String, Vec<mbv_core::api::EmbyItem>> =
                 std::collections::HashMap::new();
             if let Some(first_season) = seasons.first() {
                 let eps = client

@@ -294,7 +294,7 @@ impl SessionReporter {
     // call is pure Emby bookkeeping the session doesn't need to wait on.
     fn report_start_background(
         &self,
-        item: &MediaItem,
+        item: &EmbyItem,
         media_source_id: &MediaSourceId,
         session_id: &EmbySessionId,
     ) {
@@ -339,7 +339,7 @@ impl SessionReporter {
     // *before* the network call so the progress reporter thread never sends
     // stale IDs to Emby.
     // Returns (ext_sub_urls, success).
-    fn start_item(&self, item: &MediaItem) -> (Vec<String>, bool) {
+    fn start_item(&self, item: &EmbyItem) -> (Vec<String>, bool) {
         let info = self.client.get_playback_info(&item.id);
         // Update ids before report_start so the progress reporter (which reads
         // ids on a 10-second timer) always sees the new item.
@@ -360,7 +360,7 @@ impl SessionReporter {
     // both pure Emby bookkeeping, so both fire on background threads. Only
     // get_playback_info runs synchronously here — the session needs its ids
     // and ext_sub_urls before loadfile can be issued for the new item.
-    fn transition_to(&self, new_item: &MediaItem, last_valid_pos: i64) -> Vec<String> {
+    fn transition_to(&self, new_item: &EmbyItem, last_valid_pos: i64) -> Vec<String> {
         self.report_stopped_background(last_valid_pos);
         let info = self.client.get_playback_info(&new_item.id);
         let ext_sub_urls = info.external_subtitle_urls;
@@ -379,7 +379,7 @@ impl SessionReporter {
     // are irrelevant (audio-only) and the progress reporter can tolerate briefly
     // stale ids. Moves get_playback_info off the player thread so loadfile can be
     // issued immediately.
-    fn transition_to_deferred(&self, new_item: &MediaItem, last_valid_pos: i64) {
+    fn transition_to_deferred(&self, new_item: &EmbyItem, last_valid_pos: i64) {
         self.report_stopped_background(last_valid_pos);
         let client = self.client.clone();
         let ids = self.ids.clone();

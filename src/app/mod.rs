@@ -240,7 +240,7 @@ use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::{backend::CrosstermBackend, Terminal};
 
 #[cfg(test)]
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 #[cfg(test)]
 use mbv_core::playback_queue::RemoveSlotResult;
 #[cfg(test)]

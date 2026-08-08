@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::api::{MediaItem, TICKS_PER_SECOND};
+use crate::api::{EmbyItem, TICKS_PER_SECOND};
 
 const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 
@@ -33,14 +33,14 @@ pub struct SlotProgress {
 }
 
 impl SlotProgress {
-    pub fn from_item(item: &MediaItem) -> Self {
+    pub fn from_item(item: &EmbyItem) -> Self {
         Self {
             position_ticks: item.playback_position_ticks,
             played: item.played,
         }
     }
 
-    fn matches_server_confirmation(&self, item: &MediaItem) -> bool {
+    fn matches_server_confirmation(&self, item: &EmbyItem) -> bool {
         (self.position_ticks - item.playback_position_ticks).abs()
             <= PROGRESS_CONFIRMATION_TOLERANCE_TICKS
             && self.played == item.played
@@ -54,14 +54,14 @@ pub struct ProgressState {
 }
 
 impl ProgressState {
-    fn from_item(item: &MediaItem) -> Self {
+    fn from_item(item: &EmbyItem) -> Self {
         Self {
             local: SlotProgress::from_item(item),
             pending_sync: None,
         }
     }
 
-    fn apply_to_item(&self, item: &mut MediaItem) {
+    fn apply_to_item(&self, item: &mut EmbyItem) {
         item.playback_position_ticks = self.local.position_ticks;
         item.played = self.local.played;
     }
@@ -70,12 +70,12 @@ impl ProgressState {
 #[derive(Debug, Clone)]
 pub struct QueueSlot {
     pub slot_id: QueueSlotId,
-    pub item: MediaItem,
+    pub item: EmbyItem,
     pub progress_state: ProgressState,
 }
 
 impl QueueSlot {
-    fn new(slot_id: QueueSlotId, item: MediaItem) -> Self {
+    fn new(slot_id: QueueSlotId, item: EmbyItem) -> Self {
         let progress_state = ProgressState::from_item(&item);
         Self {
             slot_id,
@@ -122,7 +122,7 @@ impl Default for PlaybackQueue {
 }
 
 impl PlaybackQueue {
-    pub fn from_items(items: Vec<MediaItem>, active_index: Option<usize>) -> Self {
+    pub fn from_items(items: Vec<EmbyItem>, active_index: Option<usize>) -> Self {
         let mut queue = Self {
             slots: Vec::with_capacity(items.len()),
             active_slot_id: None,
@@ -168,11 +168,11 @@ impl PlaybackQueue {
         self.slots.iter().position(|slot| slot.slot_id == slot_id)
     }
 
-    pub fn append(&mut self, item: MediaItem) -> QueueSlotId {
+    pub fn append(&mut self, item: EmbyItem) -> QueueSlotId {
         self.insert(self.slots.len(), item)
     }
 
-    pub fn insert(&mut self, index: usize, item: MediaItem) -> QueueSlotId {
+    pub fn insert(&mut self, index: usize, item: EmbyItem) -> QueueSlotId {
         let slot_id = self.allocate_slot_id();
         let index = index.min(self.slots.len());
         self.slots.insert(index, QueueSlot::new(slot_id, item));
@@ -233,7 +233,7 @@ impl PlaybackQueue {
     pub fn update_slot_item(
         &mut self,
         slot_id: QueueSlotId,
-        item: MediaItem,
+        item: EmbyItem,
     ) -> QueueMutationResult<()> {
         let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) else {
             return QueueMutationResult::NotFound;
@@ -272,7 +272,7 @@ impl PlaybackQueue {
         QueueMutationResult::Applied(pending)
     }
 
-    pub fn merge_refresh(&mut self, fetched_items: Vec<MediaItem>) -> RefreshMergeResult {
+    pub fn merge_refresh(&mut self, fetched_items: Vec<EmbyItem>) -> RefreshMergeResult {
         let mut fetched_by_item_id = group_fetched_items_by_item_id(fetched_items);
         let old_slots = std::mem::take(&mut self.slots);
         let mut result = RefreshMergeResult::default();
@@ -333,7 +333,7 @@ impl PlaybackQueue {
     fn merge_fetched_slot(
         &mut self,
         slot: &mut QueueSlot,
-        fetched_item: MediaItem,
+        fetched_item: EmbyItem,
         active_slot_id: Option<QueueSlotId>,
         result: &mut RefreshMergeResult,
     ) {
@@ -375,30 +375,30 @@ impl PlaybackQueue {
 
 #[derive(Debug)]
 struct FetchedItemMatches {
-    items: Vec<MediaItem>,
+    items: Vec<EmbyItem>,
     next_index: usize,
 }
 
 impl FetchedItemMatches {
-    fn new(item: MediaItem) -> Self {
+    fn new(item: EmbyItem) -> Self {
         Self {
             items: vec![item],
             next_index: 0,
         }
     }
 
-    fn push(&mut self, item: MediaItem) {
+    fn push(&mut self, item: EmbyItem) {
         self.items.push(item);
     }
 
-    fn next_match(&mut self) -> MediaItem {
+    fn next_match(&mut self) -> EmbyItem {
         let index = self.next_index.min(self.items.len() - 1);
         self.next_index = self.next_index.saturating_add(1);
         self.items[index].clone()
     }
 }
 
-fn group_fetched_items_by_item_id(items: Vec<MediaItem>) -> HashMap<String, FetchedItemMatches> {
+fn group_fetched_items_by_item_id(items: Vec<EmbyItem>) -> HashMap<String, FetchedItemMatches> {
     let mut grouped = HashMap::new();
     for item in items {
         grouped

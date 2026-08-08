@@ -167,7 +167,7 @@ impl PlaybackRun {
 
     fn cmd_replace_queue(
         &mut self,
-        new_items: Vec<MediaItem>,
+        new_items: Vec<EmbyItem>,
         start_idx: usize,
         mpv: &Mpv,
         progress: &mut ProgressGuard,
@@ -261,14 +261,14 @@ impl PlaybackRun {
         *progress = spawn_progress_reporter(self.reporter.clone());
     }
 
-    fn append_items_to_queue(&mut self, items: Vec<MediaItem>) {
+    fn append_items_to_queue(&mut self, items: Vec<EmbyItem>) {
         for item in items {
             self.queue.append(item);
         }
         self.status.lock().unwrap().queue_len = self.queue_len();
     }
 
-    fn cmd_append_queue(&mut self, new_items: Vec<MediaItem>, mpv: &Mpv) {
+    fn cmd_append_queue(&mut self, new_items: Vec<EmbyItem>, mpv: &Mpv) {
         if new_items.is_empty() {
             return;
         }
@@ -295,7 +295,7 @@ impl PlaybackRun {
         &mut self,
         url: String,
         start_pos: f64,
-        item: Box<MediaItem>,
+        item: Box<EmbyItem>,
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {

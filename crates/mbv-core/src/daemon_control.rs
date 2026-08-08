@@ -2,7 +2,7 @@
 /// This is used for coordinated shutdown to persist the daemon's view of the queue,
 /// not the client's potentially stale shadow.
 fn project_queue_state(
-    items: &[MediaItem],
+    items: &[EmbyItem],
     cursor: usize,
     source: &crate::config::QueueSource,
     player_status: &crate::player::PlayerStatus,
@@ -63,7 +63,7 @@ fn broadcast_queue_state(
     ctrl_clients: &ClientRegistry,
     player: &Player,
     shared_queue: &SharedQueueState,
-    items: &[MediaItem],
+    items: &[EmbyItem],
     cursor: usize,
     source: &crate::config::QueueSource,
 ) {
@@ -89,13 +89,13 @@ fn handle_ctrl(
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
     audio_only: bool,
-    items: &mut Vec<MediaItem>,
+    items: &mut Vec<EmbyItem>,
     cursor: &mut usize,
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
     playback_intents: &mut PlaybackIntentState,
-    mut resolved_items: Option<Result<Vec<MediaItem>, String>>,
+    mut resolved_items: Option<Result<Vec<EmbyItem>, String>>,
     merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
     // Handle lifecycle requests before the authority transition.

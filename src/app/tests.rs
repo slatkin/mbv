@@ -6,8 +6,8 @@ use ratatui::backend::TestBackend;
 
 use ratatui::Terminal;
 
-pub(crate) fn make_item(name: &str, item_type: &str) -> MediaItem {
-    MediaItem {
+pub(crate) fn make_item(name: &str, item_type: &str) -> EmbyItem {
+    EmbyItem {
         id: "id".into(),
         name: name.into(),
         item_type: item_type.into(),
@@ -101,7 +101,7 @@ pub(crate) fn run_stub_daemon_handshake(stream: std::net::TcpStream) -> std::net
 
 // ── test helpers ─────────────────────────────────────────────────────────
 
-pub(crate) fn make_items(n: usize) -> Vec<MediaItem> {
+pub(crate) fn make_items(n: usize) -> Vec<EmbyItem> {
     (0..n)
         .map(|i| {
             let mut item = make_item(&format!("Item {i}"), "Movie");
@@ -111,7 +111,7 @@ pub(crate) fn make_items(n: usize) -> Vec<MediaItem> {
         .collect()
 }
 
-pub(crate) fn make_audio_items(n: usize) -> Vec<MediaItem> {
+pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
     (0..n)
         .map(|i| {
             let mut item = make_item(&format!("Track {i}"), "Audio");
@@ -144,7 +144,7 @@ pub(crate) fn make_app_stub() -> App {
     let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
     let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
     let (search_tx, search_rx) =
-        std::sync::mpsc::channel::<(String, Result<Vec<MediaItem>, String>)>();
+        std::sync::mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
 
     let player = PlayerProxy::stub(status.clone());
 
@@ -348,7 +348,7 @@ pub(crate) fn make_built_app() -> App {
     let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
     let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
     let (search_tx, search_rx) =
-        std::sync::mpsc::channel::<(String, Result<Vec<MediaItem>, String>)>();
+        std::sync::mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
 
     let player = PlayerProxy::stub(status);
 
@@ -416,8 +416,8 @@ pub(crate) fn render_app_to_string(app: &mut App, width: u16, height: u16) -> St
 }
 
 pub(crate) fn make_remote_app_stub(
-    local_items: Vec<MediaItem>,
-    remote_items: Vec<MediaItem>,
+    local_items: Vec<EmbyItem>,
+    remote_items: Vec<EmbyItem>,
 ) -> App {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
@@ -435,8 +435,8 @@ pub(crate) fn make_remote_app_stub(
 }
 
 pub(crate) fn make_remote_app_stub_with_cmd_rx(
-    local_items: Vec<MediaItem>,
-    remote_items: Vec<MediaItem>,
+    local_items: Vec<EmbyItem>,
+    remote_items: Vec<EmbyItem>,
 ) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
@@ -458,7 +458,7 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
     (app, cmd_rx)
 }
 
-pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<MediaItem>) -> App {
+pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<EmbyItem>) -> App {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
 
@@ -473,7 +473,7 @@ pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<MediaItem>) -> App {
 
 // ── cursor preservation during home refresh ──────────────────────────────
 
-pub(crate) fn sections(n: usize) -> Vec<(String, String, Vec<MediaItem>, usize)> {
+pub(crate) fn sections(n: usize) -> Vec<(String, String, Vec<EmbyItem>, usize)> {
     (0..n)
         .map(|i| (format!("Sec {i}"), format!("lib{i}"), make_items(3), 0))
         .collect()

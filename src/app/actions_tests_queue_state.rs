@@ -14,14 +14,14 @@ use mbv_core::player::PlayerEvent;
 use std::collections::HashMap;
 use std::sync::mpsc;
 
-fn folder(id: &str, name: &str) -> MediaItem {
+fn folder(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "Folder");
     item.id = id.into();
     item.is_folder = true;
     item
 }
 
-fn album(id: &str, name: &str) -> MediaItem {
+fn album(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "MusicAlbum");
     item.id = id.into();
     item.is_folder = true;

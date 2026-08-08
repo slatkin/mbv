@@ -1,6 +1,6 @@
 use super::notify_actions::ToastSeverity;
 use super::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
 use mbv_core::player::PlayerCommand;
 
@@ -75,7 +75,7 @@ impl App {
         }
     }
 
-    pub(super) fn replace_direct_remote_queue(&mut self, items: Vec<MediaItem>, cursor: usize) {
+    pub(super) fn replace_direct_remote_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
         self.retire_remote_tracking(true);
         let cursor = cursor.min(items.len().saturating_sub(1));
         self.player
@@ -91,7 +91,7 @@ impl App {
     pub(super) fn sync_playback_queue_after_append(
         &mut self,
         scope: QueueScope,
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
     ) -> bool {
         if items.is_empty() || scope != self.playback_target_queue_scope() {
             return true;
@@ -113,7 +113,7 @@ impl App {
         self.queue_scope_resolution().playback_target()
     }
 
-    pub(super) fn replace_playback_queue(&mut self, items: Vec<MediaItem>, cursor: usize) {
+    pub(super) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
         self.retire_remote_tracking(true);
         let cursor = cursor.min(items.len().saturating_sub(1));
         match self.playback_target_queue_scope() {
@@ -153,7 +153,7 @@ impl App {
     pub(super) fn merge_refreshed_queue(
         &mut self,
         scope: QueueScope,
-        fetched_items: Vec<MediaItem>,
+        fetched_items: Vec<EmbyItem>,
     ) -> RefreshMergeResult {
         let queue_len = self.queue_for_scope(scope).items.len();
         let sync_player_prunes =

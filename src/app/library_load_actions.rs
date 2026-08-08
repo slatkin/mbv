@@ -2,7 +2,7 @@ use super::{
     notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
     PanelFocus, PendingQueueAction,
 };
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use std::collections::HashMap;
 
 impl App {
@@ -126,7 +126,7 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_open_playlist(&mut self, playlist: MediaItem) {
+    pub(super) fn spawn_open_playlist(&mut self, playlist: EmbyItem) {
         if self.playlists_open_loading {
             return;
         }
@@ -173,7 +173,7 @@ impl App {
             self.flash("Playlist is empty".into(), ToastSeverity::Error);
             return;
         }
-        let playable: Vec<MediaItem> = items.into_iter().filter(|i| !i.is_folder).collect();
+        let playable: Vec<EmbyItem> = items.into_iter().filter(|i| !i.is_folder).collect();
         if playable.is_empty() {
             self.flash("No playable items in playlist".into(), ToastSeverity::Error);
             return;
@@ -193,7 +193,7 @@ impl App {
         }
     }
 
-    pub(super) fn rebuild_library_tabs_from_views(&mut self, all_views: &[MediaItem]) {
+    pub(super) fn rebuild_library_tabs_from_views(&mut self, all_views: &[EmbyItem]) {
         // Drain existing libs, preserving nav stacks and scroll pos so that a
         // UserDataChanged websocket refresh (fired when playback starts)
         // doesn't silently reset list scroll position.
@@ -285,7 +285,7 @@ impl App {
             .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
             .collect();
 
-        let mut latest: Vec<(String, String, Vec<MediaItem>, usize)> = Vec::new();
+        let mut latest: Vec<(String, String, Vec<EmbyItem>, usize)> = Vec::new();
         let client = self.client.lock().unwrap();
         for v in user_views.iter().filter(|v| {
             let lower = v.name.to_lowercase();

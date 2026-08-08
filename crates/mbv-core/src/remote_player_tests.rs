@@ -4,8 +4,8 @@ use crate::ctrl::CtrlState;
 use crate::ctrl::WireCommand;
 use crate::player::PlayerCommand;
 
-fn make_media_item(id: &str) -> MediaItem {
-    MediaItem {
+fn make_media_item(id: &str) -> EmbyItem {
+    EmbyItem {
         id: id.into(),
         name: "Test Item".into(),
         item_type: "Episode".into(),

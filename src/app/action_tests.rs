@@ -487,7 +487,7 @@ fn dispatch_quit_when_queue_not_dirty_returns_true_and_persists() {
 use crate::app::tests::make_item;
 use crate::app::tests::make_items;
 
-fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_core::api::MediaItem>, cursor: usize) {
+fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_core::api::EmbyItem>, cursor: usize) {
     app.player_tab.set_items(items, cursor);
 }
 

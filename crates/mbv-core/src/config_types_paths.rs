@@ -1,4 +1,4 @@
-use crate::api::MediaItem;
+use crate::api::EmbyItem;
 use std::env;
 use std::path::PathBuf;
 
@@ -617,7 +617,7 @@ pub struct QueueState {
     // has to already be on disk. A separate best-effort background fetch
     // refreshes played/position state from the server afterward.
     #[serde(default)]
-    pub items: Vec<MediaItem>,
+    pub items: Vec<EmbyItem>,
     #[serde(default)]
     pub cursor: usize,
     pub last_played_item_id: Option<String>,

@@ -1,5 +1,5 @@
 impl EmbyClient {
-    fn fetch_items(&self, path: &str, queries: &[(&str, &str)]) -> Result<Vec<MediaItem>, String> {
+    fn fetch_items(&self, path: &str, queries: &[(&str, &str)]) -> Result<Vec<EmbyItem>, String> {
         let mut req = self.get(path);
         for (k, v) in queries {
             req = req.query(k, v);
@@ -15,7 +15,7 @@ impl EmbyClient {
             .unwrap_or_default())
     }
 
-    pub fn get_views(&self) -> Result<Vec<MediaItem>, String> {
+    pub fn get_views(&self) -> Result<Vec<EmbyItem>, String> {
         let vfolders: Value = self
             .get("/Library/VirtualFolders")
             .call()
@@ -30,7 +30,7 @@ impl EmbyClient {
             .into_json()
             .map_err(|e| e.to_string())?;
 
-        let mut items: Vec<MediaItem> = Vec::new();
+        let mut items: Vec<EmbyItem> = Vec::new();
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         if let Some(arr) = vfolders.as_array() {
@@ -39,7 +39,7 @@ impl EmbyClient {
                 let name = f["Name"].as_str().unwrap_or("").to_string();
                 let ctype = f["CollectionType"].as_str().unwrap_or("").to_string();
                 seen.insert(id.clone());
-                items.push(MediaItem::folder(id, name, ctype));
+                items.push(EmbyItem::folder(id, name, ctype));
             }
         }
 
@@ -55,7 +55,7 @@ impl EmbyClient {
         Ok(items)
     }
 
-    pub fn get_user_views(&self) -> Result<Vec<MediaItem>, String> {
+    pub fn get_user_views(&self) -> Result<Vec<EmbyItem>, String> {
         self.fetch_items(&format!("/Users/{}/Views", self.user_id), &[])
     }
 
@@ -68,7 +68,7 @@ impl EmbyClient {
         limit: usize,
         sort_by: &str,
         sort_order: &str,
-    ) -> Result<(Vec<MediaItem>, usize), String> {
+    ) -> Result<(Vec<EmbyItem>, usize), String> {
         self.get_items_sorted_ranged(
             parent_id,
             item_types,
@@ -104,7 +104,7 @@ impl EmbyClient {
         sort_order: &str,
         name_ge: Option<&str>,
         name_lt: Option<&str>,
-    ) -> Result<(Vec<MediaItem>, usize), String> {
+    ) -> Result<(Vec<EmbyItem>, usize), String> {
         let mut req = self.get(&format!("/Users/{}/Items", self.user_id))
             .query("ParentId", parent_id)
             .query("SortBy", sort_by)
@@ -140,7 +140,7 @@ impl EmbyClient {
         let parse_started = std::time::Instant::now();
         let resp: Value = resp.into_json().map_err(|e| e.to_string())?;
         let total = resp["TotalRecordCount"].as_u64().unwrap_or(0) as usize;
-        let items: Vec<MediaItem> = resp["Items"]
+        let items: Vec<EmbyItem> = resp["Items"]
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
             .unwrap_or_default();
@@ -153,7 +153,7 @@ impl EmbyClient {
         Ok((items, total))
     }
 
-    pub fn search_items(&self, term: &str, limit: usize) -> Result<Vec<MediaItem>, String> {
+    pub fn search_items(&self, term: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
         self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
             ("SearchTerm",  term),
@@ -163,7 +163,7 @@ impl EmbyClient {
         ])
     }
 
-    pub fn get_continue_watching(&self, limit: usize) -> Result<Vec<MediaItem>, String> {
+    pub fn get_continue_watching(&self, limit: usize) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
         self.fetch_items(&format!("/Users/{}/Items/Resume", self.user_id), &[
             ("UserId",     &self.user_id),
@@ -173,7 +173,7 @@ impl EmbyClient {
         ])
     }
 
-    pub fn get_latest(&self, parent_id: &str, limit: usize) -> Result<Vec<MediaItem>, String> {
+    pub fn get_latest(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
         let resp: Value = self.get(&format!("/Users/{}/Items/Latest", self.user_id))
             .query("ParentId", parent_id)
             .query("Limit", &limit.to_string())
@@ -191,7 +191,7 @@ impl EmbyClient {
         &self,
         parent_id: &str,
         limit: usize,
-    ) -> Result<Vec<MediaItem>, String> {
+    ) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
         self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
             ("ParentId",          parent_id),
@@ -205,7 +205,7 @@ impl EmbyClient {
         ])
     }
 
-    pub fn get_all_playable_recursive(&self, parent_id: &str) -> Result<Vec<MediaItem>, String> {
+    pub fn get_all_playable_recursive(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
         self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video,Audio"),
@@ -217,7 +217,7 @@ impl EmbyClient {
         ])
     }
 
-    pub fn get_direct_playable(&self, parent_id: &str) -> Result<Vec<MediaItem>, String> {
+    pub fn get_direct_playable(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
         self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video,Audio"),
@@ -228,7 +228,7 @@ impl EmbyClient {
         ])
     }
 
-    pub fn get_all_videos_recursive(&self, parent_id: &str) -> Result<Vec<MediaItem>, String> {
+    pub fn get_all_videos_recursive(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
         self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video"),

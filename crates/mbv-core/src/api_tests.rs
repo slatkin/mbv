@@ -1,8 +1,8 @@
 use super::*;
 use serde_json::json;
 
-fn make_item(name: &str, item_type: &str) -> MediaItem {
-    MediaItem {
+fn make_item(name: &str, item_type: &str) -> EmbyItem {
+    EmbyItem {
         id: "id".into(),
         name: name.into(),
         item_type: item_type.into(),
@@ -37,7 +37,7 @@ fn make_item(name: &str, item_type: &str) -> MediaItem {
     }
 }
 
-// ── MediaItem::display_name ──────────────────────────────────────────────
+// ── EmbyItem::display_name ──────────────────────────────────────────────
 
 #[test]
 fn display_name_episode_without_series_falls_back_to_name() {
@@ -98,7 +98,7 @@ fn parse_item_episode_fields() {
     assert_eq!(item.parent_index_number, 2);
 }
 
-// ── MediaItem::playback_label ────────────────────────────────────────────
+// ── EmbyItem::playback_label ────────────────────────────────────────────
 
 #[test]
 fn playback_label_audio_without_artist_falls_back_to_display_name() {
@@ -112,7 +112,7 @@ fn playback_label_video_uses_display_name() {
     assert_eq!(item.playback_label(), "Inception");
 }
 
-// ── MediaItem::file_name / sort_key ──────────────────────────────────────
+// ── EmbyItem::file_name / sort_key ──────────────────────────────────────
 
 #[test]
 fn file_name_extracts_from_path() {

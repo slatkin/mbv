@@ -69,7 +69,7 @@ pub(super) fn format_release_date(premiere_date: &str) -> String {
 
 pub(super) fn render_home_video_item(
     f: &mut Frame,
-    item: &mbv_core::api::MediaItem,
+    item: &mbv_core::api::EmbyItem,
     row_y: u16,
     item_h: u16,
     content_area: Rect,

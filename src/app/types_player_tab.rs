@@ -1,17 +1,17 @@
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{
     PlaybackQueue, QueueMutationResult, QueueSlotId, RefreshMergeResult, RemoveSlotResult,
 };
 
 #[derive(Clone, Default)]
 pub(super) struct PlayerTab {
-    pub(super) items: Vec<MediaItem>,
+    pub(super) items: Vec<EmbyItem>,
     pub(super) queue_cursor: usize,
     pub(super) queue: PlaybackQueue,
 }
 
 impl PlayerTab {
-    pub(super) fn new(items: Vec<MediaItem>, queue_cursor: usize) -> Self {
+    pub(super) fn new(items: Vec<EmbyItem>, queue_cursor: usize) -> Self {
         let queue_cursor = queue_cursor.min(items.len().saturating_sub(1));
         let queue = PlaybackQueue::from_items(items.clone(), None);
         Self {
@@ -21,7 +21,7 @@ impl PlayerTab {
         }
     }
 
-    pub(super) fn set_items(&mut self, items: Vec<MediaItem>, queue_cursor: usize) {
+    pub(super) fn set_items(&mut self, items: Vec<EmbyItem>, queue_cursor: usize) {
         *self = Self::new(items, queue_cursor);
     }
 
@@ -72,7 +72,7 @@ impl PlayerTab {
         }
     }
 
-    pub(super) fn merge_refresh(&mut self, fetched_items: Vec<MediaItem>) -> RefreshMergeResult {
+    pub(super) fn merge_refresh(&mut self, fetched_items: Vec<EmbyItem>) -> RefreshMergeResult {
         self.sync_queue_model_from_items_if_needed();
         let result = self.queue.merge_refresh(fetched_items);
         self.sync_items_from_queue_model();
@@ -108,7 +108,7 @@ impl PlayerTab {
                 .is_some_and(|slot| slot.slot_id == slot_id)
     }
 
-    pub(super) fn remove_slot_at(&mut self, index: usize) -> Option<MediaItem> {
+    pub(super) fn remove_slot_at(&mut self, index: usize) -> Option<EmbyItem> {
         let slot_id = self.slot_id_at(index)?;
         let removed = match self.queue.remove_slot(slot_id) {
             RemoveSlotResult::Removed(slot) => slot.item,
@@ -120,20 +120,20 @@ impl PlayerTab {
         Some(removed)
     }
 
-    pub(super) fn insert_item_at(&mut self, index: usize, item: MediaItem) {
+    pub(super) fn insert_item_at(&mut self, index: usize, item: EmbyItem) {
         self.sync_queue_model_from_items_if_needed();
         self.queue.insert(index, item);
         self.sync_items_from_queue_model();
         self.queue_cursor = index.min(self.items.len().saturating_sub(1));
     }
 
-    pub(super) fn append_item(&mut self, item: MediaItem) {
+    pub(super) fn append_item(&mut self, item: EmbyItem) {
         self.sync_queue_model_from_items_if_needed();
         self.queue.append(item);
         self.sync_items_from_queue_model();
     }
 
-    pub(super) fn append_items(&mut self, items: Vec<MediaItem>) {
+    pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) {
         self.sync_queue_model_from_items_if_needed();
         for item in items {
             self.queue.append(item);
@@ -159,6 +159,6 @@ impl PlayerTab {
     }
 }
 
-pub(super) fn same_queue_occurrence(left: &MediaItem, right: &MediaItem) -> bool {
+pub(super) fn same_queue_occurrence(left: &EmbyItem, right: &EmbyItem) -> bool {
     left.id == right.id && left.playlist_item_id == right.playlist_item_id
 }

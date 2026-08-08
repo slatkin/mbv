@@ -6,7 +6,7 @@ use crate::app::{
     App, PanelFocus, PendingQueueAction, QueueScope, HELP_PANEL_W, PLAYLISTS_PANEL_W,
     SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
-use mbv_core::api::{MediaItem, TICKS_PER_SECOND};
+use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
 use ratatui::layout::Rect;
 use std::time::{Duration, Instant};
@@ -177,7 +177,7 @@ impl App {
                                         .map(|p| p.name.clone())
                                         .unwrap_or_default(),
                                 };
-                                let items: Vec<MediaItem> = self
+                                let items: Vec<EmbyItem> = self
                                     .playlists_open_items
                                     .iter()
                                     .filter(|i| !i.is_folder)

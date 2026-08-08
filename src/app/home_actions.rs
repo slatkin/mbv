@@ -1,11 +1,11 @@
 use super::App;
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 
 impl App {
     // ── Home flat list ───────────────────────────────────────────────────────
 
-    /// The MediaItem at the current flat `home_cursor`, or None.
-    pub(super) fn home_current_item(&self) -> Option<MediaItem> {
+    /// The EmbyItem at the current flat `home_cursor`, or None.
+    pub(super) fn home_current_item(&self) -> Option<EmbyItem> {
         let cursor = self.home.home_cursor;
         let mut pos = 0usize;
         for item in &self.home.continue_items {

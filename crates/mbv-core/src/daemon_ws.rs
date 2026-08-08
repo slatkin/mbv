@@ -3,7 +3,7 @@ fn handle_ws(
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
     audio_only: bool,
-    items: &mut Vec<MediaItem>,
+    items: &mut Vec<EmbyItem>,
     cursor: &mut usize,
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
@@ -169,6 +169,6 @@ fn handle_ws(
     }
 }
 
-fn all_audio(items: &[MediaItem]) -> bool {
-    items.iter().all(MediaItem::is_audio)
+fn all_audio(items: &[EmbyItem]) -> bool {
+    items.iter().all(EmbyItem::is_audio)
 }

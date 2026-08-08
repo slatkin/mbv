@@ -24,7 +24,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         lib_idx: usize,
-        albums: &[mbv_core::api::MediaItem],
+        albums: &[mbv_core::api::EmbyItem],
         cursor: usize,
         stored_scroll: usize,
         focused: bool,
@@ -472,7 +472,7 @@ impl App {
                 if let Some(selection) = &selected {
                     // Collage: the selected artist header's albums, in the
                     // already-sorted `left_sorted_indices` order, first 4.
-                    let header_albums: Vec<mbv_core::api::MediaItem> = layout
+                    let header_albums: Vec<mbv_core::api::EmbyItem> = layout
                         .left_sorted_indices
                         .iter()
                         .filter(|&&idx| album_info[idx].0 == selection.artist_label)

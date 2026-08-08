@@ -133,7 +133,7 @@ impl PlaybackRun {
         } else {
             let added = count - old_n;
             log::warn!(target: "player", "playlist-count increased from {} to {}: {} item(s) added externally", old_n, count, added);
-            // We cannot reconstruct the added MediaItems from mpv's playlist,
+            // We cannot reconstruct the added EmbyItems from mpv's playlist,
             // so we keep the queue as-is. Clamp current_idx to the last
             // known item in case the external tool also changed position.
             if self.current_idx >= self.queue_len() && self.queue_len() > 0 {

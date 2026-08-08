@@ -276,7 +276,7 @@ impl App {
     }
 
     /// Restore the queue from disk immediately and synchronously — the file
-    /// already holds full `MediaItem`s, so this is a local read, no network
+    /// already holds full `EmbyItem`s, so this is a local read, no network
     /// round-trip, no in-flight window where the queue could be superseded
     /// by a real user action before it lands. See `spawn_enrich_queue_state`
     /// for the separate, best-effort refresh of played/position state.
@@ -400,7 +400,7 @@ impl App {
     /// confirmation, and syncs the append to the direct-remote queue /
     /// local persistence -- rolling the whole append back if the sync
     /// fails.
-    pub(super) fn append_item_to_queue_and_sync(&mut self, item: MediaItem) {
+    pub(super) fn append_item_to_queue_and_sync(&mut self, item: EmbyItem) {
         let name = item.display_name();
         let scope = self.visible_queue_scope();
         let appended = item.clone();

@@ -1,16 +1,16 @@
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use std::sync::mpsc;
 use std::time::Instant;
 
 #[derive(Clone)]
 pub(super) struct FeedHomeVideoGroup {
-    pub(super) folder: MediaItem,
-    pub(super) items: Vec<MediaItem>,
+    pub(super) folder: EmbyItem,
+    pub(super) items: Vec<EmbyItem>,
 }
 
 #[derive(Clone, Default)]
 pub(super) struct FeedHomeVideoState {
-    pub(super) all_items: Vec<MediaItem>,
+    pub(super) all_items: Vec<EmbyItem>,
     pub(super) groups: Vec<FeedHomeVideoGroup>,
     pub(super) loading: bool,
     pub(super) selected_group: usize,

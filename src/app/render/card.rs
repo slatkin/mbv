@@ -1,7 +1,7 @@
 use super::RENDER_FILTER;
 use crate::app::images::QUEUE_CARD_PLACEHOLDER_KEY;
 use crate::app::{palette, App};
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
@@ -16,7 +16,7 @@ fn card_image_types(item_type: &str) -> &'static [&'static str] {
     }
 }
 
-fn card_cache_key(item: &MediaItem) -> String {
+fn card_cache_key(item: &EmbyItem) -> String {
     if item.item_type == "Audio" && !item.album_id.is_empty() {
         format!("{}:P", item.album_id)
     } else {
@@ -296,8 +296,8 @@ mod tests {
     }
 
     fn make_direct_remote_app(
-        local_items: Vec<mbv_core::api::MediaItem>,
-        remote_items: Vec<mbv_core::api::MediaItem>,
+        local_items: Vec<mbv_core::api::EmbyItem>,
+        remote_items: Vec<mbv_core::api::EmbyItem>,
     ) -> App {
         let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
         let mut app = App::new_remote(

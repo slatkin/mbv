@@ -63,7 +63,7 @@ pub(super) struct ListRenderCtx<'a> {
     /// bottom slice) -- the row renderer only ever sees `list_area` and has
     /// no notion of the hero at all.
     pub(super) content_area: Rect,
-    pub(super) items: &'a [mbv_core::api::MediaItem],
+    pub(super) items: &'a [mbv_core::api::EmbyItem],
     pub(super) cursor: usize,
     pub(super) stored_scroll: usize,
     /// Column count for this frame's list pane width (1 or 2).

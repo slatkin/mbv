@@ -1,7 +1,7 @@
 use crate::app::render::{parse_album_folder_name, strip_article};
 use crate::app::ui_util::natural_sort_key;
 use crate::app::{App, ArtistHeaderSelection};
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -87,7 +87,7 @@ impl GroupedAlbumCatalog {
 /// pre-settle render fallback: `item.artist` -> resolved lookup (cache or
 /// fetch result) -> folder-name parse -> literal "Unknown Artist". Never
 /// schedules artist resolution work.
-pub(super) fn derive_album_artist(item: &MediaItem, resolved: Option<&str>) -> String {
+pub(super) fn derive_album_artist(item: &EmbyItem, resolved: Option<&str>) -> String {
     if !item.artist.is_empty() {
         return item.artist.clone();
     }
@@ -105,7 +105,7 @@ pub(super) fn derive_album_artist(item: &MediaItem, resolved: Option<&str>) -> S
 /// Display `(year, album_name)` for an album item, mirroring the current
 /// renderer's rule: Emby-provided artist metadata selects the tagged year and
 /// display name, otherwise a folder-name parse wins.
-pub(super) fn derive_album_display_name(item: &MediaItem) -> (String, String) {
+pub(super) fn derive_album_display_name(item: &EmbyItem) -> (String, String) {
     if !item.artist.is_empty() {
         let year_str = if item.production_year > 0 {
             item.production_year.to_string()
@@ -128,7 +128,7 @@ pub(super) fn derive_album_display_name(item: &MediaItem) -> (String, String) {
 /// Builds the settled grouped catalog for a source snapshot from the raw
 /// items and a resolved artist lookup. Pure: no app state, no network.
 pub(super) fn build_grouped_album_catalog(
-    items: &[MediaItem],
+    items: &[EmbyItem],
     resolved: &HashMap<String, String>,
 ) -> GroupedAlbumCatalog {
     let mut entries: Vec<GroupedAlbumEntry> = Vec::with_capacity(items.len());

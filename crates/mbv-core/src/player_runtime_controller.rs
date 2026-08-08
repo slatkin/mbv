@@ -207,7 +207,7 @@ impl Player {
     /// Seed queue/status state without starting playback. Used when a freshly
     /// spawned local daemon should inherit a queue snapshot before any thin
     /// client connects, while an already-running daemon keeps its live state.
-    pub fn set_initial_queue(&self, items: &[MediaItem], cursor: usize) {
+    pub fn set_initial_queue(&self, items: &[EmbyItem], cursor: usize) {
         let mut st = self.status.lock().unwrap();
         if items.is_empty() {
             st.position_ticks = 0;
@@ -238,7 +238,7 @@ impl Player {
         client.config.audio_pipe_enabled || (!self.show_audio_window && is_audio)
     }
 
-    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, initial_volume: u8) {
+    pub fn play(&self, item: &EmbyItem, client: Arc<EmbyClient>, initial_volume: u8) {
         // Reuse the existing mpv window only when the headless state matches:
         // video→video and audio→audio reuse; video→audio and audio→video always
         // spawn a new process so the window visibility is correct.
@@ -418,7 +418,7 @@ impl Player {
 
     pub fn play_queue(
         &self,
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         start_idx: usize,
         client: Arc<EmbyClient>,
         initial_volume: u8,

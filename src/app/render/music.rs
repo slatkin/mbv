@@ -1,7 +1,7 @@
 use super::super::ui_util::*;
 use crate::app::layout::LayoutMain;
 use crate::app::App;
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use ratatui::layout::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
@@ -10,7 +10,7 @@ use ratatui::Frame;
 impl App {
     /// Returns the group level's items and cursor for a music-group library
     /// (the nav-stack level above the current album level), if pushed yet.
-    fn music_group_state(&self, lib_idx: usize) -> (Vec<MediaItem>, usize) {
+    fn music_group_state(&self, lib_idx: usize) -> (Vec<EmbyItem>, usize) {
         let lib = &self.libs[lib_idx];
         if lib.nav_stack.len() >= 2 {
             let group_lvl = &lib.nav_stack[lib.nav_stack.len() - 2];

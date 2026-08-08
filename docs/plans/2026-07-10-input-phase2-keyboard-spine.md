@@ -1050,7 +1050,7 @@ fn h_toggles_panel_mode_when_active_via_handle_key() {
 #[test]
 fn c_prompts_clear_queue_confirmation_via_handle_key() {
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items.push(mbv_core::api::MediaItem::default());
+    app.player_tab.items.push(mbv_core::api::EmbyItem::default());
     app.handle_key(crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Char('c'),
         crossterm::event::KeyModifiers::NONE,
@@ -1059,7 +1059,7 @@ fn c_prompts_clear_queue_confirmation_via_handle_key() {
 }
 ```
 
-(If `MediaItem` does not derive `Default`, check its actual constructor via `find_symbol` first rather than guessing — the existing `player_tab.items` tests elsewhere in the file will show the pattern used.)
+(If `EmbyItem` does not derive `Default`, check its actual constructor via `find_symbol` first rather than guessing — the existing `player_tab.items` tests elsewhere in the file will show the pattern used.)
 
 - [ ] **Step 2: Run to confirm they pass today**
 
@@ -1317,7 +1317,7 @@ git commit -m "Mark input-handling phase 2 (keyboard precedence spine) complete"
 - "No behavior change" → every task re-runs the full suite, not a filtered one; guard conditions are transcribed, never rewritten, from the verbatim source captured in Task 1 Step 4. ✓
 - Carried-over follow-up (dead Help `InputSnapshot`) → Task 6. ✓
 
-**Placeholder scan:** No TBD/TODO. The two "check the real constructor via `find_symbol` before finalizing" notes (Tasks 4, 5, 7) are concrete verification instructions, not deferred work — they exist because this plan was written without running the test suite against the live `HomeSearch`/`MediaItem`/`ContextMenu` types, and guessing a `Default` impl that doesn't exist would produce a red step for the wrong reason.
+**Placeholder scan:** No TBD/TODO. The two "check the real constructor via `find_symbol` before finalizing" notes (Tasks 4, 5, 7) are concrete verification instructions, not deferred work — they exist because this plan was written without running the test suite against the live `HomeSearch`/`EmbyItem`/`ContextMenu` types, and guessing a `Default` impl that doesn't exist would produce a red step for the wrong reason.
 
 **Type consistency:** `ContextEntry { name, handler }` used identically from Task 1 onward. `fn(&mut App, KeyEvent) -> Option<bool>` signature is consistent across every extracted handler in every task. `CONTEXT_STACK`'s entry list is restated in full at the end of Tasks 1 and 5 (not just diffed) specifically so a reader / implementer never has to mentally merge partial edits across tasks.
 

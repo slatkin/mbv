@@ -4,7 +4,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::api::{mbv_direct_tcp_port_command, EmbyClient, MediaItem};
+use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
 use crate::ctrl::{
     CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason, PlaybackGeneration, PlaybackIntent,
     PlaybackIntentAction, PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
@@ -53,7 +53,7 @@ enum DaemonEvent {
         reply_tx: CtrlSender,
         request_id: PlaybackRequestId,
         generation: PlaybackGeneration,
-        fetched: Result<Vec<MediaItem>, String>,
+        fetched: Result<Vec<EmbyItem>, String>,
     },
     CtrlDisconnected(CtrlClientId),
     Shutdown,
@@ -411,7 +411,7 @@ impl PlaybackIntentState {
 
 #[derive(Clone)]
 struct SharedQueueState {
-    items: Arc<Mutex<Vec<MediaItem>>>,
+    items: Arc<Mutex<Vec<EmbyItem>>>,
     cursor: Arc<Mutex<usize>>,
     source: Arc<Mutex<crate::config::QueueSource>>,
 }
@@ -562,7 +562,7 @@ fn take_authority_for_emby_remote(ctrl_clients: &ClientRegistry) {
 /// `Player`/`EmbyClient`. Returns the bare reason (not a `CtrlEvent`) so the
 /// same string can be reused for both the server-side log line and the wire
 /// event the caller sends — one message, not two that can drift apart.
-fn audio_only_rejection(audio_only: bool, fetched: &[MediaItem]) -> Option<String> {
+fn audio_only_rejection(audio_only: bool, fetched: &[EmbyItem]) -> Option<String> {
     if audio_only && !all_audio(fetched) {
         Some("Daemon is running in audio-only mode; can't play video items".to_string())
     } else {

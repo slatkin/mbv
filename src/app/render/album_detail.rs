@@ -27,7 +27,7 @@ impl App {
         &mut self,
         f: &mut Frame,
         area: Rect,
-        items: &[mbv_core::api::MediaItem],
+        items: &[mbv_core::api::EmbyItem],
         cursor: usize,
         focused: bool,
         show_title: bool,

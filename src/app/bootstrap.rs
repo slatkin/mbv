@@ -1,12 +1,12 @@
 use super::types_player_tab::PlayerTab;
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 
 pub(super) struct LocalDaemonBootstrap {
     pub(super) player_tab: PlayerTab,
     pub(super) queue_source: crate::config::QueueSource,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
-    pub(super) adopt_queue: Option<(Vec<MediaItem>, usize, crate::config::QueueSource)>,
+    pub(super) adopt_queue: Option<(Vec<EmbyItem>, usize, crate::config::QueueSource)>,
     /// Per-item resume positions carried over from the saved queue snapshot
     /// (see `QueueState::positions`), so the same best-effort enrichment that
     /// `restore_queue_state` performs for plain local playback also happens
@@ -16,7 +16,7 @@ pub(super) struct LocalDaemonBootstrap {
 }
 
 pub(super) fn bootstrap_local_daemon_queue(
-    remote_items: Vec<MediaItem>,
+    remote_items: Vec<EmbyItem>,
     remote_cursor: usize,
     remote_source: crate::config::QueueSource,
     saved_state: Option<crate::config::QueueState>,

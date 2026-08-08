@@ -7,7 +7,7 @@ use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, QueueScope, RemoteSlotState};
 use crate::config::Config;
 use mbv_core::api::EmbyClient;
-use mbv_core::api::MediaItem;
+use mbv_core::api::EmbyItem;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
@@ -257,7 +257,7 @@ pub fn make_music_group_app() -> App {
     library.collection_type = "music".into();
 
     let group_names = ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
-    let groups: Vec<MediaItem> = group_names
+    let groups: Vec<EmbyItem> = group_names
         .iter()
         .enumerate()
         .map(|(i, n)| {

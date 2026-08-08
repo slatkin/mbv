@@ -7,11 +7,11 @@ impl PlaybackRun {
         self.queue.slots().get(idx).map(|slot| slot.slot_id)
     }
 
-    fn item_at(&self, idx: usize) -> Option<&MediaItem> {
+    fn item_at(&self, idx: usize) -> Option<&EmbyItem> {
         self.queue.slots().get(idx).map(|slot| &slot.item)
     }
 
-    fn active_item(&self) -> Option<&MediaItem> {
+    fn active_item(&self) -> Option<&EmbyItem> {
         self.queue.active_slot().map(|slot| &slot.item)
     }
 
@@ -225,7 +225,7 @@ impl PlaybackRun {
     // params struct is a reasonable follow-up but out of scope here.
     #[allow(clippy::too_many_arguments)]
     fn new(
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         start_idx: usize,
         origin: PlaybackOrigin,
         reporter: SessionReporter,

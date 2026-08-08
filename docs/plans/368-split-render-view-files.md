@@ -346,7 +346,7 @@ So the carrier is **8 fields, not 11**, plus `f`, `layout`, and — for kind 2 o
 // in list_rows.rs
 pub(super) struct ListRenderCtx<'a> {
     pub(super) content_area: Rect,
-    pub(super) items: &'a [mbv_core::api::MediaItem],
+    pub(super) items: &'a [mbv_core::api::EmbyItem],
     pub(super) cursor: usize,
     pub(super) stored_scroll: usize,
     pub(super) banner_rows: usize,
@@ -360,7 +360,7 @@ The two derived locals (`n`, `visible`) are recomputed inside each callee from `
 
 If the executor finds that 8 fields plus `f`/`layout` reads acceptably as a flat parameter list (closer to the existing grouped delegate's positional style), **that is an acceptable substitution** — the ruling is "narrowest thing that compiles, cut per kind", not "must be a struct". What is *not* acceptable is passing a kind a value it does not read.
 
-**Borrow-checker check (verified, not assumed):** `items` is an owned local `Vec`, cloned out of `self.libs[..].nav_stack` / `search.results` at L314–345 — **not** a borrow of `self`. So `&'a [MediaItem]` in the carrier coexists with `&mut self` on the extracted methods. No clone or `RefCell` gymnastics needed.
+**Borrow-checker check (verified, not assumed):** `items` is an owned local `Vec`, cloned out of `self.libs[..].nav_stack` / `search.results` at L314–345 — **not** a borrow of `self`. So `&'a [EmbyItem]` in the carrier coexists with `&mut self` on the extracted methods. No clone or `RefCell` gymnastics needed.
 
 **Resulting `list.rs`**: `use` header + `compact_banner_rows` + `render_series_detail_if_visible` + `render_series_detail_top_border` + `render_power_list` prelude/dispatch/tail ≈ **400 lines**.
 
@@ -609,7 +609,7 @@ Three ways to blow the budget regardless of protocol, all avoidable:
 | Test files' `use super::*` stops resolving after production symbols move | high, mechanical | Compiler catches it immediately; fix with explicit imports in the test file, never by re-exporting for tests' sake alone. |
 | `sed -i` span deletion applied in ascending order, corrupting later ranges | medium | §1a step 3: delete **highest line number first**. Byte-identity check (§5) catches it if missed. |
 | Plan's line-number hints have drifted; executor cuts the wrong span | medium | §1a step 1: resolve every boundary by symbol name in the working tree before cutting. Spans in §3 are hints only. Byte-identity check catches a bad cut. |
-| Borrow checker rejects the carrier's `&'a [MediaItem]` alongside `&mut self` | low | Verified: `items` is an owned local clone, not a `self` borrow. |
+| Borrow checker rejects the carrier's `&'a [EmbyItem]` alongside `&mut self` | low | Verified: `items` is an owned local clone, not a `self` borrow. |
 | Silent scope creep into `render/tests.rs` or into `album.rs` from Lane A | low | Explicit guardrails (§1, §4). |
 | ~~Verbatim re-typing silently alters a moved line~~ | **retired** | Eliminated by §1a — moved content never passes through the model. This was the single largest correctness risk in earlier drafts. |
 
@@ -866,7 +866,7 @@ Kind 3 is a deliberate catch-all — it absorbs the Home "Continue Watching" tab
 // in list_rows.rs
 pub(super) struct ListRenderCtx<'a> {
     pub(super) content_area: Rect,
-    pub(super) items: &'a [mbv_core::api::MediaItem],
+    pub(super) items: &'a [mbv_core::api::EmbyItem],
     pub(super) cursor: usize,
     pub(super) stored_scroll: usize,
     pub(super) banner_rows: usize,
@@ -879,7 +879,7 @@ pub(super) struct ListRenderCtx<'a> {
 - `n` (`= items.len()`) and `visible` (`= content_area.height as usize`) are derived → **not** carrier fields; recompute them as the first lines of each callee.
 - A flat parameter list instead of the struct is acceptable if it reads better. Passing a kind a value it does not read is not.
 
-**Borrow-checker note (verified):** `items` is an owned local `Vec` cloned out of `self.libs[..]`, not a borrow of `self`, so `&'a [MediaItem]` coexists with `&mut self`. No clones or `RefCell` needed.
+**Borrow-checker note (verified):** `items` is an owned local `Vec` cloned out of `self.libs[..]`, not a borrow of `self`, so `&'a [EmbyItem]` coexists with `&mut self`. No clones or `RefCell` needed.
 
 **Visibility — 2 widenings.** `App::render_series_detail_if_visible` (216) and `App::render_series_detail_top_border` (257) are private and stay in `list.rs`, but the moved bodies call them (the latter at L858 and L1129). Both need `pub(super)`.
 

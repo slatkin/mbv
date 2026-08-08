@@ -109,7 +109,7 @@ impl PlayerProxy {
 
     pub fn play(
         &self,
-        item: &MediaItem,
+        item: &EmbyItem,
         source: crate::config::QueueSource,
         client: Arc<EmbyClient>,
         initial_volume: u8,
@@ -122,7 +122,7 @@ impl PlayerProxy {
 
     pub fn play_queue(
         &self,
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         start_idx: usize,
         source: crate::config::QueueSource,
         client: Arc<EmbyClient>,

@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
-use crate::api::{EmbyClient, MediaItem};
+use crate::api::{EmbyClient, EmbyItem};
 use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
@@ -26,7 +26,7 @@ pub enum ShutdownResponse {
 pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
     pub subtitle_prefs: Arc<Mutex<crate::player::SubtitlePrefs>>,
-    pub items: Arc<Mutex<Vec<MediaItem>>>,
+    pub items: Arc<Mutex<Vec<EmbyItem>>>,
     pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
@@ -184,7 +184,7 @@ impl RemotePlayer {
 
     pub fn adopt_queue(
         &self,
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         cursor: usize,
         source: crate::config::QueueSource,
     ) -> bool {
@@ -208,7 +208,7 @@ impl RemotePlayer {
 
     pub fn play(
         &self,
-        item: &MediaItem,
+        item: &EmbyItem,
         source: crate::config::QueueSource,
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
@@ -227,7 +227,7 @@ impl RemotePlayer {
 
     pub fn play_queue(
         &self,
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         start_idx: usize,
         source: crate::config::QueueSource,
         _client: Arc<EmbyClient>,
@@ -293,14 +293,14 @@ impl RemotePlayer {
 
     /// Test helper for root-crate integration tests that need a remote-player
     /// stand-in without a live daemon connection.
-    pub fn stub(items: Vec<MediaItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
+    pub fn stub(items: Vec<EmbyItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
         let (remote, event_rx, _cmd_rx) = Self::stub_with_command_rx(items, current_idx);
         (remote, event_rx)
     }
 
     /// Test helper variant that also exposes commands sent to the daemon.
     pub fn stub_with_command_rx(
-        items: Vec<MediaItem>,
+        items: Vec<EmbyItem>,
         current_idx: usize,
     ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
         let queue_len = items.len();
