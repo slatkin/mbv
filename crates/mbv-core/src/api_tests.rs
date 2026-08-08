@@ -357,6 +357,8 @@ fn authenticate_preserves_token_on_connectivity_error() {
     // server may be back on the next launch, and the token is still valid.
     assert_eq!(client.token, "cache-token");
     assert_eq!(client.user_id, "cache-user");
+    // The on-disk cache must also survive (not just the in-memory fields).
+    assert!(crate::config::token_cache_path().exists());
 }
 
 #[test]

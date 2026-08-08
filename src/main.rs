@@ -115,11 +115,12 @@ enum AuthFailure {
 
 /// Classifies `authenticate_bounded`'s error string into an `AuthFailure`
 /// (issue #192). The first-run and expired-credential cases are recognized
-/// verbatim; everything else -- the ureq error details behind `"Cached
-/// credential validation failed: ..."`, and the hard-join timeout
-/// `"timed out after {N}s"` synthesized by `run_with_hard_bound` (which
-/// flows through this same `other` branch, no special-casing needed) -- is
-/// a connectivity failure.
+/// verbatim; everything else maps to `ServerUnreachable`. This covers the
+/// common cases (connectivity failures such as timeout/refused/DNS/TLS) but
+/// also catches HTTP 5xx from a reachable server — `authenticate()` folds
+/// those into the same `Err` path. The "could not reach {url}" user message
+/// is therefore approximate for 5xx; the alternative (exiting silently) is
+/// worse.
 fn classify_auth_failure_kind(reason: &str) -> AuthFailure {
     match reason {
         "Cached credentials expired" => AuthFailure::CredentialsExpired,
