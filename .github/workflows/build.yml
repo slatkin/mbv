@@ -21,8 +21,11 @@ jobs:
       actions: write
 
     steps:
-      - uses: actions/checkout@v7
-
+      # The pinned archlinux base-devel image ships no git, and
+      # actions/checkout falls back to a REST API archive download when git is
+      # missing from the PATH. That yields no .git directory, which breaks the
+      # "Commit PKGBUILD" step below. Install makedeps (including git) first so
+      # checkout performs a real git clone.
       - name: Update system and install makedeps
         run: |
           pacman_retry() {
@@ -35,6 +38,8 @@ jobs:
           }
           pacman_retry pacman -Syu --noconfirm
           pacman_retry pacman -S --noconfirm --needed rust nasm mpv cava openssl github-cli git openssh
+
+      - uses: actions/checkout@v7
 
       - name: Record Rust toolchain version
         run: echo "RUSTC_VER=$(rustc --version | tr ' ' '_')" >> "$GITHUB_ENV"
