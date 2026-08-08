@@ -61,7 +61,8 @@ impl PlaybackRun {
                         season: self.season,
                         episode: self.episode,
                     });
-                } else if self.next_up == NextUp::Idle && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
+                } else if self.next_up == NextUp::Idle && ticks > 0 && ticks < TICKS_PER_SECOND * 5
+                {
                     self.next_up.arm();
                     log::info!(target: "player", "next-up: armed series={} runtime={}s", self.series_id, runtime / TICKS_PER_SECOND);
                 }
@@ -84,7 +85,8 @@ impl PlaybackRun {
             return;
         }
         let pos = pos as usize;
-        if self.pending_initial_jump || !self.load_state.is_ready() || self.forced_slot_id.is_some() {
+        if self.pending_initial_jump || !self.load_state.is_ready() || self.forced_slot_id.is_some()
+        {
             log::debug!(
                 target: "player",
                 "ignoring transient playlist-pos={pos} while queue transition is pending"
@@ -314,7 +316,8 @@ impl PlaybackRun {
                 self.queue_len());
             progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
-            self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
+            self.stop_report =
+                StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 idx: completed_idx.min(self.queue_len().saturating_sub(1)),
                 position_ticks: self.last_valid_pos,
@@ -441,8 +444,7 @@ impl PlaybackRun {
         log::warn!(target: "player", "shutdown: last_valid_pos={} stop_report={:?} pending_resume={}",
             self.last_valid_pos, self.stop_report, self.pending_resume_secs.is_some());
         if self.stop_report == StopReport::NotSent {
-            progress.stop_and_join(self.progress_join_budget());
-            self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
+            self.report_stop_now_or_background(progress);
         }
         let client = self.reporter.client.clone();
         if self.origin == PlaybackOrigin::Standalone {
@@ -495,5 +497,4 @@ impl PlaybackRun {
             let _ = self.event_tx.send(PlayerEvent::MpvQuit);
         }
     }
-
 }

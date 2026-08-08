@@ -28,6 +28,53 @@ impl PlaybackRun {
         }
     }
 
+    /// True once `Player::stop_for_shutdown` has armed a deadline — a real
+    /// quit (app close or daemon teardown), as opposed to an ordinary track
+    /// transition. Gates whether `report_stop_now_or_background` can afford
+    /// to fire the stop report on a background thread: mid-playback there's
+    /// no rush, but once the process is on its way out a detached thread
+    /// might never get to run before exit.
+    fn is_quit_shutdown(&self) -> bool {
+        self.shutdown_report_timeout.lock().unwrap().is_some()
+    }
+
+    /// Reports the current item as stopped either synchronously (real quit,
+    /// where the report must complete before the process exits) or on a
+    /// background thread (ordinary stop, kept off the critical path so the
+    /// UI/mpv can proceed immediately). Callers must still guard on
+    /// `self.stop_report` before calling this.
+    fn report_stop_now_or_background(&mut self, progress: &mut ProgressGuard) {
+        if self.is_quit_shutdown() {
+            progress.stop_and_join(self.progress_join_budget());
+            self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
+        } else {
+            let _ = progress.stop_tx.send(());
+            let handle = progress.handle.take();
+            let budget = self.progress_join_budget();
+            let reporter = self.reporter.clone();
+            let last_valid_pos = self.last_valid_pos;
+            thread::spawn(move || {
+                if let Some(h) = handle {
+                    let _ = crate::bounded::run_with_hard_bound(
+                        move || {
+                            let _ = h.join();
+                            Ok::<(), String>(())
+                        },
+                        budget,
+                    );
+                }
+                reporter.report_stopped_background(last_valid_pos);
+            });
+            // Fire-and-forget: we can't know synchronously whether Emby accepted
+            // this. Treat it as accepted anyway so mark_progress_sync_pending
+            // still protects the just-saved local position from being overwritten
+            // by a queue refresh that lands before the background call completes.
+            // If the call *does* fail, the slot's pending_sync just never gets
+            // confirmed and stays protected — the safe failure mode.
+            self.stop_report = StopReport::Accepted;
+        }
+    }
+
     fn report_stopped_for_end_file(&self, reason: EndFileReason) -> bool {
         match end_file_stop_report_context(reason) {
             StopReportContext::Ordinary => self.reporter.report_stopped(self.last_valid_pos),

@@ -1,5 +1,13 @@
 use std::os::unix::io::RawFd;
 
+fn command_quit_async(mpv: &Mpv) {
+    let quit = std::ffi::CString::new("quit").unwrap();
+    let mut args = [quit.as_ptr(), std::ptr::null()];
+    unsafe {
+        libmpv2_sys::mpv_command_async(mpv.ctx.as_ptr(), 0, args.as_mut_ptr());
+    }
+}
+
 fn poll_wakeup(fd: RawFd, timeout_ms: i32) {
     let mut pfd = libc::pollfd {
         fd,
@@ -38,6 +46,18 @@ impl PlaybackRun {
         let event_tx_panic = self.event_tx.clone();
         let current_idx_panic = self.current_idx;
 
+        // Ordered progress-report worker: pause/unpause events are sent here
+        // instead of each spawning its own thread, so two quick toggles can't
+        // race and land at Emby out of order. Drains on its own when
+        // progress_report_tx is dropped at the end of run().
+        let (progress_report_tx, progress_report_rx) = mpsc::channel::<String>();
+        let progress_worker_reporter = self.reporter.clone();
+        thread::spawn(move || {
+            for event_name in progress_report_rx {
+                progress_worker_reporter.report_progress(&event_name);
+            }
+        });
+
         if wakeup_write_fd >= 0 {
             mpv.set_wakeup_callback(move || {
                 let byte = [0u8; 1];
@@ -55,7 +75,7 @@ impl PlaybackRun {
                 }
 
                 if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                    let _ = mpv.command("quit", &[]);
+                    command_quit_async(&mpv);
                     self.quit_at = Some(Instant::now());
                 }
 
@@ -64,8 +84,7 @@ impl PlaybackRun {
                     .is_some_and(|t| t.elapsed() > Duration::from_secs(2))
                 {
                     if !self.stop_report.is_sent() {
-                        progress.stop_and_join(self.progress_join_budget());
-                        self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
+                        self.report_stop_now_or_background(&mut progress);
                     }
                     let runtime = self.status.lock().unwrap().runtime_ticks;
                     let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
@@ -117,7 +136,7 @@ impl PlaybackRun {
                             let _ = self.event_tx.send(PlayerEvent::PausedChanged(paused));
                             if self.quit_at.is_none() {
                                 let event_name = if paused { "Pause" } else { "Unpause" };
-                                self.reporter.report_progress(event_name);
+                                let _ = progress_report_tx.send(event_name.to_string());
                             }
                         }
                         Ok(Event::PropertyChange {
