@@ -49,8 +49,29 @@ impl PlaybackRun {
             self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
         } else {
             let _ = progress.stop_tx.send(());
-            self.reporter.report_stopped_background(self.last_valid_pos);
-            self.stop_report = StopReport::Sent;
+            let handle = progress.handle.take();
+            let budget = self.progress_join_budget();
+            let reporter = self.reporter.clone();
+            let last_valid_pos = self.last_valid_pos;
+            thread::spawn(move || {
+                if let Some(h) = handle {
+                    let _ = crate::bounded::run_with_hard_bound(
+                        move || {
+                            let _ = h.join();
+                            Ok::<(), String>(())
+                        },
+                        budget,
+                    );
+                }
+                reporter.report_stopped_background(last_valid_pos);
+            });
+            // Fire-and-forget: we can't know synchronously whether Emby accepted
+            // this. Treat it as accepted anyway so mark_progress_sync_pending
+            // still protects the just-saved local position from being overwritten
+            // by a queue refresh that lands before the background call completes.
+            // If the call *does* fail, the slot's pending_sync just never gets
+            // confirmed and stays protected — the safe failure mode.
+            self.stop_report = StopReport::Accepted;
         }
     }
 

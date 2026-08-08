@@ -242,12 +242,6 @@ impl SessionReporter {
             .report_progress_http(&id, &msid, pos, paused, &sid, event_name);
     }
 
-    fn report_progress_background(&self, event_name: &str) {
-        let reporter = self.clone();
-        let event_name = event_name.to_string();
-        thread::spawn(move || reporter.report_progress(&event_name));
-    }
-
     // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
     fn report_stopped(&self, last_valid_pos: i64) -> bool {
         let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();

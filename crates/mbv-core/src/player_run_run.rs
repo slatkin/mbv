@@ -46,6 +46,18 @@ impl PlaybackRun {
         let event_tx_panic = self.event_tx.clone();
         let current_idx_panic = self.current_idx;
 
+        // Ordered progress-report worker: pause/unpause events are sent here
+        // instead of each spawning its own thread, so two quick toggles can't
+        // race and land at Emby out of order. Drains on its own when
+        // progress_report_tx is dropped at the end of run().
+        let (progress_report_tx, progress_report_rx) = mpsc::channel::<String>();
+        let progress_worker_reporter = self.reporter.clone();
+        thread::spawn(move || {
+            for event_name in progress_report_rx {
+                progress_worker_reporter.report_progress(&event_name);
+            }
+        });
+
         if wakeup_write_fd >= 0 {
             mpv.set_wakeup_callback(move || {
                 let byte = [0u8; 1];
@@ -124,7 +136,7 @@ impl PlaybackRun {
                             let _ = self.event_tx.send(PlayerEvent::PausedChanged(paused));
                             if self.quit_at.is_none() {
                                 let event_name = if paused { "Pause" } else { "Unpause" };
-                                self.reporter.report_progress_background(event_name);
+                                let _ = progress_report_tx.send(event_name.to_string());
                             }
                         }
                         Ok(Event::PropertyChange {
