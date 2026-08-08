@@ -71,17 +71,8 @@ impl PlaybackRun {
                     .quit_at
                     .is_some_and(|t| t.elapsed() > Duration::from_secs(2))
                 {
-                    let is_daemon_shutdown = self.shutdown_report_timeout.lock().unwrap().is_some();
                     if !self.stop_report.is_sent() {
-                        if is_daemon_shutdown {
-                            progress.stop_and_join(self.progress_join_budget());
-                            self.stop_report =
-                                StopReport::mark_sent(self.report_stopped_for_current_context());
-                        } else {
-                            let _ = progress.stop_tx.send(());
-                            self.reporter.report_stopped_background(self.last_valid_pos);
-                            self.stop_report = StopReport::Sent;
-                        }
+                        self.report_stop_now_or_background(&mut progress);
                     }
                     let runtime = self.status.lock().unwrap().runtime_ticks;
                     let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);

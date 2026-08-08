@@ -22,8 +22,7 @@ impl PlaybackRun {
             }
             PlayerCommand::TogglePause => {
                 let p = self.status.lock().unwrap().paused;
-                let val = if p { "no" } else { "yes" };
-                let _ = mpv.command("set", &["pause", val]);
+                let _ = mpv.set_property("pause", !p);
             }
             PlayerCommand::JumpTo(idx) => {
                 if let Some(slot_id) = self.slot_id_at(idx) {

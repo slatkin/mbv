@@ -189,19 +189,21 @@ fn ensure_pipe(path: &str) -> Result<(), String> {
     }
 }
 
+// Linux's default pipe capacity (64 KiB) is small enough that a burst of
+// PCM writes can fill it and block mpv's audio thread on the downstream
+// reader, which shows up as playback-start latency; 1 MiB gives enough
+// headroom that a slow-to-attach reader doesn't stall the writer.
 fn enlarge_pipe_buffer(path: &str) {
-    const F_SETPIPE_SZ: libc::c_int = 1031;
     const TARGET_SIZE: libc::c_int = 1_048_576;
-    let cpath = match std::ffi::CString::new(path) {
-        Ok(c) => c,
-        Err(_) => return,
+    let Ok(cpath) = std::ffi::CString::new(path) else {
+        return;
     };
     let fd = unsafe { libc::open(cpath.as_ptr(), libc::O_RDONLY | libc::O_NONBLOCK) };
     if fd < 0 {
         log::warn!(target: "player", "pipe buffer: cannot open {path}: {}", std::io::Error::last_os_error());
         return;
     }
-    let result = unsafe { libc::fcntl(fd, F_SETPIPE_SZ, TARGET_SIZE) };
+    let result = unsafe { libc::fcntl(fd, libc::F_SETPIPE_SZ, TARGET_SIZE) };
     unsafe { libc::close(fd) };
     if result < 0 {
         log::warn!(target: "player", "pipe buffer: F_SETPIPE_SZ failed: {}", std::io::Error::last_os_error());
@@ -264,32 +266,9 @@ impl SessionReporter {
     }
 
     fn report_progress_background(&self, event_name: &str) {
-        let client = self.client.clone();
-        let ws_tx = self.ws_tx.clone();
-        let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        let (pos, runtime, paused) = {
-            let s = self.status.lock().unwrap_or_else(|e| e.into_inner());
-            (s.position_ticks, s.runtime_ticks, s.paused)
-        };
+        let reporter = self.clone();
         let event_name = event_name.to_string();
-        thread::spawn(move || {
-            if let Some(ref tx) = ws_tx {
-                if tx.is_connected() {
-                    client.report_progress_ws(
-                        &id,
-                        &msid,
-                        pos,
-                        runtime,
-                        paused,
-                        &sid,
-                        &event_name,
-                        tx,
-                    );
-                    return;
-                }
-            }
-            client.report_progress_http(&id, &msid, pos, paused, &sid, &event_name);
-        });
+        thread::spawn(move || reporter.report_progress(&event_name));
     }
 
     // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
