@@ -41,6 +41,14 @@ Routing is capability-led. The owner declares it is audio-only during the ctrl
 handshake and the client decides before submitting. The existing structured
 rejection stays as a backstop.
 
+Which player is the active playback target becomes its own value on the client
+rather than something derived from whether a remote attachment exists. The
+attachment fields are left alone: `active_route`, `connected_session_id` /
+`direct_remote_label`, `home_is_local_daemon` and `player_endpoint` keep their
+current meanings and stay separate, per ADR 0011's rule that library routing and
+Sessions-panel direct remote must not be conflated. Merging attachment and
+target into one state would flatten exactly that distinction, so it is not done.
+
 ## Context
 
 `mbvd` runs as a system service with no user session and therefore no display;
@@ -75,9 +83,17 @@ is where the user is and where the strip decision is made anyway.
   introduced.
 - The ctrl handshake gains an audio-only capability string. Additive, so no
   `CTRL_PROTOCOL_VERSION` bump, per the rule above that constant.
-- On the client, "a remote connection exists" and "the remote player is the
-  active playback target" stop being the same fact. `restore_local_mode`
-  currently asserts they are identical. Fall-through separates them.
+- "A remote connection exists" and "the remote player is the active playback
+  target" stop being the same fact. `restore_local_mode` asserts they are
+  identical today; that assertion is replaced by the explicit target value, not
+  relaxed. Every site that reads `player.is_remote()` to answer "where does
+  playback go" has to read the target instead — `is_remote()` keeps its literal
+  meaning and stays correct for questions about the connection. There are 27
+  non-test `is_remote()` call sites and three `debug_assert_eq!` pairings of it
+  with `player_endpoint`; each has to be read to decide which of the two
+  questions it is asking. That audit is the bulk of the client-side work, and
+  a site classified wrongly fails only in the fall-through case, which no
+  existing test covers.
 - `restore_local_mode` is not the path back for fall-through: it disconnects the
   remote, which is what fall-through exists to avoid, and it deliberately leaves
   a remote playing.
