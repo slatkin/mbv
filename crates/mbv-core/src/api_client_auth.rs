@@ -94,8 +94,10 @@ impl EmbyClient {
                 Err("Cached credentials expired".to_string())
             }
             Err(e) => {
-                self.token.clear();
-                self.user_id.clear();
+                // Connectivity failure (timeout/refused/DNS/TLS): the token
+                // itself is untouched and may still be valid, so keep it in
+                // memory and on disk for the next attempt (issue #192). Only
+                // 401/403 (above) counts as "credentials expired".
                 Err(format!("Cached credential validation failed: {e}"))
             }
         }
@@ -103,8 +105,10 @@ impl EmbyClient {
 
     /// Hard wall-clock bound for `authenticate_bounded`, independent of
     /// ureq's own connect/total timeouts (see issue #191: those don't
-    /// reliably cover every stall mode, e.g. TLS handshake hangs).
-    pub const AUTHENTICATE_HARD_BOUND: std::time::Duration = std::time::Duration::from_secs(15);
+    /// reliably cover every stall mode, e.g. TLS handshake hangs). 5s
+    /// matches the connect timeout; it is the worst-case wait before mbv
+    /// reports the server unreachable (issue #192).
+    pub const AUTHENTICATE_HARD_BOUND: std::time::Duration = std::time::Duration::from_secs(5);
 
     /// Runs `authenticate()` on a clone, bounded by `hard_bound` wall-clock
     /// time. On success, returns the authenticated clone -- callers should
