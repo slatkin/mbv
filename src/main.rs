@@ -64,33 +64,67 @@ fn authenticate_or_login(client: EmbyClient, ui_config: &config::UiConfig) -> Em
     log::info!(target: "startup", "authenticate: {}ms result={}", t0.elapsed().as_millis(), if auth_result.is_ok() { "ok" } else { "err" });
     match auth_result {
         Ok(authenticated) => authenticated,
-        Err(reason) => {
-            let initial_error = classify_auth_failure(&client.config.server_url, &reason);
-            match login::run(client, ui_config, initial_error) {
+        Err(reason) => match classify_auth_failure_kind(&reason) {
+            // The server could not be reached (timeout / refused / DNS /
+            // TLS): exit to the command line with a factual error -- the
+            // login screen would be misleading here, and the cached token
+            // is preserved for the next attempt (issue #192).
+            AuthFailure::ServerUnreachable(details) => {
+                eprintln!(
+                    "mbv: could not reach {}: {details}",
+                    client.config.server_url
+                );
+                std::process::exit(1);
+            }
+            AuthFailure::CredentialsExpired => {
+                match login::run(
+                    client,
+                    ui_config,
+                    Some("Your session has expired — please log in again.".to_string()),
+                ) {
+                    Ok(c) => c,
+                    Err(_) => std::process::exit(0),
+                }
+            }
+            AuthFailure::FirstRun => match login::run(client, ui_config, None) {
                 Ok(c) => c,
                 Err(_) => std::process::exit(0),
-            }
-        }
+            },
+        },
     }
 }
 
-/// Maps `authenticate_bounded`'s error string to what the login screen shows
-/// initially, if anything (issue #191 fix #4). Deliberately does not alarm
-/// the user for the expected "your token expired" case, but explains
-/// network/timeout failures clearly since that's the case the issue is
-/// actually about. The hard-join-timeout case flows through the generic
-/// `other` branch too, since `authenticate_bounded` produces
-/// `"timed out after {N}s"` as its `Err` string on timeout -- no
-/// special-casing needed.
-fn classify_auth_failure(server_url: &str, reason: &str) -> Option<String> {
+/// How startup authentication failed, in terms of what mbv should do next
+/// (issue #192). Connectivity-class failures exit to the command line with
+/// an error message; credential-class failures show the login screen.
+#[derive(Debug)]
+enum AuthFailure {
+    /// No cached credentials at all, or no server URL to reach: first run,
+    /// show the login screen with no error text.
+    FirstRun,
+    /// The cached token was rejected with 401/403: show the login screen so
+    /// the user can re-authenticate.
+    CredentialsExpired,
+    /// The server could not be reached (timeout, connection refused, DNS,
+    /// TLS, ...). The `String` carries the underlying error details from
+    /// `authenticate_bounded`, including the `"Cached credential validation
+    /// failed: {ureq error}"` prefix — kept verbatim so the cause is
+    /// traceable.
+    ServerUnreachable(String),
+}
+
+/// Classifies `authenticate_bounded`'s error string into an `AuthFailure`
+/// (issue #192). The first-run and expired-credential cases are recognized
+/// verbatim; everything else -- the ureq error details behind `"Cached
+/// credential validation failed: ..."`, and the hard-join timeout
+/// `"timed out after {N}s"` synthesized by `run_with_hard_bound` (which
+/// flows through this same `other` branch, no special-casing needed) -- is
+/// a connectivity failure.
+fn classify_auth_failure_kind(reason: &str) -> AuthFailure {
     match reason {
-        "Cached credentials expired" => {
-            Some("Your session has expired — please log in again.".to_string())
-        }
-        "No cached credentials" | "No server URL configured" => None,
-        other => Some(format!(
-            "Could not reach {server_url}: {other} — please log in again."
-        )),
+        "Cached credentials expired" => AuthFailure::CredentialsExpired,
+        "No cached credentials" | "No server URL configured" => AuthFailure::FirstRun,
+        other => AuthFailure::ServerUnreachable(other.to_string()),
     }
 }
 
@@ -459,45 +493,44 @@ mod tests {
     }
 
     #[test]
-    fn classify_auth_failure_expired_credentials_gets_quiet_wording() {
-        assert_eq!(
-            classify_auth_failure("http://emby.local", "Cached credentials expired"),
-            Some("Your session has expired — please log in again.".to_string())
-        );
+    fn classify_auth_failure_kind_expired_credentials_is_credentials_expired() {
+        assert!(matches!(
+            classify_auth_failure_kind("Cached credentials expired"),
+            AuthFailure::CredentialsExpired
+        ));
     }
 
     #[test]
-    fn classify_auth_failure_first_run_cases_stay_silent() {
-        assert_eq!(
-            classify_auth_failure("http://emby.local", "No cached credentials"),
-            None
-        );
-        assert_eq!(classify_auth_failure("", "No server URL configured"), None);
+    fn classify_auth_failure_kind_first_run_cases_are_first_run() {
+        assert!(matches!(
+            classify_auth_failure_kind("No cached credentials"),
+            AuthFailure::FirstRun
+        ));
+        assert!(matches!(
+            classify_auth_failure_kind("No server URL configured"),
+            AuthFailure::FirstRun
+        ));
     }
 
     #[test]
-    fn classify_auth_failure_network_error_names_the_server() {
-        assert_eq!(
-            classify_auth_failure(
-                "http://emby.local",
-                "Cached credential validation failed: some ureq error"
-            ),
-            Some(
-                "Could not reach http://emby.local: Cached credential validation failed: some ureq error — please log in again."
-                    .to_string()
-            )
-        );
+    fn classify_auth_failure_kind_network_error_is_server_unreachable() {
+        match classify_auth_failure_kind("Cached credential validation failed: some ureq error") {
+            AuthFailure::ServerUnreachable(details) => {
+                assert_eq!(
+                    details,
+                    "Cached credential validation failed: some ureq error"
+                )
+            }
+            other => panic!("expected ServerUnreachable, got {other:?}"),
+        }
     }
 
     #[test]
-    fn classify_auth_failure_hard_join_timeout_flows_through_generic_branch() {
-        assert_eq!(
-            classify_auth_failure("http://emby.local", "timed out after 15s"),
-            Some(
-                "Could not reach http://emby.local: timed out after 15s — please log in again."
-                    .to_string()
-            )
-        );
+    fn classify_auth_failure_kind_hard_join_timeout_flows_through_generic_branch() {
+        match classify_auth_failure_kind("timed out after 5s") {
+            AuthFailure::ServerUnreachable(details) => assert_eq!(details, "timed out after 5s"),
+            other => panic!("expected ServerUnreachable, got {other:?}"),
+        }
     }
 
     #[test]

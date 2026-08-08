@@ -324,6 +324,61 @@ fn parse_mbv_shared_data_tcp_port_command_extracts_port() {
     assert_eq!(parse_mbv_shared_data_tcp_port(&commands), Some(47789));
 }
 
+// ── authenticate: token clearing vs. preservation ─────────────────────────
+
+/// Writes a cached-token file into the guarded state dir, as
+/// `authenticate()` would find it.
+fn seed_cached_token(server_url: &str, token: &str, user_id: &str) {
+    save_cached_token(server_url, token, user_id);
+}
+
+#[test]
+fn authenticate_preserves_token_on_connectivity_error() {
+    let _g = crate::config::TestStateDirGuard::new();
+    let (listener, url) = local_listener_url();
+    // Server accepts, reads the request, then drops the connection without
+    // responding — a transport-level (connectivity-class) failure.
+    std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let _ = read_one_request(&mut stream);
+        }
+    });
+    seed_cached_token(&url, "cache-token", "cache-user");
+    let mut client = client_with_url(&url);
+    let result = client.authenticate();
+    match &result {
+        Err(e) => assert!(
+            e.starts_with("Cached credential validation failed:"),
+            "expected connectivity error, got {e:?}"
+        ),
+        Ok(()) => panic!("expected a connectivity error"),
+    }
+    // The cached token survives a connectivity failure (issue #192): the
+    // server may be back on the next launch, and the token is still valid.
+    assert_eq!(client.token, "cache-token");
+    assert_eq!(client.user_id, "cache-user");
+}
+
+#[test]
+fn authenticate_clears_token_on_401() {
+    let _g = crate::config::TestStateDirGuard::new();
+    let (listener, url) = local_listener_url();
+    std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let _ = read_one_request(&mut stream);
+            use std::io::Write;
+            let _ = stream.write_all(b"HTTP/1.1 401 Unauthorized\r\n\r\n");
+        }
+    });
+    seed_cached_token(&url, "cache-token", "cache-user");
+    let mut client = client_with_url(&url);
+    let result = client.authenticate();
+    assert_eq!(result, Err("Cached credentials expired".to_string()));
+    assert_eq!(client.token, "");
+    assert_eq!(client.user_id, "");
+    assert!(!crate::config::token_cache_path().exists());
+}
+
 // ── auth_header ──────────────────────────────────────────────────────────
 
 #[test]
