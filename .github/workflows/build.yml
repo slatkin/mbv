@@ -118,6 +118,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
+          echo "PWD=$(pwd)"
+          echo "GITHUB_WORKSPACE=${GITHUB_WORKSPACE}"
+          ls -la
+          git rev-parse --show-toplevel && echo "GIT TOPLEVEL FOUND" || git rev-parse --git-dir 2>&1 || echo "NO GIT REPO HERE"
           SHA256=$(sha256sum "${TARBALL}" | cut -d' ' -f1)
           sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" PKGBUILD
           sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
