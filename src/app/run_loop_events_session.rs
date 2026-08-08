@@ -1,6 +1,7 @@
 //! `SessionEvent` handling, split out of `run_loop_events.rs` to keep that
 //! file within the repository's file-size limit.
 
+use crate::app::notify_actions::ToastSeverity;
 use crate::app::{App, PanelFocus, SessionEvent};
 use std::time::{Duration, Instant};
 
@@ -157,8 +158,9 @@ impl App {
                         }
                         if self.session_miss_count >= 3 {
                             log::warn!(target: "sessions", "connected session gone; disconnecting");
-                            self.flash_status_high(
+                            self.flash(
                                 "Remote session ended; disconnected".to_string(),
+                                ToastSeverity::Error,
                             );
                             self.connected_session_id = None;
                             self.connected_session_state = None;
@@ -202,7 +204,10 @@ impl App {
                         self.retire_remote_tracking(false);
                     }
                 }
-                self.flash_status_high(format!("Remote command failed: {error}"));
+                self.flash(
+                    format!("Remote command failed: {error}"),
+                    ToastSeverity::Error,
+                );
             }
             SessionEvent::PlaylistMutationComplete {
                 mutation_id,
@@ -213,7 +218,10 @@ impl App {
             } => {
                 let succeeded = result.is_ok();
                 if let Err(error) = result {
-                    self.flash_status_high(format!("Playlist save failed: {error}"));
+                    self.flash(
+                        format!("Playlist save failed: {error}"),
+                        ToastSeverity::Error,
+                    );
                 } else if queue_lineage == self.remote_queue_lineage
                     && self.queue_playlist_id() == Some(source_playlist_id.as_str())
                 {
@@ -262,9 +270,10 @@ impl App {
                     Ok(_) => {
                         log::debug!(target: "playlist", "discarding stale playlist replacement completion")
                     }
-                    Err(error) => {
-                        self.flash_status_high(format!("Playlist overwrite failed: {error}"))
-                    }
+                    Err(error) => self.flash(
+                        format!("Playlist overwrite failed: {error}"),
+                        ToastSeverity::Error,
+                    ),
                 }
                 self.finish_playlist_mutation(&playlist_id, mutation_id);
             }
@@ -290,18 +299,24 @@ impl App {
                         // from the old playlist.
                         self.clear_local_playlist_entry_ids();
                         self.save_queue_state();
-                        self.flash_status(format!("Saved as playlist \"{name}\""));
+                        self.flash(
+                            format!("Saved as playlist \"{name}\""),
+                            ToastSeverity::Success,
+                        );
                     }
                     Ok(_) => {
                         log::debug!(target: "playlist", "discarding stale Save As completion");
                     }
-                    Err(error) => self.flash_status_high(format!("Playlist save failed: {error}")),
+                    Err(error) => self.flash(
+                        format!("Playlist save failed: {error}"),
+                        ToastSeverity::Error,
+                    ),
                 }
                 self.finish_playlist_mutation(&coordinator_key, mutation_id);
             }
             SessionEvent::Error(e) => {
                 self.sessions_loading = false;
-                self.flash_status_high(format!("Sessions error: {e}"));
+                self.flash(format!("Sessions error: {e}"), ToastSeverity::Error);
             }
         }
     }

@@ -1,5 +1,6 @@
 use super::{
-    AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus, PendingQueueAction,
+    notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
+    PanelFocus, PendingQueueAction,
 };
 use mbv_core::api::MediaItem;
 use std::collections::HashMap;
@@ -65,7 +66,7 @@ impl App {
             self.refresh_queue();
         } else if self.library_tab == 0 {
             if let Err(e) = self.fetch_home() {
-                self.flash_status_high(format!("Refresh error: {e}"));
+                self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
             }
         } else {
             self.refresh_lib();
@@ -164,17 +165,17 @@ impl App {
         let items = match client.get_playlist_items(&playlist_id) {
             Ok(r) => r,
             Err(e) => {
-                self.flash_status_high(format!("Playlist load failed: {e}"));
+                self.flash(format!("Playlist load failed: {e}"), ToastSeverity::Error);
                 return;
             }
         };
         if items.is_empty() {
-            self.flash_status_high("Playlist is empty".into());
+            self.flash("Playlist is empty".into(), ToastSeverity::Error);
             return;
         }
         let playable: Vec<MediaItem> = items.into_iter().filter(|i| !i.is_folder).collect();
         if playable.is_empty() {
-            self.flash_status_high("No playable items in playlist".into());
+            self.flash("No playable items in playlist".into(), ToastSeverity::Error);
             return;
         }
         let action = PendingQueueAction::PlayItems {

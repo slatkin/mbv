@@ -60,6 +60,7 @@ pub struct App {
     pub(super) remote_player_tab: Option<PlayerTab>,
     pub(super) status: String,
     pub(super) status_expires: Option<Instant>,
+    pub(super) status_severity: super::notify_actions::ToastSeverity,
     /// `true` only for instances built via `App::new_remote` (the
     /// `--connect-daemon` / local-daemon-auto-detect thin-client launch
     /// path). Those instances never populate `active_route` or

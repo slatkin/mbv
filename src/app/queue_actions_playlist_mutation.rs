@@ -410,7 +410,7 @@ impl App {
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
-        self.flash_status(format!("Added: {name}"));
+        self.flash(format!("Added: {name}"), ToastSeverity::Success);
         if self.sync_playback_queue_after_append(scope, vec![appended]) {
             self.persist_local_queue_state_if_needed(scope);
             self.retire_tracking_after_queue_mutation();

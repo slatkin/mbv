@@ -1,4 +1,7 @@
-use super::{AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent, QueueScope};
+use super::{
+    notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
+    QueueScope,
+};
 use mbv_core::api::MediaItem;
 
 impl App {
@@ -240,7 +243,7 @@ impl App {
                         Err(error) => {
                             self.album_indexes
                                 .insert(library_id.clone(), AlbumIndexState::Unavailable);
-                            self.flash_status_high(format!("Error: {error}"));
+                            self.flash(format!("Error: {error}"), ToastSeverity::Error);
                         }
                     }
                     if let Some(lib_idx) = self
@@ -381,17 +384,17 @@ impl App {
             LibEvent::PlaylistRenamed { new_name } => {
                 self.save_playlist_dialog = None;
                 self.force_clear = true;
-                self.flash_status(format!("Renamed to '{new_name}'"));
+                self.flash(format!("Renamed to '{new_name}'"), ToastSeverity::Success);
             }
             LibEvent::PlaylistDeleted { name } => {
                 self.confirm_modal = None;
-                self.flash_status(format!("Deleted '{name}'"));
+                self.flash(format!("Deleted '{name}'"), ToastSeverity::Success);
             }
             LibEvent::QueueEnriched { items } => {
                 let _ = self.merge_refreshed_queue(QueueScope::Local, items);
             }
             LibEvent::Error(e) => {
-                self.flash_status_high(format!("Error: {e}"));
+                self.flash(format!("Error: {e}"), ToastSeverity::Error);
             }
         }
     }

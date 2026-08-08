@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::ui_util::{is_playable, sort_audio_tracks};
 use super::{App, ArtistHeaderSelection, PanelFocus};
 use mbv_core::api::MediaItem;
@@ -53,13 +54,13 @@ impl App {
         let items = match self.resolve_artist_header_playable_items(lib_idx, selection) {
             Ok(items) => items,
             Err(e) => {
-                self.flash_status_high(format!("Error: {e}"));
+                self.flash(format!("Error: {e}"), ToastSeverity::Error);
                 return true;
             }
         };
         let count = items.len();
         if count == 0 {
-            self.flash_status_high("Nothing to enqueue".into());
+            self.flash("Nothing to enqueue".into(), ToastSeverity::Error);
             return true;
         }
 
@@ -74,10 +75,10 @@ impl App {
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
-        self.flash_status(format!(
-            "Enqueued {count} items from {}",
-            selection.artist_label
-        ));
+        self.flash(
+            format!("Enqueued {count} items from {}", selection.artist_label),
+            ToastSeverity::Success,
+        );
         if self.sync_playback_queue_after_append(scope, appended) {
             self.persist_local_queue_state_if_needed(scope);
             self.retire_remote_tracking_after_queue_mutation();
@@ -104,17 +105,20 @@ impl App {
         let mut items = match self.resolve_artist_header_playable_items(lib_idx, selection) {
             Ok(items) => items,
             Err(e) => {
-                self.flash_status_high(format!("Error: {e}"));
+                self.flash(format!("Error: {e}"), ToastSeverity::Error);
                 return true;
             }
         };
         let count = items.len();
         if count == 0 {
-            self.flash_status_high(if shuffle {
-                "Nothing to shuffle".into()
-            } else {
-                "Nothing to play".into()
-            });
+            self.flash(
+                if shuffle {
+                    "Nothing to shuffle".into()
+                } else {
+                    "Nothing to play".into()
+                },
+                ToastSeverity::Error,
+            );
             return true;
         }
         if shuffle {
@@ -122,11 +126,14 @@ impl App {
         }
         self.replace_playback_queue(items.clone(), 0);
         self.set_panel_focus(PanelFocus::Queue);
-        self.flash_status(if shuffle {
-            format!("Shuffling {count} items")
-        } else {
-            format!("Playing {count} items")
-        });
+        self.flash(
+            if shuffle {
+                format!("Shuffling {count} items")
+            } else {
+                format!("Playing {count} items")
+            },
+            ToastSeverity::Success,
+        );
         self.queue_source = if shuffle {
             crate::config::QueueSource::Shuffle
         } else {

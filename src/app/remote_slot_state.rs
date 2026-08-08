@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::{App, RemoteSlotState};
 use mbv_core::remote_player::DaemonEndpoint;
 
@@ -44,11 +45,14 @@ impl App {
             self.retire_remote_tracking(false);
             self.session_miss_count = 0;
             self.remote_pos_s = 0;
-            self.flash_status("Disconnected from remote session".to_string());
+            self.flash(
+                "Disconnected from remote session".to_string(),
+                ToastSeverity::Success,
+            );
         } else if self.direct_remote_connected {
             self.restore_local_mode("Disconnected from direct remote session");
         } else {
-            self.flash_status("No session connected".to_string());
+            self.flash("No session connected".to_string(), ToastSeverity::Neutral);
         }
     }
 

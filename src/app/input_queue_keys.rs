@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::{
     App, PanelFocus, PanelMode, QueueScope, SavePlaylistDialog, SavePlaylistStage,
     LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP,
@@ -39,16 +40,16 @@ impl App {
             } else {
                 format!("Queue column width already at maximum ({max_width} cols)")
             };
-            self.flash_status(limit);
+            self.flash(limit, ToastSeverity::Neutral);
             return true;
         }
 
         self.queue_column_width = normalized;
         self.save_prefs();
-        self.flash_status(format!(
-            "Queue column width: {} cols",
-            self.queue_column_width
-        ));
+        self.flash(
+            format!("Queue column width: {} cols", self.queue_column_width),
+            ToastSeverity::Neutral,
+        );
         true
     }
 
@@ -368,7 +369,10 @@ impl App {
             KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let scope = self.visible_queue_scope();
                 if scope == QueueScope::Remote {
-                    self.flash_status_high("Undo is not supported for remote queue edits".into());
+                    self.flash(
+                        "Undo is not supported for remote queue edits".into(),
+                        ToastSeverity::Error,
+                    );
                     return false;
                 }
                 self.undo_last_queue_edit(scope);
@@ -405,7 +409,7 @@ impl App {
                         self.set_queue_scope(QueueScope::Remote);
                     }
                 } else {
-                    self.flash_status_high("Nothing is playing".into());
+                    self.flash("Nothing is playing".into(), ToastSeverity::Error);
                 }
             }
             KeyCode::Char('s')

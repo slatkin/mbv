@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::types_confirm::ConfirmAction;
 use super::types_playback::PendingQueueAction;
 use mbv_core::player::PlayerCommand;
@@ -34,7 +35,7 @@ impl App {
                             let label = item.playback_label();
                             self.player.send_command(PlayerCommand::JumpTo(idx));
                             self.playback_queue_mut().queue_cursor = idx;
-                            self.flash_status(label);
+                            self.flash(label, ToastSeverity::Success);
                         }
                     }
                     self.status.clear();
@@ -73,7 +74,7 @@ impl App {
         self.drain_search_sidebar_results(&mut outcome);
         let produced = outcome.received > 0;
         for error in outcome.errors {
-            self.flash_status_high(format!("Search error: {error}"));
+            self.flash(format!("Search error: {error}"), ToastSeverity::Error);
         }
         produced
     }

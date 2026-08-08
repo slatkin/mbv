@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::{App, PlayerTab, QueueScope, SuspendedLocalSession};
 use mbv_core::api::parse_mbv_direct_tcp_port;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
@@ -125,7 +126,7 @@ impl App {
     /// `message` is the fully-formatted, ready-to-display status-bar
     /// warning text. Flashing is left to the caller deliberately: #223's
     /// per-library swap function needs to choose *how* to fall back --
-    /// `flash_status_high(message)` directly when it was already local, or
+    /// `flash(message, ToastSeverity::Warning)` directly when it was already local, or
     /// threading `message` through a `restore_local_mode`-style teardown
     /// when swapping away from a previously active *different* route -- and
     /// having this primitive flash unconditionally would risk a second,
@@ -202,7 +203,7 @@ impl App {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_library_route(&name, remote, remote_rx, &endpoint)
                     }
-                    Err(message) => self.flash_status_high(message),
+                    Err(message) => self.flash(message, ToastSeverity::Warning),
                 }
             }
             mbv_core::config::LastRemoteConnection::DirectSession { device_name } => {
@@ -211,9 +212,9 @@ impl App {
                     Ok(sessions) => sessions,
                     Err(e) => {
                         log::warn!(target: "auto_reconnect", "failed to list sessions: {e}");
-                        self.flash_status_high(format!(
+                        self.flash(format!(
                             "\u{26a0} Auto-reconnect couldn't list sessions ({e}), using local playback"
-                        ));
+                        ), ToastSeverity::Warning);
                         return;
                     }
                 };
@@ -237,9 +238,10 @@ impl App {
                             target: "auto_reconnect",
                             "device {device_name:?} not found in current sessions; staying local"
                         );
-                        self.flash_status_high(format!(
-                            "\u{26a0} {device_name} not found, using local playback"
-                        ));
+                        self.flash(
+                            format!("\u{26a0} {device_name} not found, using local playback"),
+                            ToastSeverity::Warning,
+                        );
                     }
                 }
             }
@@ -325,7 +327,10 @@ impl App {
             self.set_queue_scope(QueueScope::Local);
         }
         self.show_sessions = false;
-        self.flash_status(format!("Connected directly to {}", sess.device_name));
+        self.flash(
+            format!("Connected directly to {}", sess.device_name),
+            ToastSeverity::Success,
+        );
     }
 
     /// Sibling to `switch_to_direct_remote` for library-scoped daemon
@@ -411,7 +416,10 @@ impl App {
             target: "library_route",
             "switched playback route previous={previous_route:?} next={library_name:?}"
         );
-        self.flash_status(format!("Routed to {library_name} daemon"));
+        self.flash(
+            format!("Routed to {library_name} daemon"),
+            ToastSeverity::Success,
+        );
     }
 
     pub(super) fn restore_local_mode(&mut self, status: &str) {
@@ -516,7 +524,7 @@ impl App {
         self.remote_pos_s = 0;
         self.next_up_item = None;
         self.skip_intro_end_ticks = None;
-        self.flash_status_high(status);
+        self.flash(status, ToastSeverity::Warning);
     }
 
     /// Applies the route resolved by `resolve_route_for_play` before a
@@ -550,7 +558,7 @@ impl App {
                         if was_routed.is_some() {
                             self.restore_local_mode(&message);
                         } else {
-                            self.flash_status_high(message);
+                            self.flash(message, ToastSeverity::Warning);
                         }
                     }
                 }
@@ -623,11 +631,12 @@ impl App {
         self.remote_api_pos_advanced_at = Instant::now();
         self.show_sessions = false;
         if let Some(error) = direct_upgrade_error {
-            self.flash_status_high(format!(
-                "Direct mbv control failed: {error}; using attached session {name}"
-            ));
+            self.flash(
+                format!("Direct mbv control failed: {error}; using attached session {name}"),
+                ToastSeverity::Warning,
+            );
         } else {
-            self.flash_status(format!("Connected to {name}"));
+            self.flash(format!("Connected to {name}"), ToastSeverity::Success);
         }
         self.spawn_sessions_load();
     }

@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_core::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
@@ -314,7 +315,7 @@ impl App {
                     {
                         self.player.send_command(PlayerCommand::JumpTo(idx));
                         self.playback_queue_mut().queue_cursor = idx;
-                        self.flash_status(label);
+                        self.flash(label, ToastSeverity::Neutral);
                     } else {
                         log::warn!(target: "app", "next-up: item not in queue, cannot jump");
                     }
@@ -387,7 +388,7 @@ impl App {
             }
             PlayerEvent::CommandRejected(reason) => {
                 self.pending_remote_move_cursor = None;
-                self.flash_status(reason);
+                self.flash(reason, ToastSeverity::Neutral);
             }
             PlayerEvent::PlaybackIntent(event) => {
                 use mbv_core::ctrl::PlaybackIntentOutcome;
@@ -398,7 +399,7 @@ impl App {
                     PlaybackIntentOutcome::Superseded => "Playback request superseded",
                     PlaybackIntentOutcome::Rejected { .. } => "Playback request rejected",
                 };
-                self.flash_status(message.to_string());
+                self.flash(message.to_string(), ToastSeverity::Neutral);
             }
             PlayerEvent::PipePlaybackStatus(status) => {
                 use mbv_core::ctrl::PipePlaybackPhase;
@@ -419,7 +420,7 @@ impl App {
                 // These statuses only originate from a direct pipe-output
                 // daemon. Local, attached-Emby, and ordinary daemon routes
                 // never receive the event, so their presentation is unchanged.
-                self.flash_status(message);
+                self.flash(message, ToastSeverity::Neutral);
             }
             PlayerEvent::PausedChanged(_) | PlayerEvent::OutputStarted => {}
             PlayerEvent::RemoteDisconnected(reason) => {
@@ -431,10 +432,10 @@ impl App {
                 // Authority-change notification: Emby remote has taken authority.
                 // The connection stays open — do NOT call restore_local_mode().
                 // Just flash the status so the user knows commands are temporarily rejected.
-                self.flash_status_high(reason);
+                self.flash(reason, ToastSeverity::Warning);
             }
             PlayerEvent::QueueDesynced(reason) => {
-                self.flash_status(reason);
+                self.flash(reason, ToastSeverity::Neutral);
             }
             // The announced-shutdown counterpart to the unannounced-loss
             // modal raised from PlayerEvent::Stopped above (task 7.2): a

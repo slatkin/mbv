@@ -1,4 +1,4 @@
-use super::{App, PanelFocus};
+use super::{notify_actions::ToastSeverity, App, PanelFocus};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
 use mbv_core::ws::WsEvent;
@@ -25,7 +25,7 @@ impl App {
                         Err(e) => {
                             let msg = format!("WS play error: {e}");
                             drop(c);
-                            self.flash_status_high(msg);
+                            self.flash(msg, ToastSeverity::Error);
                             return;
                         }
                     }
@@ -43,14 +43,14 @@ impl App {
                         item.playback_position_ticks = start_position_ticks;
                     }
                     self.player_tab.set_items(vec![item.clone()], 0);
-                    self.flash_status(item.playback_label());
+                    self.flash(item.playback_label(), ToastSeverity::Neutral);
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     self.player
                         .play(&item, self.queue_source.clone(), c, self.ui_volume);
                 } else {
                     let count = items.len();
                     self.player_tab.set_items(items.clone(), start_idx);
-                    self.flash_status(format!("Playing {count} items"));
+                    self.flash(format!("Playing {count} items"), ToastSeverity::Neutral);
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     log::info!(target: "ws", "Play multi: count={count}, start_idx={start_idx}");
                     // Always hand the whole list to play_queue (not just the clicked

@@ -175,11 +175,8 @@ fn fetch_album_tracks_is_a_no_op_when_already_loading() {
 }
 
 // #286: this used to redirect the process-wide STDERR_FILENO fd to
-// capture the bell byte, which raced against any other test ringing the
-// bell concurrently on a different thread (flash_status/flash_status_high
-// also ring it) and produced flaky doubled "\x07\x07" captures. Reading
-// `TEST_BELL_LOG` (thread-local, cleared per test thread) instead avoids
-// touching real stderr at all, so there's nothing left to race against.
+// capture the bell byte. Reading `TEST_BELL_LOG` (thread-local, cleared
+// per test thread) instead avoids touching real stderr at all.
 #[test]
 fn notify_with_actions_rings_terminal_bell_even_without_system_notifications() {
     crate::app::notify_actions::TEST_BELL_LOG.with(|log| log.borrow_mut().clear());

@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::ui_util::take_chars;
 use super::{App, LocalPlaybackTarget};
 use crate::app::render::indicators::IndicatorData;
@@ -7,11 +8,14 @@ impl LocalPlaybackTarget {
     pub(super) fn toggle_play_pause(&self, app: &mut App) {
         if app.player.is_remote() {
             let paused = !app.player.status.lock().unwrap().paused;
-            app.flash_status(if paused {
-                "Pause requested".to_string()
-            } else {
-                "Resume requested".to_string()
-            });
+            app.flash(
+                if paused {
+                    "Pause requested".to_string()
+                } else {
+                    "Resume requested".to_string()
+                },
+                ToastSeverity::Neutral,
+            );
             app.player.set_paused(paused);
         } else {
             app.player.send_command(PlayerCommand::TogglePause);
@@ -20,7 +24,7 @@ impl LocalPlaybackTarget {
 
     pub(super) fn stop(&self, app: &mut App) {
         if app.player.is_remote() {
-            app.flash_status("Stop requested".to_string());
+            app.flash("Stop requested".to_string(), ToastSeverity::Neutral);
         }
         app.player.stop();
     }
@@ -32,12 +36,12 @@ impl LocalPlaybackTarget {
     pub(super) fn jump_track(&self, app: &mut App, step: i64) {
         if step >= 0 {
             if app.player.is_remote() {
-                app.flash_status("Next requested".to_string());
+                app.flash("Next requested".to_string(), ToastSeverity::Neutral);
             }
             app.player.next();
         } else {
             if app.player.is_remote() {
-                app.flash_status("Previous requested".to_string());
+                app.flash("Previous requested".to_string(), ToastSeverity::Neutral);
             }
             app.player.previous();
         }

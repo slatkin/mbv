@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::App;
 
 impl App {
@@ -84,7 +85,7 @@ impl App {
         if let Err(e) = crate::config::save_config_settings(&cfg) {
             log::warn!(target: "config", "config save failed: {e}");
         }
-        self.flash_status(format!("Subtitle mode: {new_mode}"));
+        self.flash(format!("Subtitle mode: {new_mode}"), ToastSeverity::Neutral);
     }
 
     /// Returns the next entry in a subtitle-cycle sequence, wrapping around.

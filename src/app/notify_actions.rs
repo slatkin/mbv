@@ -1,16 +1,34 @@
 use super::App;
 use std::time::{Duration, Instant};
 
+/// Severity class for toast notifications. Neutral and Success display for 2 s;
+/// Warning and Error display for 5 s.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ToastSeverity {
+    /// Progress, information, lifecycle events.
+    #[default]
+    Neutral,
+    /// A user-requested action completed.
+    Success,
+    /// An operation failed but recovered through a working fallback.
+    Warning,
+    /// An operation failed without recovery.
+    Error,
+}
+
+impl ToastSeverity {
+    pub fn ttl(&self) -> Duration {
+        match self {
+            ToastSeverity::Neutral | ToastSeverity::Success => Duration::from_secs(2),
+            ToastSeverity::Warning | ToastSeverity::Error => Duration::from_secs(5),
+        }
+    }
+}
+
 // #286: `App::ring_terminal_bell()` writes to a thread-local buffer instead
 // of real stderr in test builds, so tests never touch the process-wide
-// STDERR_FILENO fd. The test that verifies the bell rings used to redirect
-// that fd directly via `libc::dup2`, which raced against *any other test*
-// ringing the bell concurrently on a different thread (e.g. one that calls
-// `flash_status`/`flash_status_high`, both of which also ring the bell) and
-// produced flaky doubled "\x07\x07" captures. `cargo test` runs each test
-// on its own OS thread, so a thread-local is naturally isolated per test
-// with no locking required -- this removes the race at its root instead of
-// serializing around it.
+// STDERR_FILENO fd. `cargo test` runs each test on its own OS thread, so a
+// thread-local is naturally isolated per test with no locking required.
 #[cfg(test)]
 thread_local! {
     pub(super) static TEST_BELL_LOG: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
@@ -82,21 +100,21 @@ impl App {
         std::thread::spawn(move || {
             let _ = client.post_library_refresh(&library_id);
         });
-        self.flash_status(format!("Scanning '{name}'..."));
+        self.flash(format!("Scanning '{name}'..."), ToastSeverity::Neutral);
     }
 
-    pub(super) fn flash_status(&mut self, msg: String) {
-        Self::ring_terminal_bell();
-        self.notify_system(&msg);
+    /// Display a toast classified by `severity`. Duration derives from severity
+    /// (Neutral/Success → 2 s, Warning/Error → 5 s). Never rings the terminal
+    /// bell. Desktop notification is attempted only when severity is not Neutral
+    /// (preserving the existing `system_notifications` gating and the
+    /// hide-on-success behavior in the render path).
+    pub(super) fn flash(&mut self, msg: String, severity: ToastSeverity) {
+        if severity != ToastSeverity::Neutral {
+            self.notify_system(&msg);
+        }
         self.status = msg;
-        self.status_expires = Some(Instant::now() + Duration::from_secs(2));
-    }
-
-    pub(super) fn flash_status_high(&mut self, msg: String) {
-        Self::ring_terminal_bell();
-        self.notify_system(&msg);
-        self.status = msg;
-        self.status_expires = Some(Instant::now() + Duration::from_secs(5));
+        self.status_severity = severity;
+        self.status_expires = Some(Instant::now() + severity.ttl());
     }
 
     /// Enforces #223's queue-route invariant: an item whose resolved
@@ -118,8 +136,9 @@ impl App {
             return false;
         }
         if resolved_name != self.active_route {
-            self.flash_status_high(
+            self.flash(
                 "Can't mix libraries in a routed queue -- clear queue first".to_string(),
+                ToastSeverity::Error,
             );
             true
         } else {

@@ -12,6 +12,7 @@
 //! enum over time, one handler at a time.
 
 use super::input_resolver::KeyChord;
+use super::notify_actions::ToastSeverity;
 use super::App;
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_core::player::PlayerCommand;
@@ -467,7 +468,10 @@ impl App {
                         let items = queue.items.clone();
                         let item = items[t].clone();
                         let label = item.playback_label();
-                        self.flash_status(format!("Playing on remote: {label}"));
+                        self.flash(
+                            format!("Requesting playback: {label}"),
+                            ToastSeverity::Neutral,
+                        );
                         self.set_queue_scope(self.playback_target_queue_scope());
                         if let Some(occurrence_id) = self.tracked_occurrence_at_queue_index(t) {
                             self.issue_remote_intent(

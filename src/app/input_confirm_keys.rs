@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
     SavePlaylistDialog, SavePlaylistStage, UndoEntry,
@@ -187,7 +188,7 @@ impl App {
                     let label = item.playback_label();
                     self.player.send_command(PlayerCommand::JumpTo(idx));
                     self.playback_queue_mut().queue_cursor = idx;
-                    self.flash_status(label);
+                    self.flash(label, ToastSeverity::Success);
                 }
             }
         } else {
@@ -214,7 +215,10 @@ impl App {
         if matches!(self.panel_focus, PanelFocus::Queue)
             && self.visible_queue_scope() == QueueScope::Remote
         {
-            self.flash_status_high("Remote queue is controlled by the daemon".into());
+            self.flash(
+                "Remote queue is controlled by the daemon".into(),
+                ToastSeverity::Error,
+            );
             return Some(false);
         }
         if self.player_tab.items.is_empty() {

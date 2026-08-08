@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::types_playback::PlaylistMutation;
 use super::ui_util::is_playable;
 use super::{
@@ -16,7 +17,7 @@ impl App {
         let was_tracking = self.remote_tracker.is_some();
         self.retire_remote_tracking(true);
         if was_tracking {
-            self.flash_status("Remote tracking stopped".into());
+            self.flash("Remote tracking stopped".into(), ToastSeverity::Neutral);
         }
     }
 
@@ -228,7 +229,10 @@ impl App {
             UndoEntry::Move { from, to, slot_id } => {
                 let still_in_place = self.queue_for_scope(scope).slot_id_matches_at(to, slot_id);
                 if !still_in_place || !self.apply_queue_move(scope, to, from) {
-                    self.flash_status_high("Can't undo move: queue changed since then".into());
+                    self.flash(
+                        "Can't undo move: queue changed since then".into(),
+                        ToastSeverity::Error,
+                    );
                     return;
                 }
                 self.retire_tracking_after_queue_mutation();
@@ -285,7 +289,10 @@ impl App {
                         .get(start_idx)
                         .map(|i| i.playback_label())
                         .unwrap_or_default();
-                    self.flash_status(format!("Playing on remote: {label}"));
+                    self.flash(
+                        format!("Requesting playback: {label}"),
+                        ToastSeverity::Neutral,
+                    );
                     self.submit_attached_sequence(&id, &items, start_idx);
                 } else {
                     let c = Arc::new(self.client.lock().unwrap().clone());
@@ -332,7 +339,7 @@ impl App {
                 if self.local_queue_metadata_applies(scope) {
                     self.save_queue_state_after_explicit_clear();
                 }
-                self.flash_status("Queue cleared".into());
+                self.flash("Queue cleared".into(), ToastSeverity::Success);
             }
         }
     }
