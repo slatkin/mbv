@@ -91,6 +91,26 @@ playlist it was loaded from. Only meaningful for a queue that is a saved
 playlist; Consume happens with or without it.
 _Avoid_: autosave, consume persistence, playlist sync
 
+**Composed**:
+The stage in which a queue is held in a client's UI and no Player owner is
+executing it. Editing one has no playback consequence, so it doubles as a
+staging area — build it now, play it later. Every queue is Composed before it
+is Bound.
+_Avoid_: draft, staging queue, pending queue, unplayed queue
+
+**Bound**:
+The stage in which a Player owner has taken a queue up and is executing it. Its
+contents and cursor answer to that owner's rules, including skipping what the
+owner cannot play. A queue may be edited in either stage; only the rules
+differ.
+_Avoid_: active queue, live queue, running queue, attached queue
+
+**Unplayable item**:
+An item in a Bound queue that its Player owner cannot play — a video item on an
+audio-only owner. It stays visible in the queue and is skipped on advance,
+rather than being dropped when added or refusing the whole queue.
+_Avoid_: rejected item, filtered item, invalid item, blocked item
+
 ## Remote sessions
 
 A client can also reach *another* device's playback, discovered through Emby
@@ -122,6 +142,14 @@ Local or Remote — which queue (this client's own Player owner, or the
 Direct remote control target) is currently shown in the queue panel. Only
 exists while Direct remote control is active.
 _Avoid_: split view, pill state
+
+**Fall-through**:
+A non-audio item explicitly played or enqueued while Direct remote control
+targets an audio-only Player owner, landing in the controlling client's own
+Composed queue instead of that owner's. The item falls through; the control
+connection does not — it stays up, and the next queue addition targets the
+owner again. Never applies to items already inside a Bound queue.
+_Avoid_: local fallback, routing back, handoff, video routing
 
 **Library route**:
 A persistent per-library assignment sending that library's playback to a
