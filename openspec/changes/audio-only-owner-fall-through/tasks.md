@@ -62,20 +62,20 @@ of this change may proceed against that change's specified admission contract.
 
 ## 4. Origin-aware player events
 
-- [ ] 4.1 Drain each owned Player session through the arrangement boundary and
+- [x] 4.1 Drain each owned Player session through the arrangement boundary and
       deliver every event to the application with stable Local or Attached-owner
       origin. Do not change `mbv_core::PlayerEvent` or the ctrl wire format.
-- [ ] 4.2 Apply Local events only to Local queue/playback state and
+- [x] 4.2 Apply Local events only to Local queue/playback state and
       Attached-owner events only to owner queue/playback state.
-- [ ] 4.3 During fall-through, make an Attached-owner `QueueUpdated` refresh only
+- [x] 4.3 During fall-through, make an Attached-owner `QueueUpdated` refresh only
       the Remote Bound queue; owner stop/completion must not consume, stop, or
       mutate the Local queue.
-- [ ] 4.4 Make only a terminal Local event end fall-through and return transport
+- [x] 4.4 Make only a terminal Local event end fall-through and return transport
       ownership to an owner that remains attached.
-- [ ] 4.5 If the attached owner disconnects or shuts down during fall-through,
+- [x] 4.5 If the attached owner disconnects or shuts down during fall-through,
       remove the attachment and Remote scope, report the loss, and allow local
       playback to continue.
-- [ ] 4.6 Keep owner command rejections and authority notifications attributed to
+- [x] 4.6 Keep owner command rejections and authority notifications attributed to
       the owner without changing local transport ownership.
 
 ## 5. Explicit submission routing
