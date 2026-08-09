@@ -1,3 +1,4 @@
+use super::album::AlbumRowsCursorCtx;
 use super::album_art::INLINE_ALBUM_ART_RESERVED;
 use super::detail::compact_banner_image_cache_key;
 use super::list_rows::{ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING};
@@ -536,8 +537,10 @@ impl App {
                 list_area,
                 lib_idx,
                 &items,
-                cursor,
-                stored_scroll,
+                AlbumRowsCursorCtx {
+                    cursor,
+                    stored_scroll,
+                },
                 focused,
                 true, // hero_handles_detail: the hero panel renders the detail
                 cols as u16,

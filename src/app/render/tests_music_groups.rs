@@ -1,4 +1,4 @@
-use super::album_plan::{sorted_group_album_order, GroupedAlbumDisplayRow};
+use super::album_plan::{sorted_group_album_order, GroupedAlbumDisplayRow, HeaderFocusCtx};
 use super::test_helpers::*;
 use super::*;
 use crate::app::layout::LibraryRowTarget;
@@ -75,9 +75,11 @@ fn artist_and_album_focus_share_one_selected_group_bounds() {
             &order,
             0,
             false,
-            true,
-            None,
-            false,
+            HeaderFocusCtx {
+                selectable_headers: true,
+                selected_artist_header: None,
+                expand_selected: false,
+            },
             Some((120, 0)),
             false, // hero_handles_detail
         )
@@ -91,9 +93,11 @@ fn artist_and_album_focus_share_one_selected_group_bounds() {
             &order,
             0,
             false,
-            true,
-            Some(&header),
-            false,
+            HeaderFocusCtx {
+                selectable_headers: true,
+                selected_artist_header: Some(&header),
+                expand_selected: false,
+            },
             Some((120, 0)),
             false, // hero_handles_detail
         )

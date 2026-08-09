@@ -63,6 +63,17 @@ pub(super) enum GroupedAlbumDisplayRow {
     AlbumLoading,
 }
 
+/// The artist-header selection/focus state for a display-plan build: which
+/// rows are eligible to act as selectable headers, which header (if any) is
+/// currently focused, and whether the focused album's tracks are expanded.
+/// Grouped together because they always travel as a unit from the caller's
+/// header-focus bookkeeping into the plan builder.
+pub(super) struct HeaderFocusCtx<'a> {
+    pub(super) selectable_headers: bool,
+    pub(super) selected_artist_header: Option<&'a ArtistHeaderSelection>,
+    pub(super) expand_selected: bool,
+}
+
 pub(super) struct GroupedAlbumDisplayPlan {
     pub(super) order: Vec<usize>,
     pub(super) rows: Vec<GroupedAlbumDisplayRow>,
@@ -123,12 +134,15 @@ impl App {
         order: &[usize],
         cursor: usize,
         fetch_missing_tracks: bool,
-        selectable_headers: bool,
-        selected_artist_header: Option<&ArtistHeaderSelection>,
-        expand_selected: bool,
+        header_focus: HeaderFocusCtx,
         wrap_widths: Option<(u16, u16)>,
         hero_handles_detail: bool,
     ) -> GroupedAlbumDisplayPlan {
+        let HeaderFocusCtx {
+            selectable_headers,
+            selected_artist_header,
+            expand_selected,
+        } = header_focus;
         let header_selected = selectable_headers && selected_artist_header.is_some();
         let inline_art_rows_after_album = if self.images_enabled() {
             INLINE_ALBUM_ART_ROWS.saturating_sub(1) as usize
