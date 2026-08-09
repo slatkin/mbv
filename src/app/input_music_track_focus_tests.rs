@@ -343,12 +343,8 @@ fn selectable_artist_header_direct_enqueue_fetches_header_albums_not_stale_curso
 
     app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
 
-    let queued_ids: Vec<&str> = app
-        .player_tab
-        .items
-        .iter()
-        .map(|item| item.id.as_str())
-        .collect();
+    let emby = app.player_tab.emby_items();
+    let queued_ids: Vec<&str> = emby.iter().map(|item| item.id.as_str()).collect();
     assert_eq!(
         queued_ids,
         vec!["a1-t1", "a1-t2", "a2-t1"],

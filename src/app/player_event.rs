@@ -72,12 +72,7 @@ impl App {
                 }
                 let is_delete = self.pending_delete_slot.take().is_some();
                 let preserve_local_state = !self.has_direct_remote_queue();
-                // Resolve the raw mpv index to a slot right away, against
-                // the queue exactly as it stands now (syncing the shadow
-                // first for callers — tests, mainly — that assign `items`
-                // directly without building the model).
-                self.playback_queue_mut()
-                    .sync_queue_model_from_items_if_needed();
+                // Resolve the raw mpv index to a slot right away.
                 let slot_id = self.playback_queue().resolve_slot_at(idx);
                 match slot_id {
                     Some(slot_id) => {
@@ -98,7 +93,7 @@ impl App {
                             if progress_report_accepted {
                                 let _ = queue.queue.mark_progress_sync_pending(slot_id);
                             }
-                            queue.sync_items_from_queue_model();
+                            queue.clamp_cursor();
                             if played {
                                 log::info!(target: "player", "Stopped: marked played, position reset to 0");
                             } else if position_ticks > 0 {
@@ -166,12 +161,7 @@ impl App {
                 consume,
                 progress_report_accepted,
             } => {
-                // Resolve the raw mpv index to a slot right away, against the
-                // queue exactly as it stands now — the shadow (`items`) may
-                // still need building for tests/older callers that assign
-                // `items` directly, so sync first.
-                self.playback_queue_mut()
-                    .sync_queue_model_from_items_if_needed();
+                // Resolve the raw mpv index to a slot right away.
                 let Some(slot_id) = self.playback_queue().resolve_slot_at(idx) else {
                     log::warn!(target: "consume", "TrackCompleted: idx={idx} maps to no live slot; dropping");
                     return false;
@@ -194,7 +184,7 @@ impl App {
                 if progress_report_accepted {
                     let _ = queue.queue.mark_progress_sync_pending(slot_id);
                 }
-                queue.sync_items_from_queue_model();
+                queue.clamp_cursor();
                 let (should_consume, is_audio) = self.should_consume_slot(slot_id, consume);
                 if should_consume {
                     self.pending_queue_removal = Some((slot_id, is_audio));
@@ -212,12 +202,10 @@ impl App {
                 // before it was told (via the QueueRemove sent below) that
                 // the completed slot was removed, so it still lines up with
                 // the queue's current, pre-removal shape.
-                self.playback_queue_mut()
-                    .sync_queue_model_from_items_if_needed();
                 let target_slot_id = self.playback_queue().resolve_slot_at(idx);
 
                 if let Some((slot_id, was_audio)) = self.pending_queue_removal.take() {
-                    let len_before = self.playback_queue().items.len();
+                    let len_before = self.playback_queue().total_queue_len();
                     let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
                     let len_after = len_before - removed_id.is_some() as usize;
                     log::info!(target: "consume", "TrackChanged: consuming pending removal slot_id={slot_id:?} \
@@ -255,19 +243,19 @@ impl App {
                 self.player.status.lock().unwrap().current_idx = adjusted;
                 self.playback_queue_mut().queue_cursor = adjusted;
                 if !self.has_direct_remote_queue() {
-                    if let Some(item) = self.playback_queue().items.get(adjusted) {
+                    if let Some(item) = self.playback_queue().emby_item_at(adjusted) {
                         self.last_played_item_id = Some(item.id.clone());
                     }
                 }
                 if !self.has_direct_remote_queue() {
                     let queue = self.playback_queue();
                     log::info!(target: "consume", "TrackChanged: post-save queue len={} ids={:?}",
-                        queue.items.len(), queue.items.iter().map(|i| &i.id).collect::<Vec<_>>());
+                        queue.total_queue_len(), queue.slots().iter().map(|s| s.item.id()).collect::<Vec<_>>());
                     self.save_queue_state();
                 }
             }
             PlayerEvent::QueueNextUp { next_idx } => {
-                if let Some(item) = self.playback_queue().items.get(next_idx).cloned() {
+                if let Some(item) = self.playback_queue().clone_emby_item_at(next_idx) {
                     let item_id = item.id.clone();
                     let show_title = item.series_name.clone();
                     let ep_title = item.name.clone();
@@ -303,9 +291,9 @@ impl App {
                     let label = item.playback_label();
                     if let Some(idx) = self
                         .playback_queue()
-                        .items
+                        .slots()
                         .iter()
-                        .position(|i| i.id == item.id)
+                        .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
                     {
                         self.player.send_command(PlayerCommand::JumpTo(idx));
                         self.playback_queue_mut().queue_cursor = idx;
@@ -321,24 +309,58 @@ impl App {
                 items,
                 cursor,
                 source,
-                feed_items,
             } => {
+                let pending_local_cursor = self.pending_queue_edit_cursor.take();
+                let total = items.len();
+                let cursor = if self.has_direct_remote_queue() {
+                    self.pending_remote_move_cursor
+                        .take()
+                        .filter(|pending_cursor| *pending_cursor < total)
+                        .unwrap_or(cursor)
+                } else {
+                    pending_local_cursor
+                        .filter(|pending_cursor| *pending_cursor < total)
+                        .unwrap_or(cursor)
+                };
+                let queue = self.playback_queue_mut();
+                queue.set_items(items, cursor);
+                if !self.has_direct_remote_queue() {
+                    self.queue_source = source;
+                }
+            }
+            PlayerEvent::UnifiedQueueUpdated(unified) => {
+                // Reconstruct the canonical queue from tagged QueueItems,
+                // preserving Feed entries, slot identity, and canonical order.
+                let queue_items: Vec<mbv_core::playback_queue::QueueItem> =
+                    unified.slots.iter().map(|slot| slot.item.clone()).collect();
+                let total = queue_items.len();
+
+                // Derive the presentation cursor from the active slot index.
+                let active_index = unified
+                    .active_slot
+                    .and_then(|sid| unified.slots.iter().position(|s| s.slot_id == sid));
+                let active_cursor = active_index.unwrap_or(0);
+
                 let pending_local_cursor = self.pending_queue_edit_cursor.take();
                 let cursor = if self.has_direct_remote_queue() {
                     self.pending_remote_move_cursor
                         .take()
-                        .filter(|pending_cursor| *pending_cursor < items.len())
-                        .unwrap_or(cursor)
+                        .filter(|pc| *pc < total)
+                        .unwrap_or(active_cursor)
                 } else {
                     pending_local_cursor
-                        .filter(|pending_cursor| *pending_cursor < items.len())
-                        .unwrap_or(cursor)
+                        .filter(|pc| *pc < total)
+                        .unwrap_or(active_cursor)
                 };
+
                 let queue = self.playback_queue_mut();
-                queue.set_items_with_feed(items, cursor, feed_items);
-                if !self.has_direct_remote_queue() {
-                    self.queue_source = source;
-                }
+                queue.set_queue_items(queue_items, cursor);
+
+                // Synchronize the active slot from the daemon so that
+                // true owner playback state is reflected; composed/
+                // restored queues have no active slot unless the daemon
+                // provides one.
+                queue.sync_active_slot(active_index);
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 // mbvd never auto-seeks on this event itself — it always
@@ -353,9 +375,8 @@ impl App {
                     self.skip_intro_end_ticks = Some(intro_end_ticks);
                     let playing_title = self
                         .playback_queue()
-                        .items
-                        .get(self.playback_queue().queue_cursor)
-                        .map(|i| i.name.clone())
+                        .item_at(self.playback_queue().queue_cursor)
+                        .map(|i| i.title().to_string())
                         .unwrap_or_else(|| "mbv".into());
                     self.notify_with_actions(
                         &playing_title,
@@ -457,16 +478,6 @@ impl App {
                     self.refresh_after_stop();
                 }
             }
-            // The daemon drains its live feed tail on this event and this
-            // client mirrors the same removal against its own parallel
-            // `PlayerTab.feed_items` copy (§5.4), so the two never diverge.
-            // Queue advancement itself is driven by the Stopped/TrackCompleted
-            // event that follows in the same end-of-file sequence.
-            PlayerEvent::FeedConsumed { guid } => {
-                self.playback_queue_mut()
-                    .feed_items
-                    .retain(|entry| entry.guid != guid);
-            }
         }
         false
     }
@@ -479,8 +490,7 @@ impl App {
         let last_playing_title = {
             let idx = self.player.status.lock().unwrap().current_idx;
             self.playback_queue()
-                .items
-                .get(idx)
+                .emby_item_at(idx)
                 .map(|item| item.playback_label())
         };
         self.daemon_lost_modal = Some(DaemonLostModal {

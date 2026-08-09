@@ -40,29 +40,21 @@ impl App {
                     let scope = self.visible_queue_scope();
                     let slot_id = self.queue_for_scope_mut(scope).slot_id_at(pos);
                     if let Some(slot_id) = slot_id {
-                        let item = match self
+                        let removed_item = match self
                             .playback_queue_mut()
                             .queue
                             .remove_active_slot_confirmed(slot_id)
                         {
                             RemoveSlotResult::Removed(slot) => {
-                                self.playback_queue_mut().sync_items_from_queue_model();
-                                match slot.item {
-                                    mbv_core::playback_queue::QueueItem::Emby(e) => Some(e),
-                                    mbv_core::playback_queue::QueueItem::Feed(_) => None,
-                                }
+                                self.playback_queue_mut().clamp_cursor();
+                                Some(slot.item)
                             }
                             RemoveSlotResult::RequiresActiveConfirmation(_)
                             | RemoveSlotResult::NotFound => None,
                         };
-                        if let Some(item) = item {
+                        if let Some(item) = removed_item {
                             let queue = self.playback_queue_mut();
-                            if queue.items.is_empty() {
-                                queue.queue_cursor = 0;
-                            } else {
-                                queue.queue_cursor =
-                                    queue.queue_cursor.min(queue.items.len().saturating_sub(1));
-                            }
+                            queue.clamp_cursor();
                             if !self.player.is_remote() {
                                 self.queue_undo_stack.push(UndoEntry::Remove(pos, item));
                             }
@@ -189,9 +181,9 @@ impl App {
             if let Some(item) = self.next_up_item.take() {
                 if let Some(idx) = self
                     .playback_queue()
-                    .items
+                    .slots()
                     .iter()
-                    .position(|i| i.id == item.id)
+                    .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
                 {
                     let label = item.playback_label();
                     self.player.send_command(PlayerCommand::JumpTo(idx));
@@ -229,7 +221,7 @@ impl App {
             );
             return Some(false);
         }
-        if self.player_tab.items.is_empty() {
+        if self.player_tab.total_queue_len() == 0 {
             return Some(false);
         }
         self.notify_with_actions(

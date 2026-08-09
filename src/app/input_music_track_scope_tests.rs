@@ -70,7 +70,12 @@ fn enter_again_in_track_mode_plays_focused_track_from_cached_queue() {
     assert!(!handled);
     // Queue built from the cached album tracks, starting at the focused
     // track (index 1 -> "album-1-track-1").
-    let ids: Vec<_> = app.player_tab.items.iter().map(|i| i.id.clone()).collect();
+    let ids: Vec<_> = app
+        .player_tab
+        .emby_items()
+        .iter()
+        .map(|i| i.id.clone())
+        .collect();
     assert_eq!(
         ids,
         vec!["album-1-track-0", "album-1-track-1", "album-1-track-2"]

@@ -198,31 +198,36 @@ fn make_media_item(id: &str) -> crate::api::EmbyItem {
 }
 
 fn make_queue_session_for_pos_tests(start_idx: usize) -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
-    let items = vec![
+    let emby_items = [
         make_media_item("ep1"),
         make_media_item("ep2"),
         make_media_item("ep3"),
     ];
+    let items: Vec<QueueItem> = emby_items
+        .iter()
+        .cloned()
+        .map(|i| QueueItem::Emby(Box::new(i)))
+        .collect();
     let status = Arc::new(Mutex::new(PlayerStatus {
         active: true,
         current_idx: start_idx,
         queue_len: items.len(),
-        runtime_ticks: items[start_idx].runtime_ticks,
-        title: items[start_idx].display_name(),
+        runtime_ticks: emby_items[start_idx].runtime_ticks,
+        title: emby_items[start_idx].display_name(),
         ..Default::default()
     }));
     let client = Arc::new(EmbyClient::new(crate::config::Config::default()));
     let reporter = SessionReporter::new(
         client,
         None,
-        ItemId::new(items[start_idx].id.clone()),
+        ItemId::new(emby_items[start_idx].id.clone()),
         MediaSourceId::new("msid"),
         EmbySessionId::new("sid"),
         false,
         status.clone(),
     );
     let (event_tx, _event_rx) = mpsc::channel();
-    let session = PlaybackRun::new(
+    let session = PlaybackRun::new_from_queue_items(
         items,
         start_idx,
         PlaybackOrigin::Queue,
@@ -243,7 +248,6 @@ fn make_queue_session_for_pos_tests(start_idx: usize) -> (PlaybackRun, Arc<Mutex
         Arc::new(Mutex::new(None)),
         "http://example.test".into(),
         "token".into(),
-        Vec::new(),
     );
     (session, status)
 }

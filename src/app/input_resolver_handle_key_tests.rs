@@ -275,8 +275,7 @@ fn h_no_longer_cycles_panel_mode_via_handle_key() {
 fn c_prompts_clear_queue_confirmation_via_handle_key() {
     let mut app = make_app_stub();
     app.player_tab
-        .items
-        .push(crate::app::tests::make_item("1", "Track"));
+        .append_item(crate::app::tests::make_item("1", "Track"));
     app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
     assert!(matches!(
         app.confirm_modal.as_ref().map(|m| &m.on_confirm),
@@ -294,8 +293,7 @@ fn c_does_not_prompt_clear_queue_while_context_menu_is_open_via_handle_key() {
     // layer instead.
     let mut app = make_app_stub();
     app.player_tab
-        .items
-        .push(crate::app::tests::make_item("1", "Track"));
+        .append_item(crate::app::tests::make_item("1", "Track"));
     app.context_menu = Some(test_empty_context_menu());
     app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
     assert!(

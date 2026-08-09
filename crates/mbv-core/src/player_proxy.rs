@@ -136,14 +136,80 @@ impl PlayerProxy {
         }
     }
 
-    /// Play a single feed entry. Local: spawns/reuses mpv directly.
-    /// Remote: sends `LoadFeed` through the ctrl channel; if the remote
-    /// daemon does not advertise the `feed-playback` capability the
-    /// command is silently ignored (safe no-op).
-    pub fn play_feed(&self, entry: FeedEntry, headless: bool, initial_volume: u8) {
+    /// Item-generic queue submission: replace the current queue with `items`
+    /// and start playback from `start_idx`.  For local players this routes
+    /// through the unified `Player::submit_queue`; for remote players it
+    /// sends `UnifiedQueueReplace` when the daemon supports the capability,
+    /// falling back to legacy methods.
+    pub fn submit_queue(
+        &self,
+        items: Vec<QueueItem>,
+        start_idx: usize,
+        client: Option<Arc<EmbyClient>>,
+        headless: bool,
+        initial_volume: u8,
+    ) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.play_feed(entry, headless, initial_volume),
-            PlayerProxyInner::Remote(r) => r.play_feed(entry),
+            PlayerProxyInner::Local(p) => {
+                p.submit_queue(items, start_idx, client, headless, initial_volume);
+            }
+            PlayerProxyInner::Remote(r) => {
+                if items.is_empty() {
+                    return;
+                }
+                let start_idx = start_idx.min(items.len() - 1);
+                if r.supports_unified_queue() {
+                    // Unified path: send item-generic replace command.
+                    let _ = r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
+                        items,
+                        start_idx: Some(start_idx),
+                    });
+                } else if items.len() == 1 {
+                    // Legacy single-item path.
+                    match &items[0] {
+                        QueueItem::Emby(emby) => {
+                            if let Some(c) = client {
+                                r.play(
+                                    emby.as_ref(),
+                                    crate::config::QueueSource::default(),
+                                    c,
+                                    initial_volume,
+                                );
+                            }
+                        }
+                        QueueItem::Feed(entry) => {
+                            // Legacy wire-compat: send LoadFeed wire command
+                            // directly.  The daemon decodes it into the unified
+                            // queue path.
+                            let _ = r.send_ctrl_cmd(crate::ctrl::CtrlCmd::PlayerCmd(
+                                crate::ctrl::WireCommand::LoadFeed {
+                                    entry: entry.clone(),
+                                },
+                            ));
+                        }
+                    }
+                } else {
+                    // Legacy multi-item path: only Emby items can cross.
+                    let emby_items: Vec<EmbyItem> = items
+                        .into_iter()
+                        .filter_map(|i| match i {
+                            QueueItem::Emby(e) => Some(*e),
+                            QueueItem::Feed(_) => None,
+                        })
+                        .collect();
+                    if !emby_items.is_empty() {
+                        if let Some(c) = client {
+                            r.play_queue(
+                                emby_items,
+                                start_idx,
+                                crate::config::QueueSource::default(),
+                                c,
+                                initial_volume,
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 

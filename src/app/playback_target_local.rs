@@ -56,8 +56,7 @@ impl LocalPlaybackTarget {
     pub(super) fn is_audio_item(&self, app: &App) -> bool {
         let idx = app.player_tab.queue_cursor;
         app.player_tab
-            .items
-            .get(idx)
+            .emby_item_at(idx)
             .map(|i| i.media_type == "Audio" || i.item_type == "Audio")
             .unwrap_or(false)
     }

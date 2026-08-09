@@ -6,6 +6,7 @@ use super::{
     UndoEntry,
 };
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
 use std::sync::Arc;
 
@@ -28,7 +29,7 @@ impl App {
             let s = self.player.status.lock().unwrap();
             (s.active, s.current_idx)
         };
-        if pos >= self.queue_for_scope(scope).items.len() {
+        if pos >= self.queue_for_scope(scope).total_queue_len() {
             let queue = self.queue_for_scope_mut(scope);
             queue.clamp_cursor();
             return;
@@ -47,7 +48,7 @@ impl App {
                 .connected_session_state
                 .as_ref()
                 .and_then(|s| s.now_playing_item_id.as_ref())
-                .zip(self.queue_for_scope(scope).items.get(pos))
+                .zip(self.queue_for_scope(scope).emby_item_at(pos))
                 .map(|(npid, item)| item.id == *npid)
                 .unwrap_or(false);
             if is_now_playing_remote {
@@ -68,7 +69,7 @@ impl App {
             self.queue_dirty = true;
         }
         self.undo_stack_for_scope_mut(scope)
-            .push(UndoEntry::Remove(pos, Box::new(item)));
+            .push(UndoEntry::Remove(pos, item));
         self.persist_local_queue_state_if_needed(scope);
         if controls_playback_queue && active && pos < current_idx {
             self.pending_active_idx = Some(current_idx - 1);
@@ -118,12 +119,13 @@ impl App {
         let scope = self.visible_queue_scope();
         let queue = self.queue_for_scope(scope);
         let from = queue.queue_cursor;
-        let len = queue.items.len();
+        let emby_len = queue.emby_items().len();
         // Feed-tail slots (beyond the Emby portion) are not user-movable;
         // reject early so slot_id_at never triggers a sync.
-        if from >= len {
+        if from >= emby_len {
             return;
         }
+        let len = queue.total_queue_len();
         let to = if delta < 0 {
             match from.checked_sub(1) {
                 Some(t) => t,
@@ -169,7 +171,7 @@ impl App {
         from: usize,
         to: usize,
     ) -> bool {
-        let len = self.queue_for_scope(scope).items.len();
+        let len = self.queue_for_scope(scope).total_queue_len();
         if from >= len || to >= len || from == to {
             return false;
         }
@@ -219,8 +221,8 @@ impl App {
         match entry {
             UndoEntry::Remove(idx, item) => {
                 let queue = self.queue_for_scope_mut(scope);
-                let idx = idx.min(queue.items.len());
-                queue.insert_item_at(idx, *item);
+                let idx = idx.min(queue.total_queue_len());
+                queue.insert_item_at(idx, item);
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
@@ -313,7 +315,7 @@ impl App {
             }
             PendingQueueAction::ClearQueue => {
                 let scope = self.visible_queue_scope();
-                let had_items = !self.queue_for_scope(scope).items.is_empty();
+                let had_items = self.queue_for_scope(scope).total_queue_len() > 0;
                 if self.local_queue_metadata_applies(scope) {
                     self.clear_local_queue_metadata();
                 } else {
@@ -423,10 +425,25 @@ impl App {
     /// pushes to Emby, so those identities are invalidated whether or not
     /// tracking is active.
     pub(super) fn clear_local_playlist_entry_ids(&mut self) {
-        for item in &mut self.player_tab.items {
-            item.playlist_item_id.clear();
+        let slot_ids: Vec<_> = self
+            .player_tab
+            .queue
+            .slots()
+            .iter()
+            .filter(|s| matches!(&s.item, QueueItem::Emby(_)))
+            .map(|s| s.slot_id)
+            .collect();
+        for slot_id in slot_ids {
+            if let Some(slot) = self.player_tab.queue.slot(slot_id) {
+                if let QueueItem::Emby(mut item) = slot.item.clone() {
+                    item.playlist_item_id.clear();
+                    let _ = self
+                        .player_tab
+                        .queue
+                        .update_slot_item(slot_id, QueueItem::Emby(item));
+                }
+            }
         }
-        self.player_tab.sync_queue_model_from_items_if_needed();
     }
 
     pub(super) fn enqueue_playlist_mutation(

@@ -14,7 +14,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 fn reorder_retires_tracking_after_successful_move() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(3);
+    app.player_tab
+        .set_items(make_items(3), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 0;
     app.remote_tracker = Some(tracking_stub());
 
@@ -23,7 +24,7 @@ fn reorder_retires_tracking_after_successful_move() {
     assert!(app.remote_tracker.is_none());
     assert_eq!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .map(|item| item.id.as_str())
             .collect::<Vec<_>>(),
@@ -35,7 +36,8 @@ fn reorder_retires_tracking_after_successful_move() {
 fn undo_retires_tracking_after_restoring_the_edit() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(3);
+    app.player_tab
+        .set_items(make_items(3), app.player_tab.queue_cursor);
     app.remote_tracker = Some(tracking_stub());
 
     app.remove_from_queue(1);
@@ -43,14 +45,15 @@ fn undo_retires_tracking_after_restoring_the_edit() {
     app.undo_last_queue_edit(QueueScope::Local);
 
     assert!(app.remote_tracker.is_none());
-    assert_eq!(app.player_tab.items.len(), 3);
+    assert_eq!(app.player_tab.emby_items().len(), 3);
 }
 
 #[test]
 fn empty_undo_leaves_tracking_active() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(2);
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
     app.remote_tracker = Some(tracking_stub());
 
     app.undo_last_queue_edit(QueueScope::Local);
@@ -61,26 +64,28 @@ fn empty_undo_leaves_tracking_active() {
 #[test]
 fn boundary_move_down_leaves_tracking_active() {
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(2);
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 1;
     app.remote_tracker = Some(tracking_stub());
 
     app.move_queue_item_down();
 
     assert!(app.remote_tracker.is_some());
-    assert_eq!(app.player_tab.items.len(), 2);
+    assert_eq!(app.player_tab.emby_items().len(), 2);
 }
 
 #[test]
 fn out_of_range_removal_leaves_tracking_active() {
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(2);
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
     app.remote_tracker = Some(tracking_stub());
 
     app.remove_from_queue(5);
 
     assert!(app.remote_tracker.is_some());
-    assert_eq!(app.player_tab.items.len(), 2);
+    assert_eq!(app.player_tab.emby_items().len(), 2);
 }
 
 #[test]
@@ -140,7 +145,7 @@ fn failed_folder_enqueue_leaves_tracking_active() {
     app.enqueue_selected();
 
     assert!(app.remote_tracker.is_some());
-    assert!(app.player_tab.items.is_empty());
+    assert!(app.player_tab.emby_items().is_empty());
 }
 
 #[test]
@@ -161,7 +166,7 @@ fn empty_folder_enqueue_leaves_tracking_active() {
     handle.join().unwrap();
 
     assert!(app.remote_tracker.is_some());
-    assert!(app.player_tab.items.is_empty());
+    assert!(app.player_tab.emby_items().is_empty());
     assert!(app.status.contains("Nothing to enqueue"));
 }
 
@@ -169,7 +174,8 @@ fn empty_folder_enqueue_leaves_tracking_active() {
 fn canceled_active_item_removal_leaves_tracking_active() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(3);
+    app.player_tab
+        .set_items(make_items(3), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 1;
     {
         let mut st = app.player.status.lock().unwrap();
@@ -184,7 +190,7 @@ fn canceled_active_item_removal_leaves_tracking_active() {
     app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     assert!(app.confirm_modal.is_none());
-    assert_eq!(app.player_tab.items.len(), 3);
+    assert_eq!(app.player_tab.emby_items().len(), 3);
     assert!(app.remote_tracker.is_some());
 }
 
@@ -192,7 +198,8 @@ fn canceled_active_item_removal_leaves_tracking_active() {
 fn confirmed_active_item_removal_retires_tracking() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(3);
+    app.player_tab
+        .set_items(make_items(3), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 1;
     {
         let mut st = app.player.status.lock().unwrap();
@@ -205,7 +212,7 @@ fn confirmed_active_item_removal_retires_tracking() {
     app.handle_key_confirm_modal(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
 
     assert!(app.remote_tracker.is_none());
-    assert_eq!(app.player_tab.items.len(), 2);
+    assert_eq!(app.player_tab.emby_items().len(), 2);
 }
 
 // ── task 6.5: two successive removals then a save containing both edits ───
@@ -214,7 +221,8 @@ fn confirmed_active_item_removal_retires_tracking() {
 fn two_removals_apply_immediately_and_save_snapshots_both_edits() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(4);
+    app.player_tab
+        .set_items(make_items(4), app.player_tab.queue_cursor);
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("pl-1".into()),
         name: "Saved".into(),
@@ -226,7 +234,7 @@ fn two_removals_apply_immediately_and_save_snapshots_both_edits() {
     assert!(app.remote_tracker.is_none());
     assert_eq!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .map(|item| item.id.as_str())
             .collect::<Vec<_>>(),

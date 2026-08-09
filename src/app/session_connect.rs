@@ -304,7 +304,7 @@ impl App {
             );
         }
 
-        self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
+        self.remote_player_tab = Some(PlayerTab::from_emby_items(initial_items, initial_cursor));
         self.connected_session_id = None;
         self.connected_session_state = None;
         self.retire_remote_tracking(true);
@@ -397,7 +397,7 @@ impl App {
             );
         }
 
-        self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
+        self.remote_player_tab = Some(PlayerTab::from_emby_items(initial_items, initial_cursor));
         self.direct_remote_connected = false;
         self.active_route = Some(library_name.to_string());
         self.remote_pos_s = 0;
@@ -522,7 +522,7 @@ impl App {
             // Mirror `App::new_remote`'s local-daemon baseline (`construct.rs`):
             // adopt the daemon's live queue into the single unified `player_tab`
             // -- no separate remote tab, no scope pill (#424).
-            self.player_tab = PlayerTab::new(initial_items, initial_cursor);
+            self.player_tab = PlayerTab::from_emby_items(initial_items, initial_cursor);
             self.queue_source = remote_queue_source;
         }
         self.remote_player_tab = None;

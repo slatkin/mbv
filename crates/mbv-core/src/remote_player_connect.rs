@@ -16,8 +16,9 @@ use std::time::Duration;
 use crate::api::EmbyItem;
 use crate::ctrl::{
     CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
+    UnifiedQueueStateData,
 };
-use crate::playback_queue::FeedEntry;
+use crate::playback_queue::QueueItem;
 use crate::player::{PlayerEvent, PlayerStatus};
 
 use crate::remote_player::RemotePlayer;
@@ -222,6 +223,7 @@ pub(crate) fn perform_handshake(
             let mut compatibility = info.compatibility()?;
             compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
             compatibility.supports_feed_playback = info.supports_feed_playback();
+            compatibility.supports_unified_queue = info.supports_unified_queue();
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",
@@ -265,7 +267,6 @@ fn apply_ctrl_event(
     ev: CtrlEvent,
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
-    feed_items: &Arc<Mutex<Vec<FeedEntry>>>,
     queue_source: &Arc<Mutex<crate::config::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
@@ -289,7 +290,6 @@ fn apply_ctrl_event(
             next_status.queue_len = s.items.len();
             *status.lock().unwrap() = next_status;
             *items.lock().unwrap() = s.items.clone();
-            *feed_items.lock().unwrap() = s.feed_items.clone();
             *queue_source.lock().unwrap() = s.source.clone();
             // The very first State snapshot read synchronously during connect()
             // establishes baseline state before the App (and its event loop)
@@ -301,7 +301,6 @@ fn apply_ctrl_event(
                     items: s.items,
                     cursor: s.cursor,
                     source: s.source,
-                    feed_items: s.feed_items,
                 });
             }
         }
@@ -359,6 +358,13 @@ fn apply_ctrl_event(
                 }
             }
         }
+        CtrlEvent::UnifiedQueueState(unified) => {
+            // Convert the canonical unified queue back to the legacy
+            // items/feed_items/status shape so the TUI layer continues
+            // to work.  Task 4 will migrate the TUI to consume unified
+            // queue coordinates directly.
+            apply_unified_queue_state(unified, status, items, queue_source, event_tx, notify);
+        }
     }
 }
 
@@ -368,6 +374,56 @@ fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
             "Emby remote control took over — returned to local mode"
         }
         DisconnectReason::DaemonShutdown => "the daemon was stopped",
+    }
+}
+
+/// Applies a unified-queue state snapshot.  Updates the legacy `status`
+/// and `items` Arc values for backward-compatible status-bar consumers,
+/// and — when `notify` is true — emits a `PlayerEvent::UnifiedQueueUpdated`
+/// that carries the full tagged queue, slot identity, active slot, and
+/// revision so the TUI can reconstruct the canonical queue without
+/// decomposing it into Emby-only shapes.
+fn apply_unified_queue_state(
+    unified: UnifiedQueueStateData,
+    status: &Arc<Mutex<PlayerStatus>>,
+    items: &Arc<Mutex<Vec<EmbyItem>>>,
+    _queue_source: &Arc<Mutex<crate::config::QueueSource>>,
+    event_tx: &mpsc::Sender<PlayerEvent>,
+    notify: bool,
+) {
+    let mut next_status = unified.status.clone();
+    next_status.queue_len = unified.slots.len();
+
+    // Derive the active-slot index from the slot_id.  When no slot is
+    // active (stopped / empty queue), preserve the status's own current_idx
+    // rather than fabricating index 0.
+    if let Some(active_idx) = unified
+        .active_slot
+        .and_then(|sid| unified.slots.iter().position(|s| s.slot_id == sid))
+    {
+        next_status.current_idx = active_idx;
+    }
+
+    // Project Emby-only items for legacy status-bar / MPRIS consumers.
+    let emby_items: Vec<EmbyItem> = unified
+        .slots
+        .iter()
+        .filter_map(|slot| match &slot.item {
+            QueueItem::Emby(e) => Some((**e).clone()),
+            QueueItem::Feed(_) => None,
+        })
+        .collect();
+
+    *status.lock().unwrap() = next_status;
+    *items.lock().unwrap() = emby_items;
+
+    // QueueSource is not carried by UnifiedQueueStateData; preserve the
+    // current value so the existing source detection logic isn't reset.
+    if notify {
+        // Emit the full unified state so the TUI can reconstruct the
+        // canonical queue (tagged QueueItems, slot identity, active slot,
+        // revision) without losing Feed entries or canonical order.
+        let _ = event_tx.send(PlayerEvent::UnifiedQueueUpdated(unified));
     }
 }
 
@@ -385,7 +441,6 @@ pub(crate) fn connect_endpoint(
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
     let items: Arc<Mutex<Vec<EmbyItem>>> = Arc::new(Mutex::new(Vec::new()));
-    let feed_items: Arc<Mutex<Vec<FeedEntry>>> = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
     let disconnected = Arc::new(AtomicBool::new(false));
     let shutdown_announced = Arc::new(AtomicBool::new(false));
@@ -414,7 +469,6 @@ pub(crate) fn connect_endpoint(
         state_event,
         &status,
         &items,
-        &feed_items,
         &queue_source,
         &event_tx,
         &pending_playback,
@@ -424,7 +478,6 @@ pub(crate) fn connect_endpoint(
     // Reader thread: deserializes CtrlEvent lines from daemon
     let status_r = status.clone();
     let items_r = items.clone();
-    let feed_items_r = feed_items.clone();
     let queue_source_r = queue_source.clone();
     let pending_playback_r = pending_playback.clone();
     let disconnected_r = disconnected.clone();
@@ -475,7 +528,6 @@ pub(crate) fn connect_endpoint(
                         ev,
                         &status_r,
                         &items_r,
-                        &feed_items_r,
                         &queue_source_r,
                         &event_tx_r,
                         &pending_playback_r,
@@ -543,7 +595,6 @@ pub(crate) fn connect_endpoint(
             status,
             subtitle_prefs,
             items,
-            feed_items,
             queue_source,
             cmd_tx,
             disconnected,

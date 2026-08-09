@@ -123,7 +123,11 @@ impl App {
                         }
                         if item_changed {
                             if let Some(new_idx) = s.now_playing_item_id.as_ref().and_then(|id| {
-                                self.player_tab.items.iter().position(|it| &it.id == id)
+                                self.player_tab
+                                    .queue
+                                    .slots()
+                                    .iter()
+                                    .position(|slot| slot.item.id() == id)
                             }) {
                                 self.player_tab.queue_cursor = new_idx;
                             }
@@ -174,8 +178,18 @@ impl App {
                 }
             }
             SessionEvent::ItemRefreshed(item_id, fresh) => {
-                if let Some(slot) = self.player_tab.items.iter_mut().find(|i| i.id == item_id) {
-                    *slot = *fresh;
+                if let Some(slot_id) = self
+                    .player_tab
+                    .queue
+                    .slots()
+                    .iter()
+                    .find(|s| s.item.id() == item_id)
+                    .map(|s| s.slot_id)
+                {
+                    let _ = self.player_tab.queue.update_slot_item(
+                        slot_id,
+                        mbv_core::playback_queue::QueueItem::Emby(fresh),
+                    );
                 }
             }
             SessionEvent::CommandAcknowledged(command) => {

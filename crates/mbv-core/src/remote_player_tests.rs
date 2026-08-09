@@ -92,7 +92,6 @@ fn daemon_endpoint_rejects_unsupported_schemes() {
 fn status_only_preserves_event_confirmed_current_index() {
     let status = Arc::new(Mutex::new(status_with_idx(3)));
     let items = Arc::new(Mutex::new(Vec::new()));
-    let feed_items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
@@ -100,7 +99,6 @@ fn status_only_preserves_event_confirmed_current_index() {
         CtrlEvent::StatusOnly(status_with_idx(5)),
         &status,
         &items,
-        &feed_items,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -114,7 +112,6 @@ fn status_only_preserves_event_confirmed_current_index() {
 fn state_uses_cursor_as_current_index() {
     let status = Arc::new(Mutex::new(status_with_idx(0)));
     let items = Arc::new(Mutex::new(Vec::new()));
-    let feed_items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, rx) = mpsc::channel();
 
@@ -128,7 +125,6 @@ fn state_uses_cursor_as_current_index() {
         }),
         &status,
         &items,
-        &feed_items,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -146,7 +142,6 @@ fn state_uses_cursor_as_current_index() {
 fn status_only_preserves_current_idx_and_queue_len() {
     let status = Arc::new(Mutex::new(status_with_idx_and_len(3, 7)));
     let items = Arc::new(Mutex::new(Vec::new()));
-    let feed_items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
@@ -154,7 +149,6 @@ fn status_only_preserves_current_idx_and_queue_len() {
         CtrlEvent::StatusOnly(status_with_idx_and_len(5, 2)),
         &status,
         &items,
-        &feed_items,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -170,7 +164,6 @@ fn status_only_preserves_current_idx_and_queue_len() {
 fn state_derives_queue_len_from_items_not_status() {
     let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 0)));
     let items = Arc::new(Mutex::new(Vec::new()));
-    let feed_items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
@@ -187,7 +180,6 @@ fn state_derives_queue_len_from_items_not_status() {
         }),
         &status,
         &items,
-        &feed_items,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -201,7 +193,6 @@ fn state_derives_queue_len_from_items_not_status() {
 fn track_changed_updates_current_idx_but_not_queue_len() {
     let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 5)));
     let items = Arc::new(Mutex::new(Vec::new()));
-    let feed_items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
@@ -209,7 +200,6 @@ fn track_changed_updates_current_idx_but_not_queue_len() {
         CtrlEvent::Player(PlayerEvent::TrackChanged(2)),
         &status,
         &items,
-        &feed_items,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -225,7 +215,6 @@ fn track_changed_updates_current_idx_but_not_queue_len() {
 fn command_rejected_forwards_reason_as_player_event() {
     let status = Arc::new(Mutex::new(status_with_idx(0)));
     let items = Arc::new(Mutex::new(Vec::new()));
-    let feed_items = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, rx) = mpsc::channel();
 
@@ -233,7 +222,6 @@ fn command_rejected_forwards_reason_as_player_event() {
         CtrlEvent::CommandRejected("daemon is audio-only".to_string()),
         &status,
         &items,
-        &feed_items,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -247,4 +235,3 @@ fn command_rejected_forwards_reason_as_player_event() {
         _ => panic!("expected CommandRejected"),
     }
 }
-

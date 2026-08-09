@@ -23,6 +23,12 @@ pub struct FeedEntry {
     /// `queue_state.json` files (pre-#471) loading.
     #[serde(default)]
     pub pub_date_secs: Option<u64>,
+    /// Subscription's `FeedKind` carried into the queued snapshot. Canonical
+    /// media kind when enclosure MIME is absent or unrecognized; enclosure MIME
+    /// refines it when recognized. `#[serde(default)]` preserves legacy
+    /// serialized entries that lack this field.
+    #[serde(default)]
+    pub feed_kind: crate::config::FeedKind,
 }
 
 impl FeedEntry {
@@ -103,27 +109,33 @@ impl QueueItem {
     pub fn media_kind(&self) -> &str {
         match self {
             QueueItem::Emby(item) => &item.media_type,
-            QueueItem::Feed(entry) => entry.mime_type.as_deref().unwrap_or("Audio"),
+            QueueItem::Feed(entry) => match entry.mime_type.as_deref() {
+                Some(m) if m.starts_with("audio/") => "Audio",
+                Some(m) if m.starts_with("video/") => "Video",
+                _ => entry.feed_kind.as_str(),
+            },
         }
     }
 
     pub fn is_audio(&self) -> bool {
         match self {
             QueueItem::Emby(item) => item.is_audio(),
-            QueueItem::Feed(entry) => entry
-                .mime_type
-                .as_deref()
-                .is_some_and(|m| m.starts_with("audio/")),
+            QueueItem::Feed(entry) => match entry.mime_type.as_deref() {
+                Some(m) if m.starts_with("audio/") => true,
+                Some(m) if m.starts_with("video/") => false,
+                _ => entry.feed_kind == crate::config::FeedKind::Audio,
+            },
         }
     }
 
     pub fn is_video(&self) -> bool {
         match self {
             QueueItem::Emby(item) => item.is_video(),
-            QueueItem::Feed(entry) => entry
-                .mime_type
-                .as_deref()
-                .is_some_and(|m| m.starts_with("video/")),
+            QueueItem::Feed(entry) => match entry.mime_type.as_deref() {
+                Some(m) if m.starts_with("video/") => true,
+                Some(m) if m.starts_with("audio/") => false,
+                _ => entry.feed_kind == crate::config::FeedKind::Video,
+            },
         }
     }
 
@@ -196,6 +208,10 @@ pub struct QueueSlotId(u64);
 impl QueueSlotId {
     pub fn raw(self) -> u64 {
         self.0
+    }
+
+    pub fn from_raw(raw: u64) -> Self {
+        Self(raw)
     }
 }
 
@@ -360,12 +376,47 @@ impl PlaybackQueue {
         &self.slots
     }
 
+    /// Mutable access to slots. Intended for test helpers and internal
+    /// mutation paths; callers should prefer the explicit mutation methods
+    /// (`insert`, `remove_slot`, `move_slot`, etc.) for production code.
+    pub fn slots_mut(&mut self) -> &mut [QueueSlot] {
+        &mut self.slots
+    }
+
+    /// Consume the queue and return its slots. Used by tests and callers
+    /// that need owned slot data.
+    pub fn into_slots(self) -> Vec<QueueSlot> {
+        self.slots
+    }
+
     pub fn active_slot_id(&self) -> Option<QueueSlotId> {
         self.active_slot_id
     }
 
+    pub fn active_index(&self) -> Option<usize> {
+        self.active_slot_id.and_then(|id| self.slot_index(id))
+    }
+
     pub fn active_slot(&self) -> Option<&QueueSlot> {
         self.active_slot_id.and_then(|slot_id| self.slot(slot_id))
+    }
+
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
+    /// Returns `true` when the queue contains any `Feed` slots that a
+    /// legacy peer (without `unified-queue` capability) cannot represent.
+    /// Used by the daemon to reject legacy queue replacements that would
+    /// silently overwrite hidden canonical slots.
+    pub fn has_feed_entries(&self) -> bool {
+        self.slots
+            .iter()
+            .any(|s| matches!(s.item, QueueItem::Feed(_)))
     }
 
     pub fn clear_active_slot(&mut self) {
@@ -392,12 +443,63 @@ impl PlaybackQueue {
         slot_id
     }
 
+    /// Replace all slots with new items, clearing the active slot.
+    /// Returns the active index (if any) from the *previous* queue so callers
+    /// can carry forward presentation state if desired.
+    pub fn replace(&mut self, items: Vec<QueueItem>) -> Option<usize> {
+        let old_active = self.active_slot_id.and_then(|id| self.slot_index(id));
+        self.slots.clear();
+        self.active_slot_id = None;
+        for item in items {
+            let slot_id = self.allocate_slot_id();
+            self.slots.push(QueueSlot::new(slot_id, item));
+        }
+        self.revision.bump();
+        old_active
+    }
+
+    /// Remove all slots and clear the active slot.
+    pub fn clear(&mut self) {
+        if self.slots.is_empty() {
+            return;
+        }
+        self.slots.clear();
+        self.active_slot_id = None;
+        self.revision.bump();
+    }
+
+    /// Truncate the slots to the given length. Used by tests to simulate
+    /// a queue shrinking while a context menu is open.
+    pub fn truncate_slots(&mut self, len: usize) {
+        if len >= self.slots.len() {
+            return;
+        }
+        self.slots.truncate(len);
+        self.revision.bump();
+        // Clear active slot if it's beyond the new length.
+        if let Some(active_id) = self.active_slot_id {
+            if self.slot_index(active_id).is_none() {
+                self.active_slot_id = None;
+            }
+        }
+    }
+
     pub fn set_active_slot(&mut self, slot_id: QueueSlotId) -> QueueMutationResult<()> {
         if self.slot_index(slot_id).is_none() {
             return QueueMutationResult::NotFound;
         }
         self.active_slot_id = Some(slot_id);
         QueueMutationResult::Applied(())
+    }
+
+    /// Set the local progress state on a slot by index. Intended for test
+    /// helpers; production code should use player events to drive progress.
+    /// Only affects Emby slots; Feed slots are a no-op.
+    pub fn set_slot_progress_by_index(&mut self, index: usize, position_ticks: i64) {
+        if let Some(slot) = self.slots.get_mut(index) {
+            slot.progress_state.local.position_ticks = position_ticks;
+            slot.progress_state.apply_to_item(&mut slot.item);
+        }
     }
 
     pub fn remove_slot(&mut self, slot_id: QueueSlotId) -> RemoveSlotResult {

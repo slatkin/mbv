@@ -367,7 +367,7 @@ impl App {
             KeyCode::Delete => {
                 let queue = self.displayed_queue();
                 let t = queue.queue_cursor;
-                if t < queue.items.len() {
+                if t < queue.total_queue_len() {
                     self.remove_from_queue(t);
                 }
             }
@@ -385,7 +385,7 @@ impl App {
             KeyCode::Char('i') => {
                 let queue = self.displayed_queue();
                 let cursor = queue.queue_cursor;
-                if let Some(item) = queue.items.get(cursor) {
+                if let Some(item) = queue.emby_item_at(cursor) {
                     let item_id = item.id.clone();
                     let item_type = item.item_type.clone();
                     let libs: Vec<(usize, String, String)> = self
@@ -422,7 +422,7 @@ impl App {
                     .modifiers
                     .contains(crossterm::event::KeyModifiers::CONTROL) =>
             {
-                if !self.player_tab.items.is_empty() {
+                if self.player_tab.total_queue_len() > 0 {
                     self.save_playlist_dialog = Some(SavePlaylistDialog {
                         input: self.queue_playlist_name().to_string(),
                         stage: SavePlaylistStage::EnterName,

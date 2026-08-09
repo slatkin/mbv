@@ -60,9 +60,7 @@ fn track_title(item: &EmbyItem) -> String {
         return stem.to_string();
     }
 
-    let title = trimmed
-        .trim_start_matches(|ch| matches!(ch, '-' | '.' | '_'))
-        .trim();
+    let title = trimmed.trim_start_matches(['-', '.', '_']).trim();
     if title.is_empty() {
         stem.to_string()
     } else {

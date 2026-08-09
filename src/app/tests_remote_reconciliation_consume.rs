@@ -12,8 +12,8 @@ use mbv_core::remote_reconciliation::{
 #[test]
 fn successful_remote_command_acknowledgment_unfreezes_tracking_after_failed_poll() {
     let mut app = attached_app();
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[1].id = "b".into();
+    app.player_tab.emby_items()[0].id = "a".into();
+    app.player_tab.emby_items()[1].id = "b".into();
     app.connected_session_state = Some({
         let mut state = make_session("Client", "Emby");
         state.id = "session".into();
@@ -138,46 +138,53 @@ fn older_tracked_command_failure_does_not_retire_a_newer_command_tracker() {
 #[test]
 fn remote_jump_target_is_independent_of_tracking() {
     let mut app = attached_app();
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[1].id = "a".into();
-    app.player_tab.items.push(make_item("b", "Movie"));
-    app.player_tab.items[2].id = "b".into();
-    app.player_tab.items[0].playback_position_ticks = 10;
-    app.player_tab.items[1].playback_position_ticks = 20;
-    app.player_tab.items[2].playback_position_ticks = 30;
+    let mut item_a1 = app.player_tab.emby_items()[0].clone();
+    item_a1.id = "a".into();
+    item_a1.playback_position_ticks = 10;
+    let mut item_a2 = app.player_tab.emby_items()[1].clone();
+    item_a2.id = "a".into();
+    item_a2.playback_position_ticks = 20;
+    let mut item_b = make_item("b", "Movie");
+    item_b.id = "b".into();
+    item_b.playback_position_ticks = 30;
+    app.player_tab.set_item_at(
+        0,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a1)),
+    );
+    app.player_tab.set_item_at(
+        1,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a2)),
+    );
+    app.player_tab.append_item(item_b);
 
     // The untracked destination resolution resolves the first visible match.
-    let base = crate::app::session_command_actions::remote_jump_target(
-        &app.player_tab.items,
-        Some("a"),
-        1,
-    );
+    let base =
+        crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("a"), 1);
     assert_eq!(base, Some((1, 20)));
 
     // Tracking presence never changes the destination or payload.
     app.remote_tracker = Some(tracker(&["a", "a", "b"]));
     assert_eq!(
-        crate::app::session_command_actions::remote_jump_target(
-            &app.player_tab.items,
-            Some("a"),
-            1
-        ),
+        crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("a"), 1),
         base
     );
     assert_eq!(
-        crate::app::session_command_actions::remote_jump_target(
-            &app.player_tab.items,
-            Some("b"),
-            -1
-        ),
+        crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("b"), -1),
         Some((1, 20))
     );
 
     // After projected prefix consumption the visible queue shrinks; the
     // destination is still chosen from the visible queue exactly as untracked.
-    let items: Vec<_> = app.player_tab.items.iter().skip(1).cloned().collect();
+    let items: Vec<_> = app
+        .player_tab
+        .emby_items()
+        .iter()
+        .skip(1)
+        .cloned()
+        .collect();
+    let tab = PlayerTab::from_emby_items(items, 0);
     assert_eq!(
-        crate::app::session_command_actions::remote_jump_target(&items, Some("a"), 1),
+        crate::app::session_command_actions::remote_jump_target(&tab, Some("a"), 1),
         Some((1, 30))
     );
 }
@@ -185,11 +192,21 @@ fn remote_jump_target_is_independent_of_tracking() {
 #[test]
 fn session_jump_track_records_occurrence_intent_for_untracked_destination() {
     let mut app = attached_app();
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[1].id = "b".into();
-    app.player_tab.items.push(make_item("c", "Movie"));
-    app.player_tab.items[2].id = "c".into();
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    let mut item_a = app.player_tab.emby_items()[0].clone();
+    item_a.id = "a".into();
+    let mut item_b = app.player_tab.emby_items()[1].clone();
+    item_b.id = "b".into();
+    let mut item_c = make_item("c", "Movie");
+    item_c.id = "c".into();
+    app.player_tab.set_item_at(
+        0,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
+    );
+    app.player_tab.set_item_at(
+        1,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
+    );
+    app.player_tab.append_item(item_c);
     app.connected_session_state = Some({
         let mut state = make_session("Client", "Emby");
         state.id = "session".into();
@@ -227,12 +244,22 @@ fn session_jump_track_records_occurrence_intent_for_untracked_destination() {
 #[test]
 fn consume_followed_by_next_targets_the_projected_occurrence() {
     let mut app = attached_app();
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[0].playlist_item_id = "entry-a".into();
-    app.player_tab.items[1].id = "b".into();
-    app.player_tab.items.push(make_item("c", "Movie"));
-    app.player_tab.items[2].id = "c".into();
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    let mut item_a = app.player_tab.emby_items()[0].clone();
+    item_a.id = "a".into();
+    item_a.playlist_item_id = "entry-a".into();
+    let mut item_b = app.player_tab.emby_items()[1].clone();
+    item_b.id = "b".into();
+    let mut item_c = make_item("c", "Movie");
+    item_c.id = "c".into();
+    app.player_tab.set_item_at(
+        0,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
+    );
+    app.player_tab.set_item_at(
+        1,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
+    );
+    app.player_tab.append_item(item_c);
     let slots = app.player_tab.queue.slots();
     app.remote_queue_projection = Some(projection(
         &app,
@@ -261,15 +288,13 @@ fn consume_followed_by_next_targets_the_projected_occurrence() {
 
     // Project the applied consume of occurrence 1, shrinking the visible
     // queue from [a, b, c] to [b, c].
-    app.player_tab.sync_queue_model_from_items_if_needed();
     let consumed_slot = app.player_tab.queue.slots()[0].slot_id;
     assert!(matches!(
         app.player_tab.queue.consume_slot(consumed_slot),
         mbv_core::playback_queue::QueueMutationResult::Applied(_)
     ));
-    app.player_tab.sync_items_from_queue_model();
-    assert_eq!(app.player_tab.items.len(), 2);
-    assert_eq!(app.player_tab.items[0].id, "b");
+    assert_eq!(app.player_tab.emby_items().len(), 2);
+    assert_eq!(app.player_tab.emby_items()[0].id, "b");
 
     app.connected_session_state = Some({
         let mut state = make_session("Client", "Emby");
@@ -303,15 +328,25 @@ fn consume_followed_by_next_targets_the_projected_occurrence() {
 /// Shared 5.4 setup: `[a, b, c]` submitted to a saved playlist, occurrence 1
 /// completed and consumed, projection active, occurrence 2 confirmed.
 fn consume_first_of_three(app: &mut App) {
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[0].playlist_item_id = "entry-a".into();
-    app.player_tab.items[1].id = "b".into();
-    app.player_tab.items.push(make_item("c", "Movie"));
-    app.player_tab.items[2].id = "c".into();
-    app.player_tab.items[0].playback_position_ticks = 100;
-    app.player_tab.items[1].playback_position_ticks = 200;
-    app.player_tab.items[2].playback_position_ticks = 300;
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    let mut item_a = app.player_tab.emby_items()[0].clone();
+    item_a.id = "a".into();
+    item_a.playlist_item_id = "entry-a".into();
+    item_a.playback_position_ticks = 100;
+    let mut item_b = app.player_tab.emby_items()[1].clone();
+    item_b.id = "b".into();
+    item_b.playback_position_ticks = 200;
+    let mut item_c = make_item("c", "Movie");
+    item_c.id = "c".into();
+    item_c.playback_position_ticks = 300;
+    app.player_tab.set_item_at(
+        0,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
+    );
+    app.player_tab.set_item_at(
+        1,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
+    );
+    app.player_tab.append_item(item_c);
     let slots = app.player_tab.queue.slots();
     app.remote_queue_projection = Some(projection(
         app,
@@ -337,16 +372,13 @@ fn consume_first_of_three(app: &mut App) {
     tracking.observe(RemoteObservation::playing(2, "session", "b", 1, 100, 2));
     assert!(tracking.mark_consumed(1));
     app.remote_tracker = Some(tracking);
-
-    app.player_tab.sync_queue_model_from_items_if_needed();
     let consumed_slot = app.player_tab.queue.slots()[0].slot_id;
     assert!(matches!(
         app.player_tab.queue.consume_slot(consumed_slot),
         mbv_core::playback_queue::QueueMutationResult::Applied(_)
     ));
-    app.player_tab.sync_items_from_queue_model();
-    assert_eq!(app.player_tab.items.len(), 2);
-    assert_eq!(app.player_tab.items[0].id, "b");
+    assert_eq!(app.player_tab.emby_items().len(), 2);
+    assert_eq!(app.player_tab.emby_items()[0].id, "b");
 }
 
 #[test]
@@ -415,13 +447,23 @@ fn consume_followed_by_direct_selection_targets_the_projected_occurrence() {
 #[test]
 fn consume_followed_by_duplicate_selection_targets_distinct_occurrence() {
     let mut app = attached_app();
-    app.player_tab.items[0].id = "x".into();
-    app.player_tab.items[0].playlist_item_id = "entry-x1".into();
-    app.player_tab.items[1].id = "x".into();
-    app.player_tab.items[1].playlist_item_id = "entry-x2".into();
-    app.player_tab.items.push(make_item("y", "Movie"));
-    app.player_tab.items[2].id = "y".into();
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    let mut item_x1 = app.player_tab.emby_items()[0].clone();
+    item_x1.id = "x".into();
+    item_x1.playlist_item_id = "entry-x1".into();
+    let mut item_x2 = app.player_tab.emby_items()[1].clone();
+    item_x2.id = "x".into();
+    item_x2.playlist_item_id = "entry-x2".into();
+    let mut item_y = make_item("y", "Movie");
+    item_y.id = "y".into();
+    app.player_tab.set_item_at(
+        0,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_x1)),
+    );
+    app.player_tab.set_item_at(
+        1,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_x2)),
+    );
+    app.player_tab.append_item(item_y);
     let slots = app.player_tab.queue.slots();
     app.remote_queue_projection = Some(projection(
         &app,
@@ -449,15 +491,13 @@ fn consume_followed_by_duplicate_selection_targets_distinct_occurrence() {
     app.remote_tracker = Some(tracking);
 
     // Project the consume of the first "x": visible queue is now [x, y].
-    app.player_tab.sync_queue_model_from_items_if_needed();
     let consumed_slot = app.player_tab.queue.slots()[0].slot_id;
     assert!(matches!(
         app.player_tab.queue.consume_slot(consumed_slot),
         mbv_core::playback_queue::QueueMutationResult::Applied(_)
     ));
-    app.player_tab.sync_items_from_queue_model();
-    assert_eq!(app.player_tab.items.len(), 2);
-    assert_eq!(app.player_tab.items[0].id, "x");
+    assert_eq!(app.player_tab.emby_items().len(), 2);
+    assert_eq!(app.player_tab.emby_items()[0].id, "x");
 
     app.connected_session_state = Some({
         let mut state = make_session("Client", "Emby");

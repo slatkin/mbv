@@ -51,7 +51,7 @@ impl App {
             self.current_lib_item()
         } else if matches!(self.panel_focus, PanelFocus::Queue) {
             let queue = self.displayed_queue();
-            queue.items.get(queue.queue_cursor).cloned()
+            queue.clone_emby_item_at(queue.queue_cursor)
         } else {
             None
         };

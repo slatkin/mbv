@@ -350,7 +350,7 @@ impl App {
         let playback = self.effective_playback_state();
         let parts = playback
             .active
-            .then(|| self.playback_queue().items.get(playback.active_idx))
+            .then(|| self.playback_queue().emby_item_at(playback.active_idx))
             .flatten()
             .filter(|item| item.item_type == "Episode" && !item.series_name.is_empty())
             .filter(|item| item.display_name() == title)

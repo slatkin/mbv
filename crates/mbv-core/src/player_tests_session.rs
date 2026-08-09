@@ -374,6 +374,7 @@ fn make_feed_entry(guid: &str, title: &str) -> crate::playback_queue::FeedEntry 
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(300 * crate::api::TICKS_PER_SECOND as u64),
         pub_date_secs: None,
+        feed_kind: crate::config::FeedKind::Audio,
     }
 }
 
@@ -503,21 +504,6 @@ fn feed_cancel_pending_quit_clears_state() {
     assert!(session.quit_at.is_none());
     assert!(session.shutdown_report_timeout.lock().unwrap().is_none());
     assert_eq!(session.progress_join_budget(), Duration::from_secs(30));
-}
-
-#[test]
-fn feed_player_command_load_feed_serde_roundtrip() {
-    let entry = make_feed_entry("g1", "title");
-    let cmd = PlayerCommand::LoadFeed { entry };
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: PlayerCommand = serde_json::from_str(&json).unwrap();
-    match decoded {
-        PlayerCommand::LoadFeed { entry } => {
-            assert_eq!(entry.guid, "g1");
-            assert_eq!(entry.title, "title");
-        }
-        _ => panic!("expected LoadFeed"),
-    }
 }
 
 // ── Feed append semantics ──────────────────────────────────────────────────

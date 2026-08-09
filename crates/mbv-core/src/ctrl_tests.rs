@@ -320,6 +320,7 @@ fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some((3_600 * crate::api::TICKS_PER_SECOND) as u64),
         pub_date_secs: Some(1700000000),
+        feed_kind: crate::config::FeedKind::Audio,
     }
 }
 
@@ -336,14 +337,13 @@ fn load_feed_wire_tag_is_pinned() {
 #[test]
 fn load_feed_wire_round_trips_through_json() {
     let entry = stub_feed_entry();
-    let wire: WireCommand = PlayerCommand::LoadFeed {
+    let wire = WireCommand::LoadFeed {
         entry: entry.clone(),
-    }
-    .into();
+    };
     let json = serde_json::to_string(&wire).unwrap();
     let decoded: WireCommand = serde_json::from_str(&json).unwrap();
-    match PlayerCommand::from(decoded) {
-        PlayerCommand::LoadFeed {
+    match decoded {
+        WireCommand::LoadFeed {
             entry: decoded_entry,
         } => {
             assert_eq!(decoded_entry.guid, entry.guid);
@@ -360,17 +360,14 @@ fn load_feed_wire_round_trips_through_json() {
 #[test]
 fn load_feed_ctrl_cmd_round_trips_through_json() {
     let entry = stub_feed_entry();
-    let cmd = CtrlCmd::PlayerCmd(
-        PlayerCommand::LoadFeed {
-            entry: entry.clone(),
-        }
-        .into(),
-    );
+    let cmd = CtrlCmd::PlayerCmd(WireCommand::LoadFeed {
+        entry: entry.clone(),
+    });
     let json = serde_json::to_string(&cmd).unwrap();
     let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
     match decoded {
-        CtrlCmd::PlayerCmd(wire) => match PlayerCommand::from(wire) {
-            PlayerCommand::LoadFeed {
+        CtrlCmd::PlayerCmd(wire) => match wire {
+            WireCommand::LoadFeed {
                 entry: decoded_entry,
             } => {
                 assert_eq!(decoded_entry.guid, entry.guid);
@@ -416,6 +413,184 @@ fn old_peer_without_feed_playback_capability_rejects_load_feed() {
         supports_queue_append: true,
         supports_lifecycle_shutdown: false,
         supports_feed_playback: false,
+        supports_unified_queue: false,
     };
     assert!(!compat.supports_feed_playback);
+}
+
+// ── Unified queue wire types ──────────────────────────────────────────────
+
+#[test]
+fn current_hello_advertises_unified_queue_capability() {
+    let hello = CtrlHello::current();
+    assert!(
+        hello.supports_unified_queue(),
+        "CtrlHello::current() must advertise unified-queue capability"
+    );
+}
+
+#[test]
+fn hello_without_unified_queue_detected() {
+    let mut hello = CtrlHello::current();
+    hello
+        .capabilities
+        .retain(|cap| cap != CTRL_CAP_UNIFIED_QUEUE);
+    assert!(!hello.supports_unified_queue());
+}
+
+#[test]
+fn unified_queue_slot_round_trips_through_json() {
+    let slot = UnifiedQueueSlot {
+        slot_id: 42,
+        item: QueueItem::Emby(Box::new(stub_media_item())),
+    };
+    let json = serde_json::to_string(&slot).unwrap();
+    let decoded: UnifiedQueueSlot = serde_json::from_str(&json).unwrap();
+    assert_eq!(decoded.slot_id, 42);
+    assert_eq!(decoded.item.id(), "item1");
+}
+
+#[test]
+fn unified_queue_slot_feed_round_trips() {
+    let slot = UnifiedQueueSlot {
+        slot_id: 7,
+        item: QueueItem::Feed(stub_feed_entry()),
+    };
+    let json = serde_json::to_string(&slot).unwrap();
+    let decoded: UnifiedQueueSlot = serde_json::from_str(&json).unwrap();
+    assert_eq!(decoded.slot_id, 7);
+    match &decoded.item {
+        QueueItem::Feed(e) => assert_eq!(e.guid, "feed-guid-1"),
+        _ => panic!("expected Feed"),
+    }
+}
+
+#[test]
+fn unified_queue_state_data_round_trips() {
+    let state = UnifiedQueueStateData {
+        status: PlayerStatus::default(),
+        slots: vec![
+            UnifiedQueueSlot {
+                slot_id: 1,
+                item: QueueItem::Emby(Box::new(stub_media_item())),
+            },
+            UnifiedQueueSlot {
+                slot_id: 2,
+                item: QueueItem::Feed(stub_feed_entry()),
+            },
+        ],
+        active_slot: Some(1),
+        revision: 5,
+    };
+    let json = serde_json::to_string(&state).unwrap();
+    let decoded: UnifiedQueueStateData = serde_json::from_str(&json).unwrap();
+    assert_eq!(decoded.slots.len(), 2);
+    assert_eq!(decoded.active_slot, Some(1));
+    assert_eq!(decoded.revision, 5);
+}
+
+#[test]
+fn unified_queue_replace_cmd_round_trips() {
+    let items = vec![
+        QueueItem::Emby(Box::new(stub_media_item())),
+        QueueItem::Feed(stub_feed_entry()),
+    ];
+    let cmd = CtrlCmd::UnifiedQueueReplace {
+        items,
+        start_idx: Some(0),
+    };
+    let json = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+    match decoded {
+        CtrlCmd::UnifiedQueueReplace { items, start_idx } => {
+            assert_eq!(items.len(), 2);
+            assert_eq!(start_idx, Some(0));
+        }
+        _ => panic!("expected UnifiedQueueReplace"),
+    }
+}
+
+#[test]
+fn unified_queue_append_cmd_round_trips() {
+    let cmd = CtrlCmd::UnifiedQueueAppend {
+        items: vec![QueueItem::Feed(stub_feed_entry())],
+    };
+    let json = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+    match decoded {
+        CtrlCmd::UnifiedQueueAppend { items } => assert_eq!(items.len(), 1),
+        _ => panic!("expected UnifiedQueueAppend"),
+    }
+}
+
+#[test]
+fn unified_queue_remove_slot_cmd_round_trips() {
+    let cmd = CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 99 };
+    let json = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+    match decoded {
+        CtrlCmd::UnifiedQueueRemoveSlot { slot_id } => assert_eq!(slot_id, 99),
+        _ => panic!("expected UnifiedQueueRemoveSlot"),
+    }
+}
+
+#[test]
+fn unified_queue_move_slot_cmd_round_trips() {
+    let cmd = CtrlCmd::UnifiedQueueMoveSlot {
+        slot_id: 3,
+        to_index: 0,
+    };
+    let json = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+    match decoded {
+        CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index } => {
+            assert_eq!(slot_id, 3);
+            assert_eq!(to_index, 0);
+        }
+        _ => panic!("expected UnifiedQueueMoveSlot"),
+    }
+}
+
+#[test]
+fn unified_queue_play_slot_cmd_round_trips() {
+    let cmd = CtrlCmd::UnifiedQueuePlaySlot { slot_id: 5 };
+    let json = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+    match decoded {
+        CtrlCmd::UnifiedQueuePlaySlot { slot_id } => assert_eq!(slot_id, 5),
+        _ => panic!("expected UnifiedQueuePlaySlot"),
+    }
+}
+
+#[test]
+fn unified_queue_clear_cmd_round_trips() {
+    let cmd = CtrlCmd::UnifiedQueueClear;
+    let json = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+    assert!(matches!(decoded, CtrlCmd::UnifiedQueueClear));
+}
+
+#[test]
+fn unified_queue_state_event_round_trips() {
+    let event = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+        status: PlayerStatus::default(),
+        slots: vec![],
+        active_slot: None,
+        revision: 0,
+    });
+    let json = serde_json::to_string(&event).unwrap();
+    let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();
+    match decoded {
+        CtrlEvent::UnifiedQueueState(state) => {
+            assert!(state.slots.is_empty());
+            assert_eq!(state.active_slot, None);
+        }
+        _ => panic!("expected UnifiedQueueState"),
+    }
+}
+
+#[test]
+fn ctrl_compatibility_current_supports_unified_queue() {
+    let compat = CtrlCompatibility::current();
+    assert!(compat.supports_unified_queue);
 }

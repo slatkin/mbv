@@ -28,9 +28,9 @@ impl App {
                     if let Some(item) = self.next_up_item.take() {
                         if let Some(idx) = self
                             .playback_queue()
-                            .items
+                            .slots()
                             .iter()
-                            .position(|i| i.id == item.id)
+                            .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
                         {
                             let label = item.playback_label();
                             self.player.send_command(PlayerCommand::JumpTo(idx));

@@ -239,181 +239,14 @@ impl Player {
     }
 
     pub fn play(&self, item: &EmbyItem, client: Arc<EmbyClient>, initial_volume: u8) {
-        // Reuse the existing mpv window only when the headless state matches:
-        // video→video and audio→audio reuse; video→audio and audio→video always
-        // spawn a new process so the window visibility is correct.
-        let new_is_headless = self.headless_for(&client, item.is_audio());
-        if self.status.lock().unwrap().active
-            && (self.current_is_headless.load(Ordering::Relaxed) == new_is_headless)
-        {
-            let ep = if item.is_audio() { "Audio" } else { "Videos" };
-            let url = format!(
-                "{}/{}/{}/stream?static=true&api_key={}",
-                self.server_url, ep, item.id, self.token
-            );
-            let start_pos = if item.should_resume() {
-                item.resume_seconds()
-            } else {
-                0.0
-            };
-            {
-                let mut st = self.status.lock().unwrap();
-                st.position_ticks = item.playback_position_ticks;
-                st.runtime_ticks = item.runtime_ticks;
-                st.paused = false;
-                st.current_idx = 0;
-                st.queue_len = 1;
-                st.set_current_item_metadata(item);
-            }
-            self.send_command(PlayerCommand::LoadNew {
-                url,
-                start_pos,
-                item: Box::new(item.clone()),
-            });
-            return;
-        }
-
-        self.stop();
-        self.join();
-
-        let item = item.clone();
-        let is_audio = item.is_audio();
-        let headless = new_is_headless;
-        let item_pos = if is_audio {
-            0
-        } else {
-            item.playback_position_ticks
-        };
-        let start_pos = if is_audio || !item.should_resume() {
-            0.0
-        } else {
-            item.resume_seconds()
-        };
-        let ep = if is_audio { "Audio" } else { "Videos" };
-        let url = format!(
-            "{}/{}/{}/stream?static=true&api_key={}",
-            self.server_url, ep, item.id, self.token
-        );
-        let title = item.display_name();
-
-        let config = MpvRunConfig {
+        let headless = self.headless_for(&client, item.is_audio());
+        self.submit_queue(
+            vec![QueueItem::Emby(Box::new(item.clone()))],
+            0,
+            Some(client),
             headless,
-            use_mpv_config: self.use_mpv_config,
-            no_scripts: self.no_scripts,
-            always_skip_intro: self.always_skip_intro,
-            audio_pipe_path: client.config.audio_pipe_target(),
-            audio_pipe_samplerate: client.config.audio_pipe_samplerate,
-            audio_pipe_bitdepth: client.config.audio_pipe_bitdepth,
-        };
-        let status = self.status.clone();
-        let event_tx = self.event_tx.clone();
-        let ws_tx = self.ws_tx.clone();
-        let subtitle_prefs = self.subtitle_prefs.clone();
-        let shutdown_report_timeout = self.shutdown_report_timeout.clone();
-        let server_url = self.server_url.clone();
-        let token = self.token.clone();
-        let origin = PlaybackOrigin::Standalone;
-        *self.origin.lock().unwrap() = origin;
-        self.current_is_headless.store(headless, Ordering::Relaxed);
-
-        {
-            let mut st = status.lock().unwrap();
-            st.position_ticks = item_pos;
-            st.runtime_ticks = item.runtime_ticks;
-            st.paused = false;
-            st.current_idx = 0;
-            st.queue_len = 1;
-            st.active = true;
-            st.set_current_item_metadata(&item);
-        }
-
-        let (stop_tx, stop_rx) = mpsc::channel::<()>();
-        *self.stop_tx.lock().unwrap() = Some(stop_tx);
-        *self.shutdown_report_timeout.lock().unwrap() = None;
-        let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
-        *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
-        let wakeup_pipe = make_wakeup_pipe();
-        let wakeup_read_fd = wakeup_pipe.as_ref().map(|(r, _)| *r).unwrap_or(-1);
-        let wakeup_write_fd = wakeup_pipe.as_ref().map(|(_, w)| w.0).unwrap_or(-1);
-        *self.wakeup_fd.lock().unwrap() = wakeup_pipe.map(|(_, w)| w);
-        let pre_warmed = self.pre_warmed_mpv.lock().unwrap().take();
-
-        let handle = thread::spawn(move || {
-            let (mpv, startup_pause_for_pipe) = match pre_warmed {
-                Some(w) => w,
-                None => match init_mpv(&config) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        log::error!(target: "player", "{}", e);
-                        return;
-                    }
-                },
-            };
-            init_volume(&mpv, &status, initial_volume);
-
-            if start_pos > 0.0 {
-                let _ = mpv.set_property("start", format!("{:.0}", start_pos));
-            }
-            let title_opt = mpv_title_opt(&title);
-            log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
-            if let Err(e) = mpv.command(
-                "loadfile",
-                &[url.as_str(), "replace", "-1", title_opt.as_str()],
-            ) {
-                log::warn!(target: "player", "loadfile error: {} | url={url} opts={title_opt:?}", mpv_err_str(&e));
-                return;
-            }
-            send_ep_info(&mpv, &item);
-            observe_properties(&mpv, config.use_mpv_config);
-
-            let info = client.get_playback_info(&item.id);
-            {
-                let client = client.clone();
-                let item = item.clone();
-                let media_source_id = info.media_source_id.clone();
-                let session_id = info.session_id.clone();
-                thread::spawn(move || {
-                    let ok = client.report_start(&item, &media_source_id, &session_id);
-                    if !ok {
-                        log::warn!(target: "player", "report_start failed for item={}", item.id);
-                    }
-                });
-            }
-            let reporter = SessionReporter::new(
-                client,
-                ws_tx,
-                ItemId::new(item.id.clone()),
-                info.media_source_id,
-                info.session_id,
-                is_audio,
-                status.clone(),
-            );
-            let progress = spawn_progress_reporter(reporter.clone());
-            let session = PlaybackRun::new(
-                vec![item.clone()],
-                0,
-                origin,
-                reporter,
-                config,
-                startup_pause_for_pipe,
-                status,
-                event_tx,
-                subtitle_prefs,
-                shutdown_report_timeout,
-                server_url,
-                token,
-                info.external_subtitle_urls,
-            );
-            session.run(
-                mpv,
-                stop_rx,
-                cmd_rx,
-                progress,
-                wakeup_read_fd,
-                wakeup_write_fd,
-            );
-        });
-        *self.thread_handle.lock().unwrap() = Some(handle);
+            initial_volume,
+        );
     }
 
     pub fn play_queue(
@@ -426,68 +259,133 @@ impl Player {
         if items.is_empty() {
             return;
         }
-
         let all_audio = items
             .iter()
             .all(|i| i.media_type == "Audio" || i.item_type == "Audio");
-        let new_is_headless = self.headless_for(&client, all_audio);
+        let headless = self.headless_for(&client, all_audio);
+        let queue_items: Vec<QueueItem> = items
+            .into_iter()
+            .map(|i| QueueItem::Emby(Box::new(i)))
+            .collect();
+        self.submit_queue(
+            queue_items,
+            start_idx,
+            Some(client),
+            headless,
+            initial_volume,
+        );
+    }
 
-        // If playlist loop already running and headless state matches, replace in
-        // place (no window close). Mismatched state (e.g. video→audio-only or
-        // vice-versa) always spawns a new process so visibility is correct.
+    /// Item-generic queue submission: replace the current queue with `items`
+    /// and start playback from `start_idx`.  When the player is already
+    /// active with a matching headless state the queue is replaced in place
+    /// via a `SubmitQueue` command; otherwise a fresh mpv process is
+    /// spawned.
+    ///
+    /// `client` provides the Emby session for reporting (and audio-pipe
+    /// config).  Pass `None` for feed-only playback where no Emby session
+    /// is established.
+    ///
+    /// `headless` is computed by the caller — the `play`/`play_queue`
+    /// wrappers derive it from `headless_for`.
+    pub fn submit_queue(
+        &self,
+        items: Vec<QueueItem>,
+        start_idx: usize,
+        client: Option<Arc<EmbyClient>>,
+        headless: bool,
+        initial_volume: u8,
+    ) {
+        if items.is_empty() {
+            return;
+        }
+        let start_idx = start_idx.min(items.len() - 1);
+
+        // Fast path: reuse existing mpv window when headless state matches.
         if self.status.lock().unwrap().active
-            && *self.origin.lock().unwrap() == PlaybackOrigin::Queue
-            && (self.current_is_headless.load(Ordering::Relaxed) == new_is_headless)
+            && (self.current_is_headless.load(Ordering::Relaxed) == headless)
         {
-            let start_idx = start_idx.min(items.len() - 1);
+            let start_item = &items[start_idx];
             {
                 let mut st = self.status.lock().unwrap();
-                st.position_ticks = items[start_idx].playback_position_ticks;
-                st.runtime_ticks = items[start_idx].runtime_ticks;
+                st.position_ticks = start_item.playback_position_ticks();
+                st.runtime_ticks = start_item.runtime_ticks();
                 st.paused = false;
                 st.current_idx = start_idx;
                 st.queue_len = items.len();
-                st.set_current_item_metadata(&items[start_idx]);
+                match start_item {
+                    QueueItem::Emby(emby) => st.set_current_item_metadata(emby),
+                    QueueItem::Feed(entry) => {
+                        st.title = entry.title.clone();
+                        st.art_item_id = entry.guid.clone();
+                    }
+                }
             }
-            self.send_command(PlayerCommand::ReplaceQueue { items, start_idx });
+            self.send_command(PlayerCommand::SubmitQueue { items, start_idx });
             return;
         }
 
+        // Cold start: stop, join, spawn fresh player thread.
         self.stop();
         self.join();
 
-        let start_idx = start_idx.min(items.len() - 1);
-        let headless = new_is_headless;
+        let (audio_pipe_path, audio_pipe_samplerate, audio_pipe_bitdepth, always_skip_intro) =
+            if let Some(ref c) = client {
+                (
+                    c.config.audio_pipe_target(),
+                    c.config.audio_pipe_samplerate,
+                    c.config.audio_pipe_bitdepth,
+                    self.always_skip_intro,
+                )
+            } else {
+                (None, 0, 0, false)
+            };
 
         let config = MpvRunConfig {
             headless,
             use_mpv_config: self.use_mpv_config,
             no_scripts: self.no_scripts,
-            always_skip_intro: self.always_skip_intro,
-            audio_pipe_path: client.config.audio_pipe_target(),
-            audio_pipe_samplerate: client.config.audio_pipe_samplerate,
-            audio_pipe_bitdepth: client.config.audio_pipe_bitdepth,
+            always_skip_intro,
+            audio_pipe_path,
+            audio_pipe_samplerate,
+            audio_pipe_bitdepth,
         };
         let status = self.status.clone();
         let event_tx = self.event_tx.clone();
-        let ws_tx = self.ws_tx.clone();
+        let ws_tx = if client.is_some() {
+            self.ws_tx.clone()
+        } else {
+            None
+        };
         let subtitle_prefs = self.subtitle_prefs.clone();
         let shutdown_report_timeout = self.shutdown_report_timeout.clone();
         let server_url = self.server_url.clone();
         let token = self.token.clone();
-        let origin = PlaybackOrigin::Queue;
+        let origin = if items.len() == 1 {
+            PlaybackOrigin::Standalone
+        } else {
+            PlaybackOrigin::Queue
+        };
         *self.origin.lock().unwrap() = origin;
         self.current_is_headless.store(headless, Ordering::Relaxed);
 
+        // Set initial status for the start item.
+        let start_item = &items[start_idx];
         {
             let mut st = status.lock().unwrap();
-            st.position_ticks = 0;
-            st.runtime_ticks = items[start_idx].runtime_ticks;
+            st.position_ticks = start_item.playback_position_ticks();
+            st.runtime_ticks = start_item.runtime_ticks();
             st.paused = false;
             st.current_idx = start_idx;
             st.queue_len = items.len();
             st.active = true;
-            st.set_current_item_metadata(&items[start_idx]);
+            match start_item {
+                QueueItem::Emby(emby) => st.set_current_item_metadata(emby),
+                QueueItem::Feed(entry) => {
+                    st.title = entry.title.clone();
+                    st.art_item_id = entry.guid.clone();
+                }
+            }
         }
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
@@ -508,229 +406,130 @@ impl Player {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!(target: "player", "{}", e);
+                        status.lock().unwrap().active = false;
+                        let _ = event_tx.send(PlayerEvent::Stopped {
+                            idx: 0,
+                            position_ticks: 0,
+                            played: false,
+                            consume: false,
+                            progress_report_accepted: false,
+                            error: Some(format!("mpv startup failed: {e}")),
+                        });
                         return;
                     }
                 },
             };
             init_volume(&mpv, &status, initial_volume);
 
-            // Load the full playlist into mpv so every index matches items[i] directly.
+            // Load the full playlist into mpv so every index matches
+            // items[i] directly.  Source URL resolution branches on
+            // QueueItem variant; everything else is shared.
             for (i, item) in items.iter().enumerate() {
-                let ep = if item.is_audio() { "Audio" } else { "Videos" };
-                let url = format!(
-                    "{}/{}/{}/stream?static=true&api_key={}",
-                    server_url, ep, item.id, token
-                );
+                let url = mpv_url_for_queue_item(item, &server_url, &token);
                 let mode = if i == 0 { "replace" } else { "append-play" };
                 let title_opt = mpv_title_opt(&item.display_name());
                 if let Err(e) =
                     mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()])
                 {
-                    log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
+                    log::warn!(
+                        target: "player",
+                        "submit_queue loadfile error: {e} | mode={mode} opts={title_opt:?}",
+                    );
                     if i == 0 {
-                        // First file failed: nothing queued, exit cleanly.
                         status.lock().unwrap().active = false;
+                        let _ = event_tx.send(PlayerEvent::Stopped {
+                            idx: 0,
+                            position_ticks: 0,
+                            played: false,
+                            consume: false,
+                            progress_report_accepted: false,
+                            error: Some(format!("failed to load media: {e}")),
+                        });
                         return;
                     }
-                    // Subsequent file failed: skip it, keep playing what loaded.
                 }
             }
-            send_ep_info(&mpv, &items[start_idx]);
+            // send_ep_info only for Emby items.
+            if let Some(emby) = items.get(start_idx).and_then(|i| i.as_emby()) {
+                send_ep_info(&mpv, emby);
+            }
             observe_properties(&mpv, config.use_mpv_config);
 
-            let info = client.get_playback_info(&items[start_idx].id);
-            {
-                let client = client.clone();
-                let item = items[start_idx].clone();
-                let media_source_id = info.media_source_id.clone();
-                let session_id = info.session_id.clone();
-                thread::spawn(move || {
-                    let ok = client.report_start(&item, &media_source_id, &session_id);
-                    if !ok {
-                        log::warn!(target: "player", "report_start failed for item={}", item.id);
+            // Set up reporter based on client availability and item variant.
+            let (reporter, progress) = if let Some(client) = client {
+                if let Some(emby) = items.get(start_idx).and_then(|i| i.as_emby()) {
+                    let info = client.get_playback_info(&emby.id);
+                    let reporter = SessionReporter::new(
+                        client.clone(),
+                        ws_tx,
+                        ItemId::new(emby.id.clone()),
+                        info.media_source_id.clone(),
+                        info.session_id.clone(),
+                        emby.is_audio(),
+                        status.clone(),
+                    );
+                    let progress = spawn_progress_reporter(reporter.clone());
+                    {
+                        let c = client;
+                        let item = emby.clone();
+                        let msid = info.media_source_id;
+                        let sid = info.session_id;
+                        thread::spawn(move || {
+                            let ok = c.report_start(&item, &msid, &sid);
+                            if !ok {
+                                log::warn!(
+                                    target: "player",
+                                    "report_start failed for item={}",
+                                    item.id,
+                                );
+                            }
+                        });
                     }
-                });
-            }
-            let reporter = SessionReporter::new(
-                client,
-                ws_tx,
-                ItemId::new(items[start_idx].id.clone()),
-                info.media_source_id,
-                info.session_id,
-                items[start_idx].is_audio(),
-                status.clone(),
-            );
-            let progress = spawn_progress_reporter(reporter.clone());
-            let session = PlaybackRun::new(
-                items,
-                start_idx,
-                origin,
-                reporter,
-                config,
-                startup_pause_for_pipe,
-                status,
-                event_tx,
-                subtitle_prefs,
-                shutdown_report_timeout,
-                server_url,
-                token,
-                info.external_subtitle_urls,
-            );
-            session.run(
-                mpv,
-                stop_rx,
-                cmd_rx,
-                progress,
-                wakeup_read_fd,
-                wakeup_write_fd,
-            );
-        });
-        *self.thread_handle.lock().unwrap() = Some(handle);
-    }
-
-    /// Append a feed entry to the playback queue and play it immediately.
-    ///
-    /// When the player is already active with a matching headless state,
-    /// sends a `LoadFeed` command to reuse the mpv window — `cmd_load_feed`
-    /// decides whether to append or start fresh based on the queue length.
-    /// When the player is idle or the headless state mismatches, stops,
-    /// joins, and spawns a fresh player thread with a one-item queue.
-    ///
-    /// Feed items bypass all Emby reporting: reporter session IDs are
-    /// cleared so `report_progress` / `report_stopped` become safe no-ops.
-    pub fn play_feed(&self, entry: FeedEntry, headless: bool, initial_volume: u8) {
-        // Validate source early — do not start an mpv process for a
-        // feed entry with no playable URL.
-        if entry.primary_source().is_none() {
-            log::warn!(
-                target: "player",
-                "play_feed rejected: no playable source for guid={} title={}",
-                entry.guid, entry.title
-            );
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: 0,
-                position_ticks: 0,
-                played: false,
-                consume: false,
-                progress_report_accepted: false,
-                error: Some(format!(
-                    "feed entry has no playable source: {}",
-                    entry.title
-                )),
-            });
-            return;
-        }
-
-        // Fast path: reuse existing mpv window if headless state matches.
-        if self.status.lock().unwrap().active
-            && (self.current_is_headless.load(Ordering::Relaxed) == headless)
-        {
-            self.send_command(PlayerCommand::LoadFeed { entry });
-            return;
-        }
-
-        self.stop();
-        self.join();
-
-        let is_audio = entry
-            .mime_type
-            .as_deref()
-            .is_some_and(|m| m.starts_with("audio/"));
-
-        let config = MpvRunConfig {
-            headless,
-            use_mpv_config: self.use_mpv_config,
-            no_scripts: self.no_scripts,
-            always_skip_intro: false,
-            // Feed items play directly through speakers — no audio pipe.
-            audio_pipe_path: None,
-            audio_pipe_samplerate: 0,
-            audio_pipe_bitdepth: 0,
-        };
-        let status = self.status.clone();
-        let event_tx = self.event_tx.clone();
-        let subtitle_prefs = self.subtitle_prefs.clone();
-        let shutdown_report_timeout = self.shutdown_report_timeout.clone();
-        let server_url = self.server_url.clone();
-        let token = self.token.clone();
-        let origin = PlaybackOrigin::Standalone;
-        *self.origin.lock().unwrap() = origin;
-        self.current_is_headless.store(headless, Ordering::Relaxed);
-
-        {
-            let mut st = status.lock().unwrap();
-            st.position_ticks = 0;
-            st.runtime_ticks = entry.duration_ticks.unwrap_or(0) as i64;
-            st.paused = false;
-            st.current_idx = 0;
-            st.queue_len = 1;
-            st.active = true;
-            st.title = entry.title.clone();
-            st.art_item_id = entry.guid.clone();
-        }
-
-        let (stop_tx, stop_rx) = mpsc::channel::<()>();
-        *self.stop_tx.lock().unwrap() = Some(stop_tx);
-        *self.shutdown_report_timeout.lock().unwrap() = None;
-        let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
-        *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
-        let wakeup_pipe = make_wakeup_pipe();
-        let wakeup_read_fd = wakeup_pipe.as_ref().map(|(r, _)| *r).unwrap_or(-1);
-        let wakeup_write_fd = wakeup_pipe.as_ref().map(|(_, w)| w.0).unwrap_or(-1);
-        *self.wakeup_fd.lock().unwrap() = wakeup_pipe.map(|(_, w)| w);
-        let pre_warmed = self.pre_warmed_mpv.lock().unwrap().take();
-
-        let handle = thread::spawn(move || {
-            let (mpv, startup_pause_for_pipe) = match pre_warmed {
-                Some(w) => w,
-                None => match init_mpv(&config) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        log::error!(target: "player", "{}", e);
-                        return;
-                    }
-                },
-            };
-            init_volume(&mpv, &status, initial_volume);
-
-            let queue_item = QueueItem::Feed(entry.clone());
-            let url = mpv_url_for_queue_item(&queue_item, &server_url, &token);
-            let title_opt = mpv_title_opt(&entry.title);
-            log::info!(target: "player", "loadfile url={url} opts={title_opt:?} (feed, fresh)");
-            if let Err(e) = mpv.command(
-                "loadfile",
-                &[url.as_str(), "replace", "-1", title_opt.as_str()],
-            ) {
-                log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
-                return;
-            }
-            // No send_ep_info for feed items.
-            observe_properties(&mpv, config.use_mpv_config);
-
-            // No Emby report_start — create a no-op reporter with empty
-            // session IDs.  clear_session() is a no-op here (already
-            // empty), but makes the intent explicit.
-            let client = Arc::new(EmbyClient::new(crate::config::Config::default()));
-            let reporter = SessionReporter::new(
-                client,
-                None, // no ws_tx
-                ItemId::empty(),
-                MediaSourceId::new(""),
-                EmbySessionId::new(""),
-                is_audio,
-                status.clone(),
-            );
-            reporter.clear_session();
-            // No progress reporter for feeds — use a noop guard.
-            let (noop_stop_tx, _noop_stop_rx) = mpsc::channel();
-            let progress = ProgressGuard {
-                stop_tx: noop_stop_tx,
-                handle: None,
+                    (reporter, progress)
+                } else {
+                    // Feed item with client available — clear session so
+                    // all report calls are no-ops.
+                    let reporter = SessionReporter::new(
+                        client,
+                        ws_tx,
+                        ItemId::empty(),
+                        MediaSourceId::new(""),
+                        EmbySessionId::new(""),
+                        items[start_idx].is_audio(),
+                        status.clone(),
+                    );
+                    reporter.clear_session();
+                    let (noop_stop_tx, _noop_stop_rx) = mpsc::channel();
+                    let progress = ProgressGuard {
+                        stop_tx: noop_stop_tx,
+                        handle: None,
+                    };
+                    (reporter, progress)
+                }
+            } else {
+                // No client (feed-only): no-op reporter.
+                let client = Arc::new(EmbyClient::new(crate::config::Config::default()));
+                let reporter = SessionReporter::new(
+                    client,
+                    None,
+                    ItemId::empty(),
+                    MediaSourceId::new(""),
+                    EmbySessionId::new(""),
+                    items[start_idx].is_audio(),
+                    status.clone(),
+                );
+                reporter.clear_session();
+                let (noop_stop_tx, _noop_stop_rx) = mpsc::channel();
+                let progress = ProgressGuard {
+                    stop_tx: noop_stop_tx,
+                    handle: None,
+                };
+                (reporter, progress)
             };
 
             let session = PlaybackRun::new_from_queue_items(
-                vec![QueueItem::Feed(entry)],
-                0,
+                items,
+                start_idx,
                 origin,
                 reporter,
                 config,

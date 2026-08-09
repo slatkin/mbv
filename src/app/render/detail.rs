@@ -299,8 +299,7 @@ impl App {
         let playback = self.effective_playback_state();
         let now_playing_id: Option<String> = if playback.active {
             self.playback_queue()
-                .items
-                .get(playback.active_idx)
+                .emby_item_at(playback.active_idx)
                 .map(|i| i.id.clone())
         } else {
             None

@@ -185,8 +185,7 @@ impl App {
             let playback = self.effective_playback_state();
             playback.active.then(|| {
                 self.playback_queue()
-                    .items
-                    .get(playback.active_idx)
+                    .emby_item_at(playback.active_idx)
                     .map(|item| item.id.clone())
             })
         }

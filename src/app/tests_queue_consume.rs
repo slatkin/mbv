@@ -5,8 +5,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 #[test]
 fn stopped_progress_updates_the_queue_model_not_just_the_shadow() {
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(2);
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
     let slot_id = app.player_tab.queue.slots()[0].slot_id;
 
     app.handle_player_event(PlayerEvent::Stopped {
@@ -29,8 +29,8 @@ fn stopped_progress_updates_the_queue_model_not_just_the_shadow() {
 #[test]
 fn stopped_with_accepted_report_marks_pending_sync_and_clears_active_slot() {
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(1);
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab
+        .set_items(make_items(1), app.player_tab.queue_cursor);
     let slot_id = app.player_tab.queue.slots()[0].slot_id;
     app.handle_player_event(PlayerEvent::TrackChanged(0));
     {
@@ -68,8 +68,7 @@ fn stopped_consume_removes_the_right_slot_occurrence() {
     let mut items = make_items(3);
     items[0].id = "dup".into();
     items[2].id = "dup".into();
-    app.player_tab.items = items;
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     let first_dup = app.player_tab.queue.slots()[0].slot_id;
     let second_dup = app.player_tab.queue.slots()[2].slot_id;
     app.client.lock().unwrap().config.consume_videos = true;
@@ -102,8 +101,8 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
     // must bypass that gate via remove_active_slot_confirmed.
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(3);
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab
+        .set_items(make_items(3), app.player_tab.queue_cursor);
     // TrackChanged(0) activates slot 0, mirroring real playback where the
     // model's active_slot_id becomes Some before the delete.
     app.handle_player_event(PlayerEvent::TrackChanged(0));
@@ -122,7 +121,7 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
     app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
 
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         2,
         "confirming the delete must remove the active now-playing slot immediately"
     );
@@ -146,7 +145,7 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
     });
 
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         2,
         "the Stopped event must not remove anything a second time"
     );
@@ -165,7 +164,8 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
 fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(1);
+    app.player_tab
+        .set_items(make_items(1), app.player_tab.queue_cursor);
     app.confirm_modal = Some(ConfirmModal {
         title: String::new(),
         message: String::new(),
@@ -175,7 +175,7 @@ fn confirmed_delete_with_stale_position_does_not_mark_a_pending_delete() {
 
     app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
 
-    assert_eq!(app.player_tab.items.len(), 1);
+    assert_eq!(app.player_tab.emby_items().len(), 1);
     assert!(app.pending_delete_slot.is_none());
     assert!(!app.queue_dirty);
 }
@@ -189,7 +189,7 @@ fn stopped_path_consumes_the_last_audio_item_in_the_queue() {
     // consume_videos already works for a video's Stopped-path removal.
     let items = make_audio_items(1);
     let mut app = make_app_stub();
-    app.player_tab.items = items;
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     app.client.lock().unwrap().config.consume_audio = true;
 
     app.handle_player_event(PlayerEvent::Stopped {
@@ -202,7 +202,7 @@ fn stopped_path_consumes_the_last_audio_item_in_the_queue() {
     });
 
     assert!(
-        app.player_tab.items.is_empty(),
+        app.player_tab.emby_items().is_empty(),
         "the last audio item should be consumed via the Stopped-path when consume_audio is on"
     );
 }
@@ -212,7 +212,7 @@ fn stopped_path_does_not_consume_audio_when_consume_audio_is_off() {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_audio_items(1);
     let mut app = make_app_stub();
-    app.player_tab.items = items;
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     app.client.lock().unwrap().config.consume_audio = false;
 
     app.handle_player_event(PlayerEvent::Stopped {
@@ -225,7 +225,7 @@ fn stopped_path_does_not_consume_audio_when_consume_audio_is_off() {
     });
 
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         1,
         "consume_audio is off, so the item must stay in the queue"
     );
@@ -237,15 +237,14 @@ fn track_completed_progress_follows_slot_after_earlier_removal() {
     // then a completion event for the player's post-removal index of b
     // (0) arrives. Progress must land on slot b regardless of the churn.
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(3);
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab
+        .set_items(make_items(3), app.player_tab.queue_cursor);
     let slot_b = app.player_tab.queue.slots()[1].slot_id;
     let slot_a = app.player_tab.queue.slots()[0].slot_id;
     assert!(matches!(
         app.player_tab.queue.remove_slot(slot_a),
         RemoveSlotResult::Removed(_)
     ));
-    app.player_tab.sync_items_from_queue_model();
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         idx: 0,
@@ -262,8 +261,8 @@ fn track_completed_progress_follows_slot_after_earlier_removal() {
 #[test]
 fn track_completed_for_removed_slot_does_not_mutate_queue() {
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(2);
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
     let ids_before: Vec<_> = app
         .player_tab
         .queue
@@ -295,8 +294,8 @@ fn track_completed_for_removed_slot_does_not_mutate_queue() {
 #[test]
 fn track_changed_activates_the_current_slot() {
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(3);
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab
+        .set_items(make_items(3), app.player_tab.queue_cursor);
     let slot_b = app.player_tab.queue.slots()[1].slot_id;
 
     app.handle_player_event(PlayerEvent::TrackChanged(1));
@@ -312,8 +311,8 @@ fn track_changed_activates_the_current_slot() {
 fn track_changed_activates_slot_and_consumes_deferred_slot() {
     // [a, b, c]; complete+consume a (deferred), then TrackChanged to b.
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(3);
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab
+        .set_items(make_items(3), app.player_tab.queue_cursor);
     let slot_b = app.player_tab.queue.slots()[1].slot_id;
     app.client.lock().unwrap().config.consume_videos = true;
 
@@ -339,7 +338,7 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.player_tab.items = items;
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
@@ -358,7 +357,7 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
     app.handle_player_event(PlayerEvent::TrackChanged(1));
 
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         1,
         "consumed item should be removed from the local queue"
     );
@@ -381,7 +380,7 @@ fn consuming_a_video_resyncs_the_players_own_queue() {
     // JumpTo, next natural advance) then lands on the wrong item.
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.player_tab.items = items;
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     app.client.lock().unwrap().config.consume_videos = true;
     let cmd_rx = app.player.spy_on_commands();
 
@@ -409,7 +408,7 @@ fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.player_tab.items = items;
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
@@ -427,7 +426,7 @@ fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
     app.handle_player_event(PlayerEvent::TrackChanged(1));
 
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         1,
         "consumed item should be removed from the local queue"
     );
@@ -466,12 +465,12 @@ fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_
     app.handle_player_event(PlayerEvent::TrackChanged(1));
 
     assert_eq!(
-        app.remote_player_tab.as_ref().unwrap().items.len(),
+        app.remote_player_tab.as_ref().unwrap().emby_items().len(),
         1,
         "consumed item should still be removed from the remote queue"
     );
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         local_items.len(),
         "consume on a direct-remote queue must not touch the unrelated local playlist"
     );
@@ -487,7 +486,7 @@ fn consuming_an_audio_item_without_autosave_marks_queue_dirty() {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_audio_items(2);
     let mut app = make_app_stub();
-    app.player_tab.items = items;
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
@@ -509,7 +508,7 @@ fn consuming_an_audio_item_without_autosave_marks_queue_dirty() {
     app.handle_player_event(PlayerEvent::TrackChanged(1));
 
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         1,
         "consumed audio item should be removed from the local queue"
     );
@@ -526,7 +525,7 @@ fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirt
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_audio_items(2);
     let mut app = make_app_stub();
-    app.player_tab.items = items;
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
@@ -548,7 +547,7 @@ fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirt
     app.handle_player_event(PlayerEvent::TrackChanged(1));
 
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         1,
         "consumed audio item should be removed from the local queue"
     );
@@ -564,7 +563,7 @@ fn consume_videos_flag_does_not_consume_audio_items() {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_audio_items(2);
     let mut app = make_app_stub();
-    app.player_tab.items = items;
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     app.client.lock().unwrap().config.consume_videos = true;
     app.client.lock().unwrap().config.consume_audio = false;
 
@@ -578,7 +577,7 @@ fn consume_videos_flag_does_not_consume_audio_items() {
     app.handle_player_event(PlayerEvent::TrackChanged(1));
 
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         2,
         "consume_videos must not remove an audio item; consume_audio is off"
     );
@@ -589,7 +588,7 @@ fn consume_audio_flag_does_not_consume_video_items() {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_items(2);
     let mut app = make_app_stub();
-    app.player_tab.items = items;
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     app.client.lock().unwrap().config.consume_audio = true;
     app.client.lock().unwrap().config.consume_videos = false;
 
@@ -603,7 +602,7 @@ fn consume_audio_flag_does_not_consume_video_items() {
     app.handle_player_event(PlayerEvent::TrackChanged(1));
 
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         2,
         "consume_audio must not remove a video item; consume_videos is off"
     );

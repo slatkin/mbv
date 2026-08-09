@@ -429,7 +429,7 @@ impl App {
             // user can browse locally while the daemon plays elsewhere.
             (
                 PlayerTab::default(),
-                Some(PlayerTab::new(remote_items, remote_cursor)),
+                Some(PlayerTab::from_emby_items(remote_items, remote_cursor)),
             )
         };
         let mut app = Self::build(AppInit {

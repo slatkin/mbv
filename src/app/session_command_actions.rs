@@ -40,10 +40,10 @@ impl App {
         ) {
             self.remote_tracker = Some(tracker);
             let queue = self.displayed_queue();
-            let exact_queue = queue.items.len() == items.len()
-                && queue.items.iter().zip(items).all(|(visible, submitted)| {
-                    visible.id == submitted.id
-                        && visible.playlist_item_id == submitted.playlist_item_id
+            let exact_queue = queue.total_queue_len() == items.len()
+                && queue.slots().iter().zip(items).all(|(slot, submitted)| {
+                    slot.item.id() == submitted.id.as_str()
+                        && slot.item.playlist_item_id() == submitted.playlist_item_id.as_str()
                 });
             if exact_queue {
                 let occurrence_slots: std::collections::HashMap<_, _> = queue
@@ -116,7 +116,6 @@ impl App {
     }
 
     pub(super) fn tracked_occurrence_at_queue_index(&mut self, index: usize) -> Option<u64> {
-        self.player_tab.sync_queue_model_from_items_if_needed();
         let slot_id = self.player_tab.resolve_slot_at(index)?;
         let projection = self.remote_queue_projection.as_ref()?;
         (projection.queue_lineage == self.remote_queue_lineage)
@@ -251,12 +250,22 @@ impl App {
         // already-selected slot afterward and must never choose a different
         // target_idx or payload.
         let Some((target_idx, start_ticks)) =
-            remote_jump_target(&self.player_tab.items, current_remote_id, delta)
+            remote_jump_target(&self.player_tab, current_remote_id, delta)
         else {
             self.do_session_command(move |c| c.session_transport(&id, fallback_cmd));
             return;
         };
-        let items = self.player_tab.items.clone();
+        let emby_items = self.player_tab.emby_items();
+        // Remap the canonical queue index to the Emby-only projection index
+        // used by the session API.
+        let emby_start = self
+            .player_tab
+            .queue
+            .slots()
+            .iter()
+            .take(target_idx)
+            .filter(|s| s.item.as_emby().is_some())
+            .count();
         if self.remote_tracker.is_some() {
             if let Some(target) = self.tracked_occurrence_at_queue_index(target_idx) {
                 let intent = if delta > 0 {
@@ -272,12 +281,12 @@ impl App {
                     target_idx
                 );
             }
-            let item_ids: Vec<String> = items.iter().map(|item| item.id.clone()).collect();
+            let item_ids: Vec<String> = emby_items.iter().map(|item| item.id.clone()).collect();
             self.do_reconciliation_session_command(&id.clone(), move |client| {
-                client.session_play_items(&id, &item_ids, target_idx, start_ticks)
+                client.session_play_items(&id, &item_ids, emby_start, start_ticks)
             });
         } else {
-            self.submit_attached_sequence(&id, &items, target_idx);
+            self.submit_attached_sequence(&id, &emby_items, emby_start);
         }
     }
 
@@ -384,16 +393,26 @@ impl App {
 /// and apply the delta. Tracking must never change this choice, so command
 /// construction routes through this established untracked path first.
 pub(super) fn remote_jump_target(
-    items: &[mbv_core::api::EmbyItem],
+    player_tab: &crate::app::PlayerTab,
     now_playing_item_id: Option<&str>,
     delta: i64,
 ) -> Option<(usize, i64)> {
-    let current =
-        now_playing_item_id.and_then(|rid| items.iter().position(|item| item.id == rid))?;
+    let current = now_playing_item_id.and_then(|rid| {
+        player_tab
+            .queue
+            .slots()
+            .iter()
+            .position(|s| s.item.id() == rid)
+    })?;
     let t = current as i64 + delta;
-    if t < 0 || (t as usize) >= items.len() {
+    if t < 0 || (t as usize) >= player_tab.total_queue_len() {
         return None;
     }
     let t = t as usize;
-    Some((t, items[t].playback_position_ticks))
+    Some((
+        t,
+        player_tab
+            .emby_item_at(t)
+            .map_or(0, |i| i.playback_position_ticks),
+    ))
 }

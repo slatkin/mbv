@@ -3,8 +3,7 @@ fn handle_ws(
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
     audio_only: bool,
-    items: &mut Vec<EmbyItem>,
-    cursor: &mut usize,
+    queue: &mut PlaybackQueue,
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
@@ -33,26 +32,19 @@ fn handle_ws(
                 return;
             }
             if let Some(reason) = audio_only_rejection(audio_only, &fetched) {
-                // Emby-websocket-driven remote control has no TUI on the other end
-                // to show a rejection to — log only, per #90's scope.
                 log::warn!(target: "daemon", "rejecting websocket play request: {reason}");
                 return;
             }
-            // Clamp start_index in case the server sends an out-of-range value
             let start_idx = start_index.min(fetched.len().saturating_sub(1));
-            *items = fetched.clone();
-            *cursor = start_idx;
+            let queue_items: Vec<QueueItem> = fetched
+                .iter()
+                .cloned()
+                .map(|item| QueueItem::Emby(Box::new(item)))
+                .collect();
+            *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
             *source = crate::config::QueueSource::Remote;
             take_authority_for_emby_remote(ctrl_clients);
-            broadcast_queue_state(
-                ctrl_clients,
-                player,
-                shared_queue,
-                &fetched,
-                start_idx,
-                source,
-                &[],
-            );
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
             if fetched.len() == 1 {
                 let mut play_item = fetched[0].clone();
                 if start_position_ticks > 0 {
@@ -61,7 +53,6 @@ fn handle_ws(
                 let c = Arc::new(client.lock().unwrap().clone());
                 player.play(&play_item, c, 100);
             } else {
-                // Apply StartPositionTicks to the starting item
                 let mut start_item = fetched[start_idx].clone();
                 if start_position_ticks > 0 {
                     start_item.playback_position_ticks = start_position_ticks;
@@ -74,7 +65,7 @@ fn handle_ws(
         }
         WsEvent::Stop => {
             player.stop();
-            if !items.is_empty() {
+            if !queue.is_empty() {
                 take_authority_for_emby_remote(ctrl_clients);
             }
         }

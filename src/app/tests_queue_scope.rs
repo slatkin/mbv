@@ -6,7 +6,7 @@ use mbv_core::ctrl::{CtrlCmd, WireCommand};
 #[test]
 fn stale_remote_queue_scope_falls_back_to_local_when_not_in_direct_remote_mode() {
     let mut app = make_app_stub();
-    app.remote_player_tab = Some(PlayerTab::new(make_items(2), 1));
+    app.remote_player_tab = Some(PlayerTab::from_emby_items(make_items(2), 1));
     app.queue_scope = QueueScope::Remote;
 
     assert_eq!(app.visible_queue_scope(), QueueScope::Local);
@@ -31,7 +31,7 @@ fn queue_scope_resolution_matrix_without_remote_queue() {
 #[test]
 fn queue_scope_resolution_matrix_stale_remote_scope_without_direct_remote() {
     let mut app = make_app_stub();
-    app.remote_player_tab = Some(PlayerTab::new(make_items(2), 0));
+    app.remote_player_tab = Some(PlayerTab::from_emby_items(make_items(2), 0));
     app.queue_scope = QueueScope::Remote;
 
     assert!(!app.has_direct_remote_queue());
@@ -203,7 +203,7 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
 
     assert_eq!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -217,7 +217,7 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
         app.remote_player_tab
             .as_ref()
             .unwrap()
-            .items
+            .emby_items()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -248,7 +248,7 @@ fn clearing_a_local_daemon_queue_replaces_the_daemon_queue_with_empty() {
 
     app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
 
-    assert!(app.player_tab.items.is_empty());
+    assert!(app.player_tab.emby_items().is_empty());
     assert!(cmd_rx.try_iter().any(|cmd| {
         matches!(
             cmd,

@@ -1,8 +1,7 @@
-use super::feed_parse::{fetch_and_parse_entries, infer_feed_kind_from_mime};
+use super::feed_parse::fetch_and_parse_entries;
 use super::notify_actions::ToastSeverity;
 use super::types_feed_tab::FeedTabRefreshResult;
 use super::App;
-use mbv_core::config::FeedKind;
 use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
 
 impl App {
@@ -103,8 +102,9 @@ impl App {
         for (idx, sub) in self.feed_tab.subscriptions.iter().enumerate() {
             let url = sub.url.clone();
             let tx = tx.clone();
+            let kind = sub.kind;
             std::thread::spawn(move || {
-                let result = fetch_and_parse_entries(&url);
+                let result = fetch_and_parse_entries(&url, kind);
                 let _ = tx.send(FeedTabRefreshResult {
                     subscription_index: idx,
                     entries: result,
@@ -172,17 +172,15 @@ impl App {
 
     /// Play the entry at the current cursor (§5.5/§5.6). A no-op for an
     /// empty list, an out-of-range cursor, or an entry with no playable
-    /// enclosure/link -- `play_feed` in the player layer re-validates the
-    /// source and fails safely, but checking here avoids spawning mpv for
-    /// a doomed play and gives the user an explanatory toast instead.
+    /// enclosure/link -- the source validation below avoids spawning mpv
+    /// for a doomed play and gives the user an explanatory toast instead.
     ///
-    /// Local scope only: the entry is appended to both the application
-    /// `PlaybackQueue` (as `QueueItem::Feed`) and the parallel
-    /// `PlayerTab.feed_items` list so the queue panel renders it immediately
-    /// with correct cursor targeting and the now-playing title resolves.
-    /// Remote scope gets its feed tail from the daemon's `LoadFeed` ->
-    /// `QueueUpdated` broadcast, so setting it here would just be
-    /// overwritten.
+    /// Routes through the same `PlayerProxy::submit_queue` boundary as
+    /// library-item Play: the entry is appended to the canonical
+    /// `PlaybackQueue`, the cursor is set, and the full queue is submitted
+    /// to the player.  For remote players this sends `UnifiedQueueReplace`
+    /// when the daemon supports the capability; for local players it
+    /// replaces the mpv playlist in place or cold-starts a fresh process.
     pub(super) fn feed_tab_play_selected(&mut self) {
         let Some(entry) = self
             .feed_tab
@@ -199,21 +197,18 @@ impl App {
             );
             return;
         }
-        let headless = infer_feed_kind_from_mime(entry.mime_type.as_deref()) == FeedKind::Audio;
+        let headless = QueueItem::Feed(entry.clone()).is_audio();
         if !self.player.is_remote() {
             let active = self.player.status.lock().unwrap().active;
             let queue = self.playback_queue_mut();
-            queue.feed_items = vec![entry.clone()];
             // On a cold (inactive) player the player will spawn a fresh
-            // thread with only this Feed entry, so clear any stale Emby
-            // items and rebuild the PlaybackQueue model to match.
+            // thread with only this Feed entry, so clear any stale items.
             // On an active player the Feed is appended to the existing
             // queue and the old items stay.
             if !active {
-                queue.items.clear();
                 queue.queue = PlaybackQueue::from_items(Vec::new(), None);
             }
-            // Append to the PlaybackQueue model so the queue panel, cursor,
+            // Append to the canonical queue so the queue panel, cursor,
             // and now-playing title all resolve the Feed entry correctly.
             queue.queue.append(QueueItem::Feed(entry.clone()));
             let unified_idx = queue.queue.slots().len() - 1;
@@ -222,6 +217,45 @@ impl App {
                 .queue
                 .set_active_slot(queue.queue.slots()[unified_idx].slot_id);
         }
-        self.player.play_feed(entry, headless, self.ui_volume);
+        // Submit through the same unified path as library Play: the full
+        // canonical queue (including any pre-existing items) is handed to
+        // the player so its internal playlist matches the PlayerTab.
+        let all_items = self.playback_queue().all_queue_items();
+        let start_idx = self.playback_queue().queue_cursor;
+        let c = std::sync::Arc::new(self.client.lock().unwrap().clone());
+        self.player
+            .submit_queue(all_items, start_idx, Some(c), headless, self.ui_volume);
+    }
+
+    /// Enqueue the entry at the current cursor into the canonical queue
+    /// without starting playback, using the same append path as library
+    /// enqueue.
+    pub(super) fn feed_tab_enqueue_selected(&mut self) {
+        let Some(entry) = self
+            .feed_tab
+            .visible_entries()
+            .get(self.feed_tab.cursor)
+            .cloned()
+        else {
+            return;
+        };
+        if entry.primary_source().is_none() {
+            self.flash(
+                "Feed entry has no playable source".into(),
+                ToastSeverity::Error,
+            );
+            return;
+        }
+        let name = entry.title.clone();
+        let scope = self.visible_queue_scope();
+        self.queue_for_scope_mut(scope)
+            .queue
+            .append(QueueItem::Feed(entry));
+        if self.local_queue_metadata_applies(scope) {
+            self.queue_dirty = true;
+        }
+        self.flash(format!("Added: {name}"), ToastSeverity::Success);
+        self.persist_local_queue_state_if_needed(scope);
+        self.retire_remote_tracking(true);
     }
 }

@@ -155,7 +155,7 @@ impl App {
         scope: QueueScope,
         fetched_items: Vec<EmbyItem>,
     ) -> RefreshMergeResult {
-        let queue_len = self.queue_for_scope(scope).items.len();
+        let queue_len = self.queue_for_scope(scope).total_queue_len();
         let sync_player_prunes =
             scope == self.playback_target_queue_scope() && !self.has_direct_remote_queue();
         let active_index = if scope == self.playback_target_queue_scope() {
@@ -250,7 +250,7 @@ impl App {
             QueueMutationResult::Applied(slot) => slot,
             QueueMutationResult::NotFound => return None,
         };
-        self.playback_queue_mut().sync_items_from_queue_model();
+        self.playback_queue_mut().clamp_cursor();
         self.player.send_command(PlayerCommand::QueueRemove(idx));
         Some(removed.item.id().to_string())
     }

@@ -2,6 +2,7 @@ use super::super::ui_util::*;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
 use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -270,15 +271,11 @@ impl App {
             return;
         }
 
-        let (items, feed_items, cursor) = {
+        let (slots_snapshot, cursor) = {
             let queue = self.displayed_queue();
-            (
-                queue.items.clone(),
-                queue.feed_items.clone(),
-                queue.queue_cursor,
-            )
+            (queue.slots().to_vec(), queue.queue_cursor)
         };
-        let n = items.len() + feed_items.len();
+        let n = slots_snapshot.len();
         if n == 0 {
             self.queue_scroll = 0;
             f.render_widget(
@@ -295,21 +292,15 @@ impl App {
 
         let playback = self.displayed_queue_playback_state();
 
-        // Flat display rows, tracks then the feed tail — the queue list has
-        // no grouping/headers.
-        let display = build_queue_rows(&items, &feed_items);
+        // Flat display rows from the canonical queue — one row per slot.
+        let display = build_queue_rows(&slots_snapshot);
         let total = display.len();
         let visible = area.height as usize;
 
-        // Visual row of the cursor item.  The cursor lives in unified
-        // index space: 0..items.len() for Emby tracks, then
-        // items.len()..items.len()+feed_items.len() for Feed entries.
+        // Visual row of the cursor item.  The cursor is a slot index.
         let cursor_row = display
             .iter()
-            .position(|r| match r {
-                QueueRow::Track { idx } => *idx == cursor,
-                QueueRow::Feed { feed_idx } => items.len() + feed_idx == cursor,
-            })
+            .position(|r| matches!(r, QueueRow::Slot { slot_idx } if *slot_idx == cursor))
             .unwrap_or(0);
         let max_offset = total.saturating_sub(visible);
         self.queue_scroll = self.queue_scroll.min(max_offset);
@@ -337,13 +328,13 @@ impl App {
                 break;
             }
             match entry {
-                QueueRow::Track { idx } => {
-                    let i = *idx;
+                QueueRow::Slot { slot_idx } => {
+                    let slot_idx = *slot_idx;
                     let indent: usize = 2;
                     let track_content_w = render_w.saturating_sub(2);
-                    let item = &items[i];
-                    let is_active = i == playback.active_idx && playback.active;
-                    let is_cursor = i == cursor && focused;
+                    let slot = &slots_snapshot[slot_idx];
+                    let is_active = playback.active && playback.active_idx == slot_idx;
+                    let is_cursor = slot_idx == cursor && focused;
 
                     let fg = if is_cursor || focused {
                         palette::WHITE
@@ -352,174 +343,165 @@ impl App {
                     };
                     let row_style = Style::default().fg(fg);
 
-                    let (pt, rt) = if is_active {
-                        let pos = if playback.position_ticks > 0 {
-                            playback.position_ticks
-                        } else {
-                            item.playback_position_ticks
-                        };
-                        (pos, playback.runtime_ticks)
-                    } else {
-                        (item.playback_position_ticks, item.runtime_ticks)
-                    };
-                    let pct_str = if item.is_audio() {
-                        String::new()
-                    } else {
-                        fmt_playback_pct(pt, rt)
-                    };
+                    match &slot.item {
+                        QueueItem::Emby(item) => {
+                            let (pt, rt) = if is_active {
+                                let pos = if playback.position_ticks > 0 {
+                                    playback.position_ticks
+                                } else {
+                                    item.playback_position_ticks
+                                };
+                                (pos, playback.runtime_ticks)
+                            } else {
+                                (item.playback_position_ticks, item.runtime_ticks)
+                            };
+                            let pct_str = if item.is_audio() {
+                                String::new()
+                            } else {
+                                fmt_playback_pct(pt, rt)
+                            };
 
-                    let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
-                    let dur = if len_secs > 0 {
-                        fmt_duration_short(len_secs)
-                    } else {
-                        String::new()
-                    };
-                    let dim_color = if focused {
-                        palette::SUBTLE
-                    } else {
-                        palette::MUTED
-                    };
+                            let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
+                            let dur = if len_secs > 0 {
+                                fmt_duration_short(len_secs)
+                            } else {
+                                String::new()
+                            };
+                            let dim_color = if focused {
+                                palette::SUBTLE
+                            } else {
+                                palette::MUTED
+                            };
 
-                    // Title truncated to leave room for indent, the inline
-                    // progress percent (always reserved when present, even once
-                    // the title itself is cut off), the right-aligned duration,
-                    // and quiet columns.
-                    let dur_visible = show_length && !dur.is_empty();
-                    let pct_visible = !pct_str.is_empty();
-                    let pct_w = if pct_visible { 1 + pct_str.width() } else { 0 };
-                    let right_w = if dur_visible { dur.width() } else { 0 };
-                    let title_w = track_content_w
-                        .saturating_sub(indent + pct_w + right_w + QUEUE_TITLE_QUIET_COLUMNS);
-                    let title = trunc_str(&item.name, title_w);
+                            let dur_visible = show_length && !dur.is_empty();
+                            let pct_visible = !pct_str.is_empty();
+                            let pct_w = if pct_visible { 1 + pct_str.width() } else { 0 };
+                            let right_w = if dur_visible { dur.width() } else { 0 };
+                            let title_w = track_content_w.saturating_sub(
+                                indent + pct_w + right_w + QUEUE_TITLE_QUIET_COLUMNS,
+                            );
+                            let title = trunc_str(&item.name, title_w);
 
-                    if is_cursor {
-                        f.render_widget(
-                            Block::default().style(Style::default().bg(palette::BG_GREEN)),
-                            Rect {
-                                x: area.x,
-                                y: area.y + line_offset,
-                                width: area.width,
-                                height: 1,
-                            },
-                        );
-                    }
+                            if is_cursor {
+                                f.render_widget(
+                                    Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                                    Rect {
+                                        x: area.x,
+                                        y: area.y + line_offset,
+                                        width: area.width,
+                                        height: 1,
+                                    },
+                                );
+                            }
 
-                    // The now-playing row's title is always aqua, focused or
-                    // not. Other inactive rows match the dimmed duration color
-                    // when the queue panel is unfocused, instead of standing
-                    // out in the brighter unfocused row color.
-                    let title_color = if is_active {
-                        palette::AQUA
-                    } else if !focused {
-                        dim_color
-                    } else {
-                        fg
-                    };
+                            let title_color = if is_active {
+                                palette::AQUA
+                            } else if !focused {
+                                dim_color
+                            } else {
+                                fg
+                            };
 
-                    let mut spans: Vec<Span> = Vec::new();
-                    if indent > 0 {
-                        if is_cursor {
-                            spans.push(Span::styled("▍", Style::default().fg(palette::AQUA)));
-                            spans.push(Span::raw(" "));
-                        } else {
-                            spans.push(Span::raw("  "));
+                            let mut spans: Vec<Span> = Vec::new();
+                            if indent > 0 {
+                                if is_cursor {
+                                    spans.push(Span::styled(
+                                        "▍",
+                                        Style::default().fg(palette::AQUA),
+                                    ));
+                                    spans.push(Span::raw(" "));
+                                } else {
+                                    spans.push(Span::raw("  "));
+                                }
+                            }
+                            let title_w_actual = title.width();
+                            spans.push(Span::styled(title, Style::default().fg(title_color)));
+                            if pct_visible {
+                                spans.push(Span::raw(" "));
+                                spans.push(Span::styled(
+                                    pct_str,
+                                    Style::default().fg(palette::FOAM),
+                                ));
+                            }
+
+                            if dur_visible {
+                                let used = indent + title_w_actual + pct_w;
+                                let pad = track_content_w.saturating_sub(used + right_w);
+                                spans.push(Span::raw(" ".repeat(pad)));
+                                spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));
+                            }
+
+                            list_items.push(ListItem::new(Line::from(spans)).style(row_style));
+                            layout.queue_row_map.push(Some(slot_idx));
+                            line_offset += 1;
+                        }
+                        QueueItem::Feed(entry) => {
+                            let len_secs =
+                                entry.duration_ticks.unwrap_or(0) as i64 / TICKS_PER_SECOND;
+                            let dur = if len_secs > 0 {
+                                fmt_duration_short(len_secs)
+                            } else {
+                                String::new()
+                            };
+                            let dim_color = if focused {
+                                palette::SUBTLE
+                            } else {
+                                palette::MUTED
+                            };
+
+                            let dur_visible = show_length && !dur.is_empty();
+                            let right_w = if dur_visible { dur.width() } else { 0 };
+                            let title_w = track_content_w
+                                .saturating_sub(indent + right_w + QUEUE_TITLE_QUIET_COLUMNS);
+                            let title = trunc_str(&entry.title, title_w);
+
+                            if is_cursor {
+                                f.render_widget(
+                                    Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                                    Rect {
+                                        x: area.x,
+                                        y: area.y + line_offset,
+                                        width: area.width,
+                                        height: 1,
+                                    },
+                                );
+                            }
+
+                            let title_color = if is_active {
+                                palette::AQUA
+                            } else if !focused {
+                                dim_color
+                            } else {
+                                fg
+                            };
+
+                            let mut spans: Vec<Span> = Vec::new();
+                            if indent > 0 {
+                                if is_cursor {
+                                    spans.push(Span::styled(
+                                        "▍",
+                                        Style::default().fg(palette::AQUA),
+                                    ));
+                                    spans.push(Span::raw(" "));
+                                } else {
+                                    spans.push(Span::raw("  "));
+                                }
+                            }
+                            let title_w_actual = title.width();
+                            spans.push(Span::styled(title, Style::default().fg(title_color)));
+
+                            if dur_visible {
+                                let used = indent + title_w_actual;
+                                let pad = track_content_w.saturating_sub(used + right_w);
+                                spans.push(Span::raw(" ".repeat(pad)));
+                                spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));
+                            }
+
+                            list_items.push(ListItem::new(Line::from(spans)).style(row_style));
+                            layout.queue_row_map.push(Some(slot_idx));
+                            line_offset += 1;
                         }
                     }
-                    let title_w_actual = title.width();
-                    spans.push(Span::styled(title, Style::default().fg(title_color)));
-                    if pct_visible {
-                        spans.push(Span::raw(" "));
-                        spans.push(Span::styled(pct_str, Style::default().fg(palette::FOAM)));
-                    }
-
-                    if dur_visible {
-                        let used = indent + title_w_actual + pct_w;
-                        let pad = track_content_w.saturating_sub(used + right_w);
-                        spans.push(Span::raw(" ".repeat(pad)));
-                        spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));
-                    }
-
-                    list_items.push(ListItem::new(Line::from(spans)).style(row_style));
-                    layout.queue_row_map.push(Some(i));
-                    line_offset += 1;
-                }
-                QueueRow::Feed { feed_idx } => {
-                    let feed_idx = *feed_idx;
-                    let indent: usize = 2;
-                    let track_content_w = render_w.saturating_sub(2);
-                    let entry = &feed_items[feed_idx];
-                    let is_active =
-                        playback.active && playback.active_idx == items.len() + feed_idx;
-                    let is_cursor = focused && cursor == items.len() + feed_idx;
-
-                    let fg = if is_cursor || focused {
-                        palette::WHITE
-                    } else {
-                        palette::QUEUE_UNFOCUSED_FG
-                    };
-                    let row_style = Style::default().fg(fg);
-
-                    // Feeds have no playback-progress state; only duration.
-                    let len_secs = entry.duration_ticks.unwrap_or(0) as i64 / TICKS_PER_SECOND;
-                    let dur = if len_secs > 0 {
-                        fmt_duration_short(len_secs)
-                    } else {
-                        String::new()
-                    };
-                    let dim_color = if focused {
-                        palette::SUBTLE
-                    } else {
-                        palette::MUTED
-                    };
-
-                    let dur_visible = show_length && !dur.is_empty();
-                    let right_w = if dur_visible { dur.width() } else { 0 };
-                    let title_w = track_content_w
-                        .saturating_sub(indent + right_w + QUEUE_TITLE_QUIET_COLUMNS);
-                    let title = trunc_str(&entry.title, title_w);
-
-                    if is_cursor {
-                        f.render_widget(
-                            Block::default().style(Style::default().bg(palette::BG_GREEN)),
-                            Rect {
-                                x: area.x,
-                                y: area.y + line_offset,
-                                width: area.width,
-                                height: 1,
-                            },
-                        );
-                    }
-
-                    let title_color = if is_active {
-                        palette::AQUA
-                    } else if !focused {
-                        dim_color
-                    } else {
-                        fg
-                    };
-
-                    let mut spans: Vec<Span> = Vec::new();
-                    if indent > 0 {
-                        if is_cursor {
-                            spans.push(Span::styled("▍", Style::default().fg(palette::AQUA)));
-                            spans.push(Span::raw(" "));
-                        } else {
-                            spans.push(Span::raw("  "));
-                        }
-                    }
-                    let title_w_actual = title.width();
-                    spans.push(Span::styled(title, Style::default().fg(title_color)));
-
-                    if dur_visible {
-                        let used = indent + title_w_actual;
-                        let pad = track_content_w.saturating_sub(used + right_w);
-                        spans.push(Span::raw(" ".repeat(pad)));
-                        spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));
-                    }
-
-                    list_items.push(ListItem::new(Line::from(spans)).style(row_style));
-                    layout.queue_row_map.push(Some(items.len() + feed_idx));
-                    line_offset += 1;
                 }
             }
         }

@@ -73,6 +73,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
             mime_type: None,
             duration_ticks: None,
             pub_date_secs: Some(100),
+            feed_kind: mbv_core::config::FeedKind::Audio,
         },
         FeedEntry {
             guid: "b".into(),
@@ -82,6 +83,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
             mime_type: None,
             duration_ticks: None,
             pub_date_secs: Some(200),
+            feed_kind: mbv_core::config::FeedKind::Audio,
         },
     ];
     app.feed_tab.rebuild_all_entries();
@@ -196,6 +198,7 @@ fn feed_tab_play_selected_out_of_range_cursor_is_noop() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: None,
         pub_date_secs: None,
+        feed_kind: mbv_core::config::FeedKind::Audio,
     }]];
     app.feed_tab.rebuild_all_entries();
     app.feed_tab.selected_group = 0;
@@ -220,6 +223,7 @@ fn feed_tab_play_selected_no_source_entry_does_not_dispatch() {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
+        feed_kind: mbv_core::config::FeedKind::Audio,
     }]];
     app.feed_tab.rebuild_all_entries();
     app.feed_tab.selected_group = 0;
@@ -233,7 +237,7 @@ fn feed_tab_play_selected_no_source_entry_does_not_dispatch() {
         app.status
     );
     assert!(
-        app.playback_queue().feed_items.is_empty(),
+        app.playback_queue().queue.slots().is_empty(),
         "no-source entry must not be mirrored into the queue panel"
     );
 }

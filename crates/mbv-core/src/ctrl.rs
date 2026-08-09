@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::EmbyItem;
 use crate::config::QueueSource;
-use crate::playback_queue::FeedEntry;
+use crate::playback_queue::{FeedEntry, QueueItem, QueueSlotId};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 /// Bump ONLY when an old peer would misbehave, not when it would merely
@@ -24,8 +24,13 @@ pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
 pub const CTRL_CAP_LIFECYCLE_SHUTDOWN: &str = "lifecycle-shutdown";
 pub const CTRL_CAP_SHARED_MBV_STATE: &str = "shared-mbv-state-v1";
-/// Daemon supports playing feed entries (RSS/podcast/YouTube) via `LoadFeed`.
+/// Daemon supports playing feed entries (RSS/podcast/YouTube) via the legacy `LoadFeed` wire command.
 pub const CTRL_CAP_FEED_PLAYBACK: &str = "feed-playback";
+/// Daemon and client exchange item-generic unified queue state and operations.
+/// Capable peers use `UnifiedQueueState` and unified-queue `CtrlCmd` variants;
+/// legacy peers use `CtrlState`, `PlayItems`, `AdoptQueue`, and `PlayerCmd`
+/// queue mutations.  Additive — no protocol-version bump.
+pub const CTRL_CAP_UNIFIED_QUEUE: &str = "unified-queue";
 
 pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;
@@ -49,6 +54,7 @@ impl CtrlHello {
                 CTRL_CAP_STATUS_ONLY.to_string(),
                 CTRL_CAP_LIFECYCLE_SHUTDOWN.to_string(),
                 CTRL_CAP_FEED_PLAYBACK.to_string(),
+                CTRL_CAP_UNIFIED_QUEUE.to_string(),
             ],
             auth_token: None,
         }
@@ -101,6 +107,12 @@ impl CtrlHello {
             .iter()
             .any(|cap| cap == CTRL_CAP_FEED_PLAYBACK)
     }
+
+    pub fn supports_unified_queue(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_UNIFIED_QUEUE)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,6 +122,7 @@ pub struct CtrlCompatibility {
     pub supports_queue_append: bool,
     pub supports_lifecycle_shutdown: bool,
     pub supports_feed_playback: bool,
+    pub supports_unified_queue: bool,
 }
 
 impl CtrlCompatibility {
@@ -121,6 +134,7 @@ impl CtrlCompatibility {
                 supports_queue_append: true,
                 supports_lifecycle_shutdown: false,
                 supports_feed_playback: true,
+                supports_unified_queue: true,
             }),
             _ => Err(format!(
                 "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
@@ -133,15 +147,54 @@ impl CtrlCompatibility {
     }
 }
 
+// ── Unified queue wire types ──────────────────────────────────────────────
+// Used only when both peers advertise `unified-queue` capability.
+// Legacy peers use the old `CtrlState` / `PlayItems` / `AdoptQueue` shapes.
+
+/// One slot in the unified queue representation.  The `slot_id` is the
+/// stable runtime identity of the occurrence (not the item's content ID).
+#[derive(Clone, Serialize, Deserialize)]
+pub struct UnifiedQueueSlot {
+    pub slot_id: u64,
+    pub item: QueueItem,
+}
+
+/// Full queue state exchanged between unified-queue-capable peers.
+/// Replaces the legacy `CtrlState` (which split items and feed_items)
+/// for capable connections.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct UnifiedQueueStateData {
+    pub status: PlayerStatus,
+    pub slots: Vec<UnifiedQueueSlot>,
+    /// `None` when nothing is playing.
+    pub active_slot: Option<u64>,
+    pub revision: u64,
+}
+
+/// Build an `UnifiedQueueSlot` from a `QueueSlotId`.  Callers in
+/// `mbv-core` can use this at the daemon boundary; the `From` trait is
+/// not exposed to keep the wire type independent of internal queue types.
+pub fn slot_id_to_u64(id: QueueSlotId) -> u64 {
+    id.raw()
+}
+
+// ── CtrlCmd ──────────────────────────────────────────────────────────────
+
 #[derive(Serialize, Deserialize)]
 pub enum CtrlCmd {
     Hello(CtrlHello),
     PlayerCmd(WireCommand),
+    /// **Legacy compatibility.** Replaced by `UnifiedQueueReplace` for
+    /// peers advertising `unified-queue`.  Kept so older clients can
+    /// still adopt a queue the daemon already holds.
     AdoptQueue {
         items: Vec<EmbyItem>,
         cursor: usize,
         source: QueueSource,
     },
+    /// **Legacy compatibility.** Replaced by `UnifiedQueueReplace` for
+    /// peers advertising `unified-queue`.  Kept so older clients can
+    /// still start playback by Emby item ID.
     PlayItems {
         item_ids: Vec<String>,
         start_idx: usize,
@@ -157,6 +210,33 @@ pub enum CtrlCmd {
     /// persistence. Distinct from the player `Stop` command. Only accepted
     /// from local Unix ctrl connections.
     RequestShutdown,
+
+    // ── Unified queue commands (require `unified-queue` capability) ─────
+    /// Replace the entire queue with item-generic slots and optionally
+    /// begin playback from `start_idx`.
+    UnifiedQueueReplace {
+        items: Vec<QueueItem>,
+        start_idx: Option<usize>,
+    },
+    /// Append item-generic values to the tail of the queue.
+    UnifiedQueueAppend {
+        items: Vec<QueueItem>,
+    },
+    /// Remove the slot identified by `slot_id`.
+    UnifiedQueueRemoveSlot {
+        slot_id: u64,
+    },
+    /// Move the slot identified by `slot_id` to `to_index`.
+    UnifiedQueueMoveSlot {
+        slot_id: u64,
+        to_index: usize,
+    },
+    /// Begin playback of an existing slot identified by `slot_id`.
+    UnifiedQueuePlaySlot {
+        slot_id: u64,
+    },
+    /// Clear all slots and stop playback.
+    UnifiedQueueClear,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -242,7 +322,8 @@ pub enum WireCommand {
         items: Vec<EmbyItem>,
         start_idx: usize,
     },
-    /// Play a single feed entry. Additive — requires `feed-playback` capability.
+    /// **Legacy wire-compat.** Play a single feed entry. Additive — requires `feed-playback` capability.
+    /// Decoded at the daemon boundary into the unified queue path; current code never emits this.
     #[serde(rename = "LoadFeed")]
     LoadFeed { entry: FeedEntry },
 }
@@ -295,7 +376,10 @@ impl From<PlayerCommand> for WireCommand {
             PlayerCommand::ReplaceQueue { items, start_idx } => {
                 WireCommand::ReplaceQueue { items, start_idx }
             }
-            PlayerCommand::LoadFeed { entry } => WireCommand::LoadFeed { entry },
+            // SubmitQueue is a local-only command — it is never serialized to the wire.
+            PlayerCommand::SubmitQueue { .. } => {
+                unreachable!("SubmitQueue is local-only; never sent over ctrl")
+            }
         }
     }
 }
@@ -348,7 +432,14 @@ impl From<WireCommand> for PlayerCommand {
             WireCommand::ReplaceQueue { items, start_idx } => {
                 PlayerCommand::ReplaceQueue { items, start_idx }
             }
-            WireCommand::LoadFeed { entry } => PlayerCommand::LoadFeed { entry },
+            // LoadFeed is intercepted at the daemon control boundary
+            // before reaching this conversion; it routes through the
+            // unified queue path instead of PlayerCommand::LoadFeed.
+            WireCommand::LoadFeed { .. } => {
+                unreachable!(
+                    "LoadFeed is intercepted at daemon boundary; never converted to PlayerCommand"
+                )
+            }
         }
     }
 }
@@ -357,6 +448,9 @@ impl From<WireCommand> for PlayerCommand {
 pub enum CtrlEvent {
     Hello(CtrlHello),
     Player(PlayerEvent),
+    /// **Legacy compatibility.** Sent to peers that do not advertise
+    /// `unified-queue`.  Replaced by `UnifiedQueueState` for capable
+    /// connections.  Never emitted on a unified-queue session.
     State(CtrlState),
     StatusOnly(PlayerStatus),
     #[serde(rename = "Disconnected")]
@@ -380,6 +474,12 @@ pub enum CtrlEvent {
     ShutdownRejected {
         reason: String,
     },
+
+    // ── Unified queue events (require `unified-queue` capability) ───────
+    /// Full item-generic queue state.  Sent on initial connection and
+    /// after every queue mutation to peers advertising `unified-queue`.
+    /// Legacy peers receive `CtrlState` instead.
+    UnifiedQueueState(UnifiedQueueStateData),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -441,6 +541,11 @@ pub enum DisconnectReason {
     DaemonShutdown,
 }
 
+/// **Legacy compatibility.** Split-item queue state sent to peers that
+/// do not advertise `unified-queue`.  Replaced by `UnifiedQueueStateData`
+/// for capable connections.  The `items` and `feed_items` split is
+/// preserved here for backward wire compatibility only; the daemon's
+/// internal authority is a single `PlaybackQueue<QueueItem>`.
 #[derive(Serialize, Deserialize)]
 pub struct CtrlState {
     pub status: PlayerStatus,

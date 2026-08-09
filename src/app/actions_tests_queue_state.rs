@@ -81,23 +81,30 @@ impl Drop for XdgHomeGuard {
 }
 // ── queue_restore_cursor: last-played-id lookup + drift fallback ────────
 
+fn make_queue_items(n: usize) -> Vec<mbv_core::playback_queue::QueueItem> {
+    crate::app::tests::make_items(n)
+        .into_iter()
+        .map(|i| mbv_core::playback_queue::QueueItem::Emby(Box::new(i)))
+        .collect()
+}
+
 #[test]
 fn queue_restore_cursor_finds_last_played_by_id() {
-    let items = crate::app::tests::make_items(3);
+    let items = make_queue_items(3);
     let cursor = queue_restore_cursor(&items, 0, Some("id1"), false);
     assert_eq!(cursor, 1);
 }
 
 #[test]
 fn queue_restore_cursor_advances_past_a_completed_last_played_item() {
-    let items = crate::app::tests::make_items(3);
+    let items = make_queue_items(3);
     let cursor = queue_restore_cursor(&items, 0, Some("id1"), true);
     assert_eq!(cursor, 2);
 }
 
 #[test]
 fn queue_restore_cursor_falls_back_to_saved_cursor_when_last_played_id_missing() {
-    let items = crate::app::tests::make_items(3);
+    let items = make_queue_items(3);
     // "id5" isn't in the restored list (e.g. it was removed from the
     // queue before quitting) — must fall back to the saved cursor, not
     // silently snap back to the front of the queue.
@@ -107,7 +114,7 @@ fn queue_restore_cursor_falls_back_to_saved_cursor_when_last_played_id_missing()
 
 #[test]
 fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len() {
-    let items = crate::app::tests::make_items(3);
+    let items = make_queue_items(3);
     let cursor = queue_restore_cursor(&items, 99, Some("id5"), false);
     #[rustfmt::skip]
     assert_eq!(
@@ -118,7 +125,7 @@ fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len() {
 
 #[test]
 fn queue_restore_cursor_uses_saved_cursor_when_no_last_played_id() {
-    let items = crate::app::tests::make_items(3);
+    let items = make_queue_items(3);
     let cursor = queue_restore_cursor(&items, 1, None, false);
     assert_eq!(cursor, 1);
 }
@@ -133,7 +140,7 @@ fn restore_queue_state_with_no_saved_file_does_nothing() {
     let mut app = crate::app::tests::make_app_stub();
     app.restore_queue_state();
 
-    assert!(app.player_tab.items.is_empty());
+    assert!(app.player_tab.emby_items().is_empty());
 }
 
 #[test]
@@ -154,7 +161,7 @@ fn restore_queue_state_with_no_items_does_nothing() {
     let mut app = crate::app::tests::make_app_stub();
     app.restore_queue_state();
 
-    assert!(app.player_tab.items.is_empty());
+    assert!(app.player_tab.emby_items().is_empty());
 }
 
 #[test]
@@ -175,7 +182,7 @@ fn restore_queue_state_populates_queue_synchronously_from_disk() {
 
     // No network call is needed for the queue to already be correct —
     // this is a synchronous, local read, not a spawned background fetch.
-    assert_eq!(app.player_tab.items.len(), 3);
+    assert_eq!(app.player_tab.emby_items().len(), 3);
     assert_eq!(app.player_tab.queue_cursor, 1);
 }
 
@@ -215,7 +222,10 @@ fn quit_preserves_saved_playlist_source_for_restart_restore() {
     let _xdg = XdgHomeGuard::new();
 
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items = crate::app::tests::make_items(2);
+    app.player_tab.set_items(
+        crate::app::tests::make_items(2),
+        app.player_tab.queue_cursor,
+    );
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("playlist-id".into()),
         name: "Saved Queue".into(),
@@ -421,15 +431,19 @@ fn ensure_podcast_library_preserves_saved_feed_position() {
 #[test]
 fn queue_enriched_prunes_items_the_server_no_longer_returns() {
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items = crate::app::tests::make_items(3); // id0, id1, id2
+    app.player_tab.set_items(
+        crate::app::tests::make_items(3),
+        app.player_tab.queue_cursor,
+    ); // id0, id1, id2
     app.player_tab.queue_cursor = 0;
 
     // The background fetch no longer returns id1 (e.g. deleted server-side).
     #[rustfmt::skip]
-    let fresh = vec![app.player_tab.items[0].clone(), app.player_tab.items[2].clone()];
+    let fresh = vec![app.player_tab.emby_items()[0].clone(), app.player_tab.emby_items()[2].clone()];
     app.handle_lib_event(LibEvent::QueueEnriched { items: fresh });
 
-    let ids: Vec<&str> = app.player_tab.items.iter().map(|i| i.id.as_str()).collect();
+    let current_items = app.player_tab.emby_items();
+    let ids: Vec<&str> = current_items.iter().map(|i| i.id.as_str()).collect();
     assert_eq!(
         ids,
         vec!["id0", "id2"],
@@ -445,7 +459,10 @@ fn queue_enriched_prunes_items_the_server_no_longer_returns() {
 #[test]
 fn queue_enriched_prunes_live_playback_slots_and_resyncs_player_queue() {
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items = crate::app::tests::make_items(3);
+    app.player_tab.set_items(
+        crate::app::tests::make_items(3),
+        app.player_tab.queue_cursor,
+    );
     let cmd_rx = app.player.spy_on_commands();
     {
         let mut st = app.player.status.lock().unwrap();
@@ -454,8 +471,8 @@ fn queue_enriched_prunes_live_playback_slots_and_resyncs_player_queue() {
     }
 
     let fresh = vec![
-        app.player_tab.items[0].clone(),
-        app.player_tab.items[2].clone(),
+        app.player_tab.emby_items()[0].clone(),
+        app.player_tab.emby_items()[2].clone(),
     ];
     app.handle_lib_event(LibEvent::QueueEnriched { items: fresh });
 
@@ -473,9 +490,9 @@ fn queue_enriched_never_prunes_or_merges_the_active_slot_even_with_a_duplicate_i
     let mut app = crate::app::tests::make_app_stub();
     let mut items = crate::app::tests::make_items(2); // id0, id1
     items[1].id = "id0".to_string(); // duplicate of the active item's id
-    app.player_tab.items = items;
-    app.player_tab.items[0].playback_position_ticks = 3 * mbv_core::api::TICKS_PER_SECOND;
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
+    app.player_tab
+        .set_slot_progress_at(0, 3 * mbv_core::api::TICKS_PER_SECOND);
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
@@ -484,19 +501,20 @@ fn queue_enriched_never_prunes_or_merges_the_active_slot_even_with_a_duplicate_i
 
     // The fetch confirms id0 still exists, so slot 1's duplicate id0 would
     // also match by id alone if the skip weren't by-slot.
-    let mut fresh = app.player_tab.items[0].clone();
+    let mut fresh = app.player_tab.emby_items()[0].clone();
     fresh.name = "Refreshed Name".to_string();
     app.handle_lib_event(LibEvent::QueueEnriched {
         items: vec![fresh.clone()],
     });
 
     assert_eq!(
-        app.player_tab.items[0].playback_position_ticks,
+        app.player_tab.emby_items()[0].playback_position_ticks,
         3 * mbv_core::api::TICKS_PER_SECOND,
         "the active slot must keep its authoritative local progress even though its id matched"
     );
     assert_eq!(
-        app.player_tab.items[1].name, "Refreshed Name",
+        app.player_tab.emby_items()[1].name,
+        "Refreshed Name",
         "the non-active duplicate-id slot must still be enriched from the fresh fetch"
     );
 }
@@ -504,21 +522,25 @@ fn queue_enriched_never_prunes_or_merges_the_active_slot_even_with_a_duplicate_i
 #[test]
 fn queue_enriched_skips_player_active_idx_not_queue_cursor() {
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items = crate::app::tests::make_items(2);
+    app.player_tab.set_items(
+        crate::app::tests::make_items(2),
+        app.player_tab.queue_cursor,
+    );
     app.player_tab.queue_cursor = 1;
-    app.player_tab.items[0].playback_position_ticks = 3 * mbv_core::api::TICKS_PER_SECOND;
+    app.player_tab
+        .set_slot_progress_at(0, 3 * mbv_core::api::TICKS_PER_SECOND);
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
     }
-    let mut stale = app.player_tab.items[0].clone();
+    let mut stale = app.player_tab.emby_items()[0].clone();
     stale.playback_position_ticks = 46 * mbv_core::api::TICKS_PER_SECOND;
 
     app.handle_lib_event(LibEvent::QueueEnriched { items: vec![stale] });
 
     assert_eq!(
-        app.player_tab.items[0].playback_position_ticks,
+        app.player_tab.emby_items()[0].playback_position_ticks,
         3 * mbv_core::api::TICKS_PER_SECOND,
         "stale enrichment must not overwrite the actively playing slot"
     );
@@ -527,8 +549,10 @@ fn queue_enriched_skips_player_active_idx_not_queue_cursor() {
 #[test]
 fn queue_enriched_preserves_pending_sync_until_server_confirms_it() {
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items = crate::app::tests::make_items(1);
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab.set_items(
+        crate::app::tests::make_items(1),
+        app.player_tab.queue_cursor,
+    );
     app.handle_player_event(mbv_core::player::PlayerEvent::TrackChanged(0));
     {
         let mut st = app.player.status.lock().unwrap();
@@ -543,13 +567,13 @@ fn queue_enriched_preserves_pending_sync_until_server_confirms_it() {
         progress_report_accepted: true,
         error: None,
     });
-    let mut stale = app.player_tab.items[0].clone();
+    let mut stale = app.player_tab.emby_items()[0].clone();
     stale.playback_position_ticks = mbv_core::api::TICKS_PER_SECOND;
 
     app.handle_lib_event(LibEvent::QueueEnriched { items: vec![stale] });
 
     assert_eq!(
-        app.player_tab.items[0].playback_position_ticks,
+        app.player_tab.emby_items()[0].playback_position_ticks,
         6 * mbv_core::api::TICKS_PER_SECOND,
         "stale enrichment must not overwrite accepted local stopped progress while sync is pending"
     );
@@ -562,33 +586,34 @@ fn queue_enriched_preserves_pending_sync_until_server_confirms_it() {
 #[test]
 fn manual_refresh_merge_uses_queue_model_active_slot_protection() {
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items = crate::app::tests::make_items(2);
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab.set_items(
+        crate::app::tests::make_items(2),
+        app.player_tab.queue_cursor,
+    );
     let active_slot = app.player_tab.queue.slots()[0].slot_id;
     let _ = app.player_tab.queue.apply_progress(
         active_slot,
         9 * mbv_core::api::TICKS_PER_SECOND,
         false,
     );
-    app.player_tab.sync_items_from_queue_model();
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
     }
-    let mut stale_active = app.player_tab.items[0].clone();
+    let mut stale_active = app.player_tab.emby_items()[0].clone();
     stale_active.playback_position_ticks = mbv_core::api::TICKS_PER_SECOND;
-    let mut fresh_inactive = app.player_tab.items[1].clone();
+    let mut fresh_inactive = app.player_tab.emby_items()[1].clone();
     fresh_inactive.playback_position_ticks = 4 * mbv_core::api::TICKS_PER_SECOND;
 
     let _ = app.merge_refreshed_queue(QueueScope::Local, vec![stale_active, fresh_inactive]);
 
     assert_eq!(
-        app.player_tab.items[0].playback_position_ticks,
+        app.player_tab.emby_items()[0].playback_position_ticks,
         9 * mbv_core::api::TICKS_PER_SECOND
     );
     assert_eq!(
-        app.player_tab.items[1].playback_position_ticks,
+        app.player_tab.emby_items()[1].playback_position_ticks,
         4 * mbv_core::api::TICKS_PER_SECOND
     );
 }
@@ -605,7 +630,7 @@ fn save_queue_state_does_not_delete_file_while_attached_to_remote_session() {
     .expect("save queue state");
 
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items.clear();
+    app.player_tab.clear();
     app.connected_session_id = Some("session-1".into());
 
     app.save_queue_state();
@@ -637,7 +662,7 @@ fn save_queue_state_still_clears_file_when_locally_empty_and_not_attached() {
     .expect("save queue state");
 
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items.clear();
+    app.player_tab.clear();
     app.connected_session_id = None;
 
     app.save_queue_state();
@@ -669,7 +694,7 @@ fn save_queue_state_no_clear_preserves_file_when_locally_empty_and_not_attached(
     .expect("save queue state");
 
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items.clear();
+    app.player_tab.clear();
     app.connected_session_id = None;
 
     app.save_queue_state_no_clear();
@@ -687,7 +712,10 @@ fn save_queue_state_no_clear_still_saves_when_queue_has_items() {
     let _xdg = XdgHomeGuard::new();
 
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items = crate::app::tests::make_items(2);
+    app.player_tab.set_items(
+        crate::app::tests::make_items(2),
+        app.player_tab.queue_cursor,
+    );
 
     app.save_queue_state_no_clear();
 

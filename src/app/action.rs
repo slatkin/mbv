@@ -15,6 +15,7 @@ use super::input_resolver::KeyChord;
 use super::notify_actions::ToastSeverity;
 use super::App;
 use crossterm::event::{KeyCode, KeyModifiers};
+use mbv_core::api::EmbyItem;
 use mbv_core::player::PlayerCommand;
 use std::sync::Arc;
 
@@ -463,27 +464,46 @@ impl App {
                 let queue = self.displayed_queue();
                 let t = queue.queue_cursor;
                 let n = queue.total_queue_len();
-                if t < n {
-                    // Feed entry: cursor is in the tail region.
-                    let feed_offset = t.checked_sub(queue.items.len());
-                    if let Some(feed_offset) = feed_offset {
-                        if let Some(entry) = queue.feed_items.get(feed_offset).cloned() {
-                            if entry.primary_source().is_some() {
-                                let headless = super::feed_parse::infer_feed_kind_from_mime(
-                                    entry.mime_type.as_deref(),
-                                ) == mbv_core::config::FeedKind::Audio;
-                                self.player.play_feed(entry, headless, self.ui_volume);
-                            } else {
-                                self.flash(
-                                    "Feed entry has no playable source".into(),
-                                    super::notify_actions::ToastSeverity::Error,
-                                );
-                            }
-                        }
-                    } else if let Some(conn_id) = self.connected_session_id.clone() {
-                        let items = queue.items.clone();
-                        let item = items[t].clone();
-                        let label = item.playback_label();
+                if t >= n {
+                    return false;
+                }
+                // Validate the item at the cursor exists.
+                let Some(item) = queue.item_at(t).cloned() else {
+                    return false;
+                };
+                // Validate source for Feed entries early.
+                if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = item {
+                    if entry.primary_source().is_none() {
+                        self.flash(
+                            "Feed entry has no playable source".into(),
+                            super::notify_actions::ToastSeverity::Error,
+                        );
+                        return false;
+                    }
+                }
+                // Snapshot data from the queue before any mutable borrows.
+                let emby_items: Vec<EmbyItem> = queue
+                    .queue
+                    .slots()
+                    .iter()
+                    .filter_map(|slot| slot.item.as_emby().cloned())
+                    .collect();
+                let all_items = queue.all_queue_items();
+                // Pre-compute the Emby-only projection index for the cursor
+                // position, needed by the session API boundary.
+                let emby_start = queue
+                    .queue
+                    .slots()
+                    .iter()
+                    .take(t)
+                    .filter(|s| s.item.as_emby().is_some())
+                    .count();
+                // Connected remote session: hand off Emby items to the
+                // session; Feed entries cannot cross the Emby session API
+                // so they fall through to the local/direct-remote path.
+                if let mbv_core::playback_queue::QueueItem::Emby(_) = &item {
+                    if let Some(conn_id) = self.connected_session_id.clone() {
+                        let label = item.display_name();
                         self.flash(
                             format!("Requesting playback: {label}"),
                             ToastSeverity::Neutral,
@@ -496,54 +516,48 @@ impl App {
                                 },
                             );
                             let item_ids: Vec<String> =
-                                items.iter().map(|item| item.id.clone()).collect();
-                            let start_ticks = items[t].playback_position_ticks;
+                                emby_items.iter().map(|e| e.id.clone()).collect();
+                            let start_ticks = item.playback_position_ticks();
                             self.do_reconciliation_session_command(
                                 &conn_id.clone(),
                                 move |client| {
-                                    client.session_play_items(&conn_id, &item_ids, t, start_ticks)
+                                    client.session_play_items(
+                                        &conn_id,
+                                        &item_ids,
+                                        emby_start,
+                                        start_ticks,
+                                    )
                                 },
                             );
-                        } else {
-                            self.submit_attached_sequence(&conn_id, &items, t);
+                            return false;
                         }
-                    } else {
-                        // Only read once we know we're not handing off to a
-                        // session -- `queue_scope_is_playback` is the one
-                        // reader below.
-                        let scope = self.visible_queue_scope();
-                        let st = self.player.status.lock().unwrap();
-                        let active = st.active;
-                        let current_idx = st.current_idx;
-                        drop(st);
-                        if active && self.queue_scope_is_playback(scope) {
-                            let is_audio =
-                                queue.items.get(t).map(|i| i.is_audio()).unwrap_or(false);
-                            if t == current_idx && is_audio {
-                                self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
-                            } else if t != current_idx {
-                                self.player.send_command(PlayerCommand::JumpTo(t));
-                            }
-                        } else {
-                            // `t < n` above already guarantees the queue is
-                            // non-empty, so no `is_empty()` re-check here.
-                            //
-                            // `replace_playback_queue` and `play_queue` each
-                            // take ownership of their own `Vec<EmbyItem>`
-                            // and both run, so two clones of `queue.items`
-                            // are the minimum here, not a redundant third.
-                            let items = queue.items.clone();
-                            let c = Arc::new(self.client.lock().unwrap().clone());
-                            self.replace_playback_queue(items.clone(), t);
-                            self.player.play_queue(
-                                items,
-                                t,
-                                self.queue_source.clone(),
-                                c,
-                                self.ui_volume,
-                            );
-                        }
+                        self.submit_attached_sequence(&conn_id, &emby_items, emby_start);
+                        return false;
                     }
+                }
+                // Local / direct-remote playback.  The same path handles
+                // both Feed and Emby items: jump to an active slot or
+                // cold-start the full canonical queue.
+                let scope = self.visible_queue_scope();
+                let st = self.player.status.lock().unwrap();
+                let active = st.active;
+                let current_idx = st.current_idx;
+                drop(st);
+                if active && self.queue_scope_is_playback(scope) {
+                    let is_audio = item.is_audio();
+                    if t == current_idx && is_audio {
+                        self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
+                    } else if t != current_idx {
+                        self.player.send_command(PlayerCommand::JumpTo(t));
+                    }
+                } else {
+                    // Cold start: submit the full canonical queue (all
+                    // variants) so the player's internal playlist matches
+                    // the PlayerTab's queue exactly.
+                    let c = Arc::new(self.client.lock().unwrap().clone());
+                    let headless = all_items.iter().all(|i| i.is_audio());
+                    self.player
+                        .submit_queue(all_items, t, Some(c), headless, self.ui_volume);
                 }
             }
 

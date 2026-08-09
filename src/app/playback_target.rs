@@ -101,10 +101,13 @@ impl App {
     /// prediction once the player thread catches up.
     pub(super) fn effective_playback_state(&mut self) -> super::PlaybackState {
         if let Some(ref remote) = self.connected_session_state {
-            let maybe_active_idx = remote
-                .now_playing_item_id
-                .as_ref()
-                .and_then(|id| self.player_tab.items.iter().position(|it| &it.id == id));
+            let maybe_active_idx = remote.now_playing_item_id.as_ref().and_then(|id| {
+                self.player_tab
+                    .queue
+                    .slots()
+                    .iter()
+                    .position(|s| s.item.id() == id)
+            });
             let active_idx = maybe_active_idx.unwrap_or(0);
             let pos_ticks = {
                 let elapsed_s = if remote.is_paused {

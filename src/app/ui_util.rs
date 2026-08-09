@@ -1,5 +1,5 @@
 use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::FeedEntry;
+use mbv_core::playback_queue::QueueSlot;
 use unicode_width::UnicodeWidthStr;
 
 /// Advance subtitle mode through the standard cycle.
@@ -220,24 +220,18 @@ pub fn trunc_str(s: &str, max: usize) -> String {
     }
 }
 
-/// A visual row in the queue: either a track (index into the Emby `items`)
-/// or a feed entry (index into the daemon-owned `feed_items` tail, §5.4).
-/// The queue list has no grouping/headers — every row is a track or feed
-/// entry, in that order.  The cursor lives in unified index space:
-/// 0..items.len() for tracks, items.len()..items.len()+feed_items.len()
-/// for feed entries.
+/// A visual row in the queue. The queue list has no grouping/headers — every
+/// row is a slot from the canonical `PlaybackQueue`, in order.  The cursor
+/// is a slot index.
 #[derive(Clone)]
 pub(super) enum QueueRow {
-    Track { idx: usize },
-    Feed { feed_idx: usize },
+    Slot { slot_idx: usize },
 }
 
-/// Build the flat visual rows for the queue: one `Track` row per Emby item,
-/// followed by one `Feed` row per feed tail entry, both in order.
-pub(super) fn build_queue_rows(items: &[EmbyItem], feed_items: &[FeedEntry]) -> Vec<QueueRow> {
-    (0..items.len())
-        .map(|idx| QueueRow::Track { idx })
-        .chain((0..feed_items.len()).map(|feed_idx| QueueRow::Feed { feed_idx }))
+/// Build the flat visual rows for the queue: one row per canonical slot.
+pub(super) fn build_queue_rows(slots: &[QueueSlot]) -> Vec<QueueRow> {
+    (0..slots.len())
+        .map(|slot_idx| QueueRow::Slot { slot_idx })
         .collect()
 }
 
@@ -245,6 +239,8 @@ pub(super) fn build_queue_rows(items: &[EmbyItem], feed_items: &[FeedEntry]) -> 
 mod tests {
     use super::*;
     use crate::app::tests::make_item;
+    use mbv_core::api::EmbyItem;
+    use mbv_core::playback_queue::{FeedEntry, PlaybackQueue, QueueItem};
 
     fn make_audio_item(album: &str, album_id: &str, artist: &str) -> EmbyItem {
         let mut item = make_item(album, "Audio");
@@ -254,6 +250,14 @@ mod tests {
         item
     }
 
+    fn make_slots(items: &[EmbyItem], feed_items: &[FeedEntry]) -> Vec<QueueSlot> {
+        let mut queue = PlaybackQueue::from_items(items.to_vec(), None);
+        for entry in feed_items {
+            queue.append(QueueItem::Feed(entry.clone()));
+        }
+        queue.into_slots()
+    }
+
     #[test]
     fn build_queue_rows_is_flat_in_item_order() {
         let items = vec![
@@ -261,12 +265,13 @@ mod tests {
             make_audio_item("Album A", "a1", "Artist"),
             make_audio_item("Album A", "a1", "Artist"),
         ];
-        let rows = build_queue_rows(&items, &[]);
+        let slots = make_slots(&items, &[]);
+        let rows = build_queue_rows(&slots);
 
         assert_eq!(rows.len(), 3);
-        assert!(matches!(rows[0], QueueRow::Track { idx: 0 }));
-        assert!(matches!(rows[1], QueueRow::Track { idx: 1 }));
-        assert!(matches!(rows[2], QueueRow::Track { idx: 2 }));
+        assert!(matches!(rows[0], QueueRow::Slot { slot_idx: 0 }));
+        assert!(matches!(rows[1], QueueRow::Slot { slot_idx: 1 }));
+        assert!(matches!(rows[2], QueueRow::Slot { slot_idx: 2 }));
     }
 
     #[test]
@@ -284,6 +289,7 @@ mod tests {
                 mime_type: None,
                 duration_ticks: None,
                 pub_date_secs: None,
+                feed_kind: mbv_core::config::FeedKind::Audio,
             },
             FeedEntry {
                 guid: "f2".to_string(),
@@ -293,14 +299,16 @@ mod tests {
                 mime_type: None,
                 duration_ticks: None,
                 pub_date_secs: None,
+                feed_kind: mbv_core::config::FeedKind::Audio,
             },
         ];
-        let rows = build_queue_rows(&items, &feed_items);
+        let slots = make_slots(&items, &feed_items);
+        let rows = build_queue_rows(&slots);
 
         assert_eq!(rows.len(), 4);
-        assert!(matches!(rows[0], QueueRow::Track { idx: 0 }));
-        assert!(matches!(rows[1], QueueRow::Track { idx: 1 }));
-        assert!(matches!(rows[2], QueueRow::Feed { feed_idx: 0 }));
-        assert!(matches!(rows[3], QueueRow::Feed { feed_idx: 1 }));
+        assert!(matches!(rows[0], QueueRow::Slot { slot_idx: 0 }));
+        assert!(matches!(rows[1], QueueRow::Slot { slot_idx: 1 }));
+        assert!(matches!(rows[2], QueueRow::Slot { slot_idx: 2 }));
+        assert!(matches!(rows[3], QueueRow::Slot { slot_idx: 3 }));
     }
 }

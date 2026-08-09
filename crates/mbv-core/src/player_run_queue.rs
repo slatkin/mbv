@@ -229,46 +229,7 @@ impl PlaybackRun {
         }
     }
 
-    // `startup_pause_for_pipe` (added for audio-pipe startup-pause handling)
-    // pushed this past clippy's 10-argument default; grouping these into a
-    // params struct is a reasonable follow-up but out of scope here.
-    #[allow(clippy::too_many_arguments)]
-    fn new(
-        items: Vec<EmbyItem>,
-        start_idx: usize,
-        origin: PlaybackOrigin,
-        reporter: SessionReporter,
-        config: MpvRunConfig,
-        startup_pause_for_pipe: bool,
-        status: Arc<Mutex<PlayerStatus>>,
-        event_tx: mpsc::Sender<PlayerEvent>,
-        subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
-        shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
-        server_url: String,
-        token: String,
-        ext_sub_urls: Vec<String>,
-    ) -> Self {
-        let queue = PlaybackQueue::from_items(items, Some(start_idx));
-        Self::init_from_queue(
-            queue,
-            start_idx,
-            origin,
-            reporter,
-            config,
-            startup_pause_for_pipe,
-            status,
-            event_tx,
-            subtitle_prefs,
-            shutdown_report_timeout,
-            server_url,
-            token,
-            ext_sub_urls,
-        )
-    }
-
-    /// Construct a `PlaybackRun` from pre-built `QueueItem`s (e.g. feed entries).
-    /// Behaves identically to `new` but skips the `EmbyItem` → `QueueItem::Emby`
-    /// wrapping step, allowing `QueueItem::Feed` items to be passed directly.
+    /// Construct a `PlaybackRun` from pre-built `QueueItem`s.
     #[allow(clippy::too_many_arguments)]
     fn new_from_queue_items(
         items: Vec<QueueItem>,

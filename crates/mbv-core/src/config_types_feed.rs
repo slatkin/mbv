@@ -3,7 +3,8 @@
 /// subscription; per-entry kind can be refined from the enclosure MIME
 /// at parse time (#471). Not currently used for routing — only for
 /// display and future refinement (#472).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum FeedKind {
     Audio,
     Video,

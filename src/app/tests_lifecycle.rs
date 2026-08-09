@@ -256,7 +256,8 @@ fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
     .expect("save queue state");
 
     let mut app = make_local_daemon_app_stub(make_items(2));
-    app.player_tab.items = make_items(3);
+    app.player_tab
+        .set_items(make_items(3), app.player_tab.queue_cursor);
     app.teardown(Duration::from_secs(1));
 
     let state = crate::config::load_queue_state().expect("existing daemon snapshot");

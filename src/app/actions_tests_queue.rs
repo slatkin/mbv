@@ -161,8 +161,8 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     let rx = app.player.spy_on_commands();
     app.execute_context_action(Some(crate::app::ContextAction::Enqueue));
 
-    assert_eq!(app.player_tab.items.len(), 2);
-    assert_eq!(app.player_tab.items[1].id, queued.id);
+    assert_eq!(app.player_tab.emby_items().len(), 2);
+    assert_eq!(app.player_tab.emby_items()[1].id, queued.id);
     assert!(matches!(
         rx.try_recv(),
         Ok(PlayerCommand::QueueAppend { items }) if items.len() == 1 && items[0].id == queued.id
