@@ -236,12 +236,17 @@ impl App {
                 ) as u16
                     + HERO_BLOCK_EXTRA_ROWS
             } else if let Some(item) = &selected_album_item {
-                // Album hero: art + tracks + metadata + block chrome.
-                let track_count = self
-                    .album_tracks_cache
-                    .get(&item.id)
-                    .map(|t| t.len())
-                    .unwrap_or(0);
+                // Album hero: art + optional tracks + metadata + block chrome.
+                // Only include tracks when track-selection mode is active.
+                let in_track_mode = self.libs[lib_idx].album_track_focus.is_some();
+                let track_count = if in_track_mode {
+                    self.album_tracks_cache
+                        .get(&item.id)
+                        .map(|t| t.len())
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
                 let art_rows = if self.images_enabled() {
                     super::album_art::INLINE_ALBUM_ART_ROWS
                 } else {
@@ -616,11 +621,12 @@ impl App {
                     layout,
                 );
             } else if let Some(item) = &selected_album_item {
-                // Album hero: art + track list + metadata, mirroring the
+                // Album hero: art + optional tracks + metadata, mirroring the
                 // movie/series branch -- reserved and painted here instead of
                 // in `render_power_grouped_album_rows`' inline block. Art
                 // sits right-aligned in `content_rect`; the detail reserves
                 // its width so the track table never overlaps it.
+                // Tracks are only shown when track-selection mode is active.
                 let art_reserved_w = if self.images_enabled()
                     && content_rect.width >= INLINE_ALBUM_ART_RESERVED + 20
                 {
@@ -628,31 +634,91 @@ impl App {
                 } else {
                     0
                 };
-                let track_cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
-                if let Some(tracks) = self.album_tracks_cache.get(&item.id).cloned() {
-                    self.render_album_detail(
-                        f,
-                        content_rect,
-                        &tracks,
-                        track_cursor,
-                        focused,
-                        true,  // show_title: the hero has no Album(idx) row above
-                        true,  // selected_region_gutter: hero block context
-                        false, // flush_left
-                        true,  // show_hint: show the action hint
-                        art_reserved_w,
-                        None,
-                        layout,
-                    );
+                let in_track_mode = self.libs[lib_idx].album_track_focus.is_some();
+                if in_track_mode {
+                    let track_cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
+                    if let Some(tracks) = self.album_tracks_cache.get(&item.id).cloned() {
+                        self.render_album_detail(
+                            f,
+                            content_rect,
+                            &tracks,
+                            track_cursor,
+                            true,  // focused: track-selection mode is active
+                            true,  // show_title: the hero has no Album(idx) row above
+                            true,  // selected_region_gutter: hero block context
+                            false, // flush_left
+                            true,  // show_hint: show the action hint
+                            art_reserved_w,
+                            None,
+                            layout,
+                        );
+                    } else {
+                        // Tracks not fetched yet: kick off the fetch and show a
+                        // loading stand-in (art still reserved on the right).
+                        self.fetch_album_tracks(item.id.clone());
+                        let loading_rect = Rect {
+                            width: content_rect.width.saturating_sub(art_reserved_w),
+                            ..content_rect
+                        };
+                        super::render_placeholder(f, loading_rect, " Loading…");
+                    }
                 } else {
-                    // Tracks not fetched yet: kick off the fetch and show a
-                    // loading stand-in (art still reserved on the right).
-                    self.fetch_album_tracks(item.id.clone());
-                    let loading_rect = Rect {
-                        width: content_rect.width.saturating_sub(art_reserved_w),
-                        ..content_rect
-                    };
-                    super::render_placeholder(f, loading_rect, " Loading…");
+                    // Not in track-selection mode: show title + hint only, no
+                    // track list. The art is still reserved on the right.
+                    let inner_w = content_rect.width.saturating_sub(art_reserved_w);
+                    if inner_w < 3 {
+                        // Too narrow for any content.
+                    } else {
+                        let mut row = content_rect.y;
+                        let max_y = content_rect.y + content_rect.height;
+                        // Title row
+                        let title = item.display_name();
+                        let title_trunc = super::super::ui_util::trunc_str(
+                            &title,
+                            (inner_w as usize).saturating_sub(1),
+                        );
+                        if row < max_y {
+                            f.render_widget(
+                                Paragraph::new(Line::from(Span::styled(
+                                    format!(" {title_trunc}"),
+                                    Style::default()
+                                        .fg(palette::YELLOW)
+                                        .add_modifier(Modifier::BOLD),
+                                ))),
+                                Rect {
+                                    x: content_rect.x,
+                                    y: row,
+                                    width: inner_w,
+                                    height: 1,
+                                },
+                            );
+                            row += 1;
+                        }
+                        // Hint row
+                        if row < max_y {
+                            let hint_w = (inner_w as usize).saturating_sub(2).max(1);
+                            let hint = super::super::ui_util::trunc_str(
+                                "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks",
+                                hint_w,
+                            );
+                            f.render_widget(
+                                Paragraph::new(Line::from(vec![
+                                    super::selection_marker(true),
+                                    Span::raw(" "),
+                                    Span::styled(
+                                        hint.to_string(),
+                                        Style::default().fg(palette::MUTED),
+                                    ),
+                                ])),
+                                Rect {
+                                    x: content_rect.x,
+                                    y: row,
+                                    width: inner_w,
+                                    height: 1,
+                                },
+                            );
+                        }
+                    }
                 }
                 if art_reserved_w > 0 {
                     let art_rect = Rect {
