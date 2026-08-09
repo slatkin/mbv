@@ -111,6 +111,10 @@ pub(crate) fn make_items(n: usize) -> Vec<EmbyItem> {
         .collect()
 }
 
+pub(crate) fn make_queue_state(items: Vec<EmbyItem>) -> crate::config::QueueState {
+    crate::config::QueueState::from_emby_items(items, 0, crate::config::QueueSource::Unknown)
+}
+
 pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
     (0..n)
         .map(|i| {
@@ -415,10 +419,7 @@ pub(crate) fn render_app_to_string(app: &mut App, width: u16, height: u16) -> St
     out
 }
 
-pub(crate) fn make_remote_app_stub(
-    local_items: Vec<EmbyItem>,
-    remote_items: Vec<EmbyItem>,
-) -> App {
+pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec<EmbyItem>) -> App {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
 

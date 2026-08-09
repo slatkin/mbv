@@ -4,6 +4,186 @@ use crate::api::{EmbyItem, TICKS_PER_SECOND};
 
 const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 
+// ---------------------------------------------------------------------------
+// FeedEntry — minimal identity + playback fields for RSS/podcast/YouTube
+// items. No progress state (position_ticks / played) — deferred to #472.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FeedEntry {
+    pub guid: String,
+    pub title: String,
+    pub enclosure_url: Option<String>,
+    pub link: Option<String>,
+    pub mime_type: Option<String>,
+    pub duration_ticks: Option<u64>,
+}
+
+impl FeedEntry {
+    /// The best playable URL: enclosure first, then link as fallback.
+    pub fn primary_source(&self) -> Option<&str> {
+        self.enclosure_url.as_deref().or(self.link.as_deref())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// QueueItem — enum wrapping the two item kinds the playback queue can hold.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "kind")]
+pub enum QueueItem {
+    #[serde(rename = "Emby")]
+    Emby(Box<EmbyItem>),
+    #[serde(rename = "Feed")]
+    Feed(FeedEntry),
+}
+
+/// Custom deserializer for `QueueItem` that accepts both the tagged form
+/// (with `"kind": "Emby"` or `"kind": "Feed"`) and legacy bare `EmbyItem`
+/// objects (no `kind` field). This preserves backward compatibility with
+/// `queue_state.json` files written before the `QueueItem` enum existed.
+impl<'de> serde::Deserialize<'de> for QueueItem {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de;
+
+        let value = serde_json::Value::deserialize(deserializer)?;
+
+        // Try tagged first: {"kind":"Emby",...} or {"kind":"Feed",...}
+        if let Some(kind) = value.get("kind").and_then(|k| k.as_str()) {
+            return match kind {
+                "Emby" => {
+                    let item = EmbyItem::deserialize(value).map_err(de::Error::custom)?;
+                    Ok(QueueItem::Emby(Box::new(item)))
+                }
+                "Feed" => {
+                    let entry = FeedEntry::deserialize(value).map_err(de::Error::custom)?;
+                    Ok(QueueItem::Feed(entry))
+                }
+                other => Err(de::Error::unknown_variant(other, &["Emby", "Feed"])),
+            };
+        }
+
+        // Legacy fallback: bare EmbyItem object (no `kind` field)
+        let item = EmbyItem::deserialize(value).map_err(de::Error::custom)?;
+        Ok(QueueItem::Emby(Box::new(item)))
+    }
+}
+
+impl QueueItem {
+    pub fn title(&self) -> &str {
+        match self {
+            QueueItem::Emby(item) => &item.name,
+            QueueItem::Feed(entry) => &entry.title,
+        }
+    }
+
+    pub fn duration(&self) -> Option<u64> {
+        match self {
+            QueueItem::Emby(item) => {
+                if item.runtime_ticks > 0 {
+                    Some(item.runtime_ticks as u64)
+                } else {
+                    None
+                }
+            }
+            QueueItem::Feed(entry) => entry.duration_ticks,
+        }
+    }
+
+    pub fn media_kind(&self) -> &str {
+        match self {
+            QueueItem::Emby(item) => &item.media_type,
+            QueueItem::Feed(entry) => entry.mime_type.as_deref().unwrap_or("Audio"),
+        }
+    }
+
+    pub fn is_audio(&self) -> bool {
+        match self {
+            QueueItem::Emby(item) => item.is_audio(),
+            QueueItem::Feed(entry) => entry
+                .mime_type
+                .as_deref()
+                .is_some_and(|m| m.starts_with("audio/")),
+        }
+    }
+
+    pub fn is_video(&self) -> bool {
+        match self {
+            QueueItem::Emby(item) => item.is_video(),
+            QueueItem::Feed(entry) => entry
+                .mime_type
+                .as_deref()
+                .is_some_and(|m| m.starts_with("video/")),
+        }
+    }
+
+    pub fn artwork_url(&self) -> Option<&str> {
+        match self {
+            QueueItem::Emby(_item) => None,
+            QueueItem::Feed(_entry) => None,
+        }
+    }
+
+    /// The Emby item ID for Emby items, or the feed GUID for feed entries.
+    /// Used for server-refresh matching (only Emby items have server IDs,
+    /// but this keeps the lookup uniform).
+    pub fn id(&self) -> &str {
+        match self {
+            QueueItem::Emby(item) => &item.id,
+            QueueItem::Feed(entry) => &entry.guid,
+        }
+    }
+
+    pub fn display_name(&self) -> String {
+        match self {
+            QueueItem::Emby(item) => item.display_name(),
+            QueueItem::Feed(entry) => entry.title.clone(),
+        }
+    }
+
+    pub fn runtime_ticks(&self) -> i64 {
+        match self {
+            QueueItem::Emby(item) => item.runtime_ticks,
+            QueueItem::Feed(entry) => entry.duration_ticks.unwrap_or(0) as i64,
+        }
+    }
+
+    pub fn playback_position_ticks(&self) -> i64 {
+        match self {
+            QueueItem::Emby(item) => item.playback_position_ticks,
+            QueueItem::Feed(_) => 0,
+        }
+    }
+
+    pub fn played(&self) -> bool {
+        match self {
+            QueueItem::Emby(item) => item.played,
+            QueueItem::Feed(_) => false,
+        }
+    }
+
+    /// Returns the inner `EmbyItem` if this is an Emby variant.
+    /// Used at boundaries that only operate on Emby items (send_ep_info,
+    /// set_current_item_metadata, start_item, mark_played, etc.).
+    pub fn as_emby(&self) -> Option<&EmbyItem> {
+        match self {
+            QueueItem::Emby(item) => Some(item),
+            QueueItem::Feed(_) => None,
+        }
+    }
+
+    pub fn playlist_item_id(&self) -> &str {
+        match self {
+            QueueItem::Emby(item) => &item.playlist_item_id,
+            QueueItem::Feed(_) => "",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct QueueSlotId(u64);
 
@@ -26,7 +206,7 @@ impl QueueRevision {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SlotProgress {
     pub position_ticks: i64,
     pub played: bool,
@@ -40,6 +220,15 @@ impl SlotProgress {
         }
     }
 
+    /// Progress is only meaningful for Emby items. Feed slots get a
+    /// zeroed-out default.
+    fn from_queue_item(item: &QueueItem) -> Self {
+        match item {
+            QueueItem::Emby(emby) => Self::from_item(emby),
+            QueueItem::Feed(_) => Self::default(),
+        }
+    }
+
     fn matches_server_confirmation(&self, item: &EmbyItem) -> bool {
         (self.position_ticks - item.playback_position_ticks).abs()
             <= PROGRESS_CONFIRMATION_TOLERANCE_TICKS
@@ -47,36 +236,45 @@ impl SlotProgress {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ProgressState {
     pub local: SlotProgress,
     pub pending_sync: Option<SlotProgress>,
 }
 
 impl ProgressState {
-    fn from_item(item: &EmbyItem) -> Self {
-        Self {
-            local: SlotProgress::from_item(item),
-            pending_sync: None,
+    /// Progress is only meaningful for Emby items. Feed slots get a
+    /// zeroed-out default (no-op sync).
+    fn from_queue_item(item: &QueueItem) -> Self {
+        match item {
+            QueueItem::Emby(emby) => Self {
+                local: SlotProgress::from_item(emby),
+                pending_sync: None,
+            },
+            QueueItem::Feed(_) => Self::default(),
         }
     }
 
-    fn apply_to_item(&self, item: &mut EmbyItem) {
-        item.playback_position_ticks = self.local.position_ticks;
-        item.played = self.local.played;
+    /// Applies progress back to the item. Only touches EmbyItem fields;
+    /// Feed slots are a no-op.
+    fn apply_to_item(&self, item: &mut QueueItem) {
+        if let QueueItem::Emby(emby) = item {
+            emby.playback_position_ticks = self.local.position_ticks;
+            emby.played = self.local.played;
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct QueueSlot {
     pub slot_id: QueueSlotId,
-    pub item: EmbyItem,
+    pub item: QueueItem,
     pub progress_state: ProgressState,
 }
 
 impl QueueSlot {
-    fn new(slot_id: QueueSlotId, item: EmbyItem) -> Self {
-        let progress_state = ProgressState::from_item(&item);
+    fn new(slot_id: QueueSlotId, item: QueueItem) -> Self {
+        let progress_state = ProgressState::from_queue_item(&item);
         Self {
             slot_id,
             item,
@@ -123,6 +321,14 @@ impl Default for PlaybackQueue {
 
 impl PlaybackQueue {
     pub fn from_items(items: Vec<EmbyItem>, active_index: Option<usize>) -> Self {
+        let queue_items: Vec<QueueItem> = items
+            .into_iter()
+            .map(|item| QueueItem::Emby(Box::new(item)))
+            .collect();
+        Self::from_queue_items(queue_items, active_index)
+    }
+
+    pub fn from_queue_items(items: Vec<QueueItem>, active_index: Option<usize>) -> Self {
         let mut queue = Self {
             slots: Vec::with_capacity(items.len()),
             active_slot_id: None,
@@ -168,11 +374,11 @@ impl PlaybackQueue {
         self.slots.iter().position(|slot| slot.slot_id == slot_id)
     }
 
-    pub fn append(&mut self, item: EmbyItem) -> QueueSlotId {
+    pub fn append(&mut self, item: QueueItem) -> QueueSlotId {
         self.insert(self.slots.len(), item)
     }
 
-    pub fn insert(&mut self, index: usize, item: EmbyItem) -> QueueSlotId {
+    pub fn insert(&mut self, index: usize, item: QueueItem) -> QueueSlotId {
         let slot_id = self.allocate_slot_id();
         let index = index.min(self.slots.len());
         self.slots.insert(index, QueueSlot::new(slot_id, item));
@@ -233,13 +439,13 @@ impl PlaybackQueue {
     pub fn update_slot_item(
         &mut self,
         slot_id: QueueSlotId,
-        item: EmbyItem,
+        item: QueueItem,
     ) -> QueueMutationResult<()> {
         let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) else {
             return QueueMutationResult::NotFound;
         };
         slot.item = item;
-        slot.progress_state.local = SlotProgress::from_item(&slot.item);
+        slot.progress_state.local = SlotProgress::from_queue_item(&slot.item);
         QueueMutationResult::Applied(())
     }
 
@@ -267,8 +473,8 @@ impl PlaybackQueue {
         let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) else {
             return QueueMutationResult::NotFound;
         };
-        let pending = slot.progress_state.local.clone();
-        slot.progress_state.pending_sync = Some(pending.clone());
+        let pending = slot.progress_state.local;
+        slot.progress_state.pending_sync = Some(pending);
         QueueMutationResult::Applied(pending)
     }
 
@@ -280,8 +486,16 @@ impl PlaybackQueue {
         let active_slot_id = self.active_slot_id;
 
         for mut slot in old_slots {
+            // Feed slots have no server-side counterpart; keep them as-is.
+            if matches!(slot.item, QueueItem::Feed(_)) {
+                if should_protect_missing_slot(&slot, active_slot_id) {
+                    result.protected_slots.push(slot.slot_id);
+                }
+                merged_slots.push(slot);
+                continue;
+            }
             let fetched = fetched_by_item_id
-                .get_mut(&slot.item.id)
+                .get_mut(slot.item.id())
                 .map(FetchedItemMatches::next_match);
             match fetched {
                 Some(fetched_item) => {
@@ -338,15 +552,17 @@ impl PlaybackQueue {
         result: &mut RefreshMergeResult,
     ) {
         let is_active = active_slot_id == Some(slot.slot_id);
-        if let Some(pending) = slot.progress_state.pending_sync.clone() {
+        if let Some(pending) = slot.progress_state.pending_sync {
             if pending.matches_server_confirmation(&fetched_item) {
                 slot.progress_state.pending_sync = None;
-                slot.item = fetched_item;
+                slot.item = QueueItem::Emby(Box::new(fetched_item));
                 if is_active {
                     slot.progress_state.apply_to_item(&mut slot.item);
                     result.protected_slots.push(slot.slot_id);
                 } else {
-                    slot.progress_state.local = SlotProgress::from_item(&slot.item);
+                    if let QueueItem::Emby(ref emby) = slot.item {
+                        slot.progress_state.local = SlotProgress::from_item(emby);
+                    }
                 }
                 result.pending_confirmed_slots.push(slot.slot_id);
                 result.updated_slots.push(slot.slot_id);
@@ -358,8 +574,8 @@ impl PlaybackQueue {
         }
 
         if is_active {
-            let local_progress = slot.progress_state.local.clone();
-            slot.item = fetched_item;
+            let local_progress = slot.progress_state.local;
+            slot.item = QueueItem::Emby(Box::new(fetched_item));
             slot.progress_state.local = local_progress;
             slot.progress_state.apply_to_item(&mut slot.item);
             result.protected_slots.push(slot.slot_id);
@@ -367,8 +583,10 @@ impl PlaybackQueue {
             return;
         }
 
-        slot.item = fetched_item;
-        slot.progress_state.local = SlotProgress::from_item(&slot.item);
+        slot.item = QueueItem::Emby(Box::new(fetched_item));
+        if let QueueItem::Emby(ref emby) = slot.item {
+            slot.progress_state.local = SlotProgress::from_item(emby);
+        }
         result.updated_slots.push(slot.slot_id);
     }
 }

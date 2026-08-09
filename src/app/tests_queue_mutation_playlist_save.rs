@@ -59,7 +59,7 @@ fn untracked_save_invalidates_and_persists_entry_identities() {
     assert!(persisted
         .items
         .iter()
-        .all(|item| item.playlist_item_id.is_empty()));
+        .all(|item| item.playlist_item_id().is_empty()));
 }
 
 #[test]
@@ -271,7 +271,7 @@ fn save_as_success_clears_old_playlist_entry_ids() {
     assert!(persisted
         .items
         .iter()
-        .all(|item| item.playlist_item_id.is_empty()));
+        .all(|item| item.playlist_item_id().is_empty()));
     assert!(matches!(
         persisted.source,
         crate::config::QueueSource::Playlist { id: Some(ref id), .. } if id == "pl-2"
@@ -317,7 +317,7 @@ fn replace_completion_persists_new_source_and_cleared_entry_ids() {
     assert!(persisted
         .items
         .iter()
-        .all(|item| item.playlist_item_id.is_empty()));
+        .all(|item| item.playlist_item_id().is_empty()));
 }
 
 #[test]
@@ -347,5 +347,5 @@ fn save_and_save_on_quit_cannot_resurrect_a_consumed_occurrence() {
     assert!(app.try_quit());
     let persisted = crate::config::load_queue_state().expect("queue persisted");
     assert_eq!(persisted.items.len(), 1);
-    assert_eq!(persisted.items[0].id, "id1");
+    assert_eq!(persisted.items[0].id(), "id1");
 }

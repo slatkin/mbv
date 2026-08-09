@@ -1,4 +1,4 @@
-use super::album_plan::{GroupedAlbumDisplayPlan, GroupedAlbumDisplayRow};
+use super::album_plan::{GroupedAlbumDisplayPlan, GroupedAlbumDisplayRow, HeaderFocusCtx};
 use crate::app::layout::LibraryRowTarget;
 use crate::app::music_grouping::GroupedAlbumCatalog;
 use crate::app::{App, ArtistHeaderSelection};
@@ -123,9 +123,11 @@ impl App {
             &order,
             cursor,
             false,
-            true,
-            selected,
-            expand_selected,
+            HeaderFocusCtx {
+                selectable_headers: true,
+                selected_artist_header: selected,
+                expand_selected,
+            },
             None,
             false, // hero_handles_detail: cursor needs the full plan
         );
@@ -393,9 +395,11 @@ impl App {
             &order,
             level.cursor,
             false,
-            true,
-            Some(selection),
-            expand_selected,
+            HeaderFocusCtx {
+                selectable_headers: true,
+                selected_artist_header: Some(selection),
+                expand_selected,
+            },
             None,
             false, // hero_handles_detail: cursor needs the full plan
         );

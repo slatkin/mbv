@@ -179,7 +179,13 @@ impl App {
             .collect();
         crate::config::QueueState {
             source: self.queue_source.clone(),
-            items: self.player_tab.items.clone(),
+            items: self
+                .player_tab
+                .items
+                .iter()
+                .cloned()
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
             cursor: self.player_tab.queue_cursor,
             last_played_item_id: self.last_played_item_id.clone(),
             last_played_completed: self.last_played_completed,
@@ -289,17 +295,18 @@ impl App {
             log::info!(target: "queue", "restore: queue_state.json has no items, nothing to restore");
             return;
         }
+        let emby_items = state.emby_items();
+        let restored_count = emby_items.len();
         let cursor = super::super::actions::queue_restore_cursor(
-            &state.items,
+            &emby_items,
             state.cursor,
             state.last_played_item_id.as_deref(),
             state.last_played_completed,
         );
-        let restored_count = state.items.len();
         self.last_played_item_id = state.last_played_item_id;
         self.last_played_completed = state.last_played_completed;
         self.queue_source = state.source;
-        self.player_tab.set_items(state.items, cursor);
+        self.player_tab.set_items(emby_items, cursor);
         self.queue_dirty = false;
         log::info!(target: "queue", "restore: restored {restored_count} item(s), cursor={cursor}");
         self.spawn_enrich_queue_state(state.positions);

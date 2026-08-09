@@ -208,13 +208,10 @@ impl PlaybackRun {
 
         let start_idx = start_idx.min(new_items.len() - 1);
         for (i, item) in new_items.iter().enumerate() {
-            let ep = if item.is_audio() { "Audio" } else { "Videos" };
-            let url = format!(
-                "{}/{}/{}/stream?static=true&api_key={}",
-                self.server_url, ep, item.id, self.token
-            );
+            let queue_item = QueueItem::Emby(Box::new(item.clone()));
+            let url = mpv_url_for_queue_item(&queue_item, &self.server_url, &self.token);
             let mode = if i == 0 { "replace" } else { "append-play" };
-            let title_opt = mpv_title_opt(&item.display_name());
+            let title_opt = mpv_title_opt(&queue_item.display_name());
             if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()])
             {
                 log::warn!(target: "player", "ReplaceQueue loadfile error: {}", mpv_err_str(&e));
@@ -263,7 +260,7 @@ impl PlaybackRun {
 
     fn append_items_to_queue(&mut self, items: Vec<EmbyItem>) {
         for item in items {
-            self.queue.append(item);
+            self.queue.append(QueueItem::Emby(Box::new(item)));
         }
         self.status.lock().unwrap().queue_len = self.queue_len();
     }
@@ -274,12 +271,9 @@ impl PlaybackRun {
         }
 
         for item in &new_items {
-            let ep = if item.is_audio() { "Audio" } else { "Videos" };
-            let url = format!(
-                "{}/{}/{}/stream?static=true&api_key={}",
-                self.server_url, ep, item.id, self.token
-            );
-            let title_opt = mpv_title_opt(&item.display_name());
+            let queue_item = QueueItem::Emby(Box::new(item.clone()));
+            let url = mpv_url_for_queue_item(&queue_item, &self.server_url, &self.token);
+            let title_opt = mpv_title_opt(&queue_item.display_name());
             if let Err(e) = mpv.command(
                 "loadfile",
                 &[url.as_str(), "append-play", "-1", title_opt.as_str()],
@@ -349,5 +343,21 @@ impl PlaybackRun {
             log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
         }
         send_ep_info(mpv, &item);
+    }
+}
+
+/// Constructs the mpv loadfile URL for a `QueueItem`.
+/// - Emby: the standard Emby streaming URL.
+/// - Feed: the enclosure/link URL handed directly to mpv.
+fn mpv_url_for_queue_item(item: &QueueItem, server_url: &str, token: &str) -> String {
+    match item {
+        QueueItem::Emby(emby) => {
+            let ep = if emby.is_audio() { "Audio" } else { "Videos" };
+            format!(
+                "{}/{}/{}/stream?static=true&api_key={}",
+                server_url, ep, emby.id, token
+            )
+        }
+        QueueItem::Feed(entry) => entry.primary_source().unwrap_or("").to_string(),
     }
 }

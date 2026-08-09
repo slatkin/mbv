@@ -91,8 +91,9 @@ impl App {
         let state: crate::config::QueueState = serde_json::from_value(record.value.clone())
             .map_err(|e| format!("parse shared queue state: {e}"))?;
         mirror_shared_document(SharedDocumentKind::QueueState, &record.value)?;
+        let emby_items = state.emby_items();
         let cursor = super::actions::queue_restore_cursor(
-            &state.items,
+            &emby_items,
             state.cursor,
             state.last_played_item_id.as_deref(),
             state.last_played_completed,
@@ -104,7 +105,7 @@ impl App {
         // projection before installing it so late consume outcomes cannot
         // alias a slot in this new queue lineage.
         self.retire_remote_tracking(true);
-        self.player_tab.set_items(state.items, cursor);
+        self.player_tab.set_items(emby_items, cursor);
         self.queue_dirty = false;
         self.spawn_enrich_queue_state(state.positions);
         Ok(())
@@ -437,7 +438,10 @@ mod tests {
         let mut app = crate::app::tests::make_local_daemon_app_stub(live_items.clone());
         let shared_state = crate::config::QueueState {
             source: crate::config::QueueSource::Album,
-            items: crate::app::tests::make_items(5),
+            items: crate::app::tests::make_items(5)
+                .into_iter()
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
             cursor: 4,
             last_played_item_id: None,
             last_played_completed: false,

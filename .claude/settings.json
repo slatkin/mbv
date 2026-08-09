@@ -19,9 +19,6 @@
       "Bash(cargo clippy *)"
     ]
   },
-  "enabledPlugins": {
-    "agent-skills@addy-agent-skills": false
-  },
   "hooks": {
     "PostToolUse": [
       {
@@ -34,5 +31,9 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "agent-skills@addy-agent-skills": false,
+    "superpowers@claude-plugins-official": true
   }
 }

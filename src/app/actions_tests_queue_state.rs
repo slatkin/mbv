@@ -163,14 +163,11 @@ fn restore_queue_state_populates_queue_synchronously_from_disk() {
     let _xdg = XdgHomeGuard::new();
 
     let items = crate::app::tests::make_items(3);
-    crate::config::save_queue_state(&crate::config::QueueState {
-        source: crate::config::QueueSource::Unknown,
-        items: items.clone(),
-        cursor: 1,
-        last_played_item_id: None,
-        last_played_completed: false,
-        positions: Default::default(),
-    })
+    crate::config::save_queue_state(&crate::config::QueueState::from_emby_items(
+        items,
+        1,
+        crate::config::QueueSource::Unknown,
+    ))
     .expect("save queue state");
 
     let mut app = crate::app::tests::make_app_stub();
@@ -189,7 +186,10 @@ fn restore_queue_state_clears_a_stale_dirty_flag() {
 
     crate::config::save_queue_state(&crate::config::QueueState {
         source: crate::config::QueueSource::Unknown,
-        items: crate::app::tests::make_items(1),
+        items: crate::app::tests::make_items(1)
+            .into_iter()
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .collect(),
         cursor: 0,
         last_played_item_id: None,
         last_played_completed: false,
@@ -599,14 +599,9 @@ fn save_queue_state_does_not_delete_file_while_attached_to_remote_session() {
     let _xdg = XdgHomeGuard::new();
 
     // Seed an on-disk queue as if a previous local session left one behind.
-    crate::config::save_queue_state(&crate::config::QueueState {
-        source: crate::config::QueueSource::Unknown,
-        items: crate::app::tests::make_items(2),
-        cursor: 0,
-        last_played_item_id: None,
-        last_played_completed: false,
-        positions: Default::default(),
-    })
+    crate::config::save_queue_state(&crate::app::tests::make_queue_state(
+        crate::app::tests::make_items(1),
+    ))
     .expect("save queue state");
 
     let mut app = crate::app::tests::make_app_stub();
@@ -630,7 +625,10 @@ fn save_queue_state_still_clears_file_when_locally_empty_and_not_attached() {
 
     crate::config::save_queue_state(&crate::config::QueueState {
         source: crate::config::QueueSource::Unknown,
-        items: crate::app::tests::make_items(1),
+        items: crate::app::tests::make_items(1)
+            .into_iter()
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .collect(),
         cursor: 0,
         last_played_item_id: None,
         last_played_completed: false,
@@ -659,7 +657,10 @@ fn save_queue_state_no_clear_preserves_file_when_locally_empty_and_not_attached(
     // session never touched the local queue tab (e.g. only browsed Home).
     crate::config::save_queue_state(&crate::config::QueueState {
         source: crate::config::QueueSource::Unknown,
-        items: crate::app::tests::make_items(1),
+        items: crate::app::tests::make_items(1)
+            .into_iter()
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .collect(),
         cursor: 0,
         last_played_item_id: None,
         last_played_completed: false,

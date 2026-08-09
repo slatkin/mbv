@@ -47,7 +47,10 @@ impl App {
                         {
                             RemoveSlotResult::Removed(slot) => {
                                 self.playback_queue_mut().sync_items_from_queue_model();
-                                Some(slot.item)
+                                match slot.item {
+                                    mbv_core::playback_queue::QueueItem::Emby(e) => Some(e),
+                                    mbv_core::playback_queue::QueueItem::Feed(_) => None,
+                                }
                             }
                             RemoveSlotResult::RequiresActiveConfirmation(_)
                             | RemoveSlotResult::NotFound => None,
@@ -61,8 +64,7 @@ impl App {
                                     queue.queue_cursor.min(queue.items.len().saturating_sub(1));
                             }
                             if !self.player.is_remote() {
-                                self.queue_undo_stack
-                                    .push(UndoEntry::Remove(pos, Box::new(item)));
+                                self.queue_undo_stack.push(UndoEntry::Remove(pos, item));
                             }
 
                             // Only stop playback and record the deferred

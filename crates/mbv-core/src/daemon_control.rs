@@ -41,7 +41,11 @@ fn project_queue_state(
 
     crate::config::QueueState {
         source: source.clone(),
-        items: items.to_vec(),
+        items: items
+            .iter()
+            .cloned()
+            .map(|item| crate::playback_queue::QueueItem::Emby(Box::new(item)))
+            .collect(),
         cursor,
         last_played_item_id,
         // Deliberately false: the daemon doesn't track completion, and

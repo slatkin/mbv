@@ -7,11 +7,11 @@ impl PlaybackRun {
         self.queue.slots().get(idx).map(|slot| slot.slot_id)
     }
 
-    fn item_at(&self, idx: usize) -> Option<&EmbyItem> {
+    fn item_at(&self, idx: usize) -> Option<&QueueItem> {
         self.queue.slots().get(idx).map(|slot| &slot.item)
     }
 
-    fn active_item(&self) -> Option<&EmbyItem> {
+    fn active_item(&self) -> Option<&QueueItem> {
         self.queue.active_slot().map(|slot| &slot.item)
     }
 
@@ -188,36 +188,45 @@ impl PlaybackRun {
             return;
         };
 
-        self.osd_title = item.display_name();
-        self.last_valid_pos = if item.is_audio() {
-            0
-        } else {
-            item.playback_position_ticks
-        };
-        self.pending_resume_secs = if self.origin == PlaybackOrigin::Standalone {
-            // Standalone fresh-start (cmd_load_new) already sets the mpv `start`
-            // property to the resume position before calling this; setting
-            // pending_resume_secs too would trigger a redundant absolute seek
-            // in on_playback_restart that also suppresses the first progress
-            // report for ~500ms. Queue playback and mid-session slot activation
-            // always run with Queue origin, so they are unaffected.
-            None
-        } else if !item.is_audio() && item.should_resume() {
-            Some(item.resume_seconds())
-        } else {
-            None
-        };
-        if item.item_type == "Episode" {
-            self.series_id = ItemId::new(item.series_id.clone());
-            self.season = item.parent_index_number;
-            self.episode = item.index_number;
-        } else {
-            self.series_id.clear();
-            self.season = 0;
-            self.episode = 0;
+        match &item {
+            QueueItem::Emby(emby) => {
+                self.osd_title = emby.display_name();
+                self.last_valid_pos = if emby.is_audio() {
+                    0
+                } else {
+                    emby.playback_position_ticks
+                };
+                self.pending_resume_secs = if self.origin == PlaybackOrigin::Standalone {
+                    None
+                } else if !emby.is_audio() && emby.should_resume() {
+                    Some(emby.resume_seconds())
+                } else {
+                    None
+                };
+                if emby.item_type == "Episode" {
+                    self.series_id = ItemId::new(emby.series_id.clone());
+                    self.season = emby.parent_index_number;
+                    self.episode = emby.index_number;
+                } else {
+                    self.series_id.clear();
+                    self.season = 0;
+                    self.episode = 0;
+                }
+                let (intro_start, intro_end) = load_intro_times(&self.reporter.client, &emby.id);
+                self.set_intro(intro_start, intro_end, emby.playback_position_ticks);
+            }
+            QueueItem::Feed(entry) => {
+                self.osd_title = entry.title.clone();
+                self.last_valid_pos = 0;
+                self.pending_resume_secs = None;
+                self.series_id.clear();
+                self.season = 0;
+                self.episode = 0;
+                self.intro_start = 0;
+                self.intro_end = 0;
+                self.intro_state = IntroState::Pending;
+            }
         }
-        let (intro_start, intro_end) = load_intro_times(&self.reporter.client, &item.id);
-        self.set_intro(intro_start, intro_end, item.playback_position_ticks);
     }
 
     // `startup_pause_for_pipe` (added for audio-pipe startup-pause handling)
@@ -245,29 +254,66 @@ impl PlaybackRun {
             .active_slot()
             .map(|slot| slot.item.clone())
             .expect("PlaybackRun::new requires at least one item");
-        let initial_pos = if initial_item.is_audio() {
-            0
-        } else {
-            initial_item.playback_position_ticks
+
+        let (
+            initial_pos,
+            pending_resume_secs,
+            osd_title,
+            series_id,
+            season,
+            episode,
+            intro_start,
+            intro_end,
+            past,
+        ) = match &initial_item {
+            QueueItem::Emby(emby) => {
+                let pos = if emby.is_audio() {
+                    0
+                } else {
+                    emby.playback_position_ticks
+                };
+                let resume = if !emby.is_audio() && emby.should_resume() {
+                    Some(emby.resume_seconds())
+                } else {
+                    None
+                };
+                let (intro_start, intro_end) = load_intro_times(&reporter.client, &emby.id);
+                let past = intro_end > 0 && pos >= intro_end;
+                let sid = if emby.item_type == "Episode" {
+                    ItemId::new(emby.series_id.clone())
+                } else {
+                    ItemId::empty()
+                };
+                (
+                    pos,
+                    resume,
+                    emby.display_name(),
+                    sid,
+                    emby.parent_index_number,
+                    emby.index_number,
+                    intro_start,
+                    intro_end,
+                    past,
+                )
+            }
+            QueueItem::Feed(entry) => (
+                0,
+                None,
+                entry.title.clone(),
+                ItemId::empty(),
+                0,
+                0,
+                0,
+                0,
+                false,
+            ),
         };
-        let (intro_start, intro_end) = load_intro_times(&reporter.client, &initial_item.id);
-        let past = intro_end > 0 && initial_pos >= intro_end;
-        let pending_resume_secs = if !initial_item.is_audio() && initial_item.should_resume() {
-            Some(initial_item.resume_seconds())
-        } else {
-            None
-        };
+
         log::info!(
             target: "player",
             "playback init origin={origin:?} idx={start_idx} item_pos={}s pending_resume={pending_resume_secs:?}s",
             initial_pos / crate::api::TICKS_PER_SECOND
         );
-        let osd_title = initial_item.display_name();
-        let series_id = if initial_item.item_type == "Episode" {
-            ItemId::new(initial_item.series_id.clone())
-        } else {
-            ItemId::empty()
-        };
         PlaybackRun {
             origin,
             config,
@@ -292,8 +338,8 @@ impl PlaybackRun {
             mark_played_id: None,
             last_mouse_osd: None,
             series_id,
-            season: initial_item.parent_index_number,
-            episode: initial_item.index_number,
+            season,
+            episode,
             next_up: NextUp::Idle,
             queue_next_up: NextUp::Idle,
             next_up_jump: false,

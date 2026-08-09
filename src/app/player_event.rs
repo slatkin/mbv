@@ -88,7 +88,7 @@ impl App {
                                 if position_ticks > 0 && !slot.item.is_audio() {
                                     position_ticks
                                 } else {
-                                    slot.item.playback_position_ticks
+                                    slot.item.playback_position_ticks()
                                 }
                             } else {
                                 0
@@ -109,7 +109,7 @@ impl App {
                         }
                         if preserve_local_state {
                             if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-                                self.last_played_item_id = Some(slot.item.id.clone());
+                                self.last_played_item_id = Some(slot.item.id().to_string());
                                 self.last_played_completed = played;
                             }
                         }
@@ -190,7 +190,7 @@ impl App {
                     if position_ticks >= 300_000_000 && !slot.item.is_audio() {
                         position_ticks
                     } else {
-                        slot.item.playback_position_ticks
+                        slot.item.playback_position_ticks()
                     }
                 } else {
                     return false;

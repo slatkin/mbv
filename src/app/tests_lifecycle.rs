@@ -243,7 +243,11 @@ fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
     let old_items = make_items(1);
     crate::config::save_queue_state(&crate::config::QueueState {
         source: crate::config::QueueSource::Album,
-        items: old_items.clone(),
+        items: old_items
+            .iter()
+            .cloned()
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .collect(),
         cursor: 0,
         last_played_item_id: None,
         last_played_completed: false,
@@ -257,11 +261,7 @@ fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
 
     let state = crate::config::load_queue_state().expect("existing daemon snapshot");
     assert_eq!(
-        state
-            .items
-            .iter()
-            .map(|item| item.id.as_str())
-            .collect::<Vec<_>>(),
+        state.items.iter().map(|item| item.id()).collect::<Vec<_>>(),
         old_items
             .iter()
             .map(|item| item.id.as_str())

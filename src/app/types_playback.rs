@@ -113,7 +113,7 @@ pub(super) struct HomePane {
     pub(super) continue_items: Vec<EmbyItem>,
     pub(super) continue_cursor: usize,
     pub(super) latest: Vec<(String, String, Vec<EmbyItem>, usize)>, // (title, lib_id, items, cursor)
-    pub(super) section: usize,                                       // 0=continue, 1..=latest
+    pub(super) section: usize,                                      // 0=continue, 1..=latest
     /// Flat cursor for the home list (spans continue_items then all latest sections).
     pub(super) home_cursor: usize,
     /// Viewport scroll offset for the home list.

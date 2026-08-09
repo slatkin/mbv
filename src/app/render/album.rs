@@ -1,5 +1,5 @@
 use super::album_art::{INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS};
-use super::album_plan::GroupedAlbumDisplayRow;
+use super::album_plan::{GroupedAlbumDisplayRow, HeaderFocusCtx};
 use super::album_rows::AlbumRowCtx;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
@@ -18,6 +18,14 @@ const TRACK_BLOCK_MARGIN: u16 = 2;
 /// hand-picked offsets.
 const TRACK_TEXT_MARGIN: u16 = 2;
 
+/// The cursor position and last-stored scroll offset for a grouped-album
+/// rows render pass -- travel together since the scroll offset is always
+/// clamped relative to the cursor's row.
+pub(super) struct AlbumRowsCursorCtx {
+    pub(super) cursor: usize,
+    pub(super) stored_scroll: usize,
+}
+
 impl App {
     pub(super) fn render_grouped_album_rows(
         &mut self,
@@ -25,13 +33,16 @@ impl App {
         area: Rect,
         lib_idx: usize,
         albums: &[mbv_core::api::EmbyItem],
-        cursor: usize,
-        stored_scroll: usize,
+        cursor_ctx: AlbumRowsCursorCtx,
         focused: bool,
         hero_handles_detail: bool,
         cols: u16,
         layout: &mut LayoutMain,
     ) -> usize {
+        let AlbumRowsCursorCtx {
+            cursor,
+            stored_scroll,
+        } = cursor_ctx;
         let visible = area.height as usize;
         let avail = (area.width as usize).saturating_sub(2);
         let (album_info, order) = {
@@ -79,9 +90,11 @@ impl App {
             &order,
             cursor,
             true,
-            selectable_headers,
-            selected.as_ref(),
-            expand_selected,
+            HeaderFocusCtx {
+                selectable_headers,
+                selected_artist_header: selected.as_ref(),
+                expand_selected,
+            },
             Some((
                 area.width,
                 if self.images_enabled() && area.width >= INLINE_ALBUM_ART_RESERVED + 20 {

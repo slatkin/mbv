@@ -1,4 +1,3 @@
-use crate::api::EmbyItem;
 use std::env;
 use std::path::PathBuf;
 
@@ -617,7 +616,7 @@ pub struct QueueState {
     // has to already be on disk. A separate best-effort background fetch
     // refreshes played/position state from the server afterward.
     #[serde(default)]
-    pub items: Vec<EmbyItem>,
+    pub items: Vec<crate::playback_queue::QueueItem>,
     #[serde(default)]
     pub cursor: usize,
     pub last_played_item_id: Option<String>,
@@ -626,6 +625,47 @@ pub struct QueueState {
     // UserData when a fresh launch races with Emby's async position write.
     #[serde(default)]
     pub positions: std::collections::HashMap<String, i64>,
+}
+
+impl QueueState {
+    /// Returns only the Emby items from the queue state.
+    /// Used by the UI layer (PlayerTab) and ctrl boundary, which only
+    /// operate on Emby items.
+    pub fn emby_items(&self) -> Vec<crate::api::EmbyItem> {
+        self.items
+            .iter()
+            .filter_map(|qi| match qi {
+                crate::playback_queue::QueueItem::Emby(e) => Some((**e).clone()),
+                crate::playback_queue::QueueItem::Feed(_) => None,
+            })
+            .collect()
+    }
+
+    /// Consumes self and returns the inner `Vec<QueueItem>`.
+    pub fn into_queue_items(self) -> Vec<crate::playback_queue::QueueItem> {
+        self.items
+    }
+
+    /// Creates a `QueueState` from `Vec<EmbyItem>`, wrapping each as
+    /// `QueueItem::Emby`. Convenience for tests and callers that only
+    /// deal with Emby items.
+    pub fn from_emby_items(
+        items: Vec<crate::api::EmbyItem>,
+        cursor: usize,
+        source: QueueSource,
+    ) -> Self {
+        Self {
+            items: items
+                .into_iter()
+                .map(|item| crate::playback_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
+            cursor,
+            source,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        }
+    }
 }
 
 /// One library position per library (#361 collapsed the old two-scope

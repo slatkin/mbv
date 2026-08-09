@@ -13,7 +13,10 @@ fn local_daemon_bootstrap_adopts_saved_local_queue_and_source() {
                 id: Some("pl1".into()),
                 name: "Saved".into(),
             },
-            items,
+            items: items
+                .into_iter()
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
             cursor: 1,
             last_played_item_id: None,
             last_played_completed: false,
@@ -77,7 +80,10 @@ fn local_daemon_bootstrap_carries_saved_positions_for_enrichment() {
         crate::config::QueueSource::Unknown,
         Some(crate::config::QueueState {
             source: crate::config::QueueSource::Album,
-            items,
+            items: items
+                .into_iter()
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
             cursor: 0,
             last_played_item_id: None,
             last_played_completed: false,
@@ -99,15 +105,19 @@ fn local_daemon_bootstrap_has_no_positions_without_saved_state() {
 #[test]
 fn local_daemon_bootstrap_uses_restore_cursor_and_carries_last_played_state() {
     let items = make_items(3);
+    let last_played_id = items[1].id.clone();
     let bootstrap = bootstrap_local_daemon_queue(
         Vec::new(),
         0,
         crate::config::QueueSource::Unknown,
         Some(crate::config::QueueState {
             source: crate::config::QueueSource::Album,
-            items: items.clone(),
+            items: items
+                .into_iter()
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
             cursor: 0,
-            last_played_item_id: Some(items[1].id.clone()),
+            last_played_item_id: Some(last_played_id.clone()),
             last_played_completed: true,
             positions: Default::default(),
         }),
@@ -116,7 +126,7 @@ fn local_daemon_bootstrap_uses_restore_cursor_and_carries_last_played_state() {
     assert_eq!(bootstrap.player_tab.queue_cursor, 2);
     assert_eq!(
         bootstrap.last_played_item_id.as_deref(),
-        Some(items[1].id.as_str())
+        Some(last_played_id.as_str())
     );
     assert!(bootstrap.last_played_completed);
 }
@@ -136,7 +146,10 @@ fn local_daemon_bootstrap_prefers_existing_daemon_queue_state() {
                 id: Some("local".into()),
                 name: "Local Saved".into(),
             },
-            items: make_items(1),
+            items: make_items(1)
+                .into_iter()
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                .collect(),
             cursor: 0,
             last_played_item_id: None,
             last_played_completed: false,
@@ -168,7 +181,10 @@ fn local_daemon_app_keeps_live_queue_over_stale_disk_snapshot() {
 
     crate::config::save_queue_state(&crate::config::QueueState {
         source: crate::config::QueueSource::Unknown,
-        items: make_items(5),
+        items: make_items(5)
+            .into_iter()
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .collect(),
         cursor: 0,
         last_played_item_id: None,
         last_played_completed: false,

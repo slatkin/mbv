@@ -190,7 +190,9 @@ impl PlaybackRun {
             auto_select_tracks(mpv, &self.status, &prefs);
             self.tracks_initialized = true;
             if let Some(item) = self.active_item().cloned() {
-                send_ep_info(mpv, &item);
+                if let Some(emby) = item.as_emby() {
+                    send_ep_info(mpv, emby);
+                }
             }
             if let Some(secs) = self.pending_resume_secs.take() {
                 log::info!(target: "player", "playlist pending_resume cleared: seeking to {secs:.0}s idx={}", self.current_idx);
@@ -328,12 +330,13 @@ impl PlaybackRun {
             });
             return false;
         };
-        let natural = reason == mpv_end_file_reason::Eof && completed_item.runtime_ticks > 0;
+        let completed_runtime = completed_item.runtime_ticks();
+        let natural = reason == mpv_end_file_reason::Eof && completed_runtime > 0;
         let near_end = is_near_end(
             completed_is_audio,
             natural,
             self.last_valid_pos,
-            completed_item.runtime_ticks,
+            completed_runtime,
         );
         let was_next_up = std::mem::replace(&mut self.next_up_jump, false);
         let track_finished = natural || near_end || was_next_up;
@@ -346,7 +349,7 @@ impl PlaybackRun {
             natural={natural} near_end={near_end} was_next_up={was_next_up} \
             completed_is_audio={completed_is_audio} last_valid_pos={} runtime={} \
             => played_out={played_out} consume_track={consume_track}",
-            self.last_valid_pos, completed_item.runtime_ticks);
+            self.last_valid_pos, completed_runtime);
         let completed_pos =
             queue_completed_pos(completed_is_audio, natural, near_end, self.last_valid_pos);
 
@@ -361,10 +364,12 @@ impl PlaybackRun {
             self.status.lock().unwrap().active = false;
             self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(completed_pos));
             if played_out {
-                let id = completed_item.id.clone();
-                if let Err(e) = self.reporter.client.mark_played(&id) {
-                    log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
-                    retry_mark_played(self.reporter.client.clone(), ItemId::new(id));
+                if let Some(emby) = completed_item.as_emby() {
+                    let id = emby.id.clone();
+                    if let Err(e) = self.reporter.client.mark_played(&id) {
+                        log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
+                        retry_mark_played(self.reporter.client.clone(), ItemId::new(id));
+                    }
                 }
             }
             let _ = self.event_tx.send(PlayerEvent::Stopped {
@@ -396,32 +401,45 @@ impl PlaybackRun {
         {
             let mut s = self.status.lock().unwrap();
             s.position_ticks = 0;
-            s.runtime_ticks = next_item.runtime_ticks;
+            s.runtime_ticks = next_item.runtime_ticks();
             s.current_idx = self.current_idx;
             s.queue_len = self.queue_len();
-            s.set_current_item_metadata(&next_item);
+            if let Some(emby) = next_item.as_emby() {
+                s.set_current_item_metadata(emby);
+            } else {
+                s.title = next_item.title().to_string();
+                s.art_item_id = next_item.id().to_string();
+            }
         }
 
         let stop_report_accepted = self.reporter.report_stopped(completed_pos);
         if played_out {
-            let id = completed_item.id.clone();
-            if let Err(e) = self.reporter.client.mark_played(&id) {
-                log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
-                retry_mark_played(self.reporter.client.clone(), ItemId::new(id));
+            if let Some(emby) = completed_item.as_emby() {
+                let id = emby.id.clone();
+                if let Err(e) = self.reporter.client.mark_played(&id) {
+                    log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
+                    retry_mark_played(self.reporter.client.clone(), ItemId::new(id));
+                }
             }
         }
 
         let _ = mpv.set_property("start", "0");
         self.queue_next_up.reset();
-        send_ep_info(mpv, &next_item);
+        if let Some(emby) = next_item.as_emby() {
+            send_ep_info(mpv, emby);
+        }
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
 
         // Stop progress reporter during transition to prevent stale reports.
         progress.stop_and_join(self.progress_join_budget());
-        let (urls, ok) = self.reporter.start_item(&next_item);
-        self.ext_sub_urls = urls;
-        if !ok {
-            log::warn!(target: "player", "start_item failed for playlist track-transition item={}", next_item.id);
+        if let Some(emby) = next_item.as_emby() {
+            let (urls, ok) = self.reporter.start_item(emby);
+            self.ext_sub_urls = urls;
+            if !ok {
+                log::warn!(target: "player", "start_item failed for playlist track-transition item={}", emby.id);
+            }
+        } else {
+            self.ext_sub_urls = vec![];
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
 
