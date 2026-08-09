@@ -1,8 +1,11 @@
+use super::album::AlbumRowsCursorCtx;
 use super::album_plan::{sorted_group_album_order, GroupedAlbumDisplayRow, HeaderFocusCtx};
 use super::test_helpers::*;
 use super::*;
 use crate::app::layout::LibraryRowTarget;
 use crate::app::tests::make_item;
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
 
 #[test]
 fn selectable_artist_headers_are_typed_row_targets() {
@@ -119,6 +122,38 @@ fn artist_and_album_focus_share_one_selected_group_bounds() {
 }
 
 #[test]
+fn focused_group_header_has_no_internal_spacer_when_hero_handles_detail() {
+    let mut app = make_music_group_app();
+    let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
+    let album_info = app.group_album_info(&albums, None);
+    let order = sorted_group_album_order(&album_info);
+    let plan = app.build_grouped_album_display_plan(
+        &albums,
+        &album_info,
+        &order,
+        0,
+        false,
+        HeaderFocusCtx {
+            selectable_headers: true,
+            selected_artist_header: None,
+            expand_selected: false,
+        },
+        Some((120, 0)),
+        true,
+    );
+
+    let header_row = plan
+        .rows
+        .iter()
+        .position(|row| matches!(row, GroupedAlbumDisplayRow::ArtistHeader(_)))
+        .expect("focused artist header should render");
+    assert!(matches!(
+        plan.rows.get(header_row + 1),
+        Some(GroupedAlbumDisplayRow::Album(0))
+    ));
+}
+
+#[test]
 fn grouped_hero_art_follows_album_focus() {
     let mut album_app = make_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");
@@ -162,4 +197,57 @@ fn grouped_hero_art_follows_album_focus() {
     let _header_out = render_library_to_string_sized(&mut header_app, &mut header_layout, 60, 30);
     assert!(header_app.card_image_loading.contains("album-1:P"));
     assert!(!header_app.card_image_loading.contains("album-1:sq"));
+}
+
+#[test]
+fn two_column_album_groups_keep_spacer_above_next_group() {
+    let mut app = make_music_group_app();
+    app.music_levels[0] = "artist".into();
+    app.album_tracks_cache.insert("album-1".into(), Vec::new());
+
+    for (id, artist, name) in [
+        ("album-2", "Beta", "Beta Album"),
+        ("album-3", "Gamma", "Gamma Album"),
+    ] {
+        let mut album = make_item(name, "MusicAlbum");
+        album.id = id.into();
+        album.artist = artist.into();
+        app.libs[0].nav_stack.last_mut().unwrap().items.push(album);
+    }
+
+    let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
+    let mut layout = LayoutMain::default();
+    let mut terminal = Terminal::new(TestBackend::new(80, 20)).unwrap();
+    terminal
+        .draw(|f| {
+            app.render_grouped_album_rows(
+                f,
+                Rect::new(0, 0, 80, 20),
+                0,
+                &albums,
+                AlbumRowsCursorCtx {
+                    cursor: 0,
+                    stored_scroll: 0,
+                },
+                true,
+                false,
+                2,
+                &mut layout,
+            );
+        })
+        .unwrap();
+
+    let rendered = buffer_to_string(&terminal);
+    let lines: Vec<&str> = rendered.lines().collect();
+    for artist in ["Beta", "Gamma"] {
+        let row = lines
+            .iter()
+            .position(|line| line.trim() == artist)
+            .expect("artist header should render");
+        assert!(
+            row > 0 && lines[row - 1].trim().is_empty(),
+            "expected a spacer above {artist}:\n{}",
+            lines.join("\n")
+        );
+    }
 }

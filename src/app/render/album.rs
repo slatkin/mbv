@@ -299,7 +299,14 @@ impl App {
                 }
                 GroupedAlbumDisplayRow::ArtistHeader(_)
                 | GroupedAlbumDisplayRow::ArtistGroupSpacer => {
-                    // These always get full width and start a new row
+                    // Flush a partial two-column album row before a full-width
+                    // group row. Without this, an odd-sized group lets its
+                    // spacer/header reuse the last album's screen row, so the
+                    // following group has no visible padding above it.
+                    if !group_album_idx.is_multiple_of(cn) {
+                        current_y += 1;
+                    }
+                    // These always get full width and start a new row.
                     group_album_idx = 0;
                     (full_row_rect(current_y), true)
                 }

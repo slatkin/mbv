@@ -304,8 +304,6 @@ impl App {
                     ));
                 }
 
-                rows.push(GroupedAlbumDisplayRow::ArtistGroupSpacer);
-
                 for &idx in visible_group_indices {
                     rows.push(GroupedAlbumDisplayRow::Album(idx));
                     rows.extend(std::iter::repeat_n(
