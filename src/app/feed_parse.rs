@@ -1,23 +1,32 @@
 use super::types_feed::IdleFeedItem;
+use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::config::FeedKind;
+use mbv_core::playback_queue::FeedEntry;
 use std::sync::Arc;
 
-/// Fetch an RSS/Atom feed and parse `<item>`/`<entry>` titles and links.
-pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
-    // `ureq::get` never picks up the `native-tls` feature on its own — it only
-    // activates when a connector is configured explicitly on the agent — so
-    // plain shortcut calls fail every `https://` feed with "no TLS backend is
-    // configured". Build an agent with the connector wired up instead.
+/// Fetch the raw body of an RSS/Atom feed URL.
+///
+/// `ureq::get` never picks up the `native-tls` feature on its own — it only
+/// activates when a connector is configured explicitly on the agent — so
+/// plain shortcut calls fail every `https://` feed with "no TLS backend is
+/// configured". Build an agent with the connector wired up instead.
+fn fetch_feed_body(url: &str) -> Result<String, String> {
     let connector =
         native_tls::TlsConnector::new().map_err(|e| format!("Failed to initialize TLS: {e}"))?;
     let agent = ureq::AgentBuilder::new()
         .tls_connector(Arc::new(connector))
         .build();
-    let body = agent
+    agent
         .get(url)
         .call()
         .map_err(|e| format!("HTTP request failed: {e}"))?
         .into_string()
-        .map_err(|e| format!("Failed to read response body: {e}"))?;
+        .map_err(|e| format!("Failed to read response body: {e}"))
+}
+
+/// Fetch an RSS/Atom feed and parse `<item>`/`<entry>` titles and links.
+pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
+    let body = fetch_feed_body(url)?;
 
     let mut items = Vec::new();
 
@@ -48,6 +57,326 @@ pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String
     }
 
     Ok(items)
+}
+
+/// Fetch an RSS/Atom feed and parse each `<item>`/`<entry>` into a
+/// [`FeedEntry`] (guid, title, enclosure URL, MIME type, duration → ticks,
+/// publish date). Sibling of `fetch_and_parse_rss` (#471); the idle-feed
+/// path keeps its lean `IdleFeedItem` shape. Entries without any playable
+/// source are skipped.
+pub(super) fn fetch_and_parse_entries(url: &str) -> Result<Vec<FeedEntry>, String> {
+    let body = fetch_feed_body(url)?;
+    let mut entries = parse_rss_entries(&body);
+    if entries.is_empty() {
+        entries = parse_atom_entries(&body);
+    }
+    Ok(entries)
+}
+
+fn parse_rss_entries(body: &str) -> Vec<FeedEntry> {
+    let mut entries = Vec::new();
+    let Some(start) = body.find("<item>") else {
+        return entries;
+    };
+    for item in body[start..].split("<item>").skip(1) {
+        let Some(title) = extract_tag(item, "title") else {
+            continue;
+        };
+        let link = extract_tag(item, "link");
+        let enclosure = extract_enclosure(item);
+        let enclosure_url = enclosure.as_ref().map(|(url, _)| url.clone());
+        let mime_type = enclosure.and_then(|(_, mime)| mime);
+        let Some(source) = enclosure_url.as_deref().or(link.as_deref()) else {
+            continue;
+        };
+        let guid = extract_tag(item, "guid").unwrap_or_else(|| source.to_string());
+        let duration_ticks = extract_tag(item, "itunes:duration")
+            .and_then(|d| duration_secs(&d))
+            .map(|secs| secs * TICKS_PER_SECOND as u64);
+        let pub_date_secs = extract_tag(item, "pubDate").and_then(|d| parse_pub_date_secs(&d));
+        entries.push(FeedEntry {
+            guid,
+            title,
+            enclosure_url,
+            link,
+            mime_type,
+            duration_ticks,
+            pub_date_secs,
+        });
+    }
+    entries
+}
+
+fn parse_atom_entries(body: &str) -> Vec<FeedEntry> {
+    let mut entries = Vec::new();
+    let Some(start) = body.find("<entry>") else {
+        return entries;
+    };
+    for entry in body[start..].split("<entry>").skip(1) {
+        let Some(title) = extract_tag(entry, "title") else {
+            continue;
+        };
+        let link = extract_atom_link(entry);
+        let enclosure = extract_atom_enclosure(entry);
+        let enclosure_url = enclosure.as_ref().map(|(url, _)| url.clone());
+        let mime_type = enclosure.as_ref().and_then(|(_, mime)| mime.clone());
+        let Some(source) = enclosure_url.as_deref().or(link.as_deref()) else {
+            continue;
+        };
+        let guid = extract_tag(entry, "id").unwrap_or_else(|| source.to_string());
+        let duration_ticks = extract_tag(entry, "itunes:duration")
+            .or_else(|| extract_tag(entry, "duration"))
+            .and_then(|d| duration_secs(&d))
+            .map(|secs| secs * TICKS_PER_SECOND as u64);
+        let pub_date_secs = extract_tag(entry, "published")
+            .or_else(|| extract_tag(entry, "updated"))
+            .and_then(|d| parse_pub_date_secs(&d));
+        entries.push(FeedEntry {
+            guid,
+            title,
+            enclosure_url,
+            link,
+            mime_type,
+            duration_ticks,
+            pub_date_secs,
+        });
+    }
+    entries
+}
+
+/// Infer the media kind of a feed entry from its enclosure MIME type;
+/// absent or unrecognized values default to Video. Keep in one helper so
+/// #472 can reuse it.
+pub(super) fn infer_feed_kind_from_mime(mime: Option<&str>) -> FeedKind {
+    match mime.map(|m| m.trim().to_ascii_lowercase()) {
+        Some(m) if m.starts_with("audio/") => FeedKind::Audio,
+        _ => FeedKind::Video,
+    }
+}
+
+/// The first `<enclosure ...>` element's `url` and `type` attributes
+/// (RSS), sanitized. None when no enclosure parses.
+fn extract_enclosure(text: &str) -> Option<(String, Option<String>)> {
+    let mut rest = text;
+    while let Some(pos) = rest.find("<enclosure") {
+        let tag = &rest[pos..];
+        let len = tag.find('>')?;
+        let tag_text = &tag[..len];
+        rest = &tag[len + 1..];
+        if let Some(url) = extract_attribute(tag_text, "url") {
+            return Some((url, extract_attribute(tag_text, "type")));
+        }
+    }
+    None
+}
+
+/// The first Atom `<link rel="enclosure">` element's `href` and `type`
+/// attributes, scanning past any alternate/self links.
+fn extract_atom_enclosure(text: &str) -> Option<(String, Option<String>)> {
+    let mut rest = text;
+    while let Some(pos) = rest.find("<link") {
+        let tag = &rest[pos..];
+        let len = tag.find('>')?;
+        let tag_text = &tag[..len];
+        rest = &tag[len + 1..];
+        if extract_attribute(tag_text, "rel").as_deref() != Some("enclosure") {
+            continue;
+        }
+        if let Some(url) = extract_attribute(tag_text, "href") {
+            return Some((url, extract_attribute(tag_text, "type")));
+        }
+    }
+    None
+}
+
+/// Extract the value of an `attr="..."` attribute from a single tag's
+/// text (entities decoded, control chars stripped, trimmed).
+fn extract_attribute(text: &str, attr: &str) -> Option<String> {
+    let needle = format!(r#"{attr}=""#);
+    let start = text.find(&needle)? + needle.len();
+    let end = text[start..].find('"')?;
+    let value = &text[start..start + end];
+    let decoded = decode_xml_entities(value);
+    let sanitized = strip_control_chars(&decoded);
+    Some(sanitized.trim().to_string())
+}
+
+/// Parse an `itunes:duration` value ("HH:MM:SS", "MM:SS", or bare
+/// seconds) into whole seconds; anything else yields None.
+fn duration_secs(text: &str) -> Option<u64> {
+    let parts: Vec<&str> = text.trim().split(':').collect();
+    match parts.as_slice() {
+        [s] => s.parse().ok(),
+        [m, s] => {
+            let m: u64 = m.parse().ok()?;
+            let s: u64 = s.parse().ok()?;
+            if s > 59 {
+                return None;
+            }
+            Some(m * 60 + s)
+        }
+        [h, m, s] => {
+            let h: u64 = h.parse().ok()?;
+            let m: u64 = m.parse().ok()?;
+            let s: u64 = s.parse().ok()?;
+            if m > 59 || s > 59 {
+                return None;
+            }
+            Some(h * 3600 + m * 60 + s)
+        }
+        _ => None,
+    }
+}
+
+/// Parse an RSS `pubDate` (RFC 2822) or Atom `published`/`updated`
+/// (ISO 8601) timestamp into unix seconds UTC; anything else yields None
+/// (missing dates sort last in the Feeds tab "All" group).
+fn parse_pub_date_secs(text: &str) -> Option<u64> {
+    let t = text.trim();
+    let t = t
+        .strip_suffix('Z')
+        .or_else(|| t.strip_suffix('z'))
+        .unwrap_or(t);
+    // ISO dates are Y-M-D based (at least two dashes); RFC 2822 dates are
+    // month-name based. A plain `contains('T')` is not enough — "GMT"
+    // zones and clock times contain "T"s too.
+    if t.matches('-').count() >= 2 {
+        parse_iso_date(t)
+    } else {
+        parse_rfc2822_date(t)
+    }
+}
+
+/// RFC 2822: "Sat, 09 Aug 2026 12:00:00 +0000" (weekday optional).
+fn parse_rfc2822_date(text: &str) -> Option<u64> {
+    let rest = text.split_once(',').map(|(_, r)| r).unwrap_or(text).trim();
+    let mut parts = rest.split_whitespace();
+    let day: u32 = parts.next()?.parse().ok()?;
+    let month: u32 = match parts.next()? {
+        "Jan" => 1,
+        "Feb" => 2,
+        "Mar" => 3,
+        "Apr" => 4,
+        "May" => 5,
+        "Jun" => 6,
+        "Jul" => 7,
+        "Aug" => 8,
+        "Sep" => 9,
+        "Oct" => 10,
+        "Nov" => 11,
+        "Dec" => 12,
+        _ => return None,
+    };
+    let year: i64 = parts.next()?.parse().ok()?;
+    let mut clock = parts.next()?.split(':');
+    let hour: u32 = clock.next()?.parse().ok()?;
+    let minute: u32 = clock.next()?.parse().ok()?;
+    let second: u32 = clock.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    if year < 1970 || month > 12 || day == 0 || day > 31 || hour > 23 || minute > 59 || second > 60
+    {
+        return None;
+    }
+    let offset_secs = parts.next().map(parse_zone_offset).unwrap_or(0);
+    Some(
+        (days_from_civil(year, month, day) * 86_400
+            + hour as i64 * 3600
+            + minute as i64 * 60
+            + second as i64
+            - offset_secs) as u64,
+    )
+}
+
+/// ISO 8601: "2026-08-09T12:00:00Z" / "…+02:00" / "…+0200", optional
+/// fractional seconds.
+fn parse_iso_date(text: &str) -> Option<u64> {
+    let mut parts = text.splitn(2, 'T');
+    let date_part = parts.next()?;
+    let time_part = parts.next()?;
+    let mut dp = date_part.split('-');
+    let year: i64 = dp.next()?.parse().ok()?;
+    let month: u32 = dp.next()?.parse().ok()?;
+    let day: u32 = dp.next()?.parse().ok()?;
+    if year < 1970 || month == 0 || month > 12 || day == 0 || day > 31 {
+        return None;
+    }
+    let (time, offset_secs) = match time_part.find(['+', '-']) {
+        Some(idx) => {
+            let (rest, offset) = time_part.split_at(idx);
+            (rest, parse_iso_offset(offset)?)
+        }
+        None => (time_part, 0),
+    };
+    let mut clock = time.split('.').next()?.split(':');
+    let hour: u32 = clock.next()?.parse().ok()?;
+    let minute: u32 = clock.next()?.parse().ok()?;
+    let second: u32 = clock.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    if hour > 23 || minute > 59 || second > 60 {
+        return None;
+    }
+    Some(
+        (days_from_civil(year, month, day) * 86_400
+            + hour as i64 * 3600
+            + minute as i64 * 60
+            + second as i64
+            - offset_secs) as u64,
+    )
+}
+
+/// "+02:00" / "-0500" style UTC offsets in seconds (east positive).
+fn parse_iso_offset(s: &str) -> Option<i64> {
+    let (sign, rest) = s.split_at(1);
+    let (hour, minute): (i64, i64) = if let Some((h, m)) = rest.split_once(':') {
+        (h.parse().ok()?, m.parse().ok()?)
+    } else if rest.len() >= 4 {
+        (rest[..2].parse().ok()?, rest[2..4].parse().ok()?)
+    } else {
+        (rest.parse().ok()?, 0)
+    };
+    let secs = hour * 3600 + minute * 60;
+    if sign == "-" {
+        Some(-secs)
+    } else {
+        Some(secs)
+    }
+}
+
+/// RFC 2822 numeric ("+0500" / "-0700") and named zones ("GMT", "UTC",
+/// "EST", …); unknown names are treated as UTC.
+fn parse_zone_offset(s: &str) -> i64 {
+    if let Some(hour) = s.strip_prefix('+') {
+        let h: i64 = hour[..2].parse().unwrap_or(0);
+        let m: i64 = hour.get(2..4).and_then(|m| m.parse().ok()).unwrap_or(0);
+        return h * 3600 + m * 60;
+    }
+    if let Some(hour) = s.strip_prefix('-') {
+        let h: i64 = hour[..2].parse().unwrap_or(0);
+        let m: i64 = hour.get(2..4).and_then(|m| m.parse().ok()).unwrap_or(0);
+        return -(h * 3600 + m * 60);
+    }
+    match s {
+        "GMT" | "UTC" | "UT" | "Z" => 0,
+        "EST" => -5 * 3600,
+        "EDT" => -4 * 3600,
+        "CST" => -6 * 3600,
+        "CDT" => -5 * 3600,
+        "MST" => -7 * 3600,
+        "MDT" => -6 * 3600,
+        "PST" => -8 * 3600,
+        "PDT" => -7 * 3600,
+        _ => 0,
+    }
+}
+
+/// Days since 1970-01-01 for a proleptic-Gregorian date (Howard Hinnant's
+/// civil algorithm).
+fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let mp = ((month + 9) % 12) as i64;
+    let doy = (153 * mp + 2) / 5 + day as i64 - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719_468
 }
 
 /// Extract the first `<tag>...</tag>` content from text.
@@ -184,7 +513,11 @@ fn strip_control_chars(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_atom_link, extract_tag};
+    use super::{
+        duration_secs, extract_atom_enclosure, extract_atom_link, extract_enclosure, extract_tag,
+        infer_feed_kind_from_mime, parse_atom_entries, parse_pub_date_secs, parse_rss_entries,
+    };
+    use mbv_core::config::FeedKind;
 
     #[test]
     fn extract_tag_unwraps_cdata_decodes_entities_and_strips_control_chars() {
@@ -213,6 +546,177 @@ mod tests {
             extract_atom_link(r#"<entry><link href="https://example.test/a&amp;b" /></entry>"#)
                 .as_deref(),
             Some("https://example.test/a&b")
+        );
+    }
+
+    #[test]
+    fn rss_entry_with_enclosure_guid_and_duration() {
+        let item = r#"<item>
+            <guid>ep-42</guid>
+            <title>Episode 42</title>
+            <link>https://example.test/ep-42</link>
+            <enclosure url="https://example.test/ep-42.mp3" type="audio/mpeg" length="12345"/>
+            <itunes:duration>01:02:03</itunes:duration>
+            <pubDate>Sat, 09 Aug 2026 12:00:00 +0000</pubDate>
+        </item>"#;
+        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"));
+        assert_eq!(entries.len(), 1);
+        let e = &entries[0];
+        assert_eq!(e.guid, "ep-42");
+        assert_eq!(e.title, "Episode 42");
+        assert_eq!(
+            e.enclosure_url.as_deref(),
+            Some("https://example.test/ep-42.mp3")
+        );
+        assert_eq!(e.mime_type.as_deref(), Some("audio/mpeg"));
+        assert_eq!(e.duration_ticks, Some((3723) * 10_000_000));
+        assert_eq!(e.pub_date_secs, Some(1_786_276_800));
+    }
+
+    #[test]
+    fn rss_entry_with_only_link_is_kept() {
+        let item = r#"<item>
+            <title>No enclosure</title>
+            <link>https://example.test/post</link>
+        </item>"#;
+        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"));
+        assert_eq!(entries.len(), 1);
+        let e = &entries[0];
+        assert_eq!(e.enclosure_url, None);
+        assert_eq!(e.link.as_deref(), Some("https://example.test/post"));
+        assert_eq!(e.guid, "https://example.test/post"); // guid falls back to the source
+        assert_eq!(e.duration_ticks, None);
+        assert_eq!(e.pub_date_secs, None);
+    }
+
+    #[test]
+    fn malformed_duration_yields_none_without_failing_the_feed() {
+        let item = r#"<item>
+            <guid>g1</guid>
+            <title>Bad duration</title>
+            <enclosure url="https://example.test/a.mp4" type="video/mp4"/>
+            <itunes:duration>not-a-duration</itunes:duration>
+        </item>
+        <item>
+            <guid>g2</guid>
+            <title>Good entry after bad</title>
+            <enclosure url="https://example.test/b.mp4" type="video/mp4"/>
+        </item>"#;
+        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"));
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].duration_ticks, None);
+        assert_eq!(entries[1].guid, "g2");
+    }
+
+    #[test]
+    fn atom_entry_with_enclosure_and_published() {
+        let entry = r#"<entry>
+            <id>tag:example.test,2026:ep7</id>
+            <title>Atom Episode</title>
+            <link rel="alternate" href="https://example.test/ep7"/>
+            <link rel="enclosure" href="https://example.test/ep7.m4a" type="audio/mp4"/>
+            <published>2026-08-09T12:00:00Z</published>
+            <updated>2026-08-09T13:00:00Z</updated>
+        </entry>"#;
+        let entries = parse_atom_entries(&format!("<feed>{entry}</feed>"));
+        assert_eq!(entries.len(), 1);
+        let e = &entries[0];
+        assert_eq!(e.guid, "tag:example.test,2026:ep7");
+        assert_eq!(
+            e.enclosure_url.as_deref(),
+            Some("https://example.test/ep7.m4a")
+        );
+        assert_eq!(e.mime_type.as_deref(), Some("audio/mp4"));
+        assert_eq!(e.link.as_deref(), Some("https://example.test/ep7"));
+        // `published` wins over `updated`.
+        assert_eq!(e.pub_date_secs, Some(1_786_276_800));
+    }
+
+    #[test]
+    fn entries_without_any_source_are_skipped() {
+        let item = r#"<item><title>No source at all</title></item>"#;
+        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"));
+        assert!(entries.is_empty());
+    }
+
+    #[test]
+    fn extract_enclosure_reads_url_and_type() {
+        let text = r#"<enclosure url="https://x.test/e.mp4" type="video/mp4" length="42"/>"#;
+        let (url, mime) = extract_enclosure(text).unwrap();
+        assert_eq!(url, "https://x.test/e.mp4");
+        assert_eq!(mime.as_deref(), Some("video/mp4"));
+        assert_eq!(extract_enclosure(r#"<enclosure type="audio/mpeg"/>"#), None);
+    }
+
+    #[test]
+    fn extract_atom_enclosure_skips_non_enclosure_links() {
+        let text = r#"<link rel="alternate" href="https://x.test/a"/>
+                      <link rel="enclosure" href="https://x.test/b.mp3" type="audio/mpeg"/>"#;
+        let (url, mime) = extract_atom_enclosure(text).unwrap();
+        assert_eq!(url, "https://x.test/b.mp3");
+        assert_eq!(mime.as_deref(), Some("audio/mpeg"));
+    }
+
+    #[test]
+    fn duration_formats_parse_and_garbage_does_not() {
+        assert_eq!(duration_secs("3723"), Some(3723));
+        assert_eq!(duration_secs("62:03"), Some(62 * 60 + 3));
+        assert_eq!(duration_secs("01:02:03"), Some(3723));
+        assert_eq!(duration_secs("1:2:3"), Some(3723));
+        assert_eq!(duration_secs("01:99:00"), None);
+        assert_eq!(duration_secs("abc"), None);
+        assert_eq!(duration_secs("1:2:3:4"), None);
+    }
+
+    #[test]
+    fn pub_date_formats_parse() {
+        // RFC 2822 with named zone and with numeric zone.
+        assert_eq!(
+            parse_pub_date_secs("Sat, 09 Aug 2026 12:00:00 +0000"),
+            Some(1_786_276_800)
+        );
+        assert_eq!(
+            parse_pub_date_secs("09 Aug 2026 07:00:00 -0500"),
+            Some(1_786_276_800)
+        );
+        assert_eq!(
+            parse_pub_date_secs("Sun, 14 Aug 2022 10:00:00 GMT"),
+            Some(1_660_471_200)
+        );
+        // ISO 8601 with Z, explicit offset, and fractional seconds.
+        assert_eq!(
+            parse_pub_date_secs("2026-08-09T12:00:00Z"),
+            Some(1_786_276_800)
+        );
+        assert_eq!(
+            parse_pub_date_secs("2026-08-09T12:00:00+02:00"),
+            Some(1_786_269_600)
+        );
+        assert_eq!(
+            parse_pub_date_secs("2026-08-09T10:00:00.500-02:00"),
+            Some(1_786_276_800)
+        );
+        assert_eq!(parse_pub_date_secs("not a date"), None);
+    }
+
+    #[test]
+    fn mime_inference_defaults_video() {
+        assert_eq!(
+            infer_feed_kind_from_mime(Some("audio/mpeg")),
+            FeedKind::Audio
+        );
+        assert_eq!(
+            infer_feed_kind_from_mime(Some("audio/mp4")),
+            FeedKind::Audio
+        );
+        assert_eq!(
+            infer_feed_kind_from_mime(Some("video/mp4")),
+            FeedKind::Video
+        );
+        assert_eq!(infer_feed_kind_from_mime(None), FeedKind::Video);
+        assert_eq!(
+            infer_feed_kind_from_mime(Some("application/octet-stream")),
+            FeedKind::Video
         );
     }
 }

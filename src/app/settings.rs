@@ -28,6 +28,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::AudioLanguage => "Audio language",
         SettingKey::FeedViewLibraries => "Feed view",
         SettingKey::LibraryRoutes => "Library routes",
+        SettingKey::ManageFeeds => "Manage feeds",
         SettingKey::LogOut => "Log out",
     }
 }
@@ -77,6 +78,7 @@ pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
         }
         SettingKey::FeedViewLibraries => fmt_feed_view_list(&cfg.feed_view_libraries),
         SettingKey::LibraryRoutes => fmt_library_routes(&cfg.library_routes),
+        SettingKey::ManageFeeds => fmt_feeds_list(&cfg.feeds),
         SettingKey::LogOut => String::new(),
     }
 }
@@ -102,6 +104,14 @@ pub fn fmt_feed_view_list(list: &[String]) -> String {
         0 => "none".into(),
         1 => list[0].clone(),
         n => format!("{n} libraries"),
+    }
+}
+
+pub fn fmt_feeds_list(list: &[mbv_core::config::FeedSubscription]) -> String {
+    match list.len() {
+        0 => "none".into(),
+        1 => list[0].name.clone(),
+        n => format!("{n} feeds"),
     }
 }
 

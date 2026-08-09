@@ -129,27 +129,26 @@ _Avoid_: queue entry, playable, mixed item
 ## Feeds
 
 **FeedSubscription**:
-A user's subscription to one RSS/Atom feed: generated id, display name, URL,
-FeedKind, and last-fetched timestamp. Stored per-user in the daemon-hosted
-shared store, so subscriptions roam across machines. Editing never changes
-the URL — a changed URL is a new subscription.
+A user's subscription to one RSS/Atom feed: display name, URL, and FeedKind.
+Stored per-user in local `config.toml`; fetched entries and fetch metadata are
+not persisted. Editing never changes the URL — a changed URL is a new
+subscription.
 _Avoid_: feed config, channel, subscription config
 
 **FeedKind**:
 The Audio | Video classification of a FeedSubscription. Inferred from
-enclosure MIME types on first fetch (mixed or absent defaults to Video) and
-overridable by the user. Governs queue admission for entries that carry no
-MIME type of their own; overrides reclassify already-queued entries at play
-time.
+enclosure MIME types when available (mixed or absent defaults to Video) and
+editable by the user. It governs queue admission for entries that carry no
+MIME type of their own.
 _Avoid_: feed type, media type, category
 
 **FeedEntry**:
 One parsed item from a subscribed feed. Identity is guid, else enclosure-URL
 hash, else title+pub-date hash. Carries enclosure URL, link, pub_date,
-duration in Emby ticks, and description, plus per-user state (position_ticks,
-played) that entry merges never overwrite. Positions report to the shared
-store, not to Emby. Queued FeedEntries are owned snapshots: deleting the
-subscription leaves them playable.
+duration in Emby ticks, and description. Entries carry no persisted playback
+position or watched state and never report progress to Emby. Queued
+FeedEntries are owned snapshots: deleting the subscription leaves them
+playable for the lifetime of the Bound queue.
 _Avoid_: episode, post, feed item, rss item
 
 ## Remote sessions

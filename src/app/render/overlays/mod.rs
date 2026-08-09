@@ -2,6 +2,7 @@ mod backdrop;
 mod confirm_modal;
 mod context_menu;
 mod daemon_lost_modal;
+mod feeds_manage;
 mod help;
 mod library_routes;
 mod modal_frame;

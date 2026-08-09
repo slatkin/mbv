@@ -1,6 +1,6 @@
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{
-    PlaybackQueue, QueueItem, QueueMutationResult, QueueSlotId, RefreshMergeResult,
+    FeedEntry, PlaybackQueue, QueueItem, QueueMutationResult, QueueSlotId, RefreshMergeResult,
     RemoveSlotResult,
 };
 
@@ -9,6 +9,11 @@ pub(super) struct PlayerTab {
     pub(super) items: Vec<EmbyItem>,
     pub(super) queue_cursor: usize,
     pub(super) queue: PlaybackQueue,
+    /// The daemon-owned Feed tail (§5.4), held parallel to `queue`/`items`
+    /// so it survives round trips through `QueueUpdated` even though it is
+    /// not yet rendered or exposed to queue actions. Drained entry-by-entry
+    /// by `PlayerEvent::FeedConsumed` as the daemon consumes it.
+    pub(super) feed_items: Vec<FeedEntry>,
 }
 
 impl PlayerTab {
@@ -19,6 +24,7 @@ impl PlayerTab {
             items,
             queue_cursor,
             queue,
+            feed_items: Vec::new(),
         }
     }
 
@@ -26,16 +32,48 @@ impl PlayerTab {
         *self = Self::new(items, queue_cursor);
     }
 
-    pub(super) fn queue_model_matches_items(&self) -> bool {
-        self.queue.slots().len() == self.items.len()
-            && self
-                .queue
-                .slots()
-                .iter()
-                .zip(&self.items)
-                .all(|(slot, item)| same_queue_occurrence(&slot.item, item))
+    /// Sibling to `set_items` used only by the `QueueUpdated` consumer,
+    /// which is the sole call site that has a feed tail to carry. The many
+    /// other `set_items` callers (local queue mutations, tests) have no
+    /// feed tail to set and are left untouched.
+    pub(super) fn set_items_with_feed(
+        &mut self,
+        items: Vec<EmbyItem>,
+        queue_cursor: usize,
+        feed_items: Vec<FeedEntry>,
+    ) {
+        self.set_items(items, queue_cursor);
+        self.feed_items = feed_items;
     }
 
+    /// Checks whether the Emby prefix of the queue model matches `items`.
+    /// Feed slots at the tail are allowed and ignored — the queue is
+    /// considered "matched" when the first `items.len()` slots are Emby
+    /// items that correspond 1-to-1 with `items`, and every remaining slot
+    /// (if any) is a Feed slot.
+    pub(super) fn queue_model_matches_items(&self) -> bool {
+        let emby_count = self.items.len();
+        let slots = self.queue.slots();
+        if slots.len() < emby_count {
+            return false;
+        }
+        let prefix_ok = slots
+            .iter()
+            .take(emby_count)
+            .zip(&self.items)
+            .all(|(slot, item)| same_queue_occurrence(&slot.item, item));
+        prefix_ok
+            && slots
+                .iter()
+                .skip(emby_count)
+                .all(|slot| matches!(slot.item, QueueItem::Feed(_)))
+    }
+
+    /// Syncs the queue model from the Emby `items` shadow. When the Emby
+    /// prefix already matches, slot contents are updated in place (Feed
+    /// slots untouched). When the model is stale the queue is rebuilt from
+    /// `items`, but any Feed slots currently in the queue are preserved
+    /// and re-appended at the tail.
     pub(super) fn sync_queue_model_from_items_if_needed(&mut self) {
         if self.queue_model_matches_items() {
             let updates: Vec<_> = self
@@ -51,7 +89,19 @@ impl PlayerTab {
                     .update_slot_item(slot_id, QueueItem::Emby(Box::new(item)));
             }
         } else {
+            let feed_entries: Vec<_> = self
+                .queue
+                .slots()
+                .iter()
+                .filter_map(|slot| match &slot.item {
+                    QueueItem::Feed(entry) => Some(entry.clone()),
+                    QueueItem::Emby(_) => None,
+                })
+                .collect();
             self.queue = PlaybackQueue::from_items(self.items.clone(), None);
+            for entry in feed_entries {
+                self.queue.append(QueueItem::Feed(entry));
+            }
         }
     }
 
@@ -85,11 +135,19 @@ impl PlayerTab {
         result
     }
 
+    /// Unified queue length: Emby items + daemon Feed tail entries.
+    /// Used wherever bounds must account for the full visible queue,
+    /// not just the Emby slice.
+    pub(super) fn total_queue_len(&self) -> usize {
+        self.items.len() + self.feed_items.len()
+    }
+
     pub(super) fn clamp_cursor(&mut self) {
-        if self.items.is_empty() {
+        let total = self.total_queue_len();
+        if total == 0 {
             self.queue_cursor = 0;
         } else {
-            self.queue_cursor = self.queue_cursor.min(self.items.len() - 1);
+            self.queue_cursor = self.queue_cursor.min(total - 1);
         }
     }
 

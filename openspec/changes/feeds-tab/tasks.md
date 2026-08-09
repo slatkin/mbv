@@ -27,17 +27,26 @@
 
 ## 5. Play
 
-- [ ] 5.1 "Play" on an entry builds `QueueItem::Feed(FeedEntry)`, appends to the queue, and plays via the existing enqueue/play action (mechanics come from #470).
+- [x] 5.1 Add capability-gated `CtrlState.feed_items` and include it in the atomic broadcast and reconnect snapshot. It defaults when absent, and legacy peers receive only the existing Emby shape.
+- [x] 5.2 On `LoadFeed`, record the Feed tail in the daemon and forward playback through the lifecycle-capable `play_feed` path (not a bare `send_command` that silently fails on a cold daemon). Add a Player event that removes a consumed Feed item from that tail. Persist Feed queue slots through the tagged `QueueItem` queue-state shape, without playback-progress state.
+- [x] 5.3 Enforce the Emby-then-Feed tail invariant: while the Feed tail is nonempty, reject Emby append, move, replace, and adopt operations that would put Emby content after a Feed. Test those rejections and the successful safe mutations.
+- [x] 5.4 Reconstruct a slot-identical mixed queue on capable remote clients from Emby items plus the Feed tail; preserve Feed identity in rendering, events, and queue actions so display indices cannot target the wrong owner slot. Bare-mode Feed playback integrates into the application `PlaybackQueue` model so the now-playing title, cursor targeting, and queue-action identity resolve correctly.
+- [x] 5.5 "Play" on an entry builds `QueueItem::Feed(FeedEntry)`, appends it to the bound playback queue (both the `PlaybackQueue` model and the parallel `feed_items` list in bare mode), and starts it through the capability-gated feed player action. Unsupported peers fail safely. Validate a playable enclosure/link before dispatching; Feed playback never reports to Emby.
+- [x] 5.6 Wire Enter on the selected Feed entry to that action with the appropriate audio-only/headless decision and current UI volume. It must not fall through to Emby library queue actions.
 
 ## 6. Management overlay
 
-- [ ] 6.1 Add/remove/edit overlay modeled on `src/app/render/overlays/`.
-- [ ] 6.2 Add fetches+parses the feed first; on failure surface via the existing status/notify path and do not save.
-- [ ] 6.3 On success append to `config.feeds` and persist via `config_save.rs`; remove/edit rewrite the same list.
+- [x] 6.1 Add/remove/edit overlay modeled on `src/app/render/overlays/`; expose it through a `Manage feeds` row in F2 Settings so the first subscription can be added while the Feeds tab is hidden.
+- [x] 6.2 Add fetches+parses the feed first; on failure surface via the existing status/notify path and do not save. Ignore stale or cancelled asynchronous add results.
+- [x] 6.3 On success append to `config.feeds` and persist via `config_save.rs`; remove/edit rewrite the same list. Edit changes only name and kind; URL changes require removal and a new subscription.
+- [x] 6.4 After every mutation, resync subscriptions, clear fetched entry data, clamp selected group/cursor/scroll, and do not auto-fetch. If the last subscription is removed while Feeds is selected, fall back to Home.
 
 ## 7. Verify
 
 - [ ] 7.1 Add a real feed via the overlay → it appears in `config.toml` and the Feeds tab.
 - [ ] 7.2 Play an entry → mpv plays the enclosure URL through the queue.
-- [ ] 7.3 Restart → subscription persists (from config); no playback position is remembered (expected).
-- [ ] 7.4 `cargo test -p mbv-core` green; `cargo clippy --workspace --all-targets` green; `make check-code-file-lines` passes.
+- [ ] 7.3 Save and reload a mixed queue → the reloaded queue preserves each Emby and Feed slot in order; Feed playback position and watched state are not saved.
+- [ ] 7.3a Load a pre-change queue-state file containing bare Emby items → all items restore as Emby slots without error.
+- [ ] 7.4 Capability test: capable remote peer receives one atomic mixed snapshot and reconstructs the correct queue; legacy peer receives only Emby items.
+- [ ] 7.5 Reconnect test: a capable remote client receives the current Feed tail in its initial snapshot; a Feed consumption removes it from the following snapshot.
+- [ ] 7.6 `cargo test -p mbv-core` green; `cargo clippy --workspace --all-targets` green; `make check-code-file-lines` passes.

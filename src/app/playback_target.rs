@@ -127,7 +127,7 @@ impl App {
             let active_idx = match self.pending_active_idx {
                 Some(predicted_idx)
                     if s.current_idx == predicted_idx
-                        && s.queue_len == self.player_tab.items.len() =>
+                        && s.queue_len == self.player_tab.total_queue_len() =>
                 {
                     self.pending_active_idx = None;
                     s.current_idx

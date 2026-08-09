@@ -107,9 +107,10 @@ impl App {
     pub(super) fn focus_queue_initial_item(&mut self) {
         let playback = self.displayed_queue_playback_state();
         let queue = self.displayed_queue_mut();
-        if playback.active && playback.active_idx < queue.items.len() {
+        let total = queue.total_queue_len();
+        if playback.active && playback.active_idx < total {
             queue.queue_cursor = playback.active_idx;
-        } else if queue.queue_cursor >= queue.items.len() && !queue.items.is_empty() {
+        } else if queue.queue_cursor >= total && total > 0 {
             queue.queue_cursor = 0;
         }
     }

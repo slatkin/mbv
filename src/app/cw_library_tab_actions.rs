@@ -1,21 +1,24 @@
 use super::{App, PanelFocus, TabSelection};
 
 impl App {
-    /// Number of selectable left-panel tabs: Home/CW + all libraries.
+    /// Number of selectable left-panel tabs: Home/CW + all libraries + Feeds
+    /// (when subscriptions exist).
     pub(super) fn library_tab_count(&self) -> usize {
-        1 + self.libs.len()
+        1 + self.libs.len() + if self.has_feeds_subscriptions() { 1 } else { 0 }
     }
 
     /// Jump directly to left-panel tab `idx` (0 = Home, 1..=libs.len() =
-    /// library index `idx - 1`), e.g. from a tab-bar click or a digit key.
+    /// library index `idx - 1`, or Feeds at the end when present).
     pub(super) fn set_library_tab(&mut self, idx: usize) {
         if idx >= self.library_tab_count() {
             return;
         }
-        self.tab = TabSelection::from_position(idx);
+        self.tab = TabSelection::from_position(idx, self.feeds_tab_pos());
         self.last_card_height = 0; // reset stale image height for new view
         self.last_card_width = 0;
-        if let Some(lib_idx) = self.tab.library_index() {
+        if self.tab.is_feeds() {
+            self.set_panel_focus(PanelFocus::Library);
+        } else if let Some(lib_idx) = self.tab.library_index() {
             self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position(lib_idx);
         }
@@ -26,12 +29,15 @@ impl App {
     /// Advance the left-panel tab (wrapping); load the library if needed.
     pub(super) fn library_tab_next(&mut self) {
         let n = self.library_tab_count();
-        let pos = self.tab.to_position();
+        let fp = self.feeds_tab_pos();
+        let pos = self.tab.to_position(fp);
         let new_pos = (pos + 1) % n;
-        self.tab = TabSelection::from_position(new_pos);
+        self.tab = TabSelection::from_position(new_pos, fp);
         self.last_card_height = 0; // reset stale image height for new view
         self.last_card_width = 0;
-        if let Some(lib_idx) = self.tab.library_index() {
+        if self.tab.is_feeds() {
+            self.set_panel_focus(PanelFocus::Library);
+        } else if let Some(lib_idx) = self.tab.library_index() {
             self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position(lib_idx);
         }
@@ -42,12 +48,15 @@ impl App {
     /// Retreat the left-panel tab (wrapping); load the library if needed.
     pub(super) fn library_tab_prev(&mut self) {
         let n = self.library_tab_count();
-        let pos = self.tab.to_position();
+        let fp = self.feeds_tab_pos();
+        let pos = self.tab.to_position(fp);
         let new_pos = (pos + n - 1) % n;
-        self.tab = TabSelection::from_position(new_pos);
+        self.tab = TabSelection::from_position(new_pos, fp);
         self.last_card_height = 0;
         self.last_card_width = 0;
-        if let Some(lib_idx) = self.tab.library_index() {
+        if self.tab.is_feeds() {
+            self.set_panel_focus(PanelFocus::Library);
+        } else if let Some(lib_idx) = self.tab.library_index() {
             self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position(lib_idx);
         }

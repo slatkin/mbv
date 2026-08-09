@@ -36,6 +36,9 @@ impl App {
             }
             return Some(false);
         }
+        if self.feeds_manage_popup.is_some() {
+            return self.handle_key_feeds_manage(key);
+        }
         if self.library_routes_popup.is_some() {
             match key.code {
                 KeyCode::Esc => {

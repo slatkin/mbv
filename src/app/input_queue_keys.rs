@@ -107,6 +107,12 @@ impl App {
             if self.tab.is_home() && self.handle_cw_key(key) {
                 return false;
             }
+            if self.tab.is_feeds() {
+                if let Some(quit) = self.handle_feed_tab_key(key) {
+                    return quit;
+                }
+                // Fall through to global view keys for Tab/BackTab etc.
+            }
             if let Some(lib_idx) = self.tab.library_index() {
                 // Season switching: [ = previous season, ] = next season.
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -291,7 +297,7 @@ impl App {
                 KeyCode::PageDown => {
                     self.last_nav_at = Instant::now();
                     let queue = self.displayed_queue_mut();
-                    let n = queue.items.len();
+                    let n = queue.total_queue_len();
                     queue.queue_cursor = (queue.queue_cursor + page).min(n.saturating_sub(1));
                     return false;
                 }
@@ -329,7 +335,8 @@ impl App {
                 self.displayed_queue_mut().queue_cursor -= 1;
             }
             KeyCode::Down
-                if self.displayed_queue().queue_cursor + 1 < self.displayed_queue().items.len() =>
+                if self.displayed_queue().queue_cursor + 1
+                    < self.displayed_queue().total_queue_len() =>
             {
                 self.last_nav_at = Instant::now();
                 self.displayed_queue_mut().queue_cursor += 1;
@@ -342,14 +349,14 @@ impl App {
             KeyCode::PageDown => {
                 let p = self.queue_page_size();
                 let queue = self.displayed_queue_mut();
-                let n = queue.items.len();
+                let n = queue.total_queue_len();
                 queue.queue_cursor = (queue.queue_cursor + p).min(n.saturating_sub(1));
             }
             KeyCode::Home => {
                 self.displayed_queue_mut().queue_cursor = 0;
             }
             KeyCode::End => {
-                let n = self.displayed_queue().items.len();
+                let n = self.displayed_queue().total_queue_len();
                 if n > 0 {
                     self.displayed_queue_mut().queue_cursor = n - 1;
                 }

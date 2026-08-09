@@ -98,7 +98,7 @@ impl App {
                 let queue_area = self.layout.main.queue_area;
                 let left_area = self.layout.main.left_area;
                 if queue_area.contains((col, row).into()) {
-                    let n = self.displayed_queue().items.len();
+                    let n = self.displayed_queue().total_queue_len();
                     if n > 0 {
                         let delta = delta * 3;
                         let queue = self.displayed_queue_mut();
@@ -108,6 +108,8 @@ impl App {
                 } else if left_area.contains((col, row).into()) {
                     if self.tab.is_home() {
                         self.cw_move_cursor(delta);
+                    } else if self.tab.is_feeds() {
+                        self.feed_tab_move_cursor(delta);
                     } else {
                         self.move_lib_cursor(delta);
                     }
@@ -161,6 +163,8 @@ impl App {
                         if rect.contains((col, row).into()) {
                             if self.tab.is_home() {
                                 self.home_select_section(target);
+                            } else if self.tab.is_feeds() {
+                                self.feed_tab_select_group(target);
                             } else {
                                 let lib_idx = self.tab.library_index().unwrap();
                                 if self.is_music_group_view(lib_idx) {
@@ -194,13 +198,15 @@ impl App {
                         // tab's `Enter` key dispatches, so double-click and
                         // `Enter` can't drift again the way they did before
                         // a70ad7a.
-                        if t < queue.items.len()
+                        if t < queue.total_queue_len()
                             && self.layout.main.queue_area.contains((col, row).into())
                         {
                             self.dispatch(Command::QueuePlayCursor);
                         }
                     } else if self.tab.is_home() {
                         self.home_play();
+                    } else if self.tab.is_feeds() {
+                        // Double-click on Feeds: no-op (playback wiring pending).
                     } else if self.layout.main.left_area.contains((col, row).into())
                         || self.layout.main.hero_area.contains((col, row).into())
                     {

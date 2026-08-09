@@ -91,6 +91,7 @@ pub(crate) fn run_stub_daemon_handshake(stream: std::net::TcpStream) -> std::net
             items: Vec::new(),
             cursor: 0,
             source: crate::config::QueueSource::Unknown,
+            feed_items: Vec::new(),
         },
     ))
     .unwrap();
@@ -333,6 +334,8 @@ pub(crate) fn make_app_stub() -> App {
         player_endpoint: None,
         home_is_local_daemon: false,
         idle_feed: None,
+        feed_tab: super::types_feed_tab::FeedTabState::default(),
+        feeds_manage_popup: None,
     }
 }
 

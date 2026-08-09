@@ -17,6 +17,12 @@ pub struct FeedEntry {
     pub link: Option<String>,
     pub mime_type: Option<String>,
     pub duration_ticks: Option<u64>,
+    /// Publish time in unix seconds UTC (RSS `pubDate` / Atom
+    /// `published`/`updated`), for the "All" group's newest-first sort.
+    /// Missing dates sort last. `#[serde(default)]` keeps old
+    /// `queue_state.json` files (pre-#471) loading.
+    #[serde(default)]
+    pub pub_date_secs: Option<u64>,
 }
 
 impl FeedEntry {

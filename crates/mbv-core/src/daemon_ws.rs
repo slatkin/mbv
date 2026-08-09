@@ -51,6 +51,7 @@ fn handle_ws(
                 &fetched,
                 start_idx,
                 source,
+                &[],
             );
             if fetched.len() == 1 {
                 let mut play_item = fetched[0].clone();

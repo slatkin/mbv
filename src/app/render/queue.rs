@@ -270,11 +270,15 @@ impl App {
             return;
         }
 
-        let (items, cursor) = {
+        let (items, feed_items, cursor) = {
             let queue = self.displayed_queue();
-            (queue.items.clone(), queue.queue_cursor)
+            (
+                queue.items.clone(),
+                queue.feed_items.clone(),
+                queue.queue_cursor,
+            )
         };
-        let n = items.len();
+        let n = items.len() + feed_items.len();
         if n == 0 {
             self.queue_scroll = 0;
             f.render_widget(
@@ -291,17 +295,20 @@ impl App {
 
         let playback = self.displayed_queue_playback_state();
 
-        // Flat display rows, one per item — the queue list has no grouping/headers.
-        let display = build_queue_rows(&items);
+        // Flat display rows, tracks then the feed tail — the queue list has
+        // no grouping/headers.
+        let display = build_queue_rows(&items, &feed_items);
         let total = display.len();
         let visible = area.height as usize;
 
-        // Visual row of the cursor item.
+        // Visual row of the cursor item.  The cursor lives in unified
+        // index space: 0..items.len() for Emby tracks, then
+        // items.len()..items.len()+feed_items.len() for Feed entries.
         let cursor_row = display
             .iter()
-            .position(|r| {
-                let QueueRow::Track { idx } = r;
-                *idx == cursor
+            .position(|r| match r {
+                QueueRow::Track { idx } => *idx == cursor,
+                QueueRow::Feed { feed_idx } => items.len() + feed_idx == cursor,
             })
             .unwrap_or(0);
         let max_offset = total.saturating_sub(visible);
@@ -434,6 +441,84 @@ impl App {
 
                     list_items.push(ListItem::new(Line::from(spans)).style(row_style));
                     layout.queue_row_map.push(Some(i));
+                    line_offset += 1;
+                }
+                QueueRow::Feed { feed_idx } => {
+                    let feed_idx = *feed_idx;
+                    let indent: usize = 2;
+                    let track_content_w = render_w.saturating_sub(2);
+                    let entry = &feed_items[feed_idx];
+                    let is_active =
+                        playback.active && playback.active_idx == items.len() + feed_idx;
+                    let is_cursor = focused && cursor == items.len() + feed_idx;
+
+                    let fg = if is_cursor || focused {
+                        palette::WHITE
+                    } else {
+                        palette::QUEUE_UNFOCUSED_FG
+                    };
+                    let row_style = Style::default().fg(fg);
+
+                    // Feeds have no playback-progress state; only duration.
+                    let len_secs = entry.duration_ticks.unwrap_or(0) as i64 / TICKS_PER_SECOND;
+                    let dur = if len_secs > 0 {
+                        fmt_duration_short(len_secs)
+                    } else {
+                        String::new()
+                    };
+                    let dim_color = if focused {
+                        palette::SUBTLE
+                    } else {
+                        palette::MUTED
+                    };
+
+                    let dur_visible = show_length && !dur.is_empty();
+                    let right_w = if dur_visible { dur.width() } else { 0 };
+                    let title_w = track_content_w
+                        .saturating_sub(indent + right_w + QUEUE_TITLE_QUIET_COLUMNS);
+                    let title = trunc_str(&entry.title, title_w);
+
+                    if is_cursor {
+                        f.render_widget(
+                            Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                            Rect {
+                                x: area.x,
+                                y: area.y + line_offset,
+                                width: area.width,
+                                height: 1,
+                            },
+                        );
+                    }
+
+                    let title_color = if is_active {
+                        palette::AQUA
+                    } else if !focused {
+                        dim_color
+                    } else {
+                        fg
+                    };
+
+                    let mut spans: Vec<Span> = Vec::new();
+                    if indent > 0 {
+                        if is_cursor {
+                            spans.push(Span::styled("▍", Style::default().fg(palette::AQUA)));
+                            spans.push(Span::raw(" "));
+                        } else {
+                            spans.push(Span::raw("  "));
+                        }
+                    }
+                    let title_w_actual = title.width();
+                    spans.push(Span::styled(title, Style::default().fg(title_color)));
+
+                    if dur_visible {
+                        let used = indent + title_w_actual;
+                        let pad = track_content_w.saturating_sub(used + right_w);
+                        spans.push(Span::raw(" ".repeat(pad)));
+                        spans.push(Span::styled(dur, Style::default().fg(palette::GREEN)));
+                    }
+
+                    list_items.push(ListItem::new(Line::from(spans)).style(row_style));
+                    layout.queue_row_map.push(Some(items.len() + feed_idx));
                     line_offset += 1;
                 }
             }

@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::api::{EmbyClient, EmbyItem};
 use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent};
+use crate::playback_queue::FeedEntry;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 /// Response from a bounded shutdown request.
@@ -27,6 +28,7 @@ pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
     pub subtitle_prefs: Arc<Mutex<crate::player::SubtitlePrefs>>,
     pub items: Arc<Mutex<Vec<EmbyItem>>>,
+    pub feed_items: Arc<Mutex<Vec<FeedEntry>>>,
     pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
@@ -196,6 +198,7 @@ impl RemotePlayer {
             status.active = false;
         }
         *self.items.lock().unwrap() = items.clone();
+        self.feed_items.lock().unwrap().clear();
         *self.queue_source.lock().unwrap() = source.clone();
         self.cmd_tx
             .send(CtrlCmd::AdoptQueue {
@@ -222,6 +225,7 @@ impl RemotePlayer {
             },
         ));
         *self.items.lock().unwrap() = vec![item.clone()];
+        self.feed_items.lock().unwrap().clear();
         *self.queue_source.lock().unwrap() = source;
     }
 
@@ -246,7 +250,23 @@ impl RemotePlayer {
             },
         ));
         *self.items.lock().unwrap() = items;
+        self.feed_items.lock().unwrap().clear();
         *self.queue_source.lock().unwrap() = source;
+    }
+
+    /// Play a single feed entry on a remote daemon. If the peer does not
+    /// advertise the `feed-playback` capability, the command is silently
+    /// dropped (safe no-op — the daemon will skip the unknown wire
+    /// command, and no state corruption is possible).
+    pub fn play_feed(&self, entry: FeedEntry) {
+        if !self.ctrl_compatibility.supports_feed_playback {
+            log::warn!(
+                target: "remote",
+                "remote peer does not support feed playback; dropping LoadFeed command"
+            );
+            return;
+        }
+        let _ = self.send_command(PlayerCommand::LoadFeed { entry });
     }
 
     pub fn stop(&self) {
@@ -307,6 +327,7 @@ impl RemotePlayer {
         let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items = Arc::new(Mutex::new(items));
+        let feed_items = Arc::new(Mutex::new(Vec::new()));
         let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
         let shutdown_announced = Arc::new(AtomicBool::new(false));
@@ -320,6 +341,7 @@ impl RemotePlayer {
                 status,
                 subtitle_prefs,
                 items,
+                feed_items,
                 queue_source,
                 cmd_tx,
                 disconnected,

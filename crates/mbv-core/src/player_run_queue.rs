@@ -248,8 +248,77 @@ impl PlaybackRun {
         token: String,
         ext_sub_urls: Vec<String>,
     ) -> Self {
-        let start_idx = start_idx.min(items.len().saturating_sub(1));
         let queue = PlaybackQueue::from_items(items, Some(start_idx));
+        Self::init_from_queue(
+            queue,
+            start_idx,
+            origin,
+            reporter,
+            config,
+            startup_pause_for_pipe,
+            status,
+            event_tx,
+            subtitle_prefs,
+            shutdown_report_timeout,
+            server_url,
+            token,
+            ext_sub_urls,
+        )
+    }
+
+    /// Construct a `PlaybackRun` from pre-built `QueueItem`s (e.g. feed entries).
+    /// Behaves identically to `new` but skips the `EmbyItem` → `QueueItem::Emby`
+    /// wrapping step, allowing `QueueItem::Feed` items to be passed directly.
+    #[allow(clippy::too_many_arguments)]
+    fn new_from_queue_items(
+        items: Vec<QueueItem>,
+        start_idx: usize,
+        origin: PlaybackOrigin,
+        reporter: SessionReporter,
+        config: MpvRunConfig,
+        startup_pause_for_pipe: bool,
+        status: Arc<Mutex<PlayerStatus>>,
+        event_tx: mpsc::Sender<PlayerEvent>,
+        subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
+        shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
+        server_url: String,
+        token: String,
+    ) -> Self {
+        let queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
+        Self::init_from_queue(
+            queue,
+            start_idx,
+            origin,
+            reporter,
+            config,
+            startup_pause_for_pipe,
+            status,
+            event_tx,
+            subtitle_prefs,
+            shutdown_report_timeout,
+            server_url,
+            token,
+            Vec::new(), // no external subtitles for feed items
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn init_from_queue(
+        queue: PlaybackQueue,
+        start_idx: usize,
+        origin: PlaybackOrigin,
+        reporter: SessionReporter,
+        config: MpvRunConfig,
+        startup_pause_for_pipe: bool,
+        status: Arc<Mutex<PlayerStatus>>,
+        event_tx: mpsc::Sender<PlayerEvent>,
+        subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
+        shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
+        server_url: String,
+        token: String,
+        ext_sub_urls: Vec<String>,
+    ) -> Self {
+        let start_idx = start_idx.min(queue.slots().len().saturating_sub(1));
         let initial_item = queue
             .active_slot()
             .map(|slot| slot.item.clone())

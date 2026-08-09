@@ -12,7 +12,7 @@ use std::{
 
 use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
 use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
-use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::playback_queue::{FeedEntry, PlaybackQueue, QueueItem, QueueSlotId};
 use libmpv2::{
     events::{Event, PropertyData},
     mpv_end_file_reason, EndFileReason, Format, Mpv,

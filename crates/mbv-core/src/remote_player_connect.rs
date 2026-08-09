@@ -1,6 +1,8 @@
 #[cfg(test)]
-#[path = "remote_player_tests.rs"]
-mod tests;
+mod tests {
+    include!("remote_player_tests.rs");
+    include!("remote_player_tests_socket.rs");
+}
 
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -15,6 +17,7 @@ use crate::api::EmbyItem;
 use crate::ctrl::{
     CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
 };
+use crate::playback_queue::FeedEntry;
 use crate::player::{PlayerEvent, PlayerStatus};
 
 use crate::remote_player::RemotePlayer;
@@ -218,6 +221,7 @@ pub(crate) fn perform_handshake(
             info.validate_peer()?;
             let mut compatibility = info.compatibility()?;
             compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
+            compatibility.supports_feed_playback = info.supports_feed_playback();
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",
@@ -261,6 +265,7 @@ fn apply_ctrl_event(
     ev: CtrlEvent,
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
+    feed_items: &Arc<Mutex<Vec<FeedEntry>>>,
     queue_source: &Arc<Mutex<crate::config::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
@@ -284,6 +289,7 @@ fn apply_ctrl_event(
             next_status.queue_len = s.items.len();
             *status.lock().unwrap() = next_status;
             *items.lock().unwrap() = s.items.clone();
+            *feed_items.lock().unwrap() = s.feed_items.clone();
             *queue_source.lock().unwrap() = s.source.clone();
             // The very first State snapshot read synchronously during connect()
             // establishes baseline state before the App (and its event loop)
@@ -295,6 +301,7 @@ fn apply_ctrl_event(
                     items: s.items,
                     cursor: s.cursor,
                     source: s.source,
+                    feed_items: s.feed_items,
                 });
             }
         }
@@ -378,6 +385,7 @@ pub(crate) fn connect_endpoint(
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
     let items: Arc<Mutex<Vec<EmbyItem>>> = Arc::new(Mutex::new(Vec::new()));
+    let feed_items: Arc<Mutex<Vec<FeedEntry>>> = Arc::new(Mutex::new(Vec::new()));
     let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
     let disconnected = Arc::new(AtomicBool::new(false));
     let shutdown_announced = Arc::new(AtomicBool::new(false));
@@ -406,6 +414,7 @@ pub(crate) fn connect_endpoint(
         state_event,
         &status,
         &items,
+        &feed_items,
         &queue_source,
         &event_tx,
         &pending_playback,
@@ -415,6 +424,7 @@ pub(crate) fn connect_endpoint(
     // Reader thread: deserializes CtrlEvent lines from daemon
     let status_r = status.clone();
     let items_r = items.clone();
+    let feed_items_r = feed_items.clone();
     let queue_source_r = queue_source.clone();
     let pending_playback_r = pending_playback.clone();
     let disconnected_r = disconnected.clone();
@@ -465,6 +475,7 @@ pub(crate) fn connect_endpoint(
                         ev,
                         &status_r,
                         &items_r,
+                        &feed_items_r,
                         &queue_source_r,
                         &event_tx_r,
                         &pending_playback_r,
@@ -532,6 +543,7 @@ pub(crate) fn connect_endpoint(
             status,
             subtitle_prefs,
             items,
+            feed_items,
             queue_source,
             cmd_tx,
             disconnected,

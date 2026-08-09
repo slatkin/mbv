@@ -324,6 +324,7 @@ fn remote_queue_update_reconciles_remote_queue_without_touching_local_queue() {
         items: updated_remote.clone(),
         cursor: 2,
         source: crate::config::QueueSource::Remote,
+        feed_items: Vec::new(),
     });
 
     assert_eq!(
@@ -373,6 +374,7 @@ fn remote_queue_update_after_move_keeps_cursor_on_moved_item() {
         ],
         cursor: 1,
         source: crate::config::QueueSource::Remote,
+        feed_items: Vec::new(),
     });
 
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
@@ -410,6 +412,7 @@ fn remote_queue_update_after_move_tracks_duplicate_item_by_position() {
         ],
         cursor: 0,
         source: crate::config::QueueSource::Remote,
+        feed_items: Vec::new(),
     });
 
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
@@ -457,4 +460,132 @@ fn moving_now_playing_item_keeps_cursor_on_it() {
         ]
     );
     assert_eq!(app.player_tab.queue_cursor, 2);
+}
+
+// ── Feed-slot preservation in queue sync ───────────────────────────────────
+
+fn make_feed_entry(guid: &str) -> mbv_core::playback_queue::FeedEntry {
+    mbv_core::playback_queue::FeedEntry {
+        guid: guid.into(),
+        title: format!("Feed {guid}"),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+    }
+}
+
+/// Regression: `sync_queue_model_from_items_if_needed` must not silently
+/// drop Feed slots from the PlaybackQueue when it rebuilds from the
+/// Emby-only `items` shadow.
+#[test]
+fn sync_queue_model_preserves_feed_slots_after_rebuild() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.items = make_items(3);
+    app.player_tab.sync_queue_model_from_items_if_needed();
+
+    // Append a Feed slot directly into the queue model.
+    app.player_tab
+        .queue
+        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry(
+            "f1",
+        )));
+    assert_eq!(app.player_tab.queue.slots().len(), 4);
+
+    // Trigger the sync — must NOT destroy the Feed slot.
+    app.player_tab.sync_queue_model_from_items_if_needed();
+
+    assert_eq!(app.player_tab.queue.slots().len(), 4);
+    assert!(
+        matches!(
+            app.player_tab.queue.slots()[3].item,
+            mbv_core::playback_queue::QueueItem::Feed(_)
+        ),
+        "Feed slot must survive sync_queue_model_from_items_if_needed"
+    );
+}
+
+/// `queue_model_matches_items` must return true when Feed slots sit at
+/// the tail of an otherwise-correct Emby prefix.
+#[test]
+fn queue_model_matches_items_with_feed_tail() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.items = make_items(2);
+    app.player_tab.sync_queue_model_from_items_if_needed();
+
+    app.player_tab
+        .queue
+        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry(
+            "f1",
+        )));
+    app.player_tab
+        .queue
+        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry(
+            "f2",
+        )));
+
+    assert!(
+        app.player_tab.queue_model_matches_items(),
+        "Emby prefix + Feed tail should count as matched"
+    );
+}
+
+/// `slot_id_at` must resolve a Feed-tail index without dropping slots.
+#[test]
+fn slot_id_at_resolves_feed_slot_without_destruction() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.items = make_items(2);
+    app.player_tab.sync_queue_model_from_items_if_needed();
+
+    let feed_sid = app
+        .player_tab
+        .queue
+        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry(
+            "f1",
+        )));
+    assert_eq!(app.player_tab.queue.slots().len(), 3);
+
+    let resolved = app.player_tab.slot_id_at(2);
+    assert_eq!(resolved, Some(feed_sid));
+    assert_eq!(
+        app.player_tab.queue.slots().len(),
+        3,
+        "slot_id_at must not drop Feed slots"
+    );
+}
+
+/// Shift+Up on a Feed-tail cursor must not destroy Feed slots.
+#[test]
+fn move_up_on_feed_cursor_preserves_feed_slots() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.items = make_items(2);
+    app.player_tab.sync_queue_model_from_items_if_needed();
+
+    app.player_tab
+        .queue
+        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry(
+            "f1",
+        )));
+    // Cursor on the Feed slot (index 2, past the 2 Emby items).
+    app.player_tab.queue_cursor = 2;
+
+    app.move_queue_item_up();
+
+    assert_eq!(
+        app.player_tab.queue.slots().len(),
+        3,
+        "Shift+Up on a Feed cursor must not drop Feed slots"
+    );
+    assert!(
+        matches!(
+            app.player_tab.queue.slots()[2].item,
+            mbv_core::playback_queue::QueueItem::Feed(_)
+        ),
+        "Feed slot must remain at the tail"
+    );
 }

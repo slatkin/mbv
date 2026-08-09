@@ -121,6 +121,28 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         );
     }
 
+    if cfg.feeds.is_empty() {
+        table.remove("feeds");
+    } else {
+        // Saved as a feeds array of tables (read back by `parse_feeds`).
+        // Merge-in-place preserves the rest of the file untouched.
+        let feeds_arr = cfg
+            .feeds
+            .iter()
+            .map(|f| {
+                let mut row = toml::map::Map::new();
+                row.insert("name".to_string(), toml::Value::String(f.name.clone()));
+                row.insert("url".to_string(), toml::Value::String(f.url.clone()));
+                row.insert(
+                    "kind".to_string(),
+                    toml::Value::String(f.kind.as_str().to_string()),
+                );
+                toml::Value::Table(row)
+            })
+            .collect();
+        table.insert("feeds".to_string(), toml::Value::Array(feeds_arr));
+    }
+
     let queue = section!("queue");
     queue.insert(
         "always_play_next".to_string(),

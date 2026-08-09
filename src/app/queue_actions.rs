@@ -119,6 +119,11 @@ impl App {
         let queue = self.queue_for_scope(scope);
         let from = queue.queue_cursor;
         let len = queue.items.len();
+        // Feed-tail slots (beyond the Emby portion) are not user-movable;
+        // reject early so slot_id_at never triggers a sync.
+        if from >= len {
+            return;
+        }
         let to = if delta < 0 {
             match from.checked_sub(1) {
                 Some(t) => t,

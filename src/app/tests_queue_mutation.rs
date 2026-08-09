@@ -347,6 +347,7 @@ fn removing_non_active_item_keeps_cursor_off_now_playing_after_daemon_ack() {
         items: app.player_tab.items.clone(),
         cursor: 0,
         source: app.queue_source.clone(),
+        feed_items: Vec::new(),
     });
 
     assert_eq!(

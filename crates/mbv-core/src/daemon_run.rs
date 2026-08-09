@@ -96,6 +96,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         items: Arc::new(Mutex::new(Vec::new())),
         cursor: Arc::new(Mutex::new(0)),
         source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
+        feed_items: Arc::new(Mutex::new(Vec::new())),
     };
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
 
@@ -254,6 +255,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     let mut items: Vec<EmbyItem> = Vec::new();
     let mut cursor: usize = 0;
     let mut source = crate::config::QueueSource::Unknown;
+    let mut feed_items: Vec<FeedEntry> = Vec::new();
     let mut playback_intents = PlaybackIntentState::default();
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
@@ -316,17 +318,32 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 // cursor computed from index arithmetic, and the
                 // TrackChanged that fires between them refers to the old
                 // pre-mutation index.
-                broadcast(
-                    &ctrl_clients,
-                    &CtrlEvent::State(CtrlState {
-                        status: player.status.lock().unwrap().clone(),
-                        items: items.clone(),
-                        cursor,
-                        source: source.clone(),
-                    }),
-                );
+                // Gated per-client the same way as `broadcast_queue_state`
+                // (#5.1): legacy peers must never receive the Feed tail.
+                let status = player.status.lock().unwrap().clone();
+                let capable_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
+                    status: status.clone(),
+                    items: items.clone(),
+                    cursor,
+                    source: source.clone(),
+                    feed_items: feed_items.clone(),
+                }));
+                let legacy_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
+                    status,
+                    items: items.clone(),
+                    cursor,
+                    source: source.clone(),
+                    feed_items: Vec::new(),
+                }));
+                if let (Some(capable_json), Some(legacy_json)) = (capable_json, legacy_json) {
+                    ctrl_clients
+                        .lock()
+                        .unwrap()
+                        .broadcast_state_gated(capable_json, legacy_json);
+                }
                 *shared_queue.items.lock().unwrap() = items.clone();
                 *shared_queue.source.lock().unwrap() = source.clone();
+                *shared_queue.feed_items.lock().unwrap() = feed_items.clone();
                 if let Some((connection_id, request_id, generation)) = playback_intents
                     .current
                     .as_ref()
@@ -430,6 +447,18 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &CtrlEvent::Player(PlayerEvent::OutputStarted),
                 );
             }
+            DaemonEvent::Player(PlayerEvent::FeedConsumed { guid }) => {
+                handle_feed_consumed(
+                    &guid,
+                    &ctrl_clients,
+                    &player,
+                    &shared_queue,
+                    &items,
+                    cursor,
+                    &source,
+                    &mut feed_items,
+                );
+            }
             DaemonEvent::Player(pe) => {
                 if let PlayerEvent::PausedChanged(paused) = &pe {
                     if let Some((connection_id, request_id, generation)) = playback_intents
@@ -516,6 +545,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &mut items,
                     &mut cursor,
                     &mut source,
+                    &mut feed_items,
                     &shared_queue,
                     &ctrl_clients,
                     &mut playback_intents,
@@ -593,6 +623,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &mut items,
                     &mut cursor,
                     &mut source,
+                    &mut feed_items,
                     &shared_queue,
                     &ctrl_clients,
                     &mut playback_intents,

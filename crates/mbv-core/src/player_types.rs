@@ -196,6 +196,7 @@ pub enum PlayerEvent {
         items: Vec<crate::api::EmbyItem>,
         cursor: usize,
         source: crate::config::QueueSource,
+        feed_items: Vec<FeedEntry>,
     },
     /// Chapter API: playback entered the intro window.
     IntroStarted {
@@ -236,6 +237,13 @@ pub enum PlayerEvent {
     /// mirror to become stale. The detail describes what was detected. The UI
     /// shows this as a warning toast.
     QueueDesynced(String),
+    /// A `QueueItem::Feed` entry finished playing (or was consumed via
+    /// next-up) and left the live queue. Carries the entry's `guid` so the
+    /// daemon can remove the matching entry from its Feed tail before
+    /// broadcasting the next state (see design.md's Feed-removal ordering).
+    FeedConsumed {
+        guid: String,
+    },
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -274,6 +282,12 @@ pub enum PlayerCommand {
     ReplaceQueue {
         items: Vec<EmbyItem>,
         start_idx: usize,
+    },
+    /// Play a single feed entry. Constructs a one-entry `PlaybackQueue` containing
+    /// `QueueItem::Feed` and plays it through the existing runtime, bypassing Emby
+    /// reporting. Works both when the player is idle and when it is already active.
+    LoadFeed {
+        entry: FeedEntry,
     },
 }
 

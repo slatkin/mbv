@@ -30,6 +30,7 @@ impl App {
             || self.context_menu_open()
             || !matches!(self.panel_focus, PanelFocus::Library)
             || self.tab.is_home()
+            || self.tab.is_feeds()
         {
             return None;
         }

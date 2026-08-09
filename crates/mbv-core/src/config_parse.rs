@@ -10,9 +10,17 @@ pub fn load_config() -> Result<Config, String> {
 pub fn parse_config(text: &str) -> Result<Config, String> {
     let doc: toml::Value = toml::from_str(text).map_err(|e| e.to_string())?;
 
+    // Feeds are read independently of [server]: a config may list
+    // subscriptions without a server section (feed-only usage).
+    let feeds = parse_feeds(doc.get("feeds"));
     let server = match doc.get("server") {
         Some(s) => s,
-        None => return Ok(Config::default()),
+        None => {
+            return Ok(Config {
+                feeds,
+                ..Config::default()
+            })
+        }
     };
 
     let get_str = |section: &toml::Value, key: &str| -> String {
@@ -340,5 +348,61 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         shared_data_tls_cert_path,
         shared_data_tls_key_path,
         shared_data_endpoint,
+        feeds,
     })
+}
+
+/// Parse the `[[feeds]]` array-of-tables tolerantly: a row with an
+/// empty/absent `url` is skipped, an empty `name` falls back to the
+/// URL's host, and missing or unknown `kind` values default to Video.
+/// One malformed row never fails the whole config load.
+pub fn parse_feeds(value: Option<&toml::Value>) -> Vec<FeedSubscription> {
+    let Some(arr) = value.and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|item| {
+            let t = item.as_table()?;
+            let url = t
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if url.is_empty() {
+                return None;
+            }
+            let name = t
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let kind = t
+                .get("kind")
+                .and_then(|v| v.as_str())
+                .and_then(FeedKind::parse)
+                .unwrap_or_default();
+            Some(FeedSubscription {
+                name: if name.is_empty() {
+                    default_feed_name(&url)
+                } else {
+                    name
+                },
+                url,
+                kind,
+            })
+        })
+        .collect()
+}
+
+/// Derive a display name from a feed URL's host when the row has none.
+fn default_feed_name(url: &str) -> String {
+    url.split("://")
+        .nth(1)
+        .unwrap_or(url)
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or(url)
+        .to_string()
 }
