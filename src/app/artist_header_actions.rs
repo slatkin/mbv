@@ -78,10 +78,6 @@ impl App {
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
-        self.flash(
-            format!("Enqueued {count} items from {}", selection.artist_label),
-            ToastSeverity::Success,
-        );
         if self.sync_playback_queue_after_append(scope, appended) {
             self.persist_local_queue_state_if_needed(scope);
             self.retire_remote_tracking_after_queue_mutation();
@@ -132,14 +128,6 @@ impl App {
         }
         self.replace_playback_queue(items.clone(), 0);
         self.set_panel_focus(PanelFocus::Queue);
-        self.flash(
-            if shuffle {
-                format!("Shuffling {count} items")
-            } else {
-                format!("Playing {count} items")
-            },
-            ToastSeverity::Success,
-        );
         self.queue_source = if shuffle {
             crate::config::QueueSource::Shuffle
         } else {

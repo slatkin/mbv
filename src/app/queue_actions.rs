@@ -14,11 +14,7 @@ mod queue_actions_playlist_mutation;
 
 impl App {
     fn retire_tracking_after_queue_mutation(&mut self) {
-        let was_tracking = self.remote_tracker.is_some();
         self.retire_remote_tracking(true);
-        if was_tracking {
-            self.flash("Remote tracking stopped".into(), ToastSeverity::Neutral);
-        }
     }
 
     pub(super) fn retire_remote_tracking_after_queue_mutation(&mut self) {

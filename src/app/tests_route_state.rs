@@ -184,7 +184,7 @@ fn route_owned_transport_is_not_sessions_panel_disconnectable() {
     assert!(app.player.is_remote());
     assert!(app.suspended_local.is_some());
     assert!(app.remote_player_tab.is_some());
-    assert_eq!(app.status, "No session connected");
+    assert_eq!(app.status, "No session selected");
 }
 
 #[test]
@@ -450,7 +450,7 @@ fn disconnect_remote_does_not_exit_local_daemon_mode() {
     assert_eq!(app.remote_slot_state(), RemoteSlotState::LocalDaemon);
     assert!(app.player.is_remote());
     assert!(!app.can_disconnect_remote());
-    assert_eq!(app.status, "No session connected");
+    assert_eq!(app.status, "No session selected");
 }
 
 #[test]

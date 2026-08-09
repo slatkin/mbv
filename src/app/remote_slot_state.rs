@@ -52,7 +52,7 @@ impl App {
         } else if self.direct_remote_connected {
             self.restore_local_mode("Disconnected from direct remote session");
         } else {
-            self.flash("No session connected".to_string(), ToastSeverity::Neutral);
+            self.flash("No session selected".to_string(), ToastSeverity::Neutral);
         }
     }
 
