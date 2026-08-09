@@ -459,23 +459,26 @@ impl App {
             group_start = group_end;
         }
 
-        let display_cursor = rows
-            .iter()
-            .position(|row| {
-                selectable_headers
-                    && matches!(
-                        (row, selected_artist_header),
-                        (
-                            GroupedAlbumDisplayRow::ArtistHeader(selection),
-                            Some(selected)
-                        ) if selection == selected
+        let find_display_cursor = |rows: &[GroupedAlbumDisplayRow]| -> usize {
+            rows.iter()
+                .position(|row| {
+                    selectable_headers
+                        && matches!(
+                            (row, selected_artist_header),
+                            (
+                                GroupedAlbumDisplayRow::ArtistHeader(selection),
+                                Some(selected)
+                            ) if selection == selected
+                        )
+                })
+                .or_else(|| {
+                    rows.iter().position(
+                        |row| matches!(row, GroupedAlbumDisplayRow::Album(i) if *i == cursor),
                     )
-            })
-            .or_else(|| {
-                rows.iter()
-                    .position(|row| matches!(row, GroupedAlbumDisplayRow::Album(i) if *i == cursor))
-            })
-            .unwrap_or(0);
+                })
+                .unwrap_or(0)
+        };
+        let display_cursor = find_display_cursor(&rows);
         let selected_artist_header_valid = selected_artist_header.is_some_and(|selected| {
             selectable_headers
                 && rows.iter().any(|row| {
@@ -500,24 +503,7 @@ impl App {
             // display position. Recompute it instead of clamping the old
             // pre-removal index, which can point at the next album and make
             // scrolling/row highlighting disagree with the hero selection.
-            let display_cursor = rows
-                .iter()
-                .position(|row| {
-                    selectable_headers
-                        && matches!(
-                            (row, selected_artist_header),
-                            (
-                                GroupedAlbumDisplayRow::ArtistHeader(selection),
-                                Some(selected)
-                            ) if selection == selected
-                        )
-                })
-                .or_else(|| {
-                    rows.iter().position(
-                        |row| matches!(row, GroupedAlbumDisplayRow::Album(i) if *i == cursor),
-                    )
-                })
-                .unwrap_or(0);
+            let display_cursor = find_display_cursor(&rows);
             return GroupedAlbumDisplayPlan {
                 order: order.to_vec(),
                 rows,

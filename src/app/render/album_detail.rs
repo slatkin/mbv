@@ -235,16 +235,6 @@ impl App {
             return;
         }
 
-        let playback = self.effective_playback_state();
-        let now_playing_id: Option<String> = if playback.active {
-            self.playback_queue()
-                .items
-                .get(playback.active_idx)
-                .map(|i| i.id.clone())
-        } else {
-            None
-        };
-
         let show_length = table_area.width > 40;
         let dur_col_w: usize = if show_length { 7 } else { 0 };
         let title_col_w = (table_area.width as usize)
@@ -262,7 +252,6 @@ impl App {
             .enumerate()
             .map(|(i, item)| {
                 let is_cursor = i == cursor;
-                let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
                 let selected = is_cursor && focused;
                 let row_style = if is_cursor && focused {
                     Style::default().fg(palette::YELLOW).bg(palette::BG_GREEN)
@@ -287,8 +276,7 @@ impl App {
                     title_spans.push(Span::raw(" "));
                 }
                 let num_w = track_num.chars().count();
-                let play_icon_w = if is_playing { 2 } else { 0 };
-                let title_width = title_col_w.saturating_sub(num_w + play_icon_w).max(1);
+                let title_width = title_col_w.saturating_sub(num_w).max(1);
                 let title = track_title(item);
                 let title_lines = wrap(&title, title_width);
                 let mut wrapped_title_lines = Vec::with_capacity(title_lines.len());

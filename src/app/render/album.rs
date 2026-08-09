@@ -81,24 +81,17 @@ impl App {
             if let Some(cursor_pos) = order.iter().position(|&idx| idx == cursor) {
                 let start = cursor_pos.saturating_sub(PREFETCH_BEHIND);
                 let end = (cursor_pos + PREFETCH_AHEAD + 1).min(order.len());
-                let prefetch: Vec<(String, String, String)> = order[start..end]
-                    .iter()
-                    .enumerate()
-                    .filter(|(offset, _)| start + offset != cursor_pos)
-                    .filter_map(|(_, &idx)| albums.get(idx))
-                    .map(|album| {
-                        (
-                            super::album_art::inline_album_art_cache_key(&album.id),
-                            album.id.clone(),
-                            album.series_id.clone(),
-                        )
-                    })
-                    .collect();
-                for (cache_key, album_id, series_id) in prefetch {
+                for (offset, &idx) in order[start..end].iter().enumerate() {
+                    if start + offset == cursor_pos {
+                        continue;
+                    }
+                    let Some(album) = albums.get(idx) else {
+                        continue;
+                    };
                     self.fetch_list_card_image_when_idle(
-                        cache_key,
-                        album_id,
-                        series_id,
+                        super::album_art::inline_album_art_cache_key(&album.id),
+                        album.id.clone(),
+                        album.series_id.clone(),
                         super::MUSIC_ALBUM_IMAGE_TYPES,
                     );
                 }
@@ -333,27 +326,14 @@ impl App {
                         col_width
                     };
 
-                    let row_area = Rect {
+                    Rect {
                         x: col_x,
                         y: area.y + screen_y as u16,
                         width: actual_width,
                         height: 1,
-                    };
-                    row_area
+                    }
                 }
-                GroupedAlbumDisplayRow::ArtistHeader(_)
-                | GroupedAlbumDisplayRow::ArtistGroupSpacer => full_row_rect(screen_y as u16),
-                GroupedAlbumDisplayRow::AlbumWrappedContinuation => {
-                    // Phantom title-wrap rows: skip advancing Y in
-                    // multi-column mode so paired albums stay on the same
-                    // screen row.
-                    full_row_rect(screen_y as u16)
-                }
-                _ => {
-                    // Other rows (AlbumDetailRule, etc.)
-                    // get full width and start a new row
-                    full_row_rect(screen_y as u16)
-                }
+                _ => full_row_rect(screen_y as u16),
             };
 
             match row {

@@ -697,9 +697,8 @@ impl App {
                         // Not in track-selection mode: show the action hint only;
                         // the track list is entered with ENTER.
                         let row = detail_area.y;
-                        let max_y = detail_area.y + detail_area.height;
                         // Hint row
-                        if row < max_y {
+                        if detail_area.height > 0 {
                             let hint_w = (inner_w as usize).saturating_sub(2).max(1);
                             let hint = super::super::ui_util::trunc_str(
                                 "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks",
