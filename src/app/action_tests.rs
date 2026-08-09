@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_remote_app_stub};
-use crate::app::QueueScope;
+use crate::app::{LibEvent, QueueScope};
 
 fn key(code: KeyCode) -> KeyChord {
     KeyChord::new(code, KeyModifiers::NONE)
@@ -616,4 +616,78 @@ fn tempfile_dir() -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+#[test]
+fn playlists_load_error_preserves_existing_list_and_flashes() {
+    // Regression: a failed playlist-list fetch used to replace the
+    // existing list with an empty vec via `unwrap_or_default()`, making
+    // the UI show "No playlists found". Now the error event clears
+    // loading without touching the list.
+    let mut app = make_app_stub();
+    app.playlists = vec![make_item("Existing", "Playlist")];
+    app.playlists_loading = true;
+
+    app.handle_lib_event(LibEvent::PlaylistsLoadError(
+        "connection refused".to_string(),
+    ));
+
+    assert!(!app.playlists_loading);
+    assert_eq!(app.playlists.len(), 1);
+    assert_eq!(app.playlists[0].name, "Existing");
+    assert!(
+        app.status.contains("connection refused"),
+        "status was: {:?}",
+        app.status
+    );
+}
+
+#[test]
+fn playlist_items_load_error_preserves_existing_items_and_flashes() {
+    // Regression: a failed playlist-items fetch used to replace the
+    // open playlist's items with an empty vec, rendering "Playlist is
+    // empty". Now the error event clears loading without touching items.
+    let mut app = make_app_stub();
+    app.playlists_open = Some(make_item("My Playlist", "Playlist"));
+    app.playlists_open_items = vec![make_item("Track 1", "Audio")];
+    app.playlists_open_loading = true;
+
+    app.handle_lib_event(LibEvent::PlaylistItemsLoadError {
+        playlist_id: "id".to_string(),
+        error: "timeout".to_string(),
+    });
+
+    assert!(!app.playlists_open_loading);
+    assert_eq!(app.playlists_open_items.len(), 1);
+    assert_eq!(app.playlists_open_items[0].name, "Track 1");
+    assert!(app.status.contains("timeout"));
+}
+
+#[test]
+fn search_drain_error_does_not_produce_flash() {
+    // Regression: `drain_search_results` used to flash "Search error: …"
+    // redundantly alongside the inline "Search failed: …" in the search
+    // sidebar. Now errors are only surfaced inline.
+    let mut app = make_app_stub();
+    let mut sidebar = crate::app::search_sidebar::SearchSidebar::new();
+    sidebar.query = "test".into();
+    sidebar.loading = true;
+    app.search_sidebar = Some(sidebar);
+
+    let _ = app
+        .search_tx
+        .send(("test".into(), Err("API timeout".into())));
+    app.drain_search_results();
+
+    // The inline error is recorded on the sidebar.
+    assert_eq!(
+        app.search_sidebar
+            .as_ref()
+            .unwrap()
+            .last_drain_error
+            .as_deref(),
+        Some("API timeout")
+    );
+    // But no flash was produced -- status stays empty.
+    assert!(app.status.is_empty());
 }

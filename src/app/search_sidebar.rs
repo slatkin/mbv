@@ -14,7 +14,6 @@ pub(crate) struct SearchSidebar {
 
 pub(crate) struct SearchDrainOutcome {
     pub(crate) received: usize,
-    pub(crate) errors: Vec<String>,
 }
 
 fn is_navigable_type(item_type: &str) -> bool {
@@ -47,12 +46,7 @@ impl SearchSidebar {
         self.last_drain_error = None;
     }
 
-    pub(super) fn apply_drain(
-        &mut self,
-        query: &str,
-        result: Result<Vec<EmbyItem>, String>,
-        errors: &mut Vec<String>,
-    ) {
+    pub(super) fn apply_drain(&mut self, query: &str, result: Result<Vec<EmbyItem>, String>) {
         // A faster keystroke can dispatch a newer query while an older one
         // is still in flight; responses race on arrival order, not send
         // order. Discard anything that isn't answering the live query,
@@ -74,8 +68,7 @@ impl SearchSidebar {
                 self.last_drain_error = None;
             }
             Err(error) => {
-                self.last_drain_error = Some(error.clone());
-                errors.push(error);
+                self.last_drain_error = Some(error);
             }
         }
     }
@@ -146,10 +139,8 @@ mod tests {
             make_item("Movie 1", "Movie"),
             make_item("Series 1", "Series"),
         ];
-        let mut errors = Vec::new();
-        sidebar.apply_drain("", Ok(items), &mut errors);
+        sidebar.apply_drain("", Ok(items));
 
-        assert!(errors.is_empty());
         assert!(!sidebar.loading);
         assert_eq!(sidebar.cursor, 0);
         assert_eq!(sidebar.scroll, 0);
@@ -164,11 +155,9 @@ mod tests {
         let prior = vec![make_item("Previous", "Movie")];
         sidebar.results = prior.clone();
 
-        let mut errors = Vec::new();
-        sidebar.apply_drain("", Err("API timeout".into()), &mut errors);
+        sidebar.apply_drain("", Err("API timeout".into()));
 
         assert!(!sidebar.loading);
-        assert_eq!(errors, vec!["API timeout".to_string()]);
         assert_eq!(sidebar.last_drain_error.as_deref(), Some("API timeout"));
         let prior_names: Vec<&str> = prior.iter().map(|r| r.name.as_str()).collect();
         let actual_names: Vec<&str> = sidebar.results.iter().map(|r| r.name.as_str()).collect();
@@ -181,10 +170,8 @@ mod tests {
         sidebar.loading = true;
         sidebar.last_drain_error = Some("API timeout".into());
 
-        let mut errors = Vec::new();
-        sidebar.apply_drain("", Ok(vec![make_item("Movie 1", "Movie")]), &mut errors);
+        sidebar.apply_drain("", Ok(vec![make_item("Movie 1", "Movie")]));
 
-        assert!(errors.is_empty());
         assert!(sidebar.last_drain_error.is_none());
     }
 
@@ -212,10 +199,8 @@ mod tests {
             make_item("Photo 1", "Photo"),
         ];
 
-        let mut errors = Vec::new();
-        sidebar.apply_drain("", Ok(items), &mut errors);
+        sidebar.apply_drain("", Ok(items));
 
-        assert!(errors.is_empty());
         assert_eq!(sidebar.results.len(), 4);
         let types: Vec<&str> = sidebar
             .results
@@ -240,10 +225,8 @@ mod tests {
             make_item("Photo 1", "Photo"),
         ];
 
-        let mut errors = Vec::new();
-        sidebar.apply_drain("", Ok(items), &mut errors);
+        sidebar.apply_drain("", Ok(items));
 
-        assert!(errors.is_empty());
         assert!(sidebar.results.is_empty());
     }
 
@@ -256,15 +239,13 @@ mod tests {
         // A newer keystroke arrives before the "a" response does.
         sidebar.query = "ab".into();
 
-        let mut errors = Vec::new();
-        sidebar.apply_drain("a", Ok(vec![make_item("Stale", "Movie")]), &mut errors);
+        sidebar.apply_drain("a", Ok(vec![make_item("Stale", "Movie")]));
 
-        assert!(errors.is_empty());
         assert!(sidebar.loading, "stale response must not touch loading");
         assert_eq!(sidebar.cursor, 5);
         assert!(sidebar.results.is_empty());
 
-        sidebar.apply_drain("ab", Ok(vec![make_item("Fresh", "Movie")]), &mut errors);
+        sidebar.apply_drain("ab", Ok(vec![make_item("Fresh", "Movie")]));
 
         assert!(!sidebar.loading);
         assert_eq!(sidebar.cursor, 0);

@@ -722,9 +722,9 @@ fn restore_local_mode_clears_remote_queue_presentation_for_local_daemon_home() {
 #[test]
 fn restore_local_mode_flashes_combined_status_when_local_daemon_reconnect_fails() {
     // Same starting scenario as above, but the local-daemon reconnect
-    // attempt itself fails -- confirms `restore_local_mode` folds that
-    // failure into the flashed status instead of panicking or silently
-    // dropping it.
+    // attempt itself fails -- confirms `restore_local_mode` reports the
+    // daemon as unavailable instead of claiming local playback works
+    // (there is no suspended local player in this path).
     let _guard = crate::config::TestStateDirGuard::new();
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn route_connect_failure(
@@ -757,7 +757,11 @@ fn restore_local_mode_flashes_combined_status_when_local_daemon_reconnect_fails(
     // flash.
     assert!(app.player.is_remote());
     assert!(app.status.contains("test: route no longer resolves"));
-    assert!(app.status.contains("unreachable"));
+    assert!(app.status.contains("local daemon unavailable"));
+    assert!(
+        !app.status.contains("using local playback"),
+        "must not claim local playback when the daemon is unreachable and no local player is available"
+    );
 }
 
 #[test]
