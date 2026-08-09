@@ -129,12 +129,13 @@ fn adopt_queue_rejected_when_feed_tail_active() {
 }
 
 #[test]
-fn ctrl_load_feed_records_entry_in_tail_and_broadcasts_state() {
+fn ctrl_load_feed_records_entry_in_tail_and_starts_playback() {
     // Settled design decision (#5.2, no owner/availability rejection): the
-    // daemon always records LoadFeed into its Feed tail, forwards it to its
-    // own Player, and broadcasts the updated atomic state.
+    // daemon always records LoadFeed into its Feed tail and uses the
+    // lifecycle-capable play_feed path (not a bare send_command) so a cold
+    // daemon actually starts mpv.  The entry must have a playable source
+    // for play_feed to proceed past validation.
     let player = cold_player();
-    let player_cmd_rx = player.spy_on_commands();
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (_sender_id, sender_rx) = {
@@ -147,7 +148,15 @@ fn ctrl_load_feed_records_entry_in_tail_and_broadcasts_state() {
     let mut cursor = 0;
     let mut source = QueueSource::Unknown;
     let mut feed_items = Vec::new();
-    let entry = feed_entry("feed-1");
+    let entry = FeedEntry {
+        guid: "feed-1".into(),
+        title: "Episode 1".into(),
+        enclosure_url: Some("https://example.com/ep1.mp3".into()),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: Some(3_600_000_000),
+        pub_date_secs: None,
+    };
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
@@ -172,10 +181,15 @@ fn ctrl_load_feed_records_entry_in_tail_and_broadcasts_state() {
         &dummy_merged_tx,
     );
 
-    assert!(matches!(
-        player_cmd_rx.try_recv(),
-        Ok(PlayerCommand::LoadFeed { entry: fwd }) if fwd.guid == "feed-1"
-    ));
+    // play_feed (not send_command) was used: the player status reflects
+    // the feed entry being loaded, proving the lifecycle path ran.
+    {
+        let st = player.status.lock().unwrap();
+        assert!(st.active, "play_feed must activate the player");
+        assert_eq!(st.title, "Episode 1");
+        assert_eq!(st.current_idx, 0);
+        assert_eq!(st.queue_len, 1);
+    }
     assert_eq!(
         feed_items
             .iter()

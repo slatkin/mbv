@@ -3,6 +3,7 @@ use super::notify_actions::ToastSeverity;
 use super::types_feed_tab::FeedTabRefreshResult;
 use super::App;
 use mbv_core::config::FeedKind;
+use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
 
 impl App {
     /// Whether feed subscriptions are configured and the Feeds tab should
@@ -175,10 +176,13 @@ impl App {
     /// source and fails safely, but checking here avoids spawning mpv for
     /// a doomed play and gives the user an explanatory toast instead.
     ///
-    /// Local scope only: mirrors the entry into `PlayerTab.feed_items` so
-    /// the queue panel renders it immediately. Remote scope gets its feed
-    /// tail from the daemon's `LoadFeed` -> `QueueUpdated` broadcast, so
-    /// setting it here too would just be overwritten (and briefly wrong).
+    /// Local scope only: the entry is appended to both the application
+    /// `PlaybackQueue` (as `QueueItem::Feed`) and the parallel
+    /// `PlayerTab.feed_items` list so the queue panel renders it immediately
+    /// with correct cursor targeting and the now-playing title resolves.
+    /// Remote scope gets its feed tail from the daemon's `LoadFeed` ->
+    /// `QueueUpdated` broadcast, so setting it here would just be
+    /// overwritten.
     pub(super) fn feed_tab_play_selected(&mut self) {
         let Some(entry) = self
             .feed_tab
@@ -197,7 +201,26 @@ impl App {
         }
         let headless = infer_feed_kind_from_mime(entry.mime_type.as_deref()) == FeedKind::Audio;
         if !self.player.is_remote() {
-            self.playback_queue_mut().feed_items = vec![entry.clone()];
+            let active = self.player.status.lock().unwrap().active;
+            let queue = self.playback_queue_mut();
+            queue.feed_items = vec![entry.clone()];
+            // On a cold (inactive) player the player will spawn a fresh
+            // thread with only this Feed entry, so clear any stale Emby
+            // items and rebuild the PlaybackQueue model to match.
+            // On an active player the Feed is appended to the existing
+            // queue and the old items stay.
+            if !active {
+                queue.items.clear();
+                queue.queue = PlaybackQueue::from_items(Vec::new(), None);
+            }
+            // Append to the PlaybackQueue model so the queue panel, cursor,
+            // and now-playing title all resolve the Feed entry correctly.
+            queue.queue.append(QueueItem::Feed(entry.clone()));
+            let unified_idx = queue.queue.slots().len() - 1;
+            queue.queue_cursor = unified_idx;
+            let _ = queue
+                .queue
+                .set_active_slot(queue.queue.slots()[unified_idx].slot_id);
         }
         self.player.play_feed(entry, headless, self.ui_volume);
     }

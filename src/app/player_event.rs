@@ -139,13 +139,7 @@ impl App {
                     if should_consume {
                         let slot_id = slot_id.expect("should_consume implies a resolved slot");
                         let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
-                        let queue = self.playback_queue_mut();
-                        if queue.items.is_empty() {
-                            queue.queue_cursor = 0;
-                        } else {
-                            queue.queue_cursor =
-                                queue.queue_cursor.min(queue.items.len().saturating_sub(1));
-                        }
+                        self.playback_queue_mut().clamp_cursor();
                         log::info!(target: "consume", "Stopped-path: removed slot_id={slot_id:?} \
                             removed_id={removed_id:?}");
                         if removed_id.is_none() {

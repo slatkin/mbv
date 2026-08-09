@@ -223,8 +223,9 @@ pub fn trunc_str(s: &str, max: usize) -> String {
 /// A visual row in the queue: either a track (index into the Emby `items`)
 /// or a feed entry (index into the daemon-owned `feed_items` tail, §5.4).
 /// The queue list has no grouping/headers — every row is a track or feed
-/// entry, in that order. Feed rows are display-only: the queue cursor lives
-/// in Emby index space and never targets a `Feed` row (see `render_queue`).
+/// entry, in that order.  The cursor lives in unified index space:
+/// 0..items.len() for tracks, items.len()..items.len()+feed_items.len()
+/// for feed entries.
 #[derive(Clone)]
 pub(super) enum QueueRow {
     Track { idx: usize },

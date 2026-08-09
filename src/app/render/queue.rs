@@ -301,11 +301,15 @@ impl App {
         let total = display.len();
         let visible = area.height as usize;
 
-        // Visual row of the cursor item. Feed rows never match: the cursor
-        // lives in Emby index space only.
+        // Visual row of the cursor item.  The cursor lives in unified
+        // index space: 0..items.len() for Emby tracks, then
+        // items.len()..items.len()+feed_items.len() for Feed entries.
         let cursor_row = display
             .iter()
-            .position(|r| matches!(r, QueueRow::Track { idx } if *idx == cursor))
+            .position(|r| match r {
+                QueueRow::Track { idx } => *idx == cursor,
+                QueueRow::Feed { feed_idx } => items.len() + feed_idx == cursor,
+            })
             .unwrap_or(0);
         let max_offset = total.saturating_sub(visible);
         self.queue_scroll = self.queue_scroll.min(max_offset);
@@ -446,11 +450,9 @@ impl App {
                     let entry = &feed_items[feed_idx];
                     let is_active =
                         playback.active && playback.active_idx == items.len() + feed_idx;
-                    // Feed rows are display-only: the cursor lives in Emby
-                    // index space and never targets a feed row, so no cursor
-                    // highlight block is drawn here (unlike the Track arm).
+                    let is_cursor = focused && cursor == items.len() + feed_idx;
 
-                    let fg = if focused {
+                    let fg = if is_cursor || focused {
                         palette::WHITE
                     } else {
                         palette::QUEUE_UNFOCUSED_FG
@@ -476,6 +478,18 @@ impl App {
                         .saturating_sub(indent + right_w + QUEUE_TITLE_QUIET_COLUMNS);
                     let title = trunc_str(&entry.title, title_w);
 
+                    if is_cursor {
+                        f.render_widget(
+                            Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                            Rect {
+                                x: area.x,
+                                y: area.y + line_offset,
+                                width: area.width,
+                                height: 1,
+                            },
+                        );
+                    }
+
                     let title_color = if is_active {
                         palette::AQUA
                     } else if !focused {
@@ -486,7 +500,12 @@ impl App {
 
                     let mut spans: Vec<Span> = Vec::new();
                     if indent > 0 {
-                        spans.push(Span::raw("  "));
+                        if is_cursor {
+                            spans.push(Span::styled("▍", Style::default().fg(palette::AQUA)));
+                            spans.push(Span::raw(" "));
+                        } else {
+                            spans.push(Span::raw("  "));
+                        }
                     }
                     let title_w_actual = title.width();
                     spans.push(Span::styled(title, Style::default().fg(title_color)));
@@ -499,7 +518,7 @@ impl App {
                     }
 
                     list_items.push(ListItem::new(Line::from(spans)).style(row_style));
-                    layout.queue_row_map.push(None);
+                    layout.queue_row_map.push(Some(items.len() + feed_idx));
                     line_offset += 1;
                 }
             }

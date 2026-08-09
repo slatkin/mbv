@@ -462,9 +462,25 @@ impl App {
             Command::QueuePlayCursor => {
                 let queue = self.displayed_queue();
                 let t = queue.queue_cursor;
-                let n = queue.items.len();
+                let n = queue.total_queue_len();
                 if t < n {
-                    if let Some(conn_id) = self.connected_session_id.clone() {
+                    // Feed entry: cursor is in the tail region.
+                    let feed_offset = t.checked_sub(queue.items.len());
+                    if let Some(feed_offset) = feed_offset {
+                        if let Some(entry) = queue.feed_items.get(feed_offset).cloned() {
+                            if entry.primary_source().is_some() {
+                                let headless = super::feed_parse::infer_feed_kind_from_mime(
+                                    entry.mime_type.as_deref(),
+                                ) == mbv_core::config::FeedKind::Audio;
+                                self.player.play_feed(entry, headless, self.ui_volume);
+                            } else {
+                                self.flash(
+                                    "Feed entry has no playable source".into(),
+                                    super::notify_actions::ToastSeverity::Error,
+                                );
+                            }
+                        }
+                    } else if let Some(conn_id) = self.connected_session_id.clone() {
                         let items = queue.items.clone();
                         let item = items[t].clone();
                         let label = item.playback_label();

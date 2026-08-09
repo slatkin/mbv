@@ -508,7 +508,15 @@ fn handle_ctrl(
                     source,
                     feed_items.as_slice(),
                 );
-                player.send_command(PlayerCommand::LoadFeed { entry });
+                // Use the lifecycle-capable play_feed path rather than a
+                // bare send_command: on a cold daemon (no player thread
+                // yet), send_command returns false and the failure was
+                // silently ignored.  play_feed handles both the fast path
+                // (active mpv with matching headless state → reuses the
+                // window) and the cold path (stop/join/spawn fresh mpv).
+                // The daemon always runs headless.
+                let volume = player.status.lock().unwrap().volume.clamp(0, 200) as u8;
+                player.play_feed(entry, true, volume);
             }
             other => {
                 player.send_command(other);

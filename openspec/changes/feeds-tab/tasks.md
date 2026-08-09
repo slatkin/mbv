@@ -28,10 +28,10 @@
 ## 5. Play
 
 - [x] 5.1 Add capability-gated `CtrlState.feed_items` and include it in the atomic broadcast and reconnect snapshot. It defaults when absent, and legacy peers receive only the existing Emby shape.
-- [x] 5.2 On `LoadFeed`, record the Feed tail in the daemon and forward playback only when the Player owner is available; otherwise reject it without changing live queue state. Add a Player event that removes a consumed Feed item from that tail. Persist Feed queue slots through the tagged `QueueItem` queue-state shape, without playback-progress state.
+- [x] 5.2 On `LoadFeed`, record the Feed tail in the daemon and forward playback through the lifecycle-capable `play_feed` path (not a bare `send_command` that silently fails on a cold daemon). Add a Player event that removes a consumed Feed item from that tail. Persist Feed queue slots through the tagged `QueueItem` queue-state shape, without playback-progress state.
 - [x] 5.3 Enforce the Emby-then-Feed tail invariant: while the Feed tail is nonempty, reject Emby append, move, replace, and adopt operations that would put Emby content after a Feed. Test those rejections and the successful safe mutations.
-- [x] 5.4 Reconstruct a slot-identical mixed queue on capable remote clients from Emby items plus the Feed tail; preserve Feed identity in rendering, events, and queue actions so display indices cannot target the wrong owner slot.
-- [x] 5.5 "Play" on an entry builds `QueueItem::Feed(FeedEntry)`, appends it to the bound playback queue, and starts it through the capability-gated feed player action. Unsupported peers fail safely. Validate a playable enclosure/link before dispatching; Feed playback never reports to Emby.
+- [x] 5.4 Reconstruct a slot-identical mixed queue on capable remote clients from Emby items plus the Feed tail; preserve Feed identity in rendering, events, and queue actions so display indices cannot target the wrong owner slot. Bare-mode Feed playback integrates into the application `PlaybackQueue` model so the now-playing title, cursor targeting, and queue-action identity resolve correctly.
+- [x] 5.5 "Play" on an entry builds `QueueItem::Feed(FeedEntry)`, appends it to the bound playback queue (both the `PlaybackQueue` model and the parallel `feed_items` list in bare mode), and starts it through the capability-gated feed player action. Unsupported peers fail safely. Validate a playable enclosure/link before dispatching; Feed playback never reports to Emby.
 - [x] 5.6 Wire Enter on the selected Feed entry to that action with the appropriate audio-only/headless decision and current UI volume. It must not fall through to Emby library queue actions.
 
 ## 6. Management overlay
