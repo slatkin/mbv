@@ -258,10 +258,7 @@ impl App {
                             line.into_owned(),
                             Style::default().fg(palette::SOFT_WHITE),
                         ));
-                        if is_playing {
-                            first_line.push(Span::raw(" "));
-                            first_line.push(self.music_throbber_span());
-                        }
+
                         wrapped_title_lines.push(Line::from(first_line));
                     } else {
                         wrapped_title_lines.push(Line::from(vec![

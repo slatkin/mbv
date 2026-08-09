@@ -92,20 +92,6 @@ impl App {
             .to_symbol_span(&self.now_playing_throbber)
     }
 
-    pub(super) fn music_throbber_span(&self) -> Span<'static> {
-        const MUSIC_NOTES: throbber_widgets_tui::symbols::throbber::Set =
-            throbber_widgets_tui::symbols::throbber::Set {
-                full: "♫",
-                empty: " ",
-                symbols: &["♪", "♫", "♬", "♫", "♪"],
-            };
-
-        throbber_widgets_tui::Throbber::default()
-            .throbber_set(MUSIC_NOTES)
-            .throbber_style(Style::default().fg(palette::AQUA))
-            .to_symbol_span(&self.now_playing_throbber)
-    }
-
     pub fn render(&mut self, f: &mut Frame) {
         let area = f.area();
         // Guard against zero-dimension terminal (e.g. minimized or piped).

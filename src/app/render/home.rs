@@ -345,19 +345,6 @@ impl App {
         );
         self.home.home_scroll = scroll_y as usize;
 
-        let playing_item_id = {
-            let playback = self.effective_playback_state();
-            playback
-                .active
-                .then(|| {
-                    self.playback_queue()
-                        .items
-                        .get(playback.active_idx)
-                        .map(|item| item.id.clone())
-                })
-                .flatten()
-        };
-
         let mut hitmap: Vec<(Rect, usize)> = Vec::new();
 
         let visible = list_area.height.min(content_h.saturating_sub(scroll_y));
@@ -386,7 +373,6 @@ impl App {
                 }
                 DisplayRow::Item(flat_idx, item) => {
                     let selected_row = *flat_idx == cursor;
-                    let is_playing = playing_item_id.as_deref() == Some(item.id.as_str());
                     if selected_row {
                         layout.cursor_screen_y = Some(sy);
                     }
@@ -511,12 +497,6 @@ impl App {
                             pct.clone(),
                             Style::default().fg(palette::FOAM),
                         ));
-                    }
-
-                    // Add now-playing throbber inline with title
-                    if is_playing {
-                        title_spans.push(Span::raw(" "));
-                        title_spans.push(self.music_throbber_span());
                     }
 
                     // Calculate actual title width for right-alignment

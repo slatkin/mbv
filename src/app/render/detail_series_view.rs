@@ -359,10 +359,7 @@ impl App {
                             title_spans
                                 .push(Span::styled(ep_label, Style::default().fg(palette::MUTED)));
                             title_spans.push(Span::raw(title));
-                            if is_playing {
-                                title_spans.push(Span::raw(" "));
-                                title_spans.push(self.music_throbber_span());
-                            }
+
                             let title_cell = Cell::from(Line::from(title_spans));
                             let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
                             let length = if len_secs > 0 {
