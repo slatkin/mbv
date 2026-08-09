@@ -681,7 +681,6 @@ impl App {
                                 false, // flush_left
                                 true,  // show_hint: show the action hint
                                 art_reserved_w,
-                                None,
                                 layout,
                             );
                         } else {

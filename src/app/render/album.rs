@@ -433,7 +433,6 @@ impl App {
                             true,
                             false, // show_hint: AlbumActionHint row at top already shows it
                             0,     // art_reserved_w: already accounted for in track_area
-                            Some(row_area.x + TRACK_BLOCK_MARGIN),
                             layout,
                         );
                     }

@@ -93,7 +93,6 @@ impl App {
         flush_left: bool,
         show_hint: bool,
         art_reserved_w: u16,
-        active_marker_x: Option<u16>,
         layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
@@ -236,21 +235,6 @@ impl App {
             return;
         }
 
-        if focused {
-            if let Some(marker_x) = active_marker_x {
-                let scroll_offset = cursor.saturating_sub(table_area.height as usize - 1);
-                f.render_widget(
-                    Paragraph::new(Span::styled("\u{258D}", Style::default().fg(palette::AQUA))),
-                    Rect {
-                        x: marker_x,
-                        y: table_area.y + cursor.saturating_sub(scroll_offset) as u16,
-                        width: 1,
-                        height: 1,
-                    },
-                );
-            }
-        }
-
         let playback = self.effective_playback_state();
         let now_playing_id: Option<String> = if playback.active {
             self.playback_queue()
@@ -279,6 +263,7 @@ impl App {
             .map(|(i, item)| {
                 let is_cursor = i == cursor;
                 let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
+                let selected = is_cursor && focused;
                 let row_style = if is_cursor && focused {
                     Style::default().fg(palette::YELLOW).bg(palette::BG_GREEN)
                 } else if focused {
@@ -286,10 +271,11 @@ impl App {
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker = if is_cursor && focused && active_marker_x.is_none() {
-                    Span::styled("\u{258D}", Style::default().fg(palette::AQUA))
+                let marker = super::selection_marker(selected_region_gutter);
+                let text_fg = if selected {
+                    palette::YELLOW
                 } else {
-                    super::selection_marker(selected_region_gutter)
+                    palette::SOFT_WHITE
                 };
                 let track_num = if item.index_number > 0 {
                     format!("{:>width$}. ", item.index_number, width = track_num_width)
@@ -311,11 +297,11 @@ impl App {
                         let mut first_line = title_spans.clone();
                         first_line.push(Span::styled(
                             track_num.clone(),
-                            Style::default().fg(palette::SOFT_WHITE),
+                            Style::default().fg(text_fg),
                         ));
                         first_line.push(Span::styled(
                             line.into_owned(),
-                            Style::default().fg(palette::SOFT_WHITE),
+                            Style::default().fg(text_fg),
                         ));
 
                         wrapped_title_lines.push(Line::from(first_line));
@@ -324,10 +310,7 @@ impl App {
                             Span::raw(
                                 " ".repeat(1 + if selected_region_gutter { 1 } else { 0 } + num_w),
                             ),
-                            Span::styled(
-                                line.into_owned(),
-                                Style::default().fg(palette::SOFT_WHITE),
-                            ),
+                            Span::styled(line.into_owned(), Style::default().fg(text_fg)),
                         ]));
                     }
                 }
@@ -342,8 +325,13 @@ impl App {
                 if show_length {
                     Row::new([
                         title_cell,
-                        Cell::from(Line::from(length).alignment(Alignment::Right))
-                            .style(Style::default().fg(palette::SUBTLE)),
+                        Cell::from(Line::from(length).alignment(Alignment::Right)).style(
+                            Style::default().fg(if selected {
+                                palette::YELLOW
+                            } else {
+                                palette::SUBTLE
+                            }),
+                        ),
                         Cell::from(""),
                     ])
                     .height(title_height)
