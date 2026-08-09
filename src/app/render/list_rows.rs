@@ -166,15 +166,18 @@ pub(super) fn draw_column_selection_markers(
     cursor: usize,
     cols: usize,
     item_rows: &[Vec<usize>],
+    row_offset: usize,
 ) {
     if cols <= 1 {
         return;
     }
-    let cursor_row = item_rows.iter().position(|row| row.contains(&cursor));
-    let Some(row_idx) = cursor_row else {
+    let Some(cursor_row) = item_rows.iter().position(|row| row.contains(&cursor)) else {
         return;
     };
-    let col_in_row = item_rows[row_idx]
+    let Some(row_idx) = cursor_row.checked_sub(row_offset) else {
+        return;
+    };
+    let col_in_row = item_rows[cursor_row]
         .iter()
         .position(|&idx| idx == cursor)
         .unwrap_or(0);

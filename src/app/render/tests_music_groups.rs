@@ -269,3 +269,55 @@ fn two_column_album_groups_keep_spacer_above_next_group() {
         );
     }
 }
+
+#[test]
+fn two_column_grouped_rows_keep_absolute_columns_after_scroll() {
+    let mut app = make_music_group_app();
+    for i in 1..4 {
+        let mut album = make_item(&format!("Album {i:02}"), "MusicAlbum");
+        album.id = format!("album-{i}");
+        album.artist = "Alpha".into();
+        album.is_folder = true;
+        app.libs[0].nav_stack.last_mut().unwrap().items.push(album);
+    }
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 2;
+    let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
+    let mut layout = LayoutMain::default();
+    let mut terminal = Terminal::new(TestBackend::new(82, 2)).unwrap();
+    terminal
+        .draw(|f| {
+            app.render_grouped_album_rows(
+                f,
+                Rect::new(0, 0, 82, 2),
+                0,
+                &albums,
+                AlbumRowsCursorCtx {
+                    cursor: 2,
+                    stored_scroll: 0,
+                },
+                true,
+                true,
+                2,
+                &mut layout,
+            );
+        })
+        .unwrap();
+
+    let rendered = buffer_to_string(&terminal);
+    let lines: Vec<&str> = rendered.lines().collect();
+    assert!(
+        lines[1].contains("Album 02"),
+        "the row containing the selected album should render after the scrolled packed row:\n{rendered}\noffset={} rows={:?} cursor_y={:?}",
+        layout.left_screen_offset,
+        layout.left_item_rows,
+        layout.cursor_screen_y,
+    );
+    assert!(
+        lines[1].starts_with('▎'),
+        "the selected-row marker should follow the selected album after scrolling:\n{rendered}"
+    );
+    assert_eq!(layout.left_screen_offset, 1);
+    assert_eq!(layout.left_item_rows[1], vec![0, 1]);
+    assert_eq!(layout.left_item_rows[2], vec![2, 3]);
+    assert_eq!(layout.cursor_screen_y, Some(1));
+}

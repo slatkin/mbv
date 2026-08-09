@@ -176,72 +176,83 @@ impl App {
             .min(top_bound);
         let offset = stored_scroll.clamp(lower_bound, top_bound);
 
-        // Build screen-row-indexed left_item_rows for column-packing-aware
-        // mouse hit-testing. The rendering loop below packs display rows into
-        // screen rows; left_item_rows mirrors that with one entry per screen
-        // row. left_screen_offset lets the mouse handler index correctly.
-        let (screen_offset, total_screen_rows) = {
-            let cn = cols.max(1) as usize;
-            let mut d2s = vec![0usize; display_rows.len()];
-            let mut screen = 0usize;
-            let mut gai = 0usize;
-            let mut sr: Vec<Vec<usize>> = vec![Vec::new()];
-            for (di, row) in display_rows.iter().enumerate() {
-                d2s[di] = screen;
-                match row {
-                    GroupedAlbumDisplayRow::Album(idx) => {
-                        let col = gai % cn;
-                        gai += 1;
-                        while sr[screen].len() <= col {
-                            sr[screen].push(0);
-                        }
-                        sr[screen][col] = *idx;
-                        if (col + 1).is_multiple_of(cn) {
-                            screen += 1;
-                            sr.push(Vec::new());
-                        }
+        // Build the same display-row -> screen-row/column mapping used by the
+        // rendering loop. Keeping this mapping in one place is important in
+        // two-column mode: a viewport can begin halfway through a packed row,
+        // so resetting the packing state at `offset` makes the visible cells,
+        // selection marker, and cursor highlight disagree.
+        let cn = cols.max(1) as usize;
+        let mut display_screen_rows = vec![0usize; display_rows.len()];
+        let mut display_columns = vec![None; display_rows.len()];
+        let mut screen = 0usize;
+        let mut group_album_idx = 0usize;
+        let mut sr: Vec<Vec<usize>> = vec![Vec::new()];
+        for (di, row) in display_rows.iter().enumerate() {
+            match row {
+                GroupedAlbumDisplayRow::Album(idx) => {
+                    let col = group_album_idx % cn;
+                    display_screen_rows[di] = screen;
+                    display_columns[di] = Some(col);
+                    group_album_idx += 1;
+                    while sr[screen].len() <= col {
+                        sr[screen].push(0);
                     }
-                    GroupedAlbumDisplayRow::AlbumWrappedContinuation if cn > 1 => {}
-                    GroupedAlbumDisplayRow::ArtistHeader(_)
-                    | GroupedAlbumDisplayRow::ArtistGroupSpacer => {
-                        gai = 0;
-                        screen += 1;
-                        sr.push(Vec::new());
-                    }
-                    _ => {
+                    sr[screen][col] = *idx;
+                    if (col + 1).is_multiple_of(cn) {
                         screen += 1;
                         sr.push(Vec::new());
                     }
                 }
-            }
-            while sr.last().is_some_and(|r| r.is_empty()) && sr.len() > 1 {
-                sr.pop();
-            }
-            let so = d2s.get(offset).copied().unwrap_or(0);
-            // Cursor screen Y from the packed mapping
-            if self.libs[lib_idx].album_track_focus.is_none() {
-                if let Some(&cs) = d2s.get(display_cursor) {
-                    if cs >= so {
-                        layout.cursor_screen_y = Some(area.y + (cs - so) as u16);
+                GroupedAlbumDisplayRow::AlbumWrappedContinuation if cn > 1 => {
+                    display_screen_rows[di] = screen;
+                }
+                GroupedAlbumDisplayRow::ArtistHeader(_)
+                | GroupedAlbumDisplayRow::ArtistGroupSpacer => {
+                    if !group_album_idx.is_multiple_of(cn) {
+                        screen += 1;
+                        sr.push(Vec::new());
                     }
+                    group_album_idx = 0;
+                    display_screen_rows[di] = screen;
+                    screen += 1;
+                    sr.push(Vec::new());
+                }
+                _ => {
+                    display_screen_rows[di] = screen;
+                    screen += 1;
+                    sr.push(Vec::new());
                 }
             }
-            // Visible-slice row map and targets indexed by screen row
-            let vs = visible.min(sr.len().saturating_sub(so));
-            layout.left_row_map = (so..).take(vs).map(|i| sr[i].first().copied()).collect();
-            layout.left_row_targets = (0..vs)
-                .map(|vi| {
-                    let i = so + vi;
-                    (0..display_rows.len())
-                        .find(|&d| d2s[d] == i)
-                        .and_then(|d| display_rows[d].row_target(selectable_headers))
-                })
-                .collect();
-            let total = sr.len();
-            layout.left_item_rows = sr;
-            layout.left_screen_offset = so;
-            (so, total)
-        };
+        }
+        while sr.last().is_some_and(|r| r.is_empty()) && sr.len() > 1 {
+            sr.pop();
+        }
+        let screen_offset = display_screen_rows.get(offset).copied().unwrap_or(0);
+        // Cursor screen Y from the packed mapping
+        if self.libs[lib_idx].album_track_focus.is_none() {
+            if let Some(&cursor_screen) = display_screen_rows.get(display_cursor) {
+                if cursor_screen >= screen_offset {
+                    layout.cursor_screen_y = Some(area.y + (cursor_screen - screen_offset) as u16);
+                }
+            }
+        }
+        // Visible-slice row map and targets indexed by screen row
+        let vs = visible.min(sr.len().saturating_sub(screen_offset));
+        layout.left_row_map = (screen_offset..)
+            .take(vs)
+            .map(|i| sr[i].first().copied())
+            .collect();
+        layout.left_row_targets = (0..vs)
+            .map(|vi| {
+                let screen_row = screen_offset + vi;
+                (0..display_rows.len())
+                    .find(|&d| display_screen_rows[d] == screen_row)
+                    .and_then(|d| display_rows[d].row_target(selectable_headers))
+            })
+            .collect();
+        let total_screen_rows = sr.len();
+        layout.left_item_rows = sr;
+        layout.left_screen_offset = screen_offset;
 
         // Paint the colored background block before rendering row content
         if let Some((top_pad_abs, bottom_pad_abs)) = selected_block_bounds {
@@ -285,14 +296,15 @@ impl App {
             }
         }
 
-        let visible_rows: Vec<&GroupedAlbumDisplayRow> =
-            display_rows.iter().skip(offset).take(visible).collect();
-
-        // Two-column packing state: track album position within artist groups
-        // to pack consecutive Album rows into columns.
-        let cn = cols.max(1) as usize;
-        let mut current_y = 0u16;
-        let mut group_album_idx = 0usize;
+        let visible_screen_end = screen_offset + visible;
+        let visible_rows: Vec<(usize, &GroupedAlbumDisplayRow)> = display_rows
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| {
+                display_screen_rows[*idx] >= screen_offset
+                    && display_screen_rows[*idx] < visible_screen_end
+            })
+            .collect();
 
         // Produce the area rect for a full-width row (headers, spacers, and
         // non-album filler rows). The `Album` branch replaces the width/height
@@ -304,14 +316,14 @@ impl App {
             height: 1,
         };
 
-        for (row_idx, row) in visible_rows.iter().enumerate() {
-            let abs_row_idx = offset + row_idx;
+        for (row_idx, &(abs_row_idx, row)) in visible_rows.iter().enumerate() {
+            let screen_y = display_screen_rows[abs_row_idx] - screen_offset;
 
             // Determine if this row should start a new terminal row or continue
             // in the current row (for two-column packing).
-            let (row_area, advance_after) = match row {
+            let row_area = match row {
                 GroupedAlbumDisplayRow::Album(_) => {
-                    let col = group_album_idx % cn;
+                    let col = display_columns[abs_row_idx].unwrap_or(0);
                     let col_width = area.width / cn as u16;
                     let col_x = area.x + (col as u16 * col_width);
                     // Last column gets remaining width to avoid rounding errors
@@ -323,37 +335,24 @@ impl App {
 
                     let row_area = Rect {
                         x: col_x,
-                        y: area.y + current_y,
+                        y: area.y + screen_y as u16,
                         width: actual_width,
                         height: 1,
                     };
-                    let advance_after = (col + 1).is_multiple_of(cn);
-                    group_album_idx += 1;
-                    (row_area, advance_after)
+                    row_area
                 }
                 GroupedAlbumDisplayRow::ArtistHeader(_)
-                | GroupedAlbumDisplayRow::ArtistGroupSpacer => {
-                    // Flush a partial two-column album row before a full-width
-                    // group row. Without this, an odd-sized group lets its
-                    // spacer/header reuse the last album's screen row, so the
-                    // following group has no visible padding above it.
-                    if !group_album_idx.is_multiple_of(cn) {
-                        current_y += 1;
-                    }
-                    // These always get full width and start a new row.
-                    group_album_idx = 0;
-                    (full_row_rect(current_y), true)
-                }
+                | GroupedAlbumDisplayRow::ArtistGroupSpacer => full_row_rect(screen_y as u16),
                 GroupedAlbumDisplayRow::AlbumWrappedContinuation => {
                     // Phantom title-wrap rows: skip advancing Y in
                     // multi-column mode so paired albums stay on the same
                     // screen row.
-                    (full_row_rect(current_y), cn == 1)
+                    full_row_rect(screen_y as u16)
                 }
                 _ => {
                     // Other rows (AlbumDetailRule, etc.)
                     // get full width and start a new row
-                    (full_row_rect(current_y), true)
+                    full_row_rect(screen_y as u16)
                 }
             };
 
@@ -421,11 +420,11 @@ impl App {
                 GroupedAlbumDisplayRow::AlbumDetailStart(idx) => {
                     let height = visible_rows[row_idx..]
                         .iter()
-                        .take_while(|r| {
+                        .take_while(|(_, r)| {
                             matches!(
-                                r,
-                                GroupedAlbumDisplayRow::AlbumDetailStart(_)
-                                    | GroupedAlbumDisplayRow::AlbumDetailContinuation
+                                *r,
+                                &GroupedAlbumDisplayRow::AlbumDetailStart(_)
+                                    | &GroupedAlbumDisplayRow::AlbumDetailContinuation
                             )
                         })
                         .count() as u16;
@@ -502,11 +501,6 @@ impl App {
                 }
                 GroupedAlbumDisplayRow::AlbumDetailContinuation => {}
             }
-
-            // Advance y after rendering if this row completes a column group
-            if advance_after {
-                current_y += 1;
-            }
         }
 
         if focused && total_screen_rows > visible {
@@ -554,7 +548,14 @@ impl App {
         // Draw the aqua gutter marker for the two-column selected row,
         // matching the movie library's two-column selection appearance.
         if cols > 1 {
-            draw_column_selection_markers(f, area, cursor, cols as usize, &layout.left_item_rows);
+            draw_column_selection_markers(
+                f,
+                area,
+                cursor,
+                cols as usize,
+                &layout.left_item_rows,
+                screen_offset,
+            );
         }
 
         offset

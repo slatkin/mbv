@@ -158,7 +158,14 @@ impl App {
             super::render_right_scrollbar(f, content_area, max_off, offset);
         }
 
-        draw_column_selection_markers(f, content_area, cursor, cols, &layout.left_item_rows);
+        draw_column_selection_markers(
+            f,
+            content_area,
+            cursor,
+            cols,
+            &layout.left_item_rows,
+            offset,
+        );
 
         final_offset
     }

@@ -496,11 +496,32 @@ impl App {
                         | GroupedAlbumDisplayRow::AlbumActionHint
                 )
             });
-            let clamped_cursor = display_cursor.min(rows.len().saturating_sub(1));
+            // Removing the inline-detail rows shifts the selected album's
+            // display position. Recompute it instead of clamping the old
+            // pre-removal index, which can point at the next album and make
+            // scrolling/row highlighting disagree with the hero selection.
+            let display_cursor = rows
+                .iter()
+                .position(|row| {
+                    selectable_headers
+                        && matches!(
+                            (row, selected_artist_header),
+                            (
+                                GroupedAlbumDisplayRow::ArtistHeader(selection),
+                                Some(selected)
+                            ) if selection == selected
+                        )
+                })
+                .or_else(|| {
+                    rows.iter().position(
+                        |row| matches!(row, GroupedAlbumDisplayRow::Album(i) if *i == cursor),
+                    )
+                })
+                .unwrap_or(0);
             return GroupedAlbumDisplayPlan {
                 order: order.to_vec(),
                 rows,
-                display_cursor: clamped_cursor,
+                display_cursor,
                 selected_artist_header_valid,
                 selected_group_indices,
                 selected_block_bounds: None,
