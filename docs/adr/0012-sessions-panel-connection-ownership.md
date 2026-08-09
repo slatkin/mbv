@@ -10,6 +10,6 @@ F3's Sessions panel owns only playback/control relationships created by selectin
 
 ## Consequences
 
-F3 `Enter` remains an explicit takeover: selecting a discovered session may tear down an active library route first, then establish a Sessions-panel connection. F3 `d` is asymmetric by design: it disconnects only a Sessions-panel connection that F3 owns. When playback is route-owned and no Sessions-panel connection is active, F3 `d` leaves routing untouched and reports `No session connected`.
+F3 `Enter` remains an explicit takeover: selecting a discovered session may tear down an active library route first, then establish a Sessions-panel connection. F3 `d` is asymmetric by design: it disconnects only a Sessions-panel connection that F3 owns. When playback is route-owned and no Sessions-panel connection is active, F3 `d` leaves routing untouched and reports `No session selected`.
 
 Ownership is determined by the user action that created the relationship, not by endpoint or device identity. If the configured route's target device also appears in F3 and the user selects it there, the resulting relationship is Sessions-panel-owned even if it points at the same daemon.
