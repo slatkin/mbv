@@ -471,7 +471,7 @@ fn select_feed_folder_group_updates_feed_state_when_detail_level_exists() {
 #[test]
 fn go_back_keeps_feed_home_video_group_view_intact() {
     let mut app = make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
@@ -537,7 +537,7 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
     // A stale selected group from a prior aggregation run with more groups
     // must clamp to the groups that actually exist now.
     let mut app = make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
@@ -602,7 +602,7 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
 #[test]
 fn refresh_lib_targets_feed_selection() {
     let mut app = make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.panel_focus = PanelFocus::Library;
     app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 

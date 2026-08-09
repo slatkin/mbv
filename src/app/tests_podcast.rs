@@ -88,7 +88,7 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
         series_season_cursor: 0,
         library_total: None,
     });
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     app.open_context_menu();
 
@@ -140,7 +140,7 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
         series_season_cursor: 0,
         library_total: None,
     });
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     app.open_context_menu();
 
@@ -207,7 +207,7 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
         library_total: None,
     });
     app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     app.open_context_menu();
 
@@ -312,7 +312,7 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
         library_total: None,
     });
     app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     app.open_context_menu();
 

@@ -17,6 +17,7 @@ use super::types_playback::{
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
+use super::types_tab_selection::TabSelection;
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
@@ -145,7 +146,7 @@ pub struct App {
     // Main UI scalars.
     // reuses shared self.libs.
     pub(super) panel_focus: PanelFocus,
-    pub(super) library_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
+    pub(super) tab: TabSelection, // which left-panel tab is active
     pub(super) queue_column_width: u16,
     pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded

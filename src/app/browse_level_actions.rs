@@ -58,7 +58,7 @@ impl App {
         // When a season list arrives for a TV library,
         // automatically push a loading placeholder and fetch the first season's
         // episodes so the user lands directly in the combined series view.
-        let should_auto_push = self.library_tab == lib_idx + 1
+        let should_auto_push = self.tab.library_index() == Some(lib_idx)
             && self
                 .libs
                 .get(lib_idx)

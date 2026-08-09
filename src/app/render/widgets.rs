@@ -540,19 +540,19 @@ impl App {
     ) {
         // If a music-group library's nav_stack was truncated to just the group
         // level (e.g., stale breadcrumb click), immediately re-push the album level.
-        if self.library_tab > 0 {
-            self.ensure_music_group_album_level(self.library_tab - 1);
-            self.ensure_feed_home_video_group_level(self.library_tab - 1);
+        if let Some(lib_idx) = self.tab.library_index() {
+            self.ensure_music_group_album_level(lib_idx);
+            self.ensure_feed_home_video_group_level(lib_idx);
         }
 
-        if self.library_tab == 0 {
+        if self.tab.is_home() {
             self.render_home_list(f, area, focused, layout);
             return;
         }
-        let lib_idx = self.library_tab.saturating_sub(1);
-        let is_feed_group = self.library_tab > 0 && self.is_feed_home_video_group_view(lib_idx);
-        let is_album_folders = self.library_tab > 0 && self.is_viewing_album_folders(lib_idx);
-        let is_home_video = self.library_tab > 0 && self.is_home_video_view(lib_idx);
+        let lib_idx = self.tab.library_index().unwrap();
+        let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
+        let is_album_folders = self.is_viewing_album_folders(lib_idx);
+        let is_home_video = self.is_home_video_view(lib_idx);
         if is_feed_group {
             self.render_feed_home_video_group_view(f, area, lib_idx, focused, layout);
         } else if is_album_folders {

@@ -310,7 +310,7 @@ impl App {
         // When the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.
-        let should_auto_push_music = self.library_tab == lib_idx + 1
+        let should_auto_push_music = self.tab.library_index() == Some(lib_idx)
             && self
                 .libs
                 .get(lib_idx)

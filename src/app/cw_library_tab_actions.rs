@@ -1,4 +1,4 @@
-use super::{App, PanelFocus};
+use super::{App, PanelFocus, TabSelection};
 
 impl App {
     /// Number of selectable left-panel tabs: Home/CW + all libraries.
@@ -12,12 +12,12 @@ impl App {
         if idx >= self.library_tab_count() {
             return;
         }
-        self.library_tab = idx;
+        self.tab = TabSelection::from_position(idx);
         self.last_card_height = 0; // reset stale image height for new view
         self.last_card_width = 0;
-        if idx > 0 {
+        if let Some(lib_idx) = self.tab.library_index() {
             self.set_panel_focus(PanelFocus::Library);
-            self.activate_library_position(idx - 1);
+            self.activate_library_position(lib_idx);
         }
         self.ensure_tab_visible();
         self.save_prefs();
@@ -26,12 +26,14 @@ impl App {
     /// Advance the left-panel tab (wrapping); load the library if needed.
     pub(super) fn library_tab_next(&mut self) {
         let n = self.library_tab_count();
-        self.library_tab = (self.library_tab + 1) % n;
+        let pos = self.tab.to_position();
+        let new_pos = (pos + 1) % n;
+        self.tab = TabSelection::from_position(new_pos);
         self.last_card_height = 0; // reset stale image height for new view
         self.last_card_width = 0;
-        if self.library_tab > 0 {
+        if let Some(lib_idx) = self.tab.library_index() {
             self.set_panel_focus(PanelFocus::Library);
-            self.activate_library_position(self.library_tab - 1);
+            self.activate_library_position(lib_idx);
         }
         self.ensure_tab_visible();
         self.save_prefs();
@@ -40,12 +42,14 @@ impl App {
     /// Retreat the left-panel tab (wrapping); load the library if needed.
     pub(super) fn library_tab_prev(&mut self) {
         let n = self.library_tab_count();
-        self.library_tab = (self.library_tab + n - 1) % n;
+        let pos = self.tab.to_position();
+        let new_pos = (pos + n - 1) % n;
+        self.tab = TabSelection::from_position(new_pos);
         self.last_card_height = 0;
         self.last_card_width = 0;
-        if self.library_tab > 0 {
+        if let Some(lib_idx) = self.tab.library_index() {
             self.set_panel_focus(PanelFocus::Library);
-            self.activate_library_position(self.library_tab - 1);
+            self.activate_library_position(lib_idx);
         }
         self.ensure_tab_visible();
         self.save_prefs();

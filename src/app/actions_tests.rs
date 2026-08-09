@@ -7,7 +7,7 @@ use crate::app::library_browse_actions::{
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope,
+    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
@@ -264,7 +264,7 @@ fn refresh_while_album_index_loads_coalesces_one_replacement() {
 fn recursive_activation_keeps_panel_focus_and_enters_inline_tracks() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = recursive_music_app();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.panel_focus = PanelFocus::Library;
     app.libs[0].nav_stack.push(BrowseLevel {
         parent_id: "group-a".into(),

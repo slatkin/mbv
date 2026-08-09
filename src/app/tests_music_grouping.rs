@@ -1,6 +1,6 @@
 use super::music_grouping::{build_grouped_album_catalog, derive_album_artist};
 use super::tests::{make_app_stub, make_item};
-use super::{BrowseLevel, LibraryTab};
+use super::{BrowseLevel, LibraryTab, TabSelection};
 use mbv_core::api::EmbyItem;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -48,7 +48,7 @@ fn make_group_level() -> BrowseLevel {
 
 fn make_music_app(albums: Vec<EmbyItem>) -> super::App {
     let mut app = make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.music_levels = vec!["group".into(), "album".into()];
 
     let mut library = make_item("Music", "CollectionFolder");

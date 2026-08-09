@@ -104,12 +104,10 @@ impl App {
 
         // Route nav keys to the focused library panel.
         if matches!(self.panel_focus, PanelFocus::Library) {
-            if self.library_tab == 0 && self.handle_cw_key(key) {
+            if self.tab.is_home() && self.handle_cw_key(key) {
                 return false;
             }
-            if self.library_tab > 0 {
-                let lib_idx = self.library_tab - 1;
-
+            if let Some(lib_idx) = self.tab.library_index() {
                 // Season switching: [ = previous season, ] = next season.
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT)

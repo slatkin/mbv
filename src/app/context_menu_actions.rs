@@ -4,7 +4,7 @@ impl App {
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
         match action {
             Some(ContextAction::Play) => {
-                if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0 {
+                if matches!(self.panel_focus, PanelFocus::Library) && self.tab.is_home() {
                     self.cw_play();
                 } else if matches!(self.panel_focus, PanelFocus::Queue) {
                     // Was its own third copy of queue-cursor activation, with
@@ -18,11 +18,8 @@ impl App {
                 }
             }
             Some(ContextAction::PlayFolder(id)) => {
-                let ct = if self.library_tab > 0 {
-                    self.libs[self.library_tab - 1]
-                        .library
-                        .collection_type
-                        .clone()
+                let ct = if let Some(lib_idx) = self.tab.library_index() {
+                    self.libs[lib_idx].library.collection_type.clone()
                 } else {
                     String::new()
                 };
@@ -46,7 +43,7 @@ impl App {
                 }
             }
             Some(ContextAction::Enqueue) => {
-                if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0 {
+                if matches!(self.panel_focus, PanelFocus::Library) && self.tab.is_home() {
                     self.cw_enqueue();
                 } else {
                     self.enqueue_selected();
@@ -118,10 +115,8 @@ impl App {
         match result {
             Ok(()) => {
                 if played {
-                    let lib_idx_opt = if matches!(self.panel_focus, PanelFocus::Library)
-                        && self.library_tab > 0
-                    {
-                        Some(self.library_tab - 1)
+                    let lib_idx_opt = if matches!(self.panel_focus, PanelFocus::Library) {
+                        self.tab.library_index()
                     } else {
                         None
                     };
@@ -150,7 +145,7 @@ impl App {
                         }
                     }
                 }
-                if self.library_tab == 0 {
+                if self.tab.is_home() {
                     let _ = self.fetch_home();
                 } else {
                     self.refresh_lib();
@@ -219,7 +214,7 @@ impl App {
         match result {
             Ok(()) => {
                 if !item.played {
-                    let lib_idx = self.library_tab.saturating_sub(1);
+                    let lib_idx = self.tab.library_index().unwrap_or(0);
                     if self.is_feed_home_video_group_view(lib_idx) {
                         if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                             state.loading = true;

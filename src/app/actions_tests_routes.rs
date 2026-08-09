@@ -7,7 +7,7 @@ use crate::app::library_browse_actions::{
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope,
+    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
@@ -207,7 +207,7 @@ fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
         series_season_cursor: 0,
         library_total: None,
     });
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     app.enqueue_selected();
 
@@ -314,7 +314,7 @@ fn play_item_swaps_to_library_route_before_replacing_queue() {
     });
     let mut item = make_item("Song", "Audio");
     item.id = "song-1".to_string();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     app.play_item(item);
 

@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::layout::LayoutMain;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab};
+use crate::app::{BrowseLevel, LibraryTab, TabSelection};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -31,7 +31,7 @@ fn render_list_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
 
 fn make_movie_list_app(titles: Vec<&str>) -> App {
     let mut app = make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -526,7 +526,7 @@ fn two_column_mouse_click_selects_the_clicked_cell_not_the_row_first_item() {
 #[test]
 fn show_grouped_guard_is_false_while_search_is_active_on_album_folders() {
     let mut app = crate::app::render::test_helpers::make_music_group_app();
-    let lib_idx = app.library_tab - 1;
+    let lib_idx = app.tab.library_index().unwrap();
 
     assert!(
         app.is_viewing_album_folders(lib_idx),

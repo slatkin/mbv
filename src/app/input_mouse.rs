@@ -97,7 +97,9 @@ impl App {
             // library-row activation, so it can't drift from Enter's
             // behavior or from the app-wide "single click only focuses"
             // convention.
-            if self.layout.main.hero_area.contains((col, row).into()) && self.library_tab > 0 {
+            if self.layout.main.hero_area.contains((col, row).into())
+                && self.tab.library_index().is_some()
+            {
                 self.set_panel_focus(PanelFocus::Library);
                 return true;
             }
@@ -143,7 +145,7 @@ impl App {
                     self.last_card_width = 0;
                 }
                 self.set_panel_focus(PanelFocus::Library);
-                if self.library_tab == 0 {
+                if self.tab.is_home() {
                     // Home tab: rectangle hit-test the two-column card grid.
                     let pos = (col, row).into();
                     if let Some((_, flat_idx)) = self
@@ -157,7 +159,7 @@ impl App {
                         self.home.home_cursor = *flat_idx;
                     }
                 } else {
-                    let lib_idx = self.library_tab - 1;
+                    let lib_idx = self.tab.library_index().unwrap();
                     if self.is_music_group_view(lib_idx)
                         || self.is_feed_home_video_group_view(lib_idx)
                         || self.should_show_letter_pills(lib_idx)

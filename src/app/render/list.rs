@@ -98,19 +98,21 @@ impl App {
         }
 
         // Ensure the library is loaded when a library tab is selected.
-        if self.library_tab > 0 {
-            self.ensure_lib_loaded_for(self.library_tab - 1);
+        if let Some(lib_idx) = self.tab.library_index() {
+            self.ensure_lib_loaded_for(lib_idx);
         }
 
         let mut content_area = area;
 
         // First row area: search input box (when searching).
         if focused
-            && self.library_tab > 0
-            && self.libs[self.library_tab - 1].search.is_some()
+            && self.tab.library_index().is_some()
+            && self.libs[self.tab.library_index().unwrap()]
+                .search
+                .is_some()
             && content_area.height >= 3
         {
-            let lib_idx = self.library_tab - 1;
+            let lib_idx = self.tab.library_index().unwrap();
             // 3-row bordered search input, matching the home-search visual style.
             let search_area = Rect {
                 height: 3,
@@ -151,18 +153,21 @@ impl App {
         // `selected_movie_item`/`selected_series_item` each clone
         // the whole `EmbyItem`, so one call keeps that to a single clone per
         // frame instead of three.
-        let selected_movie_item = if self.library_tab > 0 {
-            self.selected_movie_item(self.library_tab - 1)
+        let selected_movie_item = self
+            .tab
+            .library_index()
+            .and_then(|lib_idx| self.selected_movie_item(lib_idx));
+        let selected_series_item = if selected_movie_item.is_none() {
+            self.tab
+                .library_index()
+                .and_then(|lib_idx| self.selected_series_item(lib_idx))
         } else {
             None
         };
-        let selected_series_item = if selected_movie_item.is_none() && self.library_tab > 0 {
-            self.selected_series_item(self.library_tab - 1)
-        } else {
-            None
-        };
-        let selected_album_item = if selected_series_item.is_none() && self.library_tab > 0 {
-            self.selected_album_hero_item(self.library_tab - 1)
+        let selected_album_item = if selected_series_item.is_none() {
+            self.tab
+                .library_index()
+                .and_then(|lib_idx| self.selected_album_hero_item(lib_idx))
         } else {
             None
         };
@@ -173,7 +178,11 @@ impl App {
         // not `Both`, so both feed through with no
         // separate code path. Season grids keep their own single-column
         // stride (see `is_viewing_season_grid`).
-        let cols = if self.library_tab > 0 && self.is_viewing_season_grid(self.library_tab - 1) {
+        let cols = if self
+            .tab
+            .library_index()
+            .is_some_and(|lib_idx| self.is_viewing_season_grid(lib_idx))
+        {
             1
         } else {
             crate::app::library_column_width::library_column_count(content_area.width)
@@ -194,8 +203,8 @@ impl App {
         // hero-capable content (folders, music, non-hero collections) --
         // the list then takes the whole remaining area.
         //
-        let hero_rows: u16 = if self.library_tab > 0 {
-            let lib_idx = self.library_tab - 1;
+        let hero_rows: u16 = if self.tab.library_index().is_some() {
+            let lib_idx = self.tab.library_index().unwrap();
             if let Some(item) = &selected_movie_item {
                 // Actual content rows the banner will paint (meta line,
                 // overview/director text, never fewer than the poster's own
@@ -283,8 +292,10 @@ impl App {
         // Letter-range pill row: same non-music, top-browse-level gate the
         // caller (`mod.rs`) used to check before this renderer ran.
         // Reserves 1 row for the pills plus 1 blank gap row below them.
-        let show_pills =
-            self.library_tab > 0 && self.should_show_letter_pills(self.library_tab - 1);
+        let show_pills = self
+            .tab
+            .library_index()
+            .is_some_and(|lib_idx| self.should_show_letter_pills(lib_idx));
         let pills_reserved: u16 = if show_pills {
             2.min(content_area.height)
         } else {
@@ -342,20 +353,20 @@ impl App {
         };
 
         if show_pills {
-            let lib_idx = self.library_tab - 1;
+            let lib_idx = self.tab.library_index().unwrap();
             self.render_letter_pills_row(f, pills_area, lib_idx, layout);
         }
 
         // Gather items, cursor, stored scroll offset, and the *true* library total
         // (not just how many pages have been fetched so far) from the appropriate
         // source.
-        let (items, cursor, stored_scroll, total_count) = if self.library_tab == 0 {
+        let (items, cursor, stored_scroll, total_count) = if self.tab.is_home() {
             let items = self.home.continue_items.clone();
             let cursor = self.home.continue_cursor.min(items.len().saturating_sub(1));
             let total = items.len();
             (items, cursor, 0usize, total)
         } else {
-            let lib_idx = self.library_tab - 1;
+            let lib_idx = self.tab.library_index().unwrap();
             let lib = &self.libs[lib_idx];
             let (items, cur, scroll, total) = if let Some(s) = &lib.search {
                 let items: Vec<mbv_core::api::EmbyItem> = s
@@ -426,10 +437,9 @@ impl App {
         // indexes the unfiltered nav-level item vector -- `items` here is the
         // filtered search-result vector, so the catalog's positions would no longer
         // refer to the same albums.
-        let show_grouped = self.library_tab > 0 && {
-            let lib_idx = self.library_tab - 1;
+        let show_grouped = self.tab.library_index().is_some_and(|lib_idx| {
             self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none()
-        };
+        });
 
         let n = items.len();
 
@@ -440,26 +450,21 @@ impl App {
         // vs. individual letters) doesn't change out from under the user as
         // more pages lazily load in, and a small filtered slice (< 50 items)
         // still shows headers.
-        let active_letter_filter = if self.library_tab > 0 {
-            self.libs[self.library_tab - 1]
+        let active_letter_filter = self.tab.library_index().and_then(|lib_idx| {
+            self.libs[lib_idx]
                 .nav_stack
                 .last()
                 .and_then(|l| l.letter_filter.as_ref())
                 .cloned()
-        } else {
-            None
-        };
-        let ungrouped_total = self
-            .library_tab
-            .checked_sub(1)
-            .map_or(total_count, |lib_idx| {
-                self.libs[lib_idx].library_total.unwrap_or(total_count)
-            });
+        });
+        let ungrouped_total = self.tab.library_index().map_or(total_count, |lib_idx| {
+            self.libs[lib_idx].library_total.unwrap_or(total_count)
+        });
         let use_letter_groups = !show_grouped
-            && self.library_tab > 0
+            && self.tab.library_index().is_some()
             && (ungrouped_total >= 50 || active_letter_filter.is_some())
             && {
-                let lib_idx = self.library_tab - 1;
+                let lib_idx = self.tab.library_index().unwrap();
                 self.libs[lib_idx].library.collection_type != "music"
                     && self.libs[lib_idx].search.is_none()
             };
@@ -468,8 +473,8 @@ impl App {
 
         if n == 0 {
             layout.hero_area = hero_area;
-            let msg = if self.library_tab > 0 {
-                let lib_idx = self.library_tab - 1;
+            let msg = if self.tab.library_index().is_some() {
+                let lib_idx = self.tab.library_index().unwrap();
                 if self.is_music_group_view(lib_idx) {
                     // Music-group view messages (moved from the deleted
                     // `render_power_music_group_view`): while the first
@@ -530,7 +535,7 @@ impl App {
         let final_offset: usize;
 
         if show_grouped {
-            let lib_idx = self.library_tab - 1;
+            let lib_idx = self.tab.library_index().unwrap();
             final_offset = self.render_grouped_album_rows(
                 f,
                 list_area,
@@ -590,7 +595,7 @@ impl App {
                     .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
                 height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
             };
-            let lib_idx = self.library_tab - 1;
+            let lib_idx = self.tab.library_index().unwrap();
             // Same movie/Series branch as the row spacing above: a selected
             // Series renders its season pills + episode table instead of the
             // generic compact banner. When neither is selected (e.g. a
@@ -659,9 +664,8 @@ impl App {
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.
-        // library_tab is always > 0 here (tab == 0 uses render_home_list).
-        if self.library_tab > 0 {
-            let lib_idx = self.library_tab - 1;
+        // tab is always a Library here (tab == Home uses render_home_list).
+        if let Some(lib_idx) = self.tab.library_index() {
             if let Some(s) = &mut self.libs[lib_idx].search {
                 s.scroll = final_offset;
             } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {

@@ -65,7 +65,7 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
 #[test]
 fn activating_saved_position_initializes_feed_home_video_state() {
     let mut app = make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("Youtube", "CollectionFolder");
@@ -120,7 +120,7 @@ fn activating_saved_position_initializes_feed_home_video_state() {
 fn ensure_lib_loaded_for_visible_library_accepts_restore_from_queue_focus() {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
@@ -222,11 +222,11 @@ fn library_tab_next_activates_saved_placeholder() {
             ..Default::default()
         },
     );
-    app.library_tab = 0;
+    app.tab = TabSelection::Home;
 
     app.library_tab_next();
 
-    assert_eq!(app.library_tab, 1);
+    assert_eq!(app.tab, TabSelection::Library(0));
     assert_eq!(app.libs[0].nav_stack.len(), 1);
     assert_eq!(app.libs[0].nav_stack[0].title, "Saved");
     assert!(app.libs[0].nav_stack[0].loading);
@@ -266,11 +266,11 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
     };
     app.replace_saved_library_position(0, position.clone());
     app.panel_focus = PanelFocus::Queue;
-    app.library_tab = 0;
+    app.tab = TabSelection::Home;
 
     app.library_tab_next();
 
-    assert_eq!(app.library_tab, 1);
+    assert_eq!(app.tab, TabSelection::Library(0));
     assert_eq!(app.panel_focus, PanelFocus::Library);
     assert_eq!(app.libs[0].nav_stack.len(), 1);
     assert!(app.libs[0].nav_stack[0].loading);

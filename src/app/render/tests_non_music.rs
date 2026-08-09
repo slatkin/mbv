@@ -1,7 +1,7 @@
 use super::test_helpers::*;
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab};
+use crate::app::{BrowseLevel, LibraryTab, TabSelection};
 
 #[test]
 fn home_video_library_is_never_album_folders_and_renders_via_original_list_path() {
@@ -66,7 +66,7 @@ fn letter_filter_default_is_the_first_bucket() {
 #[test]
 fn tv_series_list_computes_sorted_indices_when_above_threshold() {
     let mut app = make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     let mut library = make_item("Shows", "CollectionFolder");
     library.id = "lib-shows".into();

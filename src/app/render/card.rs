@@ -216,7 +216,7 @@ impl App {
 mod tests {
     use crate::app::images::{CachedImage, QUEUE_CARD_PLACEHOLDER_KEY};
     use crate::app::tests::{make_app_stub, make_item, make_items};
-    use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, QueueScope};
+    use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, QueueScope, TabSelection};
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
     use ratatui::backend::TestBackend;
@@ -232,7 +232,7 @@ mod tests {
     fn make_drilled_library_app() -> App {
         let mut app = make_app_stub();
         app.panel_focus = PanelFocus::Library;
-        app.library_tab = 1;
+        app.tab = TabSelection::Library(0);
 
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();

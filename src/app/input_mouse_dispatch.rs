@@ -106,7 +106,7 @@ impl App {
                             (queue.queue_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
                     }
                 } else if left_area.contains((col, row).into()) {
-                    if self.library_tab == 0 {
+                    if self.tab.is_home() {
                         self.cw_move_cursor(delta);
                     } else {
                         self.move_lib_cursor(delta);
@@ -159,10 +159,10 @@ impl App {
                 {
                     for (rect, target) in self.layout.main.selector_tabs.clone() {
                         if rect.contains((col, row).into()) {
-                            if self.library_tab == 0 {
+                            if self.tab.is_home() {
                                 self.home_select_section(target);
                             } else {
-                                let lib_idx = self.library_tab - 1;
+                                let lib_idx = self.tab.library_index().unwrap();
                                 if self.is_music_group_view(lib_idx) {
                                     self.select_music_group(lib_idx, target);
                                 } else if self.is_feed_home_video_group_view(lib_idx) {
@@ -199,7 +199,7 @@ impl App {
                         {
                             self.dispatch(Command::QueuePlayCursor);
                         }
-                    } else if self.library_tab == 0 {
+                    } else if self.tab.is_home() {
                         self.home_play();
                     } else if self.layout.main.left_area.contains((col, row).into())
                         || self.layout.main.hero_area.contains((col, row).into())
@@ -215,7 +215,7 @@ impl App {
                         // double-click there activates it the same way --
                         // including entering a Series' season/episode
                         // selection, which a single click never did.
-                        let lib_idx = self.library_tab - 1;
+                        let lib_idx = self.tab.library_index().unwrap();
                         if self.activate_recursive_album(lib_idx) {
                             // active-search jump; unchanged
                         } else if self.is_viewing_album_folders(lib_idx) {
@@ -296,9 +296,9 @@ impl App {
                     return;
                 }
                 // Header breadcrumb clicks.
-                if self.library_tab > 0 {
+                if self.tab.library_index().is_some() {
                     let crumbs = self.layout.main.breadcrumbs.clone();
-                    let lib_idx = self.library_tab - 1;
+                    let lib_idx = self.tab.library_index().unwrap();
                     for (x_start, x_end, crumb_row, target_depth) in crumbs {
                         if row == crumb_row && col >= x_start && col < x_end {
                             self.libs[lib_idx].nav_stack.truncate(target_depth);

@@ -7,8 +7,11 @@ use std::collections::HashMap;
 
 impl App {
     pub(super) fn refresh_lib(&mut self) {
-        let lib_idx = if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
-            self.library_tab - 1
+        let lib_idx = if matches!(self.panel_focus, PanelFocus::Library) {
+            let Some(idx) = self.tab.library_index() else {
+                return;
+            };
+            idx
         } else {
             return;
         };
@@ -64,7 +67,7 @@ impl App {
         self.force_clear = true;
         if matches!(self.panel_focus, PanelFocus::Queue) {
             self.refresh_queue();
-        } else if self.library_tab == 0 {
+        } else if self.tab.is_home() {
             if let Err(e) = self.fetch_home() {
                 self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
             }

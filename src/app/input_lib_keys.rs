@@ -6,10 +6,7 @@ use std::time::{Duration, Instant};
 
 impl App {
     pub(super) fn active_album_track_lib_idx(&self) -> Option<usize> {
-        if self.library_tab == 0 {
-            return None;
-        }
-        let lib_idx = self.library_tab - 1;
+        let lib_idx = self.tab.library_index()?;
         let lib = self.libs.get(lib_idx)?;
         if lib.album_track_focus.is_some() && self.is_viewing_album_folders(lib_idx) {
             Some(lib_idx)
@@ -32,7 +29,7 @@ impl App {
             || key.modifiers.contains(KeyModifiers::CONTROL)
             || self.context_menu_open()
             || !matches!(self.panel_focus, PanelFocus::Library)
-            || self.library_tab == 0
+            || self.tab.is_home()
         {
             return None;
         }
@@ -40,7 +37,7 @@ impl App {
         if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
             return None;
         }
-        let lib_idx = self.library_tab - 1;
+        let lib_idx = self.tab.library_index().unwrap();
         if key.code == KeyCode::Enter && self.selected_series_item(lib_idx).is_some() {
             return None;
         }

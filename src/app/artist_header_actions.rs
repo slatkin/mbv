@@ -6,8 +6,8 @@ use rand::seq::SliceRandom;
 
 impl App {
     pub(super) fn artist_header_action_lib_idx(&self) -> Option<usize> {
-        if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
-            Some(self.library_tab - 1)
+        if matches!(self.panel_focus, PanelFocus::Library) {
+            self.tab.library_index()
         } else {
             None
         }

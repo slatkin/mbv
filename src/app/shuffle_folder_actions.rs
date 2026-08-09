@@ -5,13 +5,13 @@ use rand::seq::SliceRandom;
 
 impl App {
     pub(super) fn shuffle_play(&mut self) {
-        if self.library_tab == 0 {
+        if self.tab.is_home() {
             return;
         }
         if self.play_selected_artist_header(true) {
             return;
         }
-        let lib_idx = self.library_tab - 1;
+        let lib_idx = self.tab.library_index().unwrap();
         let parent_id = {
             let lib = &self.libs[lib_idx];
             let item = lib
@@ -81,7 +81,7 @@ impl App {
     /// `library_route.rs` already does for the analogous "which library
     /// actually owns this item" problem in route resolution.
     pub(super) fn active_lib_is_tvshows(&self) -> bool {
-        let Some(lib_idx) = self.library_tab.checked_sub(1) else {
+        let Some(lib_idx) = self.tab.library_index() else {
             return false;
         };
         lib_idx < self.libs.len() && self.is_tvshows_library(lib_idx)

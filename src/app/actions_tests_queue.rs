@@ -7,7 +7,7 @@ use crate::app::library_browse_actions::{
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope,
+    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
@@ -103,12 +103,12 @@ fn context_menu_play_on_queue_tab_seeks_to_start_for_current_playing_audio_item(
 fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     use crate::app::action::Command;
     use crate::app::tests::make_item;
-    use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
+    use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
     use crate::player::PlayerCommand;
 
     let mut app = crate::app::tests::make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.player_tab
         .set_items(vec![make_item("Queued First", "Movie")], 0);
     {

@@ -71,6 +71,7 @@ mod types_library_tab;
 mod types_playback;
 mod types_player_tab;
 mod types_settings;
+mod types_tab_selection;
 pub(crate) mod ui_util;
 mod visualizer;
 mod ws_event_actions;
@@ -104,6 +105,7 @@ use self::types_playback::{
 };
 use self::types_player_tab::PlayerTab;
 use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};
+use self::types_tab_selection::TabSelection;
 use mbv_core::api::EmbyClient;
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(test)]

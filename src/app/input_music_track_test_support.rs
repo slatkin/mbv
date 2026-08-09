@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
+use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -16,7 +16,7 @@ use std::io::{Read, Write};
 pub(super) fn make_music_album_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.music_levels = vec!["group".into(), "album".into()];
 
     let mut library = make_item("Music", "CollectionFolder");
@@ -113,7 +113,7 @@ pub(super) fn push_tracks(app: &mut App, album_id: &str, count: usize) {
 pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.music_levels = vec!["group".into(), "album".into()];
 
     let mut library = make_item("Music", "CollectionFolder");

@@ -35,8 +35,8 @@ impl App {
     }
 
     pub(super) fn context_menu_lib_idx(&self) -> Option<usize> {
-        if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
-            Some(self.library_tab - 1)
+        if matches!(self.panel_focus, PanelFocus::Library) {
+            self.tab.library_index()
         } else {
             None
         }
@@ -182,8 +182,9 @@ impl App {
         if n == 0 {
             return;
         }
-        if self.library_tab < self.tab_scroll {
-            self.tab_scroll = self.library_tab;
+        let pos = self.tab.to_position();
+        if pos < self.tab_scroll {
+            self.tab_scroll = pos;
             return;
         }
         let tab_w = self
@@ -191,7 +192,7 @@ impl App {
             .saturating_sub(super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE);
         loop {
             let (_, end) = self.visible_tab_range(tab_w);
-            if self.library_tab < end {
+            if pos < end {
                 break;
             }
             self.tab_scroll += 1;
@@ -230,7 +231,7 @@ impl App {
             "pre_mute_volume": self.pre_mute_volume,
             "visualizer_enabled": self.visualizer_enabled,
             "panel_focus": self.panel_focus.pref_value(),
-            "library_tab": self.library_tab,
+            "library_tab": self.tab.to_position(),
             "queue_column_width": self.queue_column_width,
         });
         if let Ok(s) = serde_json::to_string(&v) {

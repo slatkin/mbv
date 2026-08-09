@@ -31,7 +31,7 @@ fn build_always_starts_on_home_without_affecting_saved_queue_state() {
 
     let app = make_built_app();
 
-    assert_eq!(app.library_tab, 0);
+    assert!(app.tab.is_home());
     assert_eq!(app.library_tab_pending, 0);
     assert!(app.player_tab.items.is_empty());
 }
