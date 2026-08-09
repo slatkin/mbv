@@ -221,6 +221,7 @@ pub(crate) fn perform_handshake(
             info.validate_peer()?;
             let mut compatibility = info.compatibility()?;
             compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
+            compatibility.supports_feed_playback = info.supports_feed_playback();
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",

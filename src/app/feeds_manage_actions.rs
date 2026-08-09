@@ -240,7 +240,13 @@ impl App {
         popup.pending_add = Some(id);
         let tx = popup.add_tx.clone();
         std::thread::spawn(move || {
-            let result = fetch_and_parse_entries(&url).map(|_entries| ());
+            let result = fetch_and_parse_entries(&url).and_then(|entries| {
+                if entries.is_empty() {
+                    Err("response did not contain any valid RSS or Atom entries".to_string())
+                } else {
+                    Ok(())
+                }
+            });
             let _ = tx.send(FeedAddResult {
                 id,
                 name,
