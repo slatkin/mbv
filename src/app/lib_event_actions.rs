@@ -1,3 +1,4 @@
+use super::ui_util::sort_audio_tracks;
 use super::{
     notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
     QueueScope,
@@ -322,8 +323,15 @@ impl App {
                 self.clamp_feed_home_video_state(lib_idx);
                 self.log_feed_home_video_state(lib_idx, "aggregated");
             }
-            LibEvent::AlbumTracksFetched { album_id, tracks } => {
+            LibEvent::AlbumTracksFetched {
+                album_id,
+                mut tracks,
+            } => {
                 self.album_tracks_loading.remove(&album_id);
+                // The cache is also the cursor's source of truth while the
+                // album is open, so normalize it once before rendering or
+                // resolving the focused track for playback.
+                sort_audio_tracks(&mut tracks);
                 self.album_tracks_cache.insert(album_id, tracks);
             }
             LibEvent::SeriesDetailFetched {

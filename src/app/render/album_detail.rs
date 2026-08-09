@@ -1,7 +1,7 @@
 use super::super::ui_util::*;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
-use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -11,6 +11,64 @@ use textwrap::wrap;
 
 const INLINE_ALBUM_TITLE_EXTRA_INDENT: u16 = 1;
 const INLINE_ALBUM_TRACK_EXTRA_INDENT: u16 = 2;
+
+fn track_title(item: &EmbyItem) -> String {
+    let raw_name = if item.name.trim().is_empty() {
+        item.file_name()
+    } else {
+        item.name.trim()
+    };
+    let file_name = raw_name.rsplit(['/', '\\']).next().unwrap_or(raw_name);
+    let (stem, from_filename) = file_name
+        .rsplit_once('.')
+        .filter(|(_, extension)| {
+            [
+                "aac", "aif", "aiff", "alac", "ape", "flac", "m4a", "mka", "mp3", "oga", "ogg",
+                "opus", "wav", "wma", "wv",
+            ]
+            .iter()
+            .any(|known| extension.eq_ignore_ascii_case(known))
+        })
+        .map(|(stem, _)| (stem, true))
+        .unwrap_or((file_name, false));
+
+    let digits_end = stem
+        .char_indices()
+        .take_while(|(_, ch)| ch.is_ascii_digit())
+        .last()
+        .map(|(idx, ch)| idx + ch.len_utf8())
+        .unwrap_or(0);
+    if digits_end == 0 {
+        return stem.to_string();
+    }
+
+    // A metadata title such as "4 Non Blondes" is not a filename prefix if
+    // Emby's canonical track number says otherwise. Filename-like values are
+    // still parsed even when the server did not provide IndexNumber.
+    if !from_filename
+        && item.index_number > 0
+        && stem[..digits_end].parse::<i64>().ok() != Some(item.index_number)
+    {
+        return stem.to_string();
+    }
+
+    let after_number = &stem[digits_end..];
+    let trimmed = after_number.trim_start();
+    let has_separator = trimmed.len() != after_number.len()
+        || matches!(trimmed.chars().next(), Some('-' | '.' | '_'));
+    if !has_separator {
+        return stem.to_string();
+    }
+
+    let title = trimmed
+        .trim_start_matches(|ch| matches!(ch, '-' | '.' | '_'))
+        .trim();
+    if title.is_empty() {
+        stem.to_string()
+    } else {
+        title.to_string()
+    }
+}
 
 impl App {
     /// Renders the music album detail panel (track list) into `area` — the lib
@@ -245,7 +303,8 @@ impl App {
                 let num_w = track_num.chars().count();
                 let play_icon_w = if is_playing { 2 } else { 0 };
                 let title_width = title_col_w.saturating_sub(num_w + play_icon_w).max(1);
-                let title_lines = wrap(&item.name, title_width);
+                let title = track_title(item);
+                let title_lines = wrap(&title, title_width);
                 let mut wrapped_title_lines = Vec::with_capacity(title_lines.len());
                 for (line_idx, line) in title_lines.into_iter().enumerate() {
                     if line_idx == 0 {
