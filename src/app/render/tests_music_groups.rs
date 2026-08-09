@@ -154,6 +154,20 @@ fn focused_group_header_has_no_internal_spacer_when_hero_handles_detail() {
 }
 
 #[test]
+fn collapsed_album_hero_does_not_stack_metadata_below_art() {
+    assert_eq!(
+        super::album_plan::album_hero_content_rows(
+            0,
+            super::album_art::INLINE_ALBUM_ART_ROWS,
+            60,
+            true,
+        ),
+        super::album_art::INLINE_ALBUM_ART_ROWS,
+        "collapsed album art should reach the hero's bottom border without extra rows"
+    );
+}
+
+#[test]
 fn grouped_hero_art_follows_album_focus() {
     let mut album_app = make_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");
@@ -174,6 +188,10 @@ fn grouped_hero_art_follows_album_focus() {
     // The hero renders the *selected* album's art (portrait `:P`), never a
     // square collage tile (`:sq`).
     assert!(album_app.card_image_loading.contains("album-2:P"));
+    assert!(
+        album_app.card_image_loading.contains("album-1:P"),
+        "the adjacent album should be pre-warmed while the selected album renders"
+    );
     assert!(!album_app.card_image_loading.contains("album-2:sq"));
 
     // With an artist header focused, the cursor album still anchors the hero,

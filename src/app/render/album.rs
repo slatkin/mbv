@@ -71,6 +71,40 @@ impl App {
             }
         };
 
+        // Pre-warm nearby album art while the cursor is idle so scrolling does
+        // not make each neighbour wait for its image fetch. Use display order
+        // rather than the source item order because grouped music lists can be
+        // sorted by artist and album independently of the API response.
+        if self.images_enabled() {
+            const PREFETCH_AHEAD: usize = 3;
+            const PREFETCH_BEHIND: usize = 1;
+            if let Some(cursor_pos) = order.iter().position(|&idx| idx == cursor) {
+                let start = cursor_pos.saturating_sub(PREFETCH_BEHIND);
+                let end = (cursor_pos + PREFETCH_AHEAD + 1).min(order.len());
+                let prefetch: Vec<(String, String, String)> = order[start..end]
+                    .iter()
+                    .enumerate()
+                    .filter(|(offset, _)| start + offset != cursor_pos)
+                    .filter_map(|(_, &idx)| albums.get(idx))
+                    .map(|album| {
+                        (
+                            super::album_art::inline_album_art_cache_key(&album.id),
+                            album.id.clone(),
+                            album.series_id.clone(),
+                        )
+                    })
+                    .collect();
+                for (cache_key, album_id, series_id) in prefetch {
+                    self.fetch_list_card_image_when_idle(
+                        cache_key,
+                        album_id,
+                        series_id,
+                        super::MUSIC_ALBUM_IMAGE_TYPES,
+                    );
+                }
+            }
+        }
+
         layout.inline_image_rect = None;
 
         let selected = self.selected_music_artist_header(lib_idx);

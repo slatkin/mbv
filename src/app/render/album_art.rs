@@ -12,7 +12,7 @@ const INLINE_ALBUM_ART_RIGHT_PAD: u16 = 2;
 pub(super) const INLINE_ALBUM_ART_RESERVED: u16 =
     INLINE_ALBUM_ART_COLS + INLINE_ALBUM_ART_GAP + INLINE_ALBUM_ART_RIGHT_PAD;
 
-fn inline_album_art_cache_key(album_id: &str) -> String {
+pub(super) fn inline_album_art_cache_key(album_id: &str) -> String {
     format!("{album_id}:P")
 }
 
