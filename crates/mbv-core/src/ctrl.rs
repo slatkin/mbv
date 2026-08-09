@@ -447,6 +447,12 @@ pub struct CtrlState {
     pub items: Vec<EmbyItem>,
     pub cursor: usize,
     pub source: QueueSource,
+    /// Live feed entries at the tail of the queue, after all Emby items.
+    /// Additive: legacy clients that don't know this field will deserialize
+    /// it as an empty vec (serde `default`). Capable clients (advertising
+    /// `feed-playback`) use it to render and manage feed entries.
+    #[serde(default)]
+    pub feed_items: Vec<FeedEntry>,
 }
 
 #[cfg(test)]

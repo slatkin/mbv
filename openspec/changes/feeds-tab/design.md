@@ -36,11 +36,14 @@ The one real integration subtlety: `all_names` and tab routing are indexed off `
 **5. Render `FeedEntry` directly, reusing the feed-view layout.**
 Reuse `home_feed.rs`'s pill-bar + list layout, but feed it concrete `FeedEntry` values (groups = subscriptions, plus an "All" group sorted by pub date desc, missing dates last). Do not adapt the Emby-shaped state to carry feed data and do not generalize the renderer off `EmbyItem`.
 
-**6. Play path builds `QueueItem::Feed`.**
-"Play" on an entry constructs a `FeedEntry` → `QueueItem::Feed`, appends to the queue, and plays — all the actual play mechanics come from #470. This change only builds the item and calls the existing enqueue/play action.
+**6. Play path builds `QueueItem::Feed`, with capability-gated transient ctrl state.**
+"Play" on an entry constructs a `FeedEntry` → `QueueItem::Feed`, appends to the bound queue, and plays. A capability-supporting Player owner may receive that request through the additive `feed-playback` ctrl command. The daemon is authoritative for a mixed remote queue: its atomic `CtrlState` snapshot includes a `feed_items` tail only for capability-supporting peers. Queue persistence uses the tagged `QueueItem` shape, so Feed entries restore with their identity and no playback-progress state. The queue invariant is Emby items first and Feed items last; clients reconstruct a slot-identical queue by concatenating the Emby wire items and Feed tail. While the tail is nonempty, the daemon rejects Emby mutations that could place Emby content after it (append, move, replace, adopt). A player Feed-removal event updates the daemon's tail and the reconnect snapshot before it broadcasts the next state. This avoids a separate event's ordering race and avoids unknown absolute mixed indices.
 
 **7. Management overlay follows the existing overlay pattern.**
 Add/remove/edit in an overlay modeled on `src/app/render/overlays/`. Add fetches+parses first (decision 3); on failure, surface via the existing status/notify path and do not save. On success, append to `config.feeds` and persist via the `config_save.rs` merge.
+
+**8. Manual refresh only.**
+Entries are fetched on the user's `r` keypress while the Feeds tab is active; there is no fetch-on-open and no timer. Before the first `r`, the tab shows an empty/"press r to load" state. This keeps startup and tab switches free of network work and matches the existing single-key action idiom.
 
 **9. The management overlay is opened from F2 Settings.**
 The Feeds tab is correctly hidden with no subscriptions, so the overlay cannot rely on a tab-local key as its only entry point. Add a `Manage feeds` Settings row whose activation opens the management overlay. Rejected: an always-visible empty Feeds tab and a new global shortcut; both create a less coherent navigation surface than the existing configuration panel.
@@ -56,5 +59,3 @@ After add, remove, or edit, resynchronize the tab from `config.feeds`, clear its
 - **Tab-index routing assumes every tab is a library** → decision 4 makes the Feeds tab an explicit branch checked before the library-index lookup; audit each site that maps `library_tab` → library so the feeds index can't be read as a library.
 - **Parser brittleness on real-world feeds** (missing enclosures, odd duration formats) → default kind Video, treat missing enclosure by falling back to link, treat unparseable duration as unknown (`None`); never fail the whole feed on one bad field.
 - **File-size cap (800 lines).** `config_types_paths.rs` is already 677 lines and `feed_actions.rs` 679 — adding here risks the cap. Put new subscription types in a small new module and new feed-tab state/actions in their own files rather than growing the existing ones.
-
-**8. Manual refresh only.** Entries are fetched on the user's `r` keypress while the Feeds tab is active; there is no fetch-on-open and no timer. Before the first `r`, the tab shows an empty/"press r to load" state. This keeps startup and tab switches free of network work and matches the existing single-key action idiom.

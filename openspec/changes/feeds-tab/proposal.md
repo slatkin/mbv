@@ -24,4 +24,4 @@ With the queue able to hold and play a feed entry (#470), the actual user-facing
 - **Config:** new `[[feeds]]` array-of-tables. Parse in `config_parse.rs`, write in `config_save.rs`, new `feeds` field on `Config` (`config_types_paths.rs`).
 - **Parser:** `src/app/feed_parse.rs` extended to emit `guid`/enclosure/MIME/duration.
 - **UI:** new tab wired into the tab bar (`chrome_tabs.rs` `all_names` chain + tab-selection routing), a feed-entry renderer (reusing `home_feed.rs` patterns, rendering concrete `FeedEntry`), and a management overlay (`src/app/render/overlays/` pattern).
-- **Out of scope:** position/resume/played/watched-filter, redb/mbvd/roaming, remote feed playback / ctrl feed sync — all #472.
+- **Out of scope:** position/resume/played/watched-filter, redb/mbvd subscription roaming, and mixed Feed-item queue synchronization. Capability-gated Feed playback through a Player owner is in scope; #472 owns future per-entry state and subscription roaming.

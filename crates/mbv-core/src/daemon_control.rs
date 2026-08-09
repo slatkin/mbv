@@ -3,6 +3,7 @@
 /// not the client's potentially stale shadow.
 fn project_queue_state(
     items: &[EmbyItem],
+    feed_items: &[FeedEntry],
     cursor: usize,
     source: &crate::config::QueueSource,
     player_status: &crate::player::PlayerStatus,
@@ -17,35 +18,49 @@ fn project_queue_state(
 
     // Incorporate the latest valid position for the active non-audio item.
     // Only persist positions for non-audio items (video requires resume).
-    if player_status.active && player_status.video_height > 0 {
-        if let Some(item) = items.get(player_status.current_idx) {
-            // Use last_valid_pos if available, otherwise position_ticks.
-            // last_valid_pos is updated as playback progresses and represents
-            // the most recent known-good position.
-            let position = if player_status.last_valid_pos > 0 {
-                player_status.last_valid_pos
-            } else {
-                player_status.position_ticks
-            };
-            positions.insert(item.id.clone(), position);
+    let total_len = items.len() + feed_items.len();
+    if player_status.active
+        && player_status.video_height > 0
+        && player_status.current_idx < total_len
+    {
+        if player_status.current_idx < items.len() {
+            if let Some(item) = items.get(player_status.current_idx) {
+                let position = if player_status.last_valid_pos > 0 {
+                    player_status.last_valid_pos
+                } else {
+                    player_status.position_ticks
+                };
+                positions.insert(item.id.clone(), position);
+            }
         }
     }
 
-    let last_played_item_id = if player_status.active {
-        items
-            .get(player_status.current_idx)
-            .map(|item| item.id.clone())
+    let last_played_item_id = if player_status.active && player_status.current_idx < total_len {
+        if player_status.current_idx < items.len() {
+            items
+                .get(player_status.current_idx)
+                .map(|item| item.id.clone())
+        } else {
+            feed_items
+                .get(player_status.current_idx - items.len())
+                .map(|entry| entry.guid.clone())
+        }
     } else {
         None
     };
 
+    let mut queue_items: Vec<crate::playback_queue::QueueItem> = items
+        .iter()
+        .cloned()
+        .map(|item| crate::playback_queue::QueueItem::Emby(Box::new(item)))
+        .collect();
+    for entry in feed_items {
+        queue_items.push(crate::playback_queue::QueueItem::Feed(entry.clone()));
+    }
+
     crate::config::QueueState {
         source: source.clone(),
-        items: items
-            .iter()
-            .cloned()
-            .map(|item| crate::playback_queue::QueueItem::Emby(Box::new(item)))
-            .collect(),
+        items: queue_items,
         cursor,
         last_played_item_id,
         // Deliberately false: the daemon doesn't track completion, and
@@ -70,19 +85,116 @@ fn broadcast_queue_state(
     items: &[EmbyItem],
     cursor: usize,
     source: &crate::config::QueueSource,
+    feed_items: &[FeedEntry],
 ) {
-    let event = CtrlEvent::State(CtrlState {
-        status: player.status.lock().unwrap().clone(),
+    let status = player.status.lock().unwrap().clone();
+    // Two variants of the same State event, differing only in feed_items:
+    // capable peers (advertised `feed-playback` at Hello) get the real Feed
+    // tail; legacy peers get an empty one (#5.1). Each is serialized once
+    // and fanned out per-client by `broadcast_state_gated`.
+    let capable_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
+        status: status.clone(),
         items: items.to_vec(),
         cursor,
         source: source.clone(),
-    });
-    broadcast(ctrl_clients, &event);
+        feed_items: feed_items.to_vec(),
+    }));
+    let legacy_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
+        status,
+        items: items.to_vec(),
+        cursor,
+        source: source.clone(),
+        feed_items: Vec::new(),
+    }));
+    if let (Some(capable_json), Some(legacy_json)) = (capable_json, legacy_json) {
+        ctrl_clients
+            .lock()
+            .unwrap()
+            .broadcast_state_gated(capable_json, legacy_json);
+    }
     *shared_queue.cursor.lock().unwrap() = cursor;
     *shared_queue.source.lock().unwrap() = source.clone();
-    if let CtrlEvent::State(state) = event {
-        *shared_queue.items.lock().unwrap() = state.items;
+    *shared_queue.feed_items.lock().unwrap() = feed_items.to_vec();
+    *shared_queue.items.lock().unwrap() = items.to_vec();
+}
+
+/// Feed tail to echo back to a single requester in a per-client rejection
+/// `State` response (#5.1): empty unless that specific client advertised
+/// `feed-playback` at Hello, mirroring the gating `broadcast_queue_state`
+/// applies to the fan-out broadcast.
+fn requester_feed_items(
+    ctrl_clients: &ClientRegistry,
+    client_id: CtrlClientId,
+    feed_items: &[FeedEntry],
+) -> Vec<FeedEntry> {
+    if ctrl_clients
+        .lock()
+        .unwrap()
+        .supports_feed_playback(client_id)
+    {
+        feed_items.to_vec()
+    } else {
+        Vec::new()
     }
+}
+
+/// Rejects a queue command with `reason` and echoes the daemon's
+/// authoritative State back to the requester (existing rejection pattern,
+/// previously hand-rolled at each call site). The requester's `feed_items`
+/// tail is gated per #5.1. Used both by the pre-existing index-out-of-range
+/// guards and the #5.3 Emby-then-Feed tail invariant guards.
+#[allow(clippy::too_many_arguments)]
+fn reject_command(
+    reply_tx: &CtrlSender,
+    ctrl_clients: &ClientRegistry,
+    client_id: CtrlClientId,
+    player: &Player,
+    items: &[EmbyItem],
+    cursor: usize,
+    source: &crate::config::QueueSource,
+    feed_items: &[FeedEntry],
+    reason: String,
+) {
+    send_to(reply_tx, &CtrlEvent::CommandRejected(reason));
+    send_to(
+        reply_tx,
+        &CtrlEvent::State(CtrlState {
+            status: player.status.lock().unwrap().clone(),
+            items: items.to_vec(),
+            cursor,
+            source: source.clone(),
+            feed_items: requester_feed_items(ctrl_clients, client_id, feed_items),
+        }),
+    );
+}
+
+/// Removes a consumed `PlayerEvent::FeedConsumed` entry from the daemon's
+/// Feed tail and rebroadcasts the updated state, per design.md: "A player
+/// Feed-removal event updates the daemon's tail and the reconnect snapshot
+/// before it broadcasts the next state." Reuses `broadcast_queue_state` so
+/// the reconnect snapshot (`shared_queue`) updates atomically with the
+/// broadcast, same as every other queue-mutating command in this file.
+#[allow(clippy::too_many_arguments)]
+fn handle_feed_consumed(
+    guid: &str,
+    ctrl_clients: &ClientRegistry,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    items: &[EmbyItem],
+    cursor: usize,
+    source: &crate::config::QueueSource,
+    feed_items: &mut Vec<FeedEntry>,
+) {
+    feed_items.retain(|entry| entry.guid != guid);
+    broadcast_queue_state(
+        ctrl_clients,
+        player,
+        shared_queue,
+        items,
+        cursor,
+        source,
+        feed_items.as_slice(),
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -96,6 +208,7 @@ fn handle_ctrl(
     items: &mut Vec<EmbyItem>,
     cursor: &mut usize,
     source: &mut crate::config::QueueSource,
+    feed_items: &mut Vec<FeedEntry>,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
     playback_intents: &mut PlaybackIntentState,
@@ -118,7 +231,8 @@ fn handle_ctrl(
 
         // Build authoritative queue state for persistence.
         let player_status = player.status.lock().unwrap().clone();
-        let mut queue_state = project_queue_state(items, *cursor, source, &player_status);
+        let mut queue_state =
+            project_queue_state(items, feed_items, *cursor, source, &player_status);
 
         // Preserve existing non-empty snapshot when authoritative queue is empty.
         // This matches the no-clear-on-quit rule: quitting is not an explicit Clear Queue action.
@@ -168,6 +282,23 @@ fn handle_ctrl(
             cursor: new_cursor,
             source: new_source,
         } => {
+            // #5.3: while the Feed tail is nonempty, capable clients address
+            // a mixed Emby-then-Feed queue, so an Emby mutation that could
+            // place Emby content after a Feed item is rejected outright.
+            if !feed_items.is_empty() {
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    items,
+                    *cursor,
+                    source,
+                    feed_items,
+                    "queue has an active Feed tail; adoption skipped".to_string(),
+                );
+                return;
+            }
             // Adoption only ever applies to a Cold daemon (see CONTEXT.md's
             // "Cold daemon" entry) — one with no queue yet. If another
             // client's command already gave this daemon a queue by the time
@@ -180,24 +311,20 @@ fn handle_ctrl(
                     "ignoring AdoptQueue: daemon already has a queue ({} item(s))",
                     items.len()
                 );
-                send_to(
-                    request.reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "daemon already has a queue; adoption skipped".to_string(),
-                    ),
-                );
                 // With multiple concurrent connections, reconciliation
                 // pushes the daemon's authoritative State so the sending
                 // client overwrites its optimistic mutation instead of
                 // lingering diverged from what the daemon holds.
-                send_to(
+                reject_command(
                     request.reply_tx,
-                    &CtrlEvent::State(CtrlState {
-                        status: player.status.lock().unwrap().clone(),
-                        items: items.clone(),
-                        cursor: *cursor,
-                        source: source.clone(),
-                    }),
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    items,
+                    *cursor,
+                    source,
+                    feed_items,
+                    "daemon already has a queue; adoption skipped".to_string(),
                 );
                 return;
             }
@@ -214,6 +341,7 @@ fn handle_ctrl(
                 &new_items,
                 next_cursor,
                 &new_source,
+                feed_items.as_slice(),
             );
             *items = new_items;
             *cursor = next_cursor;
@@ -224,6 +352,21 @@ fn handle_ctrl(
                 items: new_items,
                 start_idx,
             } => {
+                // #5.3: see the AdoptQueue guard above for rationale.
+                if !feed_items.is_empty() {
+                    reject_command(
+                        request.reply_tx,
+                        ctrl_clients,
+                        client_id,
+                        player,
+                        items,
+                        *cursor,
+                        source,
+                        feed_items,
+                        "queue has an active Feed tail; replace skipped".to_string(),
+                    );
+                    return;
+                }
                 let next_cursor = if new_items.is_empty() {
                     0
                 } else {
@@ -238,6 +381,7 @@ fn handle_ctrl(
                     &new_items,
                     next_cursor,
                     source,
+                    feed_items.as_slice(),
                 );
                 player.send_command(PlayerCommand::ReplaceQueue {
                     items: new_items,
@@ -245,6 +389,21 @@ fn handle_ctrl(
                 });
             }
             PlayerCommand::QueueAppend { items: new_items } => {
+                // #5.3: see the AdoptQueue guard above for rationale.
+                if !feed_items.is_empty() {
+                    reject_command(
+                        request.reply_tx,
+                        ctrl_clients,
+                        client_id,
+                        player,
+                        items,
+                        *cursor,
+                        source,
+                        feed_items,
+                        "queue has an active Feed tail; append skipped".to_string(),
+                    );
+                    return;
+                }
                 if !new_items.is_empty() {
                     items.extend(new_items.clone());
                     broadcast_queue_state(
@@ -254,26 +413,36 @@ fn handle_ctrl(
                         items,
                         *cursor,
                         source,
+                        feed_items.as_slice(),
                     );
                     player.send_command(PlayerCommand::QueueAppend { items: new_items });
                 }
             }
             PlayerCommand::QueueMove(from, to) => {
-                if from >= items.len() || to >= items.len() {
-                    send_to(
+                // #5.3: see the AdoptQueue guard above for rationale.
+                if !feed_items.is_empty() {
+                    reject_command(
                         request.reply_tx,
-                        &CtrlEvent::CommandRejected(
-                            "remote queue changed; move skipped".to_string(),
-                        ),
+                        ctrl_clients,
+                        client_id,
+                        player,
+                        items,
+                        *cursor,
+                        source,
+                        feed_items,
+                        "queue has an active Feed tail; move skipped".to_string(),
                     );
-                    send_to(
+                } else if from >= items.len() || to >= items.len() {
+                    reject_command(
                         request.reply_tx,
-                        &CtrlEvent::State(CtrlState {
-                            status: player.status.lock().unwrap().clone(),
-                            items: items.clone(),
-                            cursor: *cursor,
-                            source: source.clone(),
-                        }),
+                        ctrl_clients,
+                        client_id,
+                        player,
+                        items,
+                        *cursor,
+                        source,
+                        feed_items,
+                        "remote queue changed; move skipped".to_string(),
                     );
                 } else if from != to {
                     let item = items.remove(from);
@@ -286,26 +455,23 @@ fn handle_ctrl(
                         items,
                         *cursor,
                         source,
+                        feed_items.as_slice(),
                     );
                     player.send_command(PlayerCommand::QueueMove(from, to));
                 }
             }
             PlayerCommand::QueueRemove(index) => {
                 if index >= items.len() {
-                    send_to(
+                    reject_command(
                         request.reply_tx,
-                        &CtrlEvent::CommandRejected(
-                            "remote queue changed; remove skipped".to_string(),
-                        ),
-                    );
-                    send_to(
-                        request.reply_tx,
-                        &CtrlEvent::State(CtrlState {
-                            status: player.status.lock().unwrap().clone(),
-                            items: items.clone(),
-                            cursor: *cursor,
-                            source: source.clone(),
-                        }),
+                        ctrl_clients,
+                        client_id,
+                        player,
+                        items,
+                        *cursor,
+                        source,
+                        feed_items,
+                        "remote queue changed; remove skipped".to_string(),
                     );
                 } else {
                     items.remove(index);
@@ -323,9 +489,26 @@ fn handle_ctrl(
                         items,
                         *cursor,
                         source,
+                        feed_items.as_slice(),
                     );
                     player.send_command(PlayerCommand::QueueRemove(index));
                 }
+            }
+            PlayerCommand::LoadFeed { entry } => {
+                // No owner/availability rejection here (settled design
+                // decision, see #5.2): the daemon always records the entry
+                // into its Feed tail and forwards it to its own Player.
+                feed_items.push(entry.clone());
+                broadcast_queue_state(
+                    ctrl_clients,
+                    player,
+                    shared_queue,
+                    items,
+                    *cursor,
+                    source,
+                    feed_items.as_slice(),
+                );
+                player.send_command(PlayerCommand::LoadFeed { entry });
             }
             other => {
                 player.send_command(other);
@@ -372,7 +555,15 @@ fn handle_ctrl(
                 *items = vec![item.clone()];
                 *cursor = 0;
                 *source = new_source;
-                broadcast_queue_state(ctrl_clients, player, shared_queue, items, 0, source);
+                broadcast_queue_state(
+                    ctrl_clients,
+                    player,
+                    shared_queue,
+                    items,
+                    0,
+                    source,
+                    feed_items.as_slice(),
+                );
                 let mut play_item = item;
                 if start_ticks > 0 {
                     play_item.playback_position_ticks = start_ticks;
@@ -395,6 +586,7 @@ fn handle_ctrl(
                     &play_items,
                     start_idx,
                     source,
+                    feed_items.as_slice(),
                 );
                 let c = Arc::new(client.lock().unwrap().clone());
                 player.play_queue(play_items, start_idx, c, 100);

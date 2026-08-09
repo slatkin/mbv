@@ -1,6 +1,6 @@
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{
-    PlaybackQueue, QueueItem, QueueMutationResult, QueueSlotId, RefreshMergeResult,
+    FeedEntry, PlaybackQueue, QueueItem, QueueMutationResult, QueueSlotId, RefreshMergeResult,
     RemoveSlotResult,
 };
 
@@ -9,6 +9,11 @@ pub(super) struct PlayerTab {
     pub(super) items: Vec<EmbyItem>,
     pub(super) queue_cursor: usize,
     pub(super) queue: PlaybackQueue,
+    /// The daemon-owned Feed tail (§5.4), held parallel to `queue`/`items`
+    /// so it survives round trips through `QueueUpdated` even though it is
+    /// not yet rendered or exposed to queue actions. Drained entry-by-entry
+    /// by `PlayerEvent::FeedConsumed` as the daemon consumes it.
+    pub(super) feed_items: Vec<FeedEntry>,
 }
 
 impl PlayerTab {
@@ -19,11 +24,26 @@ impl PlayerTab {
             items,
             queue_cursor,
             queue,
+            feed_items: Vec::new(),
         }
     }
 
     pub(super) fn set_items(&mut self, items: Vec<EmbyItem>, queue_cursor: usize) {
         *self = Self::new(items, queue_cursor);
+    }
+
+    /// Sibling to `set_items` used only by the `QueueUpdated` consumer,
+    /// which is the sole call site that has a feed tail to carry. The many
+    /// other `set_items` callers (local queue mutations, tests) have no
+    /// feed tail to set and are left untouched.
+    pub(super) fn set_items_with_feed(
+        &mut self,
+        items: Vec<EmbyItem>,
+        queue_cursor: usize,
+        feed_items: Vec<FeedEntry>,
+    ) {
+        self.set_items(items, queue_cursor);
+        self.feed_items = feed_items;
     }
 
     pub(super) fn queue_model_matches_items(&self) -> bool {

@@ -324,6 +324,7 @@ fn remote_queue_update_reconciles_remote_queue_without_touching_local_queue() {
         items: updated_remote.clone(),
         cursor: 2,
         source: crate::config::QueueSource::Remote,
+        feed_items: Vec::new(),
     });
 
     assert_eq!(
@@ -373,6 +374,7 @@ fn remote_queue_update_after_move_keeps_cursor_on_moved_item() {
         ],
         cursor: 1,
         source: crate::config::QueueSource::Remote,
+        feed_items: Vec::new(),
     });
 
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
@@ -410,6 +412,7 @@ fn remote_queue_update_after_move_tracks_duplicate_item_by_position() {
         ],
         cursor: 0,
         source: crate::config::QueueSource::Remote,
+        feed_items: Vec::new(),
     });
 
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);

@@ -1,5 +1,5 @@
 use super::{
-    all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
+    all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_feed_consumed, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
     CtrlRequest, CtrlTransport, DaemonEvent, PlaybackIntentState, SharedQueueState,
 };
@@ -9,6 +9,7 @@ use crate::ctrl::DisconnectReason;
 use crate::ctrl::{
     CtrlCmd, PlaybackIntent, PlaybackIntentAction, PlaybackIntentOutcome, WireCommand,
 };
+use crate::playback_queue::FeedEntry;
 use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
 use crate::ws::WsEvent;
 use std::sync::{mpsc, Arc, Mutex};
@@ -90,7 +91,7 @@ fn non_audio_only_daemon_never_rejects() {
 /// the driver — there is no separate "pending" step.
 fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(tx, CtrlTransport::Local);
+    let id = clients.connect(tx, CtrlTransport::Local, true);
     (id, rx)
 }
 
@@ -99,6 +100,7 @@ fn shared_queue_state() -> SharedQueueState {
         items: Arc::new(Mutex::new(Vec::new())),
         cursor: Arc::new(Mutex::new(0)),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
+        feed_items: Arc::new(Mutex::new(Vec::new())),
     }
 }
 
@@ -296,6 +298,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         &mut items,
         &mut cursor,
         &mut source,
+        &mut Vec::new(),
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
@@ -346,6 +349,7 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &mut items,
         &mut cursor,
         &mut source,
+        &mut Vec::new(),
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
@@ -413,6 +417,7 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
         &mut items,
         &mut cursor,
         &mut source,
+        &mut Vec::new(),
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
@@ -491,6 +496,7 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
         &mut items,
         &mut cursor,
         &mut source,
+        &mut Vec::new(),
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
@@ -576,6 +582,7 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
         &mut items,
         &mut cursor,
         &mut source,
+        &mut Vec::new(),
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
@@ -651,6 +658,7 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
         &mut items,
         &mut cursor,
         &mut source,
+        &mut Vec::new(),
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),

@@ -1,7 +1,7 @@
 # feed-queue-item Specification
 
 ## Purpose
-The playback queue is a play mechanism that can hold and play either an Emby library item or a feed entry, choosing the correct play path by item type, while remote (ctrl) playback and library rendering remain Emby-only.
+The playback queue is a play mechanism that can hold and play either an Emby library item or a feed entry, choosing the correct play path by item type. Library rendering remains Emby-only. Remote (ctrl) playback carries feed entries as live, capability-gated queue state.
 ## Requirements
 ### Requirement: A queue slot holds either an Emby item or a feed entry
 
@@ -61,15 +61,53 @@ Saved queue state SHALL round-trip through a tagged item shape that distinguishe
 
 #### Scenario: Round-trip tagged state
 
-- **WHEN** a queue is saved and then reloaded
+- **WHEN** a queue containing both Emby items and feed entries is saved and then reloaded
 - **THEN** the reloaded queue SHALL contain the same slots, each with its original item kind preserved
 
-### Requirement: Feed items do not cross the ctrl boundary
+### Requirement: Feed items cross the ctrl boundary as capability-gated state
 
-Feed playback SHALL be local-player only for this capability. When queue items are sent over the ctrl protocol to a remote peer, feed entries SHALL be omitted and only Emby items SHALL be transmitted. The ctrl wire shape SHALL remain unchanged (no new capability string, no version bump).
+Feed playback over the ctrl protocol SHALL be gated on an additive `feed-playback` capability; a peer that does not advertise it SHALL receive Emby items only, exactly as before. `CTRL_PROTOCOL_VERSION` SHALL NOT change.
 
-#### Scenario: Queue with a feed entry is sent over ctrl
+Between capable peers, the atomic ctrl state snapshot SHALL carry feed entries in a `feed_items` tail field that defaults to empty for absent or legacy senders. A mixed queue SHALL be ordered as Emby items followed by feed items, so a feed entry's position is `emby_items.len() + n` and no absolute mixed-queue indices are transmitted. While any feed entry is present, the daemon SHALL reject Emby queue mutations that would break the Emby-then-feed tail invariant (append, move, replace, adopt); only mutations preserving it remain available. Adoption is rejected because it would discard live Feed state without a corresponding Feed-removal event. Feed-entry additions and removals SHALL be reflected atomically in the next state snapshot and in the reconnect snapshot.
 
-- **WHEN** a queue containing both Emby items and feed entries is transmitted over the ctrl protocol
-- **THEN** the Emby items SHALL be transmitted in their existing wire shape and the feed entries SHALL be omitted
+#### Scenario: Capable peer receives a mixed queue
 
+- **WHEN** a queue of Emby items followed by feed entries is synchronized to a peer advertising `feed-playback`
+- **THEN** the Emby items SHALL be transmitted in their existing wire shape
+- **AND** the feed entries SHALL be carried in the `feed_items` tail of the same atomic snapshot
+- **AND** the peer SHALL reconstruct a slot-identical mixed queue from the two fields
+
+#### Scenario: Legacy peer receives a mixed queue
+
+- **WHEN** a queue containing feed entries is synchronized to a peer that does not advertise `feed-playback`
+- **THEN** only the Emby items SHALL be transmitted in their existing wire shape
+- **AND** the feed entries SHALL be omitted
+
+#### Scenario: Emby mutation that breaks the tail invariant is rejected
+
+- **WHEN** feed entries are present and an Emby queue mutation would place an Emby item after a feed entry
+- **THEN** the daemon SHALL reject the mutation
+
+#### Scenario: Queue adoption with live Feed state is rejected
+
+- **WHEN** feed entries are present and a peer requests adoption of a replacement Emby queue
+- **THEN** the daemon SHALL reject the request rather than silently discard the live Feed tail
+
+### Requirement: Capability-gated Feed playback reaches a Player owner
+
+The ctrl protocol SHALL advertise an additive `feed-playback` capability. A peer supporting that capability SHALL accept a `LoadFeed` command carrying one FeedEntry and append/play it through the Player owner's Feed play path. The resulting live Feed state SHALL follow the capability-gated ctrl-state requirement. The protocol version SHALL not change.
+
+#### Scenario: Capability-supporting peer plays a Feed entry
+
+- **WHEN** a peer advertises `feed-playback` and receives `LoadFeed` for a Feed entry with a playable source
+- **THEN** the Player owner SHALL append the Feed entry and begin playback
+
+#### Scenario: Capable peer has no Player owner
+
+- **WHEN** a peer advertising `feed-playback` receives `LoadFeed` but no Player owner is available
+- **THEN** the daemon SHALL reject the command and SHALL NOT add the Feed entry to its live queue state
+
+#### Scenario: Peer lacks Feed-playback capability
+
+- **WHEN** a controlling client attempts Feed playback through a peer that does not advertise `feed-playback`
+- **THEN** the command SHALL not be sent or interpreted as another command

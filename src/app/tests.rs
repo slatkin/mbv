@@ -91,6 +91,7 @@ pub(crate) fn run_stub_daemon_handshake(stream: std::net::TcpStream) -> std::net
             items: Vec::new(),
             cursor: 0,
             source: crate::config::QueueSource::Unknown,
+            feed_items: Vec::new(),
         },
     ))
     .unwrap();

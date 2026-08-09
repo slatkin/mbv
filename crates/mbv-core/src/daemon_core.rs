@@ -9,6 +9,7 @@ use crate::ctrl::{
     CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason, PlaybackGeneration, PlaybackIntent,
     PlaybackIntentAction, PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
 };
+use crate::playback_queue::FeedEntry;
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 
@@ -123,6 +124,9 @@ struct CtrlClient {
     id: CtrlClientId,
     tx: CtrlSender,
     transport: CtrlTransport,
+    /// Whether this peer advertised `feed-playback` in its Hello. Gates
+    /// whether it receives the real Feed tail or an empty one (#5.1).
+    supports_feed_playback: bool,
 }
 
 type ClientRegistry = Arc<Mutex<CtrlClients>>;
@@ -414,6 +418,7 @@ struct SharedQueueState {
     items: Arc<Mutex<Vec<EmbyItem>>>,
     cursor: Arc<Mutex<usize>>,
     source: Arc<Mutex<crate::config::QueueSource>>,
+    feed_items: Arc<Mutex<Vec<FeedEntry>>>,
 }
 
 pub struct DaemonPlayerHandle {
@@ -461,10 +466,20 @@ impl CtrlClients {
     /// Does NOT override authority if it is currently `EmbyRemote` — the new
     /// client receives broadcasts but its commands are rejected until
     /// authority returns to `Ctrl`.
-    fn connect(&mut self, tx: CtrlSender, transport: CtrlTransport) -> CtrlClientId {
+    fn connect(
+        &mut self,
+        tx: CtrlSender,
+        transport: CtrlTransport,
+        supports_feed_playback: bool,
+    ) -> CtrlClientId {
         let id = self.next_id;
         self.next_id += 1;
-        self.connection.push(CtrlClient { id, tx, transport });
+        self.connection.push(CtrlClient {
+            id,
+            tx,
+            transport,
+            supports_feed_playback,
+        });
         if self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
         }
@@ -488,6 +503,16 @@ impl CtrlClients {
             .any(|c| c.id == id && c.transport == CtrlTransport::Local)
     }
 
+    /// Whether the client `id` advertised `feed-playback` support at Hello.
+    /// Used to gate per-client rejection echoes that would otherwise leak
+    /// the Feed tail to a legacy peer (#5.1).
+    fn supports_feed_playback(&self, id: CtrlClientId) -> bool {
+        self.connection
+            .iter()
+            .find(|c| c.id == id)
+            .is_some_and(|c| c.supports_feed_playback)
+    }
+
     fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
         if let Some(client) = self.connection.iter().find(|client| client.id == id) {
             send_to(&client.tx, event);
@@ -503,6 +528,21 @@ impl CtrlClients {
     fn broadcast_to_all(&mut self, json: String) {
         self.connection
             .retain(|c| c.tx.send(CtrlOutbound::Event(json.clone())).is_ok());
+    }
+
+    /// Broadcasts a `State` event whose `feed_items` tail is gated per
+    /// client: capable clients (advertised `feed-playback` at Hello) get
+    /// `capable_json`, everyone else gets `legacy_json` (built with an empty
+    /// Feed tail). Mirrors `broadcast_to_all`'s drop-on-failed-send behavior.
+    fn broadcast_state_gated(&mut self, capable_json: String, legacy_json: String) {
+        self.connection.retain(|c| {
+            let json = if c.supports_feed_playback {
+                &capable_json
+            } else {
+                &legacy_json
+            };
+            c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
+        });
     }
 
     /// Broadcast a `Disconnected` notification to all connected ctrl clients
@@ -615,7 +655,7 @@ fn spawn_ctrl_client<S>(
         let Some(Ok(line)) = lines.next() else {
             return;
         };
-        match serde_json::from_str::<CtrlCmd>(&line) {
+        let supports_feed_playback = match serde_json::from_str::<CtrlCmd>(&line) {
             Ok(CtrlCmd::Hello(info)) => {
                 if let Err(e) = info.validate_peer() {
                     log::warn!(target: "daemon", "rejecting ctrl client: {e}");
@@ -633,6 +673,7 @@ fn spawn_ctrl_client<S>(
                     );
                     return;
                 }
+                info.supports_feed_playback()
             }
             Ok(_) => {
                 log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
@@ -642,18 +683,27 @@ fn spawn_ctrl_client<S>(
                 log::warn!(target: "daemon", "rejecting ctrl client: invalid protocol hello: {e}");
                 return;
             }
-        }
+        };
 
         if let Ok(init_json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
             status: player_status.lock().unwrap().clone(),
             items: shared_queue.items.lock().unwrap().clone(),
             cursor: *shared_queue.cursor.lock().unwrap(),
             source: shared_queue.source.lock().unwrap().clone(),
+            feed_items: if supports_feed_playback {
+                shared_queue.feed_items.lock().unwrap().clone()
+            } else {
+                Vec::new()
+            },
         })) {
             ev_tx.send(CtrlOutbound::Event(init_json)).ok();
         }
         let reply_tx = ev_tx.clone();
-        let client_id = ctrl_clients.lock().unwrap().connect(ev_tx, transport);
+        let client_id =
+            ctrl_clients
+                .lock()
+                .unwrap()
+                .connect(ev_tx, transport, supports_feed_playback);
 
         for line in lines {
             let Ok(line) = line else { break };

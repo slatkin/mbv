@@ -352,6 +352,16 @@ impl PlaybackRun {
             completed_is_audio={completed_is_audio} last_valid_pos={} runtime={} \
             => played_out={played_out} consume_track={consume_track}",
             self.last_valid_pos, completed_runtime);
+        // Feed entries carry no Emby session, so `as_emby()` distinguishes
+        // them; consume_track (not played_out, which is video-only) is the
+        // same "left the live queue" signal the app layer uses for Emby
+        // queue-removal, so it's the correct gate for the daemon's Feed
+        // tail too.
+        if consume_track && completed_item.as_emby().is_none() {
+            let _ = self.event_tx.send(PlayerEvent::FeedConsumed {
+                guid: completed_item.id().to_string(),
+            });
+        }
         let completed_pos =
             queue_completed_pos(completed_is_audio, natural, near_end, self.last_valid_pos);
 

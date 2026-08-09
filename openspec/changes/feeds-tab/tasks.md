@@ -27,8 +27,12 @@
 
 ## 5. Play
 
-- [ ] 5.1 "Play" on an entry builds `QueueItem::Feed(FeedEntry)`, appends it to the bound playback queue, and starts it through the feed-capable player action (mechanics come from #470). Validate a playable enclosure/link before dispatching; Feed playback never reports to Emby.
-- [ ] 5.2 Wire Enter on the selected Feed entry to that action with the appropriate audio-only/headless decision and current UI volume. It must not fall through to Emby library queue actions.
+- [ ] 5.1 Add capability-gated `CtrlState.feed_items` and include it in the atomic broadcast and reconnect snapshot. It defaults when absent, and legacy peers receive only the existing Emby shape.
+- [ ] 5.2 On `LoadFeed`, record the Feed tail in the daemon and forward playback only when the Player owner is available; otherwise reject it without changing live queue state. Add a Player event that removes a consumed Feed item from that tail. Persist Feed queue slots through the tagged `QueueItem` queue-state shape, without playback-progress state.
+- [ ] 5.3 Enforce the Emby-then-Feed tail invariant: while the Feed tail is nonempty, reject Emby append, move, replace, and adopt operations that would put Emby content after a Feed. Test those rejections and the successful safe mutations.
+- [ ] 5.4 Reconstruct a slot-identical mixed queue on capable remote clients from Emby items plus the Feed tail; preserve Feed identity in rendering, events, and queue actions so display indices cannot target the wrong owner slot.
+- [ ] 5.5 "Play" on an entry builds `QueueItem::Feed(FeedEntry)`, appends it to the bound playback queue, and starts it through the capability-gated feed player action. Unsupported peers fail safely. Validate a playable enclosure/link before dispatching; Feed playback never reports to Emby.
+- [ ] 5.6 Wire Enter on the selected Feed entry to that action with the appropriate audio-only/headless decision and current UI volume. It must not fall through to Emby library queue actions.
 
 ## 6. Management overlay
 
@@ -41,5 +45,8 @@
 
 - [ ] 7.1 Add a real feed via the overlay → it appears in `config.toml` and the Feeds tab.
 - [ ] 7.2 Play an entry → mpv plays the enclosure URL through the queue.
-- [ ] 7.3 Restart → subscription persists (from config); no FeedEntry playback position or watched state is remembered.
-- [ ] 7.4 `cargo test -p mbv-core` green; `cargo clippy --workspace --all-targets` green; `make check-code-file-lines` passes.
+- [ ] 7.3 Save and reload a mixed queue → the reloaded queue preserves each Emby and Feed slot in order; Feed playback position and watched state are not saved.
+- [ ] 7.3a Load a pre-change queue-state file containing bare Emby items → all items restore as Emby slots without error.
+- [ ] 7.4 Capability test: capable remote peer receives one atomic mixed snapshot and reconstructs the correct queue; legacy peer receives only Emby items.
+- [ ] 7.5 Reconnect test: a capable remote client receives the current Feed tail in its initial snapshot; a Feed consumption removes it from the following snapshot.
+- [ ] 7.6 `cargo test -p mbv-core` green; `cargo clippy --workspace --all-targets` green; `make check-code-file-lines` passes.

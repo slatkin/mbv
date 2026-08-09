@@ -327,6 +327,7 @@ impl App {
                 items,
                 cursor,
                 source,
+                feed_items,
             } => {
                 let pending_local_cursor = self.pending_queue_edit_cursor.take();
                 let cursor = if self.has_direct_remote_queue() {
@@ -340,7 +341,7 @@ impl App {
                         .unwrap_or(cursor)
                 };
                 let queue = self.playback_queue_mut();
-                queue.set_items(items, cursor);
+                queue.set_items_with_feed(items, cursor, feed_items);
                 if !self.has_direct_remote_queue() {
                     self.queue_source = source;
                 }
@@ -461,6 +462,16 @@ impl App {
                     self.restore_local_mode("Daemon disconnected — returned to local mode");
                     self.refresh_after_stop();
                 }
+            }
+            // The daemon drains its live feed tail on this event and this
+            // client mirrors the same removal against its own parallel
+            // `PlayerTab.feed_items` copy (§5.4), so the two never diverge.
+            // Queue advancement itself is driven by the Stopped/TrackCompleted
+            // event that follows in the same end-of-file sequence.
+            PlayerEvent::FeedConsumed { guid } => {
+                self.playback_queue_mut()
+                    .feed_items
+                    .retain(|entry| entry.guid != guid);
             }
         }
         false

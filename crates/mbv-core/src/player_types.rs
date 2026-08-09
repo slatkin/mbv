@@ -196,6 +196,7 @@ pub enum PlayerEvent {
         items: Vec<crate::api::EmbyItem>,
         cursor: usize,
         source: crate::config::QueueSource,
+        feed_items: Vec<FeedEntry>,
     },
     /// Chapter API: playback entered the intro window.
     IntroStarted {
@@ -236,6 +237,13 @@ pub enum PlayerEvent {
     /// mirror to become stale. The detail describes what was detected. The UI
     /// shows this as a warning toast.
     QueueDesynced(String),
+    /// A `QueueItem::Feed` entry finished playing (or was consumed via
+    /// next-up) and left the live queue. Carries the entry's `guid` so the
+    /// daemon can remove the matching entry from its Feed tail before
+    /// broadcasting the next state (see design.md's Feed-removal ordering).
+    FeedConsumed {
+        guid: String,
+    },
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

@@ -1,4 +1,5 @@
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::FeedEntry;
 use unicode_width::UnicodeWidthStr;
 
 /// Advance subtitle mode through the standard cycle.
@@ -219,17 +220,23 @@ pub fn trunc_str(s: &str, max: usize) -> String {
     }
 }
 
-/// A visual row in the queue: a track (item index into the underlying queue).
-/// The queue list has no grouping/headers — every row is a track.
+/// A visual row in the queue: either a track (index into the Emby `items`)
+/// or a feed entry (index into the daemon-owned `feed_items` tail, §5.4).
+/// The queue list has no grouping/headers — every row is a track or feed
+/// entry, in that order. Feed rows are display-only: the queue cursor lives
+/// in Emby index space and never targets a `Feed` row (see `render_queue`).
 #[derive(Clone)]
 pub(super) enum QueueRow {
     Track { idx: usize },
+    Feed { feed_idx: usize },
 }
 
-/// Build the flat visual rows for the queue: one `Track` row per item, in order.
-pub(super) fn build_queue_rows(items: &[EmbyItem]) -> Vec<QueueRow> {
+/// Build the flat visual rows for the queue: one `Track` row per Emby item,
+/// followed by one `Feed` row per feed tail entry, both in order.
+pub(super) fn build_queue_rows(items: &[EmbyItem], feed_items: &[FeedEntry]) -> Vec<QueueRow> {
     (0..items.len())
         .map(|idx| QueueRow::Track { idx })
+        .chain((0..feed_items.len()).map(|feed_idx| QueueRow::Feed { feed_idx }))
         .collect()
 }
 
@@ -253,11 +260,46 @@ mod tests {
             make_audio_item("Album A", "a1", "Artist"),
             make_audio_item("Album A", "a1", "Artist"),
         ];
-        let rows = build_queue_rows(&items);
+        let rows = build_queue_rows(&items, &[]);
 
         assert_eq!(rows.len(), 3);
         assert!(matches!(rows[0], QueueRow::Track { idx: 0 }));
         assert!(matches!(rows[1], QueueRow::Track { idx: 1 }));
         assert!(matches!(rows[2], QueueRow::Track { idx: 2 }));
+    }
+
+    #[test]
+    fn build_queue_rows_appends_feed_rows_after_tracks() {
+        let items = vec![
+            make_audio_item("Album A", "a1", "Artist"),
+            make_audio_item("Album A", "a1", "Artist"),
+        ];
+        let feed_items = vec![
+            FeedEntry {
+                guid: "f1".to_string(),
+                title: "Feed 1".to_string(),
+                enclosure_url: None,
+                link: None,
+                mime_type: None,
+                duration_ticks: None,
+                pub_date_secs: None,
+            },
+            FeedEntry {
+                guid: "f2".to_string(),
+                title: "Feed 2".to_string(),
+                enclosure_url: None,
+                link: None,
+                mime_type: None,
+                duration_ticks: None,
+                pub_date_secs: None,
+            },
+        ];
+        let rows = build_queue_rows(&items, &feed_items);
+
+        assert_eq!(rows.len(), 4);
+        assert!(matches!(rows[0], QueueRow::Track { idx: 0 }));
+        assert!(matches!(rows[1], QueueRow::Track { idx: 1 }));
+        assert!(matches!(rows[2], QueueRow::Feed { feed_idx: 0 }));
+        assert!(matches!(rows[3], QueueRow::Feed { feed_idx: 1 }));
     }
 }
