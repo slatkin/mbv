@@ -1,7 +1,8 @@
-use super::feed_parse::fetch_and_parse_entries;
+use super::feed_parse::{fetch_and_parse_entries, infer_feed_kind_from_mime};
 use super::notify_actions::ToastSeverity;
 use super::types_feed_tab::FeedTabRefreshResult;
 use super::App;
+use mbv_core::config::FeedKind;
 
 impl App {
     /// Whether feed subscriptions are configured and the Feeds tab should
@@ -166,5 +167,38 @@ impl App {
         } else {
             self.feed_tab.cursor = cur.saturating_sub(page_size);
         }
+    }
+
+    /// Play the entry at the current cursor (§5.5/§5.6). A no-op for an
+    /// empty list, an out-of-range cursor, or an entry with no playable
+    /// enclosure/link -- `play_feed` in the player layer re-validates the
+    /// source and fails safely, but checking here avoids spawning mpv for
+    /// a doomed play and gives the user an explanatory toast instead.
+    ///
+    /// Local scope only: mirrors the entry into `PlayerTab.feed_items` so
+    /// the queue panel renders it immediately. Remote scope gets its feed
+    /// tail from the daemon's `LoadFeed` -> `QueueUpdated` broadcast, so
+    /// setting it here too would just be overwritten (and briefly wrong).
+    pub(super) fn feed_tab_play_selected(&mut self) {
+        let Some(entry) = self
+            .feed_tab
+            .visible_entries()
+            .get(self.feed_tab.cursor)
+            .cloned()
+        else {
+            return;
+        };
+        if entry.primary_source().is_none() {
+            self.flash(
+                "Feed entry has no playable source".into(),
+                ToastSeverity::Error,
+            );
+            return;
+        }
+        let headless = infer_feed_kind_from_mime(entry.mime_type.as_deref()) == FeedKind::Audio;
+        if !self.player.is_remote() {
+            self.playback_queue_mut().feed_items = vec![entry.clone()];
+        }
+        self.player.play_feed(entry, headless, self.ui_volume);
     }
 }

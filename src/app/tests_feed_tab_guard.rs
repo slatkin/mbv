@@ -171,3 +171,69 @@ fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
     assert_eq!(app.libs[0].nav_stack[0].cursor, 3);
     assert_eq!(app.libs[0].nav_stack[0].scroll, 2);
 }
+
+/// `feed_tab_play_selected` on an empty entry list (or a stale cursor past
+/// the end of a non-empty list) must return without dispatching -- the
+/// `.get(cursor)` bounds check is the only guard, since `clamp_state`
+/// isn't guaranteed to have run.
+#[test]
+fn feed_tab_play_selected_out_of_range_cursor_is_noop() {
+    let mut app = make_app_stub();
+
+    // Empty list: cursor 0 is already out of range.
+    app.feed_tab_play_selected();
+    assert!(
+        app.status.is_empty(),
+        "empty list must not flash or dispatch"
+    );
+
+    // Non-empty list with a stale cursor past the end.
+    app.feed_tab.entries = vec![vec![FeedEntry {
+        guid: "a".into(),
+        title: "Entry A".into(),
+        enclosure_url: Some("https://example.test/a.mp3".into()),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: None,
+        pub_date_secs: None,
+    }]];
+    app.feed_tab.rebuild_all_entries();
+    app.feed_tab.selected_group = 0;
+    app.feed_tab.cursor = 5;
+    app.feed_tab_play_selected();
+    assert!(
+        app.status.is_empty(),
+        "out-of-range cursor must not flash or dispatch"
+    );
+}
+
+/// An entry with neither an enclosure URL nor a link has no playable
+/// source; `feed_tab_play_selected` must flash and not dispatch.
+#[test]
+fn feed_tab_play_selected_no_source_entry_does_not_dispatch() {
+    let mut app = make_app_stub();
+    app.feed_tab.entries = vec![vec![FeedEntry {
+        guid: "a".into(),
+        title: "Entry A".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+    }]];
+    app.feed_tab.rebuild_all_entries();
+    app.feed_tab.selected_group = 0;
+    app.feed_tab.cursor = 0;
+
+    app.feed_tab_play_selected();
+
+    assert!(
+        app.status.contains("no playable source"),
+        "expected a no-playable-source toast, got {:?}",
+        app.status
+    );
+    assert!(
+        app.playback_queue().feed_items.is_empty(),
+        "no-source entry must not be mirrored into the queue panel"
+    );
+}

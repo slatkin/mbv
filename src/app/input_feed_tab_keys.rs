@@ -67,16 +67,15 @@ impl App {
                 self.feed_tab_cycle_group(1);
                 Some(false)
             }
-            // Enter — playback wiring is deferred to task 5; show a toast.
+            // Enter — play the selected entry (§5.5/§5.6). Consumed
+            // unconditionally so it never falls through to the global/
+            // library-view Enter handling of Emby queue actions.
             KeyCode::Enter => {
                 use super::notify_actions::ToastSeverity;
                 if self.feed_tab.visible_entries().is_empty() {
                     self.flash("No entries to play".into(), ToastSeverity::Neutral);
                 } else {
-                    self.flash(
-                        "Playback wiring pending (task 5)".into(),
-                        ToastSeverity::Neutral,
-                    );
+                    self.feed_tab_play_selected();
                 }
                 Some(false)
             }
