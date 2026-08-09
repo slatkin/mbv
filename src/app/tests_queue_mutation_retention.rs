@@ -103,7 +103,7 @@ fn rejected_route_enqueue_leaves_tracking_active() {
         series_season_cursor: 0,
         library_total: None,
     });
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.remote_tracker = Some(tracking_stub());
 
     app.enqueue_selected();

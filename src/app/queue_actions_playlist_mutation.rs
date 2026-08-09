@@ -355,7 +355,7 @@ impl App {
     }
 
     pub(in crate::app) fn enqueue_selected(&mut self) {
-        if self.library_tab == 0 {
+        if self.tab.is_home() {
             let Some(item) = self.current_home_item() else {
                 return;
             };
@@ -389,7 +389,7 @@ impl App {
             if !is_playable(&item) {
                 return;
             }
-            let lib_idx = self.library_tab - 1;
+            let lib_idx = self.tab.library_index().unwrap();
             let bypass = self.in_non_library_thin_client_mode();
             log::info!(target: "library_route", "{}", super::super::actions::enqueue_action_context(&item.id, &item.name, "library-view", bypass));
             let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);

@@ -323,7 +323,7 @@ fn applying_library_position_clears_non_position_ui_state() {
 #[test]
 fn save_default_library_position_persists_focused_item() {
     let mut app = make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
@@ -496,7 +496,7 @@ fn refresh_lib_clears_saved_position_for_active_library() {
         library_total: None,
     });
     app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.replace_saved_library_position(
         0,
         crate::config::LibraryPosition {
@@ -555,7 +555,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
         series_season_cursor: 0,
         library_total: None,
     });
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.replace_saved_library_position(
         0,
         crate::config::LibraryPosition {
@@ -585,7 +585,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
 #[test]
 fn home_navigation_does_not_persist_library_position_state() {
     let mut app = make_app_stub();
-    app.library_tab = 0;
+    app.tab = TabSelection::Home;
     app.home.continue_items = make_items(3);
 
     app.cw_move_cursor(1);

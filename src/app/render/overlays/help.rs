@@ -115,7 +115,7 @@ impl App {
             blank(),
         ];
         let is_queue = matches!(self.panel_focus, crate::app::PanelFocus::Queue);
-        let is_home = !is_queue && self.library_tab == 0;
+        let is_home = !is_queue && self.tab.is_home();
         let is_lib = !is_queue && !is_home;
 
         let mut ordered: Vec<Vec<Line>> = Vec::new();

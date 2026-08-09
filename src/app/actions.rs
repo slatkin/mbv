@@ -131,7 +131,7 @@ impl App {
     }
 
     pub(super) fn current_lib_item(&self) -> Option<EmbyItem> {
-        let lib_idx = self.library_tab.checked_sub(1)?;
+        let lib_idx = self.tab.library_index()?;
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
@@ -417,7 +417,7 @@ impl App {
             return;
         };
         if item.is_folder {
-            let lib_idx = self.library_tab - 1;
+            let lib_idx = self.tab.library_index().unwrap();
             let lib = &mut self.libs[lib_idx];
             lib.search = None;
             lib.nav_stack.push(BrowseLevel {
@@ -447,7 +447,7 @@ impl App {
                 "Ascending".into(),
             );
         } else if is_playable(&item) {
-            let lib_idx = self.library_tab - 1;
+            let lib_idx = self.tab.library_index().unwrap();
             if self.libs[lib_idx].search.is_some() {
                 self.libs[lib_idx].search = None;
                 if self.is_feed_home_video_group_view(lib_idx) {
@@ -575,9 +575,7 @@ impl App {
     }
 
     pub(super) fn go_back(&mut self) {
-        if self.library_tab > 0 {
-            let lib_idx = self.library_tab - 1;
-
+        if let Some(lib_idx) = self.tab.library_index() {
             // Guard: don't pop when already at the root of a synthetic "group" view
             // (music groups: nav_stack[0]=groups, nav_stack[1]=albums; feed home
             // videos: nav_stack[0]=folders, nav_stack[1]=grouped videos) -- there is

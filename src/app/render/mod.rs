@@ -53,7 +53,7 @@ use widgets::{
 };
 
 use super::ui_util::natural_sort_key;
-use super::{layout::AppLayout, palette, App, PanelFocus, PanelMode};
+use super::{layout::AppLayout, palette, App, PanelFocus, PanelMode, TabSelection};
 use crate::app::layout::{LayoutMain, LayoutPlayback};
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
@@ -271,13 +271,18 @@ impl App {
         }
         // Apply the tab saved from the previous session once libs have loaded.
         if self.library_tab_pending > 0 && !self.libs.is_empty() {
-            self.library_tab = self.library_tab_pending.min(self.libs.len());
+            let pos = self.library_tab_pending.min(self.libs.len());
+            self.tab = TabSelection::from_position(pos);
             self.library_tab_pending = 0;
         }
-        // Safety clamp -- library_tab should already be valid, but guard against
+        // Safety clamp -- tab should already be valid, but guard against
         // any edge case where libs haven't populated yet.
-        if self.library_tab > self.libs.len() {
-            self.library_tab = 0;
+        if self
+            .tab
+            .library_index()
+            .is_some_and(|i| i >= self.libs.len())
+        {
+            self.tab = TabSelection::Home;
         }
 
         // Left panel (card + queue) | Right panel (library, remaining).
@@ -513,8 +518,13 @@ impl App {
         // are dropped and the library spans the panel edge-to-edge.
         let lib_area = right_panel_content_area(lib_area, self.panel_mode != PanelMode::Both);
         let mut render_lib_area = lib_area;
-        if right_visible && self.library_tab > 0 && self.is_music_group_view(self.library_tab - 1) {
-            let lib_idx = self.library_tab - 1;
+        if right_visible
+            && self
+                .tab
+                .library_index()
+                .is_some_and(|lib_idx| self.is_music_group_view(lib_idx))
+        {
+            let lib_idx = self.tab.library_index().unwrap();
             if lib_area.height > 0 {
                 let pills_area = Rect {
                     x: lib_area.x,

@@ -22,7 +22,7 @@ impl App {
     pub(super) fn open_context_menu(&mut self) {
         let mut entries: Vec<ContextMenuEntry> = vec![];
 
-        let cw_focused = matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0;
+        let cw_focused = matches!(self.panel_focus, PanelFocus::Library) && self.tab.is_home();
         let lib_idx = self.context_menu_lib_idx();
         let in_podcast =
             lib_idx.is_some_and(|idx| self.is_podcast_library(idx)) || self.is_in_podcast_library();
@@ -137,7 +137,7 @@ impl App {
                         );
                     }
                 }
-                if cw_focused || (self.library_tab == 0 && self.home.section == 0) {
+                if cw_focused || (self.tab.is_home() && self.home.section == 0) {
                     Self::push_context_action(
                         &mut entries,
                         "Remove from Continue Watching",

@@ -119,11 +119,11 @@ impl App {
         if idx >= self.libs.len() {
             return;
         }
-        if self.library_tab == idx + 1 && self.is_feed_home_video_library(idx) {
+        if self.tab.library_index() == Some(idx) && self.is_feed_home_video_library(idx) {
             self.ensure_feed_home_video_root_loaded(idx);
             return;
         }
-        if self.library_tab == idx + 1 && self.is_podcast_library(idx) {
+        if self.tab.library_index() == Some(idx) && self.is_podcast_library(idx) {
             self.ensure_podcast_root_loaded(idx);
             return;
         }

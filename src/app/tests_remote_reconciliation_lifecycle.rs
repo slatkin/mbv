@@ -232,7 +232,7 @@ fn tracking_controls_fire_only_in_queue_context() {
 fn library_focus_rescan_does_not_trigger_tracking_controls() {
     let mut app = attached_app();
     app.panel_focus = crate::app::PanelFocus::Library;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     let mut lib_item = make_item("Movies", "CollectionFolder");
     lib_item.id = "lib-movies".into();
     app.libs.push(LibraryTab {

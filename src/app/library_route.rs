@@ -186,18 +186,18 @@ impl App {
         &mut self,
         item: &mbv_core::api::EmbyItem,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
-        log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} library_tab={}", item.id, item.name, self.library_tab);
+        log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} library_tab={}", item.id, item.name, self.tab.to_position());
         if matches!(self.panel_focus, PanelFocus::Queue) {
             log::info!(target: "library_route", "resolution path=queue item_id={:?}", item.id);
             self.active_route
                 .clone()
                 .and_then(|name| self.resolve_route_for_library(&name))
                 .or_else(|| self.route_for_item_via_ancestors(&item.id))
-        } else if self.library_tab == 0 {
+        } else if self.tab.is_home() {
             log::info!(target: "library_route", "resolution path=ancestor item_id={:?}", item.id);
             self.route_for_item_via_ancestors(&item.id)
         } else {
-            let lib_idx = self.library_tab - 1;
+            let lib_idx = self.tab.library_index().unwrap();
             log::info!(target: "library_route", "resolution path=power-library item_id={:?} lib_idx={lib_idx}", item.id);
             self.route_for_active_library_view(lib_idx)
         }
@@ -334,7 +334,7 @@ mod tests {
             library_total: None,
         });
         app.panel_focus = PanelFocus::Library;
-        app.library_tab = 1;
+        app.tab = TabSelection::Library(0);
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 
@@ -362,7 +362,7 @@ mod tests {
             library_total: None,
         });
         app.panel_focus = PanelFocus::Queue;
-        app.library_tab = 1;
+        app.tab = TabSelection::Library(0);
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 

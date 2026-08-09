@@ -7,7 +7,7 @@ use crate::app::library_browse_actions::{
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibSearch, LibraryTab, QueueScope,
+    FeedHomeVideoState, LibEvent, LibSearch, LibraryTab, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
@@ -78,13 +78,13 @@ fn active_lib_is_tvshows_true_only_on_a_tvshows_library_tab() {
     app.libs.push(lib_tab("tvshows"));
     app.libs.push(lib_tab("music"));
 
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     assert!(
         app.active_lib_is_tvshows(),
         "library_tab on the tvshows library tab"
     );
 
-    app.library_tab = 2;
+    app.tab = TabSelection::Library(1);
     assert!(
         !app.active_lib_is_tvshows(),
         "library_tab on the music library tab"
@@ -96,7 +96,7 @@ fn active_lib_is_tvshows_false_outside_any_library_tab() {
     let mut app = make_app_stub();
     app.libs.push(lib_tab("tvshows"));
 
-    app.library_tab = 0; // Home
+    app.tab = TabSelection::Home; // Home
     assert!(!app.active_lib_is_tvshows());
 
     app.panel_focus = PanelFocus::Queue;

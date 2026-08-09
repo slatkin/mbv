@@ -7,7 +7,7 @@ use crate::app::library_browse_actions::{
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope,
+    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
@@ -348,7 +348,7 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
 #[test]
 fn ensure_feed_library_preserves_saved_feed_position() {
     let mut app = crate::app::tests::make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
     let mut library = crate::app::tests::make_item("YouTube", "CollectionFolder");
@@ -385,7 +385,7 @@ fn ensure_feed_library_preserves_saved_feed_position() {
 #[test]
 fn ensure_podcast_library_preserves_saved_feed_position() {
     let mut app = crate::app::tests::make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     let mut library = crate::app::tests::make_item("Podcasts", "CollectionFolder");
     library.id = "lib-podcasts".into();

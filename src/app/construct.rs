@@ -1,6 +1,7 @@
 use super::types_playback::{HomePane, QueueScope};
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
+use super::types_tab_selection::TabSelection;
 use super::{
     bootstrap_local_daemon_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
     LEFT_WIDTH_DEFAULT,
@@ -108,7 +109,7 @@ impl App {
                     .as_str()
                     .or_else(|| prefs["power_focus"].as_str()),
             ),
-            library_tab: 0,
+            tab: TabSelection::Home,
             queue_column_width: prefs["queue_column_width"]
                 .as_u64()
                 .or_else(|| prefs["power_left_width"].as_u64())

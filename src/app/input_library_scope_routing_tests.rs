@@ -1,13 +1,13 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item, make_items};
-use crate::app::{BrowseLevel, ConfirmAction, LibraryTab, PanelFocus};
+use crate::app::{BrowseLevel, ConfirmAction, LibraryTab, PanelFocus, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
 fn make_library_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -112,7 +112,7 @@ fn ctrl_r_confirmation_targets_active_library() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.library_tab = 2;
+    app.tab = TabSelection::Library(1);
 
     for (lib_id, title) in [("lib-shows", "Shows"), ("lib-movies", "Movies")] {
         let mut library = make_item(title, "CollectionFolder");
@@ -440,7 +440,7 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
         0,
     ));
 
-    assert_eq!(app.library_tab, 1);
+    assert_eq!(app.tab, TabSelection::Library(0));
     assert_eq!(app.panel_focus, PanelFocus::Library);
     assert_eq!(app.libs[0].nav_stack.len(), 1);
     assert!(app.libs[0].nav_stack[0].loading);

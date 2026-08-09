@@ -124,10 +124,11 @@ impl App {
         let all_names: Vec<String> = std::iter::once("Home".to_string())
             .chain(self.libs.iter().map(|l| l.library.name.clone()))
             .collect();
-        let selected_tab = if self.library_tab < vis_start || self.library_tab >= vis_end {
+        let tab_pos = self.tab.to_position();
+        let selected_tab = if tab_pos < vis_start || tab_pos >= vis_end {
             usize::MAX
         } else {
-            self.library_tab - vis_start
+            tab_pos - vis_start
         };
         let tab_titles: Vec<Line> = all_names[vis_start..vis_end]
             .iter()

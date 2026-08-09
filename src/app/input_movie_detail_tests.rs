@@ -1,6 +1,8 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus, PanelMode, LEFT_WIDTH_DEFAULT};
+use crate::app::{
+    BrowseLevel, LibraryTab, PanelFocus, PanelMode, TabSelection, LEFT_WIDTH_DEFAULT,
+};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -8,7 +10,7 @@ use ratatui::Terminal;
 fn make_movie_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -95,7 +97,7 @@ fn push_library(app: &mut App, id: &str, name: &str) {
 fn make_tab_cycle_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     push_library(&mut app, "lib-movies", "Movies");
     push_library(&mut app, "lib-shows", "Shows");
     app
@@ -335,7 +337,7 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
     assert!(home.context_menu.is_some(), "combined (home) view");
 
     let mut lib = make_app_stub();
-    lib.library_tab = 1;
+    lib.tab = TabSelection::Library(0);
     let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.is_folder = true;
@@ -385,7 +387,7 @@ fn ctrl_a_enqueues_selected_from_library_view() {
     // `handle_enqueue_selected_key` (the queue view has no "enqueue
     // selected" concept and does not wire this in). See issue #209.
     let mut app = make_app_stub();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
     let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.is_folder = true;
@@ -460,7 +462,7 @@ fn tab_cycles_from_right_panel_when_search_is_closed() {
     let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert!(!handled);
-    assert_eq!(app.library_tab, 2);
+    assert_eq!(app.tab, TabSelection::Library(1));
     assert_eq!(app.panel_focus, PanelFocus::Library);
 }
 
@@ -484,17 +486,18 @@ fn selecting_the_last_tab_scrolls_it_into_view_with_correct_arrows() {
 
     // Jump straight to the last tab, the same way `library_tab_next`
     // would land there after enough presses, and let it scroll into view.
-    app.library_tab = app.tab_count() - 1;
+    app.set_library_tab(app.tab_count() - 1);
     app.ensure_tab_visible();
 
     let tab_w = app
         .terminal_width
         .saturating_sub(crate::app::TABBAR_LEFT_RESERVE + crate::app::TABBAR_RIGHT_RESERVE);
     let (vis_start, vis_end) = app.visible_tab_range(tab_w);
+    let tab_pos = app.tab.to_position();
     assert!(
-        app.library_tab >= vis_start && app.library_tab < vis_end,
+        tab_pos >= vis_start && tab_pos < vis_end,
         "selected tab {} not in visible range {vis_start}..{vis_end}",
-        app.library_tab
+        tab_pos
     );
     // The bar overflowed, so scrolling right of Home must show the
     // left-scroll arrow (there are tabs before vis_start).

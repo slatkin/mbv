@@ -154,7 +154,7 @@ fn apply_route_for_playback_swaps_to_routed_daemon_on_success() {
     });
     let mut item = make_item("Song", "Audio");
     item.id = "song-1".to_string();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     app.apply_route_for_playback(&item);
 
@@ -201,7 +201,7 @@ fn apply_route_for_playback_falls_back_to_local_with_warning_on_connect_failure(
     });
     let mut item = make_item("Song", "Audio");
     item.id = "song-1".to_string();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     app.apply_route_for_playback(&item);
 
@@ -236,7 +236,7 @@ fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
     });
     let mut item = make_item("Song", "Audio");
     item.id = "song-1".to_string();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     app.apply_route_for_playback(&item);
 
@@ -335,7 +335,7 @@ fn apply_route_for_playback_restores_local_via_restore_local_mode_when_swap_to_a
     });
     let mut item = make_item("Movie", "Movie");
     item.id = "movie-1".to_string();
-    app.library_tab = 1;
+    app.tab = TabSelection::Library(0);
 
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
     app.apply_route_for_playback(&item);

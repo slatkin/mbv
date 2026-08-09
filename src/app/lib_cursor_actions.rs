@@ -33,7 +33,7 @@ impl App {
     /// the single-column views (feed home-video groups, season grids)
     /// receive `item_rows` exactly as they do today.
     pub(super) fn move_lib_cursor_rows(&mut self, item_rows: i64) {
-        let lib_idx = self.library_tab.saturating_sub(1);
+        let lib_idx = self.tab.library_index().unwrap_or(0);
 
         // Letter-grouped lists: resolve the target item through the last
         // frame's laid-out item rows. The grouped-album view also publishes
@@ -115,7 +115,7 @@ impl App {
         let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
         self.last_nav_at = now;
         self.mark_library_navigation(now);
-        let lib_idx = self.library_tab.saturating_sub(1);
+        let lib_idx = self.tab.library_index().unwrap_or(0);
 
         if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
@@ -190,7 +190,7 @@ impl App {
     }
 
     pub(super) fn jump_lib_cursor(&mut self, to_end: bool) {
-        let lib_idx = self.library_tab.saturating_sub(1);
+        let lib_idx = self.tab.library_index().unwrap_or(0);
 
         if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
