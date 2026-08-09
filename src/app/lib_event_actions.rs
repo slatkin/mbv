@@ -243,7 +243,10 @@ impl App {
                         Err(error) => {
                             self.album_indexes
                                 .insert(library_id.clone(), AlbumIndexState::Unavailable);
-                            self.flash(format!("Error: {error}"), ToastSeverity::Error);
+                            self.flash(
+                                format!("Couldn't load album index: {error}"),
+                                ToastSeverity::Error,
+                            );
                         }
                     }
                     if let Some(lib_idx) = self
@@ -394,7 +397,7 @@ impl App {
                 let _ = self.merge_refreshed_queue(QueueScope::Local, items);
             }
             LibEvent::Error(e) => {
-                self.flash_error(e);
+                self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }
         }
     }

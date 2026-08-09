@@ -397,7 +397,18 @@ impl App {
                     PlaybackIntentOutcome::Applied => "Playback request applied",
                     PlaybackIntentOutcome::Coalesced { .. } => "Playback request already pending",
                     PlaybackIntentOutcome::Superseded => "Playback request superseded",
-                    PlaybackIntentOutcome::Rejected { .. } => "Playback request rejected",
+                    PlaybackIntentOutcome::Rejected { ref reason } => {
+                        use mbv_core::ctrl::PlaybackIntentRejection;
+                        match reason {
+                            PlaybackIntentRejection::EmptyTarget => "Nothing to play",
+                            PlaybackIntentRejection::ResolutionFailed => {
+                                "Couldn't load playback items"
+                            }
+                            PlaybackIntentRejection::AudioOnly => "Can't play audio in video mode",
+                            PlaybackIntentRejection::InvalidTarget => "Invalid playback target",
+                            PlaybackIntentRejection::Unavailable => "Playback unavailable",
+                        }
+                    }
                 };
                 self.flash(message.to_string(), ToastSeverity::Neutral);
             }

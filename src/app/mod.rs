@@ -79,6 +79,7 @@ mod ws_event_actions;
 pub use self::app_struct::App;
 use self::app_struct::AppInit;
 use self::bootstrap::bootstrap_local_daemon_queue;
+use self::notify_actions::ToastSeverity;
 use self::resize::spawn_resize_worker;
 use self::search_sidebar::SearchDrainOutcome;
 use self::types_browse::{
@@ -289,7 +290,7 @@ impl App {
                     self.status.clear();
                 }
             }
-            Err(e) => self.flash_error(e),
+            Err(e) => self.flash(format!("Couldn't load home: {e}"), ToastSeverity::Error),
         }
         self.home_loading = false;
         self.maybe_restore_queue_state();
