@@ -13,6 +13,7 @@ mod daemon_restart;
 mod feed_actions;
 mod feed_parse;
 mod feed_tab_actions;
+mod feeds_manage_actions;
 mod home_actions;
 pub(crate) mod images;
 mod input;
@@ -20,6 +21,7 @@ mod input_confirm_keys;
 mod input_context_menu;
 mod input_daemon_lost_keys;
 mod input_feed_tab_keys;
+mod input_feeds_manage_keys;
 mod input_lib_keys;
 mod input_mouse;
 mod input_mouse_dispatch;
@@ -70,6 +72,7 @@ mod types_daemon_lost;
 mod types_events;
 mod types_feed;
 mod types_feed_tab;
+mod types_feeds_manage;
 mod types_library_tab;
 mod types_playback;
 mod types_player_tab;
@@ -358,6 +361,8 @@ impl App {
             had_events |= self.drain_shared_events();
 
             had_events |= self.drain_feed_tab_results();
+
+            had_events |= self.drain_feed_add_results();
 
             while let Ok((item_id, img_opt)) = self.card_image_rx.try_recv() {
                 had_events = true;
@@ -648,6 +653,10 @@ mod tests_feed_group_loading;
 #[cfg(test)]
 #[path = "tests_feed_tab_guard.rs"]
 mod tests_feed_tab_guard;
+
+#[cfg(test)]
+#[path = "tests_feeds_manage.rs"]
+mod tests_feeds_manage;
 
 #[cfg(test)]
 #[path = "tests_podcast.rs"]

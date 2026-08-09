@@ -335,6 +335,7 @@ pub(crate) fn make_app_stub() -> App {
         home_is_local_daemon: false,
         idle_feed: None,
         feed_tab: super::types_feed_tab::FeedTabState::default(),
+        feeds_manage_popup: None,
     }
 }
 

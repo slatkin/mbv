@@ -217,6 +217,7 @@ impl App {
             home_is_local_daemon: false,
             idle_feed: init.idle_feed,
             feed_tab: super::types_feed_tab::FeedTabState::default(),
+            feeds_manage_popup: None,
         };
         app.sync_feed_subscriptions();
         app

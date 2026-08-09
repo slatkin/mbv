@@ -44,6 +44,10 @@ impl App {
                 self.open_library_routes_popup();
                 return;
             }
+            SettingKey::ManageFeeds => {
+                self.open_feeds_manage_popup();
+                return;
+            }
             SettingKey::LogOut => {
                 self.confirm_logout = true;
             }

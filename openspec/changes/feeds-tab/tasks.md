@@ -36,10 +36,10 @@
 
 ## 6. Management overlay
 
-- [ ] 6.1 Add/remove/edit overlay modeled on `src/app/render/overlays/`; expose it through a `Manage feeds` row in F2 Settings so the first subscription can be added while the Feeds tab is hidden.
-- [ ] 6.2 Add fetches+parses the feed first; on failure surface via the existing status/notify path and do not save. Ignore stale or cancelled asynchronous add results.
-- [ ] 6.3 On success append to `config.feeds` and persist via `config_save.rs`; remove/edit rewrite the same list. Edit changes only name and kind; URL changes require removal and a new subscription.
-- [ ] 6.4 After every mutation, resync subscriptions, clear fetched entry data, clamp selected group/cursor/scroll, and do not auto-fetch. If the last subscription is removed while Feeds is selected, fall back to Home.
+- [x] 6.1 Add/remove/edit overlay modeled on `src/app/render/overlays/`; expose it through a `Manage feeds` row in F2 Settings so the first subscription can be added while the Feeds tab is hidden.
+- [x] 6.2 Add fetches+parses the feed first; on failure surface via the existing status/notify path and do not save. Ignore stale or cancelled asynchronous add results.
+- [x] 6.3 On success append to `config.feeds` and persist via `config_save.rs`; remove/edit rewrite the same list. Edit changes only name and kind; URL changes require removal and a new subscription.
+- [x] 6.4 After every mutation, resync subscriptions, clear fetched entry data, clamp selected group/cursor/scroll, and do not auto-fetch. If the last subscription is removed while Feeds is selected, fall back to Home.
 
 ## 7. Verify
 

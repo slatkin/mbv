@@ -119,6 +119,12 @@ impl App {
                 }
                 _ => {}
             },
+            ConfirmAction::RemoveFeedSubscription(index) => {
+                self.confirm_modal = None;
+                if matches!(key.code, KeyCode::Char('y')) {
+                    self.remove_feed_confirmed(index);
+                }
+            }
             ConfirmAction::DiscardOrSaveDirtyPlaylist => {
                 let play_after = matches!(
                     self.pending_queue_action,

@@ -56,6 +56,7 @@ pub(super) enum SettingKey {
     LibraryRoutes,
     SubtitleLanguage,
     AudioLanguage,
+    ManageFeeds,
     LogOut,
 }
 
@@ -113,5 +114,6 @@ pub(super) static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::Autoload,
         ],
     ),
+    ("Feeds", &[SettingKey::ManageFeeds]),
     ("Actions", &[SettingKey::LogOut]),
 ];
