@@ -329,10 +329,6 @@ impl App {
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
-                self.flash(
-                    format!("Enqueued {count} items from {}", item.display_name()),
-                    ToastSeverity::Success,
-                );
                 if self.sync_playback_queue_after_append(scope, appended) {
                     self.persist_local_queue_state_if_needed(scope);
                     self.retire_remote_tracking_after_queue_mutation();

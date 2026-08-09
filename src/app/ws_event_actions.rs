@@ -48,11 +48,9 @@ impl App {
                     self.player
                         .play(&item, self.queue_source.clone(), c, self.ui_volume);
                 } else {
-                    let count = items.len();
                     self.player_tab.set_items(items.clone(), start_idx);
-                    self.flash(format!("Playing {count} items"), ToastSeverity::Neutral);
                     let c = Arc::new(self.client.lock().unwrap().clone());
-                    log::info!(target: "ws", "Play multi: count={count}, start_idx={start_idx}");
+                    log::info!(target: "ws", "Play multi: count={}, start_idx={start_idx}", items.len());
                     // Always hand the whole list to play_queue (not just the clicked
                     // item) so the remote-controlled queue continues past start_idx.
                     // play_queue already handles the "something is already playing"

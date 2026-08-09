@@ -130,7 +130,6 @@ impl App {
                 tracker.stop_tracking();
             }
             self.retire_remote_tracking(false);
-            self.flash("Remote tracking stopped".into(), ToastSeverity::Success);
         }
     }
 
@@ -177,7 +176,7 @@ impl App {
                     ToastSeverity::Error,
                 );
             } else {
-                self.flash("Remote tracking re-anchored".into(), ToastSeverity::Success);
+                self.flash("Queue tracking updated".into(), ToastSeverity::Success);
             }
         } else {
             self.remote_reanchor_popup = Some(super::RemoteReanchorPopup { targets, cursor: 0 });
@@ -203,7 +202,7 @@ impl App {
                 ToastSeverity::Error,
             );
         } else {
-            self.flash("Remote tracking re-anchored".into(), ToastSeverity::Success);
+            self.flash("Queue tracking updated".into(), ToastSeverity::Success);
         }
     }
 

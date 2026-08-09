@@ -45,11 +45,9 @@ impl App {
                     self.flash("Nothing to play".into(), ToastSeverity::Error);
                     return;
                 }
-                let count = items.len();
                 drop(client);
                 self.replace_playback_queue(items.clone(), 0);
                 self.set_panel_focus(PanelFocus::Queue);
-                self.flash(format!("Playing {count} items"), ToastSeverity::Success);
                 self.play_items_routed(items, 0);
             }
             Err(e) => {
@@ -110,11 +108,9 @@ impl App {
                     return;
                 }
                 items.shuffle(&mut rand::rng());
-                let count = items.len();
                 drop(client);
                 self.replace_playback_queue(items.clone(), 0);
                 self.set_panel_focus(PanelFocus::Queue);
-                self.flash(format!("Shuffling {count} items"), ToastSeverity::Success);
                 self.queue_source = crate::config::QueueSource::Shuffle;
                 if !self.has_direct_remote_queue() {
                     self.save_queue_state();
