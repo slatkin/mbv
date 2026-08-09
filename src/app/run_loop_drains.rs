@@ -63,19 +63,15 @@ impl App {
         produced
     }
 
-    /// Drain the search-results channel and surface any errors as a flash
-    /// message. Extracted from `run()`'s loop body; returns whether any
-    /// results were received so the caller can fold that into `had_events`.
+    /// Drain the search-results channel and apply any results to the
+    /// search sidebar. Extracted from `run()`'s loop body; returns whether
+    /// any results were received so the caller can fold that into `had_events`.
     pub(super) fn drain_search_results(&mut self) -> bool {
-        let mut outcome = SearchDrainOutcome {
-            received: 0,
-            errors: Vec::new(),
-        };
+        let mut outcome = SearchDrainOutcome { received: 0 };
         self.drain_search_sidebar_results(&mut outcome);
         let produced = outcome.received > 0;
-        for error in outcome.errors {
-            self.flash(format!("Search error: {error}"), ToastSeverity::Error);
-        }
+        // Errors are surfaced inline in the search sidebar (last_drain_error);
+        // no redundant flash needed.
         produced
     }
 

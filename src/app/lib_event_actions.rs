@@ -373,6 +373,10 @@ impl App {
                     .playlists_cursor
                     .min(self.playlists.len().saturating_sub(1));
             }
+            LibEvent::PlaylistsLoadError(e) => {
+                self.playlists_loading = false;
+                self.flash_error(e);
+            }
             LibEvent::PlaylistItemsLoaded { playlist_id, items } => {
                 if self
                     .playlists_open
@@ -383,6 +387,17 @@ impl App {
                     self.playlists_open_items = items;
                     self.playlists_open_loading = false;
                 }
+            }
+            LibEvent::PlaylistItemsLoadError { playlist_id, error } => {
+                if self
+                    .playlists_open
+                    .as_ref()
+                    .map(|p| p.id == playlist_id)
+                    .unwrap_or(false)
+                {
+                    self.playlists_open_loading = false;
+                }
+                self.flash_error(error);
             }
             LibEvent::PlaylistRenamed { new_name } => {
                 self.save_playlist_dialog = None;

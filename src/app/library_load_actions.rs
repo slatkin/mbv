@@ -83,9 +83,15 @@ impl App {
         self.playlists_loading = true;
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
-        std::thread::spawn(move || {
-            let items = client.get_playlists().unwrap_or_default();
-            let _ = tx.send(LibEvent::PlaylistsLoaded(items));
+        std::thread::spawn(move || match client.get_playlists() {
+            Ok(items) => {
+                let _ = tx.send(LibEvent::PlaylistsLoaded(items));
+            }
+            Err(e) => {
+                let _ = tx.send(LibEvent::PlaylistsLoadError(format!(
+                    "Playlist list failed: {e}"
+                )));
+            }
         });
     }
 
@@ -141,9 +147,16 @@ impl App {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         let playlist_id = playlist.id.clone();
-        std::thread::spawn(move || {
-            let items = client.get_playlist_items(&playlist_id).unwrap_or_default();
-            let _ = tx.send(LibEvent::PlaylistItemsLoaded { playlist_id, items });
+        std::thread::spawn(move || match client.get_playlist_items(&playlist_id) {
+            Ok(items) => {
+                let _ = tx.send(LibEvent::PlaylistItemsLoaded { playlist_id, items });
+            }
+            Err(e) => {
+                let _ = tx.send(LibEvent::PlaylistItemsLoadError {
+                    playlist_id,
+                    error: format!("Playlist load failed: {e}"),
+                });
+            }
         });
     }
 

@@ -85,9 +85,14 @@ pub(super) enum LibEvent {
         nav_stack: Vec<BrowseLevel>,
     },
     PlaylistsLoaded(Vec<EmbyItem>),
+    PlaylistsLoadError(String),
     PlaylistItemsLoaded {
         playlist_id: String,
         items: Vec<EmbyItem>,
+    },
+    PlaylistItemsLoadError {
+        playlist_id: String,
+        error: String,
     },
     PlaylistRenamed {
         new_name: String,

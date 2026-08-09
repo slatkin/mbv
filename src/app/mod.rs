@@ -545,7 +545,7 @@ impl App {
         while let Ok((query, result)) = self.search_rx.try_recv() {
             outcome.received += 1;
             if let Some(sidebar) = self.search_sidebar.as_mut() {
-                sidebar.apply_drain(&query, result, &mut outcome.errors);
+                sidebar.apply_drain(&query, result);
             }
         }
     }
