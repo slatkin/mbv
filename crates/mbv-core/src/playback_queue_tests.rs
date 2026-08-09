@@ -411,7 +411,7 @@ fn structural_mutations_bump_revision() {
     let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
     let initial = queue.revision();
 
-    let inserted = queue.append(QueueItem::Emby(item("c")));
+    let inserted = queue.append(QueueItem::Emby(Box::new(item("c"))));
     assert!(queue.revision() > initial);
     let after_insert = queue.revision();
 
@@ -435,7 +435,7 @@ fn structural_mutations_bump_revision() {
 
 #[test]
 fn queue_item_serializes_tagged() {
-    let emby = QueueItem::Emby(item("e1"));
+    let emby = QueueItem::Emby(Box::new(item("e1")));
     let json = serde_json::to_string(&emby).unwrap();
     assert!(json.contains(r#""kind":"Emby""#));
     assert!(json.contains(r#""id":"e1""#));
@@ -490,7 +490,7 @@ fn queue_state_round_trip_preserves_item_kind() {
         duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
     };
     let queue_items = vec![
-        QueueItem::Emby(emby_item.clone()),
+        QueueItem::Emby(Box::new(emby_item.clone())),
         QueueItem::Feed(feed_entry.clone()),
     ];
 
@@ -528,6 +528,49 @@ fn queue_state_legacy_bare_items_load_as_emby() {
     let restored: Vec<QueueItem> = serde_json::from_str(legacy_json).unwrap();
     assert_eq!(restored.len(), 1);
     assert!(matches!(&restored[0], QueueItem::Emby(e) if e.id == "old-1"));
+}
+
+fn feed(guid: &str) -> FeedEntry {
+    FeedEntry {
+        guid: guid.to_string(),
+        title: format!("Feed {guid}"),
+        enclosure_url: Some(format!("https://example.com/{guid}.mp3")),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: Some(60 * TICKS_PER_SECOND as u64),
+    }
+}
+
+#[test]
+fn feed_slot_participates_in_queue_ordering_and_survives_refresh() {
+    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
+    let feed_slot = queue.append(QueueItem::Feed(feed("f1")));
+
+    // The Feed slot holds its own identity alongside the Emby slots.
+    assert_eq!(queue.slots().last().unwrap().slot_id, feed_slot);
+    assert_eq!(queue.slots().last().unwrap().item.id(), "f1");
+
+    assert!(matches!(
+        queue.set_active_slot(feed_slot),
+        QueueMutationResult::Applied(())
+    ));
+    assert_eq!(queue.active_slot_id(), Some(feed_slot));
+
+    assert!(matches!(
+        queue.move_slot(feed_slot, 0),
+        QueueMutationResult::Applied(())
+    ));
+    assert_eq!(queue.slots()[0].slot_id, feed_slot);
+
+    // Feed slots have no server-side counterpart; a refresh must leave
+    // them in place rather than pruning them.
+    let result = queue.merge_refresh(vec![item("a"), item("b")]);
+    assert!(result.pruned_slots.is_empty());
+    assert!(queue.slot(feed_slot).is_some());
+    assert!(matches!(
+        queue.slot(feed_slot).unwrap().item,
+        QueueItem::Feed(_)
+    ));
 }
 
 #[test]

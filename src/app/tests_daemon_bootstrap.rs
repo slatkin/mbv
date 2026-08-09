@@ -15,7 +15,7 @@ fn local_daemon_bootstrap_adopts_saved_local_queue_and_source() {
             },
             items: items
                 .into_iter()
-                .map(mbv_core::playback_queue::QueueItem::Emby)
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: 1,
             last_played_item_id: None,
@@ -82,7 +82,7 @@ fn local_daemon_bootstrap_carries_saved_positions_for_enrichment() {
             source: crate::config::QueueSource::Album,
             items: items
                 .into_iter()
-                .map(mbv_core::playback_queue::QueueItem::Emby)
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: 0,
             last_played_item_id: None,
@@ -114,7 +114,7 @@ fn local_daemon_bootstrap_uses_restore_cursor_and_carries_last_played_state() {
             source: crate::config::QueueSource::Album,
             items: items
                 .into_iter()
-                .map(mbv_core::playback_queue::QueueItem::Emby)
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: 0,
             last_played_item_id: Some(last_played_id.clone()),
@@ -148,7 +148,7 @@ fn local_daemon_bootstrap_prefers_existing_daemon_queue_state() {
             },
             items: make_items(1)
                 .into_iter()
-                .map(mbv_core::playback_queue::QueueItem::Emby)
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: 0,
             last_played_item_id: None,
@@ -183,7 +183,7 @@ fn local_daemon_app_keeps_live_queue_over_stale_disk_snapshot() {
         source: crate::config::QueueSource::Unknown,
         items: make_items(5)
             .into_iter()
-            .map(mbv_core::playback_queue::QueueItem::Emby)
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
         last_played_item_id: None,

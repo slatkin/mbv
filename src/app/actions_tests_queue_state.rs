@@ -141,9 +141,14 @@ fn restore_queue_state_with_no_items_does_nothing() {
     let _g = XDG_HOME_LOCK.lock().unwrap();
     let _xdg = XdgHomeGuard::new();
 
-    crate::config::save_queue_state(&crate::app::tests::make_queue_state(
-        crate::app::tests::make_items(1),
-    ))
+    crate::config::save_queue_state(&crate::config::QueueState {
+        source: crate::config::QueueSource::Unknown,
+        items: vec![],
+        cursor: 0,
+        last_played_item_id: None,
+        last_played_completed: false,
+        positions: Default::default(),
+    })
     .expect("save queue state");
 
     let mut app = crate::app::tests::make_app_stub();
@@ -183,7 +188,7 @@ fn restore_queue_state_clears_a_stale_dirty_flag() {
         source: crate::config::QueueSource::Unknown,
         items: crate::app::tests::make_items(1)
             .into_iter()
-            .map(mbv_core::playback_queue::QueueItem::Emby)
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
         last_played_item_id: None,
@@ -622,7 +627,7 @@ fn save_queue_state_still_clears_file_when_locally_empty_and_not_attached() {
         source: crate::config::QueueSource::Unknown,
         items: crate::app::tests::make_items(1)
             .into_iter()
-            .map(mbv_core::playback_queue::QueueItem::Emby)
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
         last_played_item_id: None,
@@ -654,7 +659,7 @@ fn save_queue_state_no_clear_preserves_file_when_locally_empty_and_not_attached(
         source: crate::config::QueueSource::Unknown,
         items: crate::app::tests::make_items(1)
             .into_iter()
-            .map(mbv_core::playback_queue::QueueItem::Emby)
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
         last_played_item_id: None,

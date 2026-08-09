@@ -46,7 +46,9 @@ impl PlayerTab {
                 .map(|(slot, item)| (slot.slot_id, item.clone()))
                 .collect();
             for (slot_id, item) in updates {
-                let _ = self.queue.update_slot_item(slot_id, QueueItem::Emby(item));
+                let _ = self
+                    .queue
+                    .update_slot_item(slot_id, QueueItem::Emby(Box::new(item)));
             }
         } else {
             self.queue = PlaybackQueue::from_items(self.items.clone(), None);
@@ -59,7 +61,7 @@ impl PlayerTab {
             .slots()
             .iter()
             .filter_map(|slot| match &slot.item {
-                QueueItem::Emby(e) => Some(e.clone()),
+                QueueItem::Emby(e) => Some((**e).clone()),
                 QueueItem::Feed(_) => None,
             })
             .collect();
@@ -122,28 +124,28 @@ impl PlayerTab {
         };
         self.sync_items_from_queue_model();
         match removed {
-            QueueItem::Emby(e) => Some(e),
+            QueueItem::Emby(e) => Some(*e),
             QueueItem::Feed(_) => None,
         }
     }
 
     pub(super) fn insert_item_at(&mut self, index: usize, item: EmbyItem) {
         self.sync_queue_model_from_items_if_needed();
-        self.queue.insert(index, QueueItem::Emby(item));
+        self.queue.insert(index, QueueItem::Emby(Box::new(item)));
         self.sync_items_from_queue_model();
         self.queue_cursor = index.min(self.items.len().saturating_sub(1));
     }
 
     pub(super) fn append_item(&mut self, item: EmbyItem) {
         self.sync_queue_model_from_items_if_needed();
-        self.queue.append(QueueItem::Emby(item));
+        self.queue.append(QueueItem::Emby(Box::new(item)));
         self.sync_items_from_queue_model();
     }
 
     pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) {
         self.sync_queue_model_from_items_if_needed();
         for item in items {
-            self.queue.append(QueueItem::Emby(item));
+            self.queue.append(QueueItem::Emby(Box::new(item)));
         }
         self.sync_items_from_queue_model();
     }

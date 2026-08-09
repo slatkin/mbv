@@ -34,7 +34,7 @@ impl FeedEntry {
 #[serde(tag = "kind")]
 pub enum QueueItem {
     #[serde(rename = "Emby")]
-    Emby(EmbyItem),
+    Emby(Box<EmbyItem>),
     #[serde(rename = "Feed")]
     Feed(FeedEntry),
 }
@@ -57,7 +57,7 @@ impl<'de> serde::Deserialize<'de> for QueueItem {
             return match kind {
                 "Emby" => {
                     let item = EmbyItem::deserialize(value).map_err(de::Error::custom)?;
-                    Ok(QueueItem::Emby(item))
+                    Ok(QueueItem::Emby(Box::new(item)))
                 }
                 "Feed" => {
                     let entry = FeedEntry::deserialize(value).map_err(de::Error::custom)?;
@@ -69,7 +69,7 @@ impl<'de> serde::Deserialize<'de> for QueueItem {
 
         // Legacy fallback: bare EmbyItem object (no `kind` field)
         let item = EmbyItem::deserialize(value).map_err(de::Error::custom)?;
-        Ok(QueueItem::Emby(item))
+        Ok(QueueItem::Emby(Box::new(item)))
     }
 }
 
@@ -220,6 +220,15 @@ impl SlotProgress {
         }
     }
 
+    /// Progress is only meaningful for Emby items. Feed slots get a
+    /// zeroed-out default.
+    fn from_queue_item(item: &QueueItem) -> Self {
+        match item {
+            QueueItem::Emby(emby) => Self::from_item(emby),
+            QueueItem::Feed(_) => Self::default(),
+        }
+    }
+
     fn matches_server_confirmation(&self, item: &EmbyItem) -> bool {
         (self.position_ticks - item.playback_position_ticks).abs()
             <= PROGRESS_CONFIRMATION_TOLERANCE_TICKS
@@ -312,7 +321,10 @@ impl Default for PlaybackQueue {
 
 impl PlaybackQueue {
     pub fn from_items(items: Vec<EmbyItem>, active_index: Option<usize>) -> Self {
-        let queue_items: Vec<QueueItem> = items.into_iter().map(QueueItem::Emby).collect();
+        let queue_items: Vec<QueueItem> = items
+            .into_iter()
+            .map(|item| QueueItem::Emby(Box::new(item)))
+            .collect();
         Self::from_queue_items(queue_items, active_index)
     }
 
@@ -433,7 +445,7 @@ impl PlaybackQueue {
             return QueueMutationResult::NotFound;
         };
         slot.item = item;
-        slot.progress_state = ProgressState::from_queue_item(&slot.item);
+        slot.progress_state.local = SlotProgress::from_queue_item(&slot.item);
         QueueMutationResult::Applied(())
     }
 
@@ -461,8 +473,8 @@ impl PlaybackQueue {
         let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) else {
             return QueueMutationResult::NotFound;
         };
-        let pending = slot.progress_state.local.clone();
-        slot.progress_state.pending_sync = Some(pending.clone());
+        let pending = slot.progress_state.local;
+        slot.progress_state.pending_sync = Some(pending);
         QueueMutationResult::Applied(pending)
     }
 
@@ -540,10 +552,10 @@ impl PlaybackQueue {
         result: &mut RefreshMergeResult,
     ) {
         let is_active = active_slot_id == Some(slot.slot_id);
-        if let Some(pending) = slot.progress_state.pending_sync.clone() {
+        if let Some(pending) = slot.progress_state.pending_sync {
             if pending.matches_server_confirmation(&fetched_item) {
                 slot.progress_state.pending_sync = None;
-                slot.item = QueueItem::Emby(fetched_item);
+                slot.item = QueueItem::Emby(Box::new(fetched_item));
                 if is_active {
                     slot.progress_state.apply_to_item(&mut slot.item);
                     result.protected_slots.push(slot.slot_id);
@@ -562,8 +574,8 @@ impl PlaybackQueue {
         }
 
         if is_active {
-            let local_progress = slot.progress_state.local.clone();
-            slot.item = QueueItem::Emby(fetched_item);
+            let local_progress = slot.progress_state.local;
+            slot.item = QueueItem::Emby(Box::new(fetched_item));
             slot.progress_state.local = local_progress;
             slot.progress_state.apply_to_item(&mut slot.item);
             result.protected_slots.push(slot.slot_id);
@@ -571,7 +583,7 @@ impl PlaybackQueue {
             return;
         }
 
-        slot.item = QueueItem::Emby(fetched_item);
+        slot.item = QueueItem::Emby(Box::new(fetched_item));
         if let QueueItem::Emby(ref emby) = slot.item {
             slot.progress_state.local = SlotProgress::from_item(emby);
         }

@@ -208,7 +208,7 @@ impl PlaybackRun {
 
         let start_idx = start_idx.min(new_items.len() - 1);
         for (i, item) in new_items.iter().enumerate() {
-            let queue_item = QueueItem::Emby(item.clone());
+            let queue_item = QueueItem::Emby(Box::new(item.clone()));
             let url = mpv_url_for_queue_item(&queue_item, &self.server_url, &self.token);
             let mode = if i == 0 { "replace" } else { "append-play" };
             let title_opt = mpv_title_opt(&queue_item.display_name());
@@ -260,7 +260,7 @@ impl PlaybackRun {
 
     fn append_items_to_queue(&mut self, items: Vec<EmbyItem>) {
         for item in items {
-            self.queue.append(QueueItem::Emby(item));
+            self.queue.append(QueueItem::Emby(Box::new(item)));
         }
         self.status.lock().unwrap().queue_len = self.queue_len();
     }
@@ -271,7 +271,7 @@ impl PlaybackRun {
         }
 
         for item in &new_items {
-            let queue_item = QueueItem::Emby(item.clone());
+            let queue_item = QueueItem::Emby(Box::new(item.clone()));
             let url = mpv_url_for_queue_item(&queue_item, &self.server_url, &self.token);
             let title_opt = mpv_title_opt(&queue_item.display_name());
             if let Err(e) = mpv.command(

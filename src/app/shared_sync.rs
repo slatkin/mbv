@@ -440,7 +440,7 @@ mod tests {
             source: crate::config::QueueSource::Album,
             items: crate::app::tests::make_items(5)
                 .into_iter()
-                .map(mbv_core::playback_queue::QueueItem::Emby)
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: 4,
             last_played_item_id: None,

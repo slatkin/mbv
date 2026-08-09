@@ -635,7 +635,7 @@ impl QueueState {
         self.items
             .iter()
             .filter_map(|qi| match qi {
-                crate::playback_queue::QueueItem::Emby(e) => Some(e.clone()),
+                crate::playback_queue::QueueItem::Emby(e) => Some((**e).clone()),
                 crate::playback_queue::QueueItem::Feed(_) => None,
             })
             .collect()
@@ -657,7 +657,7 @@ impl QueueState {
         Self {
             items: items
                 .into_iter()
-                .map(crate::playback_queue::QueueItem::Emby)
+                .map(|item| crate::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor,
             source,

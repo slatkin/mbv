@@ -44,7 +44,7 @@ fn project_queue_state(
         items: items
             .iter()
             .cloned()
-            .map(crate::playback_queue::QueueItem::Emby)
+            .map(|item| crate::playback_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor,
         last_played_item_id,

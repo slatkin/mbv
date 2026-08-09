@@ -64,8 +64,7 @@ impl App {
                                     queue.queue_cursor.min(queue.items.len().saturating_sub(1));
                             }
                             if !self.player.is_remote() {
-                                self.queue_undo_stack
-                                    .push(UndoEntry::Remove(pos, Box::new(item)));
+                                self.queue_undo_stack.push(UndoEntry::Remove(pos, item));
                             }
 
                             // Only stop playback and record the deferred

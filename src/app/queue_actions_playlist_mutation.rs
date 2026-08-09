@@ -184,7 +184,7 @@ impl App {
                 .items
                 .iter()
                 .cloned()
-                .map(mbv_core::playback_queue::QueueItem::Emby)
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: self.player_tab.queue_cursor,
             last_played_item_id: self.last_played_item_id.clone(),
