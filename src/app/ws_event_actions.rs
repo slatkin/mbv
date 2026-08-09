@@ -23,7 +23,7 @@ impl App {
                     match c.get_items_by_ids(&item_ids) {
                         Ok(v) => v,
                         Err(e) => {
-                            let msg = format!("WS play error: {e}");
+                            let msg = format!("Couldn't play from remote: {e}");
                             drop(c);
                             self.flash(msg, ToastSeverity::Error);
                             return;

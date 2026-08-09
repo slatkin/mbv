@@ -343,7 +343,7 @@ impl App {
             }
             Err(e) => {
                 drop(client);
-                self.flash_error(e);
+                self.flash(format!("Couldn't enqueue items: {e}"), ToastSeverity::Error);
             }
         }
     }

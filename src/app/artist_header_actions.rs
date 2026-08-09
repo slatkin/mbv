@@ -54,7 +54,10 @@ impl App {
         let items = match self.resolve_artist_header_playable_items(lib_idx, selection) {
             Ok(items) => items,
             Err(e) => {
-                self.flash_error(e);
+                self.flash(
+                    format!("Couldn't enqueue artist items: {e}"),
+                    ToastSeverity::Error,
+                );
                 return true;
             }
         };
@@ -105,7 +108,10 @@ impl App {
         let mut items = match self.resolve_artist_header_playable_items(lib_idx, selection) {
             Ok(items) => items,
             Err(e) => {
-                self.flash_error(e);
+                self.flash(
+                    format!("Couldn't play artist items: {e}"),
+                    ToastSeverity::Error,
+                );
                 return true;
             }
         };

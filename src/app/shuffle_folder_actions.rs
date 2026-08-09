@@ -54,7 +54,7 @@ impl App {
             }
             Err(e) => {
                 drop(client);
-                self.flash_error(e);
+                self.flash(format!("Couldn't load folder: {e}"), ToastSeverity::Error);
             }
         }
     }
@@ -123,7 +123,7 @@ impl App {
             }
             Err(e) => {
                 drop(client);
-                self.flash_error(e);
+                self.flash(format!("Couldn't load folder: {e}"), ToastSeverity::Error);
             }
         }
     }
