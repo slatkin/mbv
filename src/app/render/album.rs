@@ -1,6 +1,7 @@
 use super::album_art::{INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS};
 use super::album_plan::{GroupedAlbumDisplayRow, HeaderFocusCtx};
 use super::album_rows::AlbumRowCtx;
+use super::list_rows::draw_column_selection_markers;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use ratatui::layout::*;
@@ -508,6 +509,12 @@ impl App {
                 top_pad_abs,
                 bottom_pad_abs,
             );
+        }
+
+        // Draw the aqua gutter marker for the two-column selected row,
+        // matching the movie library's two-column selection appearance.
+        if cols > 1 {
+            draw_column_selection_markers(f, area, cursor, cols as usize, &layout.left_item_rows);
         }
 
         offset

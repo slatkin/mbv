@@ -103,9 +103,9 @@ impl App {
         let suffix_w = if year_str.is_empty() {
             0
         } else {
-            year_str.chars().count() + 3
+            year_str.chars().count() + 2
         };
-        let lead_w = if selected { 2 } else { 1 };
+        let lead_w = 1;
         let name_w = avail.saturating_sub(lead_w + suffix_w);
         let trunc_name = trunc_str(album_name, name_w);
         let in_selected_block = selected_block_bounds
@@ -120,7 +120,7 @@ impl App {
             let suffix = if year_str.is_empty() {
                 String::new()
             } else {
-                format!(" • {year_str}")
+                format!("  {year_str}")
             };
             let suffix_width = suffix.chars().count() as u16;
             let title_width = content_width.saturating_sub(suffix_width).max(1);
@@ -131,13 +131,14 @@ impl App {
                 .enumerate()
                 .map(|(line_idx, line)| {
                     let mut spans = if line_idx == 0 {
-                        vec![super::selection_marker(selected), Span::raw(" ")]
+                        vec![Span::raw(" ")]
                     } else {
                         vec![Span::raw("  ")]
                     };
                     let title_style = if selected {
                         Style::default()
-                            .fg(palette::FOAM)
+                            .fg(palette::YELLOW)
+                            .bg(palette::PLAYBACK_PANEL_BG)
                             .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(focused_or_subtle(focused))
@@ -145,7 +146,7 @@ impl App {
                     spans.push(Span::styled(line.into_owned(), title_style));
                     if line_idx + 1 == wrapped_len && !suffix.is_empty() {
                         spans.push(Span::styled(
-                            " • ",
+                            "  ",
                             Style::default().fg(focused_or_muted(focused)),
                         ));
                         spans.push(Span::styled(
@@ -179,7 +180,7 @@ impl App {
             let suffix = if year_str.is_empty() {
                 String::new()
             } else {
-                format!(" • {year_str}")
+                format!("  {year_str}")
             };
             let suffix_width = suffix.chars().count();
             let title_lines: Vec<Line> = wrap(
@@ -194,7 +195,8 @@ impl App {
                     Span::styled(
                         line.into_owned(),
                         Style::default()
-                            .fg(palette::FOAM)
+                            .fg(palette::YELLOW)
+                            .bg(palette::PLAYBACK_PANEL_BG)
                             .add_modifier(Modifier::BOLD),
                     ),
                 ];
@@ -207,12 +209,16 @@ impl App {
                     && !suffix.is_empty()
                 {
                     spans.push(Span::styled(
-                        " • ",
-                        Style::default().fg(focused_or_muted(focused)),
+                        "  ",
+                        Style::default()
+                            .fg(focused_or_muted(focused))
+                            .bg(palette::PLAYBACK_PANEL_BG),
                     ));
                     spans.push(Span::styled(
                         year_str.as_str(),
-                        Style::default().fg(focused_aqua_or_muted(focused)),
+                        Style::default()
+                            .fg(focused_aqua_or_muted(focused))
+                            .bg(palette::PLAYBACK_PANEL_BG),
                     ));
                 }
                 Line::from(spans)
@@ -230,19 +236,12 @@ impl App {
         }
 
         let mut spans: Vec<Span> = Vec::new();
-        if selected {
-            spans.push(super::selection_marker(true));
-        } else {
-            spans.push(Span::raw(" "));
-        }
-
-        if selected {
-            spans.push(Span::raw(" "));
-        }
+        spans.push(Span::raw(" "));
 
         let title_style = if selected {
             Style::default()
-                .fg(palette::FOAM)
+                .fg(palette::YELLOW)
+                .bg(palette::PLAYBACK_PANEL_BG)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(focused_or_subtle(focused))
@@ -250,12 +249,16 @@ impl App {
         spans.push(Span::styled(trunc_name, title_style));
         if !year_str.is_empty() {
             spans.push(Span::styled(
-                " • ",
-                Style::default().fg(focused_or_muted(focused)),
+                "  ",
+                Style::default()
+                    .fg(focused_or_muted(focused))
+                    .bg(palette::PLAYBACK_PANEL_BG),
             ));
             spans.push(Span::styled(
                 year_str.as_str(),
-                Style::default().fg(focused_aqua_or_muted(focused)),
+                Style::default()
+                    .fg(focused_aqua_or_muted(focused))
+                    .bg(palette::PLAYBACK_PANEL_BG),
             ));
         }
 
