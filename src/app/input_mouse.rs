@@ -158,6 +158,40 @@ impl App {
                     {
                         self.home.home_cursor = *flat_idx;
                     }
+                } else if self.tab.is_feeds() {
+                    // Feeds tab: pill-bar click and row click.
+                    for (rect, target) in self.layout.main.selector_tabs.clone() {
+                        if rect.contains((col, row).into()) {
+                            self.feed_tab_select_group(target);
+                            return true;
+                        }
+                    }
+                    let click_y = (row - la.y) as usize;
+                    let use_row_map = !self.layout.main.left_row_map.is_empty();
+                    let row_map_item = if use_row_map {
+                        self.layout.main.left_row_map.get(click_y).copied()
+                    } else {
+                        None
+                    };
+                    let n = self.feed_tab.visible_entries().len();
+                    if let Some(Some(item_idx)) = row_map_item {
+                        if item_idx < n {
+                            self.feed_tab.cursor = item_idx;
+                        }
+                    } else if use_row_map {
+                        // No row map entry; cursor unchanged.
+                    } else {
+                        let visible = la.height as usize;
+                        let offset = if self.feed_tab.cursor >= visible {
+                            self.feed_tab.cursor - visible + 1
+                        } else {
+                            0
+                        };
+                        let clicked = offset + click_y;
+                        if clicked < n {
+                            self.feed_tab.cursor = clicked;
+                        }
+                    }
                 } else {
                     let lib_idx = self.tab.library_index().unwrap();
                     if self.is_music_group_view(lib_idx)

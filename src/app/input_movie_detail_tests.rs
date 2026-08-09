@@ -493,7 +493,7 @@ fn selecting_the_last_tab_scrolls_it_into_view_with_correct_arrows() {
         .terminal_width
         .saturating_sub(crate::app::TABBAR_LEFT_RESERVE + crate::app::TABBAR_RIGHT_RESERVE);
     let (vis_start, vis_end) = app.visible_tab_range(tab_w);
-    let tab_pos = app.tab.to_position();
+    let tab_pos = app.tab.to_position(app.feeds_tab_pos());
     assert!(
         tab_pos >= vis_start && tab_pos < vis_end,
         "selected tab {} not in visible range {vis_start}..{vis_end}",

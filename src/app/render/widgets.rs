@@ -549,6 +549,10 @@ impl App {
             self.render_home_list(f, area, focused, layout);
             return;
         }
+        if self.tab.is_feeds() {
+            self.render_feeds(f, area, focused, layout);
+            return;
+        }
         let lib_idx = self.tab.library_index().unwrap();
         let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
         let is_album_folders = self.is_viewing_album_folders(lib_idx);

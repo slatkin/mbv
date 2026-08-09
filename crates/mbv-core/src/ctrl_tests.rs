@@ -308,3 +308,114 @@ fn playback_intent_event_round_trips_structured_rejection() {
         })
     ));
 }
+
+// ── LoadFeed / feed-playback capability ────────────────────────────────────
+
+fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
+    crate::playback_queue::FeedEntry {
+        guid: "feed-guid-1".into(),
+        title: "Episode 1".into(),
+        enclosure_url: Some("https://example.com/ep1.mp3".into()),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: Some((3_600 * crate::api::TICKS_PER_SECOND) as u64),
+        pub_date_secs: Some(1700000000),
+    }
+}
+
+#[test]
+fn load_feed_wire_tag_is_pinned() {
+    assert_eq!(
+        wire_tag(&WireCommand::LoadFeed {
+            entry: stub_feed_entry(),
+        }),
+        "LoadFeed"
+    );
+}
+
+#[test]
+fn load_feed_wire_round_trips_through_json() {
+    let entry = stub_feed_entry();
+    let wire: WireCommand = PlayerCommand::LoadFeed {
+        entry: entry.clone(),
+    }
+    .into();
+    let json = serde_json::to_string(&wire).unwrap();
+    let decoded: WireCommand = serde_json::from_str(&json).unwrap();
+    match PlayerCommand::from(decoded) {
+        PlayerCommand::LoadFeed {
+            entry: decoded_entry,
+        } => {
+            assert_eq!(decoded_entry.guid, entry.guid);
+            assert_eq!(decoded_entry.title, entry.title);
+            assert_eq!(decoded_entry.enclosure_url, entry.enclosure_url);
+            assert_eq!(decoded_entry.mime_type, entry.mime_type);
+            assert_eq!(decoded_entry.duration_ticks, entry.duration_ticks);
+            assert_eq!(decoded_entry.pub_date_secs, entry.pub_date_secs);
+        }
+        _ => panic!("expected LoadFeed"),
+    }
+}
+
+#[test]
+fn load_feed_ctrl_cmd_round_trips_through_json() {
+    let entry = stub_feed_entry();
+    let cmd = CtrlCmd::PlayerCmd(
+        PlayerCommand::LoadFeed {
+            entry: entry.clone(),
+        }
+        .into(),
+    );
+    let json = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+    match decoded {
+        CtrlCmd::PlayerCmd(wire) => match PlayerCommand::from(wire) {
+            PlayerCommand::LoadFeed {
+                entry: decoded_entry,
+            } => {
+                assert_eq!(decoded_entry.guid, entry.guid);
+            }
+            _ => panic!("expected LoadFeed"),
+        },
+        _ => panic!("expected PlayerCmd"),
+    }
+}
+
+#[test]
+fn current_hello_advertises_feed_playback_capability() {
+    let hello = CtrlHello::current();
+    assert!(
+        hello.supports_feed_playback(),
+        "CtrlHello::current() must advertise feed-playback capability"
+    );
+}
+
+#[test]
+fn hello_missing_feed_playback_is_detected() {
+    let mut hello = CtrlHello::current();
+    hello
+        .capabilities
+        .retain(|cap| cap != CTRL_CAP_FEED_PLAYBACK);
+    assert!(
+        !hello.supports_feed_playback(),
+        "hello without feed-playback must be detected as lacking it"
+    );
+}
+
+#[test]
+fn ctrl_compatibility_supports_feed_playback() {
+    let compat = CtrlCompatibility::current();
+    assert!(compat.supports_feed_playback);
+}
+
+#[test]
+fn old_peer_without_feed_playback_capability_rejects_load_feed() {
+    let compat = CtrlCompatibility {
+        peer_protocol_version: CTRL_PROTOCOL_VERSION,
+        client_protocol_version: CTRL_PROTOCOL_VERSION,
+        supports_queue_append: true,
+        supports_lifecycle_shutdown: false,
+        supports_feed_playback: false,
+    };
+    assert!(!compat.supports_feed_playback);
+}

@@ -31,7 +31,7 @@ On parse, infer audio vs video from the enclosure MIME type; when absent, defaul
 `fetch_and_parse_rss` gains extraction of `guid`, enclosure URL, MIME, and duration (→ ticks at parse time). The idle feed only needs title+link, so either return a richer struct that the idle path ignores, or add a sibling `fetch_and_parse_entries` that yields `FeedEntry` and have the idle path keep its lean shape. Prefer the sibling function to avoid disturbing idle-feed behavior; share the tag-extraction helpers (`extract_tag`, `extract_atom_link`).
 
 **4. Feeds tab is a synthetic tab appended after libraries.**
-The one real integration subtlety: `all_names` and tab routing are indexed off `self.libs`. Model the Feeds tab as an explicit extra tab position — append its name after the library names when `!config.feeds.is_empty()`, and branch content routing on "index == feeds tab" before the library-index path. Rejected: faking a pseudo-library entry — it would leak into every place that treats a tab as an Emby library (fetching library items, hero, filters).
+The one real integration subtlety: `all_names` and tab routing are indexed off `self.libs`. Model the Feeds tab as an explicit extra tab position — append its name after the library names when `!config.feeds.is_empty()`, and branch content routing on "index == feeds tab" before the library-index path. If deleting the last subscription while this tab is selected, reset the selection to Home. Rejected: faking a pseudo-library entry — it would leak into every place that treats a tab as an Emby library (fetching library items, hero, filters).
 
 **5. Render `FeedEntry` directly, reusing the feed-view layout.**
 Reuse `home_feed.rs`'s pill-bar + list layout, but feed it concrete `FeedEntry` values (groups = subscriptions, plus an "All" group sorted by pub date desc, missing dates last). Do not adapt the Emby-shaped state to carry feed data and do not generalize the renderer off `EmbyItem`.
@@ -41,6 +41,15 @@ Reuse `home_feed.rs`'s pill-bar + list layout, but feed it concrete `FeedEntry` 
 
 **7. Management overlay follows the existing overlay pattern.**
 Add/remove/edit in an overlay modeled on `src/app/render/overlays/`. Add fetches+parses first (decision 3); on failure, surface via the existing status/notify path and do not save. On success, append to `config.feeds` and persist via the `config_save.rs` merge.
+
+**9. The management overlay is opened from F2 Settings.**
+The Feeds tab is correctly hidden with no subscriptions, so the overlay cannot rely on a tab-local key as its only entry point. Add a `Manage feeds` Settings row whose activation opens the management overlay. Rejected: an always-visible empty Feeds tab and a new global shortcut; both create a less coherent navigation surface than the existing configuration panel.
+
+**10. Editing changes only a subscription's display name and kind.**
+The URL is editable while adding a subscription, but read-only in the edit path. A changed URL is a new subscription, so users remove the old one and add the new URL. This retains the domain identity rule without inventing invisible delete-and-recreate behavior.
+
+**11. Subscription mutations discard fetched, in-memory entry lists.**
+After add, remove, or edit, resynchronize the tab from `config.feeds`, clear its per-subscription and All-group entries, clamp group/cursor/scroll state, and do not fetch automatically. An in-flight add result carries an editor generation and is ignored unless the same editor and URL are still current. This prevents stale results from saving cancelled/changed subscriptions and prevents entries fetched for one subscription being shown under another after a deletion.
 
 ## Risks / Trade-offs
 

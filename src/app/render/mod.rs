@@ -13,6 +13,7 @@ mod chrome_tabs;
 mod detail;
 mod detail_series;
 mod detail_series_view;
+mod feeds;
 mod home;
 mod home_feed;
 mod home_hero;
@@ -271,8 +272,10 @@ impl App {
         }
         // Apply the tab saved from the previous session once libs have loaded.
         if self.library_tab_pending > 0 && !self.libs.is_empty() {
-            let pos = self.library_tab_pending.min(self.libs.len());
-            self.tab = TabSelection::from_position(pos);
+            let fp = self.feeds_tab_pos();
+            let max_pos = fp.unwrap_or(self.libs.len());
+            let pos = self.library_tab_pending.min(max_pos);
+            self.tab = TabSelection::from_position(pos, fp);
             self.library_tab_pending = 0;
         }
         // Safety clamp -- tab should already be valid, but guard against

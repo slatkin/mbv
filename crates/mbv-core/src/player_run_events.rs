@@ -267,7 +267,7 @@ impl PlaybackRun {
                 progress.stop_and_join(self.progress_join_budget());
                 self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
             }
-            if (natural_end || near_end) && !completed_is_audio {
+            if (natural_end || near_end) && !completed_is_audio && self.reporter.has_session() {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
                 if let Err(e) = self.reporter.client.mark_played(id.as_str()) {
                     log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
@@ -284,7 +284,7 @@ impl PlaybackRun {
             progress.stop_and_join(self.progress_join_budget());
             self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
 
-            if natural_end {
+            if natural_end && self.reporter.has_session() {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
                 if !completed_is_audio {
                     match self.reporter.client.mark_played(id.as_str()) {
@@ -295,10 +295,12 @@ impl PlaybackRun {
                         }
                     }
                 }
+            }
+            if !self.stopped_event_sent {
                 let _ = self.event_tx.send(PlayerEvent::Stopped {
                     idx: 0,
                     position_ticks: 0,
-                    played: !completed_is_audio,
+                    played: natural_end && !completed_is_audio && self.reporter.has_session(),
                     consume: false,
                     progress_report_accepted: self.stop_report.is_accepted(),
                     error: None,
@@ -440,6 +442,10 @@ impl PlaybackRun {
             }
         } else {
             self.ext_sub_urls = vec![];
+            // Feed item: clear Emby session IDs so the progress reporter
+            // (if any) becomes a no-op.  The old item's report_stopped has
+            // already been sent above with the original IDs.
+            self.reporter.clear_session();
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
 
@@ -472,7 +478,10 @@ impl PlaybackRun {
             }
             let runtime = self.status.lock().unwrap().runtime_ticks;
             let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
-            let near_end = !is_audio && runtime > 0 && self.last_valid_pos * 20 / runtime >= 19;
+            let near_end = self.reporter.has_session()
+                && !is_audio
+                && runtime > 0
+                && self.last_valid_pos * 20 / runtime >= 19;
             if near_end {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
                 retry_mark_played(client.clone(), id);

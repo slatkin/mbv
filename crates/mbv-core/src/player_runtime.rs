@@ -222,10 +222,37 @@ impl SessionReporter {
         }
     }
 
+    /// Returns `true` when the reporter holds a real Emby session (non-empty
+    /// item ID). Guards against noisy failed HTTP calls during feed-only
+    /// playback where no Emby session was ever established.
+    fn has_session(&self) -> bool {
+        !self
+            .ids
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .0
+            .as_str()
+            .is_empty()
+    }
+
+    /// Clear all session IDs so subsequent report calls are safe no-ops.
+    /// Called when transitioning from Emby playback to a feed entry to
+    /// prevent stale session state from leaking into the feed lifecycle.
+    fn clear_session(&self) {
+        let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
+        ids.0 = ItemId::empty();
+        ids.1 = MediaSourceId::new("");
+        ids.2 = EmbySessionId::new("");
+    }
+
     // Sends progress via websocket when connected, otherwise falls back to HTTP.
     // Recovers from poisoned mutexes so the progress thread never panics while
-    // holding a lock.
+    // holding a lock.  No-op when the reporter has no session (feed-only
+    // playback) so callers never need to guard.
     fn report_progress(&self, event_name: &str) {
+        if !self.has_session() {
+            return;
+        }
         let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let (pos, runtime, paused) = {
             let s = self.status.lock().unwrap_or_else(|e| e.into_inner());
@@ -243,7 +270,12 @@ impl SessionReporter {
     }
 
     // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
+    // Returns false (no-op) when the reporter has no session so callers get the
+    // correct StopReport state without needing per-site guards.
     fn report_stopped(&self, last_valid_pos: i64) -> bool {
+        if !self.has_session() {
+            return false;
+        }
         let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let is_audio = self.is_audio.load(Ordering::Relaxed);
         let pos = if is_audio { 0 } else { last_valid_pos };
@@ -262,8 +294,11 @@ impl SessionReporter {
     // during a transition, so the player thread can issue loadfile for the new
     // item immediately instead of waiting on this HTTP call (and the WS flush,
     // which report_stopped's synchronous callers don't do — it's bookkeeping
-    // that doesn't affect playback).
+    // that doesn't affect playback).  No-op when the reporter has no session.
     fn report_stopped_background(&self, last_valid_pos: i64) {
+        if !self.has_session() {
+            return;
+        }
         let client = self.client.clone();
         let ws_tx = self.ws_tx.clone();
         let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -311,6 +346,9 @@ impl SessionReporter {
     }
 
     fn report_stopped_for_shutdown(&self, last_valid_pos: i64, timeout: Duration) -> bool {
+        if !self.has_session() {
+            return false;
+        }
         let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let is_audio = self.is_audio.load(Ordering::Relaxed);
         let pos = if is_audio { 0 } else { last_valid_pos };

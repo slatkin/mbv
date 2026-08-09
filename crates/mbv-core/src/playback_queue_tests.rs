@@ -447,6 +447,7 @@ fn queue_item_serializes_tagged() {
         link: None,
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
+        pub_date_secs: None,
     });
     let json = serde_json::to_string(&feed).unwrap();
     assert!(json.contains(r#""kind":"Feed""#));
@@ -488,6 +489,7 @@ fn queue_state_round_trip_preserves_item_kind() {
         link: None,
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
+        pub_date_secs: None,
     };
     let queue_items = vec![
         QueueItem::Emby(Box::new(emby_item.clone())),
@@ -538,6 +540,7 @@ fn feed(guid: &str) -> FeedEntry {
         link: None,
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(60 * TICKS_PER_SECOND as u64),
+        pub_date_secs: None,
     }
 }
 
@@ -582,6 +585,7 @@ fn feed_entry_primary_source_returns_enclosure() {
         link: Some("https://link.html".into()),
         mime_type: None,
         duration_ticks: None,
+        pub_date_secs: None,
     };
     assert_eq!(entry.primary_source(), Some("https://enc.mp3"));
 }
@@ -595,6 +599,7 @@ fn feed_entry_primary_source_falls_back_to_link() {
         link: Some("https://link.html".into()),
         mime_type: None,
         duration_ticks: None,
+        pub_date_secs: None,
     };
     assert_eq!(entry.primary_source(), Some("https://link.html"));
 }
@@ -608,6 +613,7 @@ fn feed_entry_primary_source_none_when_empty() {
         link: None,
         mime_type: None,
         duration_ticks: None,
+        pub_date_secs: None,
     };
     assert_eq!(entry.primary_source(), None);
 }

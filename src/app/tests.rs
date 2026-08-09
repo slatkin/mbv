@@ -333,6 +333,7 @@ pub(crate) fn make_app_stub() -> App {
         player_endpoint: None,
         home_is_local_daemon: false,
         idle_feed: None,
+        feed_tab: super::types_feed_tab::FeedTabState::default(),
     }
 }
 

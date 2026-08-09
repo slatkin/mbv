@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::api::{EmbyClient, EmbyItem};
 use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent};
+use crate::playback_queue::FeedEntry;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 /// Response from a bounded shutdown request.
@@ -247,6 +248,21 @@ impl RemotePlayer {
         ));
         *self.items.lock().unwrap() = items;
         *self.queue_source.lock().unwrap() = source;
+    }
+
+    /// Play a single feed entry on a remote daemon. If the peer does not
+    /// advertise the `feed-playback` capability, the command is silently
+    /// dropped (safe no-op — the daemon will skip the unknown wire
+    /// command, and no state corruption is possible).
+    pub fn play_feed(&self, entry: FeedEntry) {
+        if !self.ctrl_compatibility.supports_feed_playback {
+            log::warn!(
+                target: "remote",
+                "remote peer does not support feed playback; dropping LoadFeed command"
+            );
+            return;
+        }
+        let _ = self.send_command(PlayerCommand::LoadFeed { entry });
     }
 
     pub fn stop(&self) {

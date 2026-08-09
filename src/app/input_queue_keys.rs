@@ -107,6 +107,12 @@ impl App {
             if self.tab.is_home() && self.handle_cw_key(key) {
                 return false;
             }
+            if self.tab.is_feeds() {
+                if let Some(quit) = self.handle_feed_tab_key(key) {
+                    return quit;
+                }
+                // Fall through to global view keys for Tab/BackTab etc.
+            }
             if let Some(lib_idx) = self.tab.library_index() {
                 // Season switching: [ = previous season, ] = next season.
                 if !key.modifiers.contains(KeyModifiers::CONTROL)

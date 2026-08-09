@@ -108,6 +108,8 @@ impl App {
                 } else if left_area.contains((col, row).into()) {
                     if self.tab.is_home() {
                         self.cw_move_cursor(delta);
+                    } else if self.tab.is_feeds() {
+                        self.feed_tab_move_cursor(delta);
                     } else {
                         self.move_lib_cursor(delta);
                     }
@@ -161,6 +163,8 @@ impl App {
                         if rect.contains((col, row).into()) {
                             if self.tab.is_home() {
                                 self.home_select_section(target);
+                            } else if self.tab.is_feeds() {
+                                self.feed_tab_select_group(target);
                             } else {
                                 let lib_idx = self.tab.library_index().unwrap();
                                 if self.is_music_group_view(lib_idx) {
@@ -201,6 +205,8 @@ impl App {
                         }
                     } else if self.tab.is_home() {
                         self.home_play();
+                    } else if self.tab.is_feeds() {
+                        // Double-click on Feeds: no-op (playback wiring pending).
                     } else if self.layout.main.left_area.contains((col, row).into())
                         || self.layout.main.hero_area.contains((col, row).into())
                     {

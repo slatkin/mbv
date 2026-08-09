@@ -4,11 +4,11 @@ With the queue able to hold and play a feed entry (#470), the actual user-facing
 
 ## What Changes
 
-- Store feed subscriptions in `config.toml` as `[[feeds]]` entries — each `{ name, url, kind: Audio | Video }`. The immutable subscription *list* is local config (portable via the user's dotfiles repo). Mutable playback state (position/played) is explicitly **out of scope** — that is #472.
+- Store feed subscriptions in `config.toml` as `[[feeds]]` entries — each `{ name, url, kind: Audio | Video }`. The subscription list is local config (portable via the user's dotfiles repo). Mutable playback state (position/played) is explicitly **out of scope** — that is #472.
 - Extend the existing RSS/Atom parser (`src/app/feed_parse.rs`) to capture the per-entry fields a `FeedEntry` needs: `guid`, enclosure URL, MIME type, and duration (→ ticks). Today it extracts only `title` + `link`.
 - Add a **Feeds tab** — the last tab in the tab bar, visible only when at least one subscription exists. It lists entries grouped by subscription, with an "All" group sorted by publish date descending.
 - Play an entry: build a `QueueItem::Feed` (from #470), add it to the queue, play. Enclosure URL preferred, link as fallback.
-- Add a **management overlay** to add / remove / edit subscriptions, writing `config.toml`. A failed fetch/parse on add surfaces via the existing status/notify path and the subscription is not saved.
+- Add a **management overlay**, reached from F2 Settings, to add / remove / edit subscription names and kinds, writing `config.toml`. A changed URL is a new subscription, so URL editing requires removal and re-addition. A failed fetch/parse on add surfaces via the existing status/notify path and the subscription is not saved.
 
 ## Capabilities
 

@@ -136,6 +136,17 @@ impl PlayerProxy {
         }
     }
 
+    /// Play a single feed entry. Local: spawns/reuses mpv directly.
+    /// Remote: sends `LoadFeed` through the ctrl channel; if the remote
+    /// daemon does not advertise the `feed-playback` capability the
+    /// command is silently ignored (safe no-op).
+    pub fn play_feed(&self, entry: FeedEntry, headless: bool, initial_volume: u8) {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => p.play_feed(entry, headless, initial_volume),
+            PlayerProxyInner::Remote(r) => r.play_feed(entry),
+        }
+    }
+
     pub fn stop(&self) {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.stop(),

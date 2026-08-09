@@ -81,7 +81,12 @@ Selecting play on a feed entry SHALL add it to the playback queue as a feed item
 
 ### Requirement: Subscriptions are managed through an overlay
 
-The client SHALL provide an overlay to add, remove, and edit subscriptions, writing changes to `config.toml`. Adding a subscription SHALL fetch and parse the feed first; if that fails, the failure SHALL be surfaced to the user and the subscription SHALL NOT be saved.
+The client SHALL provide an overlay, reachable through the F2 Settings panel, to add, remove, and edit subscription names and kinds, writing changes to `config.toml`. A subscription URL SHALL be editable while adding a subscription but SHALL NOT be editable later; changing a URL requires removing the existing subscription and adding a new one. Adding a subscription SHALL fetch and parse the feed first; if that fails, the failure SHALL be surfaced to the user and the subscription SHALL NOT be saved.
+
+#### Scenario: Opening management with no subscriptions
+
+- **WHEN** there are no subscriptions and the user opens F2 Settings then activates Manage feeds
+- **THEN** the feed-subscription management overlay SHALL open
 
 #### Scenario: Add a valid feed
 
@@ -97,3 +102,4 @@ The client SHALL provide an overlay to add, remove, and edit subscriptions, writ
 
 - **WHEN** the user removes a subscription
 - **THEN** it SHALL be deleted from `config.toml` and no longer appear in the Feeds tab
+- **AND** if that was the last subscription while the Feeds tab was selected, selection SHALL fall back to Home

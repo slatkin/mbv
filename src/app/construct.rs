@@ -24,7 +24,7 @@ impl App {
         let _test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
-        App {
+        let mut app = App {
             #[cfg(test)]
             _test_state_dir_guard,
             client: init.client,
@@ -216,7 +216,10 @@ impl App {
             player_endpoint: None,
             home_is_local_daemon: false,
             idle_feed: init.idle_feed,
-        }
+            feed_tab: super::types_feed_tab::FeedTabState::default(),
+        };
+        app.sync_feed_subscriptions();
+        app
     }
 
     pub fn new(client: EmbyClient) -> Self {

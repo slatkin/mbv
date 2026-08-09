@@ -5,7 +5,7 @@ use rand::seq::SliceRandom;
 
 impl App {
     pub(super) fn shuffle_play(&mut self) {
-        if self.tab.is_home() {
+        if self.tab.is_home() || self.tab.is_feeds() {
             return;
         }
         if self.play_selected_artist_header(true) {

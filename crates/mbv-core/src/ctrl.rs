@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::EmbyItem;
 use crate::config::QueueSource;
+use crate::playback_queue::FeedEntry;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 /// Bump ONLY when an old peer would misbehave, not when it would merely
@@ -23,6 +24,8 @@ pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
 pub const CTRL_CAP_LIFECYCLE_SHUTDOWN: &str = "lifecycle-shutdown";
 pub const CTRL_CAP_SHARED_MBV_STATE: &str = "shared-mbv-state-v1";
+/// Daemon supports playing feed entries (RSS/podcast/YouTube) via `LoadFeed`.
+pub const CTRL_CAP_FEED_PLAYBACK: &str = "feed-playback";
 
 pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;
@@ -45,6 +48,7 @@ impl CtrlHello {
                 CTRL_CAP_START_INDEX.to_string(),
                 CTRL_CAP_STATUS_ONLY.to_string(),
                 CTRL_CAP_LIFECYCLE_SHUTDOWN.to_string(),
+                CTRL_CAP_FEED_PLAYBACK.to_string(),
             ],
             auth_token: None,
         }
@@ -91,6 +95,12 @@ impl CtrlHello {
             .iter()
             .any(|cap| cap == CTRL_CAP_LIFECYCLE_SHUTDOWN)
     }
+
+    pub fn supports_feed_playback(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_FEED_PLAYBACK)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,6 +109,7 @@ pub struct CtrlCompatibility {
     pub client_protocol_version: u32,
     pub supports_queue_append: bool,
     pub supports_lifecycle_shutdown: bool,
+    pub supports_feed_playback: bool,
 }
 
 impl CtrlCompatibility {
@@ -109,6 +120,7 @@ impl CtrlCompatibility {
                 client_protocol_version: CTRL_PROTOCOL_VERSION,
                 supports_queue_append: true,
                 supports_lifecycle_shutdown: false,
+                supports_feed_playback: true,
             }),
             _ => Err(format!(
                 "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
@@ -230,6 +242,9 @@ pub enum WireCommand {
         items: Vec<EmbyItem>,
         start_idx: usize,
     },
+    /// Play a single feed entry. Additive — requires `feed-playback` capability.
+    #[serde(rename = "LoadFeed")]
+    LoadFeed { entry: FeedEntry },
 }
 
 impl From<PlayerCommand> for WireCommand {
@@ -280,6 +295,7 @@ impl From<PlayerCommand> for WireCommand {
             PlayerCommand::ReplaceQueue { items, start_idx } => {
                 WireCommand::ReplaceQueue { items, start_idx }
             }
+            PlayerCommand::LoadFeed { entry } => WireCommand::LoadFeed { entry },
         }
     }
 }
@@ -332,6 +348,7 @@ impl From<WireCommand> for PlayerCommand {
             WireCommand::ReplaceQueue { items, start_idx } => {
                 PlayerCommand::ReplaceQueue { items, start_idx }
             }
+            WireCommand::LoadFeed { entry } => PlayerCommand::LoadFeed { entry },
         }
     }
 }

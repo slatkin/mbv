@@ -275,6 +275,12 @@ pub enum PlayerCommand {
         items: Vec<EmbyItem>,
         start_idx: usize,
     },
+    /// Play a single feed entry. Constructs a one-entry `PlaybackQueue` containing
+    /// `QueueItem::Feed` and plays it through the existing runtime, bypassing Emby
+    /// reporting. Works both when the player is idle and when it is already active.
+    LoadFeed {
+        entry: FeedEntry,
+    },
 }
 
 fn lang_code_to_name(code: &str) -> &'static str {

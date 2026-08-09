@@ -77,6 +77,11 @@ pub struct Config {
     pub idle_feed_rss_url: String,
     /// Seconds between idle feed item rotations (minimum 1).
     pub idle_feed_rotation_secs: u64,
+    /// ── Feed subscriptions (#471) ─────────────────────────────────
+    /// User-configured RSS/Atom subscriptions shown in the Feeds tab
+    /// (`[[feeds]]` array-of-tables in config.toml). The only persisted
+    /// feed data: per-entry playback state is never saved.
+    pub feeds: Vec<FeedSubscription>,
     /// ── Shared-data hosting (daemon) ──────────────────────────────
     /// When `true`, the daemon opens a dedicated shared-data listener and
     /// the redb database. Disabled by default: no listener or database is
@@ -147,6 +152,7 @@ impl Default for Config {
             auto_reconnect: false,
             idle_feed_rss_url: "https://novaramedia.com/feed/".to_string(),
             idle_feed_rotation_secs: 10,
+            feeds: vec![],
             shared_data_enabled: false,
             shared_data_listen: String::new(),
             shared_data_tls_cert_path: String::new(),

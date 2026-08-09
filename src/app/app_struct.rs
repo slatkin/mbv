@@ -10,6 +10,7 @@ use super::types_daemon_lost::DaemonLostModal;
 use super::types_events::{LibEvent, SessionEvent};
 use super::types_feed::IdleFeed;
 use super::types_feed::SavePlaylistDialog;
+use super::types_feed_tab::FeedTabState;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
     HomePane, PendingQueueAction, PlaylistMutationState, QueueScope, RemoteQueueProjection,
@@ -311,6 +312,7 @@ pub struct App {
     pub(super) library_position_state: crate::config::LibraryPositionState,
     pub(super) queue_scope: QueueScope,
     pub(super) idle_feed: Option<IdleFeed>,
+    pub(super) feed_tab: FeedTabState,
     #[cfg(test)]
     pub(super) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
