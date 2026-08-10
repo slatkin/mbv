@@ -430,18 +430,17 @@ impl Player {
             // Load the full playlist into mpv so every index matches
             // items[i] directly.  Source URL resolution branches on
             // QueueItem variant; everything else is shared.
-            for (i, item) in items.iter().enumerate() {
+            for i in queue_load_indices(items.len(), start_idx) {
+                let item = &items[i];
                 let url = mpv_url_for_queue_item(item, &server_url, &token);
-                let mode = if i == 0 { "replace" } else { "append-play" };
-                let title_opt = mpv_title_opt(&item.display_name());
-                if let Err(e) =
-                    mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()])
-                {
+                let (mode, index) = queue_load_location(i, start_idx);
+                let opts = mpv_load_opts(item);
+                if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, &index, &opts]) {
                     log::warn!(
                         target: "player",
-                        "submit_queue loadfile error: {e} | mode={mode} opts={title_opt:?}",
+                        "submit_queue loadfile error: {e} | mode={mode} opts={opts:?}",
                     );
-                    if i == 0 {
+                    if i == start_idx {
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
                             idx: 0,

@@ -4,9 +4,7 @@ impl PlaybackRun {
         {
             let mut st = self.status.lock().unwrap();
             st.position_ticks = ticks;
-            // Don't update last_valid_pos while a resume seek is pending: mpv fires
-            // time-pos=0 before the seek lands, which would overwrite the correct position.
-            if pos_secs > 0.0 && self.pending_resume_secs.is_none() {
+            if pos_secs > 0.0 {
                 if self.last_valid_pos == 0 {
                     log::info!(target: "player", "playlist last_valid_pos first non-zero: {}s idx={}", ticks / TICKS_PER_SECOND, self.current_idx);
                 }
@@ -85,7 +83,9 @@ impl PlaybackRun {
             return;
         }
         let pos = pos as usize;
-        if self.pending_initial_jump || !self.load_state.is_ready() || self.forced_slot_id.is_some()
+        if self.pending_initial_playlist_layout
+            || !self.load_state.is_ready()
+            || self.forced_slot_id.is_some()
         {
             log::debug!(
                 target: "player",
@@ -151,6 +151,7 @@ impl PlaybackRun {
         // its output-started boundary. It says nothing about downstream pipe
         // buffers or actual audibility.
         let _ = self.event_tx.send(PlayerEvent::OutputStarted);
+        self.pending_initial_playlist_layout = false;
         {
             let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
             let is_img: bool = mpv
@@ -161,15 +162,6 @@ impl PlaybackRun {
             st.video_height = h;
             st.audio_codec = codec.to_lowercase();
             st.video_is_image = is_img;
-        }
-        if self.pending_initial_jump {
-            // mpv ignored playlist-pos before the event loop started; now that
-            // playback is live (first PlaybackRestart), the jump is honored.
-            self.pending_initial_jump = false;
-            self.load_state = self.load_state.increment();
-            let _ = mpv.set_property("playlist-pos", self.current_idx as i64);
-            // Skip normal handling; wait for the next PlaybackRestart (for start_idx item).
-            return;
         }
         if self.startup_pause.is_holding() {
             self.startup_pause.clear();
@@ -193,13 +185,6 @@ impl PlaybackRun {
                 if let Some(emby) = item.as_emby() {
                     send_ep_info(mpv, emby);
                 }
-            }
-            if let Some(secs) = self.pending_resume_secs.take() {
-                log::info!(target: "player", "playlist pending_resume cleared: seeking to {secs:.0}s idx={}", self.current_idx);
-                let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
-                self.last_seek_at = Some(Instant::now());
-            } else {
-                log::info!(target: "player", "playlist pending_resume cleared: no resume (starting from 0) idx={}", self.current_idx);
             }
             if self.config.use_mpv_config {
                 let _ = mpv.command("show-text", &[&self.osd_title, "3000"]);
@@ -261,8 +246,8 @@ impl PlaybackRun {
                 && !completed_is_audio
                 && runtime > 0
                 && self.last_valid_pos * 20 / runtime >= 19;
-            log::warn!(target: "player", "quit path: last_valid_pos={} runtime={} pending_resume={} stop_report={:?}",
-                self.last_valid_pos, runtime, self.pending_resume_secs.is_some(), self.stop_report);
+            log::warn!(target: "player", "quit path: last_valid_pos={} runtime={} stop_report={:?}",
+                self.last_valid_pos, runtime, self.stop_report);
             if self.stop_report == StopReport::NotSent {
                 // mpv-initiated quits (for example a compositor close request)
                 // must not wait on Emby before mpv can finish its own shutdown.
@@ -318,8 +303,8 @@ impl PlaybackRun {
         }
 
         let completed_idx = self.current_idx;
-        log::warn!(target: "player", "advance path: reason={reason:?} last_valid_pos={} runtime={} pending_resume={}",
-            self.last_valid_pos, self.status.lock().unwrap().runtime_ticks, self.pending_resume_secs.is_some());
+        log::warn!(target: "player", "advance path: reason={reason:?} last_valid_pos={} runtime={}",
+            self.last_valid_pos, self.status.lock().unwrap().runtime_ticks);
         // H11: bounds-check completed_idx — QueueRemove can shrink the list
         // while the current track is finishing.
         let Some(completed_item) = self.item_at(completed_idx).cloned() else {
@@ -456,7 +441,7 @@ impl PlaybackRun {
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
 
-        log::info!(target: "player", "playlist track-transition idx={} pending_resume={:?}s", self.current_idx, self.pending_resume_secs);
+        log::info!(target: "player", "playlist track-transition idx={}", self.current_idx);
 
         let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
             idx: completed_idx,
@@ -472,8 +457,8 @@ impl PlaybackRun {
     }
 
     fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
-        log::warn!(target: "player", "shutdown: last_valid_pos={} stop_report={:?} pending_resume={}",
-            self.last_valid_pos, self.stop_report, self.pending_resume_secs.is_some());
+        log::warn!(target: "player", "shutdown: last_valid_pos={} stop_report={:?}",
+            self.last_valid_pos, self.stop_report);
         if self.stop_report == StopReport::NotSent {
             self.report_stop_now_or_background(progress);
         }

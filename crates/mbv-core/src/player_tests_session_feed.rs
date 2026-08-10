@@ -71,7 +71,6 @@ fn feed_session_initializes_with_correct_title_and_queue_len() {
 fn feed_session_load_active_item_state_sets_zero_position() {
     let (session, _status) = make_feed_session();
     assert_eq!(session.last_valid_pos, 0);
-    assert!(session.pending_resume_secs.is_none());
     assert!(session.series_id.as_str().is_empty());
 }
 

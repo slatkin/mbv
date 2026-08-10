@@ -177,7 +177,6 @@ impl PlaybackRun {
     fn load_active_item_state(&mut self) {
         let Some(item) = self.active_item().cloned() else {
             self.osd_title.clear();
-            self.pending_resume_secs = None;
             self.last_valid_pos = 0;
             self.series_id.clear();
             self.season = 0;
@@ -196,13 +195,6 @@ impl PlaybackRun {
                 } else {
                     emby.playback_position_ticks
                 };
-                self.pending_resume_secs = if self.origin == PlaybackOrigin::Standalone {
-                    None
-                } else if !emby.is_audio() && emby.should_resume() {
-                    Some(emby.resume_seconds())
-                } else {
-                    None
-                };
                 if emby.item_type == "Episode" {
                     self.series_id = ItemId::new(emby.series_id.clone());
                     self.season = emby.parent_index_number;
@@ -218,7 +210,6 @@ impl PlaybackRun {
             QueueItem::Feed(entry) => {
                 self.osd_title = entry.title.clone();
                 self.last_valid_pos = 0;
-                self.pending_resume_secs = None;
                 self.series_id.clear();
                 self.season = 0;
                 self.episode = 0;
@@ -285,63 +276,40 @@ impl PlaybackRun {
             .map(|slot| slot.item.clone())
             .expect("PlaybackRun::new requires at least one item");
 
-        let (
-            initial_pos,
-            pending_resume_secs,
-            osd_title,
-            series_id,
-            season,
-            episode,
-            intro_start,
-            intro_end,
-            past,
-        ) = match &initial_item {
-            QueueItem::Emby(emby) => {
-                let pos = if emby.is_audio() {
-                    0
-                } else {
-                    emby.playback_position_ticks
-                };
-                let resume = if !emby.is_audio() && emby.should_resume() {
-                    Some(emby.resume_seconds())
-                } else {
-                    None
-                };
-                let (intro_start, intro_end) = load_intro_times(&reporter.client, &emby.id);
-                let past = intro_end > 0 && pos >= intro_end;
-                let sid = if emby.item_type == "Episode" {
-                    ItemId::new(emby.series_id.clone())
-                } else {
-                    ItemId::empty()
-                };
-                (
-                    pos,
-                    resume,
-                    emby.display_name(),
-                    sid,
-                    emby.parent_index_number,
-                    emby.index_number,
-                    intro_start,
-                    intro_end,
-                    past,
-                )
-            }
-            QueueItem::Feed(entry) => (
-                0,
-                None,
-                entry.title.clone(),
-                ItemId::empty(),
-                0,
-                0,
-                0,
-                0,
-                false,
-            ),
-        };
+        let (initial_pos, osd_title, series_id, season, episode, intro_start, intro_end, past) =
+            match &initial_item {
+                QueueItem::Emby(emby) => {
+                    let pos = if emby.is_audio() {
+                        0
+                    } else {
+                        emby.playback_position_ticks
+                    };
+                    let (intro_start, intro_end) = load_intro_times(&reporter.client, &emby.id);
+                    let past = intro_end > 0 && pos >= intro_end;
+                    let sid = if emby.item_type == "Episode" {
+                        ItemId::new(emby.series_id.clone())
+                    } else {
+                        ItemId::empty()
+                    };
+                    (
+                        pos,
+                        emby.display_name(),
+                        sid,
+                        emby.parent_index_number,
+                        emby.index_number,
+                        intro_start,
+                        intro_end,
+                        past,
+                    )
+                }
+                QueueItem::Feed(entry) => {
+                    (0, entry.title.clone(), ItemId::empty(), 0, 0, 0, 0, false)
+                }
+            };
 
         log::info!(
             target: "player",
-            "playback init origin={origin:?} idx={start_idx} item_pos={}s pending_resume={pending_resume_secs:?}s",
+            "playback init origin={origin:?} idx={start_idx} item_pos={}s",
             initial_pos / crate::api::TICKS_PER_SECOND
         );
         PlaybackRun {
@@ -362,7 +330,7 @@ impl PlaybackRun {
             last_valid_pos: initial_pos,
             tracks_initialized: false,
             load_state: LoadState::Ready,
-            pending_initial_jump: start_idx > 0,
+            pending_initial_playlist_layout: start_idx > 0,
             stop_report: StopReport::NotSent,
             stopped_event_sent: false,
             mark_played_id: None,
@@ -380,7 +348,6 @@ impl PlaybackRun {
             intro_end,
             intro_state: IntroState::new(past),
             osd_title,
-            pending_resume_secs,
         }
     }
 

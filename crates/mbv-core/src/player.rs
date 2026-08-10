@@ -34,6 +34,39 @@ fn mpv_title_opt(title: &str) -> String {
     format!("force-media-title=%{}%{}", title.len(), title)
 }
 
+fn resume_start_pos(item: &QueueItem) -> f64 {
+    match item.as_emby() {
+        Some(emby) if !emby.is_audio() && emby.should_resume() => emby.resume_seconds(),
+        _ => 0.0,
+    }
+}
+
+fn mpv_load_opts(item: &QueueItem) -> String {
+    let title = mpv_title_opt(&item.display_name());
+    let start = resume_start_pos(item);
+    if start > 0.0 {
+        format!("{title},start={start}")
+    } else {
+        title
+    }
+}
+
+fn queue_load_indices(len: usize, start_idx: usize) -> impl Iterator<Item = usize> {
+    std::iter::once(start_idx)
+        .chain(0..start_idx)
+        .chain(start_idx + 1..len)
+}
+
+fn queue_load_location(index: usize, start_idx: usize) -> (&'static str, String) {
+    if index == start_idx {
+        ("replace", "-1".to_string())
+    } else if index < start_idx {
+        ("insert-at", index.to_string())
+    } else {
+        ("append", "-1".to_string())
+    }
+}
+
 fn send_ep_info(mpv: &Mpv, item: &crate::api::EmbyItem) {
     let val =
         if item.item_type == "Episode" && item.parent_index_number > 0 && item.index_number > 0 {

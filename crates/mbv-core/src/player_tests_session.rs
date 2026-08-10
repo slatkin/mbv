@@ -29,7 +29,7 @@ fn cancel_pending_quit_clears_quit_at_and_shutdown_timeout() {
 }
 
 #[test]
-fn playlist_pos_does_not_clobber_pending_initial_queue_jump() {
+fn playlist_pos_does_not_clobber_pending_initial_playlist_layout() {
     let (mut session, status) = make_queue_session_for_pos_tests(2);
 
     session.on_playlist_pos_changed(0);
@@ -41,7 +41,7 @@ fn playlist_pos_does_not_clobber_pending_initial_queue_jump() {
 #[test]
 fn playlist_pos_does_not_clobber_pending_replace_queue_load() {
     let (mut session, status) = make_queue_session_for_pos_tests(1);
-    session.pending_initial_jump = false;
+    session.pending_initial_playlist_layout = false;
     session.load_state = LoadState::begin_single();
 
     session.on_playlist_pos_changed(0);
@@ -53,7 +53,7 @@ fn playlist_pos_does_not_clobber_pending_replace_queue_load() {
 #[test]
 fn playlist_pos_does_not_clobber_in_flight_jump_to() {
     let (mut session, status) = make_queue_session_for_pos_tests(0);
-    session.pending_initial_jump = false;
+    session.pending_initial_playlist_layout = false;
     session.forced_slot_id = session.slot_id_at(1);
 
     session.on_playlist_pos_changed(1);
@@ -66,7 +66,7 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
 #[test]
 fn playlist_pos_updates_idle_queue_with_valid_mpv_position() {
     let (mut session, status) = make_queue_session_for_pos_tests(0);
-    session.pending_initial_jump = false;
+    session.pending_initial_playlist_layout = false;
 
     session.on_playlist_pos_changed(2);
 
@@ -295,15 +295,12 @@ fn standalone_quit_timeout_marks_near_end_without_consuming() {
 }
 
 #[test]
-fn standalone_fresh_start_does_not_set_pending_resume_secs() {
+fn standalone_fresh_start_preserves_saved_position() {
     // Mirrors cmd_load_new's mutation sequence for a fresh one-slot standalone
     // load of a resumable video: origin becomes Standalone, the queue is
     // replaced with the single new item, then load_active_item_state() runs.
-    // mpv's `start` property (set separately by cmd_load_new, not exercised
-    // here since it requires a live mpv) already seeks to the resume position,
-    // so pending_resume_secs must stay None to avoid a redundant absolute
-    // seek in on_playback_restart that would also suppress the first
-    // progress report for ~500ms.
+    // mpv's load position is configured separately by cmd_load_new; this state
+    // still seeds progress reporting at the saved position before events arrive.
     let (mut session, _status) = make_queue_session_for_pos_tests(0);
 
     let mut item = make_media_item("resumable");
@@ -311,29 +308,23 @@ fn standalone_fresh_start_does_not_set_pending_resume_secs() {
     assert!(item.should_resume(), "test item must actually be resumable");
 
     session.origin = PlaybackOrigin::Standalone;
+    let position_ticks = item.playback_position_ticks;
     session.queue = PlaybackQueue::from_items(vec![item], Some(0));
     session.current_idx = 0;
 
     session.load_active_item_state();
 
-    assert_eq!(
-        session.pending_resume_secs, None,
-        "standalone fresh-start must rely on mpv's `start` property, not a redundant seek"
-    );
+    assert_eq!(session.last_valid_pos, position_ticks);
 }
 
 #[test]
-fn queue_slot_activation_still_sets_pending_resume_secs() {
-    // Sibling case to the standalone fix above: mid-session slot activation
-    // (Queue origin) has no mpv `start`-property shortcut, so
-    // load_active_item_state() must still arm pending_resume_secs for a
-    // resumable item.
+fn queue_slot_activation_preserves_saved_position() {
     let (mut session, _status) = make_queue_session_for_pos_tests(0);
 
     let mut item = make_media_item("resumable");
     item.playback_position_ticks = item.runtime_ticks / 2; // 50% watched
-    let resume_secs = item.resume_seconds();
     assert!(item.should_resume(), "test item must actually be resumable");
+    let position_ticks = item.playback_position_ticks;
 
     session.origin = PlaybackOrigin::Queue;
     session.queue = PlaybackQueue::from_items(vec![item], Some(0));
@@ -341,7 +332,7 @@ fn queue_slot_activation_still_sets_pending_resume_secs() {
 
     session.load_active_item_state();
 
-    assert_eq!(session.pending_resume_secs, Some(resume_secs));
+    assert_eq!(session.last_valid_pos, position_ticks);
 }
 
 #[test]
@@ -382,6 +373,23 @@ fn resume_start_pos_is_zero_for_audio_non_resumable_and_feed_items() {
 }
 
 #[test]
+fn queue_loads_selected_item_first_and_restores_playlist_order() {
+    let mut item = make_media_item("resumable");
+    item.playback_position_ticks = item.runtime_ticks / 2;
+    let queue_item = QueueItem::Emby(Box::new(item));
+
+    assert!(mpv_load_opts(&queue_item).contains(",start="));
+    assert_eq!(
+        queue_load_indices(4, 2).collect::<Vec<_>>(),
+        vec![2, 0, 1, 3]
+    );
+    assert_eq!(queue_load_location(2, 2).0, "replace");
+    assert_eq!(queue_load_location(0, 2), ("insert-at", "0".into()));
+    assert_eq!(queue_load_location(1, 2), ("insert-at", "1".into()));
+    assert_eq!(queue_load_location(3, 2).0, "append");
+}
+
+#[test]
 fn subtitle_stream_index_maps_to_mpv_subtitle_id() {
     let status = PlayerStatus {
         active: true,
@@ -399,4 +407,3 @@ fn subtitle_stream_index_maps_to_mpv_subtitle_id() {
 // ── PlayerStatus::next_idx / previous_idx / toggle_to_reach ──────────────
 // (issue #80: single source of truth for next/previous/toggle-play bounds
 // and paused-state logic, replacing four near-identical copies.)
-

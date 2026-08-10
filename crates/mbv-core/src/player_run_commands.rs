@@ -187,11 +187,10 @@ impl PlaybackRun {
             self.current_idx = 0;
             self.sync_status_position();
             self.last_valid_pos = 0;
-            self.pending_initial_jump = false;
+            self.pending_initial_playlist_layout = false;
             self.load_state = LoadState::Ready;
             self.begin_item_lifecycle();
             self.osd_title.clear();
-            self.pending_resume_secs = None;
             self.series_id.clear();
             self.season = 0;
             self.episode = 0;
@@ -211,28 +210,21 @@ impl PlaybackRun {
         let _ = mpv.command("playlist-clear", &[]);
 
         let start_idx = start_idx.min(new_items.len() - 1);
-        for (i, item) in new_items.iter().enumerate() {
+        let active_item = new_items[start_idx].clone();
+        for i in queue_load_indices(new_items.len(), start_idx) {
+            let item = &new_items[i];
             let queue_item = QueueItem::Emby(Box::new(item.clone()));
             let url = mpv_url_for_queue_item(&queue_item, &self.server_url, &self.token);
-            let mode = if i == 0 { "replace" } else { "append-play" };
-            let title_opt = mpv_title_opt(&queue_item.display_name());
-            if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()])
-            {
+            let (mode, index) = queue_load_location(i, start_idx);
+            let opts = mpv_load_opts(&queue_item);
+            if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, &index, &opts]) {
                 log::warn!(target: "player", "ReplaceQueue loadfile error: {}", mpv_err_str(&e));
             }
         }
-        let active_item = new_items[start_idx].clone();
-        let _ = mpv.set_property("start", "0");
         send_ep_info(mpv, &active_item);
         // loadfile "replace" displaces the current file (EndFile #1).
-        // If start_idx > 0 we also set playlist-pos which displaces item[0] (EndFile #2).
-        // Use = not += so a stale load_state from a prior operation never stacks.
-        // Clear pending_initial_jump too since any in-flight initial jump is superseded.
-        self.pending_initial_jump = false;
-        self.load_state = LoadState::begin_replace(if start_idx > 0 { 2 } else { 1 });
-        if start_idx > 0 {
-            let _ = mpv.set_property("playlist-pos", start_idx as i64);
-        }
+        self.load_state = LoadState::begin_single();
+        self.pending_initial_playlist_layout = false;
 
         self.origin = PlaybackOrigin::Queue;
         self.queue = PlaybackQueue::from_items(new_items, Some(start_idx));
@@ -241,7 +233,7 @@ impl PlaybackRun {
         // stop_report stays Sent until load_state drains to Ready in on_end_file,
         // preventing a duplicate report_stopped for the displaced file's EndFile(Quit).
         self.begin_item_lifecycle();
-        log::info!(target: "player", "playlist queue-replace idx={start_idx} pending_resume={:?}s", self.pending_resume_secs);
+        log::info!(target: "player", "playlist queue-replace idx={start_idx}");
         {
             let mut s = self.status.lock().unwrap();
             s.position_ticks = active_item.playback_position_ticks;
@@ -276,10 +268,10 @@ impl PlaybackRun {
 
         for item in &new_items {
             let url = mpv_url_for_queue_item(item, &self.server_url, &self.token);
-            let title_opt = mpv_title_opt(&item.display_name());
+            let opts = mpv_load_opts(item);
             if let Err(e) = mpv.command(
                 "loadfile",
-                &[url.as_str(), "append-play", "-1", title_opt.as_str()],
+                &[url.as_str(), "append-play", "-1", opts.as_str()],
             ) {
                 log::warn!(target: "player", "QueueAppend loadfile error: {}", mpv_err_str(&e));
             }
@@ -318,7 +310,7 @@ impl PlaybackRun {
         self.load_active_item_state();
         self.stop_report = StopReport::NotSent;
         self.load_state = LoadState::begin_single();
-        self.pending_initial_jump = false;
+        self.pending_initial_playlist_layout = false;
         self.begin_item_lifecycle();
         {
             let mut st = self.status.lock().unwrap();
@@ -397,36 +389,29 @@ impl PlaybackRun {
 
         // Load every item into mpv — source URL resolution branches on
         // QueueItem variant; everything else is shared.
-        for (i, item) in items.iter().enumerate() {
+        for i in queue_load_indices(items.len(), start_idx) {
+            let item = &items[i];
             let url = mpv_url_for_queue_item(item, &self.server_url, &self.token);
-            let mode = if i == 0 { "replace" } else { "append-play" };
-            let title_opt = mpv_title_opt(&item.display_name());
-            if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()])
-            {
+            let (mode, index) = queue_load_location(i, start_idx);
+            let opts = mpv_load_opts(item);
+            if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, &index, &opts]) {
                 log::warn!(
                     target: "player",
-                    "SubmitQueue loadfile error: {e} | mode={mode} opts={title_opt:?}",
+                    "SubmitQueue loadfile error: {e} | mode={mode} opts={opts:?}",
                 );
             }
         }
 
         let active_item = &items[start_idx];
-        let _ = mpv.set_property("start", format!("{:.0}", resume_start_pos(active_item)));
+
         // send_ep_info only for Emby items.
         if let Some(emby) = active_item.as_emby() {
             send_ep_info(mpv, emby);
         }
 
         // loadfile "replace" displaces the current file (EndFile #1).
-        // If start_idx > 0 we also set playlist-pos which displaces item[0]
-        // (EndFile #2).  Use = not += so a stale load_state from a prior
-        // operation never stacks.
-        self.pending_initial_jump = false;
-        let endfile_count = if start_idx > 0 { 2 } else { 1 };
-        self.load_state = LoadState::begin_replace(endfile_count);
-        if start_idx > 0 {
-            let _ = mpv.set_property("playlist-pos", start_idx as i64);
-        }
+        self.load_state = LoadState::begin_single();
+        self.pending_initial_playlist_layout = false;
 
         self.origin = origin;
         // Clone the active item metadata before moving `items` into the queue.
@@ -461,9 +446,8 @@ impl PlaybackRun {
 
         log::info!(
             target: "player",
-            "SubmitQueue origin={origin:?} idx={start_idx} items={} pending_resume={:?}s",
+            "SubmitQueue origin={origin:?} idx={start_idx} items={}",
             self.queue_len(),
-            self.pending_resume_secs,
         );
         {
             let mut s = self.status.lock().unwrap();
@@ -478,18 +462,6 @@ impl PlaybackRun {
                 s.art_item_id = active_guid;
             }
         }
-    }
-}
-
-/// The mpv `start` position (seconds) `cmd_submit_queue` should load the
-/// active item at. Mirrors the resume predicate used by `cmd_load_new` and
-/// `load_active_item_state`/`PlaybackRun::new`: Emby video items that
-/// `should_resume()` start at their saved position; audio and Feed items
-/// always start at 0.
-fn resume_start_pos(item: &QueueItem) -> f64 {
-    match item.as_emby() {
-        Some(emby) if !emby.is_audio() && emby.should_resume() => emby.resume_seconds(),
-        _ => 0.0,
     }
 }
 

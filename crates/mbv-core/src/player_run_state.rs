@@ -14,13 +14,6 @@ pub(crate) enum Drained {
 }
 
 impl LoadState {
-    pub(crate) fn begin_replace(count: u8) -> Self {
-        match NonZeroU8::new(count) {
-            Some(nz) => LoadState::Pending(nz),
-            None => LoadState::Ready,
-        }
-    }
-
     pub(crate) fn begin_single() -> Self {
         LoadState::Pending(NonZeroU8::new(1).unwrap())
     }
@@ -43,17 +36,6 @@ impl LoadState {
 
     pub(crate) fn is_ready(&self) -> bool {
         matches!(self, LoadState::Ready)
-    }
-
-    pub(crate) fn increment(&mut self) -> Self {
-        match self {
-            LoadState::Ready => LoadState::Pending(NonZeroU8::new(1).unwrap()),
-            LoadState::Pending(n) => {
-                let v = n.get().saturating_add(1);
-                *n = NonZeroU8::new(v).unwrap_or(*n);
-                *self
-            }
-        }
     }
 }
 
