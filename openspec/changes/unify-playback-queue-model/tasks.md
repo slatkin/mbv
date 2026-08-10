@@ -14,7 +14,7 @@ Tasks are grouped as coherent ownership-boundary slices rather than one task per
 ## 3. Unified ctrl and daemon authority
 
 - [ ] 3.1 Add the additive unified-queue ctrl capability plus item-generic queue state and operations, keeping the protocol version unchanged and isolating old Emby commands and decode-only `LoadFeed` translation in compatibility adapters.
-- [ ] 3.2 Replace daemon `items + feed_items` authority with one `PlaybackQueue<QueueItem>`; derive snapshots, reconnect state, cursor, queue length, mutation, admission, and mpv synchronization from that queue for arbitrary mixed ordering.
+- [x] 3.2 Replace daemon `items + feed_items` authority with one `PlaybackQueue<QueueItem>`; derive snapshots, reconnect state, cursor, queue length, mutation, admission, and mpv synchronization from that queue for arbitrary mixed ordering.
 - [ ] 3.3 Migrate `RemotePlayer` submission, queue updates, and capability negotiation to the unified ctrl path; report missing capability and closed-channel failures instead of dropping commands, and prevent legacy peers from overwriting canonical slots they cannot represent.
 
 ## 4. TUI and state-boundary migration
@@ -25,6 +25,6 @@ Tasks are grouped as coherent ownership-boundary slices rather than one task per
 
 ## 5. Remove the split model and verify the replacement
 
-- [ ] 5.1 Delete current-code emission and internal use of `play_feed`, `LoadFeed`, parallel `feed_items`, Feed-tail mutation guards, GUID-wide consumption, and synchronization/mirroring helpers; retain only explicitly documented wire-compatibility adapters and update nearby stale comments or domain documentation.
+- [x] 5.1 Delete current-code emission and internal use of `play_feed`, `LoadFeed`, parallel `feed_items`, Feed-tail mutation guards, GUID-wide consumption, and synchronization/mirroring helpers; retain only explicitly documented wire-compatibility adapters and update nearby stale comments or domain documentation.
 - [ ] 5.2 Verify the specification matrix for Emby and Feed items across bare local playback, cold stay-alive playback, warm playback, direct remote control, reconnect, mixed reordering/removal, duplicate slots, persistence, failure visibility, and audio-only admission/fall-through.
 - [ ] 5.3 Run `rtk cargo check -p mbv-core`, `rtk cargo check`, `rtk cargo test -p mbv-core`, `rtk cargo clippy --workspace --all-targets`, and `rtk make check-code-file-lines`; resolve failures without restoring parallel queue state or Feed-specific lifecycle paths.
