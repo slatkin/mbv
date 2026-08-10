@@ -42,7 +42,6 @@ fn recursive_music_app() -> App {
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -275,7 +274,6 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -342,7 +340,6 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -377,7 +374,6 @@ fn ensure_feed_library_preserves_saved_feed_position() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -413,7 +409,6 @@ fn ensure_podcast_library_preserves_saved_feed_position() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,

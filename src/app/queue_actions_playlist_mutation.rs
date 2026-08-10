@@ -398,9 +398,6 @@ impl App {
             }
             self.append_item_to_queue_and_sync(item);
         } else {
-            if self.enqueue_selected_artist_header() {
-                return;
-            }
             let Some(item) = self.current_lib_item() else {
                 return;
             };

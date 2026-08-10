@@ -282,28 +282,18 @@ impl App {
                         .cloned()
                         .flatten();
                     if self.is_music_group_view(lib_idx) {
-                        match row_target {
-                            Some(LibraryRowTarget::ArtistHeader(selection)) => {
-                                self.libs[lib_idx].album_track_focus = None;
-                                self.libs[lib_idx].artist_header_focus = Some(selection);
-                                self.save_default_library_position(lib_idx);
-                                return true;
-                            }
-                            Some(LibraryRowTarget::Album(item_idx)) => {
-                                let lib = &mut self.libs[lib_idx];
-                                if let Some(lvl) = lib.nav_stack.last_mut() {
-                                    if item_idx < lvl.items.len() {
-                                        if lvl.cursor != item_idx {
-                                            lib.album_track_focus = None;
-                                        }
-                                        lib.artist_header_focus = None;
-                                        lvl.cursor = item_idx;
-                                        self.save_default_library_position(lib_idx);
-                                        return true;
+                        if let Some(LibraryRowTarget::Album(item_idx)) = row_target {
+                            let lib = &mut self.libs[lib_idx];
+                            if let Some(lvl) = lib.nav_stack.last_mut() {
+                                if item_idx < lvl.items.len() {
+                                    if lvl.cursor != item_idx {
+                                        lib.album_track_focus = None;
                                     }
+                                    lvl.cursor = item_idx;
+                                    self.save_default_library_position(lib_idx);
+                                    return true;
                                 }
                             }
-                            None => {}
                         }
                     }
                     let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
@@ -341,7 +331,6 @@ impl App {
                                     if lvl.cursor != item_idx {
                                         lib.album_track_focus = None;
                                     }
-                                    lib.artist_header_focus = None;
                                     lvl.cursor = item_idx;
                                 }
                             }
@@ -352,7 +341,6 @@ impl App {
                                     if lvl.cursor != item_idx {
                                         lib.album_track_focus = None;
                                     }
-                                    lib.artist_header_focus = None;
                                     lvl.cursor = item_idx;
                                 }
                             }
@@ -368,7 +356,6 @@ impl App {
                                 if lvl.cursor != clicked {
                                     lib.album_track_focus = None;
                                 }
-                                lib.artist_header_focus = None;
                                 lvl.cursor = clicked;
                             }
                         }

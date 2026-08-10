@@ -527,11 +527,7 @@ impl App {
     /// click so the two paths cannot drift (see #145 / mouse-click parity fix).
     /// Precondition: caller has confirmed `is_viewing_album_folders(lib_idx)`.
     pub(super) fn activate_album_folder_row(&mut self, lib_idx: usize) {
-        if self.libs[lib_idx].artist_header_focus.is_some() && self.is_music_group_view(lib_idx) {
-            return;
-        }
         if self.libs[lib_idx].album_track_focus.is_none() {
-            self.clear_artist_header_focus(lib_idx);
             self.libs[lib_idx].album_track_focus = Some(0);
         } else {
             let has_focused_track = self

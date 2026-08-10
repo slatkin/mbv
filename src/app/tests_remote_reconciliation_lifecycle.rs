@@ -241,7 +241,6 @@ fn library_focus_rescan_does_not_trigger_tracking_controls() {
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,

@@ -48,7 +48,6 @@ fn make_movie_app() -> App {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -87,7 +86,6 @@ fn push_library(app: &mut App, id: &str, name: &str) {
         }],
         feed_home_video: None,
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -363,7 +361,6 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -414,7 +411,6 @@ fn ctrl_a_enqueues_selected_from_library_view() {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,

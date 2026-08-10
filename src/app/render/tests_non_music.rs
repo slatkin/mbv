@@ -104,7 +104,6 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
         }],
         feed_home_video: None,
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: Some(55),

@@ -37,7 +37,6 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -109,7 +108,6 @@ fn feed_home_video_group_view_stays_enabled_with_cached_groups() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -164,7 +162,6 @@ fn fetch_home_preserves_feed_home_video_state() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -227,7 +224,6 @@ fn select_feed_folder_group_pushes_video_level_for_selected_folder() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -291,7 +287,6 @@ fn select_feed_folder_group_zero_pushes_all_videos_level() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -370,7 +365,6 @@ fn select_feed_folder_group_uses_client_side_all_items_cache() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -450,7 +444,6 @@ fn select_feed_folder_group_updates_feed_state_when_detail_level_exists() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -515,7 +508,6 @@ fn go_back_keeps_feed_home_video_group_view_intact() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -581,7 +573,6 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -647,7 +638,6 @@ fn refresh_lib_targets_feed_selection() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,

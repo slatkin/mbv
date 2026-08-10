@@ -1,7 +1,6 @@
 mod action;
 mod actions;
 mod app_struct;
-mod artist_header_actions;
 mod audio_subtitle_actions;
 mod bootstrap;
 mod browse_level_actions;
@@ -107,8 +106,8 @@ use self::types_library_tab::LibraryTab;
 #[cfg(test)]
 use self::types_playback::HomePane;
 use self::types_playback::{
-    ArtistHeaderSelection, LocalPlaybackTarget, PendingQueueAction, PlaybackState, PlaybackTarget,
-    QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteReanchorPopup, RemoteSlotState,
+    LocalPlaybackTarget, PendingQueueAction, PlaybackState, PlaybackTarget, QueueScope,
+    QueueScopeResolution, RemotePlaybackTarget, RemoteReanchorPopup, RemoteSlotState,
     SuspendedLocalSession, UndoEntry,
 };
 use self::types_player_tab::PlayerTab;

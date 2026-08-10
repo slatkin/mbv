@@ -251,9 +251,6 @@ mod playback_header_mouse_tests;
 mod movie_detail_tests;
 
 #[cfg(test)]
-#[path = "input_music_track_artist_fetch_tests.rs"]
-mod music_track_artist_fetch_tests;
-#[cfg(test)]
 #[path = "input_music_track_focus_tests.rs"]
 mod music_track_focus_tests;
 #[cfg(test)]
