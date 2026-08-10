@@ -154,6 +154,93 @@ fn focused_group_header_has_no_internal_spacer_when_hero_handles_detail() {
 }
 
 #[test]
+fn hero_handles_detail_suppresses_all_inline_detail_rows() {
+    let mut app = make_music_group_app();
+    // Add tracks to the album so the plan would normally include detail rows.
+    let tracks: Vec<mbv_core::api::EmbyItem> = (0..5)
+        .map(|i| {
+            let mut t = crate::app::tests::make_item(&format!("Track {}", i + 1), "Audio");
+            t.id = format!("track-{}", i + 1);
+            t.index_number = (i + 1) as i64;
+            t
+        })
+        .collect();
+    app.album_tracks_cache.insert("album-1".into(), tracks);
+
+    let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
+    let album_info = app.group_album_info(&albums, None);
+    let order = sorted_group_album_order(&album_info);
+
+    // Without hero_handles_detail, detail rows should appear.
+    let plan_without = app.build_grouped_album_display_plan(
+        &albums,
+        &album_info,
+        &order,
+        0,
+        false,
+        HeaderFocusCtx {
+            selectable_headers: true,
+            selected_artist_header: None,
+            expand_selected: true,
+        },
+        Some((120, 0)),
+        false,
+    );
+    let has_detail = plan_without.rows.iter().any(|row| {
+        matches!(
+            row,
+            GroupedAlbumDisplayRow::AlbumDetailStart(_)
+                | GroupedAlbumDisplayRow::AlbumDetailContinuation
+                | GroupedAlbumDisplayRow::AlbumDetailRule
+                | GroupedAlbumDisplayRow::AlbumLoading
+                | GroupedAlbumDisplayRow::AlbumActionHint
+        )
+    });
+    assert!(
+        has_detail,
+        "without hero_handles_detail, inline detail rows should appear"
+    );
+
+    // With hero_handles_detail, no detail rows should appear.
+    let plan_with = app.build_grouped_album_display_plan(
+        &albums,
+        &album_info,
+        &order,
+        0,
+        false,
+        HeaderFocusCtx {
+            selectable_headers: true,
+            selected_artist_header: None,
+            expand_selected: true,
+        },
+        Some((120, 0)),
+        true,
+    );
+    let has_detail = plan_with.rows.iter().any(|row| {
+        matches!(
+            row,
+            GroupedAlbumDisplayRow::AlbumDetailStart(_)
+                | GroupedAlbumDisplayRow::AlbumDetailContinuation
+                | GroupedAlbumDisplayRow::AlbumDetailRule
+                | GroupedAlbumDisplayRow::AlbumLoading
+                | GroupedAlbumDisplayRow::AlbumActionHint
+        )
+    });
+    assert!(
+        !has_detail,
+        "with hero_handles_detail, inline detail rows should be suppressed"
+    );
+    assert!(
+        plan_with.selected_block_bounds.is_none(),
+        "selected_block_bounds should be None when hero_handles_detail is true"
+    );
+    assert!(
+        plan_with.track_detail_bounds.is_none(),
+        "track_detail_bounds should be None when hero_handles_detail is true"
+    );
+}
+
+#[test]
 fn collapsed_album_hero_does_not_stack_metadata_below_art() {
     assert_eq!(
         super::album_plan::album_hero_content_rows(
@@ -164,6 +251,33 @@ fn collapsed_album_hero_does_not_stack_metadata_below_art() {
         ),
         super::album_art::INLINE_ALBUM_ART_ROWS,
         "collapsed album art should reach the hero's bottom border without extra rows"
+    );
+}
+
+#[test]
+fn album_hero_sizing_grows_with_track_count() {
+    let art_rows = super::album_art::INLINE_ALBUM_ART_ROWS;
+    let panel_width = 40u16;
+    let zero_tracks = super::album_plan::album_hero_content_rows(0, art_rows, panel_width, true);
+    let twenty_tracks = super::album_plan::album_hero_content_rows(20, art_rows, panel_width, true);
+    assert!(
+        twenty_tracks > zero_tracks,
+        "hero with 20 tracks ({twenty_tracks}) should be taller than with 0 ({zero_tracks})"
+    );
+    // Metadata rows (title + hint) are always included.
+    assert!(
+        zero_tracks >= 2,
+        "even with no tracks, hero should include metadata rows"
+    );
+}
+
+#[test]
+fn album_hero_sizing_without_images_ignores_art() {
+    let with_images = super::album_plan::album_hero_content_rows(3, 8, 60, true);
+    let without_images = super::album_plan::album_hero_content_rows(3, 8, 60, false);
+    assert!(
+        without_images <= with_images,
+        "without images, hero should not be taller"
     );
 }
 

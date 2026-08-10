@@ -282,28 +282,73 @@ impl App {
                         .cloned()
                         .flatten();
                     if self.is_music_group_view(lib_idx) {
-                        match row_target {
-                            Some(LibraryRowTarget::ArtistHeader(selection)) => {
-                                self.libs[lib_idx].album_track_focus = None;
-                                self.libs[lib_idx].artist_header_focus = Some(selection);
-                                self.save_default_library_position(lib_idx);
-                                return true;
-                            }
-                            Some(LibraryRowTarget::Album(item_idx)) => {
-                                let lib = &mut self.libs[lib_idx];
-                                if let Some(lvl) = lib.nav_stack.last_mut() {
-                                    if item_idx < lvl.items.len() {
-                                        if lvl.cursor != item_idx {
-                                            lib.album_track_focus = None;
-                                        }
-                                        lib.artist_header_focus = None;
-                                        lvl.cursor = item_idx;
-                                        self.save_default_library_position(lib_idx);
-                                        return true;
-                                    }
+                        // Wide Music: handle left-pane track clicks and
+                        // right-pane album clicks separately.
+                        let is_wide = !self.layout.main.wide_music_track_hitmap.is_empty();
+                        if is_wide {
+                            let pos = (col, row).into();
+                            // Track hitmap (left pane).
+                            for (rect, track_idx) in &self.layout.main.wide_music_track_hitmap {
+                                if rect.contains(pos) {
+                                    self.libs[lib_idx].album_track_focus = Some(*track_idx);
+                                    self.libs[lib_idx].artist_header_focus = None;
+                                    self.set_panel_focus(PanelFocus::Library);
+                                    self.save_default_library_position(lib_idx);
+                                    return true;
                                 }
                             }
-                            None => {}
+                            // Artwork area: no-op.
+                            if self.layout.main.wide_music_art_area.contains(pos) {
+                                return true;
+                            }
+                            // Right pane album click.
+                            if self.layout.main.wide_music_right_area.contains(pos) {
+                                let row_target = self
+                                    .layout
+                                    .main
+                                    .left_row_targets
+                                    .get(click_y)
+                                    .cloned()
+                                    .flatten();
+                                if let Some(LibraryRowTarget::Album(item_idx)) = row_target {
+                                    let lib = &mut self.libs[lib_idx];
+                                    if let Some(lvl) = lib.nav_stack.last_mut() {
+                                        if item_idx < lvl.items.len() {
+                                            lib.album_track_focus = None;
+                                            lib.artist_header_focus = None;
+                                            lvl.cursor = item_idx;
+                                            self.save_default_library_position(lib_idx);
+                                            return true;
+                                        }
+                                    }
+                                }
+                                return true;
+                            }
+                        } else {
+                            // Narrow path: existing row_target handling.
+                            match row_target {
+                                Some(LibraryRowTarget::ArtistHeader(selection)) => {
+                                    self.libs[lib_idx].album_track_focus = None;
+                                    self.libs[lib_idx].artist_header_focus = Some(selection);
+                                    self.save_default_library_position(lib_idx);
+                                    return true;
+                                }
+                                Some(LibraryRowTarget::Album(item_idx)) => {
+                                    let lib = &mut self.libs[lib_idx];
+                                    if let Some(lvl) = lib.nav_stack.last_mut() {
+                                        if item_idx < lvl.items.len() {
+                                            if lvl.cursor != item_idx {
+                                                lib.album_track_focus = None;
+                                            }
+                                            lib.artist_header_focus = None;
+                                            lvl.cursor = item_idx;
+                                            self.save_default_library_position(lib_idx);
+                                            return true;
+                                        }
+                                    }
+                                }
+                                None => {}
+                            }
                         }
                     }
                     let is_feed_group = self.is_feed_home_video_group_view(lib_idx);

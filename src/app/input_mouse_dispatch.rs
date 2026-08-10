@@ -222,6 +222,21 @@ impl App {
                         // including entering a Series' season/episode
                         // selection, which a single click never did.
                         let lib_idx = self.tab.library_index().unwrap();
+                        // Wide Music: double-click on a track plays it (Task 5.2).
+                        let is_wide_music = !self.layout.main.wide_music_track_hitmap.is_empty();
+                        if is_wide_music {
+                            let pos = (col, row).into();
+                            for (rect, track_idx) in &self.layout.main.wide_music_track_hitmap {
+                                if rect.contains(pos) {
+                                    self.libs[lib_idx].album_track_focus = Some(*track_idx);
+                                    // Play the focused track.
+                                    self.select();
+                                    return;
+                                }
+                            }
+                            // Double-click on artwork or blank space: no-op.
+                            return;
+                        }
                         if self.activate_recursive_album(lib_idx) {
                             // active-search jump; unchanged
                         } else if self.is_viewing_album_folders(lib_idx) {
@@ -241,6 +256,18 @@ impl App {
                         } else {
                             self.select();
                         }
+                    }
+                    // Wide Music: double-click on right pane album enters
+                    // track selection (same as Enter).
+                    if !self.layout.main.wide_music_track_hitmap.is_empty()
+                        && self
+                            .layout
+                            .main
+                            .wide_music_right_area
+                            .contains((col, row).into())
+                    {
+                        let lib_idx = self.tab.library_index().unwrap();
+                        self.activate_album_folder_row(lib_idx);
                     }
                     return;
                 }

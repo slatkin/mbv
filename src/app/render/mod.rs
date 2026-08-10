@@ -24,6 +24,7 @@ mod list_letter_groups;
 mod list_plain;
 mod list_rows;
 mod music;
+mod music_wide;
 mod overlays;
 mod pills;
 mod queue;
@@ -56,6 +57,7 @@ use widgets::{
 use super::ui_util::natural_sort_key;
 use super::{layout::AppLayout, palette, App, PanelFocus, PanelMode, TabSelection};
 use crate::app::layout::{LayoutMain, LayoutPlayback};
+use crate::app::TWO_COLUMN_THRESHOLD;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -508,7 +510,16 @@ impl App {
         // are dropped and the library spans the panel edge-to-edge.
         let lib_area = right_panel_content_area(lib_area, self.panel_mode != PanelMode::Both);
         let mut render_lib_area = lib_area;
+        // Music-group pills are carved from the top only in narrow mode.
+        // In wide mode, the wide music renderer places pills in the right rail.
+        let is_wide_music = right_visible
+            && lib_area.width >= TWO_COLUMN_THRESHOLD
+            && self
+                .tab
+                .library_index()
+                .is_some_and(|lib_idx| self.is_music_group_view(lib_idx));
         if right_visible
+            && !is_wide_music
             && self
                 .tab
                 .library_index()
