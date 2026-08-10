@@ -448,6 +448,7 @@ fn queue_item_serializes_tagged() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
         pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     });
     let json = serde_json::to_string(&feed).unwrap();
     assert!(json.contains(r#""kind":"Feed""#));
@@ -490,6 +491,7 @@ fn queue_state_round_trip_preserves_item_kind() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
         pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     let queue_items = vec![
         QueueItem::Emby(Box::new(emby_item.clone())),
@@ -541,6 +543,7 @@ fn feed(guid: &str) -> FeedEntry {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(60 * TICKS_PER_SECOND as u64),
         pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     }
 }
 
@@ -586,6 +589,7 @@ fn feed_entry_primary_source_returns_enclosure() {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     assert_eq!(entry.primary_source(), Some("https://enc.mp3"));
 }
@@ -600,6 +604,7 @@ fn feed_entry_primary_source_falls_back_to_link() {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     assert_eq!(entry.primary_source(), Some("https://link.html"));
 }
@@ -614,6 +619,180 @@ fn feed_entry_primary_source_none_when_empty() {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     assert_eq!(entry.primary_source(), None);
+}
+
+// ---------------------------------------------------------------------------
+// Feed media-kind classification (task 1.1)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn feed_media_kind_uses_mime_when_present() {
+    let entry = FeedEntry {
+        guid: "g1".into(),
+        title: "T".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Video),
+    };
+    let qi = QueueItem::Feed(entry);
+    assert_eq!(qi.media_kind(), "Audio");
+    assert!(qi.is_audio());
+    assert!(!qi.is_video());
+}
+
+#[test]
+fn feed_media_kind_falls_back_to_feed_kind_when_mime_absent() {
+    let entry = FeedEntry {
+        guid: "g2".into(),
+        title: "T".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Video),
+    };
+    let qi = QueueItem::Feed(entry);
+    assert_eq!(qi.media_kind(), "video");
+    assert!(!qi.is_audio());
+    assert!(qi.is_video());
+}
+
+#[test]
+fn feed_media_kind_falls_back_to_feed_kind_for_unrecognized_mime() {
+    let entry = FeedEntry {
+        guid: "g3".into(),
+        title: "T".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: Some("application/octet-stream".into()),
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Audio),
+    };
+    let qi = QueueItem::Feed(entry);
+    assert_eq!(qi.media_kind(), "audio");
+    assert!(qi.is_audio());
+    assert!(!qi.is_video());
+}
+
+#[test]
+fn feed_legacy_entry_without_feed_kind_is_neither_audio_nor_video() {
+    // Simulates a legacy serialized FeedEntry that lacks feed_kind
+    // (serde default = None, i.e. unknown).
+    let json = r#"{"kind":"Feed","guid":"g4","title":"T","enclosure_url":null,"link":null,"mime_type":null,"duration_ticks":null}"#;
+    let qi: QueueItem = serde_json::from_str(json).unwrap();
+    assert_eq!(qi.media_kind(), "Video");
+    assert!(!qi.is_audio());
+    assert!(!qi.is_video());
+}
+
+// ---------------------------------------------------------------------------
+// PlaybackQueue operation tests (task 1.2)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn replace_clears_queue_and_sets_new_items() {
+    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b")], Some(0));
+    let initial = queue.revision();
+    let old_active = queue.replace(vec![
+        QueueItem::Emby(Box::new(item("x"))),
+        QueueItem::Feed(feed("f1")),
+        QueueItem::Emby(Box::new(item("y"))),
+    ]);
+
+    assert_eq!(old_active, Some(0));
+    assert_eq!(queue.len(), 3);
+    assert_eq!(queue.slots()[0].item.id(), "x");
+    assert_eq!(queue.slots()[1].item.id(), "f1");
+    assert_eq!(queue.slots()[2].item.id(), "y");
+    assert_eq!(queue.active_slot_id(), None);
+    assert!(queue.revision() > initial);
+}
+
+#[test]
+fn replace_with_empty_vec_clears() {
+    let mut queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
+    let old_active = queue.replace(vec![]);
+
+    assert_eq!(old_active, Some(0));
+    assert!(queue.is_empty());
+    assert_eq!(queue.active_slot_id(), None);
+}
+
+#[test]
+fn clear_removes_all_slots_and_bumps_revision() {
+    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(1));
+    let initial = queue.revision();
+    queue.clear();
+
+    assert!(queue.is_empty());
+    assert_eq!(queue.len(), 0);
+    assert_eq!(queue.active_slot_id(), None);
+    assert!(queue.revision() > initial);
+}
+
+#[test]
+fn clear_on_empty_queue_is_noop() {
+    let mut queue = PlaybackQueue::default();
+    let before = queue.revision();
+    queue.clear();
+
+    assert!(queue.is_empty());
+    assert_eq!(queue.revision(), before);
+}
+
+#[test]
+fn len_and_active_index_reflect_queue_state() {
+    let mut queue = PlaybackQueue::from_items(vec![item("a"), item("b"), item("c")], Some(1));
+
+    assert_eq!(queue.len(), 3);
+    assert_eq!(queue.active_index(), Some(1));
+
+    let target = queue.slots()[2].slot_id;
+    queue.set_active_slot(target);
+    assert_eq!(queue.active_index(), Some(2));
+
+    queue.clear_active_slot();
+    assert_eq!(queue.active_index(), None);
+}
+
+#[test]
+fn mixed_queue_replace_preserves_item_variants() {
+    let mut queue = PlaybackQueue::default();
+    queue.replace(vec![
+        QueueItem::Feed(feed("f1")),
+        QueueItem::Emby(Box::new(item("e1"))),
+        QueueItem::Feed(feed("f2")),
+    ]);
+
+    assert!(matches!(queue.slots()[0].item, QueueItem::Feed(_)));
+    assert!(matches!(queue.slots()[1].item, QueueItem::Emby(_)));
+    assert!(matches!(queue.slots()[2].item, QueueItem::Feed(_)));
+}
+
+#[test]
+fn legacy_cursor_maps_interleaved_queue_into_emby_index_space() {
+    let items = vec![
+        QueueItem::Emby(Box::new(item("emby0"))),
+        QueueItem::Feed(feed("feed0")),
+        QueueItem::Emby(Box::new(item("emby1"))),
+    ];
+
+    // emby1 active: representable in both projections at Emby index 1.
+    let queue = PlaybackQueue::from_queue_items(items.clone(), Some(2));
+    assert_eq!(queue.legacy_cursor(false), 1);
+    assert_eq!(queue.legacy_cursor(true), 1);
+
+    // feed0 active: only representable when the Feed tail is included, at
+    // emby_total (2) + feed_seen (0). Without the tail it's unrepresentable.
+    let queue = PlaybackQueue::from_queue_items(items, Some(1));
+    assert_eq!(queue.legacy_cursor(true), 2);
+    assert_eq!(queue.legacy_cursor(false), 0);
 }

@@ -85,7 +85,10 @@ fn is_audio_item_reads_remote_session_audio_only_flag_when_false() {
 fn is_audio_item_falls_back_to_local_state_when_no_session() {
     let mut app = crate::app::tests::make_app_stub();
     assert!(app.connected_session_id.is_none());
-    app.player_tab.items = vec![crate::app::tests::make_item("song", "Audio")];
+    app.player_tab.set_items(
+        vec![crate::app::tests::make_item("song", "Audio")],
+        app.player_tab.queue_cursor,
+    );
     app.player_tab.queue_cursor = 0;
 
     assert!(app.is_audio_item());
@@ -223,7 +226,7 @@ fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
     // that way.
     assert!(app
         .queue_for_scope(app.visible_queue_scope())
-        .items
+        .emby_items()
         .is_empty());
     assert!(app.status.contains("Can't mix libraries in a routed queue"));
 }

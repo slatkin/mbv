@@ -196,8 +196,11 @@ pub enum PlayerEvent {
         items: Vec<crate::api::EmbyItem>,
         cursor: usize,
         source: crate::config::QueueSource,
-        feed_items: Vec<FeedEntry>,
     },
+    /// Emitted by RemotePlayer when a `UnifiedQueueState` arrives so App can
+    /// sync the full canonical queue (tagged QueueItems, slot identity, active
+    /// slot, revision) without decomposing into legacy Emby-only shapes.
+    UnifiedQueueUpdated(crate::ctrl::UnifiedQueueStateData),
     /// Chapter API: playback entered the intro window.
     IntroStarted {
         intro_end_ticks: i64,
@@ -237,13 +240,6 @@ pub enum PlayerEvent {
     /// mirror to become stale. The detail describes what was detected. The UI
     /// shows this as a warning toast.
     QueueDesynced(String),
-    /// A `QueueItem::Feed` entry finished playing (or was consumed via
-    /// next-up) and left the live queue. Carries the entry's `guid` so the
-    /// daemon can remove the matching entry from its Feed tail before
-    /// broadcasting the next state (see design.md's Feed-removal ordering).
-    FeedConsumed {
-        guid: String,
-    },
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -251,7 +247,7 @@ pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),
     QueueAppend {
-        items: Vec<EmbyItem>,
+        items: Vec<QueueItem>,
     },
     QueueRemove(usize),
     QueueMove(usize, usize),
@@ -283,11 +279,13 @@ pub enum PlayerCommand {
         items: Vec<EmbyItem>,
         start_idx: usize,
     },
-    /// Play a single feed entry. Constructs a one-entry `PlaybackQueue` containing
-    /// `QueueItem::Feed` and plays it through the existing runtime, bypassing Emby
-    /// reporting. Works both when the player is idle and when it is already active.
-    LoadFeed {
-        entry: FeedEntry,
+    /// Item-generic queue submission: replace the current queue with `items` and
+    /// start playback from `start_idx`. Handles both Emby and Feed items through
+    /// the same lifecycle path — source URL and reporting branch on `QueueItem`
+    /// variant; everything else is shared.
+    SubmitQueue {
+        items: Vec<QueueItem>,
+        start_idx: usize,
     },
 }
 

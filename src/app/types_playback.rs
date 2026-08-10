@@ -1,5 +1,5 @@
 use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueSlotId;
+use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
 use std::collections::HashMap;
@@ -93,7 +93,7 @@ impl QueueScopeResolution {
 /// made after the move is refused instead of swapping the wrong items.
 #[derive(Debug)]
 pub(super) enum UndoEntry {
-    Remove(usize, Box<EmbyItem>),
+    Remove(usize, QueueItem),
     Move {
         from: usize,
         to: usize,

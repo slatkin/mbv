@@ -136,11 +136,20 @@ impl App {
         // Use last_valid_pos (never zeroed during track transitions) rather than
         // position_ticks (transiently 0 when QueueSession advances to the next track).
         if was_playing && !self.has_direct_remote_queue() {
-            if let Some(item) = self.player_tab.items.get_mut(current_idx) {
-                if last_valid_pos > 0 && !item.is_audio() {
-                    item.playback_position_ticks = last_valid_pos;
+            if let Some(slot) = self.player_tab.queue.slots().get(current_idx) {
+                let slot_id = slot.slot_id;
+                if let Some(item) = slot.item.as_emby() {
+                    let mut item = item.clone();
+                    if last_valid_pos > 0 && !item.is_audio() {
+                        item.playback_position_ticks = last_valid_pos;
+                    }
+                    let last_id = item.id.clone();
+                    let _ = self.player_tab.queue.update_slot_item(
+                        slot_id,
+                        mbv_core::playback_queue::QueueItem::Emby(Box::new(item)),
+                    );
+                    self.last_played_item_id = Some(last_id);
                 }
-                self.last_played_item_id = Some(item.id.clone());
             }
         }
         if self.home_is_local_daemon {

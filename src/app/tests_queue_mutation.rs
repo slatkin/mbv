@@ -35,8 +35,8 @@ fn ctrl_a_enqueues_from_home_view() {
     let handled = app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
 
     assert!(!handled);
-    assert_eq!(app.player_tab.items.len(), 1);
-    assert_eq!(app.player_tab.items[0].id, "id0");
+    assert_eq!(app.player_tab.emby_items().len(), 1);
+    assert_eq!(app.player_tab.emby_items()[0].id, "id0");
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn ctrl_a_appends_to_direct_remote_queue() {
         app.remote_player_tab
             .as_ref()
             .unwrap()
-            .items
+            .emby_items()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -69,13 +69,12 @@ fn ctrl_a_appends_to_direct_remote_queue() {
     );
     assert!(matches!(
         cmd_rx.try_recv(),
-        Ok(mbv_core::ctrl::CtrlCmd::PlayerCmd(
-            mbv_core::ctrl::WireCommand::QueueAppend { items }
-        )) if items.len() == 1 && items[0].id == "id0"
+        Ok(mbv_core::ctrl::CtrlCmd::UnifiedQueueAppend { items })
+            if items.len() == 1 && items[0].id() == "id0"
     ));
     assert!(
         cmd_rx.try_recv().is_err(),
-        "Ctrl+A append must not follow QueueAppend with ReplaceQueue"
+        "Ctrl+A append must not follow UnifiedQueueAppend with ReplaceQueue"
     );
 }
 
@@ -91,14 +90,15 @@ fn enqueue_stops_tracking_and_applies_immediately() {
     app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
     assert!(app.confirm_modal.is_none());
     assert!(app.remote_tracker.is_none());
-    assert_eq!(app.player_tab.items.len(), 1);
+    assert_eq!(app.player_tab.emby_items().len(), 1);
 }
 
 #[test]
 fn tracked_playlist_deletes_apply_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(4);
+    app.player_tab
+        .set_items(make_items(4), app.player_tab.queue_cursor);
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("playlist-1".into()),
         name: "Saved".into(),
@@ -112,7 +112,7 @@ fn tracked_playlist_deletes_apply_immediately() {
     assert!(app.confirm_modal.is_none());
     assert_eq!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .map(|item| item.id.as_str())
             .collect::<Vec<_>>(),
@@ -133,13 +133,13 @@ fn clearing_local_queue_in_direct_remote_mode_leaves_remote_queue_intact() {
 
     app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
 
-    assert!(app.player_tab.items.is_empty());
+    assert!(app.player_tab.emby_items().is_empty());
     assert_eq!(app.player_tab.queue_cursor, 0);
     assert_eq!(
         app.remote_player_tab
             .as_ref()
             .unwrap()
-            .items
+            .emby_items()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -174,7 +174,8 @@ fn queue_edit_forwards_to_local_daemon_while_daemon_is_idle() {
         player_rx,
         mbv_core::remote_player::DaemonEndpoint::Local,
     );
-    app.player_tab.items = make_items(3);
+    app.player_tab
+        .set_items(make_items(3), app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 0;
     app.player.status.lock().unwrap().active = false;
     assert!(app.remote_player_tab.is_none());
@@ -186,18 +187,18 @@ fn queue_edit_forwards_to_local_daemon_while_daemon_is_idle() {
 
     assert_eq!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
         vec!["id0", "id2"]
     );
-    assert!(matches!(
-        cmd_rx.try_recv(),
-        Ok(mbv_core::ctrl::CtrlCmd::PlayerCmd(
-            mbv_core::ctrl::WireCommand::QueueRemove(1)
-        ))
-    ));
+    // Unified-capable remote peer: removal is sent as UnifiedQueueRemoveSlot.
+    let cmd = cmd_rx.try_recv().unwrap();
+    assert!(
+        matches!(cmd, mbv_core::ctrl::CtrlCmd::UnifiedQueueRemoveSlot { .. }),
+        "expected UnifiedQueueRemoveSlot"
+    );
 }
 
 #[test]
@@ -214,10 +215,15 @@ fn clearing_remote_queue_in_direct_remote_mode_leaves_local_queue_metadata_intac
 
     app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
 
-    assert!(app.remote_player_tab.as_ref().unwrap().items.is_empty());
+    assert!(app
+        .remote_player_tab
+        .as_ref()
+        .unwrap()
+        .emby_items()
+        .is_empty());
     assert_eq!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -237,14 +243,15 @@ fn clearing_remote_queue_in_direct_remote_mode_leaves_local_queue_metadata_intac
 fn clearing_tracked_queue_applies_immediately_and_stops_tracking() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(2);
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
     app.remote_tracker = Some(tracking_stub());
 
     app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
 
     assert!(app.remote_tracker.is_none());
     assert!(app.confirm_modal.is_none());
-    assert!(app.player_tab.items.is_empty());
+    assert!(app.player_tab.emby_items().is_empty());
 
     app.connected_session_id = Some("session".into());
     let mut advanced_session = make_session("Client", "Emby");
@@ -269,10 +276,10 @@ fn removing_from_local_queue_in_direct_remote_mode_does_not_touch_remote_queue()
 
     app.remove_from_queue(1);
 
-    assert_eq!(app.player_tab.items.len(), 2);
+    assert_eq!(app.player_tab.emby_items().len(), 2);
     assert_eq!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -282,7 +289,7 @@ fn removing_from_local_queue_in_direct_remote_mode_does_not_touch_remote_queue()
         app.remote_player_tab
             .as_ref()
             .unwrap()
-            .items
+            .emby_items()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -304,12 +311,15 @@ fn removing_from_remote_queue_in_direct_remote_mode_does_not_touch_local_queue()
 
     app.remove_from_queue(1);
 
-    assert_eq!(app.remote_player_tab.as_ref().unwrap().items.len(), 2);
+    assert_eq!(
+        app.remote_player_tab.as_ref().unwrap().emby_items().len(),
+        2
+    );
     assert_eq!(
         app.remote_player_tab
             .as_ref()
             .unwrap()
-            .items
+            .emby_items()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -317,7 +327,7 @@ fn removing_from_remote_queue_in_direct_remote_mode_does_not_touch_local_queue()
     );
     assert_eq!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
@@ -344,10 +354,9 @@ fn removing_non_active_item_keeps_cursor_off_now_playing_after_daemon_ack() {
     // Simulate the daemon's async ack of the removal: its `cursor` reports
     // the playback position (still track 0), not the UI's selection.
     app.handle_player_event(PlayerEvent::QueueUpdated {
-        items: app.player_tab.items.clone(),
+        items: app.player_tab.emby_items(),
         cursor: 0,
         source: app.queue_source.clone(),
-        feed_items: Vec::new(),
     });
 
     assert_eq!(
@@ -370,7 +379,12 @@ fn clearing_remote_queue_does_not_prompt_to_save_local_playlist() {
 
     assert!(app.confirm_modal.is_none());
     assert!(app.pending_queue_action.is_none());
-    assert!(app.remote_player_tab.as_ref().unwrap().items.is_empty());
+    assert!(app
+        .remote_player_tab
+        .as_ref()
+        .unwrap()
+        .emby_items()
+        .is_empty());
     assert!(app.queue_dirty);
 }
 
@@ -402,9 +416,12 @@ fn context_menu_remove_targets_displayed_remote_queue() {
     app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)));
 
     let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
-    assert_eq!(item_ids(&app.player_tab.items), item_ids(&local_items));
     assert_eq!(
-        item_ids(&app.remote_player_tab.as_ref().unwrap().items),
+        item_ids(&app.player_tab.emby_items()),
+        item_ids(&local_items)
+    );
+    assert_eq!(
+        item_ids(&app.remote_player_tab.as_ref().unwrap().emby_items()),
         vec![remote_items[0].id.clone(), remote_items[1].id.clone()]
     );
     assert_eq!(app.remote_queue_undo_stack.len(), 1);
@@ -433,14 +450,23 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
             _ => None,
         })
         .expect("remove from queue action");
-    app.remote_player_tab.as_mut().unwrap().items.truncate(2);
+    // Simulate the remote queue shrinking while the context menu is open.
+    // We truncate the slots directly to preserve the cursor position
+    // (simulating a race where the cursor hasn't been clamped yet).
+    {
+        let tab = app.remote_player_tab.as_mut().unwrap();
+        tab.queue.truncate_slots(2);
+    }
 
     app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)));
 
     let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
-    assert_eq!(item_ids(&app.player_tab.items), item_ids(&local_items));
     assert_eq!(
-        item_ids(&app.remote_player_tab.as_ref().unwrap().items),
+        item_ids(&app.player_tab.emby_items()),
+        item_ids(&local_items)
+    );
+    assert_eq!(
+        item_ids(&app.remote_player_tab.as_ref().unwrap().emby_items()),
         vec![remote_items[0].id.clone(), remote_items[1].id.clone()]
     );
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
@@ -450,14 +476,15 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
 #[test]
 fn boundary_queue_edit_does_not_retire_tracking() {
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(2);
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
     app.remote_tracker = Some(tracking_stub());
     app.player_tab.queue_cursor = 0;
 
     app.move_queue_item_up();
 
     assert!(app.remote_tracker.is_some());
-    assert_eq!(app.player_tab.items.len(), 2);
+    assert_eq!(app.player_tab.emby_items().len(), 2);
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use super::notify_actions::ToastSeverity;
 use super::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
 use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
+use mbv_core::playback_queue::{QueueItem, QueueMutationResult, QueueSlotId, RefreshMergeResult};
 use mbv_core::player::PlayerCommand;
 
 impl App {
@@ -93,15 +93,39 @@ impl App {
         scope: QueueScope,
         items: Vec<EmbyItem>,
     ) -> bool {
+        self.sync_playback_queue_items_after_append(
+            scope,
+            items
+                .into_iter()
+                .map(|item| QueueItem::Emby(Box::new(item)))
+                .collect(),
+        )
+    }
+
+    pub(super) fn sync_playback_queue_items_after_append(
+        &mut self,
+        scope: QueueScope,
+        items: Vec<QueueItem>,
+    ) -> bool {
         if items.is_empty() || scope != self.playback_target_queue_scope() {
             return true;
         }
-        let sent = self
-            .player
-            .send_command(crate::player::PlayerCommand::QueueAppend { items });
-        if !sent && !self.player.supports_queue_append() {
+        if !self.player.is_remote() && !self.player.status.lock().unwrap().active {
+            // A cold in-process player has no command channel yet. The app's
+            // canonical queue is authoritative until the next Play starts it.
+            return true;
+        }
+        let sent = self.player.queue_append(items);
+        if !sent && self.player.is_remote() && !self.player.supports_queue_append() {
             self.flash(
                 "Remote append is not supported by this direct mbv peer".to_string(),
+                ToastSeverity::Error,
+            );
+            return false;
+        }
+        if !sent {
+            self.flash(
+                "Playback owner rejected the queue append".to_string(),
                 ToastSeverity::Error,
             );
             return false;
@@ -155,7 +179,7 @@ impl App {
         scope: QueueScope,
         fetched_items: Vec<EmbyItem>,
     ) -> RefreshMergeResult {
-        let queue_len = self.queue_for_scope(scope).items.len();
+        let queue_len = self.queue_for_scope(scope).total_queue_len();
         let sync_player_prunes =
             scope == self.playback_target_queue_scope() && !self.has_direct_remote_queue();
         let active_index = if scope == self.playback_target_queue_scope() {
@@ -250,8 +274,14 @@ impl App {
             QueueMutationResult::Applied(slot) => slot,
             QueueMutationResult::NotFound => return None,
         };
-        self.playback_queue_mut().sync_items_from_queue_model();
-        self.player.send_command(PlayerCommand::QueueRemove(idx));
+        self.playback_queue_mut().clamp_cursor();
+        // Prefer slot-based removal for unified-capable remote peers.
+        let sent_unified = self
+            .player
+            .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(slot_id));
+        if !sent_unified {
+            self.player.send_command(PlayerCommand::QueueRemove(idx));
+        }
         Some(removed.item.id().to_string())
     }
 

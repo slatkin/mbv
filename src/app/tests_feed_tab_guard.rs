@@ -2,6 +2,19 @@ use super::*;
 use crate::app::tests::*;
 use mbv_core::playback_queue::FeedEntry;
 
+fn playable_feed_entry(guid: &str) -> FeedEntry {
+    FeedEntry {
+        guid: guid.into(),
+        title: format!("Feed {guid}"),
+        enclosure_url: Some(format!("https://example.test/{guid}.mp3")),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: Some(mbv_core::config::FeedKind::Audio),
+    }
+}
+
 /// With `TabSelection::Feeds` active, `library_index()` must be `None`,
 /// `shuffle_play` must not panic, and the key handler must route to
 /// feed-specific actions rather than library-item dispatch.
@@ -73,6 +86,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
             mime_type: None,
             duration_ticks: None,
             pub_date_secs: Some(100),
+            feed_kind: Some(mbv_core::config::FeedKind::Audio),
         },
         FeedEntry {
             guid: "b".into(),
@@ -82,6 +96,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
             mime_type: None,
             duration_ticks: None,
             pub_date_secs: Some(200),
+            feed_kind: Some(mbv_core::config::FeedKind::Audio),
         },
     ];
     app.feed_tab.rebuild_all_entries();
@@ -196,6 +211,7 @@ fn feed_tab_play_selected_out_of_range_cursor_is_noop() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: None,
         pub_date_secs: None,
+        feed_kind: Some(mbv_core::config::FeedKind::Audio),
     }]];
     app.feed_tab.rebuild_all_entries();
     app.feed_tab.selected_group = 0;
@@ -220,6 +236,7 @@ fn feed_tab_play_selected_no_source_entry_does_not_dispatch() {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
+        feed_kind: Some(mbv_core::config::FeedKind::Audio),
     }]];
     app.feed_tab.rebuild_all_entries();
     app.feed_tab.selected_group = 0;
@@ -233,7 +250,48 @@ fn feed_tab_play_selected_no_source_entry_does_not_dispatch() {
         app.status
     );
     assert!(
-        app.playback_queue().feed_items.is_empty(),
+        app.playback_queue().queue.slots().is_empty(),
         "no-source entry must not be mirrored into the queue panel"
     );
+}
+
+#[test]
+fn direct_remote_feed_play_submits_the_selected_entry() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(1));
+    app.queue_scope = QueueScope::Remote;
+    app.feed_tab.entries = vec![vec![playable_feed_entry("feed-play")]];
+    app.feed_tab.rebuild_all_entries();
+
+    app.feed_tab_play_selected();
+
+    match cmd_rx.try_recv().unwrap() {
+        mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace {
+            items,
+            start_idx: Some(1),
+        } => assert!(matches!(
+            &items[1],
+            mbv_core::playback_queue::QueueItem::Feed(entry)
+                if entry.guid == "feed-play"
+        )),
+        _ => panic!("expected unified Feed submission"),
+    }
+}
+
+#[test]
+fn direct_remote_feed_enqueue_uses_unified_append() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(1));
+    app.queue_scope = QueueScope::Remote;
+    app.feed_tab.entries = vec![vec![playable_feed_entry("feed-append")]];
+    app.feed_tab.rebuild_all_entries();
+
+    app.feed_tab_enqueue_selected();
+
+    assert!(matches!(
+        cmd_rx.try_recv().unwrap(),
+        mbv_core::ctrl::CtrlCmd::UnifiedQueueAppend { items }
+            if matches!(&items[0], mbv_core::playback_queue::QueueItem::Feed(entry)
+                if entry.guid == "feed-append")
+    ));
 }

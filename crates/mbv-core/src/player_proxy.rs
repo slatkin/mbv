@@ -116,7 +116,9 @@ impl PlayerProxy {
     ) {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.play(item, client, initial_volume),
-            PlayerProxyInner::Remote(r) => r.play(item, source, client, initial_volume),
+            PlayerProxyInner::Remote(r) => {
+                let _ = r.play(item, source, client, initial_volume);
+            }
         }
     }
 
@@ -131,19 +133,84 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.play_queue(items, start_idx, client, initial_volume),
             PlayerProxyInner::Remote(r) => {
-                r.play_queue(items, start_idx, source, client, initial_volume)
+                let _ = r.play_queue(items, start_idx, source, client, initial_volume);
             }
         }
     }
 
-    /// Play a single feed entry. Local: spawns/reuses mpv directly.
-    /// Remote: sends `LoadFeed` through the ctrl channel; if the remote
-    /// daemon does not advertise the `feed-playback` capability the
-    /// command is silently ignored (safe no-op).
-    pub fn play_feed(&self, entry: FeedEntry, headless: bool, initial_volume: u8) {
+    /// Item-generic queue submission: replace the current queue with `items`
+    /// and start playback from `start_idx`.  For local players this routes
+    /// through the unified `Player::submit_queue`; for remote players it
+    /// sends `UnifiedQueueReplace` when the daemon supports the capability,
+    /// falling back to legacy methods.
+    pub fn submit_queue(
+        &self,
+        items: Vec<QueueItem>,
+        start_idx: usize,
+        client: Option<Arc<EmbyClient>>,
+        headless: bool,
+        initial_volume: u8,
+    ) -> bool {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.play_feed(entry, headless, initial_volume),
-            PlayerProxyInner::Remote(r) => r.play_feed(entry),
+            PlayerProxyInner::Local(p) => {
+                p.submit_queue(items, start_idx, client, headless, initial_volume)
+            }
+            PlayerProxyInner::Remote(r) => {
+                if items.is_empty() {
+                    return false;
+                }
+                let start_idx = start_idx.min(items.len() - 1);
+                if r.supports_unified_queue() {
+                    // Unified path: send item-generic replace command.
+                    r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
+                        items,
+                        start_idx: Some(start_idx),
+                    })
+                } else if items.len() == 1 {
+                    // Legacy single-item path.
+                    match &items[0] {
+                        QueueItem::Emby(emby) => {
+                            if let Some(c) = client {
+                                r.play(
+                                    emby.as_ref(),
+                                    crate::config::QueueSource::default(),
+                                    c,
+                                    initial_volume,
+                                )
+                            } else {
+                                false
+                            }
+                        }
+                        QueueItem::Feed(entry) => r.play_feed(entry.clone()),
+                    }
+                } else if items.iter().any(|item| matches!(item, QueueItem::Feed(_))) {
+                    // A legacy peer cannot represent a mixed canonical queue;
+                    // filtering Feed slots would silently replace the owner's
+                    // queue with a different order and cursor.
+                    false
+                } else {
+                    // Legacy multi-item path: all items are Emby here.
+                    let emby_items: Vec<EmbyItem> = items
+                        .into_iter()
+                        .filter_map(|i| i.as_emby().cloned())
+                        .collect();
+                    if !emby_items.is_empty() {
+                        if let Some(c) = client {
+                            r.play_queue(
+                                emby_items,
+                                start_idx,
+                                crate::config::QueueSource::default(),
+                                c,
+                                initial_volume,
+                            )
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                }
+            }
         }
     }
 
@@ -213,6 +280,48 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(_) => true,
             PlayerProxyInner::Remote(r) => r.supports_queue_append(),
+        }
+    }
+
+    pub fn supports_unified_queue(&self) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.supports_unified_queue(),
+        }
+    }
+
+    pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => p.send_command(PlayerCommand::QueueAppend { items }),
+            PlayerProxyInner::Remote(r) => r.queue_append(items),
+        }
+    }
+
+    /// Remove a slot by stable identity on a remote peer that supports
+    /// unified queue.  Returns `false` for local players or legacy peers.
+    pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.queue_remove_slot(slot_id),
+        }
+    }
+
+    /// Move a slot by stable identity on a remote peer that supports
+    /// unified queue.  Returns `false` for local players or legacy peers.
+    pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.queue_move_slot(slot_id, to_index),
+        }
+    }
+
+    /// Begin playback of an existing slot by stable identity on a remote
+    /// peer that supports unified queue.  Returns `false` for local
+    /// players or legacy peers.
+    pub fn queue_play_slot(&self, slot_id: u64) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.queue_play_slot(slot_id),
         }
     }
 

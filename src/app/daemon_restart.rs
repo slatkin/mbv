@@ -1,4 +1,4 @@
-use super::bootstrap::bootstrap_local_daemon_queue;
+use super::bootstrap::{bootstrap_local_daemon_queue, bootstrap_unified_queue};
 use super::{App, QueueScope};
 use mbv_core::player::PlayerProxy;
 use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
@@ -53,17 +53,26 @@ impl App {
 
         let remote_items = remote.items.lock().unwrap().clone();
         let remote_cursor = remote.status.lock().unwrap().current_idx;
+        let remote_unified_state = remote.unified_queue_state();
         let remote_queue_source = remote.queue_source.lock().unwrap().clone();
-        let bootstrap = bootstrap_local_daemon_queue(
-            remote_items,
-            remote_cursor,
-            remote_queue_source,
-            if resume {
-                crate::config::load_queue_state()
-            } else {
-                None
-            },
-        );
+        let bootstrap = remote_unified_state
+            .as_ref()
+            .filter(|state| !state.slots.is_empty())
+            .map_or_else(
+                || {
+                    bootstrap_local_daemon_queue(
+                        remote_items,
+                        remote_cursor,
+                        remote_queue_source,
+                        if resume {
+                            crate::config::load_queue_state()
+                        } else {
+                            None
+                        },
+                    )
+                },
+                bootstrap_unified_queue,
+            );
         let adoption_failed = bootstrap
             .adopt_queue
             .is_some_and(|(items, cursor, source)| !remote.adopt_queue(items, cursor, source));

@@ -12,7 +12,9 @@ use std::{
 
 use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
 use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
-use crate::playback_queue::{FeedEntry, PlaybackQueue, QueueItem, QueueSlotId};
+#[cfg(test)]
+use crate::playback_queue::QueueMutationResult;
+use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use libmpv2::{
     events::{Event, PropertyData},
     mpv_end_file_reason, EndFileReason, Format, Mpv,
@@ -60,5 +62,8 @@ include!("player_proxy.rs");
 mod tests {
     include!("player_tests_basic.rs");
     include!("player_tests_session.rs");
+    include!("player_tests_session_feed.rs");
     include!("player_tests_status.rs");
+    include!("player_tests_submit.rs");
+    include!("player_proxy_tests.rs");
 }

@@ -4,6 +4,7 @@ use super::{
     App, BrowseLevel, LocalPlaybackTarget, PanelFocus, PlaybackTarget, RemotePlaybackTarget,
 };
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
 use mbv_core::ItemId;
 use std::sync::Arc;
@@ -27,7 +28,7 @@ pub(super) fn enqueue_action_context(
 /// drifted, e.g. if the list was edited before the last save) and falls back
 /// to the saved cursor only when there's no last-played id to anchor on.
 pub(crate) fn queue_restore_cursor(
-    items: &[EmbyItem],
+    items: &[QueueItem],
     saved_cursor: usize,
     last_played_item_id: Option<&str>,
     last_played_completed: bool,
@@ -39,7 +40,7 @@ pub(crate) fn queue_restore_cursor(
     // If the last-played item is no longer in the restored list (e.g. it was
     // removed from the queue before quitting), fall back to the saved cursor
     // rather than silently jumping to the front of the queue.
-    let Some(idx) = items.iter().position(|i| i.id == id) else {
+    let Some(idx) = items.iter().position(|i| i.id() == id) else {
         return fallback;
     };
     if last_played_completed {

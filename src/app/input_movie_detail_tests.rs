@@ -114,8 +114,8 @@ fn enter_on_movie_plays_without_opening_detail() {
     let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(!handled);
-    assert_eq!(app.player_tab.items.len(), 1);
-    assert_eq!(app.player_tab.items[0].id, "movie-1");
+    assert_eq!(app.player_tab.emby_items().len(), 1);
+    assert_eq!(app.player_tab.emby_items()[0].id, "movie-1");
 }
 
 // Alt+M's full-screen detail view (and its dedicated key binding) was
@@ -375,8 +375,7 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
     queue.panel_focus = PanelFocus::Queue;
     queue
         .player_tab
-        .items
-        .push(crate::app::tests::make_item("Queued", "Movie"));
+        .append_item(crate::app::tests::make_item("Queued", "Movie"));
     queue.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
     assert!(queue.context_menu.is_some(), "queue view");
 }
@@ -424,11 +423,11 @@ fn ctrl_a_enqueues_selected_from_library_view() {
     app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
 
     assert_eq!(
-        app.player_tab.items.len(),
+        app.player_tab.emby_items().len(),
         1,
         "Ctrl+a enqueues from library view"
     );
-    assert_eq!(app.player_tab.items[0].id, "movie-1");
+    assert_eq!(app.player_tab.emby_items()[0].id, "movie-1");
 }
 
 #[test]
@@ -441,7 +440,9 @@ fn ctrl_z_while_library_panel_focused_does_not_leak_to_queue_undo() {
     let mut app = make_movie_app();
     app.queue_undo_stack.push(crate::app::UndoEntry::Remove(
         0,
-        Box::new(crate::app::tests::make_item("removed", "Movie")),
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(crate::app::tests::make_item(
+            "removed", "Movie",
+        ))),
     ));
     let stack_len_before = app.queue_undo_stack.len();
 
@@ -515,7 +516,9 @@ fn ctrl_z_while_queue_panel_focused_does_trigger_undo() {
     app.panel_focus = PanelFocus::Queue;
     app.queue_undo_stack.push(crate::app::UndoEntry::Remove(
         0,
-        Box::new(crate::app::tests::make_item("removed", "Movie")),
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(crate::app::tests::make_item(
+            "removed", "Movie",
+        ))),
     ));
 
     app.handle_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL));
@@ -548,7 +551,7 @@ fn queue_page_up_and_down_move_queue_cursor_when_queue_panel_focused() {
     for i in 0..20 {
         let mut item = make_item(&format!("Queued {i}"), "Movie");
         item.id = format!("queued-{i}");
-        app.player_tab.items.push(item);
+        app.player_tab.append_item(item);
     }
     app.player_tab.queue_cursor = 15;
 
@@ -588,7 +591,7 @@ fn queue_navigation_keeps_right_panel_gate_open_after_focus_moves_to_library() {
     for i in 0..5 {
         let mut item = make_item(&format!("Queued {i}"), "Movie");
         item.id = format!("queued-{i}");
-        app.player_tab.items.push(item);
+        app.player_tab.append_item(item);
     }
     app.player_tab.queue_cursor = 0;
     let library_nav_at = app.last_library_nav_at;

@@ -3,8 +3,8 @@ use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
 use super::types_tab_selection::TabSelection;
 use super::{
-    bootstrap_local_daemon_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
-    LEFT_WIDTH_DEFAULT,
+    bootstrap_local_daemon_queue, bootstrap_unified_queue, layout, render, spawn_resize_worker,
+    App, AppInit, SessionEvent, LEFT_WIDTH_DEFAULT,
 };
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
@@ -381,19 +381,31 @@ impl App {
         }
         let remote_items = remote.items.lock().unwrap().clone();
         let remote_cursor = remote.status.lock().unwrap().current_idx;
+        let remote_unified_state = remote.unified_queue_state();
         let remote_queue_source = remote.queue_source.lock().unwrap().clone();
-        let initial_queue_scope = if !endpoint.is_local() && !remote_items.is_empty() {
+        let remote_has_items = remote_unified_state
+            .as_ref()
+            .map_or(!remote_items.is_empty(), |state| !state.slots.is_empty());
+        let initial_queue_scope = if !endpoint.is_local() && remote_has_items {
             QueueScope::Remote
         } else {
             QueueScope::Local
         };
         let local_daemon_bootstrap = endpoint.is_local().then(|| {
-            bootstrap_local_daemon_queue(
-                remote_items.clone(),
-                remote_cursor,
-                remote_queue_source.clone(),
-                crate::config::load_queue_state(),
-            )
+            remote_unified_state
+                .as_ref()
+                .filter(|state| !state.slots.is_empty())
+                .map_or_else(
+                    || {
+                        bootstrap_local_daemon_queue(
+                            remote_items.clone(),
+                            remote_cursor,
+                            remote_queue_source.clone(),
+                            crate::config::load_queue_state(),
+                        )
+                    },
+                    bootstrap_unified_queue,
+                )
         });
         // `adopt_queue` returns false when the ctrl socket is already dead
         // (the command send failed); tracked so construction doesn't
@@ -429,7 +441,10 @@ impl App {
             // user can browse locally while the daemon plays elsewhere.
             (
                 PlayerTab::default(),
-                Some(PlayerTab::new(remote_items, remote_cursor)),
+                Some(remote_unified_state.as_ref().map_or_else(
+                    || PlayerTab::from_emby_items(remote_items, remote_cursor),
+                    PlayerTab::from_unified_state,
+                )),
             )
         };
         let mut app = Self::build(AppInit {

@@ -14,8 +14,7 @@ fn saved_playlist_app() -> App {
     let mut items = make_items(2);
     items[0].playlist_item_id = "entry-0".into();
     items[1].playlist_item_id = "entry-1".into();
-    app.player_tab.items = items;
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    app.player_tab.set_items(items, app.player_tab.queue_cursor);
     app.queue_source = crate::config::QueueSource::Playlist {
         id: Some("pl-1".into()),
         name: "A".into(),
@@ -24,7 +23,7 @@ fn saved_playlist_app() -> App {
 }
 
 fn track_source(app: &mut App, playlist_id: &str) {
-    let items = app.player_tab.items.clone();
+    let items = app.player_tab.emby_items();
     app.remote_tracker =
         App::build_remote_tracker_with_source("session", &items, 0, 5, Some(playlist_id.into()));
     assert!(app.remote_tracker.is_some(), "test tracker must build");
@@ -36,7 +35,6 @@ fn consume_occurrence(app: &mut App, slot_index: usize) {
         app.player_tab.queue.consume_slot(slot),
         mbv_core::playback_queue::QueueMutationResult::Applied(_)
     ));
-    app.player_tab.sync_items_from_queue_model();
 }
 
 #[test]
@@ -49,7 +47,7 @@ fn untracked_save_invalidates_and_persists_entry_identities() {
 
     assert!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .all(|item| item.playlist_item_id.is_empty()),
         "an untracked save recreates server entry IDs and must still clear the local identities"
@@ -57,9 +55,9 @@ fn untracked_save_invalidates_and_persists_entry_identities() {
     assert_eq!(app.remote_queue_lineage, lineage);
     let persisted = crate::config::load_queue_state().expect("cleared identity persisted");
     assert!(persisted
-        .items
+        .emby_items()
         .iter()
-        .all(|item| item.playlist_item_id().is_empty()));
+        .all(|item| item.playlist_item_id.is_empty()));
 }
 
 #[test]
@@ -81,7 +79,7 @@ fn save_of_tracked_playlist_retires_eligibility_but_preserves_lineage() {
     );
     assert!(app
         .player_tab
-        .items
+        .emby_items()
         .iter()
         .all(|item| item.playlist_item_id.is_empty()));
 }
@@ -102,7 +100,7 @@ fn overwrite_of_tracked_playlist_advances_lineage_and_clears_entry_ids() {
     );
     assert!(app
         .player_tab
-        .items
+        .emby_items()
         .iter()
         .all(|item| item.playlist_item_id.is_empty()));
 }
@@ -123,7 +121,8 @@ fn overwriting_unrelated_playlist_leaves_tracked_source_identity_intact() {
     assert!(app.remote_tracking_source_is("pl-1"));
     assert_eq!(app.remote_queue_lineage, lineage);
     assert_eq!(
-        app.player_tab.items[0].playlist_item_id, "entry-0",
+        app.player_tab.emby_items()[0].playlist_item_id,
+        "entry-0",
         "the current source's identities are not recreated by an unrelated overwrite"
     );
 }
@@ -133,7 +132,7 @@ fn save_after_consumed_projection_snapshots_the_projected_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = saved_playlist_app();
     consume_occurrence(&mut app, 0);
-    assert_eq!(app.player_tab.items.len(), 1);
+    assert_eq!(app.player_tab.emby_items().len(), 1);
 
     app.save_playlist_to_emby();
 
@@ -187,7 +186,7 @@ fn save_before_replace_executes_pending_action_after_tracked_save() {
         "a successful save on the original lineage must run the save-before-replace continuation"
     );
     assert!(!app.queue_dirty);
-    assert!(app.player_tab.items.is_empty());
+    assert!(app.player_tab.emby_items().is_empty());
 }
 
 #[test]
@@ -262,16 +261,16 @@ fn save_as_success_clears_old_playlist_entry_ids() {
     ));
     assert!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .all(|item| item.playlist_item_id.is_empty()),
         "the new source must never retain entry identities from the old playlist"
     );
     let persisted = crate::config::load_queue_state().expect("save-as persisted");
     assert!(persisted
-        .items
+        .emby_items()
         .iter()
-        .all(|item| item.playlist_item_id().is_empty()));
+        .all(|item| item.playlist_item_id.is_empty()));
     assert!(matches!(
         persisted.source,
         crate::config::QueueSource::Playlist { id: Some(ref id), .. } if id == "pl-2"
@@ -286,7 +285,8 @@ fn replace_completion_persists_new_source_and_cleared_entry_ids() {
 
     app.do_overwrite_playlist("pl-2", "B");
     assert_eq!(
-        app.player_tab.items[0].playlist_item_id, "entry-0",
+        app.player_tab.emby_items()[0].playlist_item_id,
+        "entry-0",
         "boundary of an unrelated overwrite must not clear the current source's identities"
     );
 
@@ -306,7 +306,7 @@ fn replace_completion_persists_new_source_and_cleared_entry_ids() {
     assert!(!app.queue_dirty);
     assert!(app
         .player_tab
-        .items
+        .emby_items()
         .iter()
         .all(|item| item.playlist_item_id.is_empty()));
     let persisted = crate::config::load_queue_state().expect("overwrite persisted");
@@ -315,9 +315,9 @@ fn replace_completion_persists_new_source_and_cleared_entry_ids() {
         crate::config::QueueSource::Playlist { id: Some(ref id), .. } if id == "pl-2"
     ));
     assert!(persisted
-        .items
+        .emby_items()
         .iter()
-        .all(|item| item.playlist_item_id().is_empty()));
+        .all(|item| item.playlist_item_id.is_empty()));
 }
 
 #[test]
@@ -325,7 +325,7 @@ fn save_and_save_on_quit_cannot_resurrect_a_consumed_occurrence() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = saved_playlist_app();
     consume_occurrence(&mut app, 0);
-    assert_eq!(app.player_tab.items.len(), 1);
+    assert_eq!(app.player_tab.emby_items().len(), 1);
 
     // Manual save completes cleanly against the projected queue.
     app.queue_dirty = true;
@@ -338,7 +338,7 @@ fn save_and_save_on_quit_cannot_resurrect_a_consumed_occurrence() {
         result: Ok(()),
     });
     assert!(!app.queue_dirty);
-    assert_eq!(app.player_tab.items.len(), 1);
+    assert_eq!(app.player_tab.emby_items().len(), 1);
 
     // Save-on-quit snapshots the same projected queue, so the consumed
     // occurrence is never re-added by the quit save.

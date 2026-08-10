@@ -161,8 +161,8 @@ impl PlaybackRun {
                 self.cmd_load_new(url, start_pos, item, mpv, progress);
                 cancel_stop = true;
             }
-            PlayerCommand::LoadFeed { entry } => {
-                self.cmd_load_feed(entry, mpv, progress);
+            PlayerCommand::SubmitQueue { items, start_idx } => {
+                self.cmd_submit_queue(items, start_idx, mpv, progress);
                 cancel_stop = true;
             }
         }
@@ -262,22 +262,21 @@ impl PlaybackRun {
         *progress = spawn_progress_reporter(self.reporter.clone());
     }
 
-    fn append_items_to_queue(&mut self, items: Vec<EmbyItem>) {
+    fn append_items_to_queue(&mut self, items: Vec<QueueItem>) {
         for item in items {
-            self.queue.append(QueueItem::Emby(Box::new(item)));
+            self.queue.append(item);
         }
         self.status.lock().unwrap().queue_len = self.queue_len();
     }
 
-    fn cmd_append_queue(&mut self, new_items: Vec<EmbyItem>, mpv: &Mpv) {
+    fn cmd_append_queue(&mut self, new_items: Vec<QueueItem>, mpv: &Mpv) {
         if new_items.is_empty() {
             return;
         }
 
         for item in &new_items {
-            let queue_item = QueueItem::Emby(Box::new(item.clone()));
-            let url = mpv_url_for_queue_item(&queue_item, &self.server_url, &self.token);
-            let title_opt = mpv_title_opt(&queue_item.display_name());
+            let url = mpv_url_for_queue_item(item, &self.server_url, &self.token);
+            let title_opt = mpv_title_opt(&item.display_name());
             if let Err(e) = mpv.command(
                 "loadfile",
                 &[url.as_str(), "append-play", "-1", title_opt.as_str()],
@@ -349,144 +348,148 @@ impl PlaybackRun {
         send_ep_info(mpv, &item);
     }
 
-    /// Append a feed entry to the playback queue and play it immediately.
+    /// Item-generic queue submission: replace the current queue with `items`
+    /// and start playback from `start_idx`. Handles both Emby and Feed items
+    /// through the same lifecycle — source URL and reporting branch on
+    /// `QueueItem` variant; everything else is shared.
     ///
-    /// - **Idle** (empty queue): creates a fresh single-item queue with
-    ///   `PlaybackOrigin::Standalone` and loads the file via `"replace"`.
-    /// - **Active** (non-empty queue): reports the displaced Emby item as
-    ///   stopped (fire-and-forget), clears reporter IDs for the Feed,
-    ///   appends the feed entry, loads it via `"append-play"`, then jumps
-    ///   to it with `playlist-pos`.  The existing origin is preserved so
-    ///   `on_end_file`'s advance path continues to work after the feed
-    ///   item finishes.
-    ///
-    /// The displaced Emby item's EndFile is suppressed via
-    /// `load_state = begin_single()` — matching the `cmd_load_new` /
-    /// `cmd_replace_queue` pattern — because its report was already fired
-    /// above.  Reporter IDs are cleared before any Feed lifecycle event
-    /// so progress/stopped calls become safe no-ops.
-    fn cmd_load_feed(&mut self, entry: FeedEntry, mpv: &Mpv, progress: &mut ProgressGuard) {
+    /// Single-item sets `PlaybackOrigin::Standalone`; multi-item sets `Queue`.
+    fn cmd_submit_queue(
+        &mut self,
+        items: Vec<QueueItem>,
+        start_idx: usize,
+        mpv: &Mpv,
+        progress: &mut ProgressGuard,
+    ) {
         self.cancel_pending_quit();
-        // Loading a new item should always start playing it, even if mpv
-        // was left paused on the previous item (reused-window fast path).
-        let _ = mpv.set_property("pause", false);
-
-        // Stop the progress reporter so it doesn't send stale reports
-        // during the transition.
-        progress.stop_and_join(self.progress_join_budget());
-        self.ext_sub_urls = vec![];
-
-        // Validate that the feed entry has a playable URL.
-        let queue_item = QueueItem::Feed(entry.clone());
-        let url = mpv_url_for_queue_item(&queue_item, &self.server_url, &self.token);
-        if url.is_empty() {
-            log::warn!(
-                target: "player",
-                "feed entry has no playable source: guid={} title={}",
-                entry.guid, entry.title
-            );
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: 0,
-                position_ticks: 0,
-                played: false,
-                consume: false,
-                progress_report_accepted: false,
-                error: Some(format!(
-                    "feed entry has no playable source: {}",
-                    entry.title
-                )),
-            });
+        if items.is_empty() {
             return;
         }
+        let start_idx = start_idx.min(items.len() - 1);
 
-        let was_empty = self.queue_len() == 0;
+        // Loading new items should always start playing, even if mpv was
+        // left paused on the previous item (reused-window fast path).
+        let _ = mpv.set_property("pause", false);
 
-        if !was_empty {
-            // Active: fire the displaced Emby item's final stopped report
-            // BEFORE clearing IDs and BEFORE setting load_state.
-            // report_stopped_background clones the current IDs into a
-            // background thread, so the subsequent clear_session() is safe.
-            // This mirrors cmd_load_new's transition_to() which calls
-            // report_stopped_background for the old item before loading
-            // the new one.
-            self.reporter.report_stopped_background(self.last_valid_pos);
-        }
-
-        // Clear reporter IDs for the Feed — all subsequent report calls
-        // become safe no-ops via the centralized has_session() guard.
-        self.reporter.clear_session();
-
-        if was_empty {
-            // Idle: fresh single-item standalone session.
-            self.origin = PlaybackOrigin::Standalone;
-            self.queue = PlaybackQueue::from_queue_items(vec![queue_item], Some(0));
-            self.current_idx = 0;
-            self.stop_report = StopReport::NotSent;
-            self.load_state = LoadState::begin_single();
-            self.pending_initial_jump = false;
+        // Determine origin from queue size: single item = Standalone, multi = Queue.
+        let origin = if items.len() == 1 {
+            PlaybackOrigin::Standalone
         } else {
-            // Active: append to existing queue and jump to the new item.
-            let new_idx = self.queue_len();
-            self.queue.append(queue_item);
-            self.current_idx = new_idx;
+            PlaybackOrigin::Queue
+        };
+
+        // Report stopped for the current item (is_audio zeroing handled
+        // inside).  For the feed path, clear_session was called earlier so
+        // this becomes a safe no-op.
+        if self.queue_len() > 0 {
+            self.stop_report =
+                StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
+        } else {
             self.stop_report = StopReport::NotSent;
-            // One EndFile from the playlist-pos jump below.
-            // This suppresses the displaced Emby item's EndFile — its
-            // report was already sent via report_stopped_background above.
-            self.load_state = LoadState::begin_single();
-            self.pending_initial_jump = false;
         }
 
-        self.load_active_item_state();
-        self.begin_item_lifecycle();
-        {
-            let mut st = self.status.lock().unwrap();
-            st.runtime_ticks = entry.duration_ticks.unwrap_or(0) as i64;
-            st.position_ticks = 0;
-            st.current_idx = self.current_idx;
-            st.queue_len = self.queue_len();
-            st.title = entry.title.clone();
-            st.art_item_id = entry.guid.clone();
-        }
-
+        // Dismiss overlays from the previous item.
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
         let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
+        // Remove all old playlist entries so the subsequent loadfile
+        // "replace" starts from a clean slate.
+        let _ = mpv.command("playlist-clear", &[]);
 
-        let title_opt = mpv_title_opt(&entry.title);
-        if was_empty {
-            let _ = mpv.set_property("start", "0");
-            log::info!(target: "player", "loadfile url={url} opts={title_opt:?} (feed, idle)");
-            if let Err(e) = mpv.command(
-                "loadfile",
-                &[url.as_str(), "replace", "-1", title_opt.as_str()],
-            ) {
-                log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
-            }
-        } else {
-            log::info!(
-                target: "player",
-                "loadfile url={url} opts={title_opt:?} (feed, append to queue idx={})",
-                self.current_idx
-            );
-            if let Err(e) = mpv.command(
-                "loadfile",
-                &[url.as_str(), "append-play", "-1", title_opt.as_str()],
-            ) {
-                log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
-            }
-            // Jump to the newly appended item.
-            if let Err(e) = mpv.set_property("playlist-pos", self.current_idx as i64) {
+        // Load every item into mpv — source URL resolution branches on
+        // QueueItem variant; everything else is shared.
+        for (i, item) in items.iter().enumerate() {
+            let url = mpv_url_for_queue_item(item, &self.server_url, &self.token);
+            let mode = if i == 0 { "replace" } else { "append-play" };
+            let title_opt = mpv_title_opt(&item.display_name());
+            if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()])
+            {
                 log::warn!(
                     target: "player",
-                    "playlist-pos jump to {} failed: {}",
-                    self.current_idx,
-                    mpv_err_str(&e)
+                    "SubmitQueue loadfile error: {e} | mode={mode} opts={title_opt:?}",
                 );
             }
         }
-        // No send_ep_info for feed items.
-        // No progress reporter spawn — reporter IDs are cleared; the
-        // centralized has_session() guard makes all report calls no-ops.
+
+        let active_item = &items[start_idx];
+        let _ = mpv.set_property("start", format!("{:.0}", resume_start_pos(active_item)));
+        // send_ep_info only for Emby items.
+        if let Some(emby) = active_item.as_emby() {
+            send_ep_info(mpv, emby);
+        }
+
+        // loadfile "replace" displaces the current file (EndFile #1).
+        // If start_idx > 0 we also set playlist-pos which displaces item[0]
+        // (EndFile #2).  Use = not += so a stale load_state from a prior
+        // operation never stacks.
+        self.pending_initial_jump = false;
+        let endfile_count = if start_idx > 0 { 2 } else { 1 };
+        self.load_state = LoadState::begin_replace(endfile_count);
+        if start_idx > 0 {
+            let _ = mpv.set_property("playlist-pos", start_idx as i64);
+        }
+
+        self.origin = origin;
+        // Clone the active item metadata before moving `items` into the queue.
+        let active_runtime = active_item.runtime_ticks();
+        let active_pos = active_item.playback_position_ticks();
+        let active_as_emby = active_item.as_emby().cloned();
+        let active_guid = active_item.id().to_string();
+        let active_title = active_item.title().to_string();
+        self.queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
+        self.current_idx = start_idx;
+        self.load_active_item_state();
+        self.begin_item_lifecycle();
+
+        // Set up reporter for the start item — Emby items get full
+        // reporting; Feed items get a cleared session (no-op reports).
+        progress.stop_and_join(self.progress_join_budget());
+        if let Some(emby) = &active_as_emby {
+            let (urls, ok) = self.reporter.start_item(emby);
+            self.ext_sub_urls = urls;
+            if !ok {
+                log::warn!(
+                    target: "player",
+                    "start_item failed for SubmitQueue item={}",
+                    emby.id,
+                );
+            }
+        } else {
+            self.ext_sub_urls = vec![];
+            self.reporter.clear_session();
+        }
+        *progress = spawn_progress_reporter(self.reporter.clone());
+
+        log::info!(
+            target: "player",
+            "SubmitQueue origin={origin:?} idx={start_idx} items={} pending_resume={:?}s",
+            self.queue_len(),
+            self.pending_resume_secs,
+        );
+        {
+            let mut s = self.status.lock().unwrap();
+            s.position_ticks = active_pos;
+            s.runtime_ticks = active_runtime;
+            s.current_idx = self.current_idx;
+            s.queue_len = self.queue_len();
+            if let Some(emby) = &active_as_emby {
+                s.set_current_item_metadata(emby);
+            } else {
+                s.title = active_title;
+                s.art_item_id = active_guid;
+            }
+        }
+    }
+}
+
+/// The mpv `start` position (seconds) `cmd_submit_queue` should load the
+/// active item at. Mirrors the resume predicate used by `cmd_load_new` and
+/// `load_active_item_state`/`PlaybackRun::new`: Emby video items that
+/// `should_resume()` start at their saved position; audio and Feed items
+/// always start at 0.
+fn resume_start_pos(item: &QueueItem) -> f64 {
+    match item.as_emby() {
+        Some(emby) if !emby.is_audio() && emby.should_resume() => emby.resume_seconds(),
+        _ => 0.0,
     }
 }
 

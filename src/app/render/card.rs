@@ -151,24 +151,26 @@ impl App {
         let playback = self.effective_playback_state();
         let active_source = if playback.active {
             let queue = self.playback_queue();
-            (playback.active_idx < queue.items.len())
-                .then(|| (playback.active_idx, queue.items.clone()))
+            queue
+                .emby_item_at(playback.active_idx)
+                .cloned()
+                .map(|item| (playback.active_idx, item))
         } else {
             None
         };
         let selected_source = || {
             let queue = self.displayed_queue();
-            (queue.queue_cursor < queue.items.len())
-                .then(|| (queue.queue_cursor, queue.items.clone()))
+            queue
+                .clone_emby_item_at(queue.queue_cursor)
+                .map(|item| (queue.queue_cursor, item))
         };
-        let Some((cursor, items)) = active_source.or_else(selected_source) else {
+        let Some((cursor, item)) = active_source.or_else(selected_source) else {
             return self.render_card_placeholder(f, area, left_align);
         };
 
-        let item = &items[cursor];
         let img_types = card_image_types(&item.item_type);
         let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
-        let cache_key = card_cache_key(item);
+        let cache_key = card_cache_key(&item);
         let is_music_item = matches!(img_types, &["Primary"] | &["AudioChild"]);
         if self.images_enabled() || is_music_item {
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
@@ -179,17 +181,19 @@ impl App {
             .is_some_and(|e| e.img.is_none());
 
         // Prefetch images for nearby items so they are ready before the cursor reaches them.
-        // Collect data first (releasing the borrow on items) then call fetch (&mut self).
+        // Collect data first (releasing the borrow on queue) then call fetch (&mut self).
         const PREFETCH_AHEAD: usize = 3;
         const PREFETCH_BEHIND: usize = 1;
-        let n = items.len();
+        let queue_ref = self.playback_queue();
+        let n = queue_ref.total_queue_len();
         let start = cursor.saturating_sub(PREFETCH_BEHIND);
         let end = (cursor + PREFETCH_AHEAD + 1).min(n);
-        let prefetch: Vec<(String, String, String, String)> = items[start..end]
+        let prefetch: Vec<(String, String, String, String)> = queue_ref.slots()[start..end]
             .iter()
             .enumerate()
             .filter(|(i, _)| start + i != cursor)
-            .map(|(_, p)| {
+            .filter_map(|(_, slot)| slot.item.as_emby())
+            .map(|p| {
                 (
                     card_cache_key(p),
                     p.id.clone(),

@@ -47,13 +47,15 @@ impl App {
 
     fn refresh_queue(&mut self) {
         let scope = self.visible_queue_scope();
-        if self.queue_for_scope(scope).items.is_empty() {
+        if self.queue_for_scope(scope).total_queue_len() == 0 {
             return;
         }
         let ids: Vec<String> = self
             .queue_for_scope(scope)
-            .items
+            .queue
+            .slots()
             .iter()
+            .filter_map(|s| s.item.as_emby())
             .map(|i| i.id.clone())
             .collect();
         let client = self.client.lock().unwrap();

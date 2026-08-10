@@ -7,147 +7,82 @@ fn feed_entry(guid: &str) -> FeedEntry {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     }
 }
 
-/// Connects a client with an explicit `feed-playback` capability, unlike
-/// `connect_client` (which always connects a capable client). Used to
-/// exercise the #5.1 per-client gating of the Feed tail.
+/// Connects a client with explicit capability flags.
 fn connect_client_with_capability(
     clients: &mut CtrlClients,
     supports_feed_playback: bool,
+    supports_unified_queue: bool,
 ) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(tx, CtrlTransport::Local, supports_feed_playback);
+    let id = clients.connect(
+        tx,
+        CtrlTransport::Local,
+        supports_feed_playback,
+        supports_unified_queue,
+    );
     (id, rx)
 }
 
 #[test]
-fn broadcast_gates_feed_items_by_peer_capability() {
-    // #5.1: a capable peer's broadcast carries the real Feed tail; a legacy
-    // peer (Hello without feed-playback) must receive an empty one.
+fn broadcast_gates_state_by_peer_capability() {
+    // Unified-queue peers get `UnifiedQueueState`; legacy peers get `CtrlState`.
     let player = cold_player();
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (capable_rx, legacy_rx) = {
         let mut clients = registry.lock().unwrap();
-        let (_capable_id, capable_rx) = connect_client_with_capability(&mut clients, true);
-        let (_legacy_id, legacy_rx) = connect_client_with_capability(&mut clients, false);
+        let (_capable_id, capable_rx) = connect_client_with_capability(&mut clients, true, true);
+        let (_legacy_id, legacy_rx) = connect_client_with_capability(&mut clients, false, false);
         (capable_rx, legacy_rx)
     };
     let shared_queue = shared_queue_state();
-    let feed_items = vec![feed_entry("feed-1")];
+    // Build a canonical queue with one Feed slot.
+    let queue =
+        PlaybackQueue::from_queue_items(vec![QueueItem::Feed(feed_entry("feed-1"))], Some(0));
 
     super::broadcast_queue_state(
         &registry,
         &player,
         &shared_queue,
-        &[],
-        0,
+        &queue,
         &QueueSource::Unknown,
-        &feed_items,
     );
 
+    // Unified-queue peer receives UnifiedQueueState.
     match recv_event(&capable_rx) {
-        CtrlEvent::State(state) => {
-            assert_eq!(
-                state
-                    .feed_items
-                    .iter()
-                    .map(|e| e.guid.as_str())
-                    .collect::<Vec<_>>(),
-                vec!["feed-1"]
-            );
+        CtrlEvent::UnifiedQueueState(state) => {
+            assert_eq!(state.slots.len(), 1);
+            assert_eq!(state.slots[0].item.id(), "feed-1");
         }
-        _ => panic!("expected queue state update"),
+        _other => panic!("expected UnifiedQueueState, got different variant"),
     }
+    // Legacy peer receives CtrlState with feed_items empty (no feed-playback).
     match recv_event(&legacy_rx) {
         CtrlEvent::State(state) => {
             assert!(state.feed_items.is_empty());
+            assert_eq!(state.items.len(), 0);
         }
         _ => panic!("expected queue state update"),
     }
 }
 
 #[test]
-fn adopt_queue_rejected_when_feed_tail_active() {
-    // #5.3: a nonempty Feed tail makes AdoptQueue ambiguous for capable
-    // clients addressing the mixed Emby-then-Feed queue, so it's rejected.
+fn ctrl_load_feed_adds_to_canonical_queue_and_starts_playback() {
     let player = cold_player();
     let player_cmd_rx = player.spy_on_commands();
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, _sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
-    let (reply_tx, reply_rx) = mpsc::channel();
-    let mut items = Vec::new();
-    let mut cursor = 0;
-    let mut source = QueueSource::Unknown;
-    let mut feed_items = vec![feed_entry("feed-1")];
-    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-
-    handle_ctrl(
-        CtrlCmd::AdoptQueue {
-            items: vec![item("adopted", "Video", "Movie")],
-            cursor: 0,
-            source: QueueSource::Unknown,
-        },
-        1,
-        CtrlRequest {
-            reply_tx: &reply_tx,
-        },
-        &client,
-        &player,
-        false,
-        &mut items,
-        &mut cursor,
-        &mut source,
-        &mut feed_items,
-        &shared_queue_state(),
-        &registry,
-        &mut PlaybackIntentState::default(),
-        None,
-        &dummy_merged_tx,
-    );
-
-    assert!(items.is_empty());
-    assert_eq!(
-        feed_items
-            .iter()
-            .map(|e| e.guid.as_str())
-            .collect::<Vec<_>>(),
-        vec!["feed-1"]
-    );
-    assert!(player_cmd_rx.try_recv().is_err());
-    match recv_event(&reply_rx) {
-        CtrlEvent::CommandRejected(reason) => {
-            assert_eq!(reason, "queue has an active Feed tail; adoption skipped");
-        }
-        _ => panic!("expected command rejection"),
-    }
-}
-
-#[test]
-fn ctrl_load_feed_records_entry_in_tail_and_starts_playback() {
-    // Settled design decision (#5.2, no owner/availability rejection): the
-    // daemon always records LoadFeed into its Feed tail and uses the
-    // lifecycle-capable play_feed path (not a bare send_command) so a cold
-    // daemon actually starts mpv.  The entry must have a playable source
-    // for play_feed to proceed past validation.
-    let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, sender_rx) = {
+    let (sender_id, _sender_rx) = {
         let mut clients = registry.lock().unwrap();
         connect_client(&mut clients)
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
     let shared_queue = shared_queue_state();
-    let mut items = Vec::new();
-    let mut cursor = 0;
+    let mut queue = PlaybackQueue::default();
     let mut source = QueueSource::Unknown;
-    let mut feed_items = Vec::new();
     let entry = FeedEntry {
         guid: "feed-1".into(),
         title: "Episode 1".into(),
@@ -156,24 +91,23 @@ fn ctrl_load_feed_records_entry_in_tail_and_starts_playback() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(3_600_000_000),
         pub_date_secs: None,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::LoadFeed {
+        CtrlCmd::PlayerCmd(WireCommand::LoadFeed {
             entry: entry.clone(),
-        })),
-        1,
+        }),
+        sender_id,
         CtrlRequest {
             reply_tx: &reply_tx,
         },
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
+        &mut queue,
         &mut source,
-        &mut feed_items,
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
@@ -181,51 +115,24 @@ fn ctrl_load_feed_records_entry_in_tail_and_starts_playback() {
         &dummy_merged_tx,
     );
 
-    // play_feed (not send_command) was used: the player status reflects
-    // the feed entry being loaded, proving the lifecycle path ran.
+    // Canonical queue has the Feed slot.
+    assert_eq!(queue.len(), 1);
+    assert!(matches!(queue.slots()[0].item, QueueItem::Feed(_)));
+    assert_eq!(queue.slots()[0].item.id(), "feed-1");
+    // SubmitQueue was sent to the player.
+    assert!(matches!(
+        player_cmd_rx.try_recv(),
+        Ok(PlayerCommand::SubmitQueue { .. })
+    ));
+    // Reconnect snapshot reflects the canonical queue.
     {
-        let st = player.status.lock().unwrap();
-        assert!(st.active, "play_feed must activate the player");
-        assert_eq!(st.title, "Episode 1");
-        assert_eq!(st.current_idx, 0);
-        assert_eq!(st.queue_len, 1);
-    }
-    assert_eq!(
-        feed_items
-            .iter()
-            .map(|e| e.guid.as_str())
-            .collect::<Vec<_>>(),
-        vec!["feed-1"]
-    );
-    assert_eq!(
-        shared_queue
-            .feed_items
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|e| e.guid.as_str())
-            .collect::<Vec<_>>(),
-        vec!["feed-1"]
-    );
-    match recv_event(&sender_rx) {
-        CtrlEvent::State(state) => {
-            assert_eq!(
-                state
-                    .feed_items
-                    .iter()
-                    .map(|e| e.guid.as_str())
-                    .collect::<Vec<_>>(),
-                vec!["feed-1"]
-            );
-        }
-        _ => panic!("expected queue state update"),
+        let q = shared_queue.queue.lock().unwrap();
+        assert_eq!(q.len(), 1);
     }
 }
 
 #[test]
-fn feed_consumed_removes_matching_entry_from_tail_and_broadcasts_state() {
-    // Mirrors design.md: "A player Feed-removal event updates the daemon's
-    // tail and the reconnect snapshot before it broadcasts the next state."
+fn feed_slot_consumed_removes_from_canonical_queue_and_broadcasts() {
     let player = cold_player();
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (_sender_id, sender_rx) = {
@@ -233,68 +140,56 @@ fn feed_consumed_removes_matching_entry_from_tail_and_broadcasts_state() {
         connect_client(&mut clients)
     };
     let shared_queue = shared_queue_state();
-    let items = Vec::new();
-    let cursor = 0;
+    let mut queue = PlaybackQueue::from_queue_items(
+        vec![
+            QueueItem::Feed(feed_entry("feed-1")),
+            QueueItem::Feed(feed_entry("feed-2")),
+        ],
+        Some(0),
+    );
     let source = QueueSource::Unknown;
-    let mut feed_items = vec![feed_entry("feed-1"), feed_entry("feed-2")];
 
-    handle_feed_consumed(
-        "feed-1",
-        &registry,
-        &player,
-        &shared_queue,
-        &items,
-        cursor,
-        &source,
-        &mut feed_items,
-    );
+    // Find and consume the "feed-1" slot.
+    let slot_id = queue
+        .slots()
+        .iter()
+        .find(|s| s.item.id() == "feed-1")
+        .map(|s| s.slot_id)
+        .expect("feed-1 slot not found");
+    match queue.consume_slot(slot_id) {
+        crate::playback_queue::QueueMutationResult::Applied(_) => {}
+        other => panic!("expected slot consumed, got {other:?}"),
+    }
+    super::broadcast_queue_state(&registry, &player, &shared_queue, &queue, &source);
 
-    assert_eq!(
-        feed_items
-            .iter()
-            .map(|e| e.guid.as_str())
-            .collect::<Vec<_>>(),
-        vec!["feed-2"]
-    );
-    assert_eq!(
-        shared_queue
-            .feed_items
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|e| e.guid.as_str())
-            .collect::<Vec<_>>(),
-        vec!["feed-2"]
-    );
+    // Only the matching slot was removed.
+    assert_eq!(queue.len(), 1);
+    assert_eq!(queue.slots()[0].item.id(), "feed-2");
+    // Reconnect snapshot updated.
+    {
+        let q = shared_queue.queue.lock().unwrap();
+        assert_eq!(q.len(), 1);
+    }
     match recv_event(&sender_rx) {
-        CtrlEvent::State(state) => {
-            assert_eq!(
-                state
-                    .feed_items
-                    .iter()
-                    .map(|e| e.guid.as_str())
-                    .collect::<Vec<_>>(),
-                vec!["feed-2"]
-            );
+        CtrlEvent::UnifiedQueueState(state) => {
+            assert_eq!(state.slots.len(), 1);
+            assert_eq!(state.slots[0].item.id(), "feed-2");
         }
-        _ => panic!("expected queue state update"),
+        _ => panic!("expected unified queue state update"),
     }
 }
 
 #[test]
-fn adopt_queue_succeeds_when_feed_tail_empty() {
-    // Baseline for the #5.3 guard: with no Feed tail, AdoptQueue against a
-    // cold daemon still succeeds exactly as before.
+fn adopt_queue_succeeds_when_queue_empty() {
     let player = cold_player();
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, _sender_rx) = {
+    let (sender_id, _sender_rx) = {
         let mut clients = registry.lock().unwrap();
         connect_client(&mut clients)
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut items = Vec::new();
-    let mut cursor = 0;
+    let mut queue = PlaybackQueue::default();
     let mut source = QueueSource::Unknown;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -304,17 +199,15 @@ fn adopt_queue_succeeds_when_feed_tail_empty() {
             cursor: 0,
             source: QueueSource::Remote,
         },
-        1,
+        sender_id,
         CtrlRequest {
             reply_tx: &reply_tx,
         },
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
+        &mut queue,
         &mut source,
-        &mut Vec::new(),
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
@@ -322,81 +215,25 @@ fn adopt_queue_succeeds_when_feed_tail_empty() {
         &dummy_merged_tx,
     );
 
-    assert_eq!(
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        vec!["adopted"]
-    );
+    assert_eq!(queue.len(), 1);
+    assert_eq!(queue.slots()[0].item.id(), "adopted");
 }
 
 #[test]
-fn replace_queue_rejected_when_feed_tail_active() {
-    // #5.3: see the AdoptQueue guard rationale.
+fn replace_queue_succeeds_unconditionally() {
+    // With the canonical queue, there is no Feed tail guard — replace always
+    // succeeds.
     let player = cold_player();
-    let player_cmd_rx = player.spy_on_commands();
+    let _player_cmd_rx = player.spy_on_commands();
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, _sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
-    let (reply_tx, reply_rx) = mpsc::channel();
-    let mut items = vec![item("existing", "Video", "Movie")];
-    let mut cursor = 0;
-    let mut source = QueueSource::Remote;
-    let mut feed_items = vec![feed_entry("feed-1")];
-    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-
-    handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::ReplaceQueue {
-            items: vec![item("replacement", "Video", "Movie")],
-            start_idx: 0,
-        })),
-        1,
-        CtrlRequest {
-            reply_tx: &reply_tx,
-        },
-        &client,
-        &player,
-        false,
-        &mut items,
-        &mut cursor,
-        &mut source,
-        &mut feed_items,
-        &shared_queue_state(),
-        &registry,
-        &mut PlaybackIntentState::default(),
-        None,
-        &dummy_merged_tx,
-    );
-
-    assert_eq!(
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        vec!["existing"]
-    );
-    assert!(player_cmd_rx.try_recv().is_err());
-    match recv_event(&reply_rx) {
-        CtrlEvent::CommandRejected(reason) => {
-            assert_eq!(reason, "queue has an active Feed tail; replace skipped");
-        }
-        _ => panic!("expected command rejection"),
-    }
-}
-
-#[test]
-fn replace_queue_succeeds_when_feed_tail_empty() {
-    // Baseline for the #5.3 guard: with no Feed tail, ReplaceQueue succeeds
-    // exactly as before.
-    let player = cold_player();
-    let player_cmd_rx = player.spy_on_commands();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, _sender_rx) = {
+    let (sender_id, _sender_rx) = {
         let mut clients = registry.lock().unwrap();
         connect_client(&mut clients)
     };
     let (reply_tx, _reply_rx) = mpsc::channel();
-    let mut items = vec![item("existing", "Video", "Movie")];
-    let mut cursor = 0;
+    let mut queue =
+        PlaybackQueue::from_queue_items(vec![QueueItem::Feed(feed_entry("feed-1"))], Some(0));
     let mut source = QueueSource::Remote;
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
@@ -405,17 +242,15 @@ fn replace_queue_succeeds_when_feed_tail_empty() {
             items: vec![item("replacement", "Video", "Movie")],
             start_idx: 0,
         })),
-        1,
+        sender_id,
         CtrlRequest {
             reply_tx: &reply_tx,
         },
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
+        &mut queue,
         &mut source,
-        &mut Vec::new(),
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
@@ -423,49 +258,42 @@ fn replace_queue_succeeds_when_feed_tail_empty() {
         &dummy_merged_tx,
     );
 
-    assert_eq!(
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        vec!["replacement"]
-    );
-    assert!(matches!(
-        player_cmd_rx.try_recv(),
-        Ok(PlayerCommand::ReplaceQueue { .. })
-    ));
+    // Queue was replaced — Feed slot is gone, Emby item is present.
+    assert_eq!(queue.len(), 1);
+    assert_eq!(queue.slots()[0].item.id(), "replacement");
+    assert!(matches!(queue.slots()[0].item, QueueItem::Emby(_)));
 }
 
 #[test]
-fn queue_append_rejected_when_feed_tail_active() {
-    // #5.3: see the AdoptQueue guard rationale.
+fn queue_append_succeeds_unconditionally() {
     let player = cold_player();
-    let player_cmd_rx = player.spy_on_commands();
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, _sender_rx) = {
+    let (sender_id, _sender_rx) = {
         let mut clients = registry.lock().unwrap();
         connect_client(&mut clients)
     };
-    let (reply_tx, reply_rx) = mpsc::channel();
-    let mut items = vec![item("existing", "Video", "Movie")];
-    let mut cursor = 0;
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let mut queue =
+        PlaybackQueue::from_queue_items(vec![QueueItem::Feed(feed_entry("feed-1"))], Some(0));
     let mut source = QueueSource::Remote;
-    let mut feed_items = vec![feed_entry("feed-1")];
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueAppend {
-            items: vec![item("appended", "Video", "Movie")],
+            items: vec![QueueItem::Emby(Box::new(item(
+                "appended", "Video", "Movie",
+            )))],
         })),
-        1,
+        sender_id,
         CtrlRequest {
             reply_tx: &reply_tx,
         },
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
+        &mut queue,
         &mut source,
-        &mut feed_items,
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
@@ -473,53 +301,43 @@ fn queue_append_rejected_when_feed_tail_active() {
         &dummy_merged_tx,
     );
 
-    assert_eq!(
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        vec!["existing"]
-    );
-    assert!(player_cmd_rx.try_recv().is_err());
-    match recv_event(&reply_rx) {
-        CtrlEvent::CommandRejected(reason) => {
-            assert_eq!(reason, "queue has an active Feed tail; append skipped");
-        }
-        _ => panic!("expected command rejection"),
-    }
+    // Feed slot remains, Emby item appended.
+    assert_eq!(queue.len(), 2);
+    assert_eq!(queue.slots()[0].item.id(), "feed-1");
+    assert_eq!(queue.slots()[1].item.id(), "appended");
 }
 
 #[test]
-fn queue_move_rejected_when_feed_tail_active() {
-    // #5.3: see the AdoptQueue guard rationale.
+fn queue_move_succeeds_unconditionally() {
     let player = cold_player();
-    let player_cmd_rx = player.spy_on_commands();
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, _sender_rx) = {
+    let (sender_id, _sender_rx) = {
         let mut clients = registry.lock().unwrap();
         connect_client(&mut clients)
     };
-    let (reply_tx, reply_rx) = mpsc::channel();
-    let mut items = vec![
-        item("item-0", "Video", "Movie"),
-        item("item-1", "Video", "Movie"),
-    ];
-    let mut cursor = 0;
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let mut queue = PlaybackQueue::from_queue_items(
+        vec![
+            QueueItem::Feed(feed_entry("feed-1")),
+            QueueItem::Feed(feed_entry("feed-2")),
+        ],
+        Some(0),
+    );
     let mut source = QueueSource::Remote;
-    let mut feed_items = vec![feed_entry("feed-1")];
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(0, 1))),
-        1,
+        sender_id,
         CtrlRequest {
             reply_tx: &reply_tx,
         },
         &client,
         &player,
         false,
-        &mut items,
-        &mut cursor,
+        &mut queue,
         &mut source,
-        &mut feed_items,
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
@@ -528,14 +346,11 @@ fn queue_move_rejected_when_feed_tail_active() {
     );
 
     assert_eq!(
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        vec!["item-0", "item-1"]
+        queue
+            .slots()
+            .iter()
+            .map(|s| s.item.id())
+            .collect::<Vec<_>>(),
+        vec!["feed-2", "feed-1"]
     );
-    assert!(player_cmd_rx.try_recv().is_err());
-    match recv_event(&reply_rx) {
-        CtrlEvent::CommandRejected(reason) => {
-            assert_eq!(reason, "queue has an active Feed tail; move skipped");
-        }
-        _ => panic!("expected command rejection"),
-    }
 }

@@ -37,7 +37,10 @@ fn attached_app() -> App {
     app.connected_session_id = Some("session".into());
     app.connected_session_state = Some(make_session("Client", "Emby"));
     app.terminal_width = 160;
-    app.player_tab.items = vec![make_item("a", "Movie"), make_item("b", "Movie")];
+    app.player_tab.set_items(
+        vec![make_item("a", "Movie"), make_item("b", "Movie")],
+        app.player_tab.queue_cursor,
+    );
     app
 }
 
@@ -45,8 +48,8 @@ fn attached_app() -> App {
 fn duplicate_reanchor_opens_picker_and_enter_selects_occurrence() {
     let mut app = attached_app();
     app.panel_focus = crate::app::PanelFocus::Queue;
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[1].id = "b".into();
+    app.player_tab.emby_items()[0].id = "a".into();
+    app.player_tab.emby_items()[1].id = "b".into();
     let mut tracking = tracker(&["a", "a", "b"]);
     tracking.observe(RemoteObservation::playing(1, "session", "a", 80, 100, 1));
     tracking.observe(RemoteObservation::playing(2, "session", "a", 1, 100, 2));
@@ -103,9 +106,18 @@ fn tracking_retirement_clears_reanchor_popup() {
 #[test]
 fn submitted_sequence_without_exact_visible_queue_has_no_projection() {
     let mut app = attached_app();
-    app.player_tab.items[0].id = "visible-a".into();
-    app.player_tab.items[1].id = "visible-b".into();
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    let mut item_a = app.player_tab.emby_items()[0].clone();
+    item_a.id = "visible-a".into();
+    let mut item_b = app.player_tab.emby_items()[1].clone();
+    item_b.id = "visible-b".into();
+    app.player_tab.set_item_at(
+        0,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
+    );
+    app.player_tab.set_item_at(
+        1,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
+    );
     let submitted = vec![
         make_item("submitted-a", "Movie"),
         make_item("submitted-b", "Movie"),
@@ -131,18 +143,28 @@ fn stop_tracking_and_queue_edits_are_input_gated() {
     app.panel_focus = crate::app::PanelFocus::Library;
     app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
     assert!(app.confirm_modal.is_none());
-    assert_eq!(app.player_tab.items.len(), 3);
+    assert_eq!(app.player_tab.emby_items().len(), 3);
     assert!(app.remote_tracker.is_none());
 }
 
 #[test]
 fn replacement_tracker_ignores_an_earlier_in_flight_poll() {
     let mut app = attached_app();
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[1].id = "b".into();
+    let mut item_a = app.player_tab.emby_items()[0].clone();
+    item_a.id = "a".into();
+    let mut item_b = app.player_tab.emby_items()[1].clone();
+    item_b.id = "b".into();
+    app.player_tab.set_item_at(
+        0,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
+    );
+    app.player_tab.set_item_at(
+        1,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
+    );
     app.player_tab.queue_cursor = 0;
     app.session_poll_generation = 4;
-    let items = app.player_tab.items.clone();
+    let items = app.player_tab.emby_items();
     app.remote_tracker = App::build_remote_tracker_with_source("session", &items, 1, 5, None);
 
     let mut stale_session = make_session("Client", "Emby");
@@ -180,8 +202,18 @@ fn replacement_tracker_ignores_an_earlier_in_flight_poll() {
 #[test]
 fn repeated_same_item_poll_does_not_move_queue_cursor() {
     let mut app = attached_app();
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[1].id = "b".into();
+    let mut item_a = app.player_tab.emby_items()[0].clone();
+    item_a.id = "a".into();
+    let mut item_b = app.player_tab.emby_items()[1].clone();
+    item_b.id = "b".into();
+    app.player_tab.set_item_at(
+        0,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
+    );
+    app.player_tab.set_item_at(
+        1,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
+    );
     app.player_tab.queue_cursor = 0;
     app.connected_session_state = Some({
         let mut state = make_session("Client", "Emby");
@@ -259,13 +291,22 @@ fn completed_remote_occurrence_is_consumed_from_an_ad_hoc_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = attached_app();
     app.client.lock().unwrap().config.consume_videos = true;
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[1].id = "b".into();
+    let mut item_a = app.player_tab.emby_items()[0].clone();
+    item_a.id = "a".into();
+    let mut item_b = app.player_tab.emby_items()[1].clone();
+    item_b.id = "b".into();
+    app.player_tab.set_item_at(
+        0,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
+    );
+    app.player_tab.set_item_at(
+        1,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
+    );
     app.player_tab.queue_cursor = 0;
     app.session_poll_generation = 5;
-    let items = app.player_tab.items.clone();
+    let items = app.player_tab.emby_items();
     app.remote_tracker = App::build_remote_tracker_with_source("session", &items, 0, 5, None);
-    app.player_tab.sync_queue_model_from_items_if_needed();
     let slots: Vec<QueueSlotId> = app
         .player_tab
         .queue
@@ -298,7 +339,7 @@ fn completed_remote_occurrence_is_consumed_from_an_ad_hoc_queue() {
 
     assert_eq!(
         app.player_tab
-            .items
+            .emby_items()
             .iter()
             .map(|item| item.id.as_str())
             .collect::<Vec<_>>(),

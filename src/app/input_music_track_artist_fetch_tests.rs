@@ -24,12 +24,8 @@ fn selectable_artist_header_direct_play_fetches_header_albums_not_stale_cursor()
 
     app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
 
-    let queued_ids: Vec<&str> = app
-        .player_tab
-        .items
-        .iter()
-        .map(|item| item.id.as_str())
-        .collect();
+    let items = app.player_tab.emby_items();
+    let queued_ids: Vec<&str> = items.iter().map(|item| item.id.as_str()).collect();
     assert_eq!(queued_ids, vec!["a1-t1", "a1-t2", "a2-t1"]);
     assert_eq!(app.player_tab.queue_cursor, 0);
     let mut first_seen = server.first_seen_parent_ids();
@@ -63,12 +59,8 @@ fn selectable_artist_header_context_shuffle_fetches_header_albums_not_stale_curs
 
     app.execute_context_action(Some(action));
 
-    let mut queued_ids: Vec<&str> = app
-        .player_tab
-        .items
-        .iter()
-        .map(|item| item.id.as_str())
-        .collect();
+    let items2 = app.player_tab.emby_items();
+    let mut queued_ids: Vec<&str> = items2.iter().map(|item| item.id.as_str()).collect();
     queued_ids.sort_unstable();
     assert_eq!(queued_ids, vec!["a1-t1", "a2-t1"]);
     let mut first_seen = server.first_seen_parent_ids();
@@ -89,7 +81,7 @@ fn selectable_artist_header_fetch_error_leaves_queue_and_playback_unchanged() {
     app.player_tab.set_items(vec![existing], 0);
     let before_ids: Vec<String> = app
         .player_tab
-        .items
+        .emby_items()
         .iter()
         .map(|item| item.id.clone())
         .collect();
@@ -103,7 +95,7 @@ fn selectable_artist_header_fetch_error_leaves_queue_and_playback_unchanged() {
 
     let after_ids: Vec<String> = app
         .player_tab
-        .items
+        .emby_items()
         .iter()
         .map(|item| item.id.clone())
         .collect();

@@ -56,7 +56,8 @@ fn remote_slot_state_direct_remote_display_does_not_imply_sessions_panel_disconn
 #[test]
 fn direct_remote_connect_keeps_local_scope_when_remote_queue_is_empty() {
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(2);
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
     let sess = make_session("remote-host", "mbv");
 
@@ -64,14 +65,20 @@ fn direct_remote_connect_keeps_local_scope_when_remote_queue_is_empty() {
 
     assert_eq!(app.queue_scope, QueueScope::Local);
     assert_eq!(app.visible_queue_scope(), QueueScope::Local);
-    assert!(app.remote_player_tab.as_ref().unwrap().items.is_empty());
-    assert_eq!(app.player_tab.items.len(), 2);
+    assert!(app
+        .remote_player_tab
+        .as_ref()
+        .unwrap()
+        .emby_items()
+        .is_empty());
+    assert_eq!(app.player_tab.emby_items().len(), 2);
 }
 
 #[test]
 fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() {
     let mut app = make_app_stub();
-    app.player_tab.items = make_items(2);
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
     let remote_items = make_items(1);
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items.clone(), 0);
     let sess = make_session("remote-host", "mbv");
@@ -81,10 +88,10 @@ fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() 
     assert_eq!(app.queue_scope, QueueScope::Remote);
     assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
     assert_eq!(
-        app.remote_player_tab.as_ref().unwrap().items[0].id,
+        app.remote_player_tab.as_ref().unwrap().emby_items()[0].id,
         remote_items[0].id
     );
-    assert_eq!(app.player_tab.items.len(), 2);
+    assert_eq!(app.player_tab.emby_items().len(), 2);
 }
 
 #[test]
@@ -422,7 +429,7 @@ fn announced_shutdown_of_current_remote_target_does_not_quit_local_daemon_home()
 #[test]
 fn resetting_local_daemon_queue_view_drops_stale_remote_queue_and_scope() {
     let mut app = make_local_daemon_app_stub(make_items(1));
-    app.remote_player_tab = Some(PlayerTab::new(make_items(2), 1));
+    app.remote_player_tab = Some(PlayerTab::from_emby_items(make_items(2), 1));
     app.queue_scope = QueueScope::Remote;
 
     app.reset_local_daemon_queue_view();
@@ -608,12 +615,12 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
 
     let item_ids = |items: &[EmbyItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
     assert_eq!(
-        serde_json::to_value(&app.player_tab.items).unwrap(),
+        serde_json::to_value(app.player_tab.emby_items()).unwrap(),
         serde_json::to_value(&local_items).unwrap()
     );
     assert_eq!(app.player_tab.queue_cursor, 0);
     assert_eq!(
-        item_ids(&app.remote_player_tab.as_ref().unwrap().items),
+        item_ids(&app.remote_player_tab.as_ref().unwrap().emby_items()),
         vec![
             remote_items[0].id.clone(),
             remote_items[2].id.clone(),
@@ -715,7 +722,7 @@ fn restore_local_mode_clears_remote_queue_presentation_for_local_daemon_home() {
     assert_eq!(app.remote_slot_state(), RemoteSlotState::LocalDaemon);
     assert!(app.remote_player_tab.is_none());
     // The reconnected daemon's items land in the unified queue, not emptied.
-    assert_eq!(app.displayed_queue().items.len(), 2);
+    assert_eq!(app.displayed_queue().emby_items().len(), 2);
     assert_eq!(app.displayed_queue().queue_cursor, 1);
 }
 

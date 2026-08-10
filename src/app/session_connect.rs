@@ -258,7 +258,10 @@ impl App {
         self.stop_visualizer_worker();
         self.player_endpoint = Some(endpoint.clone());
         let initial_items = remote.items.lock().unwrap().clone();
-        let has_initial_items = !initial_items.is_empty();
+        let initial_unified_state = remote.unified_queue_state();
+        let has_initial_items = initial_unified_state
+            .as_ref()
+            .map_or(!initial_items.is_empty(), |state| !state.slots.is_empty());
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let always_play_next = self.client.lock().unwrap().config.always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below:
@@ -304,7 +307,10 @@ impl App {
             );
         }
 
-        self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
+        self.remote_player_tab = Some(initial_unified_state.as_ref().map_or_else(
+            || PlayerTab::from_emby_items(initial_items, initial_cursor),
+            PlayerTab::from_unified_state,
+        ));
         self.connected_session_id = None;
         self.connected_session_state = None;
         self.retire_remote_tracking(true);
@@ -353,7 +359,10 @@ impl App {
         self.player_endpoint = Some(endpoint.clone());
         let previous_route = self.active_route.clone();
         let initial_items = remote.items.lock().unwrap().clone();
-        let has_initial_items = !initial_items.is_empty();
+        let initial_unified_state = remote.unified_queue_state();
+        let has_initial_items = initial_unified_state
+            .as_ref()
+            .map_or(!initial_items.is_empty(), |state| !state.slots.is_empty());
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let always_play_next = self.client.lock().unwrap().config.always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below,
@@ -397,7 +406,10 @@ impl App {
             );
         }
 
-        self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
+        self.remote_player_tab = Some(initial_unified_state.as_ref().map_or_else(
+            || PlayerTab::from_emby_items(initial_items, initial_cursor),
+            PlayerTab::from_unified_state,
+        ));
         self.direct_remote_connected = false;
         self.active_route = Some(library_name.to_string());
         self.remote_pos_s = 0;
@@ -473,8 +485,13 @@ impl App {
             ) {
                 Ok((remote, remote_rx)) => {
                     let initial_items = remote.items.lock().unwrap().clone();
+                    let initial_unified_state = remote.unified_queue_state();
                     let initial_cursor = remote.status.lock().unwrap().current_idx;
                     let remote_queue_source = remote.queue_source.lock().unwrap().clone();
+                    let initial_tab = initial_unified_state.as_ref().map_or_else(
+                        || PlayerTab::from_emby_items(initial_items, initial_cursor),
+                        PlayerTab::from_unified_state,
+                    );
                     let always_play_next = self.client.lock().unwrap().config.always_play_next;
                     // Cloned before `remote` is moved into `PlayerProxy::remote`
                     // below, mirroring `switch_to_library_route`'s #175 MPRIS
@@ -496,8 +513,7 @@ impl App {
                     self.player_endpoint = Some(mbv_core::remote_player::DaemonEndpoint::Local);
                     debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
                     self.sync_subtitle_prefs_to_player();
-                    reconnected_local_daemon =
-                        Some((initial_items, initial_cursor, remote_queue_source));
+                    reconnected_local_daemon = Some((initial_tab, remote_queue_source));
                 }
                 Err(_message) => {
                     // The generic message from try_daemon_route_connect
@@ -517,12 +533,11 @@ impl App {
                 }
             }
         }
-        if let Some((initial_items, initial_cursor, remote_queue_source)) = reconnected_local_daemon
-        {
+        if let Some((initial_tab, remote_queue_source)) = reconnected_local_daemon {
             // Mirror `App::new_remote`'s local-daemon baseline (`construct.rs`):
             // adopt the daemon's live queue into the single unified `player_tab`
             // -- no separate remote tab, no scope pill (#424).
-            self.player_tab = PlayerTab::new(initial_items, initial_cursor);
+            self.player_tab = initial_tab;
             self.queue_source = remote_queue_source;
         }
         self.remote_player_tab = None;

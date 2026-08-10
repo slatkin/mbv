@@ -79,6 +79,18 @@ impl App {
                 }
                 Some(false)
             }
+            // e — enqueue the selected entry into the canonical queue
+            // without starting playback, using the same append path as
+            // library enqueue.
+            KeyCode::Char('e') => {
+                use super::notify_actions::ToastSeverity;
+                if self.feed_tab.visible_entries().is_empty() {
+                    self.flash("No entries to enqueue".into(), ToastSeverity::Neutral);
+                } else {
+                    self.feed_tab_enqueue_selected();
+                }
+                Some(false)
+            }
             _ => None,
         }
     }

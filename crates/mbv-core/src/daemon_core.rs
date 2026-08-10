@@ -6,10 +6,11 @@ use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
 use crate::ctrl::{
-    CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason, PlaybackGeneration, PlaybackIntent,
-    PlaybackIntentAction, PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
+    slot_id_to_u64, CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason, PlaybackGeneration,
+    PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent, PlaybackIntentOutcome,
+    PlaybackRequestId, UnifiedQueueSlot, UnifiedQueueStateData, WireCommand,
 };
-use crate::playback_queue::FeedEntry;
+use crate::playback_queue::{FeedEntry, PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 
@@ -125,8 +126,11 @@ struct CtrlClient {
     tx: CtrlSender,
     transport: CtrlTransport,
     /// Whether this peer advertised `feed-playback` in its Hello. Gates
-    /// whether it receives the real Feed tail or an empty one (#5.1).
+    /// whether it receives the Feed tail in legacy CtrlState or an empty one.
     supports_feed_playback: bool,
+    /// Whether this peer advertised `unified-queue` in its Hello. Gates
+    /// whether it receives `UnifiedQueueState` or legacy `CtrlState`.
+    supports_unified_queue: bool,
 }
 
 type ClientRegistry = Arc<Mutex<CtrlClients>>;
@@ -413,12 +417,14 @@ impl PlaybackIntentState {
     }
 }
 
+/// Snapshot of the daemon's canonical queue used to seed newly-connecting
+/// ctrl-socket clients.  The queue itself is the single source of truth;
+/// legacy `CtrlState` and capable `UnifiedQueueState` are both derived from
+/// it at the broadcast boundary.
 #[derive(Clone)]
 struct SharedQueueState {
-    items: Arc<Mutex<Vec<EmbyItem>>>,
-    cursor: Arc<Mutex<usize>>,
+    queue: Arc<Mutex<PlaybackQueue>>,
     source: Arc<Mutex<crate::config::QueueSource>>,
-    feed_items: Arc<Mutex<Vec<FeedEntry>>>,
 }
 
 pub struct DaemonPlayerHandle {
@@ -471,6 +477,7 @@ impl CtrlClients {
         tx: CtrlSender,
         transport: CtrlTransport,
         supports_feed_playback: bool,
+        supports_unified_queue: bool,
     ) -> CtrlClientId {
         let id = self.next_id;
         self.next_id += 1;
@@ -479,6 +486,7 @@ impl CtrlClients {
             tx,
             transport,
             supports_feed_playback,
+            supports_unified_queue,
         });
         if self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
@@ -505,12 +513,22 @@ impl CtrlClients {
 
     /// Whether the client `id` advertised `feed-playback` support at Hello.
     /// Used to gate per-client rejection echoes that would otherwise leak
-    /// the Feed tail to a legacy peer (#5.1).
+    /// the Feed tail to a legacy peer.
     fn supports_feed_playback(&self, id: CtrlClientId) -> bool {
         self.connection
             .iter()
             .find(|c| c.id == id)
             .is_some_and(|c| c.supports_feed_playback)
+    }
+
+    /// Whether the client `id` advertised `unified-queue` support at Hello.
+    /// Used to gate per-client state events: capable peers receive
+    /// `UnifiedQueueState`, legacy peers receive `CtrlState`.
+    fn supports_unified_queue(&self, id: CtrlClientId) -> bool {
+        self.connection
+            .iter()
+            .find(|c| c.id == id)
+            .is_some_and(|c| c.supports_unified_queue)
     }
 
     fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
@@ -530,13 +548,22 @@ impl CtrlClients {
             .retain(|c| c.tx.send(CtrlOutbound::Event(json.clone())).is_ok());
     }
 
-    /// Broadcasts a `State` event whose `feed_items` tail is gated per
-    /// client: capable clients (advertised `feed-playback` at Hello) get
-    /// `capable_json`, everyone else gets `legacy_json` (built with an empty
-    /// Feed tail). Mirrors `broadcast_to_all`'s drop-on-failed-send behavior.
-    fn broadcast_state_gated(&mut self, capable_json: String, legacy_json: String) {
+    /// Broadcasts a state event gated per client:
+    /// - `unified_json` → peers advertising `unified-queue`
+    /// - `capable_json` → peers advertising `feed-playback` but not `unified-queue`
+    /// - `legacy_json` → all others
+    ///
+    /// Mirrors `broadcast_to_all`'s drop-on-failed-send behavior.
+    fn broadcast_state_gated(
+        &mut self,
+        unified_json: String,
+        capable_json: String,
+        legacy_json: String,
+    ) {
         self.connection.retain(|c| {
-            let json = if c.supports_feed_playback {
+            let json = if c.supports_unified_queue {
+                &unified_json
+            } else if c.supports_feed_playback {
                 &capable_json
             } else {
                 &legacy_json
@@ -602,7 +629,7 @@ fn take_authority_for_emby_remote(ctrl_clients: &ClientRegistry) {
 /// `Player`/`EmbyClient`. Returns the bare reason (not a `CtrlEvent`) so the
 /// same string can be reused for both the server-side log line and the wire
 /// event the caller sends — one message, not two that can drift apart.
-fn audio_only_rejection(audio_only: bool, fetched: &[EmbyItem]) -> Option<String> {
+fn audio_only_rejection(audio_only: bool, fetched: &[QueueItem]) -> Option<String> {
     if audio_only && !all_audio(fetched) {
         Some("Daemon is running in audio-only mode; can't play video items".to_string())
     } else {
@@ -655,7 +682,9 @@ fn spawn_ctrl_client<S>(
         let Some(Ok(line)) = lines.next() else {
             return;
         };
-        let supports_feed_playback = match serde_json::from_str::<CtrlCmd>(&line) {
+        let (supports_feed_playback, supports_unified_queue) = match serde_json::from_str::<CtrlCmd>(
+            &line,
+        ) {
             Ok(CtrlCmd::Hello(info)) => {
                 if let Err(e) = info.validate_peer() {
                     log::warn!(target: "daemon", "rejecting ctrl client: {e}");
@@ -673,7 +702,7 @@ fn spawn_ctrl_client<S>(
                     );
                     return;
                 }
-                info.supports_feed_playback()
+                (info.supports_feed_playback(), info.supports_unified_queue())
             }
             Ok(_) => {
                 log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
@@ -685,25 +714,62 @@ fn spawn_ctrl_client<S>(
             }
         };
 
-        if let Ok(init_json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: player_status.lock().unwrap().clone(),
-            items: shared_queue.items.lock().unwrap().clone(),
-            cursor: *shared_queue.cursor.lock().unwrap(),
-            source: shared_queue.source.lock().unwrap().clone(),
-            feed_items: if supports_feed_playback {
-                shared_queue.feed_items.lock().unwrap().clone()
+        // Send initial state: `UnifiedQueueState` for capable peers,
+        // legacy `CtrlState` for others.
+        let status = player_status.lock().unwrap().clone();
+        let init_event = if supports_unified_queue {
+            let q = shared_queue.queue.lock().unwrap();
+            CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+                status,
+                slots: q
+                    .slots()
+                    .iter()
+                    .map(|s| UnifiedQueueSlot {
+                        slot_id: slot_id_to_u64(s.slot_id),
+                        item: s.item.clone(),
+                    })
+                    .collect(),
+                active_slot: q.active_slot_id().map(slot_id_to_u64),
+                revision: q.revision().raw(),
+                source: shared_queue.source.lock().unwrap().clone(),
+            })
+        } else {
+            let q = shared_queue.queue.lock().unwrap();
+            let feed_items: Vec<FeedEntry> = if supports_feed_playback {
+                q.slots()
+                    .iter()
+                    .filter_map(|s| match &s.item {
+                        QueueItem::Feed(e) => Some(e.clone()),
+                        _ => None,
+                    })
+                    .collect()
             } else {
                 Vec::new()
-            },
-        })) {
+            };
+            let emby_items: Vec<EmbyItem> = q
+                .slots()
+                .iter()
+                .filter_map(|s| s.item.as_emby().cloned())
+                .collect();
+            let cursor = q.active_index().unwrap_or(0);
+            CtrlEvent::State(CtrlState {
+                status,
+                items: emby_items,
+                cursor,
+                source: shared_queue.source.lock().unwrap().clone(),
+                feed_items,
+            })
+        };
+        if let Ok(init_json) = serde_json::to_string(&init_event) {
             ev_tx.send(CtrlOutbound::Event(init_json)).ok();
         }
         let reply_tx = ev_tx.clone();
-        let client_id =
-            ctrl_clients
-                .lock()
-                .unwrap()
-                .connect(ev_tx, transport, supports_feed_playback);
+        let client_id = ctrl_clients.lock().unwrap().connect(
+            ev_tx,
+            transport,
+            supports_feed_playback,
+            supports_unified_queue,
+        );
 
         for line in lines {
             let Ok(line) = line else { break };

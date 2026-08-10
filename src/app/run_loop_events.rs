@@ -111,7 +111,6 @@ impl App {
     /// holding the display cursor on whatever it was already pointing at.
     /// Returns whether the slot was actually removed.
     fn remove_projected_queue_slot(&mut self, slot_id: QueueSlotId) -> bool {
-        self.player_tab.sync_queue_model_from_items_if_needed();
         let selected_slot = self
             .player_tab
             .queue
@@ -124,7 +123,7 @@ impl App {
         ) {
             return false;
         }
-        self.player_tab.sync_items_from_queue_model();
+        self.player_tab.clamp_cursor();
         if let Some(index) =
             selected_slot.and_then(|selected| self.player_tab.queue.slot_index(selected))
         {

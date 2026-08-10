@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::api::{EmbyClient, EmbyItem};
 use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent};
-use crate::playback_queue::FeedEntry;
+use crate::playback_queue::{FeedEntry, QueueItem};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 /// Response from a bounded shutdown request.
@@ -28,7 +28,7 @@ pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
     pub subtitle_prefs: Arc<Mutex<crate::player::SubtitlePrefs>>,
     pub items: Arc<Mutex<Vec<EmbyItem>>>,
-    pub feed_items: Arc<Mutex<Vec<FeedEntry>>>,
+    pub unified_queue: Arc<Mutex<Option<crate::ctrl::UnifiedQueueStateData>>>,
     pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
@@ -186,7 +186,7 @@ impl RemotePlayer {
 
     pub fn adopt_queue(
         &self,
-        items: Vec<EmbyItem>,
+        items: Vec<QueueItem>,
         cursor: usize,
         source: crate::config::QueueSource,
     ) -> bool {
@@ -197,16 +197,29 @@ impl RemotePlayer {
             status.queue_len = items.len();
             status.active = false;
         }
-        *self.items.lock().unwrap() = items.clone();
-        self.feed_items.lock().unwrap().clear();
+        let emby_items: Vec<EmbyItem> = items
+            .iter()
+            .filter_map(|item| item.as_emby().cloned())
+            .collect();
+        *self.items.lock().unwrap() = emby_items.clone();
         *self.queue_source.lock().unwrap() = source.clone();
-        self.cmd_tx
-            .send(CtrlCmd::AdoptQueue {
-                items,
-                cursor,
-                source,
-            })
-            .is_ok()
+        if self.ctrl_compatibility.supports_unified_queue {
+            self.cmd_tx
+                .send(CtrlCmd::UnifiedAdoptQueue {
+                    items,
+                    cursor,
+                    source,
+                })
+                .is_ok()
+        } else {
+            self.cmd_tx
+                .send(CtrlCmd::AdoptQueue {
+                    items: emby_items,
+                    cursor,
+                    source,
+                })
+                .is_ok()
+        }
     }
 
     pub fn play(
@@ -215,18 +228,43 @@ impl RemotePlayer {
         source: crate::config::QueueSource,
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
-    ) {
-        let _ = self.send_playback_intent(self.new_playback_intent(
-            crate::ctrl::PlaybackIntentAction::Play {
-                item_ids: vec![item.id.clone()],
-                start_idx: 0,
-                start_ticks: item.playback_position_ticks,
-                source: source.clone(),
-            },
-        ));
-        *self.items.lock().unwrap() = vec![item.clone()];
-        self.feed_items.lock().unwrap().clear();
-        *self.queue_source.lock().unwrap() = source;
+    ) -> bool {
+        let sent = if self.ctrl_compatibility.supports_unified_queue {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
+                items: vec![QueueItem::Emby(Box::new(item.clone()))],
+                start_idx: Some(0),
+            })
+        } else {
+            self.send_playback_intent(self.new_playback_intent(
+                crate::ctrl::PlaybackIntentAction::Play {
+                    item_ids: vec![item.id.clone()],
+                    start_idx: 0,
+                    start_ticks: item.playback_position_ticks,
+                    source: source.clone(),
+                },
+            ))
+        };
+        if sent {
+            *self.items.lock().unwrap() = vec![item.clone()];
+            *self.queue_source.lock().unwrap() = source;
+        }
+        sent
+    }
+
+    pub fn supports_feed_playback(&self) -> bool {
+        self.ctrl_compatibility.supports_feed_playback
+    }
+
+    /// Legacy single-feed submission for peers that advertise `feed-playback`
+    /// but not `unified-queue`. Sends the surviving `WireCommand::LoadFeed`
+    /// envelope, which the daemon intercepts and folds into its canonical queue.
+    pub fn play_feed(&self, entry: FeedEntry) -> bool {
+        if !self.supports_feed_playback() {
+            return false;
+        }
+        self.send_ctrl_cmd(CtrlCmd::PlayerCmd(crate::ctrl::WireCommand::LoadFeed {
+            entry,
+        }))
     }
 
     pub fn play_queue(
@@ -236,37 +274,36 @@ impl RemotePlayer {
         source: crate::config::QueueSource,
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
-    ) {
-        let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
-        let start_ticks = items
-            .get(start_idx)
-            .map_or(0, |i| i.playback_position_ticks);
-        let _ = self.send_playback_intent(self.new_playback_intent(
-            crate::ctrl::PlaybackIntentAction::Play {
-                item_ids,
-                start_idx,
-                start_ticks,
-                source: source.clone(),
-            },
-        ));
-        *self.items.lock().unwrap() = items;
-        self.feed_items.lock().unwrap().clear();
-        *self.queue_source.lock().unwrap() = source;
-    }
-
-    /// Play a single feed entry on a remote daemon. If the peer does not
-    /// advertise the `feed-playback` capability, the command is silently
-    /// dropped (safe no-op — the daemon will skip the unknown wire
-    /// command, and no state corruption is possible).
-    pub fn play_feed(&self, entry: FeedEntry) {
-        if !self.ctrl_compatibility.supports_feed_playback {
-            log::warn!(
-                target: "remote",
-                "remote peer does not support feed playback; dropping LoadFeed command"
-            );
-            return;
+    ) -> bool {
+        let sent = if self.ctrl_compatibility.supports_unified_queue {
+            let queue_items: Vec<QueueItem> = items
+                .iter()
+                .cloned()
+                .map(|i| QueueItem::Emby(Box::new(i)))
+                .collect();
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
+                items: queue_items,
+                start_idx: Some(start_idx),
+            })
+        } else {
+            let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
+            let start_ticks = items
+                .get(start_idx)
+                .map_or(0, |i| i.playback_position_ticks);
+            self.send_playback_intent(self.new_playback_intent(
+                crate::ctrl::PlaybackIntentAction::Play {
+                    item_ids,
+                    start_idx,
+                    start_ticks,
+                    source: source.clone(),
+                },
+            ))
+        };
+        if sent {
+            *self.items.lock().unwrap() = items;
+            *self.queue_source.lock().unwrap() = source;
         }
-        let _ = self.send_command(PlayerCommand::LoadFeed { entry });
+        sent
     }
 
     pub fn stop(&self) {
@@ -302,6 +339,57 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_lifecycle_shutdown
     }
 
+    pub fn supports_unified_queue(&self) -> bool {
+        self.ctrl_compatibility.supports_unified_queue
+    }
+
+    pub fn unified_queue_state(&self) -> Option<crate::ctrl::UnifiedQueueStateData> {
+        self.unified_queue.lock().unwrap().clone()
+    }
+
+    pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
+        if items.is_empty() {
+            return true;
+        }
+        if self.supports_unified_queue() {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueAppend { items })
+        } else if items.iter().any(|item| matches!(item, QueueItem::Feed(_))) {
+            false
+        } else {
+            self.send_command(PlayerCommand::QueueAppend { items })
+        }
+    }
+
+    /// Remove a slot by its stable identity.  Falls back to `false` if the
+    /// peer does not advertise `unified-queue`.
+    pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
+        if self.supports_unified_queue() {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id })
+        } else {
+            false
+        }
+    }
+
+    /// Move a slot by its stable identity to `to_index`.  Falls back to
+    /// `false` if the peer does not advertise `unified-queue`.
+    pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
+        if self.supports_unified_queue() {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index })
+        } else {
+            false
+        }
+    }
+
+    /// Begin playback of an existing slot by its stable identity.  Falls
+    /// back to `false` if the peer does not advertise `unified-queue`.
+    pub fn queue_play_slot(&self, slot_id: u64) -> bool {
+        if self.supports_unified_queue() {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id })
+        } else {
+            false
+        }
+    }
+
     pub(crate) fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
             current_idx,
@@ -327,7 +415,6 @@ impl RemotePlayer {
         let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items = Arc::new(Mutex::new(items));
-        let feed_items = Arc::new(Mutex::new(Vec::new()));
         let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
         let shutdown_announced = Arc::new(AtomicBool::new(false));
@@ -341,7 +428,7 @@ impl RemotePlayer {
                 status,
                 subtitle_prefs,
                 items,
-                feed_items,
+                unified_queue: Arc::new(Mutex::new(None)),
                 queue_source,
                 cmd_tx,
                 disconnected,

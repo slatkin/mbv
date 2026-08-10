@@ -99,7 +99,13 @@ impl App {
                 item_ids,
                 ..
             } => {
-                *item_ids = Some(self.player_tab.items.iter().map(|i| i.id.clone()).collect());
+                *item_ids = Some(
+                    self.player_tab
+                        .emby_items()
+                        .iter()
+                        .map(|e| e.id.clone())
+                        .collect(),
+                );
                 let ids = item_ids.clone().unwrap_or_default();
                 let queue_lineage = *queue_lineage;
                 let source_playlist_id = source_playlist_id.clone();
@@ -122,7 +128,13 @@ impl App {
                 source_playlist_id,
                 ..
             } => {
-                *item_ids = Some(self.player_tab.items.iter().map(|i| i.id.clone()).collect());
+                *item_ids = Some(
+                    self.player_tab
+                        .emby_items()
+                        .iter()
+                        .map(|e| e.id.clone())
+                        .collect(),
+                );
                 let ids = item_ids.clone().unwrap_or_default();
                 let name = name.clone();
                 let coordinator_key = coordinator_key.clone();
@@ -147,7 +159,13 @@ impl App {
                 item_ids,
                 ..
             } => {
-                *item_ids = Some(self.player_tab.items.iter().map(|i| i.id.clone()).collect());
+                *item_ids = Some(
+                    self.player_tab
+                        .emby_items()
+                        .iter()
+                        .map(|e| e.id.clone())
+                        .collect(),
+                );
                 let replacement_name = name.to_string();
                 let ids = item_ids.clone().unwrap_or_default();
                 let queue_lineage = *queue_lineage;
@@ -172,8 +190,10 @@ impl App {
     pub(super) fn build_queue_state(&self) -> crate::config::QueueState {
         let positions: std::collections::HashMap<String, i64> = self
             .player_tab
-            .items
+            .queue
+            .slots()
             .iter()
+            .filter_map(|s| s.item.as_emby())
             .filter(|i| i.playback_position_ticks > 0 && !i.is_audio())
             .map(|i| (i.id.clone(), i.playback_position_ticks))
             .collect();
@@ -181,10 +201,10 @@ impl App {
             source: self.queue_source.clone(),
             items: self
                 .player_tab
-                .items
+                .queue
+                .slots()
                 .iter()
-                .cloned()
-                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                .map(|s| s.item.clone())
                 .collect(),
             cursor: self.player_tab.queue_cursor,
             last_played_item_id: self.last_played_item_id.clone(),
@@ -295,10 +315,10 @@ impl App {
             log::info!(target: "queue", "restore: queue_state.json has no items, nothing to restore");
             return;
         }
-        let emby_items = state.emby_items();
-        let restored_count = emby_items.len();
+        let queue_items = state.items;
+        let restored_count = queue_items.len();
         let cursor = super::super::actions::queue_restore_cursor(
-            &emby_items,
+            &queue_items,
             state.cursor,
             state.last_played_item_id.as_deref(),
             state.last_played_completed,
@@ -306,7 +326,7 @@ impl App {
         self.last_played_item_id = state.last_played_item_id;
         self.last_played_completed = state.last_played_completed;
         self.queue_source = state.source;
-        self.player_tab.set_items(emby_items, cursor);
+        self.player_tab.set_queue_items(queue_items, cursor);
         self.queue_dirty = false;
         log::info!(target: "queue", "restore: restored {restored_count} item(s), cursor={cursor}");
         self.spawn_enrich_queue_state(state.positions);
@@ -323,7 +343,12 @@ impl App {
         &self,
         positions: std::collections::HashMap<String, i64>,
     ) {
-        let item_ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
+        let item_ids: Vec<String> = self
+            .player_tab
+            .emby_items()
+            .iter()
+            .map(|e| e.id.clone())
+            .collect();
         if item_ids.is_empty() {
             return;
         }

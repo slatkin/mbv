@@ -13,14 +13,24 @@ fn remote_command_app(listener: &std::net::TcpListener) -> App {
     let url = format!("http://{}", listener.local_addr().unwrap());
     let mut app = attached_app();
     app.client.lock().unwrap().config.server_url = url;
-    app.player_tab.items[0].id = "a".into();
-    app.player_tab.items[1].id = "b".into();
-    app.player_tab.items.push(make_item("c", "Movie"));
-    app.player_tab.items[2].id = "c".into();
-    app.player_tab.items[0].playback_position_ticks = 100;
-    app.player_tab.items[1].playback_position_ticks = 200;
-    app.player_tab.items[2].playback_position_ticks = 300;
-    app.player_tab.sync_queue_model_from_items_if_needed();
+    let mut item_a = app.player_tab.emby_items()[0].clone();
+    item_a.id = "a".into();
+    item_a.playback_position_ticks = 100;
+    let mut item_b = app.player_tab.emby_items()[1].clone();
+    item_b.id = "b".into();
+    item_b.playback_position_ticks = 200;
+    let mut item_c = make_item("c", "Movie");
+    item_c.id = "c".into();
+    item_c.playback_position_ticks = 300;
+    app.player_tab.set_item_at(
+        0,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
+    );
+    app.player_tab.set_item_at(
+        1,
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
+    );
+    app.player_tab.append_item(item_c);
     let mut s = make_session("Client", "Emby");
     s.id = "session".into();
     s.now_playing_item_id = Some("a".into());
@@ -334,7 +344,7 @@ fn stop_payload_is_identical_with_and_without_tracking() {
 fn single_item_replacement_payload_is_identical_with_and_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut untracked = remote_command_app(&listener);
-    let item = untracked.player_tab.items[0].clone();
+    let item = untracked.player_tab.emby_items()[0].clone();
     let untracked_req = capture_remote_command(&listener, &mut untracked, |app| {
         app.play_item(item.clone());
     });

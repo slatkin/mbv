@@ -91,12 +91,12 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         }
     });
 
-    // Shared state for ctrl socket initial-state snapshots
+    // Shared state for ctrl socket initial-state snapshots — stores the
+    // canonical queue so both legacy and unified-queue peers are seeded
+    // from one source.
     let shared_queue = SharedQueueState {
-        items: Arc::new(Mutex::new(Vec::new())),
-        cursor: Arc::new(Mutex::new(0)),
+        queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
-        feed_items: Arc::new(Mutex::new(Vec::new())),
     };
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
 
@@ -252,10 +252,9 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         });
     }
 
-    let mut items: Vec<EmbyItem> = Vec::new();
-    let mut cursor: usize = 0;
+    // ── Canonical queue authority — single source of truth ──────────────
+    let mut queue = PlaybackQueue::default();
     let mut source = crate::config::QueueSource::Unknown;
-    let mut feed_items: Vec<FeedEntry> = Vec::new();
     let mut playback_intents = PlaybackIntentState::default();
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
@@ -296,64 +295,80 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
 
         match ev {
             DaemonEvent::Player(PlayerEvent::TrackChanged(idx)) => {
-                // The player's internal queue may lag behind the daemon's
-                // items list when a QueueRemove / QueueMove was sent down
-                // the player command channel but hasn't been processed yet.
-                // Clamp the reported index to the current items length so
-                // the cursor can never point past the validated list.
-                cursor = if items.is_empty() {
+                // The player's internal queue may lag behind the canonical
+                // queue when a mutation was sent but not yet processed.
+                // Clamp the reported index to the current queue length.
+                let clamped_idx = if queue.is_empty() {
                     0
                 } else {
-                    idx.min(items.len() - 1)
+                    idx.min(queue.len() - 1)
                 };
-                *shared_queue.cursor.lock().unwrap() = cursor;
+                // Update active slot in the canonical queue.
+                if let Some(slot_id) = queue.slots().get(clamped_idx).map(|s| s.slot_id) {
+                    queue.set_active_slot(slot_id);
+                }
                 broadcast(
                     &ctrl_clients,
-                    &CtrlEvent::Player(PlayerEvent::TrackChanged(cursor)),
+                    &CtrlEvent::Player(PlayerEvent::TrackChanged(clamped_idx)),
                 );
-                // Broadcast full state so CtrlState reflects the
-                // authoritative playback position. Without this, a
-                // CtrlState from a daemon-side list mutation processed
-                // before the player thread acted on it can carry a stale
-                // cursor computed from index arithmetic, and the
-                // TrackChanged that fires between them refers to the old
-                // pre-mutation index.
-                // Gated per-client the same way as `broadcast_queue_state`
-                // (#5.1): legacy peers must never receive the Feed tail.
+                // Broadcast full state so both legacy and capable peers see
+                // the authoritative playback position.
                 let status = player.status.lock().unwrap().clone();
+                let unified_json = serialize_ctrl_event(&CtrlEvent::UnifiedQueueState(
+                    crate::ctrl::UnifiedQueueStateData {
+                        status: status.clone(),
+                        slots: queue
+                            .slots()
+                            .iter()
+                            .map(|s| crate::ctrl::UnifiedQueueSlot {
+                                slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
+                                item: s.item.clone(),
+                            })
+                            .collect(),
+                        active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
+                        revision: queue.revision().raw(),
+                        source: source.clone(),
+                    },
+                ));
+                let (emby_items, feed_items) = split_queue_for_legacy(&queue);
                 let capable_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
                     status: status.clone(),
-                    items: items.clone(),
-                    cursor,
+                    items: emby_items.clone(),
+                    cursor: clamped_idx,
                     source: source.clone(),
                     feed_items: feed_items.clone(),
                 }));
                 let legacy_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
                     status,
-                    items: items.clone(),
-                    cursor,
+                    items: emby_items,
+                    cursor: clamped_idx,
                     source: source.clone(),
                     feed_items: Vec::new(),
                 }));
-                if let (Some(capable_json), Some(legacy_json)) = (capable_json, legacy_json) {
-                    ctrl_clients
-                        .lock()
-                        .unwrap()
-                        .broadcast_state_gated(capable_json, legacy_json);
+                if let (Some(unified_json), Some(capable_json), Some(legacy_json)) =
+                    (unified_json, capable_json, legacy_json)
+                {
+                    ctrl_clients.lock().unwrap().broadcast_state_gated(
+                        unified_json,
+                        capable_json,
+                        legacy_json,
+                    );
                 }
-                *shared_queue.items.lock().unwrap() = items.clone();
+                // Update reconnect snapshot.
+                *shared_queue.queue.lock().unwrap() = queue.clone();
                 *shared_queue.source.lock().unwrap() = source.clone();
-                *shared_queue.feed_items.lock().unwrap() = feed_items.clone();
+                // Settle playback intent if the reported index matches.
                 if let Some((connection_id, request_id, generation)) = playback_intents
                     .current
                     .as_ref()
                     .filter(|current| match &current.action {
-                        PlaybackIntentAction::Play { item_ids, .. } => items
-                            .get(cursor)
-                            .is_some_and(|item| item_ids.iter().any(|id| id == &item.id)),
-                        PlaybackIntentAction::Next | PlaybackIntentAction::Previous => {
-                            current.target_idx.is_some_and(|target| target == cursor)
-                        }
+                        PlaybackIntentAction::Play { item_ids, .. } => queue
+                            .slots()
+                            .get(clamped_idx)
+                            .is_some_and(|slot| item_ids.iter().any(|id| id == slot.item.id())),
+                        PlaybackIntentAction::Next | PlaybackIntentAction::Previous => current
+                            .target_idx
+                            .is_some_and(|target| target == clamped_idx),
                         _ => false,
                     })
                     .map(|current| {
@@ -364,7 +379,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                         )
                     })
                 {
-                    if items.get(cursor).is_some() {
+                    if queue.slots().get(clamped_idx).is_some() {
                         if let Some(event) = playback_intents.applied_if_current(
                             connection_id,
                             request_id,
@@ -383,13 +398,16 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 season,
                 episode,
             }) => {
-                if let Some(item) = items.get(cursor + 1) {
-                    player.send_command(PlayerCommand::NextUpShow {
-                        item_id: item.id.clone(),
-                        show_title: item.series_name.clone(),
-                        ep_title: item.name.clone(),
-                        artist: item.artist.clone(),
-                    });
+                let active_idx = queue.active_index().unwrap_or(0);
+                if let Some(slot) = queue.slots().get(active_idx + 1) {
+                    if let Some(emby) = slot.item.as_emby() {
+                        player.send_command(PlayerCommand::NextUpShow {
+                            item_id: emby.id.clone(),
+                            show_title: emby.series_name.clone(),
+                            ep_title: emby.name.clone(),
+                            artist: emby.artist.clone(),
+                        });
+                    }
                 }
                 broadcast(
                     &ctrl_clients,
@@ -401,13 +419,15 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 );
             }
             DaemonEvent::Player(PlayerEvent::QueueNextUp { next_idx }) => {
-                if let Some(item) = items.get(next_idx) {
-                    player.send_command(PlayerCommand::NextUpShow {
-                        item_id: item.id.clone(),
-                        show_title: item.series_name.clone(),
-                        ep_title: item.name.clone(),
-                        artist: item.artist.clone(),
-                    });
+                if let Some(slot) = queue.slots().get(next_idx) {
+                    if let Some(emby) = slot.item.as_emby() {
+                        player.send_command(PlayerCommand::NextUpShow {
+                            item_id: emby.id.clone(),
+                            show_title: emby.series_name.clone(),
+                            ep_title: emby.name.clone(),
+                            artist: emby.artist.clone(),
+                        });
+                    }
                 }
                 broadcast(
                     &ctrl_clients,
@@ -445,18 +465,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 broadcast(
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::OutputStarted),
-                );
-            }
-            DaemonEvent::Player(PlayerEvent::FeedConsumed { guid }) => {
-                handle_feed_consumed(
-                    &guid,
-                    &ctrl_clients,
-                    &player,
-                    &shared_queue,
-                    &items,
-                    cursor,
-                    &source,
-                    &mut feed_items,
                 );
             }
             DaemonEvent::Player(pe) => {
@@ -522,8 +530,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &client,
                     &player,
                     audio_only,
-                    &mut items,
-                    &mut cursor,
+                    &mut queue,
                     &mut source,
                     &shared_queue,
                     &ctrl_clients,
@@ -542,10 +549,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &client,
                     &player,
                     audio_only,
-                    &mut items,
-                    &mut cursor,
+                    &mut queue,
                     &mut source,
-                    &mut feed_items,
                     &shared_queue,
                     &ctrl_clients,
                     &mut playback_intents,
@@ -586,7 +591,16 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 if let Ok(items_for_intent) = &fetched {
                     let rejection = if items_for_intent.is_empty() {
                         Some(crate::ctrl::PlaybackIntentRejection::EmptyTarget)
-                    } else if audio_only_rejection(audio_only, items_for_intent).is_some() {
+                    } else if audio_only_rejection(
+                        audio_only,
+                        &items_for_intent
+                            .iter()
+                            .cloned()
+                            .map(|e| QueueItem::Emby(Box::new(e)))
+                            .collect::<Vec<_>>(),
+                    )
+                    .is_some()
+                    {
                         Some(crate::ctrl::PlaybackIntentRejection::AudioOnly)
                     } else {
                         None
@@ -620,10 +634,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &client,
                     &player,
                     audio_only,
-                    &mut items,
-                    &mut cursor,
+                    &mut queue,
                     &mut source,
-                    &mut feed_items,
                     &shared_queue,
                     &ctrl_clients,
                     &mut playback_intents,

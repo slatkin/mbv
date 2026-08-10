@@ -150,15 +150,7 @@ impl App {
         let now_playing: Option<String> = if active {
             let idx = self.player.status.lock().unwrap().current_idx;
             let queue = self.playback_queue();
-            if idx < queue.items.len() {
-                queue.items.get(idx).map(|i| i.playback_label())
-            } else {
-                // Feed entries live in the parallel feed_items tail; resolve
-                // the offset into that list so the title row renders during
-                // Feed playback instead of showing blank.
-                let feed_offset = idx - queue.items.len();
-                queue.feed_items.get(feed_offset).map(|e| e.title.clone())
-            }
+            queue.item_at(idx).map(|item| item.title().to_string())
         } else {
             None
         };

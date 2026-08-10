@@ -24,7 +24,7 @@ fn local_daemon_bootstrap_adopts_saved_local_queue_and_source() {
         }),
     );
 
-    assert_eq!(bootstrap.player_tab.items.len(), 2);
+    assert_eq!(bootstrap.player_tab.emby_items().len(), 2);
     assert_eq!(bootstrap.player_tab.queue_cursor, 1);
     assert!(matches!(
         bootstrap.queue_source,
@@ -157,8 +157,8 @@ fn local_daemon_bootstrap_prefers_existing_daemon_queue_state() {
         }),
     );
 
-    assert_eq!(bootstrap.player_tab.items.len(), 2);
-    assert_eq!(bootstrap.player_tab.items[0].id, remote_items[0].id);
+    assert_eq!(bootstrap.player_tab.emby_items().len(), 2);
+    assert_eq!(bootstrap.player_tab.emby_items()[0].id, remote_items[0].id);
     assert!(matches!(
         bootstrap.queue_source,
         crate::config::QueueSource::Playlist { ref name, .. } if name == "Daemon Queue"
@@ -177,7 +177,7 @@ fn local_daemon_app_keeps_live_queue_over_stale_disk_snapshot() {
     // whatever `queue_state.json` happens to hold.
     let remote_items = make_items(2);
     let mut app = make_local_daemon_app_stub(remote_items.clone());
-    assert_eq!(app.player_tab.items.len(), 2);
+    assert_eq!(app.player_tab.emby_items().len(), 2);
 
     crate::config::save_queue_state(&crate::config::QueueState {
         source: crate::config::QueueSource::Unknown,
@@ -194,13 +194,16 @@ fn local_daemon_app_keeps_live_queue_over_stale_disk_snapshot() {
 
     app.maybe_restore_queue_state();
 
-    assert_eq!(app.player_tab.items.len(), 2);
-    assert_eq!(app.player_tab.items[0].id, remote_items[0].id);
+    assert_eq!(app.player_tab.emby_items().len(), 2);
+    assert_eq!(app.player_tab.emby_items()[0].id, remote_items[0].id);
 }
 
 #[test]
 fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
-    let items = make_items(3);
+    let items: Vec<mbv_core::playback_queue::QueueItem> = make_items(3)
+        .into_iter()
+        .map(|i| mbv_core::playback_queue::QueueItem::Emby(Box::new(i)))
+        .collect();
     let cursor = super::actions::queue_restore_cursor(&items, 2, None, false);
     assert_eq!(cursor, 2);
 }

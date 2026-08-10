@@ -64,16 +64,22 @@ pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String
 /// publish date). Sibling of `fetch_and_parse_rss` (#471); the idle-feed
 /// path keeps its lean `IdleFeedItem` shape. Entries without any playable
 /// source are skipped.
-pub(super) fn fetch_and_parse_entries(url: &str) -> Result<Vec<FeedEntry>, String> {
+///
+/// `subscription_kind` is the subscription's `FeedKind` used as the
+/// canonical fallback when enclosure MIME is absent or unrecognized.
+pub(super) fn fetch_and_parse_entries(
+    url: &str,
+    subscription_kind: FeedKind,
+) -> Result<Vec<FeedEntry>, String> {
     let body = fetch_feed_body(url)?;
-    let mut entries = parse_rss_entries(&body);
+    let mut entries = parse_rss_entries(&body, subscription_kind);
     if entries.is_empty() {
-        entries = parse_atom_entries(&body);
+        entries = parse_atom_entries(&body, subscription_kind);
     }
     Ok(entries)
 }
 
-fn parse_rss_entries(body: &str) -> Vec<FeedEntry> {
+fn parse_rss_entries(body: &str, subscription_kind: FeedKind) -> Vec<FeedEntry> {
     let mut entries = Vec::new();
     let Some(start) = body.find("<item>") else {
         return entries;
@@ -102,12 +108,13 @@ fn parse_rss_entries(body: &str) -> Vec<FeedEntry> {
             mime_type,
             duration_ticks,
             pub_date_secs,
+            feed_kind: Some(subscription_kind),
         });
     }
     entries
 }
 
-fn parse_atom_entries(body: &str) -> Vec<FeedEntry> {
+fn parse_atom_entries(body: &str, subscription_kind: FeedKind) -> Vec<FeedEntry> {
     let mut entries = Vec::new();
     let Some(start) = body.find("<entry>") else {
         return entries;
@@ -139,6 +146,7 @@ fn parse_atom_entries(body: &str) -> Vec<FeedEntry> {
             mime_type,
             duration_ticks,
             pub_date_secs,
+            feed_kind: Some(subscription_kind),
         });
     }
     entries
@@ -147,6 +155,7 @@ fn parse_atom_entries(body: &str) -> Vec<FeedEntry> {
 /// Infer the media kind of a feed entry from its enclosure MIME type;
 /// absent or unrecognized values default to Video. Keep in one helper so
 /// #472 can reuse it.
+#[cfg(test)]
 pub(super) fn infer_feed_kind_from_mime(mime: Option<&str>) -> FeedKind {
     match mime.map(|m| m.trim().to_ascii_lowercase()) {
         Some(m) if m.starts_with("audio/") => FeedKind::Audio,
@@ -289,9 +298,7 @@ fn parse_rfc2822_date(text: &str) -> Option<u64> {
 /// ISO 8601: "2026-08-09T12:00:00Z" / "…+02:00" / "…+0200", optional
 /// fractional seconds.
 fn parse_iso_date(text: &str) -> Option<u64> {
-    let mut parts = text.splitn(2, 'T');
-    let date_part = parts.next()?;
-    let time_part = parts.next()?;
+    let (date_part, time_part) = text.split_once('T')?;
     let mut dp = date_part.split('-');
     let year: i64 = dp.next()?.parse().ok()?;
     let month: u32 = dp.next()?.parse().ok()?;
@@ -559,7 +566,7 @@ mod tests {
             <itunes:duration>01:02:03</itunes:duration>
             <pubDate>Sat, 09 Aug 2026 12:00:00 +0000</pubDate>
         </item>"#;
-        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"));
+        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"), FeedKind::Audio);
         assert_eq!(entries.len(), 1);
         let e = &entries[0];
         assert_eq!(e.guid, "ep-42");
@@ -579,7 +586,7 @@ mod tests {
             <title>No enclosure</title>
             <link>https://example.test/post</link>
         </item>"#;
-        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"));
+        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"), FeedKind::Audio);
         assert_eq!(entries.len(), 1);
         let e = &entries[0];
         assert_eq!(e.enclosure_url, None);
@@ -602,7 +609,7 @@ mod tests {
             <title>Good entry after bad</title>
             <enclosure url="https://example.test/b.mp4" type="video/mp4"/>
         </item>"#;
-        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"));
+        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"), FeedKind::Video);
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].duration_ticks, None);
         assert_eq!(entries[1].guid, "g2");
@@ -618,7 +625,7 @@ mod tests {
             <published>2026-08-09T12:00:00Z</published>
             <updated>2026-08-09T13:00:00Z</updated>
         </entry>"#;
-        let entries = parse_atom_entries(&format!("<feed>{entry}</feed>"));
+        let entries = parse_atom_entries(&format!("<feed>{entry}</feed>"), FeedKind::Audio);
         assert_eq!(entries.len(), 1);
         let e = &entries[0];
         assert_eq!(e.guid, "tag:example.test,2026:ep7");
@@ -635,7 +642,7 @@ mod tests {
     #[test]
     fn entries_without_any_source_are_skipped() {
         let item = r#"<item><title>No source at all</title></item>"#;
-        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"));
+        let entries = parse_rss_entries(&format!("<channel>{item}</channel>"), FeedKind::Video);
         assert!(entries.is_empty());
     }
 

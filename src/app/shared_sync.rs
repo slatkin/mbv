@@ -91,9 +91,9 @@ impl App {
         let state: crate::config::QueueState = serde_json::from_value(record.value.clone())
             .map_err(|e| format!("parse shared queue state: {e}"))?;
         mirror_shared_document(SharedDocumentKind::QueueState, &record.value)?;
-        let emby_items = state.emby_items();
+        let queue_items = state.items;
         let cursor = super::actions::queue_restore_cursor(
-            &emby_items,
+            &queue_items,
             state.cursor,
             state.last_played_item_id.as_deref(),
             state.last_played_completed,
@@ -105,7 +105,7 @@ impl App {
         // projection before installing it so late consume outcomes cannot
         // alias a slot in this new queue lineage.
         self.retire_remote_tracking(true);
-        self.player_tab.set_items(emby_items, cursor);
+        self.player_tab.set_queue_items(queue_items, cursor);
         self.queue_dirty = false;
         self.spawn_enrich_queue_state(state.positions);
         Ok(())
@@ -457,7 +457,7 @@ mod tests {
 
         assert_eq!(
             app.player_tab
-                .items
+                .emby_items()
                 .iter()
                 .map(|item| item.id.as_str())
                 .collect::<Vec<_>>(),

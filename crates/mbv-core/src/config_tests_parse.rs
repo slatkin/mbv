@@ -562,7 +562,7 @@ kind = "video"
     .unwrap();
 
     let cfg = load_config().unwrap();
-    assert_eq!(cfg.auto_reconnect, true);
+    assert!(cfg.auto_reconnect);
     assert_eq!(cfg.feeds.len(), 1);
     assert_eq!(cfg.feeds[0].name, "Nova");
     assert_eq!(cfg.feeds[0].kind, FeedKind::Video);
@@ -571,7 +571,7 @@ kind = "video"
 
     let saved = std::fs::read_to_string(config_path()).unwrap();
     let reparsed = parse_config(&saved).unwrap();
-    assert_eq!(reparsed.auto_reconnect, true, "unrelated keys preserved");
+    assert!(reparsed.auto_reconnect, "unrelated keys preserved");
     assert_eq!(reparsed.feeds.len(), 1);
     assert_eq!(reparsed.feeds[0].name, "Nova");
     assert_eq!(reparsed.feeds[0].kind, FeedKind::Video);

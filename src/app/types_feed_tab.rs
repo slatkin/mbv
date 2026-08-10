@@ -112,16 +112,19 @@ mod tests {
             mime_type: None,
             duration_ticks: None,
             pub_date_secs,
+            feed_kind: Some(mbv_core::config::FeedKind::Video),
         }
     }
 
     #[test]
     fn all_group_sorted_newest_first_with_none_last() {
-        let mut state = FeedTabState::default();
-        state.entries = vec![
-            vec![entry("old", Some(100)), entry("new", Some(300))],
-            vec![entry("nodate", None), entry("mid", Some(200))],
-        ];
+        let mut state = FeedTabState {
+            entries: vec![
+                vec![entry("old", Some(100)), entry("new", Some(300))],
+                vec![entry("nodate", None), entry("mid", Some(200))],
+            ],
+            ..Default::default()
+        };
         state.rebuild_all_entries();
         let titles: Vec<&str> = state.all_entries.iter().map(|e| e.title.as_str()).collect();
         assert_eq!(titles, vec!["new", "mid", "old", "nodate"]);
@@ -129,29 +132,35 @@ mod tests {
 
     #[test]
     fn visible_entries_all_group() {
-        let mut state = FeedTabState::default();
-        state.selected_group = 0;
-        state.all_entries = vec![entry("a", None), entry("b", None)];
+        let state = FeedTabState {
+            selected_group: 0,
+            all_entries: vec![entry("a", None), entry("b", None)],
+            ..Default::default()
+        };
         assert_eq!(state.visible_entries().len(), 2);
     }
 
     #[test]
     fn visible_entries_subscription_group() {
-        let mut state = FeedTabState::default();
-        state.entries = vec![vec![entry("x", None)], vec![entry("y", None)]];
-        state.selected_group = 1;
+        let state = FeedTabState {
+            entries: vec![vec![entry("x", None)], vec![entry("y", None)]],
+            selected_group: 1,
+            ..Default::default()
+        };
         assert_eq!(state.visible_entries().len(), 1);
         assert_eq!(state.visible_entries()[0].title, "x");
     }
 
     #[test]
     fn clamp_state_works() {
-        let mut state = FeedTabState::default();
-        state.entries = vec![vec![entry("a", None)]];
+        let mut state = FeedTabState {
+            entries: vec![vec![entry("a", None)]],
+            selected_group: 0,
+            cursor: 99,
+            scroll: 99,
+            ..Default::default()
+        };
         state.rebuild_all_entries();
-        state.selected_group = 0;
-        state.cursor = 99;
-        state.scroll = 99;
         state.clamp_state();
         assert_eq!(state.cursor, 0);
         assert_eq!(state.scroll, 0);
@@ -159,8 +168,10 @@ mod tests {
 
     #[test]
     fn group_count_includes_all() {
-        let mut state = FeedTabState::default();
-        state.subscriptions = vec![];
+        let mut state = FeedTabState {
+            subscriptions: vec![],
+            ..Default::default()
+        };
         assert_eq!(state.group_count(), 1);
         state.subscriptions = vec![
             FeedSubscription {
