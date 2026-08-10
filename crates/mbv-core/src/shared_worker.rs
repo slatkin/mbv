@@ -3,6 +3,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
 use crate::shared_state::{SharedDocumentKind, SharedDocumentTuple, SharedRecord};
+use crate::shared_store::FeedEntryState;
 
 /// Requests sent to the storage worker.
 pub enum SharedStoreRequest {
@@ -31,6 +32,24 @@ pub enum SharedStoreRequest {
         expected_revision: u64,
         value: serde_json::Value,
         reply: mpsc::Sender<Result<SharedRecord, String>>,
+    },
+    GetFeedEntry {
+        user_id: String,
+        feed_id: String,
+        entry_guid: String,
+        reply: mpsc::Sender<Result<Option<FeedEntryState>, String>>,
+    },
+    PutFeedEntry {
+        user_id: String,
+        feed_id: String,
+        entry_guid: String,
+        value: FeedEntryState,
+        reply: mpsc::Sender<Result<(), String>>,
+    },
+    ScanFeedEntries {
+        user_id: String,
+        feed_id: String,
+        reply: mpsc::Sender<Result<Vec<(String, FeedEntryState)>, String>>,
     },
     /// Administrative export: all documents as JSON.
     Export {
@@ -128,6 +147,66 @@ impl SharedStoreHandle {
             .recv()
             .map_err(|_| "storage worker reply channel closed".to_string())?
     }
+
+    pub fn get_feed_entry(
+        &self,
+        user_id: &str,
+        feed_id: &str,
+        entry_guid: &str,
+    ) -> Result<Option<FeedEntryState>, String> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.tx
+            .send(SharedStoreRequest::GetFeedEntry {
+                user_id: user_id.to_string(),
+                feed_id: feed_id.to_string(),
+                entry_guid: entry_guid.to_string(),
+                reply: reply_tx,
+            })
+            .map_err(|_| "storage worker shut down".to_string())?;
+        reply_rx
+            .recv()
+            .map_err(|_| "storage worker reply channel closed".to_string())?
+    }
+
+    pub fn put_feed_entry(
+        &self,
+        user_id: &str,
+        feed_id: &str,
+        entry_guid: &str,
+        value: FeedEntryState,
+    ) -> Result<(), String> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.tx
+            .send(SharedStoreRequest::PutFeedEntry {
+                user_id: user_id.to_string(),
+                feed_id: feed_id.to_string(),
+                entry_guid: entry_guid.to_string(),
+                value,
+                reply: reply_tx,
+            })
+            .map_err(|_| "storage worker shut down".to_string())?;
+        reply_rx
+            .recv()
+            .map_err(|_| "storage worker reply channel closed".to_string())?
+    }
+
+    pub fn scan_feed_entries(
+        &self,
+        user_id: &str,
+        feed_id: &str,
+    ) -> Result<Vec<(String, FeedEntryState)>, String> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.tx
+            .send(SharedStoreRequest::ScanFeedEntries {
+                user_id: user_id.to_string(),
+                feed_id: feed_id.to_string(),
+                reply: reply_tx,
+            })
+            .map_err(|_| "storage worker shut down".to_string())?;
+        reply_rx
+            .recv()
+            .map_err(|_| "storage worker reply channel closed".to_string())?
+    }
 }
 
 /// Spawn the storage worker. It processes one request at a time through the
@@ -176,6 +255,43 @@ pub fn spawn_shared_store_worker(db: Arc<Mutex<Database>>) -> SharedStoreHandle 
                         value,
                     );
                     let _ = reply.send(result);
+                }
+                SharedStoreRequest::GetFeedEntry {
+                    user_id,
+                    feed_id,
+                    entry_guid,
+                    reply,
+                } => {
+                    let _ = reply.send(crate::shared_store::get_feed_entry(
+                        &db,
+                        &user_id,
+                        &feed_id,
+                        &entry_guid,
+                    ));
+                }
+                SharedStoreRequest::PutFeedEntry {
+                    user_id,
+                    feed_id,
+                    entry_guid,
+                    value,
+                    reply,
+                } => {
+                    let _ = reply.send(crate::shared_store::put_feed_entry(
+                        &db,
+                        &user_id,
+                        &feed_id,
+                        &entry_guid,
+                        &value,
+                    ));
+                }
+                SharedStoreRequest::ScanFeedEntries {
+                    user_id,
+                    feed_id,
+                    reply,
+                } => {
+                    let _ = reply.send(crate::shared_store::scan_feed_entries(
+                        &db, &user_id, &feed_id,
+                    ));
                 }
                 SharedStoreRequest::Export { reply } => {
                     let result = export_json(&db);
