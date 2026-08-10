@@ -252,7 +252,7 @@ impl App {
                     });
                     (resolved_url, result)
                 }
-                Err(error) => (url.clone(), Err(error)),
+                Err(error) => (url, Err(error)),
             };
             let _ = tx.send(FeedAddResult {
                 id,

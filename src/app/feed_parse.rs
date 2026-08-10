@@ -12,6 +12,11 @@ fn fetch_feed_body(url: &str) -> Result<String, String> {
         .into_string()
         .map_err(|e| format!("Failed to read response body: {e}"))
 }
+
+/// `ureq::get` never picks up the `native-tls` feature on its own — it only
+/// activates when a connector is configured explicitly on the agent — so
+/// plain shortcut calls fail every `https://` request with "no TLS backend
+/// is configured". Build an agent with the connector wired up instead.
 fn tls_agent() -> Result<ureq::Agent, String> {
     let connector =
         native_tls::TlsConnector::new().map_err(|e| format!("Failed to initialize TLS: {e}"))?;
@@ -40,52 +45,65 @@ pub(super) fn normalize_feed_url(input: &str) -> Result<String, String> {
         return Ok(input.to_string());
     }
 
+    // Channel IDs are conventionally prefixed "UC" and appear directly in the
+    // URL, so that form rewrites with no network call; `@handle`, `/c/`, and
+    // `/user/` URLs don't carry the channel ID and need the channel page
+    // scraped for its canonical feed link.
     let segments: Vec<&str> = path.trim_matches('/').split('/').collect();
-    if segments.len() == 2 && segments[0] == "channel" && segments[1].starts_with("UC") {
-        return Ok(format!(
-            "https://www.youtube.com/feeds/videos.xml?channel_id={}",
-            segments[1]
-        ));
+    match segments.as_slice() {
+        ["channel", id] if id.starts_with("UC") => {
+            return Ok(format!(
+                "https://www.youtube.com/feeds/videos.xml?channel_id={id}"
+            ));
+        }
+        [handle] if handle.starts_with('@') && handle.len() > 1 => {}
+        ["c" | "user", name] if !name.is_empty() => {}
+        _ => return Err("URL is not a resolvable YouTube channel URL".to_string()),
     }
 
-    if (segments.len() == 1 && segments[0].starts_with('@') && segments[0].len() > 1)
-        || (segments.len() == 2 && matches!(segments[0], "c" | "user") && !segments[1].is_empty())
-    {
-        let body = tls_agent()?
-            .get(input)
-            .call()
-            .map_err(|e| format!("Failed to resolve YouTube channel: {e}"))?
-            .into_string()
-            .map_err(|e| format!("Failed to read YouTube channel page: {e}"))?;
-        return extract_rss_link(&body)
-            .ok_or_else(|| "YouTube channel page did not contain an RSS feed URL".to_string());
-    }
-
-    Err("URL is not a resolvable YouTube channel URL".to_string())
+    let body = tls_agent()?
+        .get(input)
+        .call()
+        .map_err(|e| format!("Failed to resolve YouTube channel: {e}"))?
+        .into_string()
+        .map_err(|e| format!("Failed to read YouTube channel page: {e}"))?;
+    extract_rss_link(&body)
+        .ok_or_else(|| "YouTube channel page did not contain an RSS feed URL".to_string())
 }
 
 fn url_authority_and_path(input: &str) -> Option<(&str, &str)> {
     let rest = input
         .strip_prefix("https://")
         .or_else(|| input.strip_prefix("http://"))?;
-    let (authority, path) = rest.split_once('/')?;
-    let host = authority.split('@').next()?.split(':').next()?;
-    Some((host, &rest[rest.len() - path.len() - 1..]))
+    let slash = rest.find('/')?;
+    let host = rest[..slash].split('@').next()?.split(':').next()?;
+    Some((host, &rest[slash..]))
+}
+
+/// Tags matching `<link ...>` in `text`, in order, as their inner text
+/// (without the enclosing `<link`/`>`).
+fn link_tags(text: &str) -> impl Iterator<Item = &str> {
+    let mut rest = text;
+    std::iter::from_fn(move || {
+        let pos = rest.find("<link")?;
+        let tag = &rest[pos..];
+        let len = tag.find('>')?;
+        let tag_text = &tag[..len];
+        rest = &tag[len + 1..];
+        Some(tag_text)
+    })
 }
 
 fn extract_rss_link(body: &str) -> Option<String> {
-    for link in body.split("<link").skip(1) {
-        let Some(end) = link.find('>') else {
-            continue;
-        };
-        let tag = &link[..end];
+    link_tags(body).find_map(|tag| {
         if extract_attribute(tag, "rel").as_deref() == Some("alternate")
             && extract_attribute(tag, "type").as_deref() == Some("application/rss+xml")
         {
-            return extract_attribute(tag, "href");
+            extract_attribute(tag, "href")
+        } else {
+            None
         }
-    }
-    None
+    })
 }
 
 pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
@@ -121,7 +139,10 @@ pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String
 }
 
 /// Fetch an RSS/Atom feed and parse each `<item>`/`<entry>` into a
-/// [`FeedEntry`] (guid, title, enclosure URL, MIME type, duration → ticks).
+/// [`FeedEntry`] (guid, title, enclosure URL, MIME type, duration → ticks,
+/// publish date). Sibling of `fetch_and_parse_rss` (#471); the idle-feed
+/// path keeps its lean `IdleFeedItem` shape. Entries without any playable
+/// source are skipped.
 ///
 /// `subscription_kind` is the subscription's `FeedKind` used as the
 /// canonical fallback when enclosure MIME is absent or unrecognized.
@@ -240,20 +261,12 @@ fn extract_enclosure(text: &str) -> Option<(String, Option<String>)> {
 /// The first Atom `<link rel="enclosure">` element's `href` and `type`
 /// attributes, scanning past any alternate/self links.
 fn extract_atom_enclosure(text: &str) -> Option<(String, Option<String>)> {
-    let mut rest = text;
-    while let Some(pos) = rest.find("<link") {
-        let tag = &rest[pos..];
-        let len = tag.find('>')?;
-        let tag_text = &tag[..len];
-        rest = &tag[len + 1..];
-        if extract_attribute(tag_text, "rel").as_deref() != Some("enclosure") {
-            continue;
+    link_tags(text).find_map(|tag| {
+        if extract_attribute(tag, "rel").as_deref() != Some("enclosure") {
+            return None;
         }
-        if let Some(url) = extract_attribute(tag_text, "href") {
-            return Some((url, extract_attribute(tag_text, "type")));
-        }
-    }
-    None
+        extract_attribute(tag, "href").map(|url| (url, extract_attribute(tag, "type")))
+    })
 }
 
 /// Extract the value of an `attr="..."` attribute from a single tag's
