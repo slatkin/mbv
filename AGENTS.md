@@ -15,11 +15,15 @@ disagree, the code wins — fix this file in the same PR.
 - `src/` — binary. Entry, login, tray, mpris, single-instance, daemon supervision.
 - `src/app/` — TUI state. Prefixes are the index: `input_*` keys and mouse,
   `*_actions.rs` state transitions, `render/` drawing, `*_tests.rs` its sibling.
-- `crates/mbv-core/` — Emby API, ctrl protocol, daemon, player, queue. No UI.
+  Feed subscriptions, RSS/Atom fetching/parsing, the Feeds tab, feed management,
+  and feed-backed library views live here; feed fetching is client-side.
+- `crates/mbv-core/` — Emby API, feed subscription config, ctrl protocol, daemon,
+  player, and the mixed Emby/feed playback queue. No UI or feed fetching.
 - `crates/mbvd/` — packaged system daemon.
 
-Source of truth: `ctrl.rs` (protocol), `api_types.rs` (Emby wire types), both in
-`mbv-core`. Change these before their callers.
+Source of truth: `ctrl.rs` (protocol), `api_types.rs` (Emby wire types),
+`config_types_feed.rs` (feed subscriptions), and `playback_queue_items.rs`
+(`FeedEntry`/`QueueItem`), all in `mbv-core`. Change these before their callers.
 
 ## Commands
 Builds and tests run_in_background.
