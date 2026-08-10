@@ -16,13 +16,14 @@ pub(super) struct FeedTabState {
     /// `subscription_index`).
     pub entries: Vec<Vec<FeedEntry>>,
     /// Combined entries for the "All" group, sorted by `pub_date_secs`
-    /// descending with `None` dates last.
+    /// descending with `None` dates last. Individual subscription entries use
+    /// the same ordering.
     pub all_entries: Vec<FeedEntry>,
     /// Which group is selected: 0 = "All", 1+ = subscription index 0+.
     pub selected_group: usize,
     /// Cursor into the currently-visible entry list.
     pub cursor: usize,
-    /// Scroll offset for the currently-visible entry list.
+    /// Scroll offset for the currently-visible display rows.
     pub scroll: usize,
     /// True while a refresh is in progress.
     pub loading: bool,
@@ -65,23 +66,21 @@ impl FeedTabState {
         }
     }
 
-    /// Rebuild `all_entries` from per-subscription `entries`, sorted by
-    /// `pub_date_secs` descending (None dates last).
+    /// Rebuild `all_entries` from per-subscription `entries`, sorting each
+    /// subscription and the combined list by `pub_date_secs` descending
+    /// (None dates last).
     pub fn rebuild_all_entries(&mut self) {
         self.all_entries.clear();
-        for sub_entries in &self.entries {
+        for sub_entries in &mut self.entries {
+            sort_entries_newest_first(sub_entries);
             self.all_entries.extend(sub_entries.iter().cloned());
         }
-        self.all_entries
-            .sort_by(|a, b| match (a.pub_date_secs, b.pub_date_secs) {
-                (Some(a), Some(b)) => b.cmp(&a), // newest first
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => std::cmp::Ordering::Equal,
-            });
+        sort_entries_newest_first(&mut self.all_entries);
     }
 
-    /// Clamp `cursor` and `scroll` to valid bounds for the current group.
+    /// Clamp the cursor to a valid entry for the current group. Display-row
+    /// scroll is clamped by the renderer because its bounds depend on the
+    /// terminal viewport and age headings.
     pub fn clamp_state(&mut self) {
         let n = self.visible_entries().len();
         if n == 0 {
@@ -89,7 +88,9 @@ impl FeedTabState {
             self.scroll = 0;
         } else {
             self.cursor = self.cursor.min(n - 1);
-            self.scroll = self.scroll.min(self.cursor);
+            // This is only a coarse bound; the renderer applies the precise
+            // display-row bound once it knows the viewport height.
+            self.scroll = self.scroll.min(n - 1);
         }
     }
 
@@ -97,6 +98,15 @@ impl FeedTabState {
     pub fn group_count(&self) -> usize {
         1 + self.subscriptions.len()
     }
+}
+
+fn sort_entries_newest_first(entries: &mut [FeedEntry]) {
+    entries.sort_by(|a, b| match (a.pub_date_secs, b.pub_date_secs) {
+        (Some(a), Some(b)) => b.cmp(&a), // newest first
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    });
 }
 
 #[cfg(test)]
@@ -128,6 +138,26 @@ mod tests {
         state.rebuild_all_entries();
         let titles: Vec<&str> = state.all_entries.iter().map(|e| e.title.as_str()).collect();
         assert_eq!(titles, vec!["new", "mid", "old", "nodate"]);
+    }
+
+    #[test]
+    fn subscription_groups_are_sorted_newest_first_with_none_last() {
+        let mut state = FeedTabState {
+            entries: vec![vec![
+                entry("old", Some(100)),
+                entry("new", Some(300)),
+                entry("nodate", None),
+            ]],
+            ..Default::default()
+        };
+
+        state.rebuild_all_entries();
+
+        let titles: Vec<&str> = state.entries[0]
+            .iter()
+            .map(|entry| entry.title.as_str())
+            .collect();
+        assert_eq!(titles, vec!["new", "old", "nodate"]);
     }
 
     #[test]

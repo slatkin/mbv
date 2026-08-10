@@ -180,6 +180,7 @@ impl App {
                         }
                     } else if use_row_map {
                         // No row map entry; cursor unchanged.
+                        return false;
                     } else {
                         let visible = la.height as usize;
                         let offset = if self.feed_tab.cursor >= visible {
