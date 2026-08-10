@@ -45,8 +45,12 @@ impl App {
             had_events = true;
             let idx = result.subscription_index;
             match result.entries {
-                Ok(entries) => {
+                Ok(mut entries) => {
                     if idx < self.feed_tab.entries.len() {
+                        let feed_id = self.feed_tab.subscriptions.get(idx).map(|s| s.url.clone());
+                        if let Some(feed_id) = feed_id {
+                            self.hydrate_feed_entries_for_subscription(&feed_id, &mut entries);
+                        }
                         self.feed_tab.entries[idx] = entries;
                     }
                 }
@@ -144,6 +148,7 @@ impl App {
         self.feed_tab.selected_group = (cur + delta).rem_euclid(n as i64) as usize;
         self.feed_tab.cursor = 0;
         self.feed_tab.scroll = 0;
+        self.feed_tab.rebuild_filtered_entries();
         self.feed_tab.clamp_state();
     }
 
@@ -153,6 +158,7 @@ impl App {
             self.feed_tab.selected_group = group_idx;
             self.feed_tab.cursor = 0;
             self.feed_tab.scroll = 0;
+            self.feed_tab.rebuild_filtered_entries();
             self.feed_tab.clamp_state();
         }
     }

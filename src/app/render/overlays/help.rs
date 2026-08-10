@@ -114,9 +114,19 @@ impl App {
             mk("Ctrl+R", "Rescan library"),
             blank(),
         ];
+        let sec_feeds = vec![
+            section("Feeds"),
+            mk("w", "Cycle watched filter"),
+            mk("r", "Refresh feeds"),
+            mk("[ / ]", "Switch subscription"),
+            mk("Enter", "Play entry"),
+            mk("e", "Enqueue entry"),
+            blank(),
+        ];
         let is_queue = matches!(self.panel_focus, crate::app::PanelFocus::Queue);
         let is_home = !is_queue && self.tab.is_home();
-        let is_lib = !is_queue && !is_home;
+        let is_feeds = !is_queue && !is_home && self.tab.is_feeds();
+        let is_lib = !is_queue && !is_home && !is_feeds;
 
         let mut ordered: Vec<Vec<Line>> = Vec::new();
         if is_home {
@@ -125,10 +135,19 @@ impl App {
             ordered.push(sec_playback);
             ordered.push(sec_queue);
             ordered.push(sec_library);
+            ordered.push(sec_feeds);
         } else if is_queue {
             ordered.push(sec_queue);
             ordered.push(sec_global);
             ordered.push(sec_playback);
+            ordered.push(sec_home);
+            ordered.push(sec_library);
+            ordered.push(sec_feeds);
+        } else if is_feeds {
+            ordered.push(sec_feeds);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_queue);
             ordered.push(sec_home);
             ordered.push(sec_library);
         } else {
@@ -138,6 +157,7 @@ impl App {
             ordered.push(sec_playback);
             ordered.push(sec_queue);
             ordered.push(sec_home);
+            ordered.push(sec_feeds);
         }
 
         let mut lines: Vec<Line> = ordered.into_iter().flatten().collect();

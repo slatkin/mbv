@@ -145,8 +145,12 @@ _Avoid_: feed type, media type, category
 **FeedEntry**:
 One parsed item from a subscribed feed. Identity is guid, else enclosure-URL
 hash, else title+pub-date hash. Carries enclosure URL, link, pub_date,
-duration in Emby ticks, and description. Entries carry no persisted playback
-position or watched state and never report progress to Emby. Queued
+duration in Emby ticks, description, and the normalized subscription URL as
+`feed_id`. Each entry also carries roaming `position_ticks` and `played`
+fields hydrated from the shared feed-entry store on refresh and updated on
+playback lifecycle events (stop, pause, seek, EOF). Entries never report
+progress to Emby. With no shared-data daemon, entries degrade to zero
+position and unplayed without blocking browsing or playback. Queued
 FeedEntries are owned snapshots: deleting the subscription leaves them
 playable for the lifetime of the Bound queue.
 _Avoid_: episode, post, feed item, rss item

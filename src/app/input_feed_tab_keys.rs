@@ -23,6 +23,11 @@ impl App {
                 self.refresh_feeds();
                 Some(false)
             }
+            // Watched filter cycle (unmodified w only).
+            KeyCode::Char('w') if key.modifiers.is_empty() => {
+                self.feed_tab.cycle_watched_filter();
+                Some(false)
+            }
             // Cursor navigation.
             KeyCode::Up => {
                 self.feed_tab_move_cursor(-1);
