@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::api::{EmbyClient, EmbyItem};
 use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent};
-use crate::playback_queue::QueueItem;
+use crate::playback_queue::{FeedEntry, QueueItem};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 /// Response from a bounded shutdown request.
@@ -249,6 +249,22 @@ impl RemotePlayer {
             *self.queue_source.lock().unwrap() = source;
         }
         sent
+    }
+
+    pub fn supports_feed_playback(&self) -> bool {
+        self.ctrl_compatibility.supports_feed_playback
+    }
+
+    /// Legacy single-feed submission for peers that advertise `feed-playback`
+    /// but not `unified-queue`. Sends the surviving `WireCommand::LoadFeed`
+    /// envelope, which the daemon intercepts and folds into its canonical queue.
+    pub fn play_feed(&self, entry: FeedEntry) -> bool {
+        if !self.supports_feed_playback() {
+            return false;
+        }
+        self.send_ctrl_cmd(CtrlCmd::PlayerCmd(crate::ctrl::WireCommand::LoadFeed {
+            entry,
+        }))
     }
 
     pub fn play_queue(

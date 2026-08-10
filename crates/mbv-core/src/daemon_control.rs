@@ -89,14 +89,14 @@ fn broadcast_queue_state(
     let capable_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
         status: status.clone(),
         items: emby_items.clone(),
-        cursor: queue.active_index().unwrap_or(0),
+        cursor: queue.legacy_cursor(true),
         source: source.clone(),
         feed_items: feed_items.clone(),
     }));
     let legacy_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
         status,
         items: emby_items,
-        cursor: queue.active_index().unwrap_or(0),
+        cursor: queue.legacy_cursor(false),
         source: source.clone(),
         feed_items: Vec::new(),
     }));
@@ -167,21 +167,17 @@ fn reject_command(
         );
     } else {
         let (emby_items, feed_items) = split_queue_for_legacy(queue);
-        let feed = if ctrl_clients
+        let include_feed = ctrl_clients
             .lock()
             .unwrap()
-            .supports_feed_playback(client_id)
-        {
-            feed_items
-        } else {
-            Vec::new()
-        };
+            .supports_feed_playback(client_id);
+        let feed = if include_feed { feed_items } else { Vec::new() };
         send_to(
             reply_tx,
             &CtrlEvent::State(CtrlState {
                 status,
                 items: emby_items,
-                cursor: queue.active_index().unwrap_or(0),
+                cursor: queue.legacy_cursor(include_feed),
                 source: source.clone(),
                 feed_items: feed,
             }),

@@ -181,7 +181,7 @@ impl PlayerProxy {
                                 false
                             }
                         }
-                        QueueItem::Feed(_) => false,
+                        QueueItem::Feed(entry) => r.play_feed(entry.clone()),
                     }
                 } else if items.iter().any(|item| matches!(item, QueueItem::Feed(_))) {
                     // A legacy peer cannot represent a mixed canonical queue;
