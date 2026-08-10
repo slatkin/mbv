@@ -241,7 +241,7 @@ impl Player {
     // type. Reads `audio_pipe_enabled` from `client.config` (rather than a
     // field cached on `Player`) so a setting toggled mid-session takes effect
     // on the very next play() call instead of requiring an app restart.
-    fn headless_for(&self, client: &EmbyClient, is_audio: bool) -> bool {
+    pub(crate) fn headless_for(&self, client: &EmbyClient, is_audio: bool) -> bool {
         client.config.audio_pipe_enabled || (!self.show_audio_window && is_audio)
     }
 

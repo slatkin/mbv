@@ -629,10 +629,16 @@ fn handle_ctrl(
             };
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-            player.send_command(PlayerCommand::SubmitQueue {
-                items: queue.slots().iter().map(|s| s.item.clone()).collect(),
-                start_idx: next_cursor,
-            });
+            // `send_command` alone only reaches an already-running mpv
+            // thread; on a freshly started daemon no thread exists yet, so
+            // route through `submit_queue`, which cold-starts one when
+            // needed (matches the legacy PlayItems path via play/play_queue).
+            let queue_items: Vec<QueueItem> =
+                queue.slots().iter().map(|s| s.item.clone()).collect();
+            let all_audio = queue_items.iter().all(|item| item.is_audio());
+            let c = Arc::new(client.lock().unwrap().clone());
+            let headless = player.headless_for(&c, all_audio);
+            player.submit_queue(queue_items, next_cursor, Some(c), headless, 100);
         }
         CtrlCmd::UnifiedQueueAppend { items } => {
             if items.is_empty() {
