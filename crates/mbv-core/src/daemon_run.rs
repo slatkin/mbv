@@ -590,7 +590,16 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 if let Ok(items_for_intent) = &fetched {
                     let rejection = if items_for_intent.is_empty() {
                         Some(crate::ctrl::PlaybackIntentRejection::EmptyTarget)
-                    } else if audio_only_rejection(audio_only, items_for_intent).is_some() {
+                    } else if audio_only_rejection(
+                        audio_only,
+                        &items_for_intent
+                            .iter()
+                            .cloned()
+                            .map(|e| QueueItem::Emby(Box::new(e)))
+                            .collect::<Vec<_>>(),
+                    )
+                    .is_some()
+                    {
                         Some(crate::ctrl::PlaybackIntentRejection::AudioOnly)
                     } else {
                         None

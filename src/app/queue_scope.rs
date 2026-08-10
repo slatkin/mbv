@@ -1,7 +1,7 @@
 use super::notify_actions::ToastSeverity;
 use super::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
 use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
+use mbv_core::playback_queue::{QueueItem, QueueMutationResult, QueueSlotId, RefreshMergeResult};
 use mbv_core::player::PlayerCommand;
 
 impl App {
@@ -98,7 +98,12 @@ impl App {
         }
         let sent = self
             .player
-            .send_command(crate::player::PlayerCommand::QueueAppend { items });
+            .send_command(crate::player::PlayerCommand::QueueAppend {
+                items: items
+                    .into_iter()
+                    .map(|e| QueueItem::Emby(Box::new(e)))
+                    .collect(),
+            });
         if !sent && !self.player.supports_queue_append() {
             self.flash(
                 "Remote append is not supported by this direct mbv peer".to_string(),

@@ -333,7 +333,12 @@ impl From<PlayerCommand> for WireCommand {
         match cmd {
             PlayerCommand::TogglePause => WireCommand::TogglePause,
             PlayerCommand::JumpTo(idx) => WireCommand::JumpTo(idx),
-            PlayerCommand::QueueAppend { items } => WireCommand::QueueAppend { items },
+            PlayerCommand::QueueAppend { items } => WireCommand::QueueAppend {
+                items: items
+                    .iter()
+                    .filter_map(|qi| qi.as_emby().cloned())
+                    .collect(),
+            },
             PlayerCommand::QueueRemove(idx) => WireCommand::QueueRemove(idx),
             PlayerCommand::QueueMove(from, to) => WireCommand::QueueMove(from, to),
             PlayerCommand::SetVolume(v) => WireCommand::SetVolume(v),
@@ -389,7 +394,12 @@ impl From<WireCommand> for PlayerCommand {
         match cmd {
             WireCommand::TogglePause => PlayerCommand::TogglePause,
             WireCommand::JumpTo(idx) => PlayerCommand::JumpTo(idx),
-            WireCommand::QueueAppend { items } => PlayerCommand::QueueAppend { items },
+            WireCommand::QueueAppend { items } => PlayerCommand::QueueAppend {
+                items: items
+                    .into_iter()
+                    .map(|e| QueueItem::Emby(Box::new(e)))
+                    .collect(),
+            },
             WireCommand::QueueRemove(idx) => PlayerCommand::QueueRemove(idx),
             WireCommand::QueueMove(from, to) => PlayerCommand::QueueMove(from, to),
             WireCommand::SetVolume(v) => PlayerCommand::SetVolume(v),

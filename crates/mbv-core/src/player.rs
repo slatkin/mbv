@@ -62,6 +62,7 @@ include!("player_proxy.rs");
 mod tests {
     include!("player_tests_basic.rs");
     include!("player_tests_session.rs");
+    include!("player_tests_session_feed.rs");
     include!("player_tests_status.rs");
     include!("player_tests_submit.rs");
 }

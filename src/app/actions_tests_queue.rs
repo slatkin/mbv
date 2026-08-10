@@ -165,7 +165,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     assert_eq!(app.player_tab.emby_items()[1].id, queued.id);
     assert!(matches!(
         rx.try_recv(),
-        Ok(PlayerCommand::QueueAppend { items }) if items.len() == 1 && items[0].id == queued.id
+        Ok(PlayerCommand::QueueAppend { items }) if items.len() == 1 && items[0].id() == queued.id
     ));
 
     app.panel_focus = PanelFocus::Queue;

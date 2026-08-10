@@ -545,7 +545,7 @@ fn v3_peer_sends_queue_append_wire_command() {
     let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(existing, 0);
 
     assert!(remote.send_command(PlayerCommand::QueueAppend {
-        items: vec![make_media_item("2")]
+        items: vec![QueueItem::Emby(Box::new(make_media_item("2")))]
     }));
 
     match cmd_rx.recv().unwrap() {

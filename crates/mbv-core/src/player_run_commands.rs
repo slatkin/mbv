@@ -262,22 +262,21 @@ impl PlaybackRun {
         *progress = spawn_progress_reporter(self.reporter.clone());
     }
 
-    fn append_items_to_queue(&mut self, items: Vec<EmbyItem>) {
+    fn append_items_to_queue(&mut self, items: Vec<QueueItem>) {
         for item in items {
-            self.queue.append(QueueItem::Emby(Box::new(item)));
+            self.queue.append(item);
         }
         self.status.lock().unwrap().queue_len = self.queue_len();
     }
 
-    fn cmd_append_queue(&mut self, new_items: Vec<EmbyItem>, mpv: &Mpv) {
+    fn cmd_append_queue(&mut self, new_items: Vec<QueueItem>, mpv: &Mpv) {
         if new_items.is_empty() {
             return;
         }
 
         for item in &new_items {
-            let queue_item = QueueItem::Emby(Box::new(item.clone()));
-            let url = mpv_url_for_queue_item(&queue_item, &self.server_url, &self.token);
-            let title_opt = mpv_title_opt(&queue_item.display_name());
+            let url = mpv_url_for_queue_item(item, &self.server_url, &self.token);
+            let title_opt = mpv_title_opt(&item.display_name());
             if let Err(e) = mpv.command(
                 "loadfile",
                 &[url.as_str(), "append-play", "-1", title_opt.as_str()],

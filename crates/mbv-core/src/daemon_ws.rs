@@ -31,16 +31,16 @@ fn handle_ws(
             if fetched.is_empty() {
                 return;
             }
-            if let Some(reason) = audio_only_rejection(audio_only, &fetched) {
-                log::warn!(target: "daemon", "rejecting websocket play request: {reason}");
-                return;
-            }
             let start_idx = start_index.min(fetched.len().saturating_sub(1));
             let queue_items: Vec<QueueItem> = fetched
                 .iter()
                 .cloned()
                 .map(|item| QueueItem::Emby(Box::new(item)))
                 .collect();
+            if let Some(reason) = audio_only_rejection(audio_only, &queue_items) {
+                log::warn!(target: "daemon", "rejecting websocket play request: {reason}");
+                return;
+            }
             *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
             *source = crate::config::QueueSource::Remote;
             take_authority_for_emby_remote(ctrl_clients);
@@ -161,6 +161,6 @@ fn handle_ws(
     }
 }
 
-fn all_audio(items: &[EmbyItem]) -> bool {
-    items.iter().all(EmbyItem::is_audio)
+fn all_audio(items: &[QueueItem]) -> bool {
+    items.iter().all(QueueItem::is_audio)
 }

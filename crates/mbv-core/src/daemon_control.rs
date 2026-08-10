@@ -362,7 +362,7 @@ fn handle_ctrl(
                 PlayerCommand::QueueAppend { items: new_items } => {
                     if !new_items.is_empty() {
                         for item in new_items {
-                            queue.append(QueueItem::Emby(Box::new(item)));
+                            queue.append(item);
                         }
                         broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
                         player.send_command(PlayerCommand::SubmitQueue {
@@ -443,7 +443,14 @@ fn handle_ctrl(
                 );
                 return;
             }
-            if let Some(reason) = audio_only_rejection(audio_only, &fetched) {
+            if let Some(reason) = audio_only_rejection(
+                audio_only,
+                &fetched
+                    .iter()
+                    .cloned()
+                    .map(|e| QueueItem::Emby(Box::new(e)))
+                    .collect::<Vec<_>>(),
+            ) {
                 log::warn!(target: "daemon", "rejecting ctrl play request: {reason}");
                 send_to(request.reply_tx, &CtrlEvent::CommandRejected(reason));
                 return;
@@ -578,11 +585,7 @@ fn handle_ctrl(
         CtrlCmd::UnifiedQueueReplace { items, start_idx } => {
             // Audio-only admission: reject if the daemon is in audio-only
             // mode and any item is non-audio.
-            let emby_items: Vec<EmbyItem> = items
-                .iter()
-                .filter_map(|qi| qi.as_emby().cloned())
-                .collect();
-            if let Some(reason) = audio_only_rejection(audio_only, &emby_items) {
+            if let Some(reason) = audio_only_rejection(audio_only, &items) {
                 reject_command(
                     request.reply_tx,
                     ctrl_clients,
@@ -611,11 +614,7 @@ fn handle_ctrl(
                 return;
             }
             // Audio-only admission: reject if any appended item is non-audio.
-            let emby_items: Vec<EmbyItem> = items
-                .iter()
-                .filter_map(|qi| qi.as_emby().cloned())
-                .collect();
-            if let Some(reason) = audio_only_rejection(audio_only, &emby_items) {
+            if let Some(reason) = audio_only_rejection(audio_only, &items) {
                 reject_command(
                     request.reply_tx,
                     ctrl_clients,
@@ -627,12 +626,15 @@ fn handle_ctrl(
                 );
                 return;
             }
+            let items_for_player = items.clone();
             for item in items {
                 queue.append(item);
             }
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
             // Append to the player's queue rather than replacing the whole queue.
-            player.send_command(PlayerCommand::QueueAppend { items: emby_items });
+            player.send_command(PlayerCommand::QueueAppend {
+                items: items_for_player,
+            });
         }
         CtrlCmd::UnifiedQueueRemoveSlot { slot_id } => {
             let sid = QueueSlotId::from_raw(slot_id);
@@ -647,17 +649,18 @@ fn handle_ctrl(
                     "slot not found; remove skipped".to_string(),
                 );
             } else if queue.active_slot_id() == Some(sid) {
+                let idx = queue.slot_index(sid).unwrap_or(0);
                 queue.remove_active_slot_confirmed(sid);
                 broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                if let Some(new_idx) = queue.active_index() {
-                    player.send_command(PlayerCommand::JumpTo(new_idx));
-                } else {
+                if queue.is_empty() {
                     // Clear the player's queue and stop.
                     player.send_command(PlayerCommand::SubmitQueue {
                         items: Vec::new(),
                         start_idx: 0,
                     });
                     player.stop();
+                } else {
+                    player.send_command(PlayerCommand::QueueRemove(idx));
                 }
             } else {
                 let idx = queue.slot_index(sid).unwrap_or(0);

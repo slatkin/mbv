@@ -281,7 +281,9 @@ fn queue_append_succeeds_unconditionally() {
 
     handle_ctrl(
         CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueAppend {
-            items: vec![item("appended", "Video", "Movie")],
+            items: vec![QueueItem::Emby(Box::new(item(
+                "appended", "Video", "Movie",
+            )))],
         })),
         sender_id,
         CtrlRequest {

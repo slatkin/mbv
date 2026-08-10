@@ -247,7 +247,7 @@ pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),
     QueueAppend {
-        items: Vec<EmbyItem>,
+        items: Vec<QueueItem>,
     },
     QueueRemove(usize),
     QueueMove(usize, usize),
