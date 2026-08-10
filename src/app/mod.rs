@@ -12,6 +12,7 @@ mod cw_library_tab_actions;
 mod daemon_restart;
 mod feed_actions;
 mod feed_parse;
+mod feed_parse_date;
 mod feed_tab_actions;
 mod feeds_manage_actions;
 mod home_actions;
