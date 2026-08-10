@@ -2,6 +2,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::api::EmbyClient;
 use crate::shared_protocol::{SharedDataCmd, SharedDataEvent, SharedDataHello};
@@ -300,7 +301,7 @@ fn spawn_shared_client_handler<S>(
         // Send daemon hello.
         let hello = SharedDataEvent::Hello(SharedDataHello::current());
         if let Ok(json) = serde_json::to_string(&hello) {
-            if writeln!(reader.lock().unwrap().get_mut(), "{json}").is_err() {
+            if write_shared_line(&reader, &json).is_err() {
                 return;
             }
         }
@@ -308,8 +309,7 @@ fn spawn_shared_client_handler<S>(
         // Writer thread.
         std::thread::spawn(move || {
             for line in ev_rx {
-                let mut reader = writer_reader.lock().unwrap();
-                if writeln!(reader.get_mut(), "{line}").is_err() {
+                if write_shared_line(&writer_reader, &line).is_err() {
                     break;
                 }
             }
@@ -567,6 +567,46 @@ fn read_shared_line<S: SharedStream>(
             .to_string())),
         Err(error) => Some(Err(error)),
     }
+}
+
+/// Write one complete protocol line to the nonblocking shared-data stream.
+///
+/// `write_all`/`writeln!` cannot be retried after `WouldBlock` because they may
+/// have already written part of the line. Keep the offset explicitly so a
+/// large snapshot is resumed rather than dropped or duplicated.
+fn write_shared_line<S: SharedStream>(
+    writer: &Arc<Mutex<BufReader<S>>>,
+    line: &str,
+) -> std::io::Result<()> {
+    let mut message = line.as_bytes().to_vec();
+    message.push(b'\n');
+    let mut offset = 0;
+    let deadline = Instant::now() + Duration::from_secs(5);
+
+    while offset < message.len() {
+        let result = writer.lock().unwrap().get_mut().write(&message[offset..]);
+        match result {
+            Ok(0) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::WriteZero,
+                    "shared-data stream write returned zero bytes",
+                ));
+            }
+            Ok(written) => offset += written,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                if Instant::now() >= deadline {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "shared-data stream write timed out",
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    Ok(())
 }
 
 /// Send a document notification to all other same-user sessions.
