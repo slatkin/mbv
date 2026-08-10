@@ -204,9 +204,10 @@ impl RemotePlayer {
         *self.queue_source.lock().unwrap() = source.clone();
         if self.ctrl_compatibility.supports_unified_queue {
             self.cmd_tx
-                .send(CtrlCmd::UnifiedQueueReplace {
+                .send(CtrlCmd::UnifiedAdoptQueue {
                     items,
-                    start_idx: Some(cursor),
+                    cursor,
+                    source,
                 })
                 .is_ok()
         } else {

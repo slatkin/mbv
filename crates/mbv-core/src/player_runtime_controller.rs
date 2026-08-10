@@ -207,7 +207,7 @@ impl Player {
     /// Seed queue/status state without starting playback. Used when a freshly
     /// spawned local daemon should inherit a queue snapshot before any thin
     /// client connects, while an already-running daemon keeps its live state.
-    pub fn set_initial_queue(&self, items: &[EmbyItem], cursor: usize) {
+    pub fn set_initial_queue(&self, items: &[QueueItem], cursor: usize) {
         let mut st = self.status.lock().unwrap();
         if items.is_empty() {
             st.position_ticks = 0;
@@ -221,13 +221,20 @@ impl Player {
         }
 
         let cursor = cursor.min(items.len().saturating_sub(1));
-        st.position_ticks = items[cursor].playback_position_ticks;
-        st.runtime_ticks = items[cursor].runtime_ticks;
+        let start_item = &items[cursor];
+        st.position_ticks = start_item.playback_position_ticks();
+        st.runtime_ticks = start_item.runtime_ticks();
         st.paused = false;
         st.current_idx = cursor;
         st.queue_len = items.len();
         st.active = false;
-        st.set_current_item_metadata(&items[cursor]);
+        match start_item {
+            QueueItem::Emby(emby) => st.set_current_item_metadata(emby),
+            QueueItem::Feed(entry) => {
+                st.title = entry.title.clone();
+                st.art_item_id = entry.guid.clone();
+            }
+        }
     }
 
     // Pipe mode always forces headless (no video window), regardless of item

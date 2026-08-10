@@ -571,6 +571,33 @@ fn unified_queue_clear_cmd_round_trips() {
 }
 
 #[test]
+fn unified_adopt_queue_cmd_round_trips() {
+    let items = vec![
+        QueueItem::Emby(Box::new(stub_media_item())),
+        QueueItem::Feed(stub_feed_entry()),
+    ];
+    let cmd = CtrlCmd::UnifiedAdoptQueue {
+        items,
+        cursor: 1,
+        source: QueueSource::Album,
+    };
+    let json = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+    match decoded {
+        CtrlCmd::UnifiedAdoptQueue {
+            items,
+            cursor,
+            source,
+        } => {
+            assert_eq!(items.len(), 2);
+            assert_eq!(cursor, 1);
+            assert!(matches!(source, QueueSource::Album));
+        }
+        _ => panic!("expected UnifiedAdoptQueue"),
+    }
+}
+
+#[test]
 fn unified_queue_state_event_round_trips() {
     let event = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
         status: PlayerStatus::default(),

@@ -385,6 +385,105 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
 }
 
 #[test]
+fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
+    let player = cold_player();
+    let player_cmd_rx = player.spy_on_commands();
+    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let mut queue = PlaybackQueue::default();
+    let mut source = QueueSource::Unknown;
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
+
+    handle_ctrl(
+        CtrlCmd::UnifiedAdoptQueue {
+            items: vec![emby_qi("adopted", "Video", "Movie")],
+            cursor: 0,
+            source: QueueSource::Remote,
+        },
+        1,
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
+        &client,
+        &player,
+        false,
+        &mut queue,
+        &mut source,
+        &shared_queue_state(),
+        &registry,
+        &mut PlaybackIntentState::default(),
+        None,
+        &dummy_merged_tx,
+    );
+
+    assert_eq!(queue.len(), 1);
+    assert_eq!(queue.slots()[0].item.id(), "adopted");
+    assert!(!player.status.lock().unwrap().active);
+    assert!(player_cmd_rx.try_recv().is_err());
+}
+
+#[test]
+fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
+    let player = cold_player();
+    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (_sender_id, _sender_rx) = {
+        let mut clients = registry.lock().unwrap();
+        connect_client(&mut clients)
+    };
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let mut queue = queue_from_items(&[item("existing", "Video", "Movie")], 0);
+    let mut source = QueueSource::Remote;
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
+
+    handle_ctrl(
+        CtrlCmd::UnifiedAdoptQueue {
+            items: vec![emby_qi("stale", "Video", "Movie")],
+            cursor: 0,
+            source: QueueSource::Unknown,
+        },
+        1,
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
+        &client,
+        &player,
+        false,
+        &mut queue,
+        &mut source,
+        &shared_queue_state(),
+        &registry,
+        &mut PlaybackIntentState::default(),
+        None,
+        &dummy_merged_tx,
+    );
+
+    assert_eq!(queue.len(), 1);
+    assert_eq!(queue.slots()[0].item.id(), "existing");
+    match recv_event(&reply_rx) {
+        CtrlEvent::CommandRejected(reason) => {
+            assert_eq!(reason, "daemon already has a queue; adoption skipped");
+        }
+        _ => panic!("expected command rejection"),
+    }
+    match recv_event(&reply_rx) {
+        CtrlEvent::State(state) => {
+            assert_eq!(
+                state
+                    .items
+                    .iter()
+                    .map(|i| i.id.as_str())
+                    .collect::<Vec<_>>(),
+                vec!["existing"]
+            );
+            assert_eq!(state.cursor, 0);
+        }
+        _ => panic!("expected authoritative state resync"),
+    }
+}
+
+#[test]
 fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
     let player = cold_player();
     let player_cmd_rx = player.spy_on_commands();

@@ -290,14 +290,41 @@ fn handle_ctrl(
             } else {
                 new_cursor.min(queue_items.len().saturating_sub(1))
             };
-            player.set_initial_queue(
-                &queue_items
-                    .iter()
-                    .filter_map(|qi| qi.as_emby().cloned())
-                    .collect::<Vec<_>>(),
-                next_cursor,
-            );
+            player.set_initial_queue(&queue_items, next_cursor);
             *queue = PlaybackQueue::from_queue_items(queue_items, Some(next_cursor));
+            *source = new_source;
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+        }
+        CtrlCmd::UnifiedAdoptQueue {
+            items,
+            cursor,
+            source: new_source,
+        } => {
+            // Adoption only applies to a Cold daemon — one with no queue yet.
+            if !queue.is_empty() {
+                log::warn!(
+                    target: "daemon",
+                    "ignoring UnifiedAdoptQueue: daemon already has a queue ({} slot(s))",
+                    queue.len()
+                );
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    "daemon already has a queue; adoption skipped".to_string(),
+                );
+                return;
+            }
+            let next_cursor = if items.is_empty() {
+                0
+            } else {
+                cursor.min(items.len().saturating_sub(1))
+            };
+            player.set_initial_queue(&items, next_cursor);
+            *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
         }

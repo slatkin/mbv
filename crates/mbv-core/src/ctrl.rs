@@ -237,6 +237,13 @@ pub enum CtrlCmd {
     },
     /// Clear all slots and stop playback.
     UnifiedQueueClear,
+    /// Unified-capable counterpart to the legacy `AdoptQueue`: seeds queue
+    /// state on a cold daemon (no queue yet) without starting playback.
+    UnifiedAdoptQueue {
+        items: Vec<QueueItem>,
+        cursor: usize,
+        source: QueueSource,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
