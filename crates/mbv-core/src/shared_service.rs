@@ -584,7 +584,8 @@ fn write_shared_line<S: SharedStream>(
     let deadline = Instant::now() + Duration::from_secs(5);
 
     while offset < message.len() {
-        match writer.lock().unwrap().get_mut().write(&message[offset..]) {
+        let result = writer.lock().unwrap().get_mut().write(&message[offset..]);
+        match result {
             Ok(0) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::WriteZero,
