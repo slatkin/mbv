@@ -2,6 +2,19 @@ use super::types_player_tab::PlayerTab;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 
+pub(super) fn bootstrap_unified_queue(
+    state: &mbv_core::ctrl::UnifiedQueueStateData,
+) -> LocalDaemonBootstrap {
+    LocalDaemonBootstrap {
+        player_tab: PlayerTab::from_unified_state(state),
+        queue_source: state.source.clone(),
+        last_played_item_id: None,
+        last_played_completed: false,
+        adopt_queue: None,
+        positions: Default::default(),
+    }
+}
+
 pub(super) struct LocalDaemonBootstrap {
     pub(super) player_tab: PlayerTab,
     pub(super) queue_source: crate::config::QueueSource,

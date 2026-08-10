@@ -489,6 +489,7 @@ impl App {
                     .filter_map(|slot| slot.item.as_emby().cloned())
                     .collect();
                 let all_items = queue.all_queue_items();
+                let slot_id = queue.slot_id_at(t);
                 // Pre-compute the Emby-only projection index for the cursor
                 // position, needed by the session API boundary.
                 let emby_start = queue
@@ -548,7 +549,22 @@ impl App {
                     if t == current_idx && is_audio {
                         self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
                     } else if t != current_idx {
-                        self.player.send_command(PlayerCommand::JumpTo(t));
+                        if self.player.supports_unified_queue() {
+                            let Some(slot_id) = slot_id else {
+                                return false;
+                            };
+                            if !self
+                                .player
+                                .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(slot_id))
+                            {
+                                self.flash(
+                                    "Playback owner rejected the queue selection".into(),
+                                    ToastSeverity::Error,
+                                );
+                            }
+                        } else {
+                            self.player.send_command(PlayerCommand::JumpTo(t));
+                        }
                     }
                 } else {
                     // Cold start: submit the full canonical queue (all

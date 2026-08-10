@@ -302,9 +302,9 @@ impl Player {
         client: Option<Arc<EmbyClient>>,
         headless: bool,
         initial_volume: u8,
-    ) {
+    ) -> bool {
         if items.is_empty() {
-            return;
+            return false;
         }
         let start_idx = start_idx.min(items.len() - 1);
 
@@ -328,8 +328,7 @@ impl Player {
                     }
                 }
             }
-            self.send_command(PlayerCommand::SubmitQueue { items, start_idx });
-            return;
+            return self.send_command(PlayerCommand::SubmitQueue { items, start_idx });
         }
 
         // Cold start: stop, join, spawn fresh player thread.
@@ -558,6 +557,7 @@ impl Player {
             );
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
+        true
     }
 
     pub fn stop(&self) {

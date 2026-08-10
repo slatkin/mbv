@@ -223,6 +223,10 @@ impl QueueRevision {
         self.0
     }
 
+    pub fn from_raw(raw: u64) -> Self {
+        Self(raw)
+    }
+
     fn bump(&mut self) {
         self.0 = self.0.saturating_add(1);
     }
@@ -366,6 +370,34 @@ impl PlaybackQueue {
         queue.active_slot_id =
             active_index.and_then(|index| queue.slots.get(index).map(|s| s.slot_id));
         queue
+    }
+
+    /// Reconstruct a queue snapshot while retaining the slot identities
+    /// assigned by its owner. Used at the unified ctrl boundary; local queue
+    /// construction should use `from_queue_items` so it allocates identities.
+    pub fn from_slot_items(
+        slots: Vec<(QueueSlotId, QueueItem)>,
+        active_slot_id: Option<QueueSlotId>,
+        revision: QueueRevision,
+    ) -> Self {
+        let next_slot_id = slots
+            .iter()
+            .map(|(slot_id, _)| slot_id.raw())
+            .max()
+            .unwrap_or(0)
+            .saturating_add(1);
+        let slots = slots
+            .into_iter()
+            .map(|(slot_id, item)| QueueSlot::new(slot_id, item))
+            .collect::<Vec<_>>();
+        let active_slot_id =
+            active_slot_id.filter(|slot_id| slots.iter().any(|slot| slot.slot_id == *slot_id));
+        Self {
+            slots,
+            active_slot_id,
+            revision,
+            next_slot_id,
+        }
     }
 
     pub fn revision(&self) -> QueueRevision {

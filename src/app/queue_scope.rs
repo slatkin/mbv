@@ -93,20 +93,39 @@ impl App {
         scope: QueueScope,
         items: Vec<EmbyItem>,
     ) -> bool {
+        self.sync_playback_queue_items_after_append(
+            scope,
+            items
+                .into_iter()
+                .map(|item| QueueItem::Emby(Box::new(item)))
+                .collect(),
+        )
+    }
+
+    pub(super) fn sync_playback_queue_items_after_append(
+        &mut self,
+        scope: QueueScope,
+        items: Vec<QueueItem>,
+    ) -> bool {
         if items.is_empty() || scope != self.playback_target_queue_scope() {
             return true;
         }
-        let sent = self
-            .player
-            .send_command(crate::player::PlayerCommand::QueueAppend {
-                items: items
-                    .into_iter()
-                    .map(|e| QueueItem::Emby(Box::new(e)))
-                    .collect(),
-            });
-        if !sent && !self.player.supports_queue_append() {
+        if !self.player.is_remote() && !self.player.status.lock().unwrap().active {
+            // A cold in-process player has no command channel yet. The app's
+            // canonical queue is authoritative until the next Play starts it.
+            return true;
+        }
+        let sent = self.player.queue_append(items);
+        if !sent && self.player.is_remote() && !self.player.supports_queue_append() {
             self.flash(
                 "Remote append is not supported by this direct mbv peer".to_string(),
+                ToastSeverity::Error,
+            );
+            return false;
+        }
+        if !sent {
+            self.flash(
+                "Playback owner rejected the queue append".to_string(),
                 ToastSeverity::Error,
             );
             return false;

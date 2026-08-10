@@ -116,7 +116,9 @@ impl PlayerProxy {
     ) {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.play(item, client, initial_volume),
-            PlayerProxyInner::Remote(r) => r.play(item, source, client, initial_volume),
+            PlayerProxyInner::Remote(r) => {
+                let _ = r.play(item, source, client, initial_volume);
+            }
         }
     }
 
@@ -131,7 +133,7 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.play_queue(items, start_idx, client, initial_volume),
             PlayerProxyInner::Remote(r) => {
-                r.play_queue(items, start_idx, source, client, initial_volume)
+                let _ = r.play_queue(items, start_idx, source, client, initial_volume);
             }
         }
     }
@@ -148,22 +150,22 @@ impl PlayerProxy {
         client: Option<Arc<EmbyClient>>,
         headless: bool,
         initial_volume: u8,
-    ) {
+    ) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(p) => {
-                p.submit_queue(items, start_idx, client, headless, initial_volume);
+                p.submit_queue(items, start_idx, client, headless, initial_volume)
             }
             PlayerProxyInner::Remote(r) => {
                 if items.is_empty() {
-                    return;
+                    return false;
                 }
                 let start_idx = start_idx.min(items.len() - 1);
                 if r.supports_unified_queue() {
                     // Unified path: send item-generic replace command.
-                    let _ = r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
+                    r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
                         items,
                         start_idx: Some(start_idx),
-                    });
+                    })
                 } else if items.len() == 1 {
                     // Legacy single-item path.
                     match &items[0] {
@@ -174,28 +176,23 @@ impl PlayerProxy {
                                     crate::config::QueueSource::default(),
                                     c,
                                     initial_volume,
-                                );
+                                )
+                            } else {
+                                false
                             }
                         }
-                        QueueItem::Feed(entry) => {
-                            // Legacy wire-compat: send LoadFeed wire command
-                            // directly.  The daemon decodes it into the unified
-                            // queue path.
-                            let _ = r.send_ctrl_cmd(crate::ctrl::CtrlCmd::PlayerCmd(
-                                crate::ctrl::WireCommand::LoadFeed {
-                                    entry: entry.clone(),
-                                },
-                            ));
-                        }
+                        QueueItem::Feed(_) => false,
                     }
+                } else if items.iter().any(|item| matches!(item, QueueItem::Feed(_))) {
+                    // A legacy peer cannot represent a mixed canonical queue;
+                    // filtering Feed slots would silently replace the owner's
+                    // queue with a different order and cursor.
+                    false
                 } else {
-                    // Legacy multi-item path: only Emby items can cross.
+                    // Legacy multi-item path: all items are Emby here.
                     let emby_items: Vec<EmbyItem> = items
                         .into_iter()
-                        .filter_map(|i| match i {
-                            QueueItem::Emby(e) => Some(*e),
-                            QueueItem::Feed(_) => None,
-                        })
+                        .filter_map(|i| i.as_emby().cloned())
                         .collect();
                     if !emby_items.is_empty() {
                         if let Some(c) = client {
@@ -205,8 +202,12 @@ impl PlayerProxy {
                                 crate::config::QueueSource::default(),
                                 c,
                                 initial_volume,
-                            );
+                            )
+                        } else {
+                            false
                         }
+                    } else {
+                        false
                     }
                 }
             }
@@ -286,6 +287,13 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
             PlayerProxyInner::Remote(r) => r.supports_unified_queue(),
+        }
+    }
+
+    pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => p.send_command(PlayerCommand::QueueAppend { items }),
+            PlayerProxyInner::Remote(r) => r.queue_append(items),
         }
     }
 

@@ -197,7 +197,6 @@ impl App {
             );
             return;
         }
-        let headless = QueueItem::Feed(entry.clone()).is_audio();
         // Append to the canonical queue (local or remote mirror) so the
         // queue panel, cursor, and now-playing title all resolve the Feed
         // entry correctly.  On a cold (inactive) local player the player
@@ -205,12 +204,22 @@ impl App {
         // any stale items first.
         let active = self.player.status.lock().unwrap().active;
         let is_remote = self.player.is_remote();
+        let scope = self.playback_target_queue_scope();
+        let previous_queue = self.queue_for_scope(scope).clone();
         if !active && !is_remote {
             self.playback_queue_mut().queue = PlaybackQueue::from_items(Vec::new(), None);
         }
         let queue = self.playback_queue_mut();
-        queue.queue.append(QueueItem::Feed(entry.clone()));
-        let unified_idx = queue.queue.slots().len() - 1;
+        let existing_idx = queue.queue.slots().iter().position(
+            |slot| matches!(&slot.item, QueueItem::Feed(existing) if existing.guid == entry.guid),
+        );
+        let unified_idx = match existing_idx {
+            Some(index) => index,
+            None => {
+                queue.queue.append(QueueItem::Feed(entry.clone()));
+                queue.queue.slots().len() - 1
+            }
+        };
         queue.queue_cursor = unified_idx;
         let _ = queue
             .queue
@@ -220,9 +229,35 @@ impl App {
         // the player so its internal playlist matches the PlayerTab.
         let all_items = self.playback_queue().all_queue_items();
         let start_idx = self.playback_queue().queue_cursor;
+        let headless = all_items.iter().all(QueueItem::is_audio);
         let c = std::sync::Arc::new(self.client.lock().unwrap().clone());
-        self.player
-            .submit_queue(all_items, start_idx, Some(c), headless, self.ui_volume);
+        if existing_idx.is_some() && self.player.supports_unified_queue() {
+            let slot_id = self
+                .playback_queue()
+                .slot_id_at(unified_idx)
+                .expect("existing playback queue slot disappeared");
+            if !self
+                .player
+                .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(slot_id))
+            {
+                *self.queue_for_scope_mut(scope) = previous_queue;
+                self.flash(
+                    "Playback owner rejected the Feed selection".into(),
+                    ToastSeverity::Error,
+                );
+            }
+            return;
+        }
+        if !self
+            .player
+            .submit_queue(all_items, start_idx, Some(c), headless, self.ui_volume)
+        {
+            *self.queue_for_scope_mut(scope) = previous_queue;
+            self.flash(
+                "Playback owner rejected the Feed entry".into(),
+                ToastSeverity::Error,
+            );
+        }
     }
 
     /// Enqueue the entry at the current cursor into the canonical queue
@@ -246,30 +281,21 @@ impl App {
         }
         let name = entry.title.clone();
         let scope = self.visible_queue_scope();
+        let previous_dirty = self.queue_dirty;
+        let previous_queue = self.queue_for_scope(scope).clone();
         self.queue_for_scope_mut(scope)
             .queue
             .append(QueueItem::Feed(entry.clone()));
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
-        // Synchronize the append to the remote owner when this queue is
-        // the playback target, using the same QueueAppend path as library
-        // enqueue so the daemon and client stay consistent.
-        if scope == self.playback_target_queue_scope() {
-            let sent = self
-                .player
-                .send_command(mbv_core::player::PlayerCommand::QueueAppend {
-                    items: vec![QueueItem::Feed(entry)],
-                });
-            if !sent && !self.player.supports_queue_append() {
-                self.flash(
-                    "Remote append is not supported by this direct mbv peer".to_string(),
-                    ToastSeverity::Error,
-                );
-            }
+        if self.sync_playback_queue_items_after_append(scope, vec![QueueItem::Feed(entry)]) {
+            self.flash(format!("Added: {name}"), ToastSeverity::Success);
+            self.persist_local_queue_state_if_needed(scope);
+            self.retire_remote_tracking(true);
+        } else {
+            self.queue_dirty = previous_dirty;
+            *self.queue_for_scope_mut(scope) = previous_queue;
         }
-        self.flash(format!("Added: {name}"), ToastSeverity::Success);
-        self.persist_local_queue_state_if_needed(scope);
-        self.retire_remote_tracking(true);
     }
 }

@@ -2,6 +2,7 @@ use super::*;
 use crate::config::QueueSource;
 use crate::ctrl::CtrlState;
 use crate::ctrl::WireCommand;
+use crate::playback_queue::QueueItem;
 use crate::player::PlayerCommand;
 
 fn make_media_item(id: &str) -> EmbyItem {
@@ -92,6 +93,7 @@ fn daemon_endpoint_rejects_unsupported_schemes() {
 fn status_only_preserves_event_confirmed_current_index() {
     let status = Arc::new(Mutex::new(status_with_idx(3)));
     let items = Arc::new(Mutex::new(Vec::new()));
+    let unified_queue = Arc::new(Mutex::new(None));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
@@ -99,6 +101,7 @@ fn status_only_preserves_event_confirmed_current_index() {
         CtrlEvent::StatusOnly(status_with_idx(5)),
         &status,
         &items,
+        &unified_queue,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -112,6 +115,7 @@ fn status_only_preserves_event_confirmed_current_index() {
 fn state_uses_cursor_as_current_index() {
     let status = Arc::new(Mutex::new(status_with_idx(0)));
     let items = Arc::new(Mutex::new(Vec::new()));
+    let unified_queue = Arc::new(Mutex::new(None));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, rx) = mpsc::channel();
 
@@ -125,6 +129,7 @@ fn state_uses_cursor_as_current_index() {
         }),
         &status,
         &items,
+        &unified_queue,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -142,6 +147,7 @@ fn state_uses_cursor_as_current_index() {
 fn status_only_preserves_current_idx_and_queue_len() {
     let status = Arc::new(Mutex::new(status_with_idx_and_len(3, 7)));
     let items = Arc::new(Mutex::new(Vec::new()));
+    let unified_queue = Arc::new(Mutex::new(None));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
@@ -149,6 +155,7 @@ fn status_only_preserves_current_idx_and_queue_len() {
         CtrlEvent::StatusOnly(status_with_idx_and_len(5, 2)),
         &status,
         &items,
+        &unified_queue,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -164,6 +171,7 @@ fn status_only_preserves_current_idx_and_queue_len() {
 fn state_derives_queue_len_from_items_not_status() {
     let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 0)));
     let items = Arc::new(Mutex::new(Vec::new()));
+    let unified_queue = Arc::new(Mutex::new(None));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
@@ -180,6 +188,7 @@ fn state_derives_queue_len_from_items_not_status() {
         }),
         &status,
         &items,
+        &unified_queue,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -193,6 +202,7 @@ fn state_derives_queue_len_from_items_not_status() {
 fn track_changed_updates_current_idx_but_not_queue_len() {
     let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 5)));
     let items = Arc::new(Mutex::new(Vec::new()));
+    let unified_queue = Arc::new(Mutex::new(None));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, _rx) = mpsc::channel();
 
@@ -200,6 +210,7 @@ fn track_changed_updates_current_idx_but_not_queue_len() {
         CtrlEvent::Player(PlayerEvent::TrackChanged(2)),
         &status,
         &items,
+        &unified_queue,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -215,6 +226,7 @@ fn track_changed_updates_current_idx_but_not_queue_len() {
 fn command_rejected_forwards_reason_as_player_event() {
     let status = Arc::new(Mutex::new(status_with_idx(0)));
     let items = Arc::new(Mutex::new(Vec::new()));
+    let unified_queue = Arc::new(Mutex::new(None));
     let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
     let (tx, rx) = mpsc::channel();
 
@@ -222,6 +234,7 @@ fn command_rejected_forwards_reason_as_player_event() {
         CtrlEvent::CommandRejected("daemon is audio-only".to_string()),
         &status,
         &items,
+        &unified_queue,
         &queue_source,
         &tx,
         &Arc::new(Mutex::new(std::collections::HashMap::new())),
@@ -233,5 +246,129 @@ fn command_rejected_forwards_reason_as_player_event() {
             assert_eq!(reason, "daemon is audio-only");
         }
         _ => panic!("expected CommandRejected"),
+    }
+}
+
+#[test]
+fn unified_queue_state_preserves_canonical_coordinates_and_source() {
+    use crate::ctrl::{UnifiedQueueSlot, UnifiedQueueStateData};
+
+    let status = Arc::new(Mutex::new(status_with_idx(0)));
+    let items = Arc::new(Mutex::new(Vec::<EmbyItem>::new()));
+    let unified_queue = Arc::new(Mutex::new(None));
+    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
+    let (tx, rx) = mpsc::channel();
+
+    // Mixed queue: [Emby(e0), Feed(f1), Emby(e2), Feed(f3)]. The active
+    // Feed slot must retain its canonical index; it cannot be represented by
+    // an index into the legacy Emby-only projection.
+    let e0 = make_media_item("e0");
+    let e2 = make_media_item("e2");
+    let f1 = crate::playback_queue::FeedEntry {
+        guid: "f1".into(),
+        title: "f1".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: None,
+    };
+    let f3 = crate::playback_queue::FeedEntry {
+        guid: "f3".into(),
+        title: "f3".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: None,
+    };
+
+    let unified = UnifiedQueueStateData {
+        status: status_with_idx_and_len(1, 4),
+        slots: vec![
+            UnifiedQueueSlot {
+                slot_id: 10,
+                item: QueueItem::Emby(Box::new(e0)),
+            },
+            UnifiedQueueSlot {
+                slot_id: 20,
+                item: QueueItem::Feed(f1),
+            },
+            UnifiedQueueSlot {
+                slot_id: 30,
+                item: QueueItem::Emby(Box::new(e2)),
+            },
+            UnifiedQueueSlot {
+                slot_id: 40,
+                item: QueueItem::Feed(f3),
+            },
+        ],
+        active_slot: Some(20), // canonical slot_id for f1
+        revision: 1,
+        source: QueueSource::Playlist {
+            id: Some("pl-1".into()),
+            name: "My Playlist".into(),
+        },
+    };
+
+    apply_ctrl_event(
+        CtrlEvent::UnifiedQueueState(unified),
+        &status,
+        &items,
+        &unified_queue,
+        &queue_source,
+        &tx,
+        &Arc::new(Mutex::new(std::collections::HashMap::new())),
+        true,
+    );
+
+    // queue_source carried from unified state
+    assert!(
+        matches!(
+            *queue_source.lock().unwrap(),
+            QueueSource::Playlist {
+                id: Some(ref id),
+                ..
+            } if id == "pl-1"
+        ),
+        "queue_source should be carried from UnifiedQueueStateData"
+    );
+
+    // queue_len from canonical slots
+    assert_eq!(status.lock().unwrap().queue_len, 4);
+
+    assert_eq!(status.lock().unwrap().current_idx, 1);
+
+    // Emby-only items: Feed entries stripped
+    let emby = items.lock().unwrap();
+    assert_eq!(emby.len(), 2, "only Emby items in legacy projection");
+    assert_eq!(emby[0].id, "e0");
+    assert_eq!(emby[1].id, "e2");
+
+    let canonical = unified_queue.lock().unwrap().clone().unwrap();
+    assert_eq!(canonical.active_slot, Some(20));
+    assert_eq!(canonical.slots[1].slot_id, 20);
+
+    // UnifiedQueueUpdated event emitted with full canonical data
+    match rx.recv().unwrap() {
+        PlayerEvent::UnifiedQueueUpdated(state) => {
+            assert_eq!(state.slots.len(), 4);
+            assert_eq!(state.active_slot, Some(20));
+            assert_eq!(
+                state.source,
+                QueueSource::Playlist {
+                    id: Some("pl-1".into()),
+                    name: "My Playlist".into(),
+                }
+            );
+            // Slot IDs preserved
+            assert_eq!(state.slots[0].slot_id, 10);
+            assert_eq!(state.slots[1].slot_id, 20);
+            assert_eq!(state.slots[2].slot_id, 30);
+            assert_eq!(state.slots[3].slot_id, 40);
+        }
+        _ => panic!("expected UnifiedQueueUpdated"),
     }
 }

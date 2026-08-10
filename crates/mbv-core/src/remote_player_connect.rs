@@ -18,7 +18,6 @@ use crate::ctrl::{
     CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, PlaybackIntent,
     UnifiedQueueStateData,
 };
-use crate::playback_queue::QueueItem;
 use crate::player::{PlayerEvent, PlayerStatus};
 
 use crate::remote_player::RemotePlayer;
@@ -267,6 +266,7 @@ fn apply_ctrl_event(
     ev: CtrlEvent,
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
+    unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
     queue_source: &Arc<Mutex<crate::config::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     pending_playback: &Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
@@ -359,11 +359,17 @@ fn apply_ctrl_event(
             }
         }
         CtrlEvent::UnifiedQueueState(unified) => {
-            // Convert the canonical unified queue back to the legacy
-            // items/feed_items/status shape so the TUI layer continues
-            // to work.  Task 4 will migrate the TUI to consume unified
-            // queue coordinates directly.
-            apply_unified_queue_state(unified, status, items, queue_source, event_tx, notify);
+            // Keep a compatibility projection for older status consumers,
+            // but retain the canonical snapshot for TUI and reconnect paths.
+            apply_unified_queue_state(
+                unified,
+                status,
+                items,
+                unified_queue,
+                queue_source,
+                event_tx,
+                notify,
+            );
         }
     }
 }
@@ -387,54 +393,34 @@ fn apply_unified_queue_state(
     unified: UnifiedQueueStateData,
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
+    unified_queue: &Arc<Mutex<Option<UnifiedQueueStateData>>>,
     queue_source: &Arc<Mutex<crate::config::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     notify: bool,
 ) {
     let mut next_status = unified.status.clone();
     next_status.queue_len = unified.slots.len();
+    if let Some(active_index) = unified.active_slot.and_then(|slot_id| {
+        unified
+            .slots
+            .iter()
+            .position(|slot| slot.slot_id == slot_id)
+    }) {
+        next_status.current_idx = active_index;
+    }
 
-    // Derive the active-slot index from the slot_id.  When no slot is
-    // active (stopped / empty queue), preserve the status's own current_idx
-    // rather than fabricating index 0.
-    let canonical_active_idx = unified
-        .active_slot
-        .and_then(|sid| unified.slots.iter().position(|s| s.slot_id == sid));
-
-    // Project Emby-only items for legacy status-bar / MPRIS consumers.
-    // Map the canonical active index to the Emby-only projection so
-    // current_idx stays consistent with the items array these consumers
-    // read from.
-    let mut emby_active_idx = None;
-    let mut emby_count = 0usize;
+    // Project Emby-only items only for compatibility consumers. The status
+    // coordinates remain canonical; capable consumers use the stored unified
+    // snapshot, while legacy consumers continue to receive their projection.
     let emby_items: Vec<EmbyItem> = unified
         .slots
         .iter()
-        .filter_map(|slot| {
-            if let Some(canonical_idx) = canonical_active_idx {
-                if slot.slot_id == unified.slots[canonical_idx].slot_id
-                    && matches!(&slot.item, QueueItem::Emby(_))
-                {
-                    emby_active_idx = Some(emby_count);
-                }
-            }
-            let result = match &slot.item {
-                QueueItem::Emby(e) => Some((**e).clone()),
-                QueueItem::Feed(_) => None,
-            };
-            if result.is_some() {
-                emby_count += 1;
-            }
-            result
-        })
+        .filter_map(|slot| slot.item.as_emby().cloned())
         .collect();
-
-    if let Some(idx) = emby_active_idx {
-        next_status.current_idx = idx;
-    }
 
     *status.lock().unwrap() = next_status;
     *items.lock().unwrap() = emby_items;
+    *unified_queue.lock().unwrap() = Some(unified.clone());
 
     // Carry the queue source from the unified state so saved-playlist
     // detection remains correct across reconnect.
@@ -462,6 +448,7 @@ pub(crate) fn connect_endpoint(
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
     let items: Arc<Mutex<Vec<EmbyItem>>> = Arc::new(Mutex::new(Vec::new()));
+    let unified_queue = Arc::new(Mutex::new(None));
     let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
     let disconnected = Arc::new(AtomicBool::new(false));
     let shutdown_announced = Arc::new(AtomicBool::new(false));
@@ -490,6 +477,7 @@ pub(crate) fn connect_endpoint(
         state_event,
         &status,
         &items,
+        &unified_queue,
         &queue_source,
         &event_tx,
         &pending_playback,
@@ -499,6 +487,7 @@ pub(crate) fn connect_endpoint(
     // Reader thread: deserializes CtrlEvent lines from daemon
     let status_r = status.clone();
     let items_r = items.clone();
+    let unified_queue_r = unified_queue.clone();
     let queue_source_r = queue_source.clone();
     let pending_playback_r = pending_playback.clone();
     let disconnected_r = disconnected.clone();
@@ -549,6 +538,7 @@ pub(crate) fn connect_endpoint(
                         ev,
                         &status_r,
                         &items_r,
+                        &unified_queue_r,
                         &queue_source_r,
                         &event_tx_r,
                         &pending_playback_r,
@@ -616,6 +606,7 @@ pub(crate) fn connect_endpoint(
             status,
             subtitle_prefs,
             items,
+            unified_queue,
             queue_source,
             cmd_tx,
             disconnected,

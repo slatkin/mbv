@@ -28,6 +28,7 @@ pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
     pub subtitle_prefs: Arc<Mutex<crate::player::SubtitlePrefs>>,
     pub items: Arc<Mutex<Vec<EmbyItem>>>,
+    pub unified_queue: Arc<Mutex<Option<crate::ctrl::UnifiedQueueStateData>>>,
     pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
     pub(crate) cmd_tx: mpsc::Sender<CtrlCmd>,
     pub(crate) disconnected: Arc<AtomicBool>,
@@ -227,24 +228,27 @@ impl RemotePlayer {
         source: crate::config::QueueSource,
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
-    ) {
-        if self.ctrl_compatibility.supports_unified_queue {
-            let _ = self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
+    ) -> bool {
+        let sent = if self.ctrl_compatibility.supports_unified_queue {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
                 items: vec![QueueItem::Emby(Box::new(item.clone()))],
                 start_idx: Some(0),
-            });
+            })
         } else {
-            let _ = self.send_playback_intent(self.new_playback_intent(
+            self.send_playback_intent(self.new_playback_intent(
                 crate::ctrl::PlaybackIntentAction::Play {
                     item_ids: vec![item.id.clone()],
                     start_idx: 0,
                     start_ticks: item.playback_position_ticks,
                     source: source.clone(),
                 },
-            ));
+            ))
+        };
+        if sent {
+            *self.items.lock().unwrap() = vec![item.clone()];
+            *self.queue_source.lock().unwrap() = source;
         }
-        *self.items.lock().unwrap() = vec![item.clone()];
-        *self.queue_source.lock().unwrap() = source;
+        sent
     }
 
     pub fn play_queue(
@@ -254,33 +258,36 @@ impl RemotePlayer {
         source: crate::config::QueueSource,
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
-    ) {
-        if self.ctrl_compatibility.supports_unified_queue {
+    ) -> bool {
+        let sent = if self.ctrl_compatibility.supports_unified_queue {
             let queue_items: Vec<QueueItem> = items
                 .iter()
                 .cloned()
                 .map(|i| QueueItem::Emby(Box::new(i)))
                 .collect();
-            let _ = self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
                 items: queue_items,
                 start_idx: Some(start_idx),
-            });
+            })
         } else {
             let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
             let start_ticks = items
                 .get(start_idx)
                 .map_or(0, |i| i.playback_position_ticks);
-            let _ = self.send_playback_intent(self.new_playback_intent(
+            self.send_playback_intent(self.new_playback_intent(
                 crate::ctrl::PlaybackIntentAction::Play {
                     item_ids,
                     start_idx,
                     start_ticks,
                     source: source.clone(),
                 },
-            ));
+            ))
+        };
+        if sent {
+            *self.items.lock().unwrap() = items;
+            *self.queue_source.lock().unwrap() = source;
         }
-        *self.items.lock().unwrap() = items;
-        *self.queue_source.lock().unwrap() = source;
+        sent
     }
 
     pub fn stop(&self) {
@@ -318,6 +325,23 @@ impl RemotePlayer {
 
     pub fn supports_unified_queue(&self) -> bool {
         self.ctrl_compatibility.supports_unified_queue
+    }
+
+    pub fn unified_queue_state(&self) -> Option<crate::ctrl::UnifiedQueueStateData> {
+        self.unified_queue.lock().unwrap().clone()
+    }
+
+    pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
+        if items.is_empty() {
+            return true;
+        }
+        if self.supports_unified_queue() {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueAppend { items })
+        } else if items.iter().any(|item| matches!(item, QueueItem::Feed(_))) {
+            false
+        } else {
+            self.send_command(PlayerCommand::QueueAppend { items })
+        }
     }
 
     /// Remove a slot by its stable identity.  Falls back to `false` if the
@@ -388,6 +412,7 @@ impl RemotePlayer {
                 status,
                 subtitle_prefs,
                 items,
+                unified_queue: Arc::new(Mutex::new(None)),
                 queue_source,
                 cmd_tx,
                 disconnected,

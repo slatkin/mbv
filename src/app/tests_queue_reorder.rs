@@ -532,3 +532,32 @@ fn move_up_on_feed_cursor_preserves_feed_slots() {
         "Feed slot should now be at index 1 after moving up"
     );
 }
+
+#[test]
+fn unified_queue_event_preserves_owner_slot_ids_and_source() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let state = mbv_core::ctrl::UnifiedQueueStateData {
+        status: Default::default(),
+        slots: vec![
+            mbv_core::ctrl::UnifiedQueueSlot {
+                slot_id: 41,
+                item: mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("e0", "Video"))),
+            },
+            mbv_core::ctrl::UnifiedQueueSlot {
+                slot_id: 97,
+                item: mbv_core::playback_queue::QueueItem::Feed(make_feed_entry("f1")),
+            },
+        ],
+        active_slot: Some(97),
+        revision: 12,
+        source: crate::config::QueueSource::Remote,
+    };
+
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(state));
+
+    assert_eq!(app.player_tab.queue_cursor, 1);
+    assert_eq!(app.player_tab.slot_id_at(0).unwrap().raw(), 41);
+    assert_eq!(app.player_tab.slot_id_at(1).unwrap().raw(), 97);
+    assert_eq!(app.queue_source, crate::config::QueueSource::Remote);
+}

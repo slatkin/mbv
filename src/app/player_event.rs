@@ -329,11 +329,7 @@ impl App {
                 }
             }
             PlayerEvent::UnifiedQueueUpdated(unified) => {
-                // Reconstruct the canonical queue from tagged QueueItems,
-                // preserving Feed entries, slot identity, and canonical order.
-                let queue_items: Vec<mbv_core::playback_queue::QueueItem> =
-                    unified.slots.iter().map(|slot| slot.item.clone()).collect();
-                let total = queue_items.len();
+                let total = unified.slots.len();
 
                 // Derive the presentation cursor from the active slot index.
                 let active_index = unified
@@ -353,14 +349,10 @@ impl App {
                         .unwrap_or(active_cursor)
                 };
 
+                let source = unified.source.clone();
                 let queue = self.playback_queue_mut();
-                queue.set_queue_items(queue_items, cursor);
-
-                // Synchronize the active slot from the daemon so that
-                // true owner playback state is reflected; composed/
-                // restored queues have no active slot unless the daemon
-                // provides one.
-                queue.sync_active_slot(active_index);
+                queue.set_unified_state(&unified, cursor);
+                self.queue_source = source;
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 // mbvd never auto-seeks on this event itself — it always
@@ -490,8 +482,8 @@ impl App {
         let last_playing_title = {
             let idx = self.player.status.lock().unwrap().current_idx;
             self.playback_queue()
-                .emby_item_at(idx)
-                .map(|item| item.playback_label())
+                .item_at(idx)
+                .map(|item| item.title().to_string())
         };
         self.daemon_lost_modal = Some(DaemonLostModal {
             last_playing_title,

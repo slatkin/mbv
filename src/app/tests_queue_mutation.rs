@@ -69,13 +69,12 @@ fn ctrl_a_appends_to_direct_remote_queue() {
     );
     assert!(matches!(
         cmd_rx.try_recv(),
-        Ok(mbv_core::ctrl::CtrlCmd::PlayerCmd(
-            mbv_core::ctrl::WireCommand::QueueAppend { items }
-        )) if items.len() == 1 && items[0].id == "id0"
+        Ok(mbv_core::ctrl::CtrlCmd::UnifiedQueueAppend { items })
+            if items.len() == 1 && items[0].id() == "id0"
     ));
     assert!(
         cmd_rx.try_recv().is_err(),
-        "Ctrl+A append must not follow QueueAppend with ReplaceQueue"
+        "Ctrl+A append must not follow UnifiedQueueAppend with ReplaceQueue"
     );
 }
 

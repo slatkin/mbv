@@ -84,7 +84,7 @@ mod ws_event_actions;
 
 pub use self::app_struct::App;
 use self::app_struct::AppInit;
-use self::bootstrap::bootstrap_local_daemon_queue;
+use self::bootstrap::{bootstrap_local_daemon_queue, bootstrap_unified_queue};
 use self::notify_actions::ToastSeverity;
 use self::resize::spawn_resize_worker;
 use self::search_sidebar::SearchDrainOutcome;

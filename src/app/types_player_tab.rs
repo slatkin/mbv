@@ -23,6 +23,26 @@ impl PlayerTab {
         }
     }
 
+    pub(super) fn from_unified_state(state: &mbv_core::ctrl::UnifiedQueueStateData) -> Self {
+        let active_index = state
+            .active_slot
+            .and_then(|slot_id| state.slots.iter().position(|slot| slot.slot_id == slot_id));
+        let slots = state
+            .slots
+            .iter()
+            .map(|slot| (QueueSlotId::from_raw(slot.slot_id), slot.item.clone()))
+            .collect();
+        let queue = PlaybackQueue::from_slot_items(
+            slots,
+            state.active_slot.map(QueueSlotId::from_raw),
+            mbv_core::playback_queue::QueueRevision::from_raw(state.revision),
+        );
+        Self {
+            queue_cursor: active_index.unwrap_or(0),
+            queue,
+        }
+    }
+
     /// Creates a `PlayerTab` from a legacy `Vec<EmbyItem>`, wrapping each
     /// as `QueueItem::Emby`. Kept for callers that start from Emby-only
     /// sources (library browse, remote projection).
@@ -44,6 +64,16 @@ impl PlayerTab {
     /// silently drop them.
     pub(super) fn set_queue_items(&mut self, items: Vec<QueueItem>, queue_cursor: usize) {
         *self = Self::new(items, queue_cursor);
+    }
+
+    pub(super) fn set_unified_state(
+        &mut self,
+        state: &mbv_core::ctrl::UnifiedQueueStateData,
+        queue_cursor: usize,
+    ) {
+        *self = Self::from_unified_state(state);
+        self.queue_cursor = queue_cursor;
+        self.clamp_cursor();
     }
 
     pub(super) fn sync_active_slot(&mut self, active_index: Option<usize>) {
