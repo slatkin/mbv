@@ -387,7 +387,7 @@ fn apply_unified_queue_state(
     unified: UnifiedQueueStateData,
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<EmbyItem>>>,
-    _queue_source: &Arc<Mutex<crate::config::QueueSource>>,
+    queue_source: &Arc<Mutex<crate::config::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
     notify: bool,
 ) {
@@ -397,28 +397,49 @@ fn apply_unified_queue_state(
     // Derive the active-slot index from the slot_id.  When no slot is
     // active (stopped / empty queue), preserve the status's own current_idx
     // rather than fabricating index 0.
-    if let Some(active_idx) = unified
+    let canonical_active_idx = unified
         .active_slot
-        .and_then(|sid| unified.slots.iter().position(|s| s.slot_id == sid))
-    {
-        next_status.current_idx = active_idx;
-    }
+        .and_then(|sid| unified.slots.iter().position(|s| s.slot_id == sid));
 
     // Project Emby-only items for legacy status-bar / MPRIS consumers.
+    // Map the canonical active index to the Emby-only projection so
+    // current_idx stays consistent with the items array these consumers
+    // read from.
+    let mut emby_active_idx = None;
+    let mut emby_count = 0usize;
     let emby_items: Vec<EmbyItem> = unified
         .slots
         .iter()
-        .filter_map(|slot| match &slot.item {
-            QueueItem::Emby(e) => Some((**e).clone()),
-            QueueItem::Feed(_) => None,
+        .filter_map(|slot| {
+            if let Some(canonical_idx) = canonical_active_idx {
+                if slot.slot_id == unified.slots[canonical_idx].slot_id
+                    && matches!(&slot.item, QueueItem::Emby(_))
+                {
+                    emby_active_idx = Some(emby_count);
+                }
+            }
+            let result = match &slot.item {
+                QueueItem::Emby(e) => Some((**e).clone()),
+                QueueItem::Feed(_) => None,
+            };
+            if result.is_some() {
+                emby_count += 1;
+            }
+            result
         })
         .collect();
+
+    if let Some(idx) = emby_active_idx {
+        next_status.current_idx = idx;
+    }
 
     *status.lock().unwrap() = next_status;
     *items.lock().unwrap() = emby_items;
 
-    // QueueSource is not carried by UnifiedQueueStateData; preserve the
-    // current value so the existing source detection logic isn't reset.
+    // Carry the queue source from the unified state so saved-playlist
+    // detection remains correct across reconnect.
+    *queue_source.lock().unwrap() = unified.source.clone();
+
     if notify {
         // Emit the full unified state so the TUI can reconstruct the
         // canonical queue (tagged QueueItems, slot identity, active slot,

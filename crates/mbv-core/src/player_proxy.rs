@@ -282,6 +282,41 @@ impl PlayerProxy {
         }
     }
 
+    pub fn supports_unified_queue(&self) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.supports_unified_queue(),
+        }
+    }
+
+    /// Remove a slot by stable identity on a remote peer that supports
+    /// unified queue.  Returns `false` for local players or legacy peers.
+    pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.queue_remove_slot(slot_id),
+        }
+    }
+
+    /// Move a slot by stable identity on a remote peer that supports
+    /// unified queue.  Returns `false` for local players or legacy peers.
+    pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.queue_move_slot(slot_id, to_index),
+        }
+    }
+
+    /// Begin playback of an existing slot by stable identity on a remote
+    /// peer that supports unified queue.  Returns `false` for local
+    /// players or legacy peers.
+    pub fn queue_play_slot(&self, slot_id: u64) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.queue_play_slot(slot_id),
+        }
+    }
+
     pub fn next(&self) -> bool {
         match self.status.lock().unwrap().next_idx() {
             Some(idx) => match &self.inner {

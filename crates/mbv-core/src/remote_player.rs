@@ -320,6 +320,36 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_unified_queue
     }
 
+    /// Remove a slot by its stable identity.  Falls back to `false` if the
+    /// peer does not advertise `unified-queue`.
+    pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
+        if self.supports_unified_queue() {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id })
+        } else {
+            false
+        }
+    }
+
+    /// Move a slot by its stable identity to `to_index`.  Falls back to
+    /// `false` if the peer does not advertise `unified-queue`.
+    pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
+        if self.supports_unified_queue() {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index })
+        } else {
+            false
+        }
+    }
+
+    /// Begin playback of an existing slot by its stable identity.  Falls
+    /// back to `false` if the peer does not advertise `unified-queue`.
+    pub fn queue_play_slot(&self, slot_id: u64) -> bool {
+        if self.supports_unified_queue() {
+            self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id })
+        } else {
+            false
+        }
+    }
+
     pub(crate) fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
             current_idx,

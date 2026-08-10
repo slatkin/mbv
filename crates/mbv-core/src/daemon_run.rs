@@ -327,6 +327,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                             .collect(),
                         active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
                         revision: queue.revision().raw(),
+                        source: source.clone(),
                     },
                 ));
                 let (emby_items, feed_items) = split_queue_for_legacy(&queue);

@@ -62,6 +62,9 @@ impl App {
             }
         }
         let cursor_before = self.queue_for_scope(scope).queue_cursor;
+        // Capture slot identity before removal so we can issue a
+        // slot-based command for unified-capable remote peers.
+        let slot_id = self.queue_for_scope(scope).slot_id_at(pos);
         let Some(item) = self.queue_for_scope_mut(scope).remove_slot_at(pos) else {
             return;
         };
@@ -77,7 +80,15 @@ impl App {
         let sent_queue_remove = controls_playback_queue
             && (active || scope == QueueScope::Remote || self.player.is_remote());
         if sent_queue_remove {
-            self.player.send_command(PlayerCommand::QueueRemove(pos));
+            // Prefer slot-based removal for unified-capable remote peers
+            // to avoid TOCTOU races on positional indices.
+            let sent_unified = slot_id.is_some_and(|sid| {
+                self.player
+                    .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(sid))
+            });
+            if !sent_unified {
+                self.player.send_command(PlayerCommand::QueueRemove(pos));
+            }
             // Player thread adjusts current_idx when it processes the command.
             // No eager adjustment here — doing so races with the player thread
             // and can cause index mismatches during rapid removals.
@@ -119,12 +130,6 @@ impl App {
         let scope = self.visible_queue_scope();
         let queue = self.queue_for_scope(scope);
         let from = queue.queue_cursor;
-        let emby_len = queue.emby_items().len();
-        // Feed-tail slots (beyond the Emby portion) are not user-movable;
-        // reject early so slot_id_at never triggers a sync.
-        if from >= emby_len {
-            return;
-        }
         let len = queue.total_queue_len();
         let to = if delta < 0 {
             match from.checked_sub(1) {
@@ -206,7 +211,14 @@ impl App {
         if controls_playback_queue
             && (active || scope == QueueScope::Remote || self.player.is_remote())
         {
-            self.player.send_command(PlayerCommand::QueueMove(from, to));
+            // Prefer slot-based move for unified-capable remote peers
+            // to avoid TOCTOU races on positional indices.
+            let sent_unified = self
+                .player
+                .queue_move_slot(mbv_core::ctrl::slot_id_to_u64(slot_id), to);
+            if !sent_unified {
+                self.player.send_command(PlayerCommand::QueueMove(from, to));
+            }
         }
         true
     }

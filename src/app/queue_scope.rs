@@ -256,7 +256,13 @@ impl App {
             QueueMutationResult::NotFound => return None,
         };
         self.playback_queue_mut().clamp_cursor();
-        self.player.send_command(PlayerCommand::QueueRemove(idx));
+        // Prefer slot-based removal for unified-capable remote peers.
+        let sent_unified = self
+            .player
+            .queue_remove_slot(mbv_core::ctrl::slot_id_to_u64(slot_id));
+        if !sent_unified {
+            self.player.send_command(PlayerCommand::QueueRemove(idx));
+        }
         Some(removed.item.id().to_string())
     }
 

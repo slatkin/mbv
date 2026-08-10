@@ -194,12 +194,12 @@ fn queue_edit_forwards_to_local_daemon_while_daemon_is_idle() {
             .collect::<Vec<_>>(),
         vec!["id0", "id2"]
     );
-    assert!(matches!(
-        cmd_rx.try_recv(),
-        Ok(mbv_core::ctrl::CtrlCmd::PlayerCmd(
-            mbv_core::ctrl::WireCommand::QueueRemove(1)
-        ))
-    ));
+    // Unified-capable remote peer: removal is sent as UnifiedQueueRemoveSlot.
+    let cmd = cmd_rx.try_recv().unwrap();
+    assert!(
+        matches!(cmd, mbv_core::ctrl::CtrlCmd::UnifiedQueueRemoveSlot { .. }),
+        "expected UnifiedQueueRemoveSlot"
+    );
 }
 
 #[test]

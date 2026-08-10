@@ -26,5 +26,5 @@ Tasks are grouped as coherent ownership-boundary slices rather than one task per
 ## 5. Remove the split model and verify the replacement
 
 - [x] 5.1 Delete current-code emission and internal use of `play_feed`, `LoadFeed`, parallel `feed_items`, Feed-tail mutation guards, GUID-wide consumption, and synchronization/mirroring helpers; retain only explicitly documented wire-compatibility adapters and update nearby stale comments or domain documentation.
-- [ ] 5.2 Verify the specification matrix for Emby and Feed items across bare local playback, cold stay-alive playback, warm playback, direct remote control, reconnect, mixed reordering/removal, duplicate slots, persistence, failure visibility, and audio-only admission/fall-through.
-- [ ] 5.3 Run `rtk cargo check -p mbv-core`, `rtk cargo check`, `rtk cargo test -p mbv-core`, `rtk cargo clippy --workspace --all-targets`, and `rtk make check-code-file-lines`; resolve failures without restoring parallel queue state or Feed-specific lifecycle paths.
+- [x] 5.2 Verify the specification matrix for Emby and Feed items across bare local playback, cold stay-alive playback, warm playback, direct remote control, reconnect, mixed reordering/removal, duplicate slots, persistence, failure visibility, and audio-only admission/fall-through.
+- [x] 5.3 Run `rtk cargo check -p mbv-core`, `rtk cargo check`, `rtk cargo test -p mbv-core`, `rtk cargo clippy --workspace --all-targets`, and `rtk make check-code-file-lines`; resolve failures without restoring parallel queue state or Feed-specific lifecycle paths.

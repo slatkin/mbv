@@ -169,6 +169,8 @@ pub struct UnifiedQueueStateData {
     /// `None` when nothing is playing.
     pub active_slot: Option<u64>,
     pub revision: u64,
+    #[serde(default)]
+    pub source: QueueSource,
 }
 
 /// Build an `UnifiedQueueSlot` from a `QueueSlotId`.  Callers in

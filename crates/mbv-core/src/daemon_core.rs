@@ -731,6 +731,7 @@ fn spawn_ctrl_client<S>(
                     .collect(),
                 active_slot: q.active_slot_id().map(slot_id_to_u64),
                 revision: q.revision().raw(),
+                source: shared_queue.source.lock().unwrap().clone(),
             })
         } else {
             let q = shared_queue.queue.lock().unwrap();

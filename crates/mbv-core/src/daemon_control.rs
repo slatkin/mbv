@@ -80,6 +80,7 @@ fn broadcast_queue_state(
                 .collect(),
             active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
             revision: queue.revision().raw(),
+            source: source.clone(),
         },
     ));
 
@@ -161,6 +162,7 @@ fn reject_command(
                     .collect(),
                 active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
                 revision: queue.revision().raw(),
+                source: source.clone(),
             }),
         );
     } else {

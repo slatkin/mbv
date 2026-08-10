@@ -296,12 +296,15 @@ fn move_queue_item_for_remote_scope_sends_move_command_and_preserves_local_queue
     assert!(!app.queue_dirty);
     assert_eq!(app.queue_undo_stack.len(), 0);
     assert_eq!(app.remote_queue_undo_stack.len(), 1);
-    assert!(matches!(
-        cmd_rx.try_recv(),
-        Ok(mbv_core::ctrl::CtrlCmd::PlayerCmd(
-            mbv_core::ctrl::WireCommand::QueueMove(1, 0)
-        ))
-    ));
+    // Unified-capable remote peer: move is sent as UnifiedQueueMoveSlot.
+    let cmd = cmd_rx.try_recv().unwrap();
+    assert!(
+        matches!(
+            cmd,
+            mbv_core::ctrl::CtrlCmd::UnifiedQueueMoveSlot { to_index: 0, .. }
+        ),
+        "expected UnifiedQueueMoveSlot {{ to_index: 0 }}"
+    );
 }
 
 #[test]
@@ -496,7 +499,8 @@ fn slot_id_at_resolves_feed_slot_without_destruction() {
     );
 }
 
-/// Shift+Up on a Feed-tail cursor must not destroy Feed slots.
+/// Shift+Up on a Feed cursor now moves it — the Emby-only guard has
+/// been removed so either kind may move across the other.
 #[test]
 fn move_up_on_feed_cursor_preserves_feed_slots() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -519,11 +523,12 @@ fn move_up_on_feed_cursor_preserves_feed_slots() {
         3,
         "Shift+Up on a Feed cursor must not drop Feed slots"
     );
+    // Feed slot moved from index 2 to index 1 (across the Emby items).
     assert!(
         matches!(
-            app.player_tab.queue.slots()[2].item,
+            app.player_tab.queue.slots()[1].item,
             mbv_core::playback_queue::QueueItem::Feed(_)
         ),
-        "Feed slot must remain at the tail"
+        "Feed slot should now be at index 1 after moving up"
     );
 }

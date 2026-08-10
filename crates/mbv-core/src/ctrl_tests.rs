@@ -481,6 +481,7 @@ fn unified_queue_state_data_round_trips() {
         ],
         active_slot: Some(1),
         revision: 5,
+        source: QueueSource::Unknown,
     };
     let json = serde_json::to_string(&state).unwrap();
     let decoded: UnifiedQueueStateData = serde_json::from_str(&json).unwrap();
@@ -604,6 +605,7 @@ fn unified_queue_state_event_round_trips() {
         slots: vec![],
         active_slot: None,
         revision: 0,
+        source: QueueSource::Unknown,
     });
     let json = serde_json::to_string(&event).unwrap();
     let decoded: CtrlEvent = serde_json::from_str(&json).unwrap();

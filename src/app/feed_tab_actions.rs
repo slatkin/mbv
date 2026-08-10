@@ -198,25 +198,23 @@ impl App {
             return;
         }
         let headless = QueueItem::Feed(entry.clone()).is_audio();
-        if !self.player.is_remote() {
-            let active = self.player.status.lock().unwrap().active;
-            let queue = self.playback_queue_mut();
-            // On a cold (inactive) player the player will spawn a fresh
-            // thread with only this Feed entry, so clear any stale items.
-            // On an active player the Feed is appended to the existing
-            // queue and the old items stay.
-            if !active {
-                queue.queue = PlaybackQueue::from_items(Vec::new(), None);
-            }
-            // Append to the canonical queue so the queue panel, cursor,
-            // and now-playing title all resolve the Feed entry correctly.
-            queue.queue.append(QueueItem::Feed(entry.clone()));
-            let unified_idx = queue.queue.slots().len() - 1;
-            queue.queue_cursor = unified_idx;
-            let _ = queue
-                .queue
-                .set_active_slot(queue.queue.slots()[unified_idx].slot_id);
+        // Append to the canonical queue (local or remote mirror) so the
+        // queue panel, cursor, and now-playing title all resolve the Feed
+        // entry correctly.  On a cold (inactive) local player the player
+        // will spawn a fresh thread with only this Feed entry, so clear
+        // any stale items first.
+        let active = self.player.status.lock().unwrap().active;
+        let is_remote = self.player.is_remote();
+        if !active && !is_remote {
+            self.playback_queue_mut().queue = PlaybackQueue::from_items(Vec::new(), None);
         }
+        let queue = self.playback_queue_mut();
+        queue.queue.append(QueueItem::Feed(entry.clone()));
+        let unified_idx = queue.queue.slots().len() - 1;
+        queue.queue_cursor = unified_idx;
+        let _ = queue
+            .queue
+            .set_active_slot(queue.queue.slots()[unified_idx].slot_id);
         // Submit through the same unified path as library Play: the full
         // canonical queue (including any pre-existing items) is handed to
         // the player so its internal playlist matches the PlayerTab.
@@ -250,9 +248,25 @@ impl App {
         let scope = self.visible_queue_scope();
         self.queue_for_scope_mut(scope)
             .queue
-            .append(QueueItem::Feed(entry));
+            .append(QueueItem::Feed(entry.clone()));
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
+        }
+        // Synchronize the append to the remote owner when this queue is
+        // the playback target, using the same QueueAppend path as library
+        // enqueue so the daemon and client stay consistent.
+        if scope == self.playback_target_queue_scope() {
+            let sent = self
+                .player
+                .send_command(mbv_core::player::PlayerCommand::QueueAppend {
+                    items: vec![QueueItem::Feed(entry)],
+                });
+            if !sent && !self.player.supports_queue_append() {
+                self.flash(
+                    "Remote append is not supported by this direct mbv peer".to_string(),
+                    ToastSeverity::Error,
+                );
+            }
         }
         self.flash(format!("Added: {name}"), ToastSeverity::Success);
         self.persist_local_queue_state_if_needed(scope);
