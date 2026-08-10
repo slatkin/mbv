@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::shared_state::{SharedDocumentKind, SharedRecord};
+use crate::shared_store::FeedEntryState;
 
 /// Protocol version for the shared-data service. Additive changes get a
 /// capability string, not a version bump (matching the ctrl protocol convention).
@@ -14,6 +15,7 @@ pub const SHARED_DATA_CAP_HEARTBEAT_V1: &str = "shared-mbv-state-heartbeat-v1";
 
 /// Capability for validating a client token against its explicit Emby user ID.
 pub const SHARED_DATA_CAP_USER_ID_AUTH_V1: &str = "shared-mbv-state-user-id-auth-v1";
+pub const SHARED_DATA_CAP_FEED_ENTRY_STATE_V1: &str = "shared-mbv-feed-entry-state-v1";
 
 /// Hello message sent by the daemon immediately after connection.
 #[derive(Serialize, Deserialize)]
@@ -30,6 +32,7 @@ impl SharedDataHello {
                 SHARED_DATA_CAP_V1.to_string(),
                 SHARED_DATA_CAP_HEARTBEAT_V1.to_string(),
                 SHARED_DATA_CAP_USER_ID_AUTH_V1.to_string(),
+                SHARED_DATA_CAP_FEED_ENTRY_STATE_V1.to_string(),
             ],
         }
     }
@@ -49,7 +52,9 @@ pub enum SharedDataCmd {
     /// Check that the daemon is still servicing this connection.
     Ping,
     /// Request a full snapshot of all four documents.
-    Snapshot { request_id: u64 },
+    Snapshot {
+        request_id: u64,
+    },
     /// Create a document that does not yet exist.
     CreateDocument {
         request_id: u64,
@@ -62,6 +67,21 @@ pub enum SharedDataCmd {
         kind: SharedDocumentKind,
         expected_revision: u64,
         value: serde_json::Value,
+    },
+    GetFeedEntry {
+        request_id: u64,
+        feed_id: String,
+        entry_guid: String,
+    },
+    PutFeedEntry {
+        request_id: u64,
+        feed_id: String,
+        entry_guid: String,
+        value: FeedEntryState,
+    },
+    ScanFeedEntries {
+        request_id: u64,
+        feed_id: String,
     },
 }
 
@@ -113,6 +133,27 @@ pub enum SharedDataEvent {
     DocumentNotification {
         kind: SharedDocumentKind,
         record: SharedRecord,
+    },
+    FeedEntry {
+        request_id: u64,
+        feed_id: String,
+        entry_guid: String,
+        value: FeedEntryState,
+    },
+    FeedEntryAbsent {
+        request_id: u64,
+        feed_id: String,
+        entry_guid: String,
+    },
+    FeedEntryPut {
+        request_id: u64,
+        feed_id: String,
+        entry_guid: String,
+    },
+    FeedEntriesScanned {
+        request_id: u64,
+        feed_id: String,
+        entries: Vec<(String, FeedEntryState)>,
     },
     /// Generic error.
     Error { reason: String },

@@ -1,9 +1,18 @@
 use redb::{Database, ReadableTable, TableDefinition};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 use crate::shared_state::{SharedDocumentKind, SharedDocumentTuple, SharedRecord};
 
 const DB_TABLE: TableDefinition<(&str, &str), &str> = TableDefinition::new("shared_documents");
+const FEED_ENTRY_STATE_TABLE: TableDefinition<(&str, &str, &str), &str> =
+    TableDefinition::new("feed_entry_state");
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+pub struct FeedEntryState {
+    pub position_ticks: i64,
+    pub played: bool,
+}
 
 /// Path to the shared-data `redb` database file. Lives alongside the other
 /// state files under `state_dir()`.
@@ -35,6 +44,7 @@ pub fn open_shared_db() -> Result<Database, String> {
     })?;
     {
         let _ = txn.open_table(DB_TABLE);
+        let _ = txn.open_table(FEED_ENTRY_STATE_TABLE);
     }
     txn.commit().map_err(|e| {
         remove_created_db(&path, existed);
@@ -48,6 +58,83 @@ pub fn open_shared_db() -> Result<Database, String> {
     }
 
     Ok(db)
+}
+
+pub fn get_feed_entry(
+    db: &Database,
+    user_id: &str,
+    feed_id: &str,
+    entry_guid: &str,
+) -> Result<Option<FeedEntryState>, String> {
+    let txn = db
+        .begin_read()
+        .map_err(|e| format!("begin read transaction: {e}"))?;
+    let table = txn
+        .open_table(FEED_ENTRY_STATE_TABLE)
+        .map_err(|e| format!("open feed entry table for read: {e}"))?;
+    let key = (user_id, feed_id, entry_guid);
+    match table
+        .get(key)
+        .map_err(|e| format!("read feed entry: {e}"))?
+    {
+        Some(guard) => serde_json::from_str(guard.value())
+            .map(Some)
+            .map_err(|e| format!("parse feed entry state: {e}")),
+        None => Ok(None),
+    }
+}
+
+pub fn put_feed_entry(
+    db: &Database,
+    user_id: &str,
+    feed_id: &str,
+    entry_guid: &str,
+    value: &FeedEntryState,
+) -> Result<(), String> {
+    let json =
+        serde_json::to_string(value).map_err(|e| format!("serialize feed entry state: {e}"))?;
+    let txn = db
+        .begin_write()
+        .map_err(|e| format!("begin feed entry write: {e}"))?;
+    let mut table = txn
+        .open_table(FEED_ENTRY_STATE_TABLE)
+        .map_err(|e| format!("open feed entry table for write: {e}"))?;
+    table
+        .insert((user_id, feed_id, entry_guid), json.as_str())
+        .map_err(|e| format!("insert feed entry state: {e}"))?;
+    drop(table);
+    txn.commit()
+        .map_err(|e| format!("commit feed entry write: {e}"))
+}
+
+pub fn scan_feed_entries(
+    db: &Database,
+    user_id: &str,
+    feed_id: &str,
+) -> Result<Vec<(String, FeedEntryState)>, String> {
+    let txn = db
+        .begin_read()
+        .map_err(|e| format!("begin read transaction: {e}"))?;
+    let table = txn
+        .open_table(FEED_ENTRY_STATE_TABLE)
+        .map_err(|e| format!("open feed entry table for scan: {e}"))?;
+    let lower = (user_id, feed_id, "");
+    let upper = (user_id, feed_id, "\u{10ffff}");
+    let mut entries = Vec::new();
+    for entry in table
+        .range(lower..upper)
+        .map_err(|e| format!("scan feed entries: {e}"))?
+    {
+        let (key, value) = entry.map_err(|e| format!("read feed entry: {e}"))?;
+        let (uid, fid, guid) = key.value();
+        if uid != user_id || fid != feed_id {
+            continue;
+        }
+        let state = serde_json::from_str(value.value())
+            .map_err(|e| format!("parse feed entry state: {e}"))?;
+        entries.push((guid.to_string(), state));
+    }
+    Ok(entries)
 }
 
 /// Open an existing shared database without creating one. Used by the local
@@ -345,6 +432,7 @@ mod tests {
         let db = Database::create(&path).unwrap();
         let txn = db.begin_write().unwrap();
         let _ = txn.open_table(DB_TABLE);
+        let _ = txn.open_table(FEED_ENTRY_STATE_TABLE);
         txn.commit().unwrap();
         db
     }
@@ -476,5 +564,61 @@ mod tests {
         assert!(l.is_none());
         assert!(r.is_none());
         assert!(s.is_none());
+    }
+
+    #[test]
+    fn feed_entry_round_trip() {
+        let db = test_db();
+        let state = FeedEntryState {
+            position_ticks: 42,
+            played: true,
+        };
+        put_feed_entry(&db, "u", "feed", "guid", &state).unwrap();
+        assert_eq!(
+            get_feed_entry(&db, "u", "feed", "guid").unwrap(),
+            Some(state)
+        );
+    }
+
+    #[test]
+    fn feed_entry_put_is_last_write_wins() {
+        let db = test_db();
+        let first = FeedEntryState {
+            position_ticks: 1,
+            played: false,
+        };
+        let second = FeedEntryState {
+            position_ticks: 2,
+            played: true,
+        };
+        put_feed_entry(&db, "u", "feed", "guid", &first).unwrap();
+        put_feed_entry(&db, "u", "feed", "guid", &second).unwrap();
+        assert_eq!(
+            get_feed_entry(&db, "u", "feed", "guid").unwrap(),
+            Some(second)
+        );
+    }
+
+    #[test]
+    fn feed_entry_scan_is_bounded_by_user_and_feed() {
+        let db = test_db();
+        let state = |position_ticks| FeedEntryState {
+            position_ticks,
+            played: false,
+        };
+        put_feed_entry(&db, "u", "feed", "one", &state(1)).unwrap();
+        put_feed_entry(&db, "u", "feed", "two", &state(2)).unwrap();
+        put_feed_entry(&db, "u", "feed-extra", "three", &state(3)).unwrap();
+        put_feed_entry(&db, "other", "feed", "four", &state(4)).unwrap();
+        let entries = scan_feed_entries(&db, "u", "feed").unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].0, "one");
+        assert_eq!(entries[1].0, "two");
+    }
+
+    #[test]
+    fn feed_entry_scan_empty() {
+        let db = test_db();
+        assert!(scan_feed_entries(&db, "u", "missing").unwrap().is_empty());
     }
 }

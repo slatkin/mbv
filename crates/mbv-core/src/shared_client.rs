@@ -9,6 +9,7 @@ use crate::api::EmbyClient;
 use crate::config::Config;
 use crate::shared_protocol::{SharedDataCmd, SharedDataEvent};
 use crate::shared_state::{SharedDocumentKind, SharedRecord, SharedSnapshotResponse};
+use crate::shared_store::FeedEntryState;
 
 /// State machine for the shared-data client connection.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -42,6 +43,7 @@ pub struct SharedClient {
     next_request_id: u64,
     backoff: Duration,
     last_attempt: Option<Instant>,
+    feed_entry_state_supported: bool,
 }
 
 impl Default for SharedClient {
@@ -62,6 +64,7 @@ impl SharedClient {
             next_request_id: 1,
             backoff: Duration::from_secs(1),
             last_attempt: None,
+            feed_entry_state_supported: false,
         }
     }
 
@@ -153,7 +156,8 @@ impl SharedClient {
         let hello_line = read_line(&mut reader, "daemon hello")?;
         let hello: SharedDataEvent =
             serde_json::from_str(&hello_line).map_err(|e| format!("parse daemon hello: {e}"))?;
-        let (heartbeat_supported, user_id_auth_supported) = match hello {
+        let (heartbeat_supported, user_id_auth_supported, feed_entry_state_supported) = match hello
+        {
             SharedDataEvent::Hello(h) => {
                 if !h
                     .capabilities
@@ -169,6 +173,9 @@ impl SharedClient {
                     h.capabilities
                         .iter()
                         .any(|cap| cap == crate::shared_protocol::SHARED_DATA_CAP_USER_ID_AUTH_V1),
+                    h.capabilities.iter().any(|cap| {
+                        cap == crate::shared_protocol::SHARED_DATA_CAP_FEED_ENTRY_STATE_V1
+                    }),
                 )
             }
             other => {
@@ -264,6 +271,7 @@ impl SharedClient {
 
         self.tx = Some(cmd_tx);
         self.event_rx = Some(ev_rx);
+        self.feed_entry_state_supported = feed_entry_state_supported;
         self.state = SharedClientState::Shared;
         self.backoff = Duration::from_secs(1);
         Ok(snapshot)
@@ -491,6 +499,76 @@ impl SharedClient {
             other => Err(format!(
                 "update {} received unexpected response: {}",
                 kind.as_str(),
+                serde_json::to_string(&other).unwrap_or_default()
+            )),
+        }
+    }
+
+    pub fn get_feed_entry(
+        &mut self,
+        feed_id: String,
+        entry_guid: String,
+    ) -> Result<Option<FeedEntryState>, String> {
+        if !self.feed_entry_state_supported {
+            return Ok(None);
+        }
+        let event = self.request_and_wait(SharedDataCmd::GetFeedEntry {
+            request_id: 0,
+            feed_id: feed_id.clone(),
+            entry_guid: entry_guid.clone(),
+        })?;
+        match event {
+            SharedDataEvent::FeedEntry { value, .. } => Ok(Some(value)),
+            SharedDataEvent::FeedEntryAbsent { .. } => Ok(None),
+            SharedDataEvent::RequestError { reason, .. } => Err(reason),
+            other => Err(format!(
+                "get feed entry received unexpected response: {}",
+                serde_json::to_string(&other).unwrap_or_default()
+            )),
+        }
+    }
+
+    pub fn put_feed_entry(
+        &mut self,
+        feed_id: String,
+        entry_guid: String,
+        value: FeedEntryState,
+    ) -> Result<bool, String> {
+        if !self.feed_entry_state_supported {
+            return Ok(false);
+        }
+        let event = self.request_and_wait(SharedDataCmd::PutFeedEntry {
+            request_id: 0,
+            feed_id,
+            entry_guid,
+            value,
+        })?;
+        match event {
+            SharedDataEvent::FeedEntryPut { .. } => Ok(true),
+            SharedDataEvent::RequestError { reason, .. } => Err(reason),
+            other => Err(format!(
+                "put feed entry received unexpected response: {}",
+                serde_json::to_string(&other).unwrap_or_default()
+            )),
+        }
+    }
+
+    pub fn scan_feed_entries(
+        &mut self,
+        feed_id: String,
+    ) -> Result<Option<Vec<(String, FeedEntryState)>>, String> {
+        if !self.feed_entry_state_supported {
+            return Ok(None);
+        }
+        let event = self.request_and_wait(SharedDataCmd::ScanFeedEntries {
+            request_id: 0,
+            feed_id,
+        })?;
+        match event {
+            SharedDataEvent::FeedEntriesScanned { entries, .. } => Ok(Some(entries)),
+            SharedDataEvent::RequestError { reason, .. } => Err(reason),
+            other => Err(format!(
+                "scan feed entries received unexpected response: {}",
                 serde_json::to_string(&other).unwrap_or_default()
             )),
         }

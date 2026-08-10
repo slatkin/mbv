@@ -543,6 +543,84 @@ fn spawn_shared_client_handler<S>(
                         }
                     }
                 }
+                SharedDataCmd::GetFeedEntry {
+                    request_id,
+                    feed_id,
+                    entry_guid,
+                } => match store.get_feed_entry(&user_id, &feed_id, &entry_guid) {
+                    Ok(Some(value)) => {
+                        let ev = SharedDataEvent::FeedEntry {
+                            request_id,
+                            feed_id,
+                            entry_guid,
+                            value,
+                        };
+                        let _ = ev_tx.send(serde_json::to_string(&ev).unwrap_or_default());
+                    }
+                    Ok(None) => {
+                        let ev = SharedDataEvent::FeedEntryAbsent {
+                            request_id,
+                            feed_id,
+                            entry_guid,
+                        };
+                        let _ = ev_tx.send(serde_json::to_string(&ev).unwrap_or_default());
+                    }
+                    Err(reason) => {
+                        let _ = ev_tx.send(
+                            serde_json::to_string(&SharedDataEvent::RequestError {
+                                request_id,
+                                reason,
+                            })
+                            .unwrap_or_default(),
+                        );
+                    }
+                },
+                SharedDataCmd::PutFeedEntry {
+                    request_id,
+                    feed_id,
+                    entry_guid,
+                    value,
+                } => match store.put_feed_entry(&user_id, &feed_id, &entry_guid, value) {
+                    Ok(()) => {
+                        let ev = SharedDataEvent::FeedEntryPut {
+                            request_id,
+                            feed_id,
+                            entry_guid,
+                        };
+                        let _ = ev_tx.send(serde_json::to_string(&ev).unwrap_or_default());
+                    }
+                    Err(reason) => {
+                        let _ = ev_tx.send(
+                            serde_json::to_string(&SharedDataEvent::RequestError {
+                                request_id,
+                                reason,
+                            })
+                            .unwrap_or_default(),
+                        );
+                    }
+                },
+                SharedDataCmd::ScanFeedEntries {
+                    request_id,
+                    feed_id,
+                } => match store.scan_feed_entries(&user_id, &feed_id) {
+                    Ok(entries) => {
+                        let ev = SharedDataEvent::FeedEntriesScanned {
+                            request_id,
+                            feed_id,
+                            entries,
+                        };
+                        let _ = ev_tx.send(serde_json::to_string(&ev).unwrap_or_default());
+                    }
+                    Err(reason) => {
+                        let _ = ev_tx.send(
+                            serde_json::to_string(&SharedDataEvent::RequestError {
+                                request_id,
+                                reason,
+                            })
+                            .unwrap_or_default(),
+                        );
+                    }
+                },
             }
         }
 

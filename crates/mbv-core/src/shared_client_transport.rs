@@ -175,6 +175,30 @@ fn with_request_id(command: SharedDataCmd, request_id: u64) -> SharedDataCmd {
             expected_revision,
             value,
         },
+        SharedDataCmd::GetFeedEntry {
+            feed_id,
+            entry_guid,
+            ..
+        } => SharedDataCmd::GetFeedEntry {
+            request_id,
+            feed_id,
+            entry_guid,
+        },
+        SharedDataCmd::PutFeedEntry {
+            feed_id,
+            entry_guid,
+            value,
+            ..
+        } => SharedDataCmd::PutFeedEntry {
+            request_id,
+            feed_id,
+            entry_guid,
+            value,
+        },
+        SharedDataCmd::ScanFeedEntries { feed_id, .. } => SharedDataCmd::ScanFeedEntries {
+            request_id,
+            feed_id,
+        },
         SharedDataCmd::Hello {
             auth_token,
             user_id,
@@ -193,6 +217,10 @@ fn event_request_id(event: &SharedDataEvent) -> Option<u64> {
         | SharedDataEvent::DocumentAlreadyExists { request_id, .. }
         | SharedDataEvent::DocumentUpdated { request_id, .. }
         | SharedDataEvent::DocumentStale { request_id, .. }
+        | SharedDataEvent::FeedEntry { request_id, .. }
+        | SharedDataEvent::FeedEntryAbsent { request_id, .. }
+        | SharedDataEvent::FeedEntryPut { request_id, .. }
+        | SharedDataEvent::FeedEntriesScanned { request_id, .. }
         | SharedDataEvent::RequestError { request_id, .. } => Some(*request_id),
         _ => None,
     }
