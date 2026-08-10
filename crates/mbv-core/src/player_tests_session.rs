@@ -345,6 +345,43 @@ fn queue_slot_activation_still_sets_pending_resume_secs() {
 }
 
 #[test]
+fn resume_start_pos_uses_saved_position_for_resumable_video() {
+    // Regression test: cmd_submit_queue's warm-reuse path used to hardcode
+    // mpv's `start` property to "0", silently dropping the resume position
+    // that cmd_load_new used to set. resume_start_pos() is the extracted
+    // decision it now uses instead.
+    let mut item = make_media_item("resumable");
+    item.playback_position_ticks = item.runtime_ticks / 2; // 50% watched
+    assert!(item.should_resume(), "test item must actually be resumable");
+    let resume_secs = item.resume_seconds();
+
+    let queue_item = QueueItem::Emby(Box::new(item));
+
+    assert_eq!(resume_start_pos(&queue_item), resume_secs);
+}
+
+#[test]
+fn resume_start_pos_is_zero_for_audio_non_resumable_and_feed_items() {
+    let mut audio_item = make_media_item("audio");
+    audio_item.media_type = "Audio".into();
+    audio_item.playback_position_ticks = audio_item.runtime_ticks / 2;
+    assert_eq!(
+        resume_start_pos(&QueueItem::Emby(Box::new(audio_item))),
+        0.0
+    );
+
+    let fresh_item = make_media_item("fresh");
+    assert!(!fresh_item.should_resume());
+    assert_eq!(
+        resume_start_pos(&QueueItem::Emby(Box::new(fresh_item))),
+        0.0
+    );
+
+    let feed_entry = make_feed_entry("feed-1", "Podcast Episode 1");
+    assert_eq!(resume_start_pos(&QueueItem::Feed(feed_entry)), 0.0);
+}
+
+#[test]
 fn subtitle_stream_index_maps_to_mpv_subtitle_id() {
     let status = PlayerStatus {
         active: true,

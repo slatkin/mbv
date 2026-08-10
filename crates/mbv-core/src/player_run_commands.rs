@@ -412,7 +412,7 @@ impl PlaybackRun {
         }
 
         let active_item = &items[start_idx];
-        let _ = mpv.set_property("start", "0");
+        let _ = mpv.set_property("start", format!("{:.0}", resume_start_pos(active_item)));
         // send_ep_info only for Emby items.
         if let Some(emby) = active_item.as_emby() {
             send_ep_info(mpv, emby);
@@ -479,6 +479,18 @@ impl PlaybackRun {
                 s.art_item_id = active_guid;
             }
         }
+    }
+}
+
+/// The mpv `start` position (seconds) `cmd_submit_queue` should load the
+/// active item at. Mirrors the resume predicate used by `cmd_load_new` and
+/// `load_active_item_state`/`PlaybackRun::new`: Emby video items that
+/// `should_resume()` start at their saved position; audio and Feed items
+/// always start at 0.
+fn resume_start_pos(item: &QueueItem) -> f64 {
+    match item.as_emby() {
+        Some(emby) if !emby.is_audio() && emby.should_resume() => emby.resume_seconds(),
+        _ => 0.0,
     }
 }
 
