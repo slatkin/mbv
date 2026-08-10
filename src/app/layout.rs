@@ -89,6 +89,35 @@ pub(crate) struct LayoutMain {
     pub queue_cursor_screen_y: Option<u16>,
     pub selector_tabs: Vec<(Rect, usize)>,
     pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
+    /// Per-track hit targets for the wide Music left pane. Each entry is
+    /// `(screen_rect, track_index)` covering all wrapped physical rows of
+    /// that logical track. Cleared every frame; populated only when the
+    /// wide Music layout is active.
+    pub wide_music_track_hitmap: Vec<(Rect, usize)>,
+    /// Bounding rect of the wide Music left pane's hero artwork area.
+    /// Clicks here should not activate track selection or playback.
+    pub wide_music_art_area: Rect,
+    /// Bounding rect of the wide Music right pane (album browser).
+    /// Populated only when the wide Music layout is active.
+    pub wide_music_right_area: Rect,
+}
+
+impl LayoutMain {
+    /// Whether the wide Music layout rendered this frame. The right pane
+    /// area is only set by the wide Music renderer, so it is a reliable
+    /// signal even when the track hitmap is empty (tracks still loading
+    /// or album has no tracks).
+    pub(crate) fn is_wide_music_active(&self) -> bool {
+        self.wide_music_right_area.width > 0 && self.wide_music_right_area.height > 0
+    }
+
+    /// Returns the track index whose hit target contains `pos`, if any.
+    pub(crate) fn wide_music_track_at(&self, pos: ratatui::layout::Position) -> Option<usize> {
+        self.wide_music_track_hitmap
+            .iter()
+            .find(|(rect, _)| rect.contains(pos))
+            .map(|(_, track_idx)| *track_idx)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

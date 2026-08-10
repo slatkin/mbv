@@ -6,10 +6,9 @@
 
 ## 2. Wide Left Album And Track Workspace
 
-- [ ] 2.1 Render the selected album title, metadata, and large Home-style centered artwork in the upper left region using existing album selection and image-cache paths.
-- [ ] 2.2 Add content-aware vertical allocation that gives the hero roughly three-fifths of the pane while reserving a persistent, useful track viewport and shrinking artwork first on short terminals.
-- [ ] 2.3 Render cached tracks, Loading, and empty states in the lower left region even when `album_track_focus` is `None`, without showing stale album data after selection changes.
-- [ ] 2.4 Keep the focused track visible through internal track-table scrolling while preview mode starts from the beginning.
+- [x] 2.1 Add the album branch to the hero content painting in `list.rs:515-553` — call `render_power_album_detail` with the hero's content rect when `selected_album_item` is present
+- [x] 2.2 Render album art in the hero via the existing `inline_album_art` path, positioned within the hero rect
+- [x] 2.3 Verify track focus interaction works in the hero context: Enter activates track cursor, track navigation moves within the hero's track list, Escape exits track focus
 
 ## 3. Wide Right Album Browser
 
@@ -33,8 +32,17 @@
 
 ## 6. Tests And Verification
 
-- [ ] 6.1 Update existing grouped Music render and input tests for narrow preservation, wide one-column album geometry, reciprocal focus, and responsive identity continuity; avoid pixel-specific snapshots.
-- [ ] 6.2 Extend existing mouse coverage for wrapped track hit targets and click/double-click behavior only where the current fixture can express it without a new harness.
-- [ ] 6.3 Run formatting checks and the narrowest relevant application tests for grouped Music rendering, navigation, track focus, scope, and mouse dispatch.
-- [ ] 6.4 Run `cargo clippy --workspace --all-targets` and `make check-code-file-lines`.
-- [ ] 6.5 Visually verify a grouped Music library below 82 columns, at 82 columns, at a wider width, and at short terminal heights; check large artwork, persistent tracks, right-rail pills, pane focus colors, scrolling, resize continuity, and track mouse behavior.
+- [x] 6.1 In `power_widgets.rs:569-570`, remove the `is_album_folders && is_music_group` branch so it falls through to `render_power_list`
+- [x] 6.2 Move the loading/organizing state messages from `music.rs:97-146` into `render_power_list`'s empty-items handling, gated on `is_music_group_view`
+- [x] 6.3 Delete `render_power_music_group_view` from `music.rs`; keep `render_power_music_group_pills_row`
+- [x] 6.4 Verify the music-group pills in `mod.rs:511-528` still render correctly above the hero — the pills carve rows from `lib_area` before `render_power_list` receives it, so no change expected
+
+## 7. Tests and verification
+
+- [x] 7.1 Update existing album plan tests (`tests_album_focus.rs`, `tests_album_listing.rs`) with `hero_handles_detail: true` variants
+- [x] 7.2 Update music-group rendering tests (`tests_music_groups.rs`) for the new hero + two-column layout
+- [x] 7.3 Add test: album hero sizing matches the expanded block height computed by the standalone sizing function
+- [x] 7.4 Add test: two-column grouped album rows pack correctly with full-width artist headers and independent group packing
+- [ ] 7.5 Visual verification in a real terminal at multiple widths (narrow 1-col, threshold, wide 2-col) with a music library with levels
+- [ ] 7.6 Verify track focus, artist header selection, and group pill switching all work in the hero context
+- [x] 7.7 Run `cargo test -p mbv-core` and `cargo clippy --workspace --all-targets`

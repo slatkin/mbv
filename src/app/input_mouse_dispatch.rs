@@ -222,6 +222,16 @@ impl App {
                         // including entering a Series' season/episode
                         // selection, which a single click never did.
                         let lib_idx = self.tab.library_index().unwrap();
+                        // Wide Music: double-click on a track plays it.
+                        if self.layout.main.is_wide_music_active() {
+                            let pos = (col, row).into();
+                            if let Some(track_idx) = self.layout.main.wide_music_track_at(pos) {
+                                self.libs[lib_idx].album_track_focus = Some(track_idx);
+                                self.select();
+                            }
+                            // Double-click on artwork or blank space: no-op.
+                            return;
+                        }
                         if self.activate_recursive_album(lib_idx) {
                             // active-search jump; unchanged
                         } else if self.is_viewing_album_folders(lib_idx) {
@@ -241,6 +251,18 @@ impl App {
                         } else {
                             self.select();
                         }
+                    }
+                    // Wide Music: double-click on right pane album enters
+                    // track selection (same as Enter).
+                    if self.layout.main.is_wide_music_active()
+                        && self
+                            .layout
+                            .main
+                            .wide_music_right_area
+                            .contains((col, row).into())
+                    {
+                        let lib_idx = self.tab.library_index().unwrap();
+                        self.activate_album_folder_row(lib_idx);
                     }
                     return;
                 }
