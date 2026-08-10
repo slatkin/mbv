@@ -10,6 +10,9 @@ fn make_feed_entry(guid: &str, title: &str) -> crate::playback_queue::FeedEntry 
         duration_ticks: Some(300 * crate::api::TICKS_PER_SECOND as u64),
         pub_date_secs: None,
         feed_kind: Some(crate::config::FeedKind::Audio),
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
     }
 }
 

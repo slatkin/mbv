@@ -123,6 +123,9 @@ mod tests {
             duration_ticks: None,
             pub_date_secs,
             feed_kind: Some(mbv_core::config::FeedKind::Video),
+            feed_id: None,
+            position_ticks: 0,
+            played: false,
         }
     }
 

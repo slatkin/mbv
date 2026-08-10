@@ -65,6 +65,9 @@ fn video_feed_qi(guid: &str) -> QueueItem {
         duration_ticks: None,
         pub_date_secs: None,
         feed_kind: Some(crate::config::FeedKind::Video),
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
     })
 }
 

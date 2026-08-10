@@ -4,6 +4,27 @@ use crate::config::Config;
 
 pub const TICKS_PER_SECOND: i64 = 10_000_000;
 
+/// Inclusive lower-bound percentage of known runtime at which a saved
+/// position qualifies for resume. Exactly this percent qualifies.
+pub const RESUME_THRESHOLD_PERCENT: i64 = 6;
+
+/// Shared resume-eligibility predicate used by both Emby items and feed
+/// entries. A positive saved position with unknown runtime (`runtime_ticks
+/// <= 0`) is always resumable. Zero and negative positions never qualify.
+/// For a known runtime the position must be at least `RESUME_THRESHOLD_PERCENT`
+/// (inclusive) of runtime. Uses `i128` multiplication to avoid overflow.
+pub fn should_resume(position_ticks: i64, runtime_ticks: i64) -> bool {
+    if position_ticks <= 0 {
+        return false;
+    }
+    if runtime_ticks > 0 {
+        (position_ticks as i128) * 100
+            >= (runtime_ticks as i128) * (RESUME_THRESHOLD_PERCENT as i128)
+    } else {
+        true
+    }
+}
+
 fn decode_html_entities(s: &str) -> String {
     s.replace("&quot;", "\"")
         .replace("&apos;", "'")
@@ -19,7 +40,13 @@ pub fn gen_session_id() -> EmbySessionId {
         .unwrap_or_default();
     let pid = std::process::id();
     let r: u32 = rand::random();
-    EmbySessionId::new(format!("{:x}{:x}{:x}{:x}", t.as_secs(), t.subsec_nanos(), pid, r))
+    EmbySessionId::new(format!(
+        "{:x}{:x}{:x}{:x}",
+        t.as_secs(),
+        t.subsec_nanos(),
+        pid,
+        r
+    ))
 }
 
 pub fn device_name() -> String {
@@ -125,14 +152,7 @@ impl EmbyItem {
     }
 
     pub fn should_resume(&self) -> bool {
-        let pos = self.playback_position_ticks;
-        if pos <= 0 {
-            return false;
-        }
-        if self.runtime_ticks > 0 && pos * 100 < self.runtime_ticks {
-            return false;
-        } // displays as 0%
-        true
+        should_resume(self.playback_position_ticks, self.runtime_ticks)
     }
 
     pub fn runtime_seconds(&self) -> f64 {

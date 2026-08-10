@@ -101,10 +101,11 @@ impl App {
         let tx = self.feed_tab.refresh_tx.clone();
         for (idx, sub) in self.feed_tab.subscriptions.iter().enumerate() {
             let url = sub.url.clone();
+            let feed_id = url.clone();
             let tx = tx.clone();
             let kind = sub.kind;
             std::thread::spawn(move || {
-                let result = fetch_and_parse_entries(&url, kind);
+                let result = fetch_and_parse_entries(&url, kind, &feed_id);
                 let _ = tx.send(FeedTabRefreshResult {
                     subscription_index: idx,
                     entries: result,
@@ -197,6 +198,8 @@ impl App {
             );
             return;
         }
+        // Hydrate stored position/played before appending to the queue.
+        let entry = self.hydrate_feed_entry_state(entry);
         // Append to the canonical queue (local or remote mirror) so the
         // queue panel, cursor, and now-playing title all resolve the Feed
         // entry correctly.  On a cold (inactive) local player the player

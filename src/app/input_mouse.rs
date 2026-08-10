@@ -84,6 +84,16 @@ impl App {
         let target_secs = (fraction * runtime_ticks as f64) / TICKS_PER_SECOND as f64;
         self.player
             .send_command(PlayerCommand::SeekAbsolute(target_secs));
+        // Mark a pending Feed seek so the next OutputStarted persists
+        // the resulting position (confirmed seek completion).
+        if let Some(slot_id) = self.playback_queue().queue.active_slot_id() {
+            if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
+                if matches!(slot.item, mbv_core::playback_queue::QueueItem::Feed(ref e) if e.feed_id.is_some())
+                {
+                    self.feed_seek_pending_slot = Some(slot_id);
+                }
+            }
+        }
     }
 
     pub(super) fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {

@@ -94,6 +94,21 @@ impl App {
                                 let _ = queue.queue.mark_progress_sync_pending(slot_id);
                             }
                             queue.clamp_cursor();
+                            // Persist Feed lifecycle state before any
+                            // consume/removal changes the queue.
+                            if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
+                                if matches!(slot.item, mbv_core::playback_queue::QueueItem::Feed(_))
+                                {
+                                    let runtime = slot.item.runtime_ticks();
+                                    let feed_completed =
+                                        played || (runtime > 0 && position >= runtime * 95 / 100);
+                                    self.persist_feed_slot_lifecycle(
+                                        slot_id,
+                                        position,
+                                        feed_completed,
+                                    );
+                                }
+                            }
                             if played {
                                 log::info!(target: "player", "Stopped: marked played, position reset to 0");
                             } else if position_ticks > 0 {
@@ -185,6 +200,17 @@ impl App {
                     let _ = queue.queue.mark_progress_sync_pending(slot_id);
                 }
                 queue.clamp_cursor();
+                // Persist Feed lifecycle state before any consume/removal.
+                // TrackCompleted with `played` means EOF; for Feed entries,
+                // only known-runtime EOF marks played (unknown runtime keeps
+                // played=false per spec).
+                if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
+                    if matches!(slot.item, mbv_core::playback_queue::QueueItem::Feed(_)) {
+                        let runtime = slot.item.runtime_ticks();
+                        let feed_completed = played && runtime > 0;
+                        self.persist_feed_slot_lifecycle(slot_id, position, feed_completed);
+                    }
+                }
                 let (should_consume, is_audio) = self.should_consume_slot(slot_id, consume);
                 if should_consume {
                     self.pending_queue_removal = Some((slot_id, is_audio));
@@ -441,7 +467,37 @@ impl App {
                 // never receive the event, so their presentation is unchanged.
                 self.flash(message, ToastSeverity::Neutral);
             }
-            PlayerEvent::PausedChanged(_) | PlayerEvent::OutputStarted => {}
+            PlayerEvent::PausedChanged(paused) => {
+                // Persist Feed position on pause (one write per pause event).
+                if paused {
+                    if let Some(slot_id) = self.playback_queue().queue.active_slot_id() {
+                        if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
+                            if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = slot.item
+                            {
+                                if entry.feed_id.is_some() {
+                                    let pos_ticks =
+                                        self.player.status.lock().unwrap().position_ticks;
+                                    self.persist_feed_slot_lifecycle(slot_id, pos_ticks, false);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            PlayerEvent::OutputStarted => {
+                // If a seek was pending for a Feed slot, persist the
+                // resulting position now (confirmed seek completion).
+                if let Some(slot_id) = self.feed_seek_pending_slot.take() {
+                    if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
+                        if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = slot.item {
+                            if entry.feed_id.is_some() {
+                                let pos_ticks = self.player.status.lock().unwrap().position_ticks;
+                                self.persist_feed_slot_lifecycle(slot_id, pos_ticks, false);
+                            }
+                        }
+                    }
+                }
+            }
             PlayerEvent::RemoteDisconnected(reason) => {
                 self.restore_local_mode(&reason);
                 self.refresh_after_stop();

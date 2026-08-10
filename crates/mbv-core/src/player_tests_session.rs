@@ -352,7 +352,7 @@ fn resume_start_pos_uses_saved_position_for_resumable_video() {
 }
 
 #[test]
-fn resume_start_pos_is_zero_for_audio_non_resumable_and_feed_items() {
+fn resume_start_pos_is_zero_for_audio_non_resumable_and_zero_position_feed_items() {
     let mut audio_item = make_media_item("audio");
     audio_item.media_type = "Audio".into();
     audio_item.playback_position_ticks = audio_item.runtime_ticks / 2;
@@ -369,6 +369,7 @@ fn resume_start_pos_is_zero_for_audio_non_resumable_and_feed_items() {
     );
 
     let feed_entry = make_feed_entry("feed-1", "Podcast Episode 1");
+    // Feed entry with zero position starts from the beginning.
     assert_eq!(resume_start_pos(&QueueItem::Feed(feed_entry)), 0.0);
 }
 

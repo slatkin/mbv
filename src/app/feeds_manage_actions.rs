@@ -242,14 +242,15 @@ impl App {
         std::thread::spawn(move || {
             let (resolved_url, result) = match normalize_feed_url(&url) {
                 Ok(resolved_url) => {
-                    let result = fetch_and_parse_entries(&resolved_url, kind).and_then(|entries| {
-                        if entries.is_empty() {
-                            Err("response did not contain any valid RSS or Atom entries"
-                                .to_string())
-                        } else {
-                            Ok(())
-                        }
-                    });
+                    let result = fetch_and_parse_entries(&resolved_url, kind, &resolved_url)
+                        .and_then(|entries| {
+                            if entries.is_empty() {
+                                Err("response did not contain any valid RSS or Atom entries"
+                                    .to_string())
+                            } else {
+                                Ok(())
+                            }
+                        });
                     (resolved_url, result)
                 }
                 Err(error) => (url, Err(error)),

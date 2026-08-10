@@ -471,6 +471,9 @@ fn make_feed_entry(guid: &str) -> mbv_core::playback_queue::FeedEntry {
         duration_ticks: None,
         pub_date_secs: None,
         feed_kind: Some(mbv_core::config::FeedKind::Audio),
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
     }
 }
 

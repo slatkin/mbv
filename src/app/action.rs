@@ -461,14 +461,18 @@ impl App {
             }
 
             Command::QueuePlayCursor => {
-                let queue = self.displayed_queue();
-                let t = queue.queue_cursor;
-                let n = queue.total_queue_len();
+                let (t, n, item) = {
+                    let queue = self.displayed_queue();
+                    let t = queue.queue_cursor;
+                    let n = queue.total_queue_len();
+                    let item = queue.item_at(t).cloned();
+                    (t, n, item)
+                };
                 if t >= n {
                     return false;
                 }
                 // Validate the item at the cursor exists.
-                let Some(item) = queue.item_at(t).cloned() else {
+                let Some(item) = item else {
                     return false;
                 };
                 // Validate source for Feed entries early.
@@ -481,7 +485,22 @@ impl App {
                         return false;
                     }
                 }
+                // Hydrate stored feed-entry state before building the
+                // playback snapshot so resume uses the latest position.
+                if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = item {
+                    let hydrated = self.hydrate_feed_entry_state(entry.clone());
+                    let sid = self.playback_queue().slot_id_at(t);
+                    if let Some(sid) = sid {
+                        let queue_mut = self.playback_queue_mut();
+                        let _ = queue_mut.queue.apply_progress(
+                            sid,
+                            hydrated.position_ticks,
+                            hydrated.played,
+                        );
+                    }
+                }
                 // Snapshot data from the queue before any mutable borrows.
+                let queue = self.displayed_queue();
                 let emby_items: Vec<EmbyItem> = queue
                     .queue
                     .slots()

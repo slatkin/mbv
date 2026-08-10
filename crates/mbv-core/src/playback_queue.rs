@@ -53,12 +53,15 @@ impl SlotProgress {
         }
     }
 
-    /// Progress is only meaningful for Emby items. Feed slots get a
-    /// zeroed-out default.
+    /// Progress from either item kind. Feed slots carry their local
+    /// position and played state without entering Emby sync.
     fn from_queue_item(item: &QueueItem) -> Self {
         match item {
             QueueItem::Emby(emby) => Self::from_item(emby),
-            QueueItem::Feed(_) => Self::default(),
+            QueueItem::Feed(entry) => Self {
+                position_ticks: entry.position_ticks,
+                played: entry.played,
+            },
         }
     }
 
@@ -76,24 +79,37 @@ pub struct ProgressState {
 }
 
 impl ProgressState {
-    /// Progress is only meaningful for Emby items. Feed slots get a
-    /// zeroed-out default (no-op sync).
+    /// Progress from either item kind. Feed slots retain local position
+    /// and played state but never enter Emby sync (`pending_sync` stays
+    /// `None`).
     fn from_queue_item(item: &QueueItem) -> Self {
         match item {
             QueueItem::Emby(emby) => Self {
                 local: SlotProgress::from_item(emby),
                 pending_sync: None,
             },
-            QueueItem::Feed(_) => Self::default(),
+            QueueItem::Feed(entry) => Self {
+                local: SlotProgress {
+                    position_ticks: entry.position_ticks,
+                    played: entry.played,
+                },
+                pending_sync: None,
+            },
         }
     }
 
-    /// Applies progress back to the item. Only touches EmbyItem fields;
-    /// Feed slots are a no-op.
+    /// Applies progress back to the item. Touches both EmbyItem and
+    /// FeedEntry fields; Feed entries never participate in Emby sync.
     fn apply_to_item(&self, item: &mut QueueItem) {
-        if let QueueItem::Emby(emby) = item {
-            emby.playback_position_ticks = self.local.position_ticks;
-            emby.played = self.local.played;
+        match item {
+            QueueItem::Emby(emby) => {
+                emby.playback_position_ticks = self.local.position_ticks;
+                emby.played = self.local.played;
+            }
+            QueueItem::Feed(entry) => {
+                entry.position_ticks = self.local.position_ticks;
+                entry.played = self.local.played;
+            }
         }
     }
 }

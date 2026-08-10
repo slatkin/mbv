@@ -350,6 +350,148 @@ impl App {
             SharedDocumentKind::RoamingSettings => self.apply_shared_roaming_settings(record),
         }
     }
+
+    /// Read stored feed-entry state from the shared daemon and copy the
+    /// returned position/played values into the entry. Returns the entry
+    /// (possibly mutated). Missing identity, absent state, unsupported
+    /// capability, disconnection, or read failure all leave the entry
+    /// stateless without rejecting playback or contacting Emby.
+    pub(super) fn hydrate_feed_entry_state(
+        &mut self,
+        mut entry: mbv_core::playback_queue::FeedEntry,
+    ) -> mbv_core::playback_queue::FeedEntry {
+        let (Some(feed_id), Some(shared)) = (&entry.feed_id, self.shared_client.as_mut()) else {
+            return entry;
+        };
+        if !matches!(shared.state(), SharedClientState::Shared) {
+            return entry;
+        }
+        match shared.get_feed_entry(feed_id.clone(), entry.guid.clone()) {
+            Ok(Some(state)) => {
+                entry.position_ticks = state.position_ticks;
+                entry.played = state.played;
+                log::info!(
+                    target: "feed_state",
+                    "hydrated feed entry guid={} feed_id={} pos={}s played={}",
+                    entry.guid,
+                    feed_id,
+                    state.position_ticks / mbv_core::api::TICKS_PER_SECOND,
+                    state.played,
+                );
+            }
+            Ok(None) => {
+                log::debug!(
+                    target: "feed_state",
+                    "no stored state for feed entry guid={} feed_id={}",
+                    entry.guid,
+                    feed_id,
+                );
+            }
+            Err(e) => {
+                log::warn!(
+                    target: "feed_state",
+                    "feed state read failed for guid={} feed_id={}: {e}; playing statelessly",
+                    entry.guid,
+                    feed_id,
+                );
+            }
+        }
+        entry
+    }
+
+    /// Write feed-entry state to the shared daemon. Failures are logged and
+    /// discarded — they never stop playback.
+    pub(super) fn write_feed_entry_state(
+        &mut self,
+        feed_id: &str,
+        entry_guid: &str,
+        position_ticks: i64,
+        played: bool,
+    ) {
+        let Some(shared) = self.shared_client.as_mut() else {
+            return;
+        };
+        if !matches!(shared.state(), SharedClientState::Shared) {
+            return;
+        }
+        let state = mbv_core::shared_store::FeedEntryState {
+            position_ticks,
+            played,
+        };
+        match shared.put_feed_entry(feed_id.to_string(), entry_guid.to_string(), state) {
+            Ok(true) => {
+                log::info!(
+                    target: "feed_state",
+                    "wrote feed entry state guid={} feed_id={} pos={}s played={}",
+                    entry_guid,
+                    feed_id,
+                    position_ticks / mbv_core::api::TICKS_PER_SECOND,
+                    played,
+                );
+            }
+            Ok(false) => {
+                log::debug!(
+                    target: "feed_state",
+                    "feed state write skipped (unsupported) guid={} feed_id={}",
+                    entry_guid,
+                    feed_id,
+                );
+            }
+            Err(e) => {
+                log::warn!(
+                    target: "feed_state",
+                    "feed state write failed guid={} feed_id={}: {e}",
+                    entry_guid,
+                    feed_id,
+                );
+            }
+        }
+    }
+
+    /// Resolve an addressable Feed queue slot, derive its lifecycle state,
+    /// update queue progress, and write `FeedEntryState` through #492
+    /// without invoking Emby progress reporting. `completed` is true for
+    /// known-runtime EOF or stop at/above 95% — played entries store
+    /// position zero. Unknown-runtime EOF keeps `played` false.
+    pub(super) fn persist_feed_slot_lifecycle(
+        &mut self,
+        slot_id: mbv_core::playback_queue::QueueSlotId,
+        position_ticks: i64,
+        completed: bool,
+    ) {
+        // Extract identity from the slot before any mutable borrow.
+        let (feed_id, entry_guid) = {
+            let queue = self.playback_queue();
+            let Some(slot) = queue.queue.slot(slot_id) else {
+                return;
+            };
+            let mbv_core::playback_queue::QueueItem::Feed(ref entry) = slot.item else {
+                return;
+            };
+            let Some(ref feed_id) = entry.feed_id else {
+                return;
+            };
+            (feed_id.clone(), entry.guid.clone())
+        };
+        let runtime = {
+            let queue = self.playback_queue();
+            queue
+                .queue
+                .slot(slot_id)
+                .map(|s| s.item.runtime_ticks())
+                .unwrap_or(0)
+        };
+        let (store_position, store_played) = if completed && runtime > 0 {
+            (0, true)
+        } else {
+            (position_ticks, false)
+        };
+        let queue_mut = self.playback_queue_mut();
+        let _ = queue_mut
+            .queue
+            .apply_progress(slot_id, store_position, store_played);
+        self.write_feed_entry_state(&feed_id, &entry_guid, store_position, store_played);
+    }
 }
 
 fn revision_for(shared: &SharedClient, kind: SharedDocumentKind) -> Option<u64> {
