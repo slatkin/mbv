@@ -18,6 +18,46 @@ const PILLS_GAP_ROWS: u16 = 1;
 const PANE_PAD_X: u16 = 2;
 const PANE_PAD_Y: u16 = 1;
 
+fn wide_album_metadata(album: &mbv_core::api::EmbyItem, artist: &str) -> (String, u32) {
+    let display_name = album.display_name();
+    if let Some((parsed_artist, parsed_year, title)) = super::parse_album_folder_name(&display_name)
+    {
+        let year_matches = album.production_year == 0 || album.production_year == parsed_year;
+        if parsed_artist == artist && year_matches {
+            return (title, album.production_year.max(parsed_year));
+        }
+    }
+
+    let prefix = if album.production_year > 0 {
+        format!("{artist} ({}) ", album.production_year)
+    } else {
+        format!("{artist} ")
+    };
+    let title = display_name
+        .strip_prefix(&prefix)
+        .unwrap_or(&display_name)
+        .to_string();
+    (title, album.production_year)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wide_album_metadata;
+    use crate::app::tests::make_item;
+
+    #[test]
+    fn wide_album_metadata_removes_artist_and_year_prefix() {
+        let mut album = make_item("Bob Dylan (1970) New Morning", "MusicAlbum");
+        album.artist = "Bob Dylan".into();
+        album.production_year = 1970;
+
+        assert_eq!(
+            wide_album_metadata(&album, "Bob Dylan"),
+            ("New Morning".to_string(), 1970)
+        );
+    }
+}
+
 /// Tracks the vertical sub-areas of the wide Music left pane so the
 /// hero and track regions can be allocated independently.
 struct WideLeftLayout {
@@ -25,9 +65,8 @@ struct WideLeftLayout {
     hero_area: Rect,
     /// Track list region below the hero.
     track_area: Rect,
-    /// Artwork sub-rect aligned to the top and right edge of the pane. It
-    /// intentionally reaches into the pane's outer padding so the cover has
-    /// no blank row above it and its rendered edge aligns with the track block.
+    /// Artwork sub-rect aligned one row below the pane top and flush with the
+    /// track block's right edge.
     art_area: Rect,
     /// Text sub-rect inside `hero_area` (left of artwork).
     text_area: Rect,
@@ -38,7 +77,7 @@ struct WideLeftLayout {
 ///
 /// The hero is sized to the artwork (or its compact metadata when images are
 /// disabled), so the track block starts directly below the visible hero.
-/// The track region reserves its own padding, label, and at least one visible
+/// The track region reserves its own padding and at least one visible content
 /// row when tracks exist.
 fn compute_wide_left_layout(
     left_area: Rect,
@@ -88,9 +127,9 @@ fn compute_wide_left_layout(
                     .saturating_sub(INLINE_ALBUM_ART_RESERVED)
                     .saturating_add(PANE_PAD_X),
             ),
-            y: hero_area.y.saturating_sub(PANE_PAD_Y),
+            y: hero_area.y,
             width: INLINE_ALBUM_ART_RESERVED,
-            height: hero_area.height.saturating_add(PANE_PAD_Y),
+            height: hero_area.height,
         }
     } else {
         Rect::default()
@@ -279,7 +318,14 @@ impl App {
             );
         }
         if browser_area.height > 0 && browser_area.width > 0 {
-            self.render_wide_right_album_browser(f, browser_area, lib_idx, right_focused, layout);
+            self.render_wide_right_album_browser(
+                f,
+                browser_area,
+                list_panel,
+                lib_idx,
+                right_focused,
+                layout,
+            );
         }
         if list_panel.height > 0 {
             let border_style = Style::default().fg(palette::SEEK_TRACK);
@@ -315,10 +361,12 @@ impl App {
     ) {
         let text = &left_layout.text_area;
         if text.height > 0 && text.width >= 3 {
-            // ── Title ──
-            let title = album.display_name();
-            let title_trunc =
-                super::super::ui_util::trunc_str(&title, (text.width as usize).saturating_sub(1));
+            let artist = self.resolve_group_album_artist(album);
+            let (title, release_year) = wide_album_metadata(album, &artist);
+            let text_width = (text.width as usize).saturating_sub(1);
+
+            // ── Album title ──
+            let title_trunc = super::super::ui_util::trunc_str(&title, text_width);
             let title_style = if left_focused || library_focused {
                 Style::default()
                     .fg(palette::YELLOW)
@@ -339,35 +387,33 @@ impl App {
                 },
             );
 
-            // ── Metadata line (year, artist) ──
-            if text.height > 1 {
-                let mut meta_parts = Vec::new();
-                if album.production_year > 0 {
-                    meta_parts.push(album.production_year.to_string());
-                }
-                // Artist from the grouping catalog or fallback.
-                let artist = self.resolve_group_album_artist(album);
-                if !artist.is_empty() && artist != "Unknown Artist" {
-                    meta_parts.push(artist);
-                }
-                let meta_text = meta_parts.join(" \u{2022} ");
-                let meta_trunc = super::super::ui_util::trunc_str(
-                    &meta_text,
-                    (text.width as usize).saturating_sub(1),
-                );
-                let meta_fg = if library_focused {
-                    palette::SUBTLE
-                } else {
-                    palette::MUTED
-                };
+            // ── Artist ──
+            if text.height > 1 && !artist.is_empty() && artist != "Unknown Artist" {
+                let artist_trunc = super::super::ui_util::trunc_str(&artist, text_width);
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
-                        format!(" {meta_trunc}"),
-                        Style::default().fg(meta_fg),
+                        format!(" {artist_trunc}"),
+                        Style::default().fg(palette::FOAM),
                     ))),
                     Rect {
                         x: text.x,
                         y: text.y + 1,
+                        width: text.width,
+                        height: 1,
+                    },
+                );
+            }
+
+            // ── Release year ──
+            if text.height > 2 && release_year > 0 {
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        format!(" {release_year}"),
+                        Style::default().fg(palette::SUBTLE),
+                    ))),
+                    Rect {
+                        x: text.x,
+                        y: text.y + 2,
                         width: text.width,
                         height: 1,
                     },
@@ -557,6 +603,7 @@ impl App {
         &mut self,
         f: &mut Frame,
         browser_area: Rect,
+        panel_area: Rect,
         lib_idx: usize,
         right_focused: bool,
         layout: &mut LayoutMain,
@@ -683,22 +730,32 @@ impl App {
                     if selected {
                         layout.cursor_screen_y = Some(browser_area.y + screen_y);
                     }
-                    self.render_album_row(
-                        f,
-                        AlbumRowCtx {
+                    if selected && right_focused {
+                        self.render_wide_selected_album_row(
+                            f,
                             row_area,
-                            idx: *idx,
-                            album_info: &album_info,
-                            cursor,
-                            header_selected: false,
-                            avail,
-                            selected_block_bounds: None,
-                            selectable_headers: false,
-                            abs_row_idx: *row_idx,
-                            selected_art_reserved_w: 0,
-                            focused: right_focused,
-                        },
-                    );
+                            panel_area,
+                            *idx,
+                            &album_info,
+                        );
+                    } else {
+                        self.render_album_row(
+                            f,
+                            AlbumRowCtx {
+                                row_area,
+                                idx: *idx,
+                                album_info: &album_info,
+                                cursor,
+                                header_selected: false,
+                                avail,
+                                selected_block_bounds: None,
+                                selectable_headers: false,
+                                abs_row_idx: *row_idx,
+                                selected_art_reserved_w: 0,
+                                focused: right_focused,
+                            },
+                        );
+                    }
                 }
                 _ => {}
             }

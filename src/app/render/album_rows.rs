@@ -266,6 +266,58 @@ impl App {
         f.render_widget(Paragraph::new(Line::from(spans)), album_area);
     }
 
+    pub(super) fn render_wide_selected_album_row(
+        &self,
+        f: &mut Frame,
+        row_area: Rect,
+        panel_area: Rect,
+        idx: usize,
+        album_info: &[(String, String, String)],
+    ) {
+        let (_, year, title) = &album_info[idx];
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+            Rect {
+                x: panel_area.x,
+                y: row_area.y,
+                width: panel_area.width,
+                height: 1,
+            },
+        );
+
+        let suffix = if year.is_empty() {
+            String::new()
+        } else {
+            format!("  {year}")
+        };
+        let title_width = panel_area
+            .width
+            .saturating_sub(2 + suffix.chars().count() as u16) as usize;
+        let title = trunc_str(title, title_width);
+        let mut spans = vec![
+            Span::styled("▍", Style::default().fg(palette::AQUA)),
+            Span::raw(" "),
+            Span::styled(
+                title,
+                Style::default()
+                    .fg(palette::WHITE)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ];
+        if !suffix.is_empty() {
+            spans.push(Span::styled(suffix, Style::default().fg(palette::GREEN)));
+        }
+        f.render_widget(
+            Paragraph::new(Line::from(spans)),
+            Rect {
+                x: panel_area.x,
+                y: row_area.y,
+                width: panel_area.width,
+                height: 1,
+            },
+        );
+    }
+
     pub(super) fn render_album_action_hint(
         &self,
         f: &mut Frame,
