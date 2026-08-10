@@ -320,7 +320,7 @@ fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some((3_600 * crate::api::TICKS_PER_SECOND) as u64),
         pub_date_secs: Some(1700000000),
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     }
 }
 

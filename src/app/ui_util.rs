@@ -289,7 +289,7 @@ mod tests {
                 mime_type: None,
                 duration_ticks: None,
                 pub_date_secs: None,
-                feed_kind: mbv_core::config::FeedKind::Audio,
+                feed_kind: Some(mbv_core::config::FeedKind::Audio),
             },
             FeedEntry {
                 guid: "f2".to_string(),
@@ -299,7 +299,7 @@ mod tests {
                 mime_type: None,
                 duration_ticks: None,
                 pub_date_secs: None,
-                feed_kind: mbv_core::config::FeedKind::Audio,
+                feed_kind: Some(mbv_core::config::FeedKind::Audio),
             },
         ];
         let slots = make_slots(&items, &feed_items);

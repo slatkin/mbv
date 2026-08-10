@@ -467,7 +467,7 @@ fn make_feed_entry(guid: &str) -> mbv_core::playback_queue::FeedEntry {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: mbv_core::config::FeedKind::Audio,
+        feed_kind: Some(mbv_core::config::FeedKind::Audio),
     }
 }
 

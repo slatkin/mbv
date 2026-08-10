@@ -7,7 +7,7 @@ fn feed_entry(guid: &str) -> FeedEntry {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     }
 }
 
@@ -91,7 +91,7 @@ fn ctrl_load_feed_adds_to_canonical_queue_and_starts_playback() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(3_600_000_000),
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 

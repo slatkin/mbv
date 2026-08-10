@@ -448,7 +448,7 @@ fn queue_item_serializes_tagged() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     });
     let json = serde_json::to_string(&feed).unwrap();
     assert!(json.contains(r#""kind":"Feed""#));
@@ -491,7 +491,7 @@ fn queue_state_round_trip_preserves_item_kind() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(3600 * TICKS_PER_SECOND as u64),
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     let queue_items = vec![
         QueueItem::Emby(Box::new(emby_item.clone())),
@@ -543,7 +543,7 @@ fn feed(guid: &str) -> FeedEntry {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(60 * TICKS_PER_SECOND as u64),
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     }
 }
 
@@ -589,7 +589,7 @@ fn feed_entry_primary_source_returns_enclosure() {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     assert_eq!(entry.primary_source(), Some("https://enc.mp3"));
 }
@@ -604,7 +604,7 @@ fn feed_entry_primary_source_falls_back_to_link() {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     assert_eq!(entry.primary_source(), Some("https://link.html"));
 }
@@ -619,7 +619,7 @@ fn feed_entry_primary_source_none_when_empty() {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     assert_eq!(entry.primary_source(), None);
 }
@@ -638,7 +638,7 @@ fn feed_media_kind_uses_mime_when_present() {
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Video,
+        feed_kind: Some(crate::config::FeedKind::Video),
     };
     let qi = QueueItem::Feed(entry);
     assert_eq!(qi.media_kind(), "Audio");
@@ -656,7 +656,7 @@ fn feed_media_kind_falls_back_to_feed_kind_when_mime_absent() {
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Video,
+        feed_kind: Some(crate::config::FeedKind::Video),
     };
     let qi = QueueItem::Feed(entry);
     assert_eq!(qi.media_kind(), "video");
@@ -674,7 +674,7 @@ fn feed_media_kind_falls_back_to_feed_kind_for_unrecognized_mime() {
         mime_type: Some("application/octet-stream".into()),
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     };
     let qi = QueueItem::Feed(entry);
     assert_eq!(qi.media_kind(), "audio");
@@ -683,13 +683,14 @@ fn feed_media_kind_falls_back_to_feed_kind_for_unrecognized_mime() {
 }
 
 #[test]
-fn feed_legacy_entry_without_feed_kind_defaults_to_video() {
+fn feed_legacy_entry_without_feed_kind_is_neither_audio_nor_video() {
     // Simulates a legacy serialized FeedEntry that lacks feed_kind
-    // (serde default = Video).
+    // (serde default = None, i.e. unknown).
     let json = r#"{"kind":"Feed","guid":"g4","title":"T","enclosure_url":null,"link":null,"mime_type":null,"duration_ticks":null}"#;
     let qi: QueueItem = serde_json::from_str(json).unwrap();
-    assert_eq!(qi.media_kind(), "video");
-    assert!(qi.is_video());
+    assert_eq!(qi.media_kind(), "Video");
+    assert!(!qi.is_audio());
+    assert!(!qi.is_video());
 }
 
 // ---------------------------------------------------------------------------

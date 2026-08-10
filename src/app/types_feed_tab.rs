@@ -112,7 +112,7 @@ mod tests {
             mime_type: None,
             duration_ticks: None,
             pub_date_secs,
-            feed_kind: mbv_core::config::FeedKind::Video,
+            feed_kind: Some(mbv_core::config::FeedKind::Video),
         }
     }
 

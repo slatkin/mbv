@@ -9,7 +9,7 @@ fn make_feed_entry(guid: &str, title: &str) -> crate::playback_queue::FeedEntry 
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some(300 * crate::api::TICKS_PER_SECOND as u64),
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Audio,
+        feed_kind: Some(crate::config::FeedKind::Audio),
     }
 }
 

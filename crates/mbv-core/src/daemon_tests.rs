@@ -64,7 +64,7 @@ fn video_feed_qi(guid: &str) -> QueueItem {
         mime_type: Some("video/mp4".into()),
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: crate::config::FeedKind::Video,
+        feed_kind: Some(crate::config::FeedKind::Video),
     })
 }
 

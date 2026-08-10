@@ -25,10 +25,10 @@ pub struct FeedEntry {
     pub pub_date_secs: Option<u64>,
     /// Subscription's `FeedKind` carried into the queued snapshot. Canonical
     /// media kind when enclosure MIME is absent or unrecognized; enclosure MIME
-    /// refines it when recognized. `#[serde(default)]` preserves legacy
-    /// serialized entries that lack this field.
+    /// refines it when recognized. `None` means unknown — legacy
+    /// persisted/wire data that predates this field.
     #[serde(default)]
-    pub feed_kind: crate::config::FeedKind,
+    pub feed_kind: Option<crate::config::FeedKind>,
 }
 
 impl FeedEntry {
@@ -112,7 +112,7 @@ impl QueueItem {
             QueueItem::Feed(entry) => match entry.mime_type.as_deref() {
                 Some(m) if m.starts_with("audio/") => "Audio",
                 Some(m) if m.starts_with("video/") => "Video",
-                _ => entry.feed_kind.as_str(),
+                _ => entry.feed_kind.map(|k| k.as_str()).unwrap_or("Video"),
             },
         }
     }
@@ -123,7 +123,7 @@ impl QueueItem {
             QueueItem::Feed(entry) => match entry.mime_type.as_deref() {
                 Some(m) if m.starts_with("audio/") => true,
                 Some(m) if m.starts_with("video/") => false,
-                _ => entry.feed_kind == crate::config::FeedKind::Audio,
+                _ => entry.feed_kind == Some(crate::config::FeedKind::Audio),
             },
         }
     }
@@ -134,7 +134,7 @@ impl QueueItem {
             QueueItem::Feed(entry) => match entry.mime_type.as_deref() {
                 Some(m) if m.starts_with("video/") => true,
                 Some(m) if m.starts_with("audio/") => false,
-                _ => entry.feed_kind == crate::config::FeedKind::Video,
+                _ => entry.feed_kind == Some(crate::config::FeedKind::Video),
             },
         }
     }

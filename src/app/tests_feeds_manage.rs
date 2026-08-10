@@ -108,7 +108,7 @@ fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
             mime_type: None,
             duration_ticks: None,
             pub_date_secs: None,
-            feed_kind: mbv_core::config::FeedKind::Video,
+            feed_kind: Some(mbv_core::config::FeedKind::Video),
         }],
         vec![mbv_core::playback_queue::FeedEntry {
             guid: "b1".into(),
@@ -118,7 +118,7 @@ fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
             mime_type: None,
             duration_ticks: None,
             pub_date_secs: None,
-            feed_kind: mbv_core::config::FeedKind::Video,
+            feed_kind: Some(mbv_core::config::FeedKind::Video),
         }],
     ];
     app.feed_tab.rebuild_all_entries();

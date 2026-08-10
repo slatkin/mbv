@@ -108,7 +108,7 @@ fn parse_rss_entries(body: &str, subscription_kind: FeedKind) -> Vec<FeedEntry> 
             mime_type,
             duration_ticks,
             pub_date_secs,
-            feed_kind: subscription_kind,
+            feed_kind: Some(subscription_kind),
         });
     }
     entries
@@ -146,7 +146,7 @@ fn parse_atom_entries(body: &str, subscription_kind: FeedKind) -> Vec<FeedEntry>
             mime_type,
             duration_ticks,
             pub_date_secs,
-            feed_kind: subscription_kind,
+            feed_kind: Some(subscription_kind),
         });
     }
     entries
