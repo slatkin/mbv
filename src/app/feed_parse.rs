@@ -4,33 +4,95 @@ use mbv_core::config::FeedKind;
 use mbv_core::playback_queue::FeedEntry;
 use std::sync::Arc;
 
-/// Fetch the raw body of an RSS/Atom feed URL.
-///
-/// `ureq::get` never picks up the `native-tls` feature on its own — it only
-/// activates when a connector is configured explicitly on the agent — so
-/// plain shortcut calls fail every `https://` feed with "no TLS backend is
-/// configured". Build an agent with the connector wired up instead.
 fn fetch_feed_body(url: &str) -> Result<String, String> {
-    let connector =
-        native_tls::TlsConnector::new().map_err(|e| format!("Failed to initialize TLS: {e}"))?;
-    let agent = ureq::AgentBuilder::new()
-        .tls_connector(Arc::new(connector))
-        .build();
-    agent
+    tls_agent()?
         .get(url)
         .call()
         .map_err(|e| format!("HTTP request failed: {e}"))?
         .into_string()
         .map_err(|e| format!("Failed to read response body: {e}"))
 }
+fn tls_agent() -> Result<ureq::Agent, String> {
+    let connector =
+        native_tls::TlsConnector::new().map_err(|e| format!("Failed to initialize TLS: {e}"))?;
+    Ok(ureq::AgentBuilder::new()
+        .tls_connector(Arc::new(connector))
+        .build())
+}
+pub(super) fn normalize_feed_url(input: &str) -> Result<String, String> {
+    let Some((host, path_and_query)) = url_authority_and_path(input) else {
+        return Ok(input.to_string());
+    };
+    if !matches!(host, "youtube.com" | "www.youtube.com" | "m.youtube.com") {
+        return Ok(input.to_string());
+    }
 
-/// Fetch an RSS/Atom feed and parse `<item>`/`<entry>` titles and links.
+    let (path, query) = path_and_query
+        .split_once('?')
+        .map_or((path_and_query, ""), |(path, query)| (path, query));
+    if path == "/feeds/videos.xml"
+        && query.split('&').any(|param| {
+            param
+                .strip_prefix("channel_id=")
+                .is_some_and(|id| !id.is_empty())
+        })
+    {
+        return Ok(input.to_string());
+    }
+
+    let segments: Vec<&str> = path.trim_matches('/').split('/').collect();
+    if segments.len() == 2 && segments[0] == "channel" && segments[1].starts_with("UC") {
+        return Ok(format!(
+            "https://www.youtube.com/feeds/videos.xml?channel_id={}",
+            segments[1]
+        ));
+    }
+
+    if (segments.len() == 1 && segments[0].starts_with('@') && segments[0].len() > 1)
+        || (segments.len() == 2 && matches!(segments[0], "c" | "user") && !segments[1].is_empty())
+    {
+        let body = tls_agent()?
+            .get(input)
+            .call()
+            .map_err(|e| format!("Failed to resolve YouTube channel: {e}"))?
+            .into_string()
+            .map_err(|e| format!("Failed to read YouTube channel page: {e}"))?;
+        return extract_rss_link(&body)
+            .ok_or_else(|| "YouTube channel page did not contain an RSS feed URL".to_string());
+    }
+
+    Err("URL is not a resolvable YouTube channel URL".to_string())
+}
+
+fn url_authority_and_path(input: &str) -> Option<(&str, &str)> {
+    let rest = input
+        .strip_prefix("https://")
+        .or_else(|| input.strip_prefix("http://"))?;
+    let (authority, path) = rest.split_once('/')?;
+    let host = authority.split('@').next()?.split(':').next()?;
+    Some((host, &rest[rest.len() - path.len() - 1..]))
+}
+
+fn extract_rss_link(body: &str) -> Option<String> {
+    for link in body.split("<link").skip(1) {
+        let Some(end) = link.find('>') else {
+            continue;
+        };
+        let tag = &link[..end];
+        if extract_attribute(tag, "rel").as_deref() == Some("alternate")
+            && extract_attribute(tag, "type").as_deref() == Some("application/rss+xml")
+        {
+            return extract_attribute(tag, "href");
+        }
+    }
+    None
+}
+
 pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
     let body = fetch_feed_body(url)?;
 
     let mut items = Vec::new();
 
-    // Try RSS `<item>` blocks first
     if let Some(start) = body.find("<item>") {
         let rest = &body[start..];
         for item_match in rest.split("<item>").skip(1) {
@@ -42,7 +104,6 @@ pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String
         }
     }
 
-    // If no RSS items found, try Atom `<entry>` blocks
     if items.is_empty() {
         if let Some(start) = body.find("<entry>") {
             let rest = &body[start..];
@@ -60,10 +121,7 @@ pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String
 }
 
 /// Fetch an RSS/Atom feed and parse each `<item>`/`<entry>` into a
-/// [`FeedEntry`] (guid, title, enclosure URL, MIME type, duration → ticks,
-/// publish date). Sibling of `fetch_and_parse_rss` (#471); the idle-feed
-/// path keeps its lean `IdleFeedItem` shape. Entries without any playable
-/// source are skipped.
+/// [`FeedEntry`] (guid, title, enclosure URL, MIME type, duration → ticks).
 ///
 /// `subscription_kind` is the subscription's `FeedKind` used as the
 /// canonical fallback when enclosure MIME is absent or unrecognized.
@@ -522,7 +580,8 @@ fn strip_control_chars(text: &str) -> String {
 mod tests {
     use super::{
         duration_secs, extract_atom_enclosure, extract_atom_link, extract_enclosure, extract_tag,
-        infer_feed_kind_from_mime, parse_atom_entries, parse_pub_date_secs, parse_rss_entries,
+        infer_feed_kind_from_mime, normalize_feed_url, parse_atom_entries, parse_pub_date_secs,
+        parse_rss_entries,
     };
     use mbv_core::config::FeedKind;
 
@@ -725,5 +784,17 @@ mod tests {
             infer_feed_kind_from_mime(Some("application/octet-stream")),
             FeedKind::Video
         );
+    }
+
+    #[test]
+    fn normalize_feed_url_pure_paths() {
+        assert_eq!(
+            normalize_feed_url("https://youtube.com/channel/UCabc").unwrap(),
+            "https://www.youtube.com/feeds/videos.xml?channel_id=UCabc"
+        );
+        let feed = "https://www.youtube.com/feeds/videos.xml?channel_id=UCabc";
+        assert_eq!(normalize_feed_url(feed).unwrap(), feed);
+        let other = "https://example.com/feed.xml";
+        assert_eq!(normalize_feed_url(other).unwrap(), other);
     }
 }
