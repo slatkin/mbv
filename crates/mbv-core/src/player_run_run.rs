@@ -75,7 +75,15 @@ impl PlaybackRun {
                 }
 
                 if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                    command_quit_async(&mpv);
+                    // A synchronous quit exits promptly for regular playback.
+                    // FIFO output can block mpv in its audio thread, so keep
+                    // that path asynchronous and let the bounded fallback
+                    // handle a delayed Shutdown event.
+                    if self.config.audio_pipe_path.is_some() {
+                        command_quit_async(&mpv);
+                    } else {
+                        let _ = mpv.command("quit", &[]);
+                    }
                     self.quit_at = Some(Instant::now());
                 }
 

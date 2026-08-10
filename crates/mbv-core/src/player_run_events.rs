@@ -264,8 +264,9 @@ impl PlaybackRun {
             log::warn!(target: "player", "quit path: last_valid_pos={} runtime={} pending_resume={} stop_report={:?}",
                 self.last_valid_pos, runtime, self.pending_resume_secs.is_some(), self.stop_report);
             if self.stop_report == StopReport::NotSent {
-                progress.stop_and_join(self.progress_join_budget());
-                self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
+                // mpv-initiated quits (for example a compositor close request)
+                // must not wait on Emby before mpv can finish its own shutdown.
+                self.report_stop_now_or_background(progress);
             }
             if (natural_end || near_end) && !completed_is_audio && self.reporter.has_session() {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
@@ -281,8 +282,14 @@ impl PlaybackRun {
         if self.origin == PlaybackOrigin::Standalone {
             let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
 
-            progress.stop_and_join(self.progress_join_budget());
-            self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
+            if reason == mpv_end_file_reason::Quit {
+                // Keep an external window close off the mpv event loop. Natural
+                // EOF still reports synchronously before its completion event.
+                self.report_stop_now_or_background(progress);
+            } else {
+                progress.stop_and_join(self.progress_join_budget());
+                self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
+            }
 
             if natural_end && self.reporter.has_session() {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
