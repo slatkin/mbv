@@ -2,11 +2,19 @@ use super::album_art::INLINE_ALBUM_ART_ROWS;
 use super::{natural_sort_key, strip_article};
 use crate::app::layout::LibraryRowTarget;
 use crate::app::music_grouping::{derive_album_display_name, GroupedAlbumCatalog};
-use crate::app::{App, ArtistHeaderSelection};
+use crate::app::App;
 use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
 pub(super) const SELECTED_ALBUM_WINDOW: usize = 12;
+
+/// Display-only artist group header carried in the display plan for
+/// rendering. Not a selection or navigation target.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct ArtistGroupHeader {
+    pub(super) first_album_id: String,
+    pub(super) artist_label: String,
+}
 
 /// Sorted album display order for a set of `(artist, year, name)` info
 /// triples: indices ordered by the artist's natural sort key (articles
@@ -48,7 +56,7 @@ pub(super) fn album_hero_content_rows(
 
 #[derive(Clone)]
 pub(super) enum GroupedAlbumDisplayRow {
-    ArtistHeader(ArtistHeaderSelection),
+    ArtistHeader(ArtistGroupHeader),
     ArtistGroupSpacer,
     AlbumDetailRule,
     AlbumWrappedContinuation,
@@ -57,22 +65,16 @@ pub(super) enum GroupedAlbumDisplayRow {
     /// it is *not* expanded into full track-selection mode (`AlbumDetailStart`
     /// covers the hint once expanded) outside the music-group view.
     AlbumActionHint,
-    /// Action-hint row shown directly under a selected artist header in a
-    /// music-group selection block.
-    ArtistActionHint,
     AlbumDetailStart(usize),
     AlbumDetailContinuation,
     AlbumLoading,
 }
 
-/// The artist-header selection/focus state for a display-plan build: which
-/// rows are eligible to act as selectable headers, which header (if any) is
-/// currently focused, and whether the focused album's tracks are expanded.
-/// Grouped together because they always travel as a unit from the caller's
-/// header-focus bookkeeping into the plan builder.
-pub(super) struct HeaderFocusCtx<'a> {
-    pub(super) selectable_headers: bool,
-    pub(super) selected_artist_header: Option<&'a ArtistHeaderSelection>,
+/// Display-plan build context for grouped album views.
+pub(super) struct HeaderFocusCtx {
+    /// True when the music-group (pill-selector) view is active, enabling
+    /// the selected-group block frame and two-column layout.
+    pub(super) in_music_group_view: bool,
     pub(super) expand_selected: bool,
 }
 
@@ -80,8 +82,6 @@ pub(super) struct GroupedAlbumDisplayPlan {
     pub(super) order: Vec<usize>,
     pub(super) rows: Vec<GroupedAlbumDisplayRow>,
     pub(super) display_cursor: usize,
-    pub(super) selected_artist_header_valid: bool,
-    pub(super) selected_group_indices: Option<Vec<usize>>,
     /// Absolute (unscrolled) indices into `rows` of the selected block's
     /// framing `AlbumDetailRule` rows — `(top_rule_idx, bottom_rule_idx)`.
     pub(super) selected_block_bounds: Option<(usize, usize)>,
@@ -90,12 +90,9 @@ pub(super) struct GroupedAlbumDisplayPlan {
 }
 
 impl GroupedAlbumDisplayRow {
-    pub(super) fn row_target(&self, selectable_headers: bool) -> Option<LibraryRowTarget> {
+    pub(super) fn row_target(&self) -> Option<LibraryRowTarget> {
         match self {
             Self::Album(idx) => Some(LibraryRowTarget::Album(*idx)),
-            Self::ArtistHeader(selection) if selectable_headers => {
-                Some(LibraryRowTarget::ArtistHeader(selection.clone()))
-            }
             _ => None,
         }
     }
@@ -141,11 +138,9 @@ impl App {
         hero_handles_detail: bool,
     ) -> GroupedAlbumDisplayPlan {
         let HeaderFocusCtx {
-            selectable_headers,
-            selected_artist_header,
+            in_music_group_view,
             expand_selected,
         } = header_focus;
-        let header_selected = selectable_headers && selected_artist_header.is_some();
         let inline_art_rows_after_album = if self.images_enabled() {
             INLINE_ALBUM_ART_ROWS.saturating_sub(1) as usize
         } else {
@@ -244,7 +239,6 @@ impl App {
         let mut has_artist_group = false;
         let mut selected_block_bounds: Option<(usize, usize)> = None;
         let mut track_detail_bounds: Option<(usize, usize)> = None;
-        let mut selected_group_indices = None;
         let mut group_start = 0;
         while group_start < order.len() {
             let artist = album_info[order[group_start]].0.clone();
@@ -256,14 +250,12 @@ impl App {
                 rows.push(GroupedAlbumDisplayRow::ArtistGroupSpacer);
             }
             let first_idx = order[group_start];
-            let header_selection = ArtistHeaderSelection {
+            let group_header = ArtistGroupHeader {
                 first_album_id: albums[first_idx].id.clone(),
                 artist_label: artist,
             };
             let group_contains_cursor = order[group_start..group_end].contains(&cursor);
-            let selected_group = selectable_headers
-                && ((header_selected && selected_artist_header == Some(&header_selection))
-                    || (!header_selected && group_contains_cursor));
+            let selected_group = in_music_group_view && group_contains_cursor;
 
             if selected_group {
                 let group_indices = order[group_start..group_end].to_vec();
@@ -280,30 +272,20 @@ impl App {
                 };
                 let window_end = (window_start + SELECTED_ALBUM_WINDOW).min(group_indices.len());
                 let visible_group_indices = &group_indices[window_start..window_end];
-                selected_group_indices = Some(group_indices.clone());
                 rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                 let top_idx = rows.len();
                 rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                rows.push(GroupedAlbumDisplayRow::ArtistHeader(header_selection));
-                if header_selected {
-                    rows.push(GroupedAlbumDisplayRow::ArtistActionHint);
-                    rows.extend(std::iter::repeat_n(
-                        GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                        selected_hint_lines("^P: Play | ^A: Enqueue | ^S: Shuffle")
-                            .saturating_sub(1),
-                    ));
+                rows.push(GroupedAlbumDisplayRow::ArtistHeader(group_header));
+                rows.push(GroupedAlbumDisplayRow::AlbumActionHint);
+                let hint = if expand_selected {
+                    "^P: Play | ^A: Enqueue | ^S: Shuffle | BACK: Exit"
                 } else {
-                    rows.push(GroupedAlbumDisplayRow::AlbumActionHint);
-                    let hint = if expand_selected {
-                        "^P: Play | ^A: Enqueue | ^S: Shuffle | BACK: Exit"
-                    } else {
-                        "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks"
-                    };
-                    rows.extend(std::iter::repeat_n(
-                        GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                        selected_hint_lines(hint).saturating_sub(1),
-                    ));
-                }
+                    "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks"
+                };
+                rows.extend(std::iter::repeat_n(
+                    GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                    selected_hint_lines(hint).saturating_sub(1),
+                ));
 
                 for &idx in visible_group_indices {
                     rows.push(GroupedAlbumDisplayRow::Album(idx));
@@ -311,7 +293,7 @@ impl App {
                         GroupedAlbumDisplayRow::AlbumWrappedContinuation,
                         selected_title_lines(idx).saturating_sub(1),
                     ));
-                    if !header_selected && expand_selected && idx == cursor {
+                    if expand_selected && idx == cursor {
                         match self.album_tracks_cache.get(&albums[idx].id) {
                             Some(tracks) if !tracks.is_empty() => {
                                 let detail_rows = selected_detail_rows(tracks, false);
@@ -365,9 +347,9 @@ impl App {
                 rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                 selected_block_bounds = Some((top_idx, bottom_idx));
             } else {
-                rows.push(GroupedAlbumDisplayRow::ArtistHeader(header_selection));
+                rows.push(GroupedAlbumDisplayRow::ArtistHeader(group_header));
                 for &idx in &order[group_start..group_end] {
-                    if idx == cursor && !selectable_headers && !expand_selected {
+                    if idx == cursor && !in_music_group_view && !expand_selected {
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                         let top_idx = rows.len();
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
@@ -394,7 +376,7 @@ impl App {
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                         selected_block_bounds = Some((top_idx, bottom_idx));
-                    } else if idx == cursor && !selectable_headers {
+                    } else if idx == cursor && !in_music_group_view {
                         match self.album_tracks_cache.get(&albums[idx].id) {
                             Some(tracks) if !tracks.is_empty() => {
                                 let detail_rows = selected_detail_rows(tracks, true)
@@ -460,30 +442,10 @@ impl App {
 
         let find_display_cursor = |rows: &[GroupedAlbumDisplayRow]| -> usize {
             rows.iter()
-                .position(|row| {
-                    selectable_headers
-                        && matches!(
-                            (row, selected_artist_header),
-                            (
-                                GroupedAlbumDisplayRow::ArtistHeader(selection),
-                                Some(selected)
-                            ) if selection == selected
-                        )
-                })
-                .or_else(|| {
-                    rows.iter().position(
-                        |row| matches!(row, GroupedAlbumDisplayRow::Album(i) if *i == cursor),
-                    )
-                })
+                .position(|row| matches!(row, GroupedAlbumDisplayRow::Album(i) if *i == cursor))
                 .unwrap_or(0)
         };
         let display_cursor = find_display_cursor(&rows);
-        let selected_artist_header_valid = selected_artist_header.is_some_and(|selected| {
-            selectable_headers
-                && rows.iter().any(|row| {
-                    matches!(row, GroupedAlbumDisplayRow::ArtistHeader(selection) if selection == selected)
-                })
-        });
 
         // When the hero panel handles the detail rendering, suppress the
         // inline detail rows and clear the bounds that reference them.
@@ -507,8 +469,6 @@ impl App {
                 order: order.to_vec(),
                 rows,
                 display_cursor,
-                selected_artist_header_valid,
-                selected_group_indices,
                 selected_block_bounds: None,
                 track_detail_bounds: None,
             };
@@ -518,8 +478,6 @@ impl App {
             order: order.to_vec(),
             rows,
             display_cursor,
-            selected_artist_header_valid,
-            selected_group_indices,
             selected_block_bounds,
             track_detail_bounds,
         }

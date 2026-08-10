@@ -74,7 +74,6 @@ pub(super) fn make_music_album_app() -> App {
         ],
         feed_home_video: None,
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -174,7 +173,6 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
         ],
         feed_home_video: None,
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -347,15 +345,4 @@ pub(super) fn configure_recursive_fetch_server(app: &mut App, server: &Recursive
     client.config.server_url = server.base_url.clone();
     client.user_id = "user-1".into();
     client.token = "token-1".into();
-}
-
-pub(super) fn make_selectable_artist_header_bulk_app() -> App {
-    let mut app = make_music_album_app();
-    add_beta_album(&mut app);
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = 2;
-    app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
-        first_album_id: "album-1".into(),
-        artist_label: "Unknown Artist".into(),
-    });
-    app
 }

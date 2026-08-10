@@ -177,7 +177,6 @@ impl App {
                             if let Some(lvl) = lib.nav_stack.last_mut() {
                                 if item_idx < lvl.items.len() {
                                     lib.album_track_focus = None;
-                                    lib.artist_header_focus = None;
                                     lvl.cursor = item_idx;
                                     self.save_default_library_position(lib_idx);
                                 }
@@ -330,7 +329,7 @@ impl App {
                             // Track hitmap (left pane).
                             if let Some(track_idx) = self.layout.main.wide_music_track_at(pos) {
                                 self.libs[lib_idx].album_track_focus = Some(track_idx);
-                                self.libs[lib_idx].artist_header_focus = None;
+
                                 self.set_panel_focus(PanelFocus::Library);
                                 self.save_default_library_position(lib_idx);
                                 return true;
@@ -346,12 +345,6 @@ impl App {
                         } else {
                             // Narrow path: existing row_target handling.
                             match row_target {
-                                Some(LibraryRowTarget::ArtistHeader(selection)) => {
-                                    self.libs[lib_idx].album_track_focus = None;
-                                    self.libs[lib_idx].artist_header_focus = Some(selection);
-                                    self.save_default_library_position(lib_idx);
-                                    return true;
-                                }
                                 Some(LibraryRowTarget::Album(item_idx)) => {
                                     let lib = &mut self.libs[lib_idx];
                                     if let Some(lvl) = lib.nav_stack.last_mut() {
@@ -359,7 +352,6 @@ impl App {
                                             if lvl.cursor != item_idx {
                                                 lib.album_track_focus = None;
                                             }
-                                            lib.artist_header_focus = None;
                                             lvl.cursor = item_idx;
                                             self.save_default_library_position(lib_idx);
                                             return true;
@@ -405,7 +397,6 @@ impl App {
                                     if lvl.cursor != item_idx {
                                         lib.album_track_focus = None;
                                     }
-                                    lib.artist_header_focus = None;
                                     lvl.cursor = item_idx;
                                 }
                             }
@@ -416,7 +407,6 @@ impl App {
                                     if lvl.cursor != item_idx {
                                         lib.album_track_focus = None;
                                     }
-                                    lib.artist_header_focus = None;
                                     lvl.cursor = item_idx;
                                 }
                             }
@@ -432,7 +422,6 @@ impl App {
                                 if lvl.cursor != clicked {
                                     lib.album_track_focus = None;
                                 }
-                                lib.artist_header_focus = None;
                                 lvl.cursor = clicked;
                             }
                         }

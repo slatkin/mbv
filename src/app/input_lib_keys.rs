@@ -227,18 +227,6 @@ impl App {
             KeyCode::Char('h') if self.current_library_columns(lib_idx) > 1 => {
                 self.move_lib_cursor(-1)
             }
-            KeyCode::PageUp
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && self.is_music_group_view(lib_idx) =>
-            {
-                self.jump_music_group_display_cursor_to_artist(lib_idx, false);
-            }
-            KeyCode::PageDown
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && self.is_music_group_view(lib_idx) =>
-            {
-                self.jump_music_group_display_cursor_to_artist(lib_idx, true);
-            }
             KeyCode::PageUp => {
                 if !self.page_grouped_album_cursor(lib_idx, false) {
                     let p = self.lib_page_size();
@@ -254,9 +242,6 @@ impl App {
             KeyCode::Home => self.jump_lib_cursor(false),
             KeyCode::End => self.jump_lib_cursor(true),
             KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if self.play_selected_artist_header(false) {
-                    return Some(false);
-                }
                 let item = self.current_lib_item();
                 if let Some(item) = item {
                     if item.is_folder {
@@ -276,9 +261,6 @@ impl App {
                 self.toggle_watched()
             }
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if self.play_selected_artist_header(true) {
-                    return Some(false);
-                }
                 self.shuffle_play()
             }
             KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {

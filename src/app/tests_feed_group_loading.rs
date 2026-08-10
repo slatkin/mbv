@@ -37,7 +37,6 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -120,7 +119,6 @@ fn make_home_video_app() -> App {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -287,7 +285,6 @@ fn refreshed_does_not_overwrite_feed_root_with_video_items() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -347,7 +344,6 @@ fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,

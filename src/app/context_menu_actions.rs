@@ -33,26 +33,11 @@ impl App {
             Some(ContextAction::ShuffleFolder(id)) => {
                 self.shuffle_folder(&id);
             }
-            Some(ContextAction::PlayArtistHeader(selection)) => {
-                if let Some(lib_idx) = self.artist_header_action_lib_idx() {
-                    self.play_artist_header_selection(lib_idx, &selection, false);
-                }
-            }
-            Some(ContextAction::ShuffleArtistHeader(selection)) => {
-                if let Some(lib_idx) = self.artist_header_action_lib_idx() {
-                    self.play_artist_header_selection(lib_idx, &selection, true);
-                }
-            }
             Some(ContextAction::Enqueue) => {
                 if matches!(self.panel_focus, PanelFocus::Library) && self.tab.is_home() {
                     self.cw_enqueue();
                 } else {
                     self.enqueue_selected();
-                }
-            }
-            Some(ContextAction::EnqueueArtistHeader(selection)) => {
-                if let Some(lib_idx) = self.artist_header_action_lib_idx() {
-                    self.enqueue_artist_header_selection(lib_idx, &selection);
                 }
             }
             Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder((*item).clone()),

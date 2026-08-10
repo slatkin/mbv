@@ -8,9 +8,6 @@ impl App {
         if self.tab.is_home() || self.tab.is_feeds() {
             return;
         }
-        if self.play_selected_artist_header(true) {
-            return;
-        }
         let lib_idx = self.tab.library_index().unwrap();
         let parent_id = {
             let lib = &self.libs[lib_idx];

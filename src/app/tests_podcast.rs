@@ -16,7 +16,6 @@ fn podcast_library_detects_collection_type() {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -39,7 +38,6 @@ fn podcast_library_detects_name_when_collection_type_missing() {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -83,7 +81,6 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -135,7 +132,6 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -201,7 +197,6 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -306,7 +301,6 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
         }),
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,

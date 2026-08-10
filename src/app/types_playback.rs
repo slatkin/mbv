@@ -120,12 +120,6 @@ pub(super) struct HomePane {
     pub(super) home_scroll: usize,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ArtistHeaderSelection {
-    pub first_album_id: String,
-    pub artist_label: String,
-}
-
 pub(super) struct SuspendedLocalSession {
     pub(super) player: PlayerProxy,
     pub(super) player_rx: mpsc::Receiver<PlayerEvent>,

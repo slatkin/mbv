@@ -2,7 +2,6 @@ use super::album::AlbumRowsCursorCtx;
 use super::album_plan::{sorted_group_album_order, GroupedAlbumDisplayRow, HeaderFocusCtx};
 use super::test_helpers::*;
 use super::*;
-use crate::app::layout::LibraryRowTarget;
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -39,37 +38,34 @@ fn selectable_artist_headers_are_typed_row_targets() {
         "expected both artist headers to render:\n{out}"
     );
     let header_row = layout
-        .left_row_targets
+        .left_row_map
         .iter()
-        .position(|target| {
-            matches!(
-                target,
-                Some(LibraryRowTarget::ArtistHeader(selection))
-                    if selection.artist_label == "Alpha"
-                        && selection.first_album_id == "album-1"
-            )
-        })
-        .expect("expected the custom artist header to be a typed row target");
+        .position(|item| item.is_none())
+        .expect("expected a non-album row (artist header) in the row map");
     assert_eq!(
         layout.left_row_map[header_row], None,
         "legacy row map must keep headers non-album rows"
     );
+    // Artist headers are display-only and must not appear as row targets.
+    assert!(
+        layout
+            .left_row_targets
+            .get(header_row)
+            .is_none_or(|t| t.is_none()),
+        "artist headers must not be navigation targets"
+    );
 }
 
 #[test]
-fn artist_and_album_focus_share_one_selected_group_bounds() {
+fn selected_group_has_block_bounds() {
     let mut app = make_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");
     second.id = "album-2".into();
     second.artist = "Alpha".into();
     app.libs[0].nav_stack.last_mut().unwrap().items.push(second);
     let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
-    let header = crate::app::ArtistHeaderSelection {
-        first_album_id: "album-1".into(),
-        artist_label: "Alpha".into(),
-    };
 
-    let album_plan = {
+    let plan = {
         let album_info = app.group_album_info(&albums, None);
         let order = sorted_group_album_order(&album_info);
         app.build_grouped_album_display_plan(
@@ -79,26 +75,7 @@ fn artist_and_album_focus_share_one_selected_group_bounds() {
             0,
             false,
             HeaderFocusCtx {
-                selectable_headers: true,
-                selected_artist_header: None,
-                expand_selected: false,
-            },
-            Some((120, 0)),
-            false, // hero_handles_detail
-        )
-    };
-    let header_plan = {
-        let album_info = app.group_album_info(&albums, None);
-        let order = sorted_group_album_order(&album_info);
-        app.build_grouped_album_display_plan(
-            &albums,
-            &album_info,
-            &order,
-            0,
-            false,
-            HeaderFocusCtx {
-                selectable_headers: true,
-                selected_artist_header: Some(&header),
+                in_music_group_view: true,
                 expand_selected: false,
             },
             Some((120, 0)),
@@ -106,13 +83,12 @@ fn artist_and_album_focus_share_one_selected_group_bounds() {
         )
     };
 
-    assert_eq!(
-        album_plan.selected_block_bounds, header_plan.selected_block_bounds,
-        "header and album focus should use the same artist-scoped frame"
+    assert!(
+        plan.selected_block_bounds.is_some(),
+        "the selected group should have block bounds"
     );
     assert_eq!(
-        album_plan
-            .rows
+        plan.rows
             .iter()
             .filter(|row| matches!(row, GroupedAlbumDisplayRow::Album(_)))
             .count(),
@@ -134,8 +110,7 @@ fn focused_group_header_has_no_internal_spacer_when_hero_handles_detail() {
         0,
         false,
         HeaderFocusCtx {
-            selectable_headers: true,
-            selected_artist_header: None,
+            in_music_group_view: true,
             expand_selected: false,
         },
         Some((120, 0)),
@@ -179,8 +154,7 @@ fn hero_handles_detail_suppresses_all_inline_detail_rows() {
         0,
         false,
         HeaderFocusCtx {
-            selectable_headers: true,
-            selected_artist_header: None,
+            in_music_group_view: true,
             expand_selected: true,
         },
         Some((120, 0)),
@@ -209,8 +183,7 @@ fn hero_handles_detail_suppresses_all_inline_detail_rows() {
         0,
         false,
         HeaderFocusCtx {
-            selectable_headers: true,
-            selected_artist_header: None,
+            in_music_group_view: true,
             expand_selected: true,
         },
         Some((120, 0)),
@@ -307,28 +280,6 @@ fn grouped_hero_art_follows_album_focus() {
         "the adjacent album should be pre-warmed while the selected album renders"
     );
     assert!(!album_app.card_image_loading.contains("album-2:sq"));
-
-    // With an artist header focused, the cursor album still anchors the hero,
-    // so the same portrait art is fetched -- no square collage in the hero flow.
-    let mut header_app = make_music_group_app();
-    let mut second = make_item("Second Album", "MusicAlbum");
-    second.id = "album-2".into();
-    second.artist = "Alpha".into();
-    header_app.libs[0]
-        .nav_stack
-        .last_mut()
-        .unwrap()
-        .items
-        .push(second);
-    header_app.image_protocol_enabled = true;
-    header_app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
-        first_album_id: "album-1".into(),
-        artist_label: "Alpha".into(),
-    });
-    let mut header_layout = LayoutMain::default();
-    let _header_out = render_library_to_string_sized(&mut header_app, &mut header_layout, 60, 30);
-    assert!(header_app.card_image_loading.contains("album-1:P"));
-    assert!(!header_app.card_image_loading.contains("album-1:sq"));
 }
 
 #[test]

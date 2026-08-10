@@ -208,7 +208,6 @@ pub fn make_movie_app() -> App {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -313,7 +312,6 @@ pub fn make_music_group_app() -> App {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -436,7 +434,6 @@ pub fn make_home_video_app() -> App {
         feed_home_video: None,
 
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: None,
@@ -475,7 +472,6 @@ pub fn make_large_movie_library_app(library_total: usize) -> App {
         }],
         feed_home_video: None,
         album_track_focus: None,
-        artist_header_focus: None,
         series_selection: None,
         series_season_cursor: 0,
         library_total: Some(library_total),

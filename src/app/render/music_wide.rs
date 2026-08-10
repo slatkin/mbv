@@ -652,8 +652,7 @@ impl App {
             cursor,
             true,
             HeaderFocusCtx {
-                selectable_headers: false,
-                selected_artist_header: None,
+                in_music_group_view: true,
                 expand_selected: false,
             },
             None, // No wrap_widths needed for one-column.
@@ -707,15 +706,9 @@ impl App {
                 super::album_plan::GroupedAlbumDisplayRow::ArtistHeader(header) => {
                     // Wide right rail: no selectable headers (design Decision 5).
                     self.render_artist_header_row(
-                        f,
-                        row_area,
-                        header,
-                        false, // selectable_headers: not in wide right rail
-                        None,  // No selected block in wide right rail.
-                        *row_idx,
-                        0, // No art reservation in right rail.
-                        right_focused,
-                        lib_idx,
+                        f, row_area, header, true, // in_music_group_view
+                        None, // No selected block in wide right rail.
+                        *row_idx, 0, // No art reservation in right rail.
                     );
                 }
                 super::album_plan::GroupedAlbumDisplayRow::ArtistGroupSpacer => {}
@@ -740,10 +733,9 @@ impl App {
                                 idx: *idx,
                                 album_info: &album_info,
                                 cursor,
-                                header_selected: false,
                                 avail,
                                 selected_block_bounds: None,
-                                selectable_headers: false,
+                                in_music_group_view: true,
                                 abs_row_idx: *row_idx,
                                 selected_art_reserved_w: 0,
                                 focused: right_focused,
@@ -780,7 +772,7 @@ impl App {
                 }
                 let target_y = browser_y_offset + screen_y as usize;
                 if target_y < targets.len() {
-                    targets[target_y] = row.row_target(false);
+                    targets[target_y] = row.row_target();
                 }
             }
             layout.left_row_targets = targets;

@@ -18,7 +18,6 @@
 //! (e.g. the zero-area guard) -- it can never hold a mix of fields from two
 //! different frames.
 
-use super::ArtistHeaderSelection;
 use ratatui::layout::Rect;
 
 /// Seekbar rect, the two divider status indicators that still have a click
@@ -124,7 +123,6 @@ impl LayoutMain {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum LibraryRowTarget {
     Album(usize),
-    ArtistHeader(ArtistHeaderSelection),
 }
 
 /// All per-frame layout geometry, grouped by the view that produces it.
