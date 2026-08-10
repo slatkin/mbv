@@ -216,6 +216,7 @@ impl App {
             player_endpoint: None,
             home_is_local_daemon: false,
             idle_feed: init.idle_feed,
+            feed_seek_pending_slot: None,
             feed_tab: super::types_feed_tab::FeedTabState::default(),
             feeds_manage_popup: None,
         };

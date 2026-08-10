@@ -12,6 +12,9 @@ fn feed_entry(guid: &str) -> FeedEntry {
         duration_ticks: None,
         pub_date_secs: None,
         feed_kind: None,
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
     }
 }
 

@@ -273,6 +273,9 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
         duration_ticks: None,
         pub_date_secs: None,
         feed_kind: None,
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
     };
     let f3 = crate::playback_queue::FeedEntry {
         guid: "f3".into(),
@@ -283,6 +286,9 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
         duration_ticks: None,
         pub_date_secs: None,
         feed_kind: None,
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
     };
 
     let unified = UnifiedQueueStateData {

@@ -317,6 +317,11 @@ pub struct App {
     /// State for the feeds management overlay (§6), opened from F2
     /// Settings' `Manage feeds` row. `None` when the overlay is closed.
     pub(super) feeds_manage_popup: Option<FeedsManagePopup>,
+    /// When a seek was issued during Feed playback, the slot_id is stored
+    /// here. The next `OutputStarted` clears it and persists the resulting
+    /// position. This prevents ordinary output restarts (buffering,
+    /// startup) from becoming state writes.
+    pub(super) feed_seek_pending_slot: Option<mbv_core::playback_queue::QueueSlotId>,
     #[cfg(test)]
     pub(super) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }

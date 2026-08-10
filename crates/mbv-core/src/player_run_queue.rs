@@ -209,7 +209,12 @@ impl PlaybackRun {
             }
             QueueItem::Feed(entry) => {
                 self.osd_title = entry.title.clone();
-                self.last_valid_pos = 0;
+                let runtime = entry.duration_ticks.unwrap_or(0) as i64;
+                self.last_valid_pos = if crate::api::should_resume(entry.position_ticks, runtime) {
+                    entry.position_ticks
+                } else {
+                    0
+                };
                 self.series_id.clear();
                 self.season = 0;
                 self.episode = 0;
@@ -303,7 +308,13 @@ impl PlaybackRun {
                     )
                 }
                 QueueItem::Feed(entry) => {
-                    (0, entry.title.clone(), ItemId::empty(), 0, 0, 0, 0, false)
+                    let runtime = entry.duration_ticks.unwrap_or(0) as i64;
+                    let pos = if crate::api::should_resume(entry.position_ticks, runtime) {
+                        entry.position_ticks
+                    } else {
+                        0
+                    };
+                    (pos, entry.title.clone(), ItemId::empty(), 0, 0, 0, 0, false)
                 }
             };
 

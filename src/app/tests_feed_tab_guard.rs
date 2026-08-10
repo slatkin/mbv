@@ -12,6 +12,9 @@ fn playable_feed_entry(guid: &str) -> FeedEntry {
         duration_ticks: None,
         pub_date_secs: None,
         feed_kind: Some(mbv_core::config::FeedKind::Audio),
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
     }
 }
 
@@ -87,6 +90,9 @@ fn feeds_tab_does_not_route_into_library_behavior() {
             duration_ticks: None,
             pub_date_secs: Some(100),
             feed_kind: Some(mbv_core::config::FeedKind::Audio),
+            feed_id: None,
+            position_ticks: 0,
+            played: false,
         },
         FeedEntry {
             guid: "b".into(),
@@ -97,6 +103,9 @@ fn feeds_tab_does_not_route_into_library_behavior() {
             duration_ticks: None,
             pub_date_secs: Some(200),
             feed_kind: Some(mbv_core::config::FeedKind::Audio),
+            feed_id: None,
+            position_ticks: 0,
+            played: false,
         },
     ];
     app.feed_tab.rebuild_all_entries();
@@ -212,6 +221,9 @@ fn feed_tab_play_selected_out_of_range_cursor_is_noop() {
         duration_ticks: None,
         pub_date_secs: None,
         feed_kind: Some(mbv_core::config::FeedKind::Audio),
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
     }]];
     app.feed_tab.rebuild_all_entries();
     app.feed_tab.selected_group = 0;
@@ -237,6 +249,9 @@ fn feed_tab_play_selected_no_source_entry_does_not_dispatch() {
         duration_ticks: None,
         pub_date_secs: None,
         feed_kind: Some(mbv_core::config::FeedKind::Audio),
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
     }]];
     app.feed_tab.rebuild_all_entries();
     app.feed_tab.selected_group = 0;

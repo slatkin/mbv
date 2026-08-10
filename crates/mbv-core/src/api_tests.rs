@@ -669,10 +669,26 @@ fn should_resume_mid_way_returns_true() {
 }
 
 #[test]
-fn should_resume_under_one_percent_returns_false() {
+fn should_resume_under_six_percent_returns_false() {
     let mut item = make_item("X", "Movie");
     item.runtime_ticks = TICKS_PER_SECOND * 7200; // 2h
-    item.playback_position_ticks = TICKS_PER_SECOND; // ~0.01%
+    item.playback_position_ticks = TICKS_PER_SECOND * 60; // ~0.8%
+    assert!(!item.should_resume());
+}
+
+#[test]
+fn should_resume_exactly_six_percent_returns_true() {
+    let mut item = make_item("X", "Movie");
+    item.runtime_ticks = TICKS_PER_SECOND * 100; // 100s
+    item.playback_position_ticks = TICKS_PER_SECOND * 6; // exactly 6%
+    assert!(item.should_resume());
+}
+
+#[test]
+fn should_resume_just_below_six_percent_returns_false() {
+    let mut item = make_item("X", "Movie");
+    item.runtime_ticks = TICKS_PER_SECOND * 100; // 100s
+    item.playback_position_ticks = TICKS_PER_SECOND * 6 - 1; // just below 6%
     assert!(!item.should_resume());
 }
 

@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
-// FeedEntry — minimal identity + playback fields for RSS/podcast/YouTube
-// items. No progress state (position_ticks / played) — deferred to #472.
+// FeedEntry — identity, playback, and resume fields for RSS/podcast/YouTube
+// items. Identity (`feed_id`) and progress (`position_ticks`, `played`) are
+// serde-defaulted so old queue payloads and ctrl snapshots remain loadable.
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -23,6 +24,20 @@ pub struct FeedEntry {
     /// persisted/wire data that predates this field.
     #[serde(default)]
     pub feed_kind: Option<crate::config::FeedKind>,
+    /// Stable feed identity for the keyed feed-entry state store (#492).
+    /// Set to the normalized subscription URL at fetch time. `None` means
+    /// the entry cannot address the store (legacy or identity-less) and
+    /// playback falls through to stateless behavior.
+    #[serde(default)]
+    pub feed_id: Option<String>,
+    /// Playback position in ticks. Zero means start from the beginning
+    /// (or the entry was marked played with position reset).
+    #[serde(default)]
+    pub position_ticks: i64,
+    /// Whether the entry has been played to completion (known-runtime EOF
+    /// or stop ≥ 95%). Played entries with position zero replay from start.
+    #[serde(default)]
+    pub played: bool,
 }
 
 impl FeedEntry {
@@ -167,14 +182,14 @@ impl QueueItem {
     pub fn playback_position_ticks(&self) -> i64 {
         match self {
             QueueItem::Emby(item) => item.playback_position_ticks,
-            QueueItem::Feed(_) => 0,
+            QueueItem::Feed(entry) => entry.position_ticks,
         }
     }
 
     pub fn played(&self) -> bool {
         match self {
             QueueItem::Emby(item) => item.played,
-            QueueItem::Feed(_) => false,
+            QueueItem::Feed(entry) => entry.played,
         }
     }
 
