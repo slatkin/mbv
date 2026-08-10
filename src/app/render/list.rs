@@ -103,8 +103,8 @@ impl App {
             self.ensure_lib_loaded_for(lib_idx);
         }
 
-        // Task 1.1/1.3: Wide grouped Music uses a Music-specific horizontal
-        // split at or above the shared 82-column breakpoint. The narrow path
+        // Wide grouped Music uses a Music-specific horizontal split at or
+        // above the shared 82-column breakpoint. The narrow path
         // (below breakpoint) continues unchanged through the existing hero-
         // above-list renderer.
         if let Some(lib_idx) = self.tab.library_index() {

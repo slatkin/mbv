@@ -103,6 +103,23 @@ pub(crate) struct LayoutMain {
     pub wide_music_right_area: Rect,
 }
 
+impl LayoutMain {
+    /// Whether the wide Music layout rendered this frame. The track hitmap
+    /// is only populated by that renderer, so an empty hitmap means the
+    /// narrow layout is active.
+    pub(crate) fn is_wide_music_active(&self) -> bool {
+        !self.wide_music_track_hitmap.is_empty()
+    }
+
+    /// Returns the track index whose hit target contains `pos`, if any.
+    pub(crate) fn wide_music_track_at(&self, pos: ratatui::layout::Position) -> Option<usize> {
+        self.wide_music_track_hitmap
+            .iter()
+            .find(|(rect, _)| rect.contains(pos))
+            .map(|(_, track_idx)| *track_idx)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum LibraryRowTarget {
     Album(usize),

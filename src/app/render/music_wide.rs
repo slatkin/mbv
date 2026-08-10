@@ -17,6 +17,16 @@ const PILLS_GAP_ROWS: u16 = 1;
 /// Padding inside each wide music pane, matching the Home overview block.
 const PANE_PAD_X: u16 = 2;
 const PANE_PAD_Y: u16 = 1;
+/// Minimum left-pane height needed to draw a hero/track separator row.
+const MIN_LEFT_HEIGHT_FOR_SEPARATOR: u16 = 6;
+/// Minimum outer area width and height for the wide two-column layout;
+/// below this the caller falls back to the narrow renderer.
+const MIN_WIDE_AREA_HEIGHT: u16 = 6;
+const MIN_PANE_WIDTH: u16 = 40;
+/// Reserved width for the right-aligned track duration column plus its
+/// leading space (`fmt_duration_mmss` output is unbounded but rarely
+/// exceeds this).
+const DURATION_COL_W: usize = 8;
 
 fn wide_album_metadata(album: &mbv_core::api::EmbyItem, artist: &str) -> (String, u32) {
     let display_name = album.display_name();
@@ -38,24 +48,6 @@ fn wide_album_metadata(album: &mbv_core::api::EmbyItem, artist: &str) -> (String
         .unwrap_or(&display_name)
         .to_string();
     (title, album.production_year)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::wide_album_metadata;
-    use crate::app::tests::make_item;
-
-    #[test]
-    fn wide_album_metadata_removes_artist_and_year_prefix() {
-        let mut album = make_item("Bob Dylan (1970) New Morning", "MusicAlbum");
-        album.artist = "Bob Dylan".into();
-        album.production_year = 1970;
-
-        assert_eq!(
-            wide_album_metadata(&album, "Bob Dylan"),
-            ("New Morning".to_string(), 1970)
-        );
-    }
 }
 
 /// Tracks the vertical sub-areas of the wide Music left pane so the
@@ -87,7 +79,11 @@ fn compute_wide_left_layout(
     let total_h = left_area.height;
     let art_available = images_enabled && left_area.width >= INLINE_ALBUM_ART_RESERVED;
     // Reserve a separator row between hero and tracks.
-    let sep: u16 = if total_h > 6 { 1 } else { 0 };
+    let sep: u16 = if total_h > MIN_LEFT_HEIGHT_FOR_SEPARATOR {
+        1
+    } else {
+        0
+    };
 
     // The track block is exactly the loaded track rows plus one padding row at
     // each edge. Loading and empty states still need one content row.
@@ -102,7 +98,7 @@ fn compute_wide_left_layout(
     } else {
         2
     }
-    .min(total_h.saturating_sub(sep + 2));
+    .min(total_h.saturating_sub(sep + PANE_PAD_Y * 2));
     let track_h = requested_track_h.min(total_h.saturating_sub(hero_ideal + sep));
     let hero_h = hero_ideal.min(total_h.saturating_sub(track_h + sep));
 
@@ -151,8 +147,8 @@ fn compute_wide_left_layout(
 /// Uses the Home-style 40/60 ratio with a two-column gap between panes.
 fn wide_music_panes(content_area: Rect) -> (Rect, Rect) {
     let left_w = ((content_area.width as u32 * 2 / 5) as u16)
-        .max(40)
-        .min(content_area.width.saturating_sub(40));
+        .max(MIN_PANE_WIDTH)
+        .min(content_area.width.saturating_sub(MIN_PANE_WIDTH));
     let right_w = content_area
         .width
         .saturating_sub(left_w)
@@ -186,8 +182,6 @@ impl App {
     /// Renders the wide grouped Music layout: a left pane with album hero
     /// and persistent tracks, and a right pane with music-group pills and
     /// a one-column album browser.
-    ///
-    /// Tasks 1.3, 2.1-2.4, 3.1-3.4, 4.1-4.2, 5.1.
     pub(super) fn render_wide_music_group(
         &mut self,
         f: &mut Frame,
@@ -199,7 +193,7 @@ impl App {
         layout.wide_music_track_hitmap.clear();
         layout.wide_music_art_area = Rect::default();
 
-        if area.width < TWO_COLUMN_THRESHOLD || area.height < 6 {
+        if area.width < TWO_COLUMN_THRESHOLD || area.height < MIN_WIDE_AREA_HEIGHT {
             // Too narrow for wide mode — fall back to narrow rendering.
             self.render_list(f, area, focused, layout);
             return;
@@ -210,14 +204,12 @@ impl App {
             return;
         };
 
-        let (left_area, right_area) = wide_music_panes(area);
-        let left_panel = left_area;
-        let right_panel = right_area;
+        let (left_panel, right_panel) = wide_music_panes(area);
         let left_area = inset_pane(left_panel);
         let right_area = inset_pane(right_panel);
         layout.wide_music_right_area = right_area;
 
-        // ── Focus state (Task 4.1) ──────────────────────────────────────
+        // ── Focus state ──────────────────────────────────────────────────
         // Derive internal pane focus from outer PanelFocus and
         // album_track_focus without adding persisted focus state.
         let library_focused = matches!(self.panel_focus, PanelFocus::Library);
@@ -227,18 +219,19 @@ impl App {
         let right_focused = library_focused && !track_active;
 
         // ── Fetch and cache tracks ──────────────────────────────────────
-        let tracks = self.album_tracks_cache.get(&album.id).cloned();
-        if tracks.is_none() && !self.album_tracks_loading.contains(&album.id) {
+        let track_count = self.album_tracks_cache.get(&album.id).map_or(0, Vec::len);
+        if !self.album_tracks_cache.contains_key(&album.id)
+            && !self.album_tracks_loading.contains(&album.id)
+        {
             self.fetch_album_tracks(album.id.clone());
         }
-        let track_count = tracks.as_ref().map_or(0, Vec::len);
 
         // ── Left pane: hero + tracks ────────────────────────────────────
         let left_layout = compute_wide_left_layout(left_area, self.images_enabled(), track_count);
         layout.left_area = left_area;
         layout.hero_area = left_layout.hero_area;
 
-        // Pane background (Task 4.2: reciprocal palette).
+        // Pane background (reciprocal palette).
         let left_bg = if left_focused {
             palette::BG_GREEN
         } else {
@@ -277,7 +270,7 @@ impl App {
             right_panel,
         );
 
-        // Pills at the top of the right rail (Task 3.1).
+        // Pills at the top of the right rail.
         let pills_area = Rect {
             x: right_area.x,
             y: right_panel.y,
@@ -288,7 +281,7 @@ impl App {
             self.render_music_group_pills_row(f, pills_area, lib_idx, layout);
         }
 
-        // Album browser below the pills (Tasks 3.2-3.4). The list panel uses
+        // Album browser below the pills. The list panel uses
         // the same one-row padding and upper/lower three-quarter borders as
         // Home's wide list panel; the browser itself is inset inside it.
         let browser_y = right_panel.y + PILLS_ROW_HEIGHT + PILLS_GAP_ROWS;
@@ -349,7 +342,7 @@ impl App {
     }
 
     /// Renders the wide left pane's hero: album title, metadata, and
-    /// large centered artwork. Task 2.1.
+    /// large centered artwork.
     fn render_wide_left_hero(
         &mut self,
         f: &mut Frame,
@@ -428,8 +421,8 @@ impl App {
     }
 
     /// Renders the persistent track list in the wide left pane's lower
-    /// region. Shows tracks regardless of `album_track_focus` (Task 2.3).
-    /// Keeps focused track visible (Task 2.4). Records hit targets (Task 5.1).
+    /// region. Shows tracks regardless of `album_track_focus`.
+    /// Keeps the focused track visible and records mouse hit targets.
     fn render_wide_left_tracks(
         &mut self,
         f: &mut Frame,
@@ -465,9 +458,9 @@ impl App {
             return;
         }
 
-        match self.album_tracks_cache.get(&album.id).cloned() {
+        match self.album_tracks_cache.get(&album.id) {
             None => {
-                // Loading state (Task 2.3).
+                // Loading state.
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
                         "Loading\u{2026}",
@@ -487,10 +480,10 @@ impl App {
                 );
             }
             Some(tracks) => {
-                // Track list (Tasks 2.3, 2.4, 5.1).
+                // Track list.
                 let n = tracks.len();
                 let visible = list_area.height as usize;
-                // Task 2.4: preview starts from beginning (offset 0),
+                // Preview mode starts from the beginning (offset 0);
                 // focused mode keeps the selected track visible.
                 let track_cursor = self.libs[lib_idx].album_track_focus;
                 let scroll = if let Some(cursor) = track_cursor {
@@ -504,7 +497,8 @@ impl App {
                 };
 
                 let gutter_w: usize = 1;
-                let title_col_w = (list_area.width as usize).saturating_sub(gutter_w + 2 + 8); // 8 for duration
+                let title_col_w =
+                    (list_area.width as usize).saturating_sub(gutter_w + 2 + DURATION_COL_W);
 
                 layout.wide_music_track_hitmap.clear();
 
@@ -533,7 +527,7 @@ impl App {
                         palette::SOFT_WHITE
                     };
 
-                    // Focused-track cursor highlight (Task 4.2).
+                    // Focused-track cursor highlight.
                     if is_cursor && left_focused {
                         f.render_widget(
                             Block::default().style(Style::default().bg(palette::BG_GREEN)),
@@ -559,7 +553,7 @@ impl App {
 
                     let mut spans = vec![marker, Span::raw(" ")];
                     spans.push(Span::styled(track_num, Style::default().fg(text_fg)));
-                    spans.push(Span::styled(name.to_string(), Style::default().fg(text_fg)));
+                    spans.push(Span::styled(name, Style::default().fg(text_fg)));
                     // Duration right-aligned.
                     let used: usize = spans.iter().map(|s| s.content.len()).sum::<usize>() + 1; // +1 for the marker space
                     let pad = (list_area.width as usize).saturating_sub(used + duration.len() + 1);
@@ -577,7 +571,7 @@ impl App {
 
                     f.render_widget(Paragraph::new(Line::from(spans)), row_rect);
 
-                    // Record hit target for this track (Task 5.1).
+                    // Record the hit target for this track.
                     layout.wide_music_track_hitmap.push((row_rect, ti));
                 }
 
@@ -598,7 +592,7 @@ impl App {
     }
 
     /// Renders the wide right pane's album browser: a one-column
-    /// artist-grouped album list. Tasks 3.2-3.4.
+    /// artist-grouped album list.
     fn render_wide_right_album_browser(
         &mut self,
         f: &mut Frame,
@@ -649,8 +643,8 @@ impl App {
             }
         };
 
-        // Task 3.3: One column only — no two-column packing.
-        // No selectable headers in wide right rail (design Decision 5).
+        // One column only — no two-column packing, and no selectable
+        // headers in the wide right rail (design Decision 5).
         let plan = self.build_grouped_album_display_plan(
             &albums,
             &album_info,
@@ -769,5 +763,23 @@ impl App {
 
         // Update left_sorted_indices for cursor navigation.
         layout.left_sorted_indices = plan.order;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wide_album_metadata;
+    use crate::app::tests::make_item;
+
+    #[test]
+    fn wide_album_metadata_removes_artist_and_year_prefix() {
+        let mut album = make_item("Bob Dylan (1970) New Morning", "MusicAlbum");
+        album.artist = "Bob Dylan".into();
+        album.production_year = 1970;
+
+        assert_eq!(
+            wide_album_metadata(&album, "Bob Dylan"),
+            ("New Morning".to_string(), 1970)
+        );
     }
 }

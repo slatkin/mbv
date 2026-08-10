@@ -284,18 +284,16 @@ impl App {
                     if self.is_music_group_view(lib_idx) {
                         // Wide Music: handle left-pane track clicks and
                         // right-pane album clicks separately.
-                        let is_wide = !self.layout.main.wide_music_track_hitmap.is_empty();
+                        let is_wide = self.layout.main.is_wide_music_active();
                         if is_wide {
                             let pos = (col, row).into();
                             // Track hitmap (left pane).
-                            for (rect, track_idx) in &self.layout.main.wide_music_track_hitmap {
-                                if rect.contains(pos) {
-                                    self.libs[lib_idx].album_track_focus = Some(*track_idx);
-                                    self.libs[lib_idx].artist_header_focus = None;
-                                    self.set_panel_focus(PanelFocus::Library);
-                                    self.save_default_library_position(lib_idx);
-                                    return true;
-                                }
+                            if let Some(track_idx) = self.layout.main.wide_music_track_at(pos) {
+                                self.libs[lib_idx].album_track_focus = Some(track_idx);
+                                self.libs[lib_idx].artist_header_focus = None;
+                                self.set_panel_focus(PanelFocus::Library);
+                                self.save_default_library_position(lib_idx);
+                                return true;
                             }
                             // Artwork area: no-op.
                             if self.layout.main.wide_music_art_area.contains(pos) {
