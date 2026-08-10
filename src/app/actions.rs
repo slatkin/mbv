@@ -9,20 +9,6 @@ use mbv_core::player::PlayerCommand;
 use mbv_core::ItemId;
 use std::sync::Arc;
 
-pub(super) fn enqueue_action_context(
-    item_id: &str,
-    item_name: &str,
-    source: &str,
-    bypass: bool,
-) -> String {
-    let mut context =
-        format!("user action=enqueue item_id={item_id:?} item_name={item_name:?} source={source}");
-    if bypass {
-        context.push_str(" reason=non-library thin-client owns playback");
-    }
-    context
-}
-
 /// Where playback should resume within a restored queue. Prefers locating
 /// `last_played_item_id` by ID (robust to the saved `cursor` index having
 /// drifted, e.g. if the list was edited before the last save) and falls back
@@ -301,9 +287,6 @@ impl App {
 
     pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::EmbyItem) {
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
-        if self.in_non_library_thin_client_mode() {
-            log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
-        }
         let resolved = self.resolve_route_for_enqueue_folder(&item);
         if self.enqueue_route_conflict(resolved) {
             return;

@@ -44,9 +44,6 @@ impl App {
         selection: &ArtistHeaderSelection,
     ) -> bool {
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=artist-header", selection.first_album_id, selection.artist_label);
-        if self.in_non_library_thin_client_mode() {
-            log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} source=artist-header reason=non-library thin-client owns playback", selection.first_album_id, selection.artist_label);
-        }
         let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
         if self.enqueue_route_conflict(resolved) {
             return true;

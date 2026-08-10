@@ -150,6 +150,10 @@ impl App {
     /// uses to gate `apply_route_for_playback`.
     pub(super) fn enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool {
         if self.in_non_library_thin_client_mode() {
+            log::info!(
+                target: "library_route",
+                "route conflict check skipped: non-library thin-client owns playback"
+            );
             return false;
         }
         if resolved_name != self.active_route {

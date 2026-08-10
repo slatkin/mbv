@@ -392,9 +392,6 @@ impl App {
                 return;
             }
             log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
-            if self.in_non_library_thin_client_mode() {
-                log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
-            }
             let resolved = self.route_for_item_via_ancestors(&item.id).map(|(n, _)| n);
             if self.enqueue_route_conflict(resolved) {
                 return;
@@ -415,8 +412,7 @@ impl App {
                 return;
             }
             let lib_idx = self.tab.library_index().unwrap();
-            let bypass = self.in_non_library_thin_client_mode();
-            log::info!(target: "library_route", "{}", super::super::actions::enqueue_action_context(&item.id, &item.name, "library-view", bypass));
+            log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=library-view", item.id, item.name);
             let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
             if self.enqueue_route_conflict(resolved) {
                 return;
