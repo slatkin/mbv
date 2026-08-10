@@ -761,6 +761,31 @@ impl App {
             super::render_right_scrollbar(f, browser_area, max_off, offset);
         }
 
+        // Populate left_row_targets for mouse hit-testing in the right pane.
+        // Indexed from wide_music_right_area.y so clicks on the browser's
+        // album rows resolve correctly (gap rows above the browser are None).
+        {
+            let right_area_top = layout.wide_music_right_area.y;
+            let right_area_h = layout.wide_music_right_area.height as usize;
+            let browser_y_offset = if browser_area.y > right_area_top {
+                (browser_area.y - right_area_top) as usize
+            } else {
+                0
+            };
+            let mut targets = vec![None; right_area_h];
+            for (row_idx, row) in &visible_rows {
+                let screen_y = *row_idx as isize - offset as isize;
+                if screen_y < 0 {
+                    continue;
+                }
+                let target_y = browser_y_offset + screen_y as usize;
+                if target_y < targets.len() {
+                    targets[target_y] = row.row_target(false);
+                }
+            }
+            layout.left_row_targets = targets;
+        }
+
         // Update left_sorted_indices for cursor navigation.
         layout.left_sorted_indices = plan.order;
     }

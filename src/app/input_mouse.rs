@@ -147,6 +147,46 @@ impl App {
                 }
                 return true;
             }
+            // Wide Music: right-pane clicks (pills + album browser) bypass
+            // the left_area gate because the right pane is a physically
+            // separate rect. Track hits in the left pane flow through the
+            // existing left_area block (wide left pane IS left_area).
+            if let Some(lib_idx) = self.tab.library_index() {
+                if self.is_music_group_view(lib_idx) && self.layout.main.is_wide_music_active() {
+                    let pos = (col, row).into();
+                    for (rect, target) in self.layout.main.selector_tabs.clone() {
+                        if rect.contains(pos) {
+                            self.set_panel_focus(PanelFocus::Library);
+                            self.select_music_group(lib_idx, target);
+                            return true;
+                        }
+                    }
+                    let ra = self.layout.main.wide_music_right_area;
+                    if ra.contains(pos) {
+                        self.set_panel_focus(PanelFocus::Library);
+                        let click_y = (row - ra.y) as usize;
+                        let row_target = self
+                            .layout
+                            .main
+                            .left_row_targets
+                            .get(click_y)
+                            .cloned()
+                            .flatten();
+                        if let Some(LibraryRowTarget::Album(item_idx)) = row_target {
+                            let lib = &mut self.libs[lib_idx];
+                            if let Some(lvl) = lib.nav_stack.last_mut() {
+                                if item_idx < lvl.items.len() {
+                                    lib.album_track_focus = None;
+                                    lib.artist_header_focus = None;
+                                    lvl.cursor = item_idx;
+                                    self.save_default_library_position(lib_idx);
+                                }
+                            }
+                        }
+                        return true;
+                    }
+                }
+            }
             // Click in the left panel: focus it and set its cursor.
             let la = self.layout.main.left_area;
             if la.contains((col, row).into()) {
@@ -299,29 +339,10 @@ impl App {
                             if self.layout.main.wide_music_art_area.contains(pos) {
                                 return true;
                             }
-                            // Right pane album click.
-                            if self.layout.main.wide_music_right_area.contains(pos) {
-                                let row_target = self
-                                    .layout
-                                    .main
-                                    .left_row_targets
-                                    .get(click_y)
-                                    .cloned()
-                                    .flatten();
-                                if let Some(LibraryRowTarget::Album(item_idx)) = row_target {
-                                    let lib = &mut self.libs[lib_idx];
-                                    if let Some(lvl) = lib.nav_stack.last_mut() {
-                                        if item_idx < lvl.items.len() {
-                                            lib.album_track_focus = None;
-                                            lib.artist_header_focus = None;
-                                            lvl.cursor = item_idx;
-                                            self.save_default_library_position(lib_idx);
-                                            return true;
-                                        }
-                                    }
-                                }
-                                return true;
-                            }
+                            // Any remaining left-pane click is consumed
+                            // (other surfaces — pills, album browser — are
+                            // in the right pane and handled above).
+                            return true;
                         } else {
                             // Narrow path: existing row_target handling.
                             match row_target {

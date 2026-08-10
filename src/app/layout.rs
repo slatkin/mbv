@@ -104,11 +104,12 @@ pub(crate) struct LayoutMain {
 }
 
 impl LayoutMain {
-    /// Whether the wide Music layout rendered this frame. The track hitmap
-    /// is only populated by that renderer, so an empty hitmap means the
-    /// narrow layout is active.
+    /// Whether the wide Music layout rendered this frame. The right pane
+    /// area is only set by the wide Music renderer, so it is a reliable
+    /// signal even when the track hitmap is empty (tracks still loading
+    /// or album has no tracks).
     pub(crate) fn is_wide_music_active(&self) -> bool {
-        !self.wide_music_track_hitmap.is_empty()
+        self.wide_music_right_area.width > 0 && self.wide_music_right_area.height > 0
     }
 
     /// Returns the track index whose hit target contains `pos`, if any.
