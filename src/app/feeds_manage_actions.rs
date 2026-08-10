@@ -1,4 +1,4 @@
-use super::feed_parse::fetch_and_parse_entries;
+use super::feed_parse::{fetch_and_parse_entries, normalize_feed_url};
 use super::notify_actions::ToastSeverity;
 use super::types_feeds_manage::{
     FeedAddResult, FeedForm, FeedFormField, FeedsManagePopup, FeedsManageStage,
@@ -240,17 +240,24 @@ impl App {
         popup.pending_add = Some(id);
         let tx = popup.add_tx.clone();
         std::thread::spawn(move || {
-            let result = fetch_and_parse_entries(&url, kind).and_then(|entries| {
-                if entries.is_empty() {
-                    Err("response did not contain any valid RSS or Atom entries".to_string())
-                } else {
-                    Ok(())
+            let (resolved_url, result) = match normalize_feed_url(&url) {
+                Ok(resolved_url) => {
+                    let result = fetch_and_parse_entries(&resolved_url, kind).and_then(|entries| {
+                        if entries.is_empty() {
+                            Err("response did not contain any valid RSS or Atom entries"
+                                .to_string())
+                        } else {
+                            Ok(())
+                        }
+                    });
+                    (resolved_url, result)
                 }
-            });
+                Err(error) => (url, Err(error)),
+            };
             let _ = tx.send(FeedAddResult {
                 id,
                 name,
-                url,
+                url: resolved_url,
                 kind,
                 result,
             });
