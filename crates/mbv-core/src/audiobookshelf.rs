@@ -49,6 +49,7 @@ pub enum AudiobookshelfFailureClass {
     Server,
     Protocol,
     MalformedResponse,
+    Unavailable,
 }
 
 /// A redacted request failure. It contains a classification only: in
@@ -75,6 +76,7 @@ impl std::fmt::Display for AudiobookshelfError {
             AudiobookshelfFailureClass::Server => "server failure",
             AudiobookshelfFailureClass::Protocol => "unexpected server response",
             AudiobookshelfFailureClass::MalformedResponse => "malformed server response",
+            AudiobookshelfFailureClass::Unavailable => "service unavailable",
         })
     }
 }

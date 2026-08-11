@@ -223,6 +223,15 @@ impl AudiobookshelfRuntime {
         true
     }
 
+    pub fn cancel_setup(&mut self, generation: SetupGeneration, state: ServiceState) -> bool {
+        if !self.accepts(generation) {
+            return false;
+        }
+        self.generation = self.generation.next();
+        self.state = state;
+        true
+    }
+
     pub fn accepts(&self, generation: SetupGeneration) -> bool {
         self.generation == generation
     }

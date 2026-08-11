@@ -57,7 +57,7 @@ pub(super) fn start_audiobookshelf(
             .and_then(|setup| {
                 load_service_secret(ServiceKind::Audiobookshelf)
                     .ok_or(mbv_core::audiobookshelf::AudiobookshelfError {
-                        class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected,
+                        class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Unavailable,
                     })
                     .and_then(|key| {
                         mbv_core::audiobookshelf::AudiobookshelfClient::new(&setup.server_url)

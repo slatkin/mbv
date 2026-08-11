@@ -91,7 +91,7 @@ impl App {
             form.fields[1].clear();
             if let Some(generation) = form.generation {
                 self.audiobookshelf_runtime
-                    .complete(generation, form.previous_state);
+                    .cancel_setup(generation, form.previous_state);
             }
         }
         self.audiobookshelf_setup_rx = None;
