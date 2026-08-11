@@ -99,7 +99,6 @@ impl App {
             level.scroll = offset;
         }
 
-        let avail = (browser_area.width as usize).saturating_sub(2);
         let visible_rows: Vec<_> = plan
             .rows
             .iter()
@@ -110,10 +109,14 @@ impl App {
 
         for (row_idx, row) in &visible_rows {
             let screen_y = (*row_idx - offset) as u16;
+            // Album-row renderers supply their own one-cell leading gutter.
+            // Extend the row one cell left so visible text still begins at
+            // the browser area's standard two-column interior inset, while
+            // retaining two columns at the right edge.
             let row_area = Rect {
-                x: browser_area.x,
+                x: browser_area.x.saturating_sub(1),
                 y: browser_area.y + screen_y,
-                width: browser_area.width,
+                width: browser_area.width.saturating_add(1),
                 height: 1,
             };
 
@@ -148,7 +151,7 @@ impl App {
                                 idx: *idx,
                                 album_info: &album_info,
                                 cursor,
-                                avail,
+                                avail: row_area.width as usize,
                                 selected_block_bounds: None,
                                 in_music_group_view: true,
                                 abs_row_idx: *row_idx,

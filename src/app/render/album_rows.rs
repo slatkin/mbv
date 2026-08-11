@@ -267,11 +267,10 @@ impl App {
         };
         let title_width = panel_area
             .width
-            .saturating_sub(3 + suffix.chars().count() as u16) as usize;
+            .saturating_sub(4 + suffix.chars().count() as u16) as usize;
         let title = trunc_str(title, title_width);
         let mut spans = vec![
             Span::styled("▍", Style::default().fg(palette::AQUA)),
-            Span::raw(" "),
             Span::raw(" "),
             Span::styled(
                 title,

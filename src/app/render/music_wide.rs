@@ -1,5 +1,4 @@
 use super::album_art::INLINE_ALBUM_ART_RESERVED;
-use super::widgets::COLUMN_GAP;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, PanelFocus, TWO_COLUMN_THRESHOLD};
 use ratatui::layout::*;
@@ -13,9 +12,11 @@ use textwrap::wrap;
 const PILLS_ROW_HEIGHT: u16 = 1;
 /// Blank rows below the pills before the album list starts.
 const PILLS_GAP_ROWS: u16 = 1;
-/// Padding inside each wide music pane, matching the Home overview block.
+/// Padding inside recessed wide-music blocks, matching the Home overview block.
 const PANE_PAD_X: u16 = 2;
 const PANE_PAD_Y: u16 = 1;
+/// Empty columns separating the wide Music hero and album-browser panes.
+const WIDE_PANE_GAP: u16 = 2;
 /// Minimum left-pane height needed to draw a hero/track separator row.
 const MIN_LEFT_HEIGHT_FOR_SEPARATOR: u16 = 6;
 /// Minimum outer area width and height for the wide two-column layout;
@@ -181,7 +182,7 @@ fn wide_music_panes(content_area: Rect) -> (Rect, Rect) {
     let right_w = content_area
         .width
         .saturating_sub(left_w)
-        .saturating_sub(COLUMN_GAP);
+        .saturating_sub(WIDE_PANE_GAP);
     (
         Rect {
             x: content_area.x,
@@ -190,7 +191,7 @@ fn wide_music_panes(content_area: Rect) -> (Rect, Rect) {
             height: content_area.height,
         },
         Rect {
-            x: content_area.x + left_w + COLUMN_GAP,
+            x: content_area.x + left_w + WIDE_PANE_GAP,
             y: content_area.y,
             width: right_w,
             height: content_area.height,
@@ -198,12 +199,11 @@ fn wide_music_panes(content_area: Rect) -> (Rect, Rect) {
     )
 }
 
-fn inset_pane(area: Rect) -> Rect {
+fn inset_pane_vertically(area: Rect) -> Rect {
     Rect {
-        x: area.x.saturating_add(PANE_PAD_X),
         y: area.y.saturating_add(PANE_PAD_Y),
-        width: area.width.saturating_sub(PANE_PAD_X * 2),
         height: area.height.saturating_sub(PANE_PAD_Y * 2),
+        ..area
     }
 }
 
@@ -256,8 +256,11 @@ impl App {
         let album = self.selected_album_item(lib_idx);
 
         let (left_panel, right_panel) = wide_music_panes(area);
-        let left_area = inset_pane(left_panel);
-        let right_area = inset_pane(right_panel);
+        // The shared library content area already provides the outer
+        // horizontal gutter. Only retain vertical breathing room here so the
+        // wide panes do not acquire a second two-column frame.
+        let left_area = inset_pane_vertically(left_panel);
+        let right_area = inset_pane_vertically(right_panel);
         layout.wide_music_right_area = right_area;
 
         // ── Focus state ──────────────────────────────────────────────────
@@ -550,9 +553,7 @@ impl App {
                     0
                 };
 
-                let gutter_w: usize = 1;
-                let title_col_w =
-                    (list_area.width as usize).saturating_sub(gutter_w + 2 + DURATION_COL_W);
+                let title_col_w = (list_area.width as usize).saturating_sub(DURATION_COL_W);
 
                 layout.wide_music_track_hitmap.clear();
 
@@ -589,7 +590,6 @@ impl App {
                         );
                     }
 
-                    let marker = super::selection_marker(selected);
                     let track_num = if track.index_number > 0 {
                         format!("{:>2}. ", track.index_number)
                     } else {
@@ -605,11 +605,12 @@ impl App {
                         "\u{2014}".to_string()
                     };
 
-                    let mut spans = vec![marker, Span::raw(" ")];
-                    spans.push(Span::styled(track_num, Style::default().fg(text_fg)));
-                    spans.push(Span::styled(name, Style::default().fg(text_fg)));
+                    let mut spans = vec![
+                        Span::styled(track_num, Style::default().fg(text_fg)),
+                        Span::styled(name, Style::default().fg(text_fg)),
+                    ];
                     // Duration right-aligned.
-                    let used: usize = spans.iter().map(|s| s.content.len()).sum::<usize>() + 1; // +1 for the marker space
+                    let used: usize = spans.iter().map(|s| s.content.len()).sum();
                     let pad = (list_area.width as usize).saturating_sub(used + duration.len() + 1);
                     if pad > 0 {
                         spans.push(Span::raw(" ".repeat(pad)));
