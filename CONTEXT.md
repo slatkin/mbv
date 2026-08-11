@@ -4,11 +4,65 @@ A terminal client for Emby that browses a library and plays media. Playback may
 run inside the terminal process itself, or be hosted by a background process on
 the same machine so it survives the terminal closing.
 
+## Services
+
+**Service**:
+One of mbv's singleton media integrations: Emby, Audiobookshelf, or Feeds. Each
+kind exists at most once within mbv; Feeds is always present even when it has no
+subscriptions.
+_Avoid_: account, provider, backend
+
+**Remote Service**:
+An Emby or Audiobookshelf Service reached at a configured server and authorized
+with its own Service credential.
+_Avoid_: account, remote provider, backend
+
+**Service setup**:
+Establishing a Remote Service by successfully validating its server and Service
+credential. mbv itself never requires Service setup before it can start.
+_Avoid_: app login, account creation, onboarding
+
+**Service-independent startup**:
+The guarantee that mbv enters its TUI before any Remote Service authenticates or
+becomes available.
+_Avoid_: no-auth mode, offline mode, provider mode
+
+**Services view**:
+The Settings surface for setting up remote Services and managing feed
+subscriptions. mbv opens it initially when no Service has content configured.
+_Avoid_: login screen, setup wizard, authentication gate
+
+**Service state**:
+The current availability of a remote Service: Not configured, Connecting,
+Ready, Needs authentication, or Unavailable. Unavailable preserves credentials;
+Needs authentication means the remote Service rejected them.
+_Avoid_: login state, account state, online status
+
+**Service replacement**:
+Changing a remote Service to a different server. It invalidates all queued and
+persisted state belonging to the previous server.
+_Avoid_: reconnect, migration, account switch
+
+**Service removal**:
+Deleting a Remote Service's setup, credential, and local state and returning it
+to Not configured.
+_Avoid_: logout, disconnect, disable
+
+**Service credential**:
+A secret issued by Emby or Audiobookshelf that authorizes mbv to that Service.
+It belongs only to that Service.
+_Avoid_: account credential, mbv token, control token
+
+**Control credential**:
+An mbv-owned secret that authorizes a Client to a Player owner, independently of
+all Service credentials.
+_Avoid_: Emby token, API key, login token
+
 ## Playback ownership
 
 **Player owner**:
-The single process on a machine that holds the audio device and the Emby
-playback session. Exactly one exists per user at a time.
+The single process on a machine that holds the audio device, Bound queue, and
+Service-specific playback lifecycle. Exactly one exists per user at a time.
 _Avoid_: instance, master, host
 
 **Bare mode**:
@@ -107,9 +161,10 @@ Bound to two owners at once while only one of them plays.
 _Avoid_: active queue, live queue, running queue, attached queue
 
 **Unplayable item**:
-An item a Player owner cannot play — a video item on an audio-only owner. It
-never enters that owner's queue: a controlling client strips it before
-submitting, and the owner discards any that reach it regardless.
+An item a Player owner cannot play, such as video on an audio-only owner or an
+item belonging to a remote Service the owner does not have configured. It never
+enters that owner's queue: a controlling client strips it before submitting,
+and the owner discards any that reach it regardless.
 _Avoid_: rejected item, filtered item, invalid item, blocked item
 
 **EmbyItem**:
