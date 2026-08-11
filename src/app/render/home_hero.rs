@@ -263,7 +263,7 @@ impl App {
             } else {
                 palette::MUTED
             };
-            let block = Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG));
+            let block = Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG));
             // 2-col horizontal padding, 1-row top padding
             let block_h = 1 + layout.overview_lines.len() as u16 + 1; // top pad + lines + bottom pad
             let block_area = Rect {

@@ -12,6 +12,9 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+const HOME_HERO_PAD_X: u16 = 2;
+const HOME_HERO_PAD_Y: u16 = 1;
+
 impl App {
     pub(super) fn render_home_list(
         &mut self,
@@ -123,10 +126,22 @@ impl App {
             let hero_col_width = ((area.width as u32 * 2 / 5) as u16)
                 .max(12)
                 .min(area.width.saturating_sub(12));
-            let hero_col_height = area.height;
+            let hero_panel = Rect {
+                x: area.x,
+                y: area.y,
+                width: hero_col_width,
+                height: area.height.saturating_sub(1),
+            };
+            let hero_content = Rect {
+                x: hero_panel.x.saturating_add(HOME_HERO_PAD_X),
+                y: hero_panel.y.saturating_add(HOME_HERO_PAD_Y),
+                width: hero_panel.width.saturating_sub(HOME_HERO_PAD_X * 2),
+                height: hero_panel.height.saturating_sub(HOME_HERO_PAD_Y * 2),
+            };
+            let hero_col_height = hero_content.height;
 
             hero_data = hero_item.and_then(|item| {
-                let meta_w = hero_col_width as usize;
+                let meta_w = hero_content.width as usize;
                 let meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
                 // Terminal cells are roughly twice as tall as they are wide, so a
                 // 16:9 image needs 9 rows for every 32 columns. Keep the artwork
@@ -138,20 +153,27 @@ impl App {
                     None
                 } else {
                     let img_area = Rect {
-                        x: area.x,
-                        y: area.y,
-                        width: hero_col_width,
+                        x: hero_content.x,
+                        y: hero_content.y,
+                        width: hero_content.width,
                         height: image_height,
                     };
                     let meta_area = Rect {
-                        x: area.x,
-                        y: area.y + img_area.height + 1,
-                        width: hero_col_width,
+                        x: hero_content.x,
+                        y: hero_content.y + img_area.height + 1,
+                        width: hero_content.width,
                         height: meta_layout.height,
                     };
                     Some((item, meta_area, img_area, meta_layout))
                 }
             });
+
+            if hero_data.is_some() {
+                f.render_widget(
+                    Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                    hero_panel,
+                );
+            }
 
             list_area = if hero_data.is_some() {
                 Rect {
