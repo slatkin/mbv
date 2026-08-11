@@ -37,6 +37,7 @@ fn inline_art_box_rect(area: Rect) -> Rect {
 
 #[derive(Clone, Copy)]
 enum ArtAnchorX {
+    Center,
     Right,
 }
 
@@ -50,6 +51,7 @@ enum ArtAnchorY {
 fn align_art(container: Rect, w: u16, h: u16, ax: ArtAnchorX, ay: ArtAnchorY) -> Rect {
     let free_w = container.width.saturating_sub(w);
     let x = match ax {
+        ArtAnchorX::Center => container.x + free_w / 2,
         ArtAnchorX::Right => container.x + free_w,
     };
     let y = match ay {
@@ -85,6 +87,40 @@ impl App {
             nav_gate_open,
             false,
             (ArtAnchorX::Right, ArtAnchorY::Top),
+        );
+        layout.inline_image_rect = Some(img_rect);
+    }
+
+    pub(super) fn render_inline_album_art_centered(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        album: &mbv_core::api::EmbyItem,
+        layout: &mut LayoutMain,
+    ) {
+        if !self.images_enabled() || area.width < 4 || area.height < 2 {
+            return;
+        }
+
+        let box_rect = Rect {
+            x: area.x,
+            y: area.y,
+            width: INLINE_ALBUM_ART_COLS.min(area.width),
+            height: INLINE_ALBUM_ART_ROWS.min(area.height),
+        };
+        let box_rect = Rect {
+            x: area.x + area.width.saturating_sub(box_rect.width) / 2,
+            ..box_rect
+        };
+        let nav_gate_open = self.right_panel_image_renders_allowed();
+        let img_rect = self.render_inline_art_cell(
+            f,
+            box_rect,
+            album,
+            inline_album_art_cache_key(&album.id),
+            nav_gate_open,
+            false,
+            (ArtAnchorX::Center, ArtAnchorY::Top),
         );
         layout.inline_image_rect = Some(img_rect);
     }

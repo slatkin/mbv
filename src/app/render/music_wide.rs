@@ -7,6 +7,7 @@ use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
+use textwrap::wrap;
 
 /// Height of the music-group pills row inside the right rail.
 const PILLS_ROW_HEIGHT: u16 = 1;
@@ -21,6 +22,9 @@ const MIN_LEFT_HEIGHT_FOR_SEPARATOR: u16 = 6;
 /// below this the caller falls back to the narrow renderer.
 const MIN_WIDE_AREA_HEIGHT: u16 = 6;
 const MIN_PANE_WIDTH: u16 = 40;
+/// Minimum width for the hero metadata column to remain beside the artwork.
+/// Narrower columns move the metadata below the artwork instead.
+const MIN_HERO_METADATA_SIDE_WIDTH: u16 = 15;
 /// Reserved width for the right-aligned track duration column plus its
 /// leading space (`fmt_duration_mmss` output is unbounded but rarely
 /// exceeds this).
@@ -60,6 +64,8 @@ struct WideLeftLayout {
     art_area: Rect,
     /// Text sub-rect inside `hero_area` (left of artwork).
     text_area: Rect,
+    /// Whether the hero uses the narrow stacked artwork/metadata layout.
+    stack_metadata: bool,
 }
 
 /// Computes the vertical split of the wide Music left pane between the
@@ -76,6 +82,8 @@ fn compute_wide_left_layout(
 ) -> WideLeftLayout {
     let total_h = left_area.height;
     let art_available = images_enabled && left_area.width >= INLINE_ALBUM_ART_RESERVED;
+    let side_metadata_width = left_area.width.saturating_sub(INLINE_ALBUM_ART_RESERVED);
+    let stack_metadata = art_available && side_metadata_width < MIN_HERO_METADATA_SIDE_WIDTH;
     // Reserve a separator row between hero and tracks.
     let sep: u16 = if total_h > MIN_LEFT_HEIGHT_FOR_SEPARATOR {
         1
@@ -92,7 +100,7 @@ fn compute_wide_left_layout(
     // directly below the visible cover instead of leaving an empty tail under
     // the artwork just because the pane happens to be tall.
     let hero_ideal = if art_available {
-        super::album_art::INLINE_ALBUM_ART_ROWS
+        super::album_art::INLINE_ALBUM_ART_ROWS.saturating_add(if stack_metadata { 3 } else { 0 })
     } else {
         2
     }
@@ -114,23 +122,45 @@ fn compute_wide_left_layout(
     };
 
     let art_area = if art_available && hero_area.width >= INLINE_ALBUM_ART_RESERVED {
+        let art_width = if stack_metadata {
+            hero_area.width
+        } else {
+            INLINE_ALBUM_ART_RESERVED
+        };
         Rect {
-            x: hero_area.x.saturating_add(
-                hero_area
-                    .width
-                    .saturating_sub(INLINE_ALBUM_ART_RESERVED)
-                    .saturating_add(PANE_PAD_X),
-            ),
+            x: if stack_metadata {
+                hero_area.x
+            } else {
+                hero_area.x.saturating_add(
+                    hero_area
+                        .width
+                        .saturating_sub(INLINE_ALBUM_ART_RESERVED)
+                        .saturating_add(PANE_PAD_X),
+                )
+            },
             y: hero_area.y,
-            width: INLINE_ALBUM_ART_RESERVED,
-            height: hero_area.height,
+            width: art_width,
+            height: if stack_metadata {
+                super::album_art::INLINE_ALBUM_ART_ROWS.min(hero_area.height)
+            } else {
+                hero_area.height
+            },
         }
     } else {
         Rect::default()
     };
-    let text_area = Rect {
-        width: hero_area.width.saturating_sub(art_area.width),
-        ..hero_area
+    let text_area = if stack_metadata {
+        Rect {
+            x: hero_area.x,
+            y: hero_area.y.saturating_add(art_area.height),
+            width: hero_area.width,
+            height: hero_area.height.saturating_sub(art_area.height),
+        }
+    } else {
+        Rect {
+            width: hero_area.width.saturating_sub(art_area.width),
+            ..hero_area
+        }
     };
 
     WideLeftLayout {
@@ -138,6 +168,7 @@ fn compute_wide_left_layout(
         track_area,
         art_area,
         text_area,
+        stack_metadata,
     }
 }
 
@@ -173,6 +204,31 @@ fn inset_pane(area: Rect) -> Rect {
         y: area.y.saturating_add(PANE_PAD_Y),
         width: area.width.saturating_sub(PANE_PAD_X * 2),
         height: area.height.saturating_sub(PANE_PAD_Y * 2),
+    }
+}
+
+fn render_wrapped_text(
+    f: &mut Frame,
+    area: Rect,
+    row: &mut u16,
+    text: &str,
+    width: usize,
+    style: Style,
+) {
+    for line in wrap(text, width.max(1)) {
+        if *row >= area.bottom() {
+            break;
+        }
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(format!(" {line}"), style))),
+            Rect {
+                x: area.x,
+                y: *row,
+                width: area.width,
+                height: 1,
+            },
+        );
+        *row += 1;
     }
 }
 
@@ -355,9 +411,9 @@ impl App {
             let artist = self.resolve_group_album_artist(album);
             let (title, release_year) = wide_album_metadata(album, &artist);
             let text_width = (text.width as usize).saturating_sub(1);
+            let mut row = text.y;
 
             // ── Album title ──
-            let title_trunc = super::super::ui_util::trunc_str(&title, text_width);
             let title_style = if left_focused || library_focused {
                 Style::default()
                     .fg(palette::YELLOW)
@@ -365,38 +421,22 @@ impl App {
             } else {
                 Style::default().fg(palette::YELLOW)
             };
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    format!(" {title_trunc}"),
-                    title_style,
-                ))),
-                Rect {
-                    x: text.x,
-                    y: text.y,
-                    width: text.width,
-                    height: 1,
-                },
-            );
+            render_wrapped_text(f, *text, &mut row, &title, text_width, title_style);
 
             // ── Artist ──
-            if text.height > 1 && !artist.is_empty() && artist != "Unknown Artist" {
-                let artist_trunc = super::super::ui_util::trunc_str(&artist, text_width);
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        format!(" {artist_trunc}"),
-                        Style::default().fg(palette::FOAM),
-                    ))),
-                    Rect {
-                        x: text.x,
-                        y: text.y + 1,
-                        width: text.width,
-                        height: 1,
-                    },
+            if !artist.is_empty() && artist != "Unknown Artist" {
+                render_wrapped_text(
+                    f,
+                    *text,
+                    &mut row,
+                    &artist,
+                    text_width,
+                    Style::default().fg(palette::FOAM),
                 );
             }
 
             // ── Release year ──
-            if text.height > 2 && release_year > 0 {
+            if release_year > 0 && row < text.bottom() {
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
                         format!(" {release_year}"),
@@ -404,7 +444,7 @@ impl App {
                     ))),
                     Rect {
                         x: text.x,
-                        y: text.y + 2,
+                        y: row,
                         width: text.width,
                         height: 1,
                     },
@@ -414,7 +454,11 @@ impl App {
 
         // ── Artwork ──
         if left_layout.art_area.width > 0 && left_layout.art_area.height > 0 {
-            self.render_inline_album_art(f, left_layout.art_area, album, layout);
+            if left_layout.stack_metadata {
+                self.render_inline_album_art_centered(f, left_layout.art_area, album, layout);
+            } else {
+                self.render_inline_album_art(f, left_layout.art_area, album, layout);
+            }
         }
     }
 
