@@ -116,7 +116,20 @@ impl App {
         ];
         let sec_feeds = vec![
             section("Feeds"),
-            mk("w", "Cycle watched filter"),
+            blank(),
+            Line::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    format!("{:<kw$}", "w", kw = key_w),
+                    Style::default()
+                        .fg(palette::TEXT)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "Cycle watched filter".to_owned(),
+                    Style::default().fg(palette::SUBTLE),
+                ),
+            ]),
             mk("r", "Refresh feeds"),
             mk("[ / ]", "Switch subscription"),
             mk("Enter", "Play entry"),
