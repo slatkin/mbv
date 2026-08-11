@@ -3,6 +3,7 @@ include!("config_types_feed.rs");
 include!("config_paths.rs");
 include!("config_parse.rs");
 include!("config_save.rs");
+include!("config_audiobookshelf_lifecycle.rs");
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod tests {

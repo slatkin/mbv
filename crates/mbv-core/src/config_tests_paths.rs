@@ -148,6 +148,130 @@ fn emby_setup_transaction_rejects_arbitrary_snapshot_read_errors_before_writing(
 }
 
 #[test]
+fn audiobookshelf_lifecycle_isolated_and_ordered() {
+    let _guard = TestStateDirGuard::new();
+    std::fs::write(
+        config_path(),
+        "[server]\nurl = \"emby.example\"\nuser_id = \"emby-user\"\n[feeds]\nkeep = true\n",
+    )
+    .unwrap();
+    save_service_secret(ServiceKind::Emby, "emby-secret").unwrap();
+    persist_audiobookshelf_setup_and_secret(
+        &AudiobookshelfSetup::new("https://books.example/"),
+        "books-secret",
+    )
+    .unwrap();
+    let doc: toml::Value =
+        toml::from_str(&std::fs::read_to_string(config_path()).unwrap()).unwrap();
+    assert_eq!(
+        doc["audiobookshelf"]["url"].as_str(),
+        Some("https://books.example")
+    );
+    assert!(!std::fs::read_to_string(config_path())
+        .unwrap()
+        .contains("books-secret"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(service_secret_path(ServiceKind::Audiobookshelf))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
+
+    let owned_state = std::sync::Arc::new(std::sync::Mutex::new("preserved"));
+    persist_audiobookshelf_setup_and_secret(
+        &AudiobookshelfSetup::new("https://books.example"),
+        "repaired-books-secret",
+    )
+    .unwrap();
+    assert_eq!(*owned_state.lock().unwrap(), "preserved");
+
+    let order = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let clear_order = order.clone();
+    let restore_order = order.clone();
+    replace_audiobookshelf_setup_and_secret(
+        &AudiobookshelfSetup::new("https://new-books.example"),
+        "new-books-secret",
+        move || {
+            clear_order.lock().unwrap().push("clear");
+            Ok(())
+        },
+        move || restore_order.lock().unwrap().push("restore"),
+    )
+    .unwrap();
+    assert_eq!(&*order.lock().unwrap(), &["clear"]);
+    assert_eq!(
+        load_service_secret(ServiceKind::Audiobookshelf).as_deref(),
+        Some("new-books-secret")
+    );
+    assert_eq!(
+        load_service_secret(ServiceKind::Emby).as_deref(),
+        Some("emby-secret")
+    );
+
+    let remove_order = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let remove_clear = remove_order.clone();
+    remove_audiobookshelf_setup_and_secret_with_owned_state(
+        move || {
+            remove_clear.lock().unwrap().push("clear");
+            Ok(())
+        },
+        || panic!("owned-state restore is not expected"),
+    )
+    .unwrap();
+    assert_eq!(&*remove_order.lock().unwrap(), &["clear"]);
+    assert!(load_service_secret(ServiceKind::Audiobookshelf).is_none());
+    let config = std::fs::read_to_string(config_path()).unwrap();
+    assert!(!config.contains("audiobookshelf"));
+    assert!(config.contains("emby.example"));
+    assert!(config.contains("[feeds]"));
+}
+
+#[test]
+fn failed_audiobookshelf_candidate_and_transaction_leave_working_state() {
+    let _guard = TestStateDirGuard::new();
+    persist_audiobookshelf_setup_and_secret(
+        &AudiobookshelfSetup::new("https://working.example"),
+        "working-secret",
+    )
+    .unwrap();
+    let before = std::fs::read(config_path()).unwrap();
+    let before_secret = load_service_secret(ServiceKind::Audiobookshelf);
+    assert!(
+        crate::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
+            "",
+            "candidate-secret",
+            std::time::Duration::from_millis(1)
+        )
+        .is_err()
+    );
+    assert_eq!(std::fs::read(config_path()).unwrap(), before);
+    assert_eq!(
+        load_service_secret(ServiceKind::Audiobookshelf),
+        before_secret
+    );
+
+    let result = audiobookshelf_transaction(|config, _secret| {
+        save_audiobookshelf_setup_at(
+            &AudiobookshelfSetup::new("https://candidate.example"),
+            config,
+        )?;
+        Err("candidate persistence rejected".into())
+    });
+    assert!(result.is_err());
+    assert_eq!(std::fs::read(config_path()).unwrap(), before);
+    assert_eq!(
+        load_service_secret(ServiceKind::Audiobookshelf),
+        Some("working-secret".into())
+    );
+}
+
+#[test]
 fn load_library_position_state_defaults_for_missing_or_invalid_file() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
     std::env::remove_var("MBV_SYSTEM");

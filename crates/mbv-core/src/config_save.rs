@@ -41,6 +41,20 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         }
     }
 
+    let audiobookshelf = cfg
+        .audiobookshelf_setup
+        .as_ref()
+        .filter(|setup| !setup.server_url.is_empty());
+    if let Some(setup) = audiobookshelf {
+        let section = section!("audiobookshelf");
+        section.insert(
+            "url".to_string(),
+            toml::Value::String(setup.server_url.clone()),
+        );
+    } else {
+        table.remove("audiobookshelf");
+    }
+
     let session = section!("session");
     session.insert(
         "stay_alive".to_string(),

@@ -7,6 +7,51 @@ use super::search_sidebar::SearchDrainOutcome;
 use super::App;
 
 impl App {
+    pub(super) fn drain_audiobookshelf_events(&mut self) -> bool {
+        let mut produced = false;
+        for test in [false, true] {
+            let receiver = if test {
+                self.audiobookshelf_test_rx.take()
+            } else {
+                self.audiobookshelf_startup_rx.take()
+            };
+            let Some(receiver) = receiver else { continue };
+            match receiver.rx.try_recv() {
+                Ok(completion) => {
+                    produced = true;
+                    self.apply_audiobookshelf_completion(completion);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    if test {
+                        self.audiobookshelf_test_rx = Some(receiver);
+                    } else {
+                        self.audiobookshelf_startup_rx = Some(receiver);
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    produced = true;
+                    self.handle_audiobookshelf_worker_disconnect(receiver.generation);
+                }
+            }
+        }
+        if let Some(receiver) = self.audiobookshelf_setup_rx.take() {
+            match receiver.try_recv() {
+                Ok(completion) => {
+                    produced = true;
+                    self.apply_audiobookshelf_setup_completion(completion);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    self.audiobookshelf_setup_rx = Some(receiver);
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    produced = true;
+                    self.handle_audiobookshelf_setup_worker_disconnect();
+                }
+            }
+        }
+        produced
+    }
+
     /// Drain and act on notification-originated actions (skip-intro, next-up,
     /// clear-queue confirmation, notif-failure flag). Extracted from `run()`'s
     /// loop body; returns whether any action was received so the caller can

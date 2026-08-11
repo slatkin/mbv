@@ -6,6 +6,9 @@ pub struct Config {
     /// Singleton Emby setup. `server_url` remains only as a legacy projection
     /// for callers that still construct provider clients.
     pub emby_setup: Option<EmbySetup>,
+    /// Singleton Audiobookshelf setup. Its API key lives only in the
+    /// Audiobookshelf Service secret file.
+    pub audiobookshelf_setup: Option<AudiobookshelfSetup>,
     pub server_url: String,
     pub username: String,
     pub password: String,
@@ -130,6 +133,21 @@ impl EmbySetup {
     }
 }
 
+/// Audiobookshelf-specific setup persisted in config.toml. The API key is a
+/// Service secret and is deliberately not part of this record.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AudiobookshelfSetup {
+    pub server_url: String,
+}
+
+impl AudiobookshelfSetup {
+    pub fn new(server_url: impl Into<String>) -> Self {
+        Self {
+            server_url: server_url.into().trim().trim_end_matches('/').to_string(),
+        }
+    }
+}
+
 /// Singleton Service kind identifier. Each variant represents exactly one
 /// configured instance of that Service within mbv.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -159,6 +177,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             emby_setup: None,
+            audiobookshelf_setup: None,
             server_url: String::new(),
             username: String::new(),
             password: String::new(),

@@ -9,7 +9,7 @@ use super::{
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
 use mbv_core::remote_player::DaemonEndpoint;
-use mbv_core::service_runtime::EmbyRuntime;
+use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use ratatui_image::picker::Picker;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -30,11 +30,18 @@ impl App {
             _test_state_dir_guard,
             config: init.config,
             emby_runtime: init.emby_runtime,
+            audiobookshelf_runtime: init.audiobookshelf_runtime,
             emby_startup_rx: init.emby_startup_rx,
             emby_startup_request: init.emby_startup_request,
+            audiobookshelf_startup_rx: init.audiobookshelf_startup_rx,
+            audiobookshelf_startup_request: init.audiobookshelf_startup_request,
+            audiobookshelf_test_rx: init.audiobookshelf_test_rx,
+            audiobookshelf_setup_rx: init.audiobookshelf_setup_rx,
             emby_setup_form: init.emby_setup_form,
+            audiobookshelf_setup_form: None,
             emby_setup_rx: init.emby_setup_rx,
             pending_emby_replacement: None,
+            pending_audiobookshelf_replacement: None,
             shared_client: None,
             shared_reconnect_rx: None,
             player: init.player,
@@ -322,8 +329,13 @@ impl App {
         let mut app = Self::build(AppInit {
             config,
             emby_runtime: EmbyRuntime::ready(client_arc.clone()),
+            audiobookshelf_runtime: AudiobookshelfRuntime::new(false),
             emby_startup_rx: None,
             emby_startup_request: None,
+            audiobookshelf_startup_rx: None,
+            audiobookshelf_startup_request: None,
+            audiobookshelf_test_rx: None,
+            audiobookshelf_setup_rx: None,
             emby_setup_form: None,
             emby_setup_rx: None,
             player,
@@ -379,6 +391,10 @@ impl App {
         let credential_present =
             mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some();
         let generation = mbv_core::service_runtime::SetupGeneration::default();
+        let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
+        let audiobookshelf_credential_present =
+            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
+                .is_some();
         let raw_player = Player::new(
             String::new(),
             String::new(),
@@ -404,8 +420,20 @@ impl App {
                     super::service_startup::initial_state(configured, credential_present);
                 runtime
             },
+            audiobookshelf_runtime: {
+                let mut runtime = AudiobookshelfRuntime::new(audiobookshelf_configured);
+                runtime.state = super::service_startup::audiobookshelf_initial_state(
+                    audiobookshelf_configured,
+                    audiobookshelf_credential_present,
+                );
+                runtime
+            },
             emby_startup_rx: None,
             emby_startup_request: None,
+            audiobookshelf_startup_rx: None,
+            audiobookshelf_startup_request: None,
+            audiobookshelf_test_rx: None,
+            audiobookshelf_setup_rx: None,
             emby_setup_form: None,
             emby_setup_rx: None,
             player,
@@ -438,6 +466,9 @@ impl App {
             idle_feed: None,
         });
         app.emby_startup_request = configured.then_some((app_config.clone(), generation));
+        app.audiobookshelf_startup_request = (audiobookshelf_configured
+            && audiobookshelf_credential_present)
+            .then_some((app_config.clone(), generation));
         if super::service_startup::should_open_services(&app_config) {
             app.open_services_settings();
         }
@@ -508,6 +539,10 @@ impl App {
         let emby_configured = app_config.emby_setup.is_some();
         let emby_credential_present =
             mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some();
+        let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
+        let audiobookshelf_credential_present =
+            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
+                .is_some();
         let config = Arc::new(Mutex::new(app_config));
         let client_arc = client.map(|client| Arc::new(Mutex::new(client)));
         let remote_items = remote.items.lock().unwrap().clone();
@@ -591,8 +626,20 @@ impl App {
                 },
                 |client| EmbyRuntime::ready(client.clone()),
             ),
+            audiobookshelf_runtime: {
+                let mut runtime = AudiobookshelfRuntime::new(audiobookshelf_configured);
+                runtime.state = super::service_startup::audiobookshelf_initial_state(
+                    audiobookshelf_configured,
+                    audiobookshelf_credential_present,
+                );
+                runtime
+            },
             emby_startup_rx: None,
             emby_startup_request: None,
+            audiobookshelf_startup_rx: None,
+            audiobookshelf_startup_request: None,
+            audiobookshelf_test_rx: None,
+            audiobookshelf_setup_rx: None,
             emby_setup_form: None,
             emby_setup_rx: None,
             player,

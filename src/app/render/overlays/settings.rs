@@ -265,6 +265,10 @@ impl App {
             self.render_emby_setup_panel(f, layout, area);
             return;
         }
+        if self.audiobookshelf_setup_form.is_some() {
+            self.render_audiobookshelf_setup_panel(f, layout, area);
+            return;
+        }
         let content = match area {
             Some(area) => {
                 Self::render_panel_shell_at(f, area, "SERVICES", "[↵]select [Esc]back", true)
@@ -379,6 +383,77 @@ impl App {
         };
         lines.push(Line::from(Span::styled(
             status,
+            Style::default().fg(if form.busy {
+                palette::MUTED
+            } else {
+                palette::RED
+            }),
+        )));
+        f.render_widget(Paragraph::new(lines), content);
+        layout.settings_area = content;
+    }
+
+    fn render_audiobookshelf_setup_panel(
+        &mut self,
+        f: &mut Frame,
+        layout: &mut AppLayout,
+        area: Option<ratatui::layout::Rect>,
+    ) {
+        let content = match area {
+            Some(area) => Self::render_panel_shell_at(
+                f,
+                area,
+                "AUDIOBOOKSHELF SETUP",
+                "[↵]submit [Esc]back",
+                true,
+            ),
+            None => Self::render_panel_shell(
+                f,
+                f.area(),
+                SETTINGS_PANEL_W,
+                "AUDIOBOOKSHELF SETUP",
+                "[↵]submit [Esc]back",
+            ),
+        };
+        layout.settings_content_area = content;
+        let Some(form) = self.audiobookshelf_setup_form.as_ref() else {
+            return;
+        };
+        let labels = ["Server URL", "API key"];
+        let mut lines = Vec::with_capacity(6);
+        for (idx, label) in labels.iter().enumerate() {
+            let focused = form.focus == idx;
+            lines.push(Line::from(Span::styled(
+                *label,
+                Style::default()
+                    .fg(if focused {
+                        palette::FOAM
+                    } else {
+                        palette::SUBTLE
+                    })
+                    .add_modifier(if focused {
+                        Modifier::BOLD
+                    } else {
+                        Modifier::empty()
+                    }),
+            )));
+            let value = if idx == 1 {
+                "•".repeat(form.fields[idx].chars().count())
+            } else {
+                form.fields[idx].clone()
+            };
+            lines.push(Line::from(Span::styled(
+                format!("  {value}{}", if focused && !form.busy { "▏" } else { "" }),
+                Style::default().fg(palette::TEXT),
+            )));
+        }
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            if form.busy {
+                "Working…"
+            } else {
+                form.error.as_str()
+            },
             Style::default().fg(if form.busy {
                 palette::MUTED
             } else {

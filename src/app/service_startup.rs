@@ -3,6 +3,128 @@ use mbv_core::config::{load_service_secret, EmbySetup, ServiceKind};
 use mbv_core::service_runtime::{EmbyFailure, EmbyFailureClass, ServiceState, SetupGeneration};
 use std::sync::mpsc;
 
+#[allow(dead_code)]
+pub(super) enum AudiobookshelfCompletionKind {
+    Startup,
+    Test,
+}
+
+pub(super) struct AudiobookshelfCompletion {
+    pub(super) generation: SetupGeneration,
+    pub(super) kind: AudiobookshelfCompletionKind,
+    pub(super) result: Result<
+        mbv_core::audiobookshelf::AudiobookshelfUser,
+        mbv_core::audiobookshelf::AudiobookshelfError,
+    >,
+}
+
+pub(super) struct AudiobookshelfValidatedCandidate {
+    pub(super) setup: mbv_core::config::AudiobookshelfSetup,
+    pub(super) user: mbv_core::audiobookshelf::AudiobookshelfUser,
+    pub(super) api_key: String,
+}
+
+pub(super) struct AudiobookshelfPendingReplacement {
+    pub(super) candidate: AudiobookshelfValidatedCandidate,
+    pub(super) previous_state: ServiceState,
+}
+
+pub(super) struct AudiobookshelfSetupCompletion {
+    pub(super) generation: SetupGeneration,
+    pub(super) previous_state: ServiceState,
+    pub(super) result:
+        Result<AudiobookshelfValidatedCandidate, mbv_core::audiobookshelf::AudiobookshelfError>,
+}
+
+pub(super) struct AudiobookshelfStartupReceiver {
+    pub(super) generation: SetupGeneration,
+    pub(super) rx: mpsc::Receiver<AudiobookshelfCompletion>,
+}
+
+pub(super) fn start_audiobookshelf(
+    config: crate::config::Config,
+    generation: SetupGeneration,
+    kind: AudiobookshelfCompletionKind,
+) -> AudiobookshelfStartupReceiver {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = config
+            .audiobookshelf_setup
+            .as_ref()
+            .ok_or(mbv_core::audiobookshelf::AudiobookshelfError {
+                class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Protocol,
+            })
+            .and_then(|setup| {
+                load_service_secret(ServiceKind::Audiobookshelf)
+                    .ok_or(mbv_core::audiobookshelf::AudiobookshelfError {
+                        class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected,
+                    })
+                    .and_then(|key| {
+                        mbv_core::audiobookshelf::AudiobookshelfClient::new(&setup.server_url)
+                            .and_then(|client| client.me_bounded(&key, mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND))
+                    })
+            });
+        let _ = tx.send(AudiobookshelfCompletion {
+            generation,
+            kind,
+            result,
+        });
+    });
+    AudiobookshelfStartupReceiver { generation, rx }
+}
+
+pub(super) fn start_audiobookshelf_setup(
+    server_url: String,
+    api_key: String,
+    generation: SetupGeneration,
+    previous_state: ServiceState,
+) -> mpsc::Receiver<AudiobookshelfSetupCompletion> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = mbv_core::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
+            &server_url,
+            &api_key,
+            mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+        )
+        .map(|candidate| {
+            let (setup, user, api_key) = candidate.into_parts();
+            AudiobookshelfValidatedCandidate {
+                setup,
+                user,
+                api_key,
+            }
+        });
+        let _ = tx.send(AudiobookshelfSetupCompletion {
+            generation,
+            previous_state,
+            result,
+        });
+    });
+    rx
+}
+
+pub(super) fn audiobookshelf_initial_state(
+    configured: bool,
+    credential_present: bool,
+) -> ServiceState {
+    match (configured, credential_present) {
+        (false, _) => ServiceState::NotConfigured,
+        (true, true) => ServiceState::Connecting,
+        (true, false) => ServiceState::NeedsAuthentication,
+    }
+}
+
+pub(super) fn classify_audiobookshelf_failure(
+    error: &mbv_core::audiobookshelf::AudiobookshelfError,
+) -> ServiceState {
+    match error.class {
+        mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected => {
+            ServiceState::NeedsAuthentication
+        }
+        _ => ServiceState::Unavailable,
+    }
+}
+
 pub(super) struct Completion {
     pub(super) generation: SetupGeneration,
     pub(super) result: Result<Startup, EmbyFailure>,
