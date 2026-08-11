@@ -468,6 +468,7 @@ impl App {
         let (server_url, token) = {
             let Some(client) = self.emby_client() else {
                 self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
+                let _ = self.card_image_tx.send((req.cache_key, None));
                 return;
             };
             let c = client.lock().unwrap();
