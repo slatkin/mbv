@@ -430,7 +430,7 @@ fn apply_unified_queue_state(
         // Emit the full unified state so the TUI can reconstruct the
         // canonical queue (tagged QueueItems, slot identity, active slot,
         // revision) without losing Feed entries or canonical order.
-        let _ = event_tx.send(PlayerEvent::UnifiedQueueUpdated(unified));
+        let _ = event_tx.send(PlayerEvent::UnifiedQueueUpdated(Box::new(unified)));
     }
 }
 

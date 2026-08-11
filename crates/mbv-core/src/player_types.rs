@@ -200,7 +200,7 @@ pub enum PlayerEvent {
     /// Emitted by RemotePlayer when a `UnifiedQueueState` arrives so App can
     /// sync the full canonical queue (tagged QueueItems, slot identity, active
     /// slot, revision) without decomposing into legacy Emby-only shapes.
-    UnifiedQueueUpdated(crate::ctrl::UnifiedQueueStateData),
+    UnifiedQueueUpdated(Box<crate::ctrl::UnifiedQueueStateData>),
     /// Chapter API: playback entered the intro window.
     IntroStarted {
         intro_end_ticks: i64,

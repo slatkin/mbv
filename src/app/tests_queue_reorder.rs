@@ -557,7 +557,7 @@ fn unified_queue_event_preserves_owner_slot_ids_and_source() {
         source: crate::config::QueueSource::Remote,
     };
 
-    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(state));
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(state)));
 
     assert_eq!(app.player_tab.queue_cursor, 1);
     assert_eq!(app.player_tab.slot_id_at(0).unwrap().raw(), 41);

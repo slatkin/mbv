@@ -25,6 +25,7 @@ mod list_plain;
 mod list_rows;
 mod music;
 mod music_wide;
+mod music_wide_browser;
 mod overlays;
 mod pills;
 mod queue;
