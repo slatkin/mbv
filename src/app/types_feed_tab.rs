@@ -25,8 +25,8 @@ impl WatchedFilter {
     pub fn label(self) -> &'static str {
         match self {
             Self::All => "All",
-            Self::Watched => "Watched",
-            Self::Unwatched => "Unwatched",
+            Self::Watched => "Played",
+            Self::Unwatched => "Unplayed",
         }
     }
 

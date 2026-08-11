@@ -177,6 +177,11 @@ impl App {
         if row < max_y {
             row += 1;
         }
+        // Keep the playback-state filter visually separated from the group
+        // pill bar.
+        if row < max_y {
+            row += 1;
+        }
         // Watched filter indicator line.
         if row < max_y && has_subs {
             let filter = state.watched_filter;

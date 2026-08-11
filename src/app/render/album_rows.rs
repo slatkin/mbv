@@ -193,15 +193,11 @@ impl App {
                 {
                     spans.push(Span::styled(
                         "  ",
-                        Style::default()
-                            .fg(focused_or_muted(focused))
-                            .bg(palette::PLAYBACK_PANEL_BG),
+                        Style::default().fg(focused_or_muted(focused)),
                     ));
                     spans.push(Span::styled(
                         year_str.as_str(),
-                        Style::default()
-                            .fg(focused_aqua_or_muted(focused))
-                            .bg(palette::PLAYBACK_PANEL_BG),
+                        Style::default().fg(focused_aqua_or_muted(focused)),
                     ));
                 }
                 Line::from(spans)
@@ -233,15 +229,11 @@ impl App {
         if !year_str.is_empty() {
             spans.push(Span::styled(
                 "  ",
-                Style::default()
-                    .fg(focused_or_muted(focused))
-                    .bg(palette::PLAYBACK_PANEL_BG),
+                Style::default().fg(focused_or_muted(focused)),
             ));
             spans.push(Span::styled(
                 year_str.as_str(),
-                Style::default()
-                    .fg(focused_aqua_or_muted(focused))
-                    .bg(palette::PLAYBACK_PANEL_BG),
+                Style::default().fg(focused_aqua_or_muted(focused)),
             ));
         }
 
