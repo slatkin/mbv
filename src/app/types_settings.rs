@@ -87,6 +87,9 @@ pub(super) enum ServiceActionIntent {
     RetryEmby,
     RepairEmby,
     SetupAudiobookshelf,
+    TestAudiobookshelf,
+    RemoveAudiobookshelf,
+    ReplaceAudiobookshelf,
     ManageFeeds,
 }
 

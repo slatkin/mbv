@@ -14,6 +14,8 @@ pub(super) enum ConfirmAction {
     RemoveFeedSubscription(usize),
     RemoveEmby,
     ReplaceEmby(mbv_core::service_runtime::SetupGeneration),
+    RemoveAudiobookshelf,
+    ReplaceAudiobookshelf(mbv_core::service_runtime::SetupGeneration),
 }
 
 /// State for the shared confirmation-modal overlay: a centered, bordered

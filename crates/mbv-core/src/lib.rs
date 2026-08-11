@@ -1,5 +1,6 @@
 pub mod api;
 pub mod applog;
+pub mod audiobookshelf;
 pub(crate) mod bounded;
 pub mod config;
 pub mod ctrl;

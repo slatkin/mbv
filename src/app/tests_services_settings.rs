@@ -112,7 +112,7 @@ fn feeds_is_always_present_and_enter_opens_existing_manager() {
 }
 
 #[test]
-fn audiobookshelf_is_disabled_until_implemented() {
+fn audiobookshelf_exposes_setup_action_when_not_configured() {
     let app = tests::make_app_stub();
     assert_eq!(
         app.service_state_label(ServiceEntry::Audiobookshelf),
@@ -120,7 +120,7 @@ fn audiobookshelf_is_disabled_until_implemented() {
     );
     assert_eq!(
         app.service_action_label(ServiceEntry::Audiobookshelf),
-        "Setup unavailable (coming later)"
+        "Set up Audiobookshelf"
     );
 }
 

@@ -14,6 +14,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     // [server] is absent (feed-only / service-independent startup).
     let feeds = parse_feeds(doc.get("feeds"));
     let server = doc.get("server");
+    let audiobookshelf = doc.get("audiobookshelf");
 
     let get_str = |section: &toml::Value, key: &str| -> String {
         section
@@ -302,9 +303,15 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     let user_id = server.map(|s| get_str(s, "user_id")).unwrap_or_default();
     let emby_setup = (!server_url.is_empty() && !user_id.is_empty())
         .then(|| EmbySetup::new(&server_url, user_id));
+    let audiobookshelf_url = audiobookshelf
+        .map(|section| get_str(section, "url"))
+        .unwrap_or_default();
+    let audiobookshelf_setup = (!audiobookshelf_url.trim().is_empty())
+        .then(|| AudiobookshelfSetup::new(audiobookshelf_url));
 
     Ok(Config {
         emby_setup,
+        audiobookshelf_setup,
         server_url,
         username: String::new(),
         password: String::new(),

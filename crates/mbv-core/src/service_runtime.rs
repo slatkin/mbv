@@ -1,5 +1,6 @@
 use crate::api::EmbyClient;
 use crate::api::EmbyItem;
+use crate::audiobookshelf::AudiobookshelfUser;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,6 +159,81 @@ impl EmbyRuntime {
         }
         self.state = state;
         true
+    }
+}
+
+/// Runtime-only Audiobookshelf identity and availability. The API key is
+/// intentionally absent; callers load it from the Service secret boundary.
+pub struct AudiobookshelfRuntime {
+    pub user: Option<AudiobookshelfUser>,
+    pub state: ServiceState,
+    generation: SetupGeneration,
+}
+
+impl AudiobookshelfRuntime {
+    pub fn new(configured: bool) -> Self {
+        Self {
+            user: None,
+            state: if configured {
+                ServiceState::Connecting
+            } else {
+                ServiceState::NotConfigured
+            },
+            generation: SetupGeneration::default(),
+        }
+    }
+
+    pub const fn generation(&self) -> SetupGeneration {
+        self.generation
+    }
+
+    pub fn begin_setup(&mut self) -> SetupGeneration {
+        self.generation = self.generation.next();
+        self.state = ServiceState::Connecting;
+        self.generation
+    }
+
+    pub fn begin_validation(&mut self) -> SetupGeneration {
+        self.generation = self.generation.next();
+        self.state = ServiceState::Connecting;
+        self.generation
+    }
+
+    pub fn remove_setup(&mut self) -> SetupGeneration {
+        self.generation = self.generation.next();
+        self.user = None;
+        self.state = ServiceState::NotConfigured;
+        self.generation
+    }
+
+    pub fn commit_ready(&mut self, generation: SetupGeneration, user: AudiobookshelfUser) -> bool {
+        if self.generation != generation {
+            return false;
+        }
+        self.user = Some(user);
+        self.state = ServiceState::Ready;
+        true
+    }
+
+    pub fn complete(&mut self, generation: SetupGeneration, state: ServiceState) -> bool {
+        if !self.accepts(generation) {
+            return false;
+        }
+        self.state = state;
+        true
+    }
+
+    pub fn cancel_setup(&mut self, generation: SetupGeneration, state: ServiceState) -> bool {
+        if !self.accepts(generation) {
+            return false;
+        }
+        self.generation = self.generation.next();
+        self.state = state;
+        true
+    }
+
+    pub fn accepts(&self, generation: SetupGeneration) -> bool {
+        self.generation == generation
     }
 }
 

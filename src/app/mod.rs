@@ -2,6 +2,7 @@ mod action;
 mod actions;
 mod app_struct;
 mod audio_subtitle_actions;
+mod audiobookshelf_service_actions;
 mod bootstrap;
 mod browse_level_actions;
 mod construct;
@@ -298,6 +299,13 @@ impl App {
         if let Some((config, generation)) = self.emby_startup_request.take() {
             self.emby_startup_rx = Some(service_startup::start(config, generation));
         }
+        if let Some((config, generation)) = self.audiobookshelf_startup_request.take() {
+            self.audiobookshelf_startup_rx = Some(service_startup::start_audiobookshelf(
+                config,
+                generation,
+                service_startup::AudiobookshelfCompletionKind::Startup,
+            ));
+        }
 
         if let Some(client) = self.emby_client() {
             client.lock().unwrap().register_capabilities();
@@ -382,6 +390,7 @@ impl App {
                     }
                 }
             }
+            had_events |= self.drain_audiobookshelf_events();
             if let Ok(ev) = self.player_rx.try_recv() {
                 had_events = true;
                 if self.handle_player_event(ev) {
@@ -706,6 +715,10 @@ mod tests_feeds_manage;
 #[cfg(test)]
 #[path = "tests_services_settings.rs"]
 mod tests_services_settings;
+
+#[cfg(test)]
+#[path = "tests_audiobookshelf_runtime.rs"]
+mod tests_audiobookshelf_runtime;
 
 #[cfg(test)]
 #[path = "tests_podcast.rs"]

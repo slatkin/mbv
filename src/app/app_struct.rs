@@ -23,7 +23,7 @@ use super::types_tab_selection::TabSelection;
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
-use mbv_core::service_runtime::EmbyRuntime;
+use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_core::visualizer::CavaWorker;
 use mbv_core::ws::WsEvent;
 use ratatui_image::picker::Picker;
@@ -35,14 +35,28 @@ pub struct App {
     /// runtime. Feed management reads and mutates this context directly.
     pub(super) config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     pub(super) emby_runtime: EmbyRuntime,
+    pub(super) audiobookshelf_runtime: AudiobookshelfRuntime,
     pub(super) emby_startup_rx: Option<super::service_startup::StartupReceiver>,
     pub(super) emby_startup_request: Option<(
         crate::config::Config,
         mbv_core::service_runtime::SetupGeneration,
     )>,
+    pub(super) audiobookshelf_startup_rx:
+        Option<super::service_startup::AudiobookshelfStartupReceiver>,
+    pub(super) audiobookshelf_startup_request: Option<(
+        crate::config::Config,
+        mbv_core::service_runtime::SetupGeneration,
+    )>,
+    pub(super) audiobookshelf_test_rx:
+        Option<super::service_startup::AudiobookshelfStartupReceiver>,
+    pub(super) audiobookshelf_setup_rx:
+        Option<std::sync::mpsc::Receiver<super::service_startup::AudiobookshelfSetupCompletion>>,
     pub(super) emby_setup_form: Option<super::services_settings::EmbySetupForm>,
+    pub(super) audiobookshelf_setup_form: Option<super::services_settings::AudiobookshelfSetupForm>,
     pub(super) emby_setup_rx: Option<mpsc::Receiver<super::service_startup::SetupCompletion>>,
     pub(super) pending_emby_replacement: Option<super::service_startup::Startup>,
+    pub(super) pending_audiobookshelf_replacement:
+        Option<super::service_startup::AudiobookshelfPendingReplacement>,
     pub(super) shared_client: Option<mbv_core::shared_client::SharedClient>,
     pub(super) shared_reconnect_rx: Option<
         mpsc::Receiver<
@@ -341,6 +355,98 @@ pub struct App {
 }
 
 impl App {
+    #[allow(dead_code)]
+    pub(super) fn test_audiobookshelf_connection(&mut self) {
+        if self.audiobookshelf_runtime.state
+            == mbv_core::service_runtime::ServiceState::NotConfigured
+        {
+            return;
+        }
+        let config = self.config.lock().unwrap().clone();
+        let generation = self.audiobookshelf_runtime.begin_validation();
+        self.audiobookshelf_test_rx = Some(super::service_startup::start_audiobookshelf(
+            config,
+            generation,
+            super::service_startup::AudiobookshelfCompletionKind::Test,
+        ));
+    }
+
+    pub(super) fn apply_audiobookshelf_completion(
+        &mut self,
+        completion: super::service_startup::AudiobookshelfCompletion,
+    ) {
+        use super::notify_actions::ToastSeverity;
+        if !self.audiobookshelf_runtime.accepts(completion.generation) {
+            log::debug!(target: "startup", "ignored stale Audiobookshelf completion");
+            return;
+        }
+        match completion.result {
+            Ok(user) => {
+                let Some(setup) = self.config.lock().unwrap().audiobookshelf_setup.clone() else {
+                    return;
+                };
+                self.audiobookshelf_runtime
+                    .commit_ready(completion.generation, user.clone());
+                if matches!(
+                    completion.kind,
+                    super::service_startup::AudiobookshelfCompletionKind::Test
+                ) {
+                    self.flash(
+                        format!(
+                            "Audiobookshelf {} is ready for {}",
+                            setup.server_url, user.username
+                        ),
+                        ToastSeverity::Success,
+                    );
+                }
+            }
+            Err(error) => {
+                let state = super::service_startup::classify_audiobookshelf_failure(&error);
+                self.audiobookshelf_runtime
+                    .complete(completion.generation, state);
+                if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
+                    self.audiobookshelf_runtime.user = None;
+                    let deletion = mbv_core::config::clear_service_secret_result(
+                        mbv_core::config::ServiceKind::Audiobookshelf,
+                    );
+                    self.flash(
+                        match deletion {
+                            Ok(()) => "Audiobookshelf rejected its saved credential; set it up again".into(),
+                            Err(error) => format!("Audiobookshelf rejected its saved credential; could not remove it: {error}"),
+                        },
+                        ToastSeverity::Warning,
+                    );
+                } else {
+                    self.flash(
+                        format!("Audiobookshelf unavailable: {error}"),
+                        ToastSeverity::Warning,
+                    );
+                }
+            }
+        }
+    }
+
+    pub(super) fn handle_audiobookshelf_worker_disconnect(
+        &mut self,
+        generation: mbv_core::service_runtime::SetupGeneration,
+    ) {
+        if !self.audiobookshelf_runtime.accepts(generation) {
+            return;
+        }
+        let config = self.config.lock().unwrap().clone();
+        let state = if config.audiobookshelf_setup.is_some()
+            && mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
+                .is_some()
+        {
+            mbv_core::service_runtime::ServiceState::Unavailable
+        } else if config.audiobookshelf_setup.is_some() {
+            mbv_core::service_runtime::ServiceState::NeedsAuthentication
+        } else {
+            mbv_core::service_runtime::ServiceState::NotConfigured
+        };
+        self.audiobookshelf_runtime.complete(generation, state);
+    }
+
     /// Clone the concrete Emby runtime handle when Emby is available. Callers
     /// must treat `None` as a normal service-independent state.
     pub(super) fn emby_client(&self) -> Option<Arc<Mutex<EmbyClient>>> {
@@ -622,11 +728,22 @@ impl App {
 pub(super) struct AppInit {
     pub(super) config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     pub(super) emby_runtime: EmbyRuntime,
+    pub(super) audiobookshelf_runtime: AudiobookshelfRuntime,
     pub(super) emby_startup_rx: Option<super::service_startup::StartupReceiver>,
     pub(super) emby_startup_request: Option<(
         crate::config::Config,
         mbv_core::service_runtime::SetupGeneration,
     )>,
+    pub(super) audiobookshelf_startup_rx:
+        Option<super::service_startup::AudiobookshelfStartupReceiver>,
+    pub(super) audiobookshelf_startup_request: Option<(
+        crate::config::Config,
+        mbv_core::service_runtime::SetupGeneration,
+    )>,
+    pub(super) audiobookshelf_test_rx:
+        Option<super::service_startup::AudiobookshelfStartupReceiver>,
+    pub(super) audiobookshelf_setup_rx:
+        Option<std::sync::mpsc::Receiver<super::service_startup::AudiobookshelfSetupCompletion>>,
     pub(super) emby_setup_form: Option<super::services_settings::EmbySetupForm>,
     pub(super) emby_setup_rx: Option<mpsc::Receiver<super::service_startup::SetupCompletion>>,
     pub(super) player: mbv_core::player::PlayerProxy,

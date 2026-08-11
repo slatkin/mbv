@@ -140,6 +140,29 @@ impl App {
                     self.replace_emby_confirmed(generation);
                 }
             }
+            ConfirmAction::RemoveAudiobookshelf => {
+                if matches!(
+                    key.code,
+                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+                ) {
+                    self.confirm_modal = None;
+                    self.remove_audiobookshelf_confirmed();
+                } else if key.code == KeyCode::Esc {
+                    self.confirm_modal = None;
+                }
+            }
+            ConfirmAction::ReplaceAudiobookshelf(generation) => {
+                if key.code == KeyCode::Esc {
+                    self.confirm_modal = None;
+                    self.pending_audiobookshelf_replacement = None;
+                } else if matches!(
+                    key.code,
+                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+                ) {
+                    self.confirm_modal = None;
+                    self.replace_audiobookshelf_confirmed(generation);
+                }
+            }
             ConfirmAction::DiscardOrSaveDirtyPlaylist => {
                 let play_after = matches!(
                     self.pending_queue_action,
