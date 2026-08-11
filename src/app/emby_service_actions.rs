@@ -186,6 +186,7 @@ impl App {
         config.api_key.clear();
         drop(config);
         self.emby_runtime.state = ServiceState::Ready;
+        self.sync_subtitle_prefs_from_emby();
         self.flash("Emby replaced and ready".into(), ToastSeverity::Success);
     }
 }

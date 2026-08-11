@@ -379,9 +379,22 @@ pub fn load_control_credential() -> Option<String> {
 
 /// Remove the Control credential file.
 pub fn clear_control_credential() {
+    let _ = clear_control_credential_result();
+}
+
+pub fn clear_control_credential_result() -> Result<(), String> {
     let path = control_credential_path();
-    let _ = std::fs::remove_file(&path);
-    let _ = std::fs::remove_file(path.with_extension("json.tmp"));
+    match std::fs::remove_file(&path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("remove {}: {error}", path.display())),
+    }
+    match std::fs::remove_file(path.with_extension("json.tmp")) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("remove Control credential temporary file: {error}")),
+    }
+    Ok(())
 }
 
 /// ── Legacy Emby token migration ──────────────────────────────────────

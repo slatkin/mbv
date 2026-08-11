@@ -400,6 +400,7 @@ impl App {
                 self.emby_runtime.client = Some(client);
                 self.apply_emby_bootstrap(startup.bootstrap);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
+                self.sync_subtitle_prefs_from_emby();
                 self.flash("Emby is ready".into(), ToastSeverity::Success);
                 log::info!(target: "startup", "Emby startup completed");
             }
@@ -549,6 +550,9 @@ impl App {
                 self.emby_runtime.client = Some(client);
                 self.apply_emby_bootstrap(startup.bootstrap);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
+                if start_network {
+                    self.sync_subtitle_prefs_from_emby();
+                }
                 {
                     let mut config = self.config.lock().unwrap();
                     config.emby_setup = Some(setup);

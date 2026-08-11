@@ -12,4 +12,5 @@ pub mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
     include!("config_tests_parse.rs");
     include!("config_tests_paths.rs");
+    include!("config_tests_paths_migration.rs");
 }

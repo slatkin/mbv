@@ -136,7 +136,19 @@ impl CtrlHello {
     }
 
     pub fn validate_control_credential(&self, expected: &str) -> Result<(), String> {
-        if self.control_token.as_deref() == Some(expected) {
+        let Some(presented) = self.control_token.as_deref() else {
+            return Err("invalid Control credential".to_string());
+        };
+        if presented.len() == expected.len()
+            && presented
+                .as_bytes()
+                .iter()
+                .zip(expected.as_bytes())
+                .fold(0u8, |difference, (&presented, &expected)| {
+                    difference | (presented ^ expected)
+                })
+                == 0
+        {
             Ok(())
         } else {
             Err("invalid Control credential".to_string())

@@ -62,6 +62,32 @@ impl App {
         self.push_subtitle_prefs();
     }
 
+    /// Fetch Emby's preferences after a service-independent startup reaches
+    /// Ready. Local preferences remain authoritative once explicitly set.
+    pub(super) fn sync_subtitle_prefs_from_emby(&mut self) {
+        let use_emby_prefs = {
+            let config = self.config.lock().unwrap();
+            config.subtitle_mode.is_empty()
+                && config.subtitle_lang.is_empty()
+                && config.audio_lang.is_empty()
+        };
+        if !use_emby_prefs {
+            return;
+        }
+        let Some(client) = self.emby_client() else {
+            return;
+        };
+        let prefs = match client.lock().unwrap().get_user_subtitle_prefs() {
+            Ok(prefs) => prefs,
+            Err(error) => {
+                log::warn!(target: "startup", "could not load Emby subtitle preferences: {error}");
+                return;
+            }
+        };
+        *self.player.subtitle_prefs.lock().unwrap() = prefs;
+        self.push_subtitle_prefs();
+    }
+
     /// Clone the current subtitle prefs from the shared Arc and notify the player thread.
     pub(super) fn push_subtitle_prefs(&self) {
         let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
