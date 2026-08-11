@@ -26,15 +26,6 @@ pub(super) fn focused_or_muted(focused: bool) -> Color {
     }
 }
 
-/// Returns `palette::AQUA` when `focused`, `palette::MUTED` otherwise.
-pub(super) fn focused_aqua_or_muted(focused: bool) -> Color {
-    if focused {
-        palette::AQUA
-    } else {
-        palette::MUTED
-    }
-}
-
 /// Returns `palette::SOFT_WHITE` when `focused`, `palette::MUTED` otherwise.
 pub(super) fn focused_or_muted_soft_white(focused: bool) -> Color {
     if focused {

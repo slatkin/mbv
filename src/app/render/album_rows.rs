@@ -1,8 +1,6 @@
 use super::super::ui_util::trunc_str;
 use super::album_plan::ArtistGroupHeader;
-use super::list_rows::{
-    focused_aqua_or_muted, focused_or_muted, focused_or_muted_soft_white, focused_or_subtle,
-};
+use super::list_rows::{focused_or_muted, focused_or_muted_soft_white, focused_or_subtle};
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -134,7 +132,7 @@ impl App {
                         ));
                         spans.push(Span::styled(
                             year_str.as_str(),
-                            Style::default().fg(focused_aqua_or_muted(focused)),
+                            Style::default().fg(palette::FOAM),
                         ));
                     }
                     Line::from(spans)
@@ -197,7 +195,7 @@ impl App {
                     ));
                     spans.push(Span::styled(
                         year_str.as_str(),
-                        Style::default().fg(focused_aqua_or_muted(focused)),
+                        Style::default().fg(palette::FOAM),
                     ));
                 }
                 Line::from(spans)
@@ -233,7 +231,7 @@ impl App {
             ));
             spans.push(Span::styled(
                 year_str.as_str(),
-                Style::default().fg(focused_aqua_or_muted(focused)),
+                Style::default().fg(palette::FOAM),
             ));
         }
 
@@ -280,7 +278,7 @@ impl App {
             ),
         ];
         if !suffix.is_empty() {
-            spans.push(Span::styled(suffix, Style::default().fg(palette::GREEN)));
+            spans.push(Span::styled(suffix, Style::default().fg(palette::FOAM)));
         }
         f.render_widget(
             Paragraph::new(Line::from(spans)),
