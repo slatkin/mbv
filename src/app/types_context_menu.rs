@@ -1,4 +1,3 @@
-use super::types_playback::ArtistHeaderSelection;
 use mbv_core::api::EmbyItem;
 
 #[derive(Clone, Debug)]
@@ -6,9 +5,6 @@ pub(super) enum ContextAction {
     Play,
     PlayFolder(String),
     ShuffleFolder(String),
-    PlayArtistHeader(ArtistHeaderSelection),
-    ShuffleArtistHeader(ArtistHeaderSelection),
-    EnqueueArtistHeader(ArtistHeaderSelection),
     Enqueue,
     EnqueueFolder(Box<EmbyItem>),
     MarkPlayed(String),

@@ -1,7 +1,8 @@
 # artist-keyboard-navigation Specification
 
 ## Purpose
-TBD - created by archiving change artist-keyboard-navigation. Update Purpose after archive.
+
+Defines how modified PageUp and PageDown keys behave in library views, including the grouped music album view.
 ## Requirements
 ### Requirement: Ctrl+PageDown jumps to next artist
 The system SHALL move the library cursor to the next artist header in the grouped album display target list when Ctrl+PageDown is pressed in the library panel.
@@ -46,4 +47,3 @@ The system SHALL only activate Ctrl+PageUp/PageDown artist navigation when the l
 #### Scenario: Non-grouped view
 - **WHEN** Ctrl+PageUp or Ctrl+PageDown is pressed in a non-grouped library view
 - **THEN** the key press is handled as a no-op (swallowed, not passed through)
-

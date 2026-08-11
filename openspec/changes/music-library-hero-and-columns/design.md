@@ -1,85 +1,110 @@
 ## Context
 
-The music-group view (`render_power_music_group_view` in `music.rs`) was built before the two-column layout and hero-on-top changes landed. It routes through its own renderer that calls `render_power_grouped_album_rows` directly, bypassing `render_power_list` and all the machinery it gained: hero area split, two-column packing, letter pills below hero, search box, scroll persistence, prefetch.
+Grouped Music currently renders through the shared library-list path with a selected-album hero above grouped album rows. Below the shared 82-column threshold those rows are one column; at and above it they pack into two columns. Music-group pills are carved from the full content width before library rendering. The album track table appears only when `album_track_focus` is active.
 
-The dispatch in `power_widgets.rs:558-577` currently branches:
-- `is_album_folders && is_music_group` → `music.rs` (separate path)
-- `is_album_folders` (no music group) → `list.rs` (shared path, already has `show_grouped` calling the same `render_power_grouped_album_rows`)
+The Home tab already provides the intended wide visual precedent: a roughly 40/60 horizontal split, a two-column gap, pills over the right list, focused `BG_GREEN` and unfocused `PLAYBACK_PANEL_BG` surfaces, and one logical list item per terminal row. See `proposal.md` for motivation and the delta specs for behavior.
 
-The album's expanded block (art + metadata + track list) currently renders inline below the selected album row via `album_plan.rs`'s `AlbumDetailStart`/`AlbumDetailContinuation` rows. Moving it to the hero means the plan builder stops producing those rows, and the hero sizing/painting logic gets a new album branch.
-
-See proposal.md for motivation.
+The separate `remove-selectable-music-artist-headers` change removes artist-header focus and actions. This design assumes that change lands first, so grouped Music has only album browsing and track selection as internal focus states.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Route music-group view through `render_power_list` so it inherits hero, columns, and all shared list infrastructure.
-- Move the selected album's expanded block into the hero panel — same content, new position.
-- Two-column packing for grouped album rows, with full-width artist headers.
-- Preserve all grouping stability guarantees (per `stable-music-library-grouping` spec).
+- Preserve the current grouped Music renderer and interaction below the existing breakpoint.
+- Give wide grouped Music a stable left album/track workspace and right album browser.
+- Keep responsive composition as render-time state derived from the content width.
+- Reuse existing album selection, track cache, track cursor, grouping snapshot, and Home palette behavior.
 
 **Non-Goals:**
 
-- Changing the home video or feed home video group renderers.
-- Modifying genre/mood pill behavior.
-- Adding hero for non-album music items.
+- Generalizing the split into a shared layout for other library types.
+- Adding a persisted pane-focus or split-size setting.
+- Adding artist summaries or replacing removed artist bulk actions.
+- Changing Music API requests, grouping configuration, or queue construction.
 
 ## Decisions
 
-### 1. Remove the music.rs dispatch and let list.rs handle it
+### 1. Branch grouped Music at the existing shared breakpoint
 
-The dispatch in `power_widgets.rs` changes: the `is_album_folders && is_music_group` branch falls through to `render_power_list` instead of calling `render_power_music_group_view`. `render_power_music_group_view` in `music.rs` is deleted; `render_power_music_group_pills_row` stays (it's called from `mod.rs` before the library renders).
+Grouped Music uses the same content-width threshold as Home wide mode and library column packing. Below it, rendering and input continue through today's hero-above-list path unchanged. At or above it, a Music-specific coordinator renders the horizontal layout.
 
-`render_power_list` already has a `show_grouped` branch (line 470) that calls `render_power_grouped_album_rows`. The music-group view falls into exactly this branch. The existing gates — `is_viewing_album_folders(lib_idx) && search.is_none()` — already match the music-group case.
+The branch is based on the padded library content area, not terminal width, so queue width and panel mode are already accounted for. No new responsive state is stored; resizing derives the composition each frame.
 
-The loading/organizing states currently handled by `music.rs:97-146` move into `render_power_list`'s empty-items handling, gated on `is_music_group_view`.
+Rejected: stacking the new wide panes at narrow widths. The user explicitly chose to retain the current narrow composition rather than introduce another fallback.
 
-### 2. Hero sizing: new album branch alongside movie and series
+### 2. Use Home's 40/60 split and put pills in the right rail
 
-The hero height computation in `list.rs:191-243` gains a third branch. After checking `selected_movie_item` and `selected_series_item`, it checks `selected_album_item`. A new helper `power_selected_album_item` (parallel to `power_selected_movie_item` in `detail.rs`) returns the selected album when the library is a music library at the album-browsing level.
+Wide Music divides the full content area into a left pane of approximately two-fifths, a two-column gap, and a right pane using the remainder, with the same minimum-side clamps as Home where practical.
 
-The album hero height is the album's expanded block height: album art rows + metadata rows + track list rows + block chrome (`HERO_BLOCK_EXTRA_ROWS`). This is computed from the same data `album_plan.rs` currently uses for inline expansion sizing — the album's track count and art dimensions — extracted into a standalone sizing function so the hero can call it without building the full display plan.
+The wide coordinator owns music-group pill placement: pills occupy the right rail's first row and the album list begins below the same spacing and rule treatment used by Home's wide list. The existing full-width pill carve remains the narrow path only.
 
-### 3. Hero content: reuse render_power_album_detail
+This requires deciding wide versus narrow before the global Music pill carve. Keeping pills full-width was rejected because it weakens the right rail's identity as the complete album browser and shortens the left hero.
 
-The hero content painting (list.rs:515-553) gains an album branch. It calls `render_power_album_detail` with the hero's content rect — the same function currently used for inline track rendering, which already takes `area`, `items`, `cursor`, and layout parameters. The function is already designed for reuse (per its doc comment: "can render either the legacy drilled-in nav_stack level or the inline-album-detail cache with the same code path").
+### 3. Divide the left pane vertically between a large hero and persistent tracks
 
-The album art for the hero is rendered via the same `inline_album_art` path, now positioned within the hero rect rather than inline with the list.
+The left pane is one visual workspace with two vertical regions:
 
-### 4. Album plan stops producing inline expansion rows
+- A Home-style album hero above, using yellow title treatment, metadata, and centered large artwork.
+- A track region below, using the existing wrapped track-table content and duration rules.
 
-`build_grouped_album_display_plan` gains a parameter (e.g. `hero_handles_detail: bool`) that suppresses `AlbumDetailStart`, `AlbumDetailContinuation`, `AlbumDetailRule`, `AlbumLoading`, and `AlbumActionHint` rows from the plan. When the hero handles the detail, the plan produces only `Album`, `ArtistHeader`, `ArtistGroupSpacer`, and `AlbumWrappedContinuation` rows.
+The initial allocation gives the hero roughly three-fifths of available height and tracks roughly two-fifths. Track sizing is content-aware: a short album may use fewer track rows and return space to artwork, while a long album scrolls within the track region. When height is constrained, reserve the track label plus at least one visible track row when tracks exist, then shrink or omit artwork before removing the track region. Loading and empty states use the same reserved track region so the layout does not jump when data arrives.
 
-The `selected_block_bounds` and `track_detail_bounds` fields in the plan become `None` when `hero_handles_detail` is true — the hero draws its own block shell via `hero_block_shell`.
+The existing album-detail renderer may be decomposed or parameterized, but wide layout must not derive pane height from total track count; that would recreate the current hero growth problem.
 
-### 5. Two-column packing for grouped album rows
+### 4. Separate track visibility from track focus
 
-`render_power_grouped_album_rows` accepts a `cols` parameter. Albums within each artist group pack row-major: album `i` within a group occupies column `i % cols`. Artist headers and group spacers span full width and start a fresh row, same as letter headers in `list_letter_groups.rs`.
+`album_track_focus: Option<usize>` remains the internal focus discriminator:
 
-The display plan (`GroupedAlbumDisplayRow`) gains a multi-item variant (or album rows are grouped at render time, matching how `render_power_plain_rows` handles `DisplayRow::Item` with multiple indices). The simpler approach is to keep `Album(usize)` single-item and batch consecutive `Album` rows into column pairs at render time in `album.rs`, avoiding changes to the plan builder's logic.
+- `None`: right album browser is active; left tracks render as a preview without an active cursor.
+- `Some(i)`: left track region is active and keeps track `i` visible.
 
-`album_cursor.rs` cursor movement adapts to columns: up/down moves by `cols` items within a group, left/right moves by 1. At group boundaries, movement wraps to the nearest item in the adjacent group, same as letter-group cursor movement.
+Wide rendering requests the selected album's cached tracks regardless of this option. A cache miss shows Loading and starts the existing album-id-keyed fetch. Selection changes must key every title, art, loading, and track lookup to the new album immediately so stale tracks cannot appear under the new hero.
 
-### 6. Music-group pills stay in mod.rs, above the hero
+Preview mode starts at the top of the track list. Focused mode uses render-local table scrolling to keep the selected index visible. No second persisted track-scroll field is introduced unless implementation proves the existing table state cannot preserve cursor visibility.
 
-The music-group pills are already rendered in `mod.rs:511-528`, before `render_power_library` is called. They carve rows off the top of `lib_area`, and the remaining area is passed to the library renderer. This stays unchanged — the pills render above the content area that `render_power_list` receives, so they naturally sit above the hero.
+### 5. Keep the right album browser strictly one column
 
-The pills and the hero are independent: pills select which genre/mood group to browse, the hero shows the selected album within that group.
+The wide right rail renders the settled grouped display with one album per physical album row and full-width artist labels. The grouped two-column packing and left/right album-cell navigation introduced by the earlier version of this change have no remaining responsive use: narrow is below the threshold and wide deliberately uses one column.
 
-### 7. Track focus interaction moves to the hero
+Column-specific grouped code should be deleted when no other caller requires it, while retaining shared grouping plans, wrapped album labels, album cursor identity, paging, and scroll clamping. Up/Down remain album movement; Left/Right do not become cross-pane focus controls. Enter and Escape are the explicit keyboard focus transitions.
 
-`album_track_focus` (the track-selection cursor) continues to work the same way: Enter on the selected album activates track focus, the track cursor moves within the track list, Enter on a track plays it. The only change is that the track list renders in the hero panel instead of inline.
+### 6. Derive reciprocal pane styling from existing focus state
 
-The hero's content rect is stored in `layout.hero_area` (already exists). Input handling (`input_lib_power_keys.rs`) uses this to route track-focus keys to the hero's track list. Mouse clicks within the hero's track area are handled the same as clicks within the former inline track area.
+No new focus enum is needed. Styling derives from outer `PanelFocus` plus `album_track_focus`:
 
-### 8. Artist header selection preserved
+| Outer focus | Track focus | Left workspace | Right browser |
+| --- | --- | --- | --- |
+| Library | None | `PLAYBACK_PANEL_BG` preview | `BG_GREEN` focused |
+| Library | Some | `BG_GREEN` focused | `PLAYBACK_PANEL_BG` context |
+| Queue | either | normal dimmed library treatment | normal dimmed library treatment |
 
-Artist headers remain selectable in the music-group view (`selectable_headers` flag). The cursor can sit on an artist header, and actions (play all, queue all) operate on the header's group. This is unchanged — the `ArtistHeader` row type stays in the plan, and the selected-artist-header rendering moves from the inline list to the list area below the hero (it's a list feature, not a hero feature).
+The focused right row follows Home's aqua cursor bar and contrasting selected-row treatment. During track focus the selected album marker remains visible but its text and surface dim with the rail. The focused track uses the existing yellow active-track treatment.
+
+### 7. Preserve keyboard semantics and geometry during focus changes
+
+Enter on an album sets `album_track_focus` to the existing initial index. Up/Down, Enter on a track, current-item scope, and Escape/Backspace keep their current behavior. Entering or leaving track selection changes only styling and active cursor; the split and vertical allocations do not move.
+
+Resizing across the breakpoint preserves selected album identity and `album_track_focus`. A focused track therefore remains focused when switching into narrow mode, where today's hero shows tracks; switching to wide mode exposes the same focused track in the persistent region. With no track focus, narrow mode continues to collapse tracks while wide mode previews them.
+
+### 8. Add track-row hitmaps only for wide mode
+
+Wide rendering records one logical hit target per visible track, covering all wrapped physical rows belonging to it. A single click sets `album_track_focus` to that track; a double-click first sets the same focus and then invokes existing focused-track playback.
+
+Clicking an album or group pill clears track focus through existing selection paths and returns visual focus right. Artwork and blank hero space may focus the outer Library panel but do not enter track selection or invoke playback. The generic whole-hero double-click activation behavior does not apply to the wide Music left pane because its track rows provide the explicit interactive targets.
+
+### 9. Keep responsive grouping continuity selection-based
+
+Both compositions consume the same settled grouped snapshot and album cursor. Width changes rebuild display geometry and clamp scroll around the selected album; they do not restart grouping or create separate narrow/wide snapshots. Render-derived row maps and hitmaps are replaced every frame so stale geometry cannot cross the breakpoint.
 
 ## Risks / Trade-offs
 
-- **Album plan refactor scope.** `album_plan.rs` (455 lines) builds a complex display plan with inline expansion, art reservation, track detail bounds, and selected block bounds. Adding `hero_handles_detail` to suppress the expansion rows while keeping the rest correct is the riskiest piece. The plan's test coverage (`tests_album_focus.rs`, `tests_album_listing.rs`) must be extended for the hero case.
-- **Cursor movement with columns in grouped view.** The grouped album view has its own cursor movement logic (`album_cursor.rs`, 489 lines) that handles artist-header selection, track focus, and group boundaries. Adding column awareness on top of that is complex. The existing `page_power_grouped_album_cursor` and jump helpers all need column-count parameters.
-- **Track list in the hero.** The track list in the hero is fixed-position while the album list scrolls below it. If the track list is long (20+ tracks), the hero may consume most of the content area. The existing hero height cap (leaves at least 1 row for the list) applies, but a capped hero may truncate the track list. The track list within the hero should scroll internally when capped.
-- **Visual regression.** The music-group view is heavily used. The transition from inline expansion to hero-on-top changes the spatial relationship between the selected album and its context (neighboring albums). Visual verification at multiple terminal widths is required.
+- **[Artwork dominates short terminals]** Large Home-style artwork could starve tracks. -> Reserve the track region first and let artwork shrink or disappear before tracks.
+- **[Track fetch churn]** Moving quickly through albums can request tracks for several selections. -> Reuse the album-id cache/loading set and issue at most one request per album; do not add speculative prefetch in this change.
+- **[Stale mouse geometry]** Wrapped tracks and responsive resizing can invalidate hit rows. -> Rebuild and clear wide track hitmaps every frame and key them by logical track index.
+- **[Breakpoint discontinuity]** Pills and tracks move when crossing 82 columns. -> Preserve album/track identity and scroll visibility while treating the composition switch as intentional, matching Home.
+- **[Partially implemented obsolete columns]** Existing grouped two-column code may obscure the one-column invariant. -> Delete unused column-specific branches rather than retaining compatibility for a layout no longer specified.
+- **[Visual verification burden]** Color and art/track proportions are difficult to validate with stable text assertions. -> Prefer geometry/interaction tests and perform real-terminal checks at narrow, threshold, wide, and short-height sizes.
+
+## Migration Plan
+
+No persisted data or protocol migration is required. Apply `remove-selectable-music-artist-headers` first, then implement this responsive layout against the simplified album/track focus model. Rollback restores the current hero-above-list and grouped column behavior without data changes.

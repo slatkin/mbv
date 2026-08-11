@@ -1,51 +1,48 @@
-## 1. Album hero sizing and helper
+## 1. Responsive Music Routing
 
-- [x] 1.1 Add `power_selected_album_item` helper in `detail.rs` — returns the selected album `MediaItem` when `collection_type == "music"` and `is_viewing_album_folders`, parallel to `power_selected_movie_item`
-- [x] 1.2 Extract album hero height computation from `album_plan.rs` inline expansion sizing into a standalone function: given track count, art dimensions, and panel width, return the total hero rows needed (art + metadata + tracks + `HERO_BLOCK_EXTRA_ROWS`)
-- [x] 1.3 Add the album branch to the hero height computation in `list.rs:191-243` — after `selected_movie_item` and `selected_series_item`, check `selected_album_item` and call the new sizing function
-- [x] 1.4 Add `"music"` to the `top_hero_level` placeholder match in `list.rs:232-234` so the hero placeholder renders while the album list is loading
+- [ ] 1.1 Derive grouped Music wide mode from the padded content width using the existing shared 82-column breakpoint.
+- [ ] 1.2 Preserve the current narrow full-width pills, hero-above-list, and one-column grouped album path without behavioral changes.
+- [ ] 1.3 Add a wide grouped Music coordinator that owns the 40/60 horizontal split and clears/rebuilds layout geometry when crossing the breakpoint.
 
-## 2. Album hero content painting
+## 2. Wide Left Album And Track Workspace
 
 - [x] 2.1 Add the album branch to the hero content painting in `list.rs:515-553` — call `render_power_album_detail` with the hero's content rect when `selected_album_item` is present
 - [x] 2.2 Render album art in the hero via the existing `inline_album_art` path, positioned within the hero rect
-- [ ] 2.3 Verify track focus interaction works in the hero context: Enter activates track cursor, track navigation moves within the hero's track list, Escape exits track focus
+- [x] 2.3 Verify track focus interaction works in the hero context: Enter activates track cursor, track navigation moves within the hero's track list, Escape exits track focus
 
-## 3. Album plan: suppress inline expansion
+## 3. Wide Right Album Browser
 
-- [x] 3.1 Add `hero_handles_detail: bool` parameter to `build_grouped_album_display_plan` in `album_plan.rs`
-- [x] 3.2 When `hero_handles_detail` is true, suppress `AlbumDetailStart`, `AlbumDetailContinuation`, `AlbumDetailRule`, `AlbumLoading`, and `AlbumActionHint` rows from the plan output
-- [x] 3.3 Set `selected_block_bounds` and `track_detail_bounds` to `None` when `hero_handles_detail` is true
-- [x] 3.4 Update callers of `build_grouped_album_display_plan` to pass `hero_handles_detail: true` when rendering through `render_power_list`, `false` for any remaining non-hero callers
+- [ ] 3.1 Move music-group pills into the top of the wide right rail while retaining existing pill selection, overflow, and group-switch behavior.
+- [ ] 3.2 Render the settled artist-grouped album browser below the pills with one album per row and full-width artist labels, relying on the prerequisite change for non-selectability.
+- [ ] 3.3 Remove Music-only grouped two-column packing and left/right album-cell navigation; retain any generic column machinery that structural search shows is still used elsewhere.
+- [ ] 3.4 Preserve album cursor identity, paging, wrapping, loading/organizing messages, and scroll clamping in the narrower right rail.
 
-## 4. Two-column packing for grouped album rows
+## 4. Focus And Styling
 
-- [x] 4.1 Add `cols` parameter to `render_power_grouped_album_rows` in `album.rs`
-- [x] 4.2 Batch consecutive `Album` rows into column pairs at render time — album `i` within an artist group occupies column `i % cols`, each pair shares a terminal row
-- [x] 4.3 Render `ArtistHeader` and `ArtistGroupSpacer` rows at full width, starting a fresh row (same pattern as letter headers in `list_letter_groups.rs`)
-- [x] 4.4 Each artist group packs independently — a row never mixes albums from two groups; a trailing odd album in a group leaves the partner cell empty
-- [x] 4.5 Pass the column count from `render_power_list` through to `render_power_grouped_album_rows` via the `cols` variable already computed in `list.rs:170-174`
+- [ ] 4.1 Derive internal pane focus from outer `PanelFocus` and `album_track_focus` without adding persisted focus state.
+- [ ] 4.2 Apply Home's focused green, playback-panel, selected-row, aqua-marker, yellow-title, and unfocused text treatments reciprocally to the left workspace and right browser.
+- [ ] 4.3 Preserve Enter, track movement/playback, current-item scope, Escape/Backspace, album selection, and group-switch semantics while keeping wide geometry fixed during focus changes.
+- [ ] 4.4 Preserve selected album and focused track identity when resizing across the responsive breakpoint.
 
-## 5. Cursor movement with columns in grouped view
+## 5. Wide Track Mouse Interaction
 
-- [x] 5.1 Update `album_cursor.rs` cursor movement to accept `cols` — up/down moves by `cols` items within a group, left/right moves by 1 item
-- [x] 5.2 Handle group boundaries: down from the last row of a group moves to the first album of the next group; up from the first row moves to the last row of the previous group
-- [x] 5.3 Update `page_power_grouped_album_cursor` to page by `cols × page_rows` items
-- [x] 5.4 Update key handling in `input_lib_power_keys.rs` to pass the column count to grouped-view cursor movement
+- [ ] 5.1 Record per-track wide-mode hit targets that cover every visible wrapped row and clear them when the wide Music layout is not active.
+- [ ] 5.2 Make single-click select the logical track and shift focus left; make double-click select and play that track through the existing playback path.
+- [ ] 5.3 Ensure album and group-pill clicks clear track focus and return focus right, while artwork and blank hero space do not activate tracks or playback.
 
-## 6. Dispatch change and music.rs cleanup
+## 6. Tests And Verification
 
-- [ ] 6.1 In `power_widgets.rs:569-570`, remove the `is_album_folders && is_music_group` branch so it falls through to `render_power_list`
-- [ ] 6.2 Move the loading/organizing state messages from `music.rs:97-146` into `render_power_list`'s empty-items handling, gated on `is_music_group_view`
-- [ ] 6.3 Delete `render_power_music_group_view` from `music.rs`; keep `render_power_music_group_pills_row`
-- [ ] 6.4 Verify the music-group pills in `mod.rs:511-528` still render correctly above the hero — the pills carve rows from `lib_area` before `render_power_list` receives it, so no change expected
+- [x] 6.1 In `power_widgets.rs:569-570`, remove the `is_album_folders && is_music_group` branch so it falls through to `render_power_list`
+- [x] 6.2 Move the loading/organizing state messages from `music.rs:97-146` into `render_power_list`'s empty-items handling, gated on `is_music_group_view`
+- [x] 6.3 Delete `render_power_music_group_view` from `music.rs`; keep `render_power_music_group_pills_row`
+- [x] 6.4 Verify the music-group pills in `mod.rs:511-528` still render correctly above the hero — the pills carve rows from `lib_area` before `render_power_list` receives it, so no change expected
 
 ## 7. Tests and verification
 
-- [ ] 7.1 Update existing album plan tests (`tests_album_focus.rs`, `tests_album_listing.rs`) with `hero_handles_detail: true` variants
-- [ ] 7.2 Update music-group rendering tests (`tests_music_groups.rs`) for the new hero + two-column layout
-- [ ] 7.3 Add test: album hero sizing matches the expanded block height computed by the standalone sizing function
-- [ ] 7.4 Add test: two-column grouped album rows pack correctly with full-width artist headers and independent group packing
+- [x] 7.1 Update existing album plan tests (`tests_album_focus.rs`, `tests_album_listing.rs`) with `hero_handles_detail: true` variants
+- [x] 7.2 Update music-group rendering tests (`tests_music_groups.rs`) for the new hero + two-column layout
+- [x] 7.3 Add test: album hero sizing matches the expanded block height computed by the standalone sizing function
+- [x] 7.4 Add test: two-column grouped album rows pack correctly with full-width artist headers and independent group packing
 - [ ] 7.5 Visual verification in a real terminal at multiple widths (narrow 1-col, threshold, wide 2-col) with a music library with levels
 - [ ] 7.6 Verify track focus, artist header selection, and group pill switching all work in the hero context
-- [ ] 7.7 Run `cargo test -p mbv-core` and `cargo clippy --workspace --all-targets`
+- [x] 7.7 Run `cargo test -p mbv-core` and `cargo clippy --workspace --all-targets`

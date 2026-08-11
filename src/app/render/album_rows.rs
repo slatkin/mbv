@@ -1,8 +1,8 @@
 use super::super::ui_util::trunc_str;
+use super::album_plan::ArtistGroupHeader;
 use super::list_rows::{
     focused_aqua_or_muted, focused_or_muted, focused_or_muted_soft_white, focused_or_subtle,
 };
-use crate::app::ArtistHeaderSelection;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -19,10 +19,9 @@ pub(super) struct AlbumRowCtx<'a> {
     pub idx: usize,
     pub album_info: &'a [(String, String, String)],
     pub cursor: usize,
-    pub header_selected: bool,
     pub avail: usize,
     pub selected_block_bounds: Option<(usize, usize)>,
-    pub selectable_headers: bool,
+    pub in_music_group_view: bool,
     pub abs_row_idx: usize,
     pub selected_art_reserved_w: u16,
     pub focused: bool,
@@ -33,22 +32,15 @@ impl App {
         &self,
         f: &mut Frame,
         row_area: Rect,
-        selection: &ArtistHeaderSelection,
-        selectable_headers: bool,
+        header: &ArtistGroupHeader,
+        in_music_group_view: bool,
         selected_block_bounds: Option<(usize, usize)>,
         abs_row_idx: usize,
         selected_art_reserved_w: u16,
-        focused: bool,
-        lib_idx: usize,
     ) {
-        let selected = selectable_headers
-            && self.libs[lib_idx]
-                .artist_header_focus
-                .as_ref()
-                .is_some_and(|focused| focused == selection);
         let in_selected_block = selected_block_bounds
             .is_some_and(|(top, bottom)| abs_row_idx > top && abs_row_idx < bottom);
-        let grouped_block = selectable_headers && in_selected_block;
+        let grouped_block = in_music_group_view && in_selected_block;
         let label_area = if in_selected_block {
             Rect {
                 width: row_area.width.saturating_sub(selected_art_reserved_w),
@@ -59,23 +51,11 @@ impl App {
         };
         let gutter_w = if grouped_block { 2 } else { 1 };
         let label_avail = (label_area.width as usize).saturating_sub(gutter_w);
-        let artist_label = trunc_str(&selection.artist_label, label_avail);
-        let label_style = if selected && grouped_block {
-            Style::default()
-                .fg(palette::FOAM)
-                .add_modifier(Modifier::BOLD)
-        } else if selected && focused {
-            Style::default()
-                .fg(palette::YELLOW)
-                .add_modifier(Modifier::BOLD)
-        } else if selected || focused {
-            Style::default().fg(palette::YELLOW)
-        } else {
-            Style::default().fg(palette::SUBTLE)
-        };
+        let artist_label = trunc_str(&header.artist_label, label_avail);
+        let label_style = Style::default().fg(palette::SUBTLE);
         let mut spans = Vec::with_capacity(3);
         if grouped_block {
-            spans.push(super::selection_marker(selected));
+            spans.push(super::selection_marker(false));
             spans.push(Span::raw(" "));
         } else {
             spans.push(Span::raw(" "));
@@ -90,15 +70,14 @@ impl App {
             idx,
             album_info,
             cursor,
-            header_selected,
             avail,
             selected_block_bounds,
-            selectable_headers,
+            in_music_group_view,
             abs_row_idx,
             selected_art_reserved_w,
             focused,
         } = ctx;
-        let selected = idx == cursor && !header_selected;
+        let selected = idx == cursor;
         let (_, year_str, album_name) = &album_info[idx];
         let suffix_w = if year_str.is_empty() {
             0
@@ -110,7 +89,7 @@ impl App {
         let trunc_name = trunc_str(album_name, name_w);
         let in_selected_block = selected_block_bounds
             .is_some_and(|(top, bottom)| abs_row_idx > top && abs_row_idx < bottom);
-        let grouped_block = selectable_headers && in_selected_block;
+        let grouped_block = in_music_group_view && in_selected_block;
 
         if grouped_block {
             let content_width = row_area
@@ -266,11 +245,63 @@ impl App {
         f.render_widget(Paragraph::new(Line::from(spans)), album_area);
     }
 
+    pub(super) fn render_wide_selected_album_row(
+        &self,
+        f: &mut Frame,
+        row_area: Rect,
+        panel_area: Rect,
+        idx: usize,
+        album_info: &[(String, String, String)],
+    ) {
+        let (_, year, title) = &album_info[idx];
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+            Rect {
+                x: panel_area.x,
+                y: row_area.y,
+                width: panel_area.width,
+                height: 1,
+            },
+        );
+
+        let suffix = if year.is_empty() {
+            String::new()
+        } else {
+            format!("  {year}")
+        };
+        let title_width = panel_area
+            .width
+            .saturating_sub(2 + suffix.chars().count() as u16) as usize;
+        let title = trunc_str(title, title_width);
+        let mut spans = vec![
+            Span::styled("▍", Style::default().fg(palette::AQUA)),
+            Span::raw(" "),
+            Span::styled(
+                title,
+                Style::default()
+                    .fg(palette::WHITE)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ];
+        if !suffix.is_empty() {
+            spans.push(Span::styled(suffix, Style::default().fg(palette::GREEN)));
+        }
+        f.render_widget(
+            Paragraph::new(Line::from(spans)),
+            Rect {
+                x: panel_area.x,
+                y: row_area.y,
+                width: panel_area.width,
+                height: 1,
+            },
+        );
+    }
+
     pub(super) fn render_album_action_hint(
         &self,
         f: &mut Frame,
         row_area: Rect,
-        selectable_headers: bool,
+        in_music_group_view: bool,
         selected_block_bounds: Option<(usize, usize)>,
         abs_row_idx: usize,
         selected_art_reserved_w: u16,
@@ -279,7 +310,7 @@ impl App {
     ) {
         let in_selected_block = selected_block_bounds
             .is_some_and(|(top, bottom)| abs_row_idx > top && abs_row_idx < bottom);
-        let hint = if selectable_headers
+        let hint = if in_music_group_view
             && in_selected_block
             && self.libs[lib_idx].album_track_focus.is_some()
         {
@@ -287,7 +318,7 @@ impl App {
         } else {
             "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks"
         };
-        let gutter_w = if selectable_headers && in_selected_block {
+        let gutter_w = if in_music_group_view && in_selected_block {
             2
         } else {
             1
@@ -314,42 +345,6 @@ impl App {
             Rect {
                 width: row_area.width.saturating_sub(selected_art_reserved_w),
                 height: hint_lines.len() as u16,
-                ..row_area
-            },
-        );
-    }
-
-    pub(super) fn render_artist_action_hint(
-        f: &mut Frame,
-        row_area: Rect,
-        selectable_headers: bool,
-        selected_block_bounds: Option<(usize, usize)>,
-        abs_row_idx: usize,
-        selected_art_reserved_w: u16,
-        focused: bool,
-    ) {
-        let in_selected_block = selected_block_bounds
-            .is_some_and(|(top, bottom)| abs_row_idx > top && abs_row_idx < bottom);
-        let gutter_w = if selectable_headers && in_selected_block {
-            2
-        } else {
-            1
-        };
-        let hint_w = row_area
-            .width
-            .saturating_sub(selected_art_reserved_w)
-            .saturating_sub(gutter_w) as usize;
-        let hint = trunc_str("^P: Play | ^A: Enqueue | ^S: Shuffle", hint_w);
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::raw(" ".repeat(gutter_w as usize)),
-                Span::styled(
-                    hint.to_string(),
-                    Style::default().fg(focused_or_muted_soft_white(focused)),
-                ),
-            ])),
-            Rect {
-                width: row_area.width.saturating_sub(selected_art_reserved_w),
                 ..row_area
             },
         );

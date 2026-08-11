@@ -1,7 +1,6 @@
 use super::types_browse::BrowseLevel;
 use super::types_browse::LibSearch;
 use super::types_feed::FeedHomeVideoState;
-use super::types_playback::ArtistHeaderSelection;
 use mbv_core::api::EmbyItem;
 
 pub(super) struct LibraryTab {
@@ -14,7 +13,6 @@ pub(super) struct LibraryTab {
     /// `idx` indexes into that album's cached track list
     /// (`App::album_tracks_cache`). `None` = normal album-list navigation.
     pub(super) album_track_focus: Option<usize>,
-    pub(super) artist_header_focus: Option<ArtistHeaderSelection>,
     /// `Some(ep_idx)` = series-selection mode is active for the Series item
     /// currently shown inline at the library list nav level;
     /// `ep_idx` indexes into the cached episode list for the current season.
@@ -34,7 +32,6 @@ pub(super) struct LibraryTab {
 impl LibraryTab {
     pub(super) fn clear_music_focus(&mut self) {
         self.album_track_focus = None;
-        self.artist_header_focus = None;
     }
 
     pub(super) fn library_position_snapshot(&self) -> crate::config::LibraryPosition {

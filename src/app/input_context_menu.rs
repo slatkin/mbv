@@ -36,13 +36,7 @@ impl App {
                 None
             }
         });
-        let artist_header_context = lib_idx
-            .and_then(|lib_idx| self.selected_artist_header_album_items(lib_idx))
-            .map(|(selection, _)| selection);
-
-        let current_item = if artist_header_context.is_some() {
-            None
-        } else if cw_focused {
+        let current_item = if cw_focused {
             self.home
                 .continue_items
                 .get(self.home.continue_cursor)
@@ -56,23 +50,7 @@ impl App {
             None
         };
 
-        if let Some(selection) = artist_header_context {
-            Self::push_context_action(
-                &mut entries,
-                "Play All",
-                ContextAction::PlayArtistHeader(selection.clone()),
-            );
-            Self::push_context_action(
-                &mut entries,
-                "Shuffle",
-                ContextAction::ShuffleArtistHeader(selection.clone()),
-            );
-            Self::push_context_action(
-                &mut entries,
-                "Add to Queue",
-                ContextAction::EnqueueArtistHeader(selection),
-            );
-        } else if let Some(ref item) = current_item {
+        if let Some(ref item) = current_item {
             if item.is_folder {
                 Self::push_context_action(
                     &mut entries,

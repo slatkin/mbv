@@ -3,7 +3,7 @@ use super::album_art::INLINE_ALBUM_ART_RESERVED;
 use super::detail::compact_banner_image_cache_key;
 use super::list_rows::{ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING};
 use crate::app::layout::LayoutMain;
-use crate::app::{palette, App};
+use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -101,6 +101,20 @@ impl App {
         // Ensure the library is loaded when a library tab is selected.
         if let Some(lib_idx) = self.tab.library_index() {
             self.ensure_lib_loaded_for(lib_idx);
+        }
+
+        // Wide grouped Music uses a Music-specific horizontal split at or
+        // above the shared 82-column breakpoint. The narrow path
+        // (below breakpoint) continues unchanged through the existing hero-
+        // above-list renderer.
+        if let Some(lib_idx) = self.tab.library_index() {
+            if self.is_music_group_view(lib_idx)
+                && self.is_viewing_album_folders(lib_idx)
+                && area.width >= TWO_COLUMN_THRESHOLD
+            {
+                self.render_wide_music_group(f, area, lib_idx, focused, layout);
+                return;
+            }
         }
 
         let mut content_area = area;

@@ -1,6 +1,6 @@
 use crate::app::render::{parse_album_folder_name, strip_article};
 use crate::app::ui_util::natural_sort_key;
-use crate::app::{App, ArtistHeaderSelection};
+use crate::app::App;
 use mbv_core::api::EmbyItem;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -36,6 +36,7 @@ pub(super) struct GroupedAlbumEntry {
 
 #[derive(Clone)]
 pub(super) struct GroupedAlbumGroup {
+    #[allow(dead_code)] // used in tests
     pub(super) artist: String,
     pub(super) start: usize,
     pub(super) end: usize,
@@ -74,12 +75,6 @@ impl MusicGroupingState {
             candidate: None,
             settled: None,
         }
-    }
-}
-
-impl GroupedAlbumCatalog {
-    pub(super) fn group_for_artist(&self, artist: &str) -> Option<&GroupedAlbumGroup> {
-        self.groups.iter().find(|g| g.artist == artist)
     }
 }
 
@@ -302,8 +297,8 @@ impl App {
     }
 
     /// Commits the candidate's settled catalog when its source revision still
-    /// matches the active browse level, anchoring the cursor and artist-header
-    /// focus by album identity so a replacement keeps the selection in view.
+    /// matches the active browse level, anchoring the cursor by album identity
+    /// so a replacement keeps the selection in view.
     fn commit_music_grouping_candidate(&mut self, lib_idx: usize) {
         let lib = &mut self.libs[lib_idx];
         let Some(level) = lib.nav_stack.last_mut() else {
@@ -318,49 +313,23 @@ impl App {
         if candidate.revision != state.revision || candidate.parent_id != level.parent_id {
             return;
         }
-        let had_settled = state.settled.is_some();
-        let anchor = had_settled.then(|| {
-            (
-                level.items.get(level.cursor).map(|item| item.id.clone()),
-                lib.artist_header_focus
-                    .as_ref()
-                    .map(|s| s.first_album_id.clone()),
-            )
-        });
+        let anchor_album_id = state
+            .settled
+            .is_some()
+            .then(|| level.items.get(level.cursor).map(|item| item.id.clone()));
         let mut catalog = build_grouped_album_catalog(&level.items, &candidate.resolved);
         catalog.revision = candidate.revision;
         catalog.parent_id = candidate.parent_id;
         state.settled = Some(catalog);
         let catalog = state.settled.as_ref().expect("catalog just inserted");
-        match anchor {
-            Some((selected_album_id, header_first_album_id)) => {
-                if let Some(id) = selected_album_id {
-                    if let Some(&pos) = catalog.id_to_entry.get(&id) {
-                        level.cursor = catalog.entries[pos].album_index;
-                    } else if let Some(first) = catalog.entries.first() {
-                        level.cursor = first.album_index;
-                    }
-                }
-                if header_first_album_id.is_some() {
-                    if let Some(selection) = lib.artist_header_focus.clone() {
-                        match catalog.group_for_artist(&selection.artist_label) {
-                            Some(group) => {
-                                let first_album_id = catalog.entries[group.start].album_id.clone();
-                                lib.artist_header_focus = Some(ArtistHeaderSelection {
-                                    first_album_id,
-                                    artist_label: selection.artist_label,
-                                });
-                            }
-                            None => lib.artist_header_focus = None,
-                        }
-                    }
-                }
+        if let Some(Some(id)) = anchor_album_id {
+            if let Some(&pos) = catalog.id_to_entry.get(&id) {
+                level.cursor = catalog.entries[pos].album_index;
+            } else if let Some(first) = catalog.entries.first() {
+                level.cursor = first.album_index;
             }
-            None => {
-                if let Some(first) = catalog.entries.first() {
-                    level.cursor = first.album_index;
-                }
-            }
+        } else if let Some(first) = catalog.entries.first() {
+            level.cursor = first.album_index;
         }
     }
 }

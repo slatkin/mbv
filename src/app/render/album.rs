@@ -100,18 +100,14 @@ impl App {
 
         layout.inline_image_rect = None;
 
-        let selected = self.selected_music_artist_header(lib_idx);
-        let selectable_headers = self.is_music_group_view(lib_idx);
-        // When an artist header is the focused row, the album under the
-        // cursor must not also render as selected -- only one row group
-        // (header or album) is ever the actual focus target at a time.
-        let header_selected = selected.is_some();
+        let in_music_group_view = self.is_music_group_view(lib_idx);
         // Inline track expansion for the selected album: in the music-group
         // (pill selector) view, only expand once the user has pressed Enter
         // to enter track-selection mode (`album_track_focus`); elsewhere
         // (plain album-folder browsing) the existing always-expand behavior
         // is unchanged.
-        let expand_selected = !selectable_headers || self.libs[lib_idx].album_track_focus.is_some();
+        let expand_selected =
+            !in_music_group_view || self.libs[lib_idx].album_track_focus.is_some();
         let plan = self.build_grouped_album_display_plan(
             albums,
             &album_info,
@@ -119,8 +115,7 @@ impl App {
             cursor,
             true,
             HeaderFocusCtx {
-                selectable_headers,
-                selected_artist_header: selected.as_ref(),
+                in_music_group_view,
                 expand_selected,
             },
             Some((
@@ -133,9 +128,6 @@ impl App {
             )),
             hero_handles_detail,
         );
-        if selected.is_some() && !plan.selected_artist_header_valid {
-            self.clear_artist_header_focus(lib_idx);
-        }
         layout.left_sorted_indices = plan.order.clone();
         let display_cursor = plan.display_cursor;
         let display_rows = plan.rows;
@@ -240,7 +232,7 @@ impl App {
                 let screen_row = screen_offset + vi;
                 (0..display_rows.len())
                     .find(|&d| display_screen_rows[d] == screen_row)
-                    .and_then(|d| display_rows[d].row_target(selectable_headers))
+                    .and_then(|d| display_rows[d].row_target())
             })
             .collect();
         let total_screen_rows = sr.len();
@@ -337,17 +329,15 @@ impl App {
             };
 
             match row {
-                GroupedAlbumDisplayRow::ArtistHeader(selection) => {
+                GroupedAlbumDisplayRow::ArtistHeader(header) => {
                     self.render_artist_header_row(
                         f,
                         row_area,
-                        selection,
-                        selectable_headers,
+                        header,
+                        in_music_group_view,
                         selected_block_bounds,
                         abs_row_idx,
                         selected_art_reserved_w,
-                        focused,
-                        lib_idx,
                     );
                 }
                 GroupedAlbumDisplayRow::ArtistGroupSpacer => {}
@@ -364,10 +354,9 @@ impl App {
                             idx: *idx,
                             album_info: &album_info,
                             cursor,
-                            header_selected,
                             avail,
                             selected_block_bounds,
-                            selectable_headers,
+                            in_music_group_view,
                             abs_row_idx,
                             selected_art_reserved_w,
                             focused,
@@ -378,22 +367,11 @@ impl App {
                     self.render_album_action_hint(
                         f,
                         row_area,
-                        selectable_headers,
+                        in_music_group_view,
                         selected_block_bounds,
                         abs_row_idx,
                         selected_art_reserved_w,
                         lib_idx,
-                        focused,
-                    );
-                }
-                GroupedAlbumDisplayRow::ArtistActionHint => {
-                    Self::render_artist_action_hint(
-                        f,
-                        row_area,
-                        selectable_headers,
-                        selected_block_bounds,
-                        abs_row_idx,
-                        selected_art_reserved_w,
                         focused,
                     );
                 }
@@ -497,17 +475,7 @@ impl App {
                     width: area.width,
                     height: (visible_bottom - art_top) as u16,
                 };
-                if let Some(selection) = &selected {
-                    // Collage: the selected artist header's albums, in the
-                    // already-sorted `left_sorted_indices` order, first 4.
-                    let header_albums: Vec<mbv_core::api::EmbyItem> = layout
-                        .left_sorted_indices
-                        .iter()
-                        .filter(|&&idx| album_info[idx].0 == selection.artist_label)
-                        .filter_map(|&idx| albums.get(idx).cloned())
-                        .collect();
-                    self.render_inline_artist_collage(f, art_rect, &header_albums, layout);
-                } else if let Some(album) = albums.get(cursor) {
+                if let Some(album) = albums.get(cursor) {
                     self.render_inline_album_art(f, art_rect, album, layout);
                 }
             }

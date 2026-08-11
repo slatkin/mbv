@@ -76,15 +76,10 @@ fn selecting_music_group_clears_track_focus() {
     group2.is_folder = true;
     app.libs[0].nav_stack[0].items.push(group2);
     app.libs[0].album_track_focus = Some(1);
-    app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
-        first_album_id: "album-1".into(),
-        artist_label: "Unknown Artist".into(),
-    });
 
     app.select_music_group(0, 1);
 
     assert!(app.libs[0].album_track_focus.is_none());
-    assert!(app.libs[0].artist_header_focus.is_none());
 }
 
 #[test]
@@ -95,15 +90,10 @@ fn switching_music_group_clears_track_focus() {
     group2.is_folder = true;
     app.libs[0].nav_stack[0].items.push(group2);
     app.libs[0].album_track_focus = Some(1);
-    app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
-        first_album_id: "album-1".into(),
-        artist_label: "Unknown Artist".into(),
-    });
 
     app.switch_music_group(0, 1);
 
     assert!(app.libs[0].album_track_focus.is_none());
-    assert!(app.libs[0].artist_header_focus.is_none());
 }
 
 #[test]
@@ -364,19 +354,17 @@ fn two_column_album_navigation_strides_rows_and_crosses_groups() {
     // Down strides one row (cols = 2) within the Alpha group.
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 2);
-    assert!(app.libs[0].artist_header_focus.is_none());
 
     // Left/right move by a single album.
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 3);
 
-    // Down from Alpha's last row jumps to the first album of the next
-    // group (Beta), never resting on the artist header.
+    // Down from Alpha's last row moves by cols (2) in the flat album-only
+    // target list, crossing the group boundary without resting on a header.
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 4);
-    assert!(app.libs[0].artist_header_focus.is_none());
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 5);
 
-    // Up from Beta's first row lands on the previous group's last row.
+    // Up from the second Beta album moves back by cols (2).
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 3);
 }
@@ -397,7 +385,6 @@ fn oversized_artist_navigation_reaches_hidden_albums_before_following_artist() {
             app.libs[0].nav_stack.last().unwrap().cursor,
             expected_cursor
         );
-        assert!(app.libs[0].artist_header_focus.is_none());
     }
 }
 
@@ -410,7 +397,6 @@ fn page_down_crosses_oversized_artist_window_to_following_artist() {
 
     app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
-    assert!(app.libs[0].artist_header_focus.is_none());
     assert_eq!(
         app.libs[0].nav_stack.last().unwrap().cursor,
         60,
