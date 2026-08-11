@@ -43,28 +43,33 @@ impl App {
         // Drain all available results.
         while let Ok(result) = rx.try_recv() {
             had_events = true;
+            let feed_id = result.feed_id;
             let idx = result.subscription_index;
-            match result.entries {
-                Ok(mut entries) => {
-                    if idx < self.feed_tab.entries.len() {
-                        let feed_id = self.feed_tab.subscriptions.get(idx).map(|s| s.url.clone());
-                        if let Some(feed_id) = feed_id {
-                            self.hydrate_feed_entries_for_subscription(&feed_id, &mut entries);
+            let is_current_subscription = self
+                .feed_tab
+                .subscriptions
+                .get(idx)
+                .is_some_and(|subscription| subscription.url == feed_id);
+            if is_current_subscription {
+                match result.entries {
+                    Ok(mut entries) => {
+                        self.hydrate_feed_entries_for_subscription(&feed_id, &mut entries);
+                        if let Some(slot) = self.feed_tab.entries.get_mut(idx) {
+                            *slot = entries;
                         }
-                        self.feed_tab.entries[idx] = entries;
                     }
-                }
-                Err(e) => {
-                    self.flash(
-                        format!("Feed '{}' refresh failed: {e}", {
-                            self.feed_tab
-                                .subscriptions
-                                .get(idx)
-                                .map(|s| s.name.as_str())
-                                .unwrap_or("?")
-                        }),
-                        ToastSeverity::Error,
-                    );
+                    Err(e) => {
+                        self.flash(
+                            format!("Feed '{}' refresh failed: {e}", {
+                                self.feed_tab
+                                    .subscriptions
+                                    .get(idx)
+                                    .map(|s| s.name.as_str())
+                                    .unwrap_or("?")
+                            }),
+                            ToastSeverity::Error,
+                        );
+                    }
                 }
             }
             // Decrement outstanding count; loading stays true until every
@@ -111,6 +116,7 @@ impl App {
             std::thread::spawn(move || {
                 let result = fetch_and_parse_entries(&url, kind, &feed_id);
                 let _ = tx.send(FeedTabRefreshResult {
+                    feed_id,
                     subscription_index: idx,
                     entries: result,
                 });

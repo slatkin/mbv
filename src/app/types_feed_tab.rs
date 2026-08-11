@@ -41,6 +41,7 @@ impl WatchedFilter {
 
 /// Result sent from a background fetch thread back to the Feeds tab.
 pub(super) struct FeedTabRefreshResult {
+    pub feed_id: String,
     pub subscription_index: usize,
     pub entries: Result<Vec<FeedEntry>, String>,
 }
