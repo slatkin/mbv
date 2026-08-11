@@ -421,12 +421,12 @@ impl App {
     /// Shared append/sync/rollback tail for a single-item enqueue
     /// (extracted from `enqueue_selected`'s two branches, which had
     /// duplicated this verbatim): appends `item` to the visible queue,
-    /// marks local queue metadata dirty when applicable, flashes a status
-    /// confirmation, and syncs the append to the direct-remote queue /
-    /// local persistence -- rolling the whole append back if the sync
-    /// fails.
+    /// marks local queue metadata dirty when applicable, and syncs the
+    /// append to the direct-remote queue / local persistence -- rolling
+    /// the whole append back if the sync fails.  The visible queue
+    /// mutation is the success confirmation; no enqueue success toast is
+    /// emitted.
     pub(super) fn append_item_to_queue_and_sync(&mut self, item: EmbyItem) {
-        let name = item.display_name();
         let scope = self.visible_queue_scope();
         let appended = item.clone();
         let previous_dirty = self.queue_dirty;
@@ -435,7 +435,6 @@ impl App {
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
-        self.flash(format!("Added: {name}"), ToastSeverity::Success);
         if self.sync_playback_queue_after_append(scope, vec![appended]) {
             self.persist_local_queue_state_if_needed(scope);
             self.retire_tracking_after_queue_mutation();
