@@ -26,13 +26,17 @@ Source of truth: `ctrl.rs` (protocol), `api_types.rs` (Emby wire types),
 (`FeedEntry`/`QueueItem`), all in `mbv-core`. Change these before their callers.
 
 ## Commands
+Prefer cargo nextest over cargo test.
+
+Additional cargo tools are available and should be preferred: cargo watch, cargo expand, cargo edit
+
 Builds and tests run_in_background.
 - `cargo check -p mbv-core` — prefer over workspace builds
-- `cargo test -p mbv-core`
+- `cargo nextest run -p mbv-core`
 - `cargo clippy --workspace --all-targets`
 - `make check-code-file-lines`
 
-Additional cargo tools are available and should be preferred: cargo nextest, cargo watch, cargo expand, cargo edit
+Use difftastic (difft) is also available and can be used with git.
 
 You run in an environment where ast-grep is available; whenever a search requires syntax-aware or structural matching, default to ast-grep --lang rust -p '<pattern>' (or set --lang appropriately) and avoid falling back to text-only tools like rg or grep unless I explicitly request a plain-text search.
 
