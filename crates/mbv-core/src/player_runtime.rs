@@ -477,7 +477,7 @@ fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
         opt!("input-vo-keyboard", "yes");
         opt!("wayland-app-id", "mbv");
         opt!("demuxer-max-bytes", "50M");
-        opt!("demuxer-max-back-bytes", "10M");
+        opt!("demuxer-max-back-bytes", "100M");
         opt!("gapless-audio", "weak");
         if no_scripts || !use_mpv_config {
             opt!("load-scripts", "no");
