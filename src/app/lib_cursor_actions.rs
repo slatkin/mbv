@@ -329,7 +329,9 @@ impl App {
         if !detail.episodes.contains_key(&new_season.id) {
             let series_id = item.id.clone();
             let season_id = new_season.id.clone();
-            let client = self.client.lock().unwrap().clone();
+            let Some(client) = self.emby_snapshot() else {
+                return;
+            };
             let tx = self.lib_tx.clone();
             std::thread::spawn(move || {
                 let eps = client

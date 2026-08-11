@@ -197,7 +197,10 @@ impl App {
             self.submit_attached_sequence(&id, &items, start_idx);
             return;
         }
-        let c = Arc::new(self.client.lock().unwrap().clone());
+        let Some(c) = self.emby_snapshot().map(Arc::new) else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
         if direct_remote {
             if let Some(item) = items.get(start_idx) {
                 self.flash(
@@ -247,14 +250,21 @@ impl App {
             return;
         }
         if !item.series_id.is_empty() && self.player.always_play_next {
-            let c = self.client.lock().unwrap();
+            let Some(client) = self.emby_client() else {
+                self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                return;
+            };
+            let c = client.lock().unwrap();
             let episodes = c.get_episodes_from(
                 &ItemId::new(item.series_id.as_str()),
                 &ItemId::new(item.id.as_str()),
             );
             drop(c);
             if episodes.len() > 1 {
-                let c = Arc::new(self.client.lock().unwrap().clone());
+                let Some(c) = self.emby_snapshot().map(Arc::new) else {
+                    self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                    return;
+                };
                 if !direct_remote {
                     self.on_queue_replace_silent();
                     self.replace_playback_queue(episodes.clone(), 0);
@@ -270,7 +280,10 @@ impl App {
                 return;
             }
         }
-        let c = Arc::new(self.client.lock().unwrap().clone());
+        let Some(c) = self.emby_snapshot().map(Arc::new) else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
         if !direct_remote {
             self.replace_playback_queue(vec![item.clone()], 0);
         } else {
@@ -291,7 +304,11 @@ impl App {
         if self.enqueue_route_conflict(resolved) {
             return;
         }
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
+        let client = client.lock().unwrap();
         match client.get_all_playable_recursive(&item.id) {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
@@ -376,7 +393,11 @@ impl App {
         }
         if is_playable(&item) {
             let fresh = {
-                let c = self.client.lock().unwrap();
+                let Some(client) = self.emby_client() else {
+                    self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                    return;
+                };
+                let c = client.lock().unwrap();
                 c.get_items_by_ids(std::slice::from_ref(&item.id))
                     .ok()
                     .and_then(|mut v| {
@@ -448,7 +469,11 @@ impl App {
                 self.save_default_library_position(lib_idx);
             }
             let fresh = {
-                let c = self.client.lock().unwrap();
+                let Some(client) = self.emby_client() else {
+                    self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                    return;
+                };
+                let c = client.lock().unwrap();
                 c.get_items_by_ids(std::slice::from_ref(&item.id))
                     .ok()
                     .and_then(|mut v| {
@@ -480,7 +505,7 @@ impl App {
                     return;
                 }
             }
-            let autoload = self.client.lock().unwrap().config.autoload;
+            let autoload = self.config.lock().unwrap().autoload;
             if autoload {
                 let parent_id = if self.is_feed_home_video_group_view(lib_idx) {
                     self.feed_home_video_selected_parent_id(lib_idx)
@@ -491,7 +516,11 @@ impl App {
                         .map(|l| l.parent_id.clone())
                 };
                 if let Some(parent_id) = parent_id {
-                    let client = self.client.lock().unwrap();
+                    let Some(client) = self.emby_client() else {
+                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                        return;
+                    };
+                    let client = client.lock().unwrap();
                     match client.get_direct_playable(&parent_id) {
                         Ok(mut siblings) => {
                             siblings.retain(|i| !i.is_folder);

@@ -42,6 +42,10 @@ fi
 while IFS= read -r -d '' path; do
     is_governed_path "$path" || continue
 
+    # A tracked deletion is still listed by git until the change is staged.
+    # It has no source contents to count; existing files remain governed.
+    [[ -e "$path" ]] || continue
+
     if ! lines=$(wc -l < "$path"); then
         printf 'code-file-lines: unable to count %s; refusing to pass\n' "$path" >&2
         errors=1

@@ -19,7 +19,11 @@ impl App {
                 }
                 self.on_queue_replace_silent();
                 let items = {
-                    let c = self.client.lock().unwrap();
+                    let Some(client) = self.emby_client() else {
+                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                        return;
+                    };
+                    let c = client.lock().unwrap();
                     match c.get_items_by_ids(&item_ids) {
                         Ok(v) => v,
                         Err(e) => {
@@ -44,12 +48,18 @@ impl App {
                     }
                     self.player_tab.set_items(vec![item.clone()], 0);
                     self.flash(item.playback_label(), ToastSeverity::Neutral);
-                    let c = Arc::new(self.client.lock().unwrap().clone());
+                    let Some(c) = self.emby_snapshot().map(Arc::new) else {
+                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                        return;
+                    };
                     self.player
                         .play(&item, self.queue_source.clone(), c, self.ui_volume);
                 } else {
                     self.player_tab.set_items(items.clone(), start_idx);
-                    let c = Arc::new(self.client.lock().unwrap().clone());
+                    let Some(c) = self.emby_snapshot().map(Arc::new) else {
+                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                        return;
+                    };
                     log::info!(target: "ws", "Play multi: count={}, start_idx={start_idx}", items.len());
                     // Always hand the whole list to play_queue (not just the clicked
                     // item) so the remote-controlled queue continues past start_idx.

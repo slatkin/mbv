@@ -1,4 +1,17 @@
 impl EmbyClient {
+    fn service_failure(context: &str, error: ureq::Error) -> crate::service_runtime::EmbyFailure {
+        let class = match error {
+            ureq::Error::Status(401 | 403, _) => {
+                crate::service_runtime::EmbyFailureClass::AuthenticationRejected
+            }
+            _ => crate::service_runtime::EmbyFailureClass::Unavailable,
+        };
+        crate::service_runtime::EmbyFailure {
+            class,
+            message: format!("{context}: {error}"),
+        }
+    }
+
     // ── HTTP infrastructure ──────────────────────────────────────────────────
 
     pub fn new(config: Config) -> Self {
@@ -121,6 +134,176 @@ impl EmbyClient {
         let mut clone = self.clone();
         crate::bounded::run_with_hard_bound(
             move || clone.authenticate().map(|()| clone),
+            hard_bound,
+        )
+    }
+
+    /// Validate a token from the Service secret store without consulting the
+    /// legacy token cache. The whole operation is bounded so startup can leave
+    /// the TUI responsive even when Emby is unreachable.
+    pub fn authenticate_service_token_bounded(
+        &self,
+        token: String,
+        hard_bound: std::time::Duration,
+    ) -> Result<EmbyClient, String> {
+        let mut clone = self.clone();
+        clone.token = token;
+        crate::bounded::run_with_hard_bound(
+            move || {
+                let users: Value = clone
+                    .get("/Users")
+                    .call()
+                    .map_err(|e| format!("service credential validation failed: {e}"))?
+                    .into_json()
+                    .map_err(|e| format!("service credential response failed: {e}"))?;
+                let users = users
+                    .as_array()
+                    .ok_or_else(|| "service credential response was not a user list".to_string())?;
+                let user = clone
+                    .config
+                    .username
+                    .is_empty()
+                    .then(|| users.first())
+                    .flatten()
+                    .or_else(|| {
+                        users.iter().find(|user| {
+                            user["Name"].as_str().is_some_and(|name| {
+                                name.eq_ignore_ascii_case(&clone.config.username)
+                            })
+                        })
+                    })
+                    .ok_or_else(|| "no matching Emby user".to_string())?;
+                clone.user_id = user["Id"].as_str().unwrap_or_default().to_string();
+                if let Some(name) = user["Name"].as_str() {
+                    clone.config.username = name.to_string();
+                }
+                Ok(clone)
+            },
+            hard_bound,
+        )
+    }
+
+    /// Validate a token against the persisted provider identity. Unlike the
+    /// older compatibility method, this never rediscovers the user via `/Users`.
+    pub fn authenticate_service_setup_bounded(
+        &self,
+        token: String,
+        setup: &crate::config::EmbySetup,
+        hard_bound: std::time::Duration,
+    ) -> Result<EmbyClient, crate::service_runtime::EmbyFailure> {
+        let mut clone = self.clone();
+        clone.config.server_url = setup.server_url.trim_end_matches('/').to_string();
+        clone.user_id = setup.user_id.clone();
+        clone.token = token;
+        crate::bounded::run_with_hard_bound(
+            move || {
+                clone
+                    .get(&format!("/Users/{}", clone.user_id))
+                    .call()
+                    .map_err(|e| {
+                        Self::service_failure("service credential validation failed", e)
+                    })?;
+                Ok(clone)
+            },
+            hard_bound,
+        )
+    }
+
+    /// Exchange transient setup credentials for an Emby Service credential.
+    /// This deliberately has no persistence side effect: callers decide when
+    /// the validated token is safe to commit.
+    pub fn exchange_credentials_bounded(
+        &self,
+        server_url: &str,
+        username: &str,
+        password: &str,
+        hard_bound: std::time::Duration,
+    ) -> Result<EmbyCredentialExchange, String> {
+        let mut client = self.clone();
+        client.config.server_url = server_url.trim().trim_end_matches('/').to_string();
+        let username = username.trim().to_string();
+        let password = password.to_string();
+        if client.config.server_url.is_empty() || username.is_empty() || password.is_empty() {
+            return Err("server URL, username, and password are required".to_string());
+        }
+        crate::bounded::run_with_hard_bound(
+            move || {
+                let resp: Value = client
+                    .agent
+                    .post(&client.url("/Users/AuthenticateByName"))
+                    .set(
+                        "Authorization",
+                        &format!(
+                            "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\"",
+                            client.device_name,
+                            client.device_id,
+                            env!("CARGO_PKG_VERSION")
+                        ),
+                    )
+                    .send_json(ureq::json!({"Username": username, "Pw": password}))
+                    .map_err(|e| format!("Emby authentication failed: {e}"))?
+                    .into_json()
+                    .map_err(|e| format!("Emby authentication response parse failed: {e}"))?;
+                let token = resp["AccessToken"]
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|token| !token.is_empty())
+                    .ok_or_else(|| "Emby authentication returned an empty token".to_string())?;
+                let user_id = resp["User"]["Id"]
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|id| !id.is_empty())
+                    .ok_or_else(|| "Emby authentication returned an empty user ID".to_string())?;
+                Ok(EmbyCredentialExchange {
+                    server_url: client.config.server_url,
+                    user_id: user_id.to_string(),
+                    token: token.to_string(),
+                })
+            },
+            hard_bound,
+        )
+    }
+
+    pub fn apply_credential_exchange(&mut self, exchange: &EmbyCredentialExchange) {
+        self.config.server_url = exchange.server_url.clone();
+        self.config.username.clear();
+        self.config.password.clear();
+        self.config.api_key.clear();
+        self.user_id = exchange.user_id.clone();
+        self.token = exchange.token.clone();
+    }
+
+    /// Load the minimum Home/library data required by the existing TUI after
+    /// Service authentication. This runs as one bounded operation so no
+    /// Emby request is made from the event loop.
+    pub fn load_startup_data_bounded(
+        &self,
+        hard_bound: std::time::Duration,
+    ) -> Result<crate::service_runtime::EmbyBootstrap, crate::service_runtime::EmbyFailure> {
+        let client = self.clone();
+        crate::bounded::run_with_hard_bound(
+            move || {
+                let continue_items = client.get_continue_watching(20).unwrap_or_default();
+                let views = client.get_views_classified()?;
+                let user_views = client.get_user_views().unwrap_or_default();
+                let latest = user_views
+                    .into_iter()
+                    .filter(|view| view.collection_type != "playlists")
+                    .map(|view| {
+                        let items = if view.collection_type == "tvshows" {
+                            client.get_latest_episodes(&view.id, 30).unwrap_or_default()
+                        } else {
+                            client.get_latest(&view.id, 30).unwrap_or_default()
+                        };
+                        (view.name, view.id, items)
+                    })
+                    .collect();
+                Ok(crate::service_runtime::EmbyBootstrap {
+                    continue_items,
+                    views,
+                    latest,
+                })
+            },
             hard_bound,
         )
     }
@@ -343,4 +526,11 @@ impl EmbyClient {
     }
 
     // ── Browse / fetch ───────────────────────────────────────────────────────
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmbyCredentialExchange {
+    pub server_url: String,
+    pub user_id: String,
+    pub token: String,
 }

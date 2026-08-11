@@ -57,20 +57,21 @@ impl App {
                                 .as_ref()
                                 .and_then(|p| p.now_playing_item_id.clone())
                             {
-                                let client = self.client.lock().unwrap().clone();
-                                let tx = self.sessions_tx.clone();
-                                std::thread::spawn(move || {
-                                    if let Ok(mut items) =
-                                        client.get_items_by_ids(std::slice::from_ref(&prev_id))
-                                    {
-                                        if let Some(fresh) = items.pop() {
-                                            let _ = tx.send(SessionEvent::ItemRefreshed(
-                                                prev_id,
-                                                Box::new(fresh),
-                                            ));
+                                if let Some(client) = self.emby_snapshot() {
+                                    let tx = self.sessions_tx.clone();
+                                    std::thread::spawn(move || {
+                                        if let Ok(mut items) =
+                                            client.get_items_by_ids(std::slice::from_ref(&prev_id))
+                                        {
+                                            if let Some(fresh) = items.pop() {
+                                                let _ = tx.send(SessionEvent::ItemRefreshed(
+                                                    prev_id,
+                                                    Box::new(fresh),
+                                                ));
+                                            }
                                         }
-                                    }
-                                });
+                                    });
+                                }
                             }
                         }
                         // Detect playback via API position advancing, not IsPaused.

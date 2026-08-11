@@ -341,8 +341,13 @@ impl Drop for RecursiveFetchServer {
 }
 
 pub(super) fn configure_recursive_fetch_server(app: &mut App, server: &RecursiveFetchServer) {
-    let mut client = app.client.lock().unwrap();
-    client.config.server_url = server.base_url.clone();
+    let mut config = app.config.lock().unwrap().clone();
+    config.server_url = server.base_url.clone();
+    *app.config.lock().unwrap() = config.clone();
+    let mut client = mbv_core::api::EmbyClient::new(config);
     client.user_id = "user-1".into();
     client.token = "token-1".into();
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
 }

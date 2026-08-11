@@ -29,6 +29,14 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     }
 
     let client = Arc::new(Mutex::new(client));
+    let control_credential = if crate::config::is_system_instance() {
+        None
+    } else {
+        Some(
+            crate::config::load_or_create_control_credential()
+                .expect("mbv daemon: failed to load Control credential"),
+        )
+    };
 
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx) = mpsc::channel();
@@ -109,6 +117,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         let client2 = client.clone();
         let player_status = player.status.clone();
         let shared_queue = shared_queue.clone();
+        let control_credential = control_credential.clone();
 
         std::thread::spawn(move || {
             for stream in listener.incoming() {
@@ -119,6 +128,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
                     client2.clone(),
+                    control_credential.clone(),
                     player_status.clone(),
                     shared_queue.clone(),
                 );
@@ -219,6 +229,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         let client2 = client.clone();
         let player_status = player.status.clone();
         let shared_queue = shared_queue.clone();
+        let control_credential = control_credential.clone();
         std::thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
@@ -228,6 +239,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
                     client2.clone(),
+                    control_credential.clone(),
                     player_status.clone(),
                     shared_queue.clone(),
                 );

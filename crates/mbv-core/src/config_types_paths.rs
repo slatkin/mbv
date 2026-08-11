@@ -3,6 +3,9 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Singleton Emby setup. `server_url` remains only as a legacy projection
+    /// for callers that still construct provider clients.
+    pub emby_setup: Option<EmbySetup>,
     pub server_url: String,
     pub username: String,
     pub password: String,
@@ -106,12 +109,56 @@ pub struct Config {
     pub shared_data_endpoint: String,
 }
 
+/// Emby-specific setup (server URL + user ID) stored in config.toml `[server]`.
+/// The corresponding API token is stored separately in a per-Service mode-0600
+/// secret file, never in config.toml. The flat `server_url`/`username`/
+/// `password`/`api_key` fields on `Config` serve backward compat during
+/// migration and will be removed once all callers go through `EmbySetup`
+/// and runtime service state.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EmbySetup {
+    pub server_url: String,
+    pub user_id: String,
+}
+
+impl EmbySetup {
+    pub fn new(server_url: impl Into<String>, user_id: impl Into<String>) -> Self {
+        Self {
+            server_url: server_url.into().trim().trim_end_matches('/').to_string(),
+            user_id: user_id.into().trim().to_string(),
+        }
+    }
+}
+
+/// Singleton Service kind identifier. Each variant represents exactly one
+/// configured instance of that Service within mbv.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ServiceKind {
+    Emby,
+    /// Reserved; not yet implemented. Added now to establish the pattern
+    /// and the per-Service secret path. No Audiobookshelf auth, browsing,
+    /// playback, or credential logic is introduced here.
+    Audiobookshelf,
+}
+
+impl ServiceKind {
+    /// Filesystem-safe name for this Service kind, used for per-Service
+    /// secret file names.
+    pub fn secret_name(self) -> &'static str {
+        match self {
+            ServiceKind::Emby => "emby",
+            ServiceKind::Audiobookshelf => "audiobookshelf",
+        }
+    }
+}
+
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
 pub const DEFAULT_SHARED_DATA_TCP_PORT: u16 = 47789;
 
 impl Default for Config {
     fn default() -> Self {
         Config {
+            emby_setup: None,
             server_url: String::new(),
             username: String::new(),
             password: String::new(),

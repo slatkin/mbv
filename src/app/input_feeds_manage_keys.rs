@@ -16,7 +16,7 @@ impl App {
     }
 
     fn handle_feeds_manage_list_key(&mut self, key: KeyEvent) {
-        let count = self.client.lock().unwrap().config.feeds.len();
+        let count = self.config.lock().unwrap().feeds.len();
         match key.code {
             KeyCode::Esc => self.feeds_manage_popup = None,
             KeyCode::Up => {

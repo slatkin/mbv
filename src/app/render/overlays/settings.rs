@@ -3,6 +3,7 @@ use super::super::super::palette;
 use super::super::super::settings::{
     setting_label, setting_value, settings_cursor_to_key, settings_total_rows,
 };
+use super::super::super::types_settings::{ServiceEntry, SettingsDestination, SERVICE_ENTRIES};
 use super::super::super::ui_util::{cycle_lang, next_subtitle_mode};
 use super::super::super::App;
 use super::super::super::{MultiSelectKind, SettingKey, SETTINGS_PANEL_W, SETTING_SECTIONS};
@@ -15,15 +16,20 @@ use std::time::{Duration, Instant};
 impl App {
     pub(crate) fn close_settings(&mut self) {
         if self.settings_save_at.take().is_some() {
-            let cfg = self.client.lock().unwrap().config.clone();
+            let cfg = self.config.lock().unwrap().clone();
             crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
         }
         self.show_settings = false;
+        self.settings_destination = SettingsDestination::Main;
     }
 
     pub(crate) fn handle_settings_activate(&mut self) {
         let key = settings_cursor_to_key(self.settings_cursor);
         match key {
+            SettingKey::Services => {
+                self.open_services_settings();
+                return;
+            }
             SettingKey::HiddenLibraries => {
                 self.open_multiselect_popup(MultiSelectKind::HiddenLibraries);
                 return;
@@ -64,27 +70,26 @@ impl App {
             }
             SettingKey::SystemNotifications => {
                 let new_val = {
-                    let mut c = self.client.lock().unwrap();
-                    c.config.system_notifications = !c.config.system_notifications;
-                    c.config.system_notifications
+                    let mut c = self.config.lock().unwrap();
+                    c.system_notifications = !c.system_notifications;
+                    c.system_notifications
                 };
                 self.system_notifications = new_val;
             }
             SettingKey::SubtitleMode => {
                 let new_mode = {
-                    let mut c = self.client.lock().unwrap();
-                    c.config.subtitle_mode =
-                        next_subtitle_mode(&c.config.subtitle_mode).to_string();
-                    c.config.subtitle_mode.clone()
+                    let mut c = self.config.lock().unwrap();
+                    c.subtitle_mode = next_subtitle_mode(&c.subtitle_mode).to_string();
+                    c.subtitle_mode.clone()
                 };
                 self.player.subtitle_prefs.lock().unwrap().mode = new_mode;
                 self.push_subtitle_prefs();
             }
             SettingKey::SubtitleLanguage => {
                 let new_lang = {
-                    let mut c = self.client.lock().unwrap();
-                    let new = cycle_lang(&c.config.my_languages, &c.config.subtitle_lang);
-                    c.config.subtitle_lang = new.clone();
+                    let mut c = self.config.lock().unwrap();
+                    let new = cycle_lang(&c.my_languages, &c.subtitle_lang);
+                    c.subtitle_lang = new.clone();
                     new
                 };
                 self.player.subtitle_prefs.lock().unwrap().subtitle_lang = new_lang;
@@ -92,53 +97,44 @@ impl App {
             }
             SettingKey::AudioLanguage => {
                 let new_lang = {
-                    let mut c = self.client.lock().unwrap();
-                    let new = cycle_lang(&c.config.my_languages, &c.config.audio_lang);
-                    c.config.audio_lang = new.clone();
+                    let mut c = self.config.lock().unwrap();
+                    let new = cycle_lang(&c.my_languages, &c.audio_lang);
+                    c.audio_lang = new.clone();
                     new
                 };
                 self.player.subtitle_prefs.lock().unwrap().audio_lang = new_lang;
                 self.push_subtitle_prefs();
             }
             _ => {
-                let mut c = self.client.lock().unwrap();
+                let mut c = self.config.lock().unwrap();
                 match key {
-                    SettingKey::StayAlive => c.config.stay_alive = !c.config.stay_alive,
-                    SettingKey::AutoReconnect => c.config.auto_reconnect = !c.config.auto_reconnect,
+                    SettingKey::StayAlive => c.stay_alive = !c.stay_alive,
+                    SettingKey::AutoReconnect => c.auto_reconnect = !c.auto_reconnect,
                     SettingKey::SavePlaylistOnQuit => {
-                        c.config.save_playlist_on_quit = !c.config.save_playlist_on_quit
+                        c.save_playlist_on_quit = !c.save_playlist_on_quit
                     }
-                    SettingKey::AlwaysPlayNext => {
-                        c.config.always_play_next = !c.config.always_play_next
-                    }
-                    SettingKey::ConsumeVideos => c.config.consume_videos = !c.config.consume_videos,
-                    SettingKey::ConsumeAudio => c.config.consume_audio = !c.config.consume_audio,
+                    SettingKey::AlwaysPlayNext => c.always_play_next = !c.always_play_next,
+                    SettingKey::ConsumeVideos => c.consume_videos = !c.consume_videos,
+                    SettingKey::ConsumeAudio => c.consume_audio = !c.consume_audio,
                     SettingKey::SavePlaylistOnConsume => {
-                        c.config.save_playlist_on_consume = !c.config.save_playlist_on_consume
+                        c.save_playlist_on_consume = !c.save_playlist_on_consume
                     }
                     SettingKey::SavePlaylistOnConsumeAudio => {
-                        c.config.save_playlist_on_consume_audio =
-                            !c.config.save_playlist_on_consume_audio
+                        c.save_playlist_on_consume_audio = !c.save_playlist_on_consume_audio
                     }
-                    SettingKey::AlwaysSkipIntro => {
-                        c.config.always_skip_intro = !c.config.always_skip_intro
-                    }
-                    SettingKey::ShowAudioWindow => {
-                        c.config.show_audio_window = !c.config.show_audio_window
-                    }
-                    SettingKey::UseMpvConfig => c.config.use_mpv_config = !c.config.use_mpv_config,
-                    SettingKey::NoScripts => c.config.no_scripts = !c.config.no_scripts,
-                    SettingKey::Autoload => c.config.autoload = !c.config.autoload,
-                    SettingKey::ShowSysTrayIcon => {
-                        c.config.show_systray_icon = !c.config.show_systray_icon
-                    }
+                    SettingKey::AlwaysSkipIntro => c.always_skip_intro = !c.always_skip_intro,
+                    SettingKey::ShowAudioWindow => c.show_audio_window = !c.show_audio_window,
+                    SettingKey::UseMpvConfig => c.use_mpv_config = !c.use_mpv_config,
+                    SettingKey::NoScripts => c.no_scripts = !c.no_scripts,
+                    SettingKey::Autoload => c.autoload = !c.autoload,
+                    SettingKey::ShowSysTrayIcon => c.show_systray_icon = !c.show_systray_icon,
                     _ => {}
                 }
             }
         }
         if key == SettingKey::AutoReconnect {
             self.persist_roaming_settings();
-            if self.client.lock().unwrap().config.auto_reconnect {
+            if self.config.lock().unwrap().auto_reconnect {
                 self.persist_current_auto_reconnect_target();
             }
         }
@@ -151,6 +147,10 @@ impl App {
         layout: &mut AppLayout,
         area: Option<ratatui::layout::Rect>,
     ) {
+        if matches!(self.settings_destination, SettingsDestination::Services) {
+            self.render_services_panel(f, layout, area);
+            return;
+        }
         let panel = area.is_some();
         let content = match area {
             Some(area) => {
@@ -171,7 +171,7 @@ impl App {
         };
         layout.settings_content_area = content;
 
-        let cfg = self.client.lock().unwrap().config.clone();
+        let cfg = self.config.lock().unwrap().clone();
         let ui = self.ui_config_snapshot();
 
         let cursor = self.settings_cursor;
@@ -253,5 +253,139 @@ impl App {
             content,
         );
         Self::render_sidebar_scrollbar(f, content, total, self.settings_scroll);
+    }
+
+    fn render_services_panel(
+        &mut self,
+        f: &mut Frame,
+        layout: &mut AppLayout,
+        area: Option<ratatui::layout::Rect>,
+    ) {
+        if self.emby_setup_form.is_some() {
+            self.render_emby_setup_panel(f, layout, area);
+            return;
+        }
+        let content = match area {
+            Some(area) => {
+                Self::render_panel_shell_at(f, area, "SERVICES", "[↵]select [Esc]back", true)
+            }
+            None => Self::render_panel_shell(
+                f,
+                f.area(),
+                SETTINGS_PANEL_W,
+                "SERVICES",
+                "[↵]select [Esc]back",
+            ),
+        };
+        layout.settings_content_area = content;
+        let cursor = self.services_cursor;
+        let mut lines = Vec::with_capacity(SERVICE_ENTRIES.len());
+        let mut line_of_cursor = Vec::with_capacity(SERVICE_ENTRIES.len());
+        for (index, entry) in SERVICE_ENTRIES.iter().copied().enumerate() {
+            line_of_cursor.push(lines.len());
+            let focused = index == cursor;
+            let marker = if focused { "▸ " } else { "  " };
+            let name = Self::service_entry_name(entry);
+            let state = self.service_state_label(entry);
+            let context = self.service_context(entry);
+            let action = self.service_action_label(entry);
+            let detail = if context.is_empty() {
+                format!("{state} · {action}")
+            } else {
+                format!("{state} · {context} · {action}")
+            };
+            let name_style = if focused {
+                Style::default()
+                    .fg(palette::TEXT)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette::SUBTLE)
+            };
+            lines.push(Line::from(vec![
+                Span::raw(marker),
+                Span::styled(name, name_style),
+                Span::raw("  "),
+                Span::styled(
+                    detail,
+                    Style::default().fg(if entry == ServiceEntry::Audiobookshelf {
+                        palette::MUTED
+                    } else {
+                        palette::AQUA
+                    }),
+                ),
+            ]));
+        }
+        f.render_widget(Paragraph::new(lines), content);
+        layout.settings_line_of_cursor = line_of_cursor;
+        layout.settings_area = content;
+    }
+
+    fn render_emby_setup_panel(
+        &mut self,
+        f: &mut Frame,
+        layout: &mut AppLayout,
+        area: Option<ratatui::layout::Rect>,
+    ) {
+        let content = match area {
+            Some(area) => {
+                Self::render_panel_shell_at(f, area, "EMBY SETUP", "[↵]submit [Esc]back", true)
+            }
+            None => Self::render_panel_shell(
+                f,
+                f.area(),
+                SETTINGS_PANEL_W,
+                "EMBY SETUP",
+                "[↵]submit [Esc]back",
+            ),
+        };
+        layout.settings_content_area = content;
+        let Some(form) = self.emby_setup_form.as_ref() else {
+            return;
+        };
+        let labels = ["Server URL", "Username", "Password"];
+        let mut lines = Vec::with_capacity(8);
+        for (idx, label) in labels.iter().enumerate() {
+            let focused = form.focus == idx;
+            lines.push(Line::from(Span::styled(
+                *label,
+                Style::default()
+                    .fg(if focused {
+                        palette::FOAM
+                    } else {
+                        palette::SUBTLE
+                    })
+                    .add_modifier(if focused {
+                        Modifier::BOLD
+                    } else {
+                        Modifier::empty()
+                    }),
+            )));
+            let value = if idx == 2 {
+                "•".repeat(form.fields[idx].chars().count())
+            } else {
+                form.fields[idx].clone()
+            };
+            let cursor = if focused && !form.busy { "▏" } else { "" };
+            lines.push(Line::from(Span::styled(
+                format!("  {value}{cursor}"),
+                Style::default().fg(palette::TEXT),
+            )));
+        }
+        lines.push(Line::from(""));
+        let status = if form.busy {
+            "Working…"
+        } else {
+            form.error.as_str()
+        };
+        lines.push(Line::from(Span::styled(
+            status,
+            Style::default().fg(if form.busy {
+                palette::MUTED
+            } else {
+                palette::RED
+            }),
+        )));
+        f.render_widget(Paragraph::new(lines), content);
+        layout.settings_area = content;
     }
 }

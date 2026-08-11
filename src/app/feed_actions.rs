@@ -202,7 +202,9 @@ impl App {
         }
         let parent_id = root.parent_id.clone();
         let candidate_folders = root.items.clone();
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let (mut all_items, total_count) = match client.get_items_sorted(
@@ -301,9 +303,9 @@ impl App {
         if lib.library.collection_type != "homevideos" {
             return false;
         }
-        let client = self.client.lock().unwrap();
-        client
-            .config
+        self.config
+            .lock()
+            .unwrap()
             .feed_view_libraries
             .contains(&lib.library.name.to_lowercase())
             && lib
@@ -375,9 +377,9 @@ impl App {
         if lib.library.collection_type != "homevideos" {
             return false;
         }
-        let client = self.client.lock().unwrap();
-        client
-            .config
+        self.config
+            .lock()
+            .unwrap()
             .feed_view_libraries
             .contains(&lib.library.name.to_lowercase())
     }
@@ -472,7 +474,9 @@ impl App {
         }
         let parent_id = root.parent_id.clone();
         let show_folders = root.items.clone();
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let mut all_items: Vec<EmbyItem> = Vec::new();
@@ -592,7 +596,7 @@ impl App {
         let Some(ref idle_feed) = self.idle_feed else {
             return;
         };
-        let rss_url = self.client.lock().unwrap().config.idle_feed_rss_url.clone();
+        let rss_url = self.config.lock().unwrap().idle_feed_rss_url.clone();
         let tx = idle_feed.items_tx.clone();
         std::thread::spawn(move || {
             let items = match fetch_and_parse_rss(&rss_url) {
@@ -644,7 +648,7 @@ impl App {
         if idle_feed.items.is_empty() {
             return;
         }
-        let rotation_secs = self.client.lock().unwrap().config.idle_feed_rotation_secs;
+        let rotation_secs = self.config.lock().unwrap().idle_feed_rotation_secs;
         if idle_feed.last_rotation.elapsed() >= std::time::Duration::from_secs(rotation_secs) {
             idle_feed.current_index = (idle_feed.current_index + 1) % idle_feed.items.len();
             idle_feed.last_rotation = Instant::now();

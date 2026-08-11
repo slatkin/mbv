@@ -122,12 +122,15 @@ pub fn run_local_daemon_main() -> ! {
     if let Err(e) = guard.write_pid() {
         log::warn!(target: "local_daemon", "failed to write pid into lock file: {e}");
     }
-
-    let mut client = EmbyClient::new(config);
-    if client.authenticate().is_err() {
-        eprintln!("mbv: local daemon: no cached credentials; run mbv interactively first");
+    if let Err(e) = mbv_core::config::load_or_create_control_credential() {
+        eprintln!("mbv: local daemon: cannot load Control credential: {e}");
         std::process::exit(1);
     }
+
+    // Player ownership does not depend on Remote Service availability. The
+    // concrete Emby client is retained for configuration and optional API
+    // work; daemon construction never authenticates it.
+    let client = EmbyClient::new(config);
 
     let show_systray_icon = client.config.show_systray_icon;
     let player_handle: std::sync::Arc<std::sync::Mutex<Option<daemon::DaemonPlayerHandle>>> =

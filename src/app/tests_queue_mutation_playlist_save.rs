@@ -229,7 +229,7 @@ fn manual_save_overwrite_and_save_on_quit_share_per_playlist_ordering() {
     // the save fails at HTTP level here, so the source/dirty state survive the
     // attempted save (on_queue_replace_silent would have cleared both).
     app.queue_dirty = true;
-    app.client.lock().unwrap().config.save_playlist_on_quit = true;
+    app.config.lock().unwrap().save_playlist_on_quit = true;
     assert!(app.try_quit());
     assert!(matches!(
         app.queue_source,
@@ -343,7 +343,7 @@ fn save_and_save_on_quit_cannot_resurrect_a_consumed_occurrence() {
     // Save-on-quit snapshots the same projected queue, so the consumed
     // occurrence is never re-added by the quit save.
     app.queue_dirty = true;
-    app.client.lock().unwrap().config.save_playlist_on_quit = true;
+    app.config.lock().unwrap().save_playlist_on_quit = true;
     assert!(app.try_quit());
     let persisted = crate::config::load_queue_state().expect("queue persisted");
     assert_eq!(persisted.items.len(), 1);

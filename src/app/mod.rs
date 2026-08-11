@@ -9,6 +9,7 @@ mod consume_quit_actions;
 mod context_menu_actions;
 mod cw_library_tab_actions;
 mod daemon_restart;
+mod emby_service_actions;
 mod feed_actions;
 mod feed_parse;
 mod feed_parse_date;
@@ -60,6 +61,8 @@ mod resize;
 mod run_loop_drains;
 mod run_loop_events;
 mod search_sidebar;
+mod service_startup;
+mod services_settings;
 mod session_command_actions;
 mod session_connect;
 mod settings;
@@ -112,6 +115,8 @@ use self::types_playback::{
 };
 use self::types_player_tab::PlayerTab;
 use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};
+#[cfg(test)]
+use self::types_settings::{ServiceEntry, SettingsDestination, SERVICE_ENTRIES};
 use self::types_tab_selection::TabSelection;
 use mbv_core::api::EmbyClient;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -279,37 +284,46 @@ impl App {
         // no pending flash, mirroring the render loop's own expiry check.
         let has_live_flash = self.status_expires.is_some_and(|t| t > Instant::now());
         if !has_live_flash {
-            self.status = "Loading...".into();
+            self.status = self
+                .emby_client()
+                .map(|_| "Loading...".into())
+                .unwrap_or_else(|| service_startup::startup_status(self.emby_runtime.state).into());
         }
         self.home_loading = true;
         terminal.draw(|f| self.render(f))?;
 
-        {
-            let c = self.client.lock().unwrap();
-            c.register_capabilities();
+        // Only start the configured Remote Service after the first TUI frame
+        // has been rendered. The selected Player owner and UI therefore never
+        // wait for Emby setup, authentication, or connectivity.
+        if let Some((config, generation)) = self.emby_startup_request.take() {
+            self.emby_startup_rx = Some(service_startup::start(config, generation));
         }
 
-        match self.fetch_home() {
-            Ok(()) => {
-                let has_live_flash = self.status_expires.is_some_and(|t| t > Instant::now());
-                if !has_live_flash {
-                    self.status.clear();
+        if let Some(client) = self.emby_client() {
+            client.lock().unwrap().register_capabilities();
+        }
+
+        if self.emby_client().is_some() {
+            match self.fetch_home() {
+                Ok(()) => {
+                    let has_live_flash = self.status_expires.is_some_and(|t| t > Instant::now());
+                    if !has_live_flash {
+                        self.status.clear();
+                    }
                 }
+                Err(e) => self.flash(format!("Couldn't load home: {e}"), ToastSeverity::Warning),
             }
-            Err(e) => self.flash(format!("Couldn't load home: {e}"), ToastSeverity::Error),
+        } else {
+            self.flash(
+                service_startup::startup_status(self.emby_runtime.state).into(),
+                ToastSeverity::Warning,
+            );
         }
         self.home_loading = false;
         self.maybe_restore_queue_state();
 
         // Initialize idle feed if configured
-        if self
-            .client
-            .lock()
-            .unwrap()
-            .config
-            .idle_feed_rss_url
-            .is_empty()
-        {
+        if self.config.lock().unwrap().idle_feed_rss_url.is_empty() {
             // No RSS URL configured, skip idle feed
         } else {
             let (items_tx, items_rx) = std::sync::mpsc::channel();
@@ -327,8 +341,7 @@ impl App {
         terminal.draw(|f| self.render(f))?;
 
         install_signal_handlers();
-        let quit_timeout =
-            Duration::from_secs(self.client.lock().unwrap().config.quit_timeout_secs);
+        let quit_timeout = Duration::from_secs(self.config.lock().unwrap().quit_timeout_secs);
         start_quit_watchdog(self.player.quit_handle(), quit_timeout);
 
         let mut last_render = Instant::now() - Duration::from_secs(2);
@@ -337,6 +350,37 @@ impl App {
             let mut had_events = false;
             if QUIT_REQUESTED.load(Ordering::Relaxed) {
                 break;
+            }
+
+            if let Some(worker) = self.emby_startup_rx.take() {
+                match worker.rx.try_recv() {
+                    Ok(completion) => {
+                        had_events = true;
+                        self.apply_emby_completion(completion);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        self.emby_startup_rx = Some(worker);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        self.handle_emby_startup_worker_disconnect(worker.generation);
+                        had_events = true;
+                    }
+                }
+            }
+            if let Some(rx) = self.emby_setup_rx.take() {
+                match rx.try_recv() {
+                    Ok(completion) => {
+                        had_events = true;
+                        self.apply_emby_setup_completion(completion);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        self.emby_setup_rx = Some(rx);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        self.handle_emby_setup_worker_disconnect();
+                        had_events = true;
+                    }
+                }
             }
             if let Ok(ev) = self.player_rx.try_recv() {
                 had_events = true;
@@ -425,7 +469,7 @@ impl App {
 
             if let Some(at) = self.settings_save_at {
                 if Instant::now() >= at {
-                    let cfg = self.client.lock().unwrap().config.clone();
+                    let cfg = self.config.lock().unwrap().clone();
                     crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
                     self.settings_save_at = None;
                 }
@@ -449,8 +493,9 @@ impl App {
             if self.ws_send_tx.is_some()
                 && self.last_capabilities.elapsed() >= Duration::from_secs(600)
             {
-                let client = self.client.lock().unwrap().clone();
-                std::thread::spawn(move || client.register_capabilities());
+                if let Some(client) = self.emby_snapshot() {
+                    std::thread::spawn(move || client.register_capabilities());
+                }
                 self.last_capabilities = Instant::now();
             }
 
@@ -657,6 +702,10 @@ mod tests_feed_tab_guard;
 #[cfg(test)]
 #[path = "tests_feeds_manage.rs"]
 mod tests_feeds_manage;
+
+#[cfg(test)]
+#[path = "tests_services_settings.rs"]
+mod tests_services_settings;
 
 #[cfg(test)]
 #[path = "tests_podcast.rs"]

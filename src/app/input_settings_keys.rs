@@ -1,4 +1,5 @@
 use super::settings::settings_total_rows;
+use super::types_settings::SettingsDestination;
 use super::App;
 use crossterm::event::{KeyCode, KeyEvent};
 
@@ -6,6 +7,9 @@ impl App {
     pub(super) fn handle_key_settings(&mut self, key: KeyEvent) -> Option<bool> {
         if !self.show_settings {
             return None;
+        }
+        if matches!(self.settings_destination, SettingsDestination::Services) {
+            return self.handle_key_services_settings(key);
         }
         if self.multiselect_popup.is_some() {
             match key.code {

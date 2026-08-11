@@ -63,7 +63,10 @@ impl App {
             }
             return true;
         }
-        if self.show_settings && self.multiselect_popup.is_none() {
+        if self.show_settings
+            && self.multiselect_popup.is_none()
+            && self.feeds_manage_popup.is_none()
+        {
             let settings_content_area = self.layout.settings_content_area;
             let content_top = settings_content_area.y;
             let content_bottom = settings_content_area
@@ -88,7 +91,15 @@ impl App {
                     {
                         self.settings_cursor = cur;
                         self.settings_scroll_follow();
-                        self.handle_settings_activate();
+                        if matches!(
+                            self.settings_destination,
+                            crate::app::types_settings::SettingsDestination::Services
+                        ) {
+                            self.services_cursor = cur;
+                            self.activate_service_entry();
+                        } else {
+                            self.handle_settings_activate();
+                        }
                     }
                 }
                 _ => {}

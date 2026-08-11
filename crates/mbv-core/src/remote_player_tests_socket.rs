@@ -370,7 +370,7 @@ fn perform_handshake_times_out_when_daemon_never_sends_hello() {
 
     let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
     let result = crate::bounded::run_with_hard_bound(
-        move || perform_handshake(stream, "token").map_err(|e| e.to_string()),
+        move || perform_handshake(stream, "token", || Ok("control".to_string())),
         Duration::from_millis(50),
     );
 
@@ -384,9 +384,9 @@ fn perform_handshake_times_out_when_daemon_never_sends_hello() {
 
 #[test]
 fn perform_handshake_succeeds_promptly_when_daemon_responds() {
-    // Companion to the timeout test above: the fast/success path must
-    // still work end-to-end through the same bounded wrapper used in
-    // `connect_endpoint`, not just in isolation.
+    // Companion to the timeout test above: the fast/success path must still
+    // work end-to-end through the same bounded wrapper used in
+    // `connect_endpoint`, including a new client's legacy Emby-auth fallback.
     use std::io::BufRead;
     use std::net::TcpListener;
 
@@ -398,11 +398,23 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
         let mut writer = stream.try_clone().unwrap();
         let mut reader = BufReader::new(stream);
 
-        let hello = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap();
+        let mut hello_info = CtrlHello::current();
+        hello_info
+            .capabilities
+            .retain(|cap| cap != crate::ctrl::CTRL_CAP_CONTROL_AUTH);
+        let hello = serde_json::to_string(&CtrlEvent::Hello(hello_info)).unwrap();
         writeln!(writer, "{hello}").unwrap();
 
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
+        let CtrlCmd::Hello(client_hello) = serde_json::from_str(&client_hello).unwrap() else {
+            panic!("expected client hello");
+        };
+        assert_eq!(
+            client_hello.auth_token.as_deref(),
+            Some("legacy-emby-token")
+        );
+        assert_eq!(client_hello.control_token, None);
 
         let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
             status: PlayerStatus::default(),
@@ -417,7 +429,11 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
 
     let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
     let result = crate::bounded::run_with_hard_bound(
-        move || perform_handshake(stream, "token").map_err(|e| e.to_string()),
+        move || {
+            perform_handshake(stream, "legacy-emby-token", || {
+                panic!("legacy peer must not request a Control credential")
+            })
+        },
         Duration::from_secs(5),
     );
 
@@ -467,6 +483,32 @@ fn request_shutdown_sends_command_and_receives_via_shared_channel() {
         matches!(response, crate::remote_player::ShutdownResponse::TimedOut),
         "stub has no reader thread to inject a reply, so TimedOut is correct"
     );
+}
+
+#[test]
+fn feed_only_attach_to_legacy_peer_returns_compatibility_diagnostic() {
+    let (client, mut peer) = UnixStream::pair().unwrap();
+    let daemon = std::thread::spawn(move || {
+        let mut hello = CtrlHello::current();
+        hello
+            .capabilities
+            .retain(|cap| cap != crate::ctrl::CTRL_CAP_CONTROL_AUTH);
+        writeln!(
+            peer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
+    });
+
+    let result = perform_handshake(ControlStream::Unix(client), "", || {
+        Ok("unused-control-credential".to_string())
+    });
+    match result {
+        Err(error) => assert_eq!(error, LEGACY_DAEMON_COMPATIBILITY_ERROR),
+        Ok(_) => panic!("legacy feed-only attachment unexpectedly succeeded"),
+    }
+    daemon.join().unwrap();
 }
 
 #[test]

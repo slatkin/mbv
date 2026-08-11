@@ -243,7 +243,10 @@ impl App {
                     return false;
                 }
                 let playlists = {
-                    let c = self.client.lock().unwrap();
+                    let Some(client) = self.emby_client() else {
+                        return false;
+                    };
+                    let c = client.lock().unwrap();
                     c.get_playlists().unwrap_or_default()
                 };
                 let existing = playlists

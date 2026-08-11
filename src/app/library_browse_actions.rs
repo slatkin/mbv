@@ -153,10 +153,8 @@ impl App {
             let lib_id = self.libs[idx].library.id.clone();
             let lib_name = self.libs[idx].library.name.clone();
             let is_feed_view = {
-                let c = self.client.lock().unwrap();
-                c.config
-                    .feed_view_libraries
-                    .contains(&lib_name.to_lowercase())
+                let c = self.config.lock().unwrap();
+                c.feed_view_libraries.contains(&lib_name.to_lowercase())
             };
             let (item_types, unplayed_only, sort_by, sort_order) =
                 match self.libs[idx].library.collection_type.as_str() {
@@ -201,7 +199,9 @@ impl App {
         saved: crate::config::LibraryPosition,
     ) {
         let visible_rows = self.lib_page_size();
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let restored = super::restore_library_position(&saved, visible_rows, |saved_level| {
@@ -326,7 +326,9 @@ impl App {
         sort_by: String,
         sort_order: String,
     ) {
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         let spawn_started = std::time::Instant::now();
         std::thread::spawn(move || {
@@ -378,7 +380,9 @@ impl App {
         item_type: String,
         libs: Vec<(usize, String, String)>,
     ) {
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             // Match library by collection_type since CollectionFolder IDs never appear in ancestors
@@ -495,7 +499,9 @@ impl App {
         sort_order: String,
         letter_filter: Option<super::render::LetterFilter>,
     ) {
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         let (name_ge, name_lt) = letter_filter
             .as_ref()
@@ -553,7 +559,9 @@ impl App {
         let unplayed_only = lvl.unplayed_only;
         let sort_by = lvl.sort_by.clone();
         let sort_order = lvl.sort_order.clone();
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             if let Ok((items, _)) = client.get_items_sorted(
@@ -589,7 +597,9 @@ impl App {
         let unplayed_only = lvl.unplayed_only;
         let sort_by = lvl.sort_by.clone();
         let sort_order = lvl.sort_order.clone();
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             if let Ok((items, _)) = client.get_items_sorted(

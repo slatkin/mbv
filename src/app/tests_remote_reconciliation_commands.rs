@@ -3,7 +3,7 @@
 //! repository's file-size limit.
 
 use super::{attached_app, projection, tracker};
-use crate::app::tests::{make_item, make_session};
+use crate::app::tests::{install_test_emby, make_item, make_session};
 use crate::app::*;
 use mbv_core::remote_reconciliation::RemoteIntent;
 
@@ -12,7 +12,9 @@ use mbv_core::remote_reconciliation::RemoteIntent;
 fn remote_command_app(listener: &std::net::TcpListener) -> App {
     let url = format!("http://{}", listener.local_addr().unwrap());
     let mut app = attached_app();
-    app.client.lock().unwrap().config.server_url = url;
+    app.config.lock().unwrap().server_url = url;
+    let config = app.config.lock().unwrap().clone();
+    install_test_emby(&mut app, config);
     let mut item_a = app.player_tab.emby_items()[0].clone();
     item_a.id = "a".into();
     item_a.playback_position_ticks = 100;

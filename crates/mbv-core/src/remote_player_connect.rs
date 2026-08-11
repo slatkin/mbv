@@ -84,6 +84,9 @@ const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 // tighter than `EmbyClient::AUTHENTICATE_HARD_BOUND`.
 const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
+pub const LEGACY_DAEMON_COMPATIBILITY_ERROR: &str =
+    "daemon does not support control-auth; configure and authenticate Emby to attach to this legacy peer";
+
 // A local daemon that was *just* launched (via `stay_alive` or auto-detect)
 // may have written its PID file (which is what makes it "detected") slightly
 // before its ctrl socket is bound. Retry briefly rather than immediately
@@ -202,10 +205,14 @@ impl std::fmt::Display for DaemonEndpoint {
 /// `DAEMON_HANDSHAKE_HARD_BOUND` (issue #191 fix #5), and so it can be tested
 /// directly against a real stalled `TcpListener` without going through
 /// `connect_endpoint`'s full setup.
-pub(crate) fn perform_handshake(
+pub(crate) fn perform_handshake<F>(
     stream: ControlStream,
     auth_token: &str,
-) -> Result<(BufReader<ControlStream>, CtrlEvent, CtrlCompatibility), String> {
+    load_control_token: F,
+) -> Result<(BufReader<ControlStream>, CtrlEvent, CtrlCompatibility), String>
+where
+    F: FnOnce() -> Result<String, String>,
+{
     let mut reader = BufReader::new(stream);
     let mut first_line = String::new();
     reader
@@ -223,6 +230,7 @@ pub(crate) fn perform_handshake(
             compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
             compatibility.supports_feed_playback = info.supports_feed_playback();
             compatibility.supports_unified_queue = info.supports_unified_queue();
+            compatibility.supports_control_auth = info.supports_control_auth();
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",
@@ -236,11 +244,17 @@ pub(crate) fn perform_handshake(
             return Err("daemon did not send protocol hello".to_string());
         }
     };
-    let client_hello = serde_json::to_string(&CtrlCmd::Hello(CtrlHello::compatible_client(
-        auth_token.into(),
-        ctrl_compatibility,
-    )))
-    .map_err(|e| e.to_string())?;
+    let mut client_hello = if ctrl_compatibility.supports_control_auth {
+        CtrlHello::current_control_client(load_control_token()?)
+    } else {
+        if auth_token.is_empty() {
+            return Err(LEGACY_DAEMON_COMPATIBILITY_ERROR.to_string());
+        }
+        CtrlHello::current_client(auth_token.to_string())
+    };
+    client_hello.protocol_version = ctrl_compatibility.client_protocol_version;
+    let client_hello =
+        serde_json::to_string(&CtrlCmd::Hello(client_hello)).map_err(|e| e.to_string())?;
     // Write via the same handle the `BufReader` wraps (`get_mut()`) rather
     // than a second `try_clone()`'d handle -- the handshake is strictly
     // sequential (read hello -> write client hello -> read state) with no
@@ -470,7 +484,11 @@ pub(crate) fn connect_endpoint(
     let handshake_stream = stream.try_clone().map_err(|e| e.to_string())?;
     let auth_token_owned = auth_token.to_string();
     let (reader, state_event, ctrl_compatibility) = crate::bounded::run_with_hard_bound(
-        move || perform_handshake(handshake_stream, &auth_token_owned),
+        move || {
+            perform_handshake(handshake_stream, &auth_token_owned, || {
+                crate::config::load_or_create_control_credential()
+            })
+        },
         DAEMON_HANDSHAKE_HARD_BOUND,
     )?;
     apply_ctrl_event(

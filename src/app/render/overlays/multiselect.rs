@@ -32,7 +32,7 @@ impl App {
                 "Czech",
                 "Turkish",
             ];
-            let my_langs = self.client.lock().unwrap().config.my_languages.clone();
+            let my_langs = self.config.lock().unwrap().my_languages.clone();
             let items = ALL_LANGS
                 .iter()
                 .map(|&name| {
@@ -47,17 +47,21 @@ impl App {
             });
             return;
         }
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            return;
+        };
+        let client = client.lock().unwrap();
         let all = match kind {
             MultiSelectKind::HiddenLibraries => client.get_views().unwrap_or_default(),
             MultiSelectKind::HiddenLatest => client.get_user_views().unwrap_or_default(),
             MultiSelectKind::FeedViewLibraries => client.get_views().unwrap_or_default(),
             MultiSelectKind::MyLanguages => unreachable!(),
         };
+        let config = self.config.lock().unwrap();
         let selected_list = match kind {
-            MultiSelectKind::HiddenLibraries => &client.config.hidden_libraries,
-            MultiSelectKind::HiddenLatest => &client.config.hidden_latest,
-            MultiSelectKind::FeedViewLibraries => &client.config.feed_view_libraries,
+            MultiSelectKind::HiddenLibraries => &config.hidden_libraries,
+            MultiSelectKind::HiddenLatest => &config.hidden_latest,
+            MultiSelectKind::FeedViewLibraries => &config.feed_view_libraries,
             MultiSelectKind::MyLanguages => unreachable!(),
         };
         let items: Vec<(String, String, bool)> = all
@@ -69,6 +73,7 @@ impl App {
                 (lower, v.name.clone(), is_hidden)
             })
             .collect();
+        drop(config);
         drop(client);
         self.multiselect_popup = Some(MultiSelectPopup {
             kind,
@@ -90,20 +95,18 @@ impl App {
                 .map(|(_, name, _)| name.clone())
                 .collect();
             {
-                let mut c = self.client.lock().unwrap();
+                let mut c = self.config.lock().unwrap();
                 if !selected.is_empty() {
-                    if !c.config.subtitle_lang.is_empty()
-                        && !selected.contains(&c.config.subtitle_lang)
-                    {
-                        c.config.subtitle_lang = String::new();
+                    if !c.subtitle_lang.is_empty() && !selected.contains(&c.subtitle_lang) {
+                        c.subtitle_lang = String::new();
                     }
-                    if !c.config.audio_lang.is_empty() && !selected.contains(&c.config.audio_lang) {
-                        c.config.audio_lang = String::new();
+                    if !c.audio_lang.is_empty() && !selected.contains(&c.audio_lang) {
+                        c.audio_lang = String::new();
                     }
                 }
-                c.config.my_languages = selected;
+                c.my_languages = selected;
             }
-            let cfg = self.client.lock().unwrap().config.clone();
+            let cfg = self.config.lock().unwrap().clone();
             {
                 let mut p = self.player.subtitle_prefs.lock().unwrap();
                 p.subtitle_lang = cfg.subtitle_lang.clone();
@@ -122,11 +125,11 @@ impl App {
             .map(|(lower, _, _)| lower.clone())
             .collect();
         {
-            let mut c = self.client.lock().unwrap();
+            let mut c = self.config.lock().unwrap();
             match popup.kind {
-                MultiSelectKind::HiddenLibraries => c.config.hidden_libraries = hidden.clone(),
-                MultiSelectKind::HiddenLatest => c.config.hidden_latest = hidden.clone(),
-                MultiSelectKind::FeedViewLibraries => c.config.feed_view_libraries = hidden.clone(),
+                MultiSelectKind::HiddenLibraries => c.hidden_libraries = hidden.clone(),
+                MultiSelectKind::HiddenLatest => c.hidden_latest = hidden.clone(),
+                MultiSelectKind::FeedViewLibraries => c.feed_view_libraries = hidden.clone(),
                 MultiSelectKind::MyLanguages => unreachable!(),
             }
         }
@@ -140,7 +143,7 @@ impl App {
             }
             MultiSelectKind::MyLanguages => unreachable!(),
         }
-        let cfg = self.client.lock().unwrap().config.clone();
+        let cfg = self.config.lock().unwrap().clone();
         if let Err(e) = crate::config::save_config_settings(&cfg) {
             log::warn!(target: "config", "config save failed: {e}");
         }

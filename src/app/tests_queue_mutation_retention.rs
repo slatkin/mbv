@@ -153,7 +153,7 @@ fn empty_folder_enqueue_leaves_tracking_active() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.server_url = url;
+    app.config.lock().unwrap().server_url = url;
     let mut folder = make_item("Folder", "CollectionFolder");
     folder.is_folder = true;
     app.home.continue_items = vec![folder];

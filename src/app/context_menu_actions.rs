@@ -67,7 +67,11 @@ impl App {
     }
 
     fn context_set_many_played(&mut self, item_ids: &[String]) {
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
+        let client = client.lock().unwrap();
         let result = item_ids
             .iter()
             .try_for_each(|item_id| client.mark_played(item_id));
@@ -82,7 +86,11 @@ impl App {
     }
 
     fn context_set_many_unplayed(&mut self, item_ids: &[String]) {
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
+        let client = client.lock().unwrap();
         let result = item_ids
             .iter()
             .try_for_each(|item_id| client.mark_unplayed(item_id));
@@ -97,7 +105,11 @@ impl App {
     }
 
     fn context_set_played(&mut self, item_id: &str, played: bool) {
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
+        let client = client.lock().unwrap();
         let result = if played {
             client.mark_played(item_id)
         } else {
@@ -159,7 +171,11 @@ impl App {
         else {
             return;
         };
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
+        let client = client.lock().unwrap();
         let result = client.hide_from_resume(&item.id);
         drop(client);
         match result {
@@ -180,7 +196,11 @@ impl App {
         if item.is_folder || item.is_audio() {
             return;
         }
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
+        let client = client.lock().unwrap();
         let result = if item.played {
             client.mark_unplayed(&item.id)
         } else {
@@ -205,7 +225,11 @@ impl App {
         if item.is_folder || item.is_audio() {
             return;
         }
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
+        let client = client.lock().unwrap();
         let result = if item.played {
             client.mark_unplayed(&item.id)
         } else {

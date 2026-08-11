@@ -25,7 +25,7 @@ fn session_direct_endpoint_rejects_non_mbv_without_local_fallback() {
 #[test]
 fn session_direct_endpoint_falls_back_to_local_socket_for_same_host_session() {
     let app = make_app_stub();
-    let device_name = app.client.lock().unwrap().device_name.clone();
+    let device_name = "mbv";
     let sess = make_session(&device_name, "mbv");
     assert_eq!(
         app.session_direct_endpoint(&sess),

@@ -117,6 +117,29 @@ impl App {
                     self.remove_feed_confirmed(index);
                 }
             }
+            ConfirmAction::RemoveEmby => {
+                if matches!(
+                    key.code,
+                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+                ) {
+                    self.confirm_modal = None;
+                    self.remove_emby_confirmed();
+                } else if key.code == KeyCode::Esc {
+                    self.confirm_modal = None;
+                }
+            }
+            ConfirmAction::ReplaceEmby(generation) => {
+                if key.code == KeyCode::Esc {
+                    self.confirm_modal = None;
+                    self.pending_emby_replacement = None;
+                } else if matches!(
+                    key.code,
+                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+                ) {
+                    self.confirm_modal = None;
+                    self.replace_emby_confirmed(generation);
+                }
+            }
             ConfirmAction::DiscardOrSaveDirtyPlaylist => {
                 let play_after = matches!(
                     self.pending_queue_action,

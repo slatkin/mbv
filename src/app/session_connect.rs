@@ -28,7 +28,10 @@ impl App {
                 sess.host
             );
         }
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            return None;
+        };
+        let client = client.lock().unwrap();
         sess.device_name
             .eq_ignore_ascii_case(&client.device_name)
             .then_some(mbv_core::remote_player::DaemonEndpoint::Local)
@@ -45,9 +48,16 @@ impl App {
     ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
         #[cfg(test)]
         if let Some(f) = *super::SESSIONS_LOAD_OVERRIDE.lock().unwrap() {
-            return f(&self.client.lock().unwrap());
+            let Some(client) = self.emby_client() else {
+                return Err("Emby is unavailable".into());
+            };
+            return f(&client.lock().unwrap());
         }
-        self.client.lock().unwrap().get_sessions_unfiltered()
+        let Some(client) = self.emby_client() else {
+            return Err("Emby is unavailable".into());
+        };
+        let result = client.lock().unwrap().get_sessions_unfiltered();
+        result
     }
 
     fn connect_direct_endpoint(
@@ -148,7 +158,10 @@ impl App {
         String,
     > {
         log::info!(target: "daemon_route", "daemon route attempt start route={route_label:?} endpoint={endpoint}");
-        let auth_token = self.client.lock().unwrap().token.clone();
+        let Some(client) = self.emby_client() else {
+            return Err("Emby is unavailable".into());
+        };
+        let auth_token = client.lock().unwrap().token.clone();
         self.connect_daemon_route_endpoint(endpoint, &auth_token)
             .inspect(|_| {
                 log::info!(target: "daemon_route", "daemon route attempt succeeded route={route_label:?} endpoint={endpoint}");
@@ -173,7 +186,7 @@ impl App {
     /// on) local playback, exactly like #222's per-play lazy-connect
     /// fallback rule -- never a hard failure at startup.
     pub(super) fn try_auto_reconnect(&mut self) {
-        if !self.client.lock().unwrap().config.auto_reconnect {
+        if !self.config.lock().unwrap().auto_reconnect {
             log::info!(target: "auto_reconnect", "auto-reconnect disabled; staying local");
             return;
         }
@@ -263,7 +276,7 @@ impl App {
             .as_ref()
             .map_or(!initial_items.is_empty(), |state| !state.slots.is_empty());
         let initial_cursor = remote.status.lock().unwrap().current_idx;
-        let always_play_next = self.client.lock().unwrap().config.always_play_next;
+        let always_play_next = self.config.lock().unwrap().always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below:
         // MPRIS (if this session has a live registration) must follow this
         // new ctrl-owning target too, or it stays wired to whatever owned
@@ -364,7 +377,7 @@ impl App {
             .as_ref()
             .map_or(!initial_items.is_empty(), |state| !state.slots.is_empty());
         let initial_cursor = remote.status.lock().unwrap().current_idx;
-        let always_play_next = self.client.lock().unwrap().config.always_play_next;
+        let always_play_next = self.config.lock().unwrap().always_play_next;
         // Cloned before `remote` is moved into `PlayerProxy::remote` below,
         // mirroring `switch_to_direct_remote`'s #175 MPRIS rebind.
         let mpris_remote = remote.clone();
@@ -492,7 +505,7 @@ impl App {
                         || PlayerTab::from_emby_items(initial_items, initial_cursor),
                         PlayerTab::from_unified_state,
                     );
-                    let always_play_next = self.client.lock().unwrap().config.always_play_next;
+                    let always_play_next = self.config.lock().unwrap().always_play_next;
                     // Cloned before `remote` is moved into `PlayerProxy::remote`
                     // below, mirroring `switch_to_library_route`'s #175 MPRIS
                     // rebind.
@@ -623,7 +636,10 @@ impl App {
         // should skip this.
         if self.player_owner_is_on_this_machine() {
             if let Some(endpoint) = self.session_direct_endpoint(sess) {
-                let auth_token = self.client.lock().unwrap().token.clone();
+                let Some(client) = self.emby_client() else {
+                    return;
+                };
+                let auth_token = client.lock().unwrap().token.clone();
                 match self.connect_direct_endpoint(&endpoint, &auth_token) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);

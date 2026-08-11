@@ -32,6 +32,7 @@ pub(super) enum PanelMode {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum SettingKey {
+    Services,
     StayAlive,
     AutoReconnect,
     SavePlaylistOnQuit,
@@ -60,9 +61,39 @@ pub(super) enum SettingKey {
     LogOut,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum SettingsDestination {
+    #[default]
+    Main,
+    Services,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ServiceEntry {
+    Emby,
+    Audiobookshelf,
+    Feeds,
+}
+
+pub(super) const SERVICE_ENTRIES: [ServiceEntry; 3] = [
+    ServiceEntry::Emby,
+    ServiceEntry::Audiobookshelf,
+    ServiceEntry::Feeds,
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ServiceActionIntent {
+    SetupEmby,
+    RetryEmby,
+    RepairEmby,
+    SetupAudiobookshelf,
+    ManageFeeds,
+}
+
 // Sections rendered as YELLOW blocks in a 2×2 grid.
 // LogOut is rendered separately as a plain line below the grid.
 pub(super) static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
+    ("Services", &[SettingKey::Services]),
     (
         "Playback",
         &[

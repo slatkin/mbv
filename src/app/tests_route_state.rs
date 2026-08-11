@@ -550,7 +550,7 @@ fn displayed_queue_playback_state_stays_active_for_local_daemon_queue() {
 fn local_daemon_consume_adjusts_active_idx_after_removal_shift() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_local_daemon_app_stub(make_items(4));
-    app.client.lock().unwrap().config.consume_videos = true;
+    app.config.lock().unwrap().consume_videos = true;
     {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
@@ -589,7 +589,7 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
     let local_items = make_items(2);
     let remote_items = make_items(4);
     let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
-    app.client.lock().unwrap().config.consume_videos = true;
+    app.config.lock().unwrap().consume_videos = true;
     app.set_queue_scope(QueueScope::Remote);
     {
         let mut status = app.player.status.lock().unwrap();

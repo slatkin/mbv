@@ -68,7 +68,10 @@ impl App {
 
     pub(crate) fn open_library_routes_popup(&mut self) {
         log::info!(target: "library_route", "F2 route picker opened");
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            return;
+        };
+        let client = client.lock().unwrap();
         let all = match client.get_views() {
             Ok(all) => {
                 log::info!(target: "library_route", "F2 library fetch succeeded count={}", all.len());
@@ -84,7 +87,7 @@ impl App {
                 return;
             }
         };
-        let routes = client.config.library_routes.clone();
+        let routes = self.config.lock().unwrap().library_routes.clone();
         let items: Vec<(String, String, Option<String>)> = all
             .iter()
             .filter(|v| v.collection_type != "playlists")
@@ -116,7 +119,10 @@ impl App {
                 return;
             }
         };
-        let local_device_name = self.client.lock().unwrap().device_name.clone();
+        let Some(client) = self.emby_client() else {
+            return;
+        };
+        let local_device_name = client.lock().unwrap().device_name.clone();
         let mut devices: Vec<(String, Option<mbv_core::remote_player::DaemonEndpoint>)> = sessions
             .iter()
             .filter(|s| s.client.eq_ignore_ascii_case("mbv"))
@@ -150,10 +156,9 @@ impl App {
         // for the live session fetch this stage needs regardless, to let
         // the user pick a *new* device.
         let current_endpoint = self
-            .client
+            .config
             .lock()
             .unwrap()
-            .config
             .library_routes
             .get(&library_lower)
             .and_then(|raw| mbv_core::remote_player::DaemonEndpoint::parse(raw).ok());
@@ -208,21 +213,20 @@ impl App {
         }
 
         {
-            let mut c = self.client.lock().unwrap();
+            let mut c = self.config.lock().unwrap();
             if cursor == 0 {
-                c.config.library_routes.remove(&library_lower);
+                c.library_routes.remove(&library_lower);
                 log::info!(target: "library_route", "F2 route removed library={library_lower:?}");
             } else if let Some((_, Some(endpoint))) = devices.get(cursor - 1) {
                 // #256: persist the resolved endpoint, never the device
                 // name -- the name was only ever needed to let the user
                 // pick a device in this dialog.
-                c.config
-                    .library_routes
+                c.library_routes
                     .insert(library_lower.clone(), endpoint.to_string());
                 log::info!(target: "library_route", "F2 endpoint persisted library={library_lower:?} endpoint={endpoint}");
             }
         }
-        let cfg = self.client.lock().unwrap().config.clone();
+        let cfg = self.config.lock().unwrap().clone();
         // Keep the App's own resolution-time copy (`self.library_routes`,
         // read by `resolve_route_for_library` in library_route.rs) in sync
         // with the just-edited config -- otherwise the change wouldn't take
@@ -237,7 +241,10 @@ impl App {
         self.persist_roaming_settings();
 
         // Return to the library list, refreshed with the new assignment.
-        let refresh_result = { self.client.lock().unwrap().get_views() };
+        let Some(client) = self.emby_client() else {
+            return;
+        };
+        let refresh_result = { client.lock().unwrap().get_views() };
         let all = match refresh_result {
             Ok(all) => all,
             Err(e) => {
@@ -566,12 +573,7 @@ mod tests {
         );
 
         assert_eq!(
-            app.client
-                .lock()
-                .unwrap()
-                .config
-                .library_routes
-                .get("music"),
+            app.config.lock().unwrap().library_routes.get("music"),
             Some(&endpoint.to_string())
         );
         assert_eq!(app.library_routes.get("music"), Some(&endpoint.to_string()));
@@ -580,10 +582,9 @@ mod tests {
     #[test]
     fn commit_device_selection_clears_route_on_local_no_route() {
         let mut app = make_app_stub();
-        app.client
+        app.config
             .lock()
             .unwrap()
-            .config
             .library_routes
             .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.library_routes
@@ -604,15 +605,7 @@ mod tests {
 
         app.handle_library_routes_enter();
 
-        assert_eq!(
-            app.client
-                .lock()
-                .unwrap()
-                .config
-                .library_routes
-                .get("music"),
-            None
-        );
+        assert_eq!(app.config.lock().unwrap().library_routes.get("music"), None);
         assert_eq!(app.library_routes.get("music"), None);
     }
 
@@ -635,10 +628,9 @@ mod tests {
         *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
 
         let mut app = make_app_stub();
-        app.client
+        app.config
             .lock()
             .unwrap()
-            .config
             .library_routes
             .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         // enter_device_stage directly, rather than through
@@ -710,15 +702,7 @@ mod tests {
 
         app.handle_library_routes_enter();
 
-        assert_eq!(
-            app.client
-                .lock()
-                .unwrap()
-                .config
-                .library_routes
-                .get("music"),
-            None
-        );
+        assert_eq!(app.config.lock().unwrap().library_routes.get("music"), None);
         assert_eq!(app.library_routes.get("music"), None);
         assert!(app.status.contains("no-port-device"));
         assert!(app.status.contains("not currently routable"));

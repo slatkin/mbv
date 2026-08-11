@@ -5,7 +5,7 @@ use mbv_core::player::{PlayerCommand, PlayerEvent};
 fn intro_started_auto_skips_when_client_prefers_it() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.always_skip_intro = true;
+    app.config.lock().unwrap().always_skip_intro = true;
     let rx = app.player.spy_on_commands();
 
     app.handle_player_event(PlayerEvent::IntroStarted {
@@ -27,7 +27,7 @@ fn intro_started_auto_skips_when_client_prefers_it() {
 fn intro_started_keeps_manual_prompt_when_client_prefers_it() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.always_skip_intro = false;
+    app.config.lock().unwrap().always_skip_intro = false;
     let rx = app.player.spy_on_commands();
 
     app.handle_player_event(PlayerEvent::IntroStarted {

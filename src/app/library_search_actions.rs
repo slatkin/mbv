@@ -77,7 +77,9 @@ impl App {
     // `handle_lib_event`'s `AlbumIndexBuilt` rebuild-pending branch, which
     // stays behind in `actions.rs`.
     pub(super) fn spawn_album_index_build(&self, library_id: String) {
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let levels = self.music_levels.clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
@@ -156,7 +158,9 @@ impl App {
         };
         let library_id = self.libs[lib_idx].library.id.clone();
         let library_name = self.libs[lib_idx].library.display_name();
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return false;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let fetch = |parent_id: &str| {
@@ -232,7 +236,9 @@ impl App {
         loaded_count: usize,
         letter_filter: Option<super::render::LetterFilter>,
     ) {
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         let limit = loaded_count.max(PAGE_SIZE);
         let (name_ge, name_lt) = letter_filter

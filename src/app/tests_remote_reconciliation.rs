@@ -290,7 +290,7 @@ fn stale_reconciliation_command_failure_does_not_invalidate_replacement_tracker(
 fn completed_remote_occurrence_is_consumed_from_an_ad_hoc_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = attached_app();
-    app.client.lock().unwrap().config.consume_videos = true;
+    app.config.lock().unwrap().consume_videos = true;
     let mut item_a = app.player_tab.emby_items()[0].clone();
     item_a.id = "a".into();
     let mut item_b = app.player_tab.emby_items()[1].clone();

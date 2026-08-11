@@ -14,13 +14,13 @@ impl App {
     /// #156).
     pub(super) fn try_quit(&mut self) -> bool {
         if self.queue_dirty && self.queue_is_saved_playlist() {
-            let save_on_quit = self.client.lock().unwrap().config.save_playlist_on_quit;
+            let save_on_quit = self.config.lock().unwrap().save_playlist_on_quit;
             if save_on_quit {
                 let playlist_id = self.queue_playlist_id().map(str::to_string);
                 self.save_playlist_to_emby();
                 if let Some(playlist_id) = playlist_id {
                     let deadline = Instant::now()
-                        + Duration::from_secs(self.client.lock().unwrap().config.quit_timeout_secs);
+                        + Duration::from_secs(self.config.lock().unwrap().quit_timeout_secs);
                     while self.playlist_mutations.contains_key(&playlist_id)
                         && Instant::now() < deadline
                     {
@@ -61,7 +61,7 @@ impl App {
             return;
         }
         self.queue_dirty = true;
-        let save_on_consume = self.client.lock().unwrap().config.save_playlist_on_consume;
+        let save_on_consume = self.config.lock().unwrap().save_playlist_on_consume;
         let is_saved_playlist = self.queue_is_saved_playlist();
         log::info!(target: "consume", "on_video_consumed: queue_dirty=true save_playlist_on_consume={save_on_consume} \
             is_saved_playlist={is_saved_playlist}");
@@ -84,12 +84,7 @@ impl App {
             return;
         }
         self.queue_dirty = true;
-        let save_on_consume = self
-            .client
-            .lock()
-            .unwrap()
-            .config
-            .save_playlist_on_consume_audio;
+        let save_on_consume = self.config.lock().unwrap().save_playlist_on_consume_audio;
         let is_saved_playlist = self.queue_is_saved_playlist();
         log::info!(target: "consume", "on_audio_consumed: queue_dirty=true \
             save_playlist_on_consume_audio={save_on_consume} is_saved_playlist={is_saved_playlist}");

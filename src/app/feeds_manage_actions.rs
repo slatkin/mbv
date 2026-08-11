@@ -27,7 +27,7 @@ impl App {
             return;
         };
         let index = popup.cursor;
-        let sub = self.client.lock().unwrap().config.feeds.get(index).cloned();
+        let sub = self.config.lock().unwrap().feeds.get(index).cloned();
         let Some(sub) = sub else {
             return;
         };
@@ -42,10 +42,9 @@ impl App {
         };
         let index = popup.cursor;
         let name = self
-            .client
+            .config
             .lock()
             .unwrap()
-            .config
             .feeds
             .get(index)
             .map(|s| s.name.clone());
@@ -67,12 +66,11 @@ impl App {
     /// (§6.3): rewrites `config.feeds` without the removed entry.
     pub(super) fn remove_feed_confirmed(&mut self, index: usize) {
         let feeds: Vec<FeedSubscription> = {
-            let c = self.client.lock().unwrap();
-            if index >= c.config.feeds.len() {
+            let c = self.config.lock().unwrap();
+            if index >= c.feeds.len() {
                 return;
             }
-            c.config
-                .feeds
+            c.feeds
                 .iter()
                 .enumerate()
                 .filter(|(i, _)| *i != index)
@@ -192,9 +190,8 @@ impl App {
             return;
         }
         let feeds: Vec<FeedSubscription> = {
-            let c = self.client.lock().unwrap();
-            c.config
-                .feeds
+            let c = self.config.lock().unwrap();
+            c.feeds
                 .iter()
                 .enumerate()
                 .map(|(i, s)| {
@@ -287,8 +284,8 @@ impl App {
         match result.result {
             Ok(()) => {
                 let feeds = {
-                    let c = self.client.lock().unwrap();
-                    let mut feeds = c.config.feeds.clone();
+                    let c = self.config.lock().unwrap();
+                    let mut feeds = c.feeds.clone();
                     feeds.push(FeedSubscription {
                         name: result.name.clone(),
                         url: result.url,
@@ -309,14 +306,14 @@ impl App {
         true
     }
 
-    /// Writes `feeds` into the client's config and persists it via the
+    /// Writes `feeds` into App's general config and persists it via the
     /// existing read-modify-write toml merge (§6.3), then runs the §6.4
     /// post-mutation resync.
     fn persist_feeds(&mut self, feeds: Vec<FeedSubscription>) {
         let cfg = {
-            let mut c = self.client.lock().unwrap();
-            c.config.feeds = feeds;
-            c.config.clone()
+            let mut c = self.config.lock().unwrap();
+            c.feeds = feeds;
+            c.clone()
         };
         if let Err(e) = crate::config::save_config_settings(&cfg) {
             log::warn!(target: "config", "config save failed: {e}");

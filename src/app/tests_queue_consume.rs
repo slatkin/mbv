@@ -71,7 +71,7 @@ fn stopped_consume_removes_the_right_slot_occurrence() {
     app.player_tab.set_items(items, app.player_tab.queue_cursor);
     let first_dup = app.player_tab.queue.slots()[0].slot_id;
     let second_dup = app.player_tab.queue.slots()[2].slot_id;
-    app.client.lock().unwrap().config.consume_videos = true;
+    app.config.lock().unwrap().consume_videos = true;
 
     app.handle_player_event(PlayerEvent::Stopped {
         idx: 2,
@@ -190,7 +190,7 @@ fn stopped_path_consumes_the_last_audio_item_in_the_queue() {
     let items = make_audio_items(1);
     let mut app = make_app_stub();
     app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.client.lock().unwrap().config.consume_audio = true;
+    app.config.lock().unwrap().consume_audio = true;
 
     app.handle_player_event(PlayerEvent::Stopped {
         idx: 0,
@@ -213,7 +213,7 @@ fn stopped_path_does_not_consume_audio_when_consume_audio_is_off() {
     let items = make_audio_items(1);
     let mut app = make_app_stub();
     app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.client.lock().unwrap().config.consume_audio = false;
+    app.config.lock().unwrap().consume_audio = false;
 
     app.handle_player_event(PlayerEvent::Stopped {
         idx: 0,
@@ -314,7 +314,7 @@ fn track_changed_activates_slot_and_consumes_deferred_slot() {
     app.player_tab
         .set_items(make_items(3), app.player_tab.queue_cursor);
     let slot_b = app.player_tab.queue.slots()[1].slot_id;
-    app.client.lock().unwrap().config.consume_videos = true;
+    app.config.lock().unwrap().consume_videos = true;
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         idx: 0,
@@ -343,8 +343,8 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
     };
-    app.client.lock().unwrap().config.consume_videos = true;
-    app.client.lock().unwrap().config.save_playlist_on_consume = false;
+    app.config.lock().unwrap().consume_videos = true;
+    app.config.lock().unwrap().save_playlist_on_consume = false;
 
     // First item finishes playing and is consumed while advancing to the next track.
     app.handle_player_event(PlayerEvent::TrackCompleted {
@@ -381,7 +381,7 @@ fn consuming_a_video_resyncs_the_players_own_queue() {
     let items = make_items(2);
     let mut app = make_app_stub();
     app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.client.lock().unwrap().config.consume_videos = true;
+    app.config.lock().unwrap().consume_videos = true;
     let cmd_rx = app.player.spy_on_commands();
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
@@ -413,8 +413,8 @@ fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
     };
-    app.client.lock().unwrap().config.consume_videos = true;
-    app.client.lock().unwrap().config.save_playlist_on_consume = true;
+    app.config.lock().unwrap().consume_videos = true;
+    app.config.lock().unwrap().save_playlist_on_consume = true;
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         idx: 0,
@@ -452,8 +452,8 @@ fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
     };
-    app.client.lock().unwrap().config.consume_videos = true;
-    app.client.lock().unwrap().config.save_playlist_on_consume = true;
+    app.config.lock().unwrap().consume_videos = true;
+    app.config.lock().unwrap().save_playlist_on_consume = true;
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         idx: 0,
@@ -491,12 +491,8 @@ fn consuming_an_audio_item_without_autosave_marks_queue_dirty() {
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
     };
-    app.client.lock().unwrap().config.consume_audio = true;
-    app.client
-        .lock()
-        .unwrap()
-        .config
-        .save_playlist_on_consume_audio = false;
+    app.config.lock().unwrap().consume_audio = true;
+    app.config.lock().unwrap().save_playlist_on_consume_audio = false;
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         idx: 0,
@@ -530,12 +526,8 @@ fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirt
         id: Some("pl1".to_string()),
         name: "My Playlist".to_string(),
     };
-    app.client.lock().unwrap().config.consume_audio = true;
-    app.client
-        .lock()
-        .unwrap()
-        .config
-        .save_playlist_on_consume_audio = true;
+    app.config.lock().unwrap().consume_audio = true;
+    app.config.lock().unwrap().save_playlist_on_consume_audio = true;
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         idx: 0,
@@ -564,8 +556,8 @@ fn consume_videos_flag_does_not_consume_audio_items() {
     let items = make_audio_items(2);
     let mut app = make_app_stub();
     app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.client.lock().unwrap().config.consume_videos = true;
-    app.client.lock().unwrap().config.consume_audio = false;
+    app.config.lock().unwrap().consume_videos = true;
+    app.config.lock().unwrap().consume_audio = false;
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         idx: 0,
@@ -589,8 +581,8 @@ fn consume_audio_flag_does_not_consume_video_items() {
     let items = make_items(2);
     let mut app = make_app_stub();
     app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.client.lock().unwrap().config.consume_audio = true;
-    app.client.lock().unwrap().config.consume_videos = false;
+    app.config.lock().unwrap().consume_audio = true;
+    app.config.lock().unwrap().consume_videos = false;
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         idx: 0,

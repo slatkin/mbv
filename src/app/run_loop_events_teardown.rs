@@ -91,7 +91,7 @@ impl App {
         // the `new_remote` doc comment), so it must not be skipped here.
         if self.launched_as_remote && !self.home_is_local_daemon {
             log::info!(target: "auto_reconnect", "teardown persistence skipped: launched as remote");
-        } else if !self.client.lock().unwrap().config.auto_reconnect {
+        } else if !self.config.lock().unwrap().auto_reconnect {
             log::info!(target: "auto_reconnect", "teardown persistence skipped: auto-reconnect disabled");
         } else {
             let last = self.current_auto_reconnect_target();
@@ -169,8 +169,12 @@ impl App {
         // DaemonEndpoint::Local connection without mutating self.player or
         // any route/queue-scope/MPRIS/auto-reconnect state.
         let (stay_alive, auth_token) = {
-            let client = self.client.lock().unwrap();
-            (client.config.stay_alive, client.token.clone())
+            let config = self.config.lock().unwrap();
+            let token = self
+                .emby_client()
+                .map(|client| client.lock().unwrap().token.clone())
+                .unwrap_or_default();
+            (config.stay_alive, token)
         };
         let should_request_shutdown = self.home_is_local_daemon && !stay_alive;
         let mut shutdown_response: Option<mbv_core::remote_player::ShutdownResponse> = None;
