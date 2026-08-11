@@ -6,8 +6,6 @@ use crate::app::App;
 use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
-pub(super) const SELECTED_ALBUM_WINDOW: usize = 12;
-
 /// Display-only artist group header carried in the display plan for
 /// rendering. Not a selection or navigation target.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -259,19 +257,6 @@ impl App {
 
             if selected_group {
                 let group_indices = order[group_start..group_end].to_vec();
-                let window_start = if group_indices.len() > SELECTED_ALBUM_WINDOW {
-                    let cursor_pos = group_indices
-                        .iter()
-                        .position(|&idx| idx == cursor)
-                        .unwrap_or(0);
-                    cursor_pos
-                        .saturating_sub(SELECTED_ALBUM_WINDOW.saturating_sub(1))
-                        .min(group_indices.len() - SELECTED_ALBUM_WINDOW)
-                } else {
-                    0
-                };
-                let window_end = (window_start + SELECTED_ALBUM_WINDOW).min(group_indices.len());
-                let visible_group_indices = &group_indices[window_start..window_end];
                 rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                 let top_idx = rows.len();
                 rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
@@ -287,7 +272,7 @@ impl App {
                     selected_hint_lines(hint).saturating_sub(1),
                 ));
 
-                for &idx in visible_group_indices {
+                for &idx in &group_indices {
                     rows.push(GroupedAlbumDisplayRow::Album(idx));
                     rows.extend(std::iter::repeat_n(
                         GroupedAlbumDisplayRow::AlbumWrappedContinuation,

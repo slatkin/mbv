@@ -59,10 +59,13 @@ fn selectable_artist_headers_are_typed_row_targets() {
 #[test]
 fn selected_group_has_block_bounds() {
     let mut app = make_music_group_app();
-    let mut second = make_item("Second Album", "MusicAlbum");
-    second.id = "album-2".into();
-    second.artist = "Alpha".into();
-    app.libs[0].nav_stack.last_mut().unwrap().items.push(second);
+    let albums = app.libs[0].nav_stack.last_mut().unwrap();
+    for idx in 2..=24 {
+        let mut album = make_item(&format!("Album {idx}"), "MusicAlbum");
+        album.id = format!("album-{idx}");
+        album.artist = "Alpha".into();
+        albums.items.push(album);
+    }
     let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
 
     let plan = {
@@ -92,7 +95,7 @@ fn selected_group_has_block_bounds() {
             .iter()
             .filter(|row| matches!(row, GroupedAlbumDisplayRow::Album(_)))
             .count(),
-        2,
+        24,
         "the selected group should emit the complete discography"
     );
 }
