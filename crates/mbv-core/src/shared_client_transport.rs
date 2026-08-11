@@ -79,6 +79,7 @@ fn run_client_worker<S>(
     loop {
         while let Ok(cmd) = cmd_rx.try_recv() {
             if !send_worker_command(&mut reader, &cmd) {
+                log::warn!(target: "shared_data", "shared-data connection closed while sending command");
                 let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
                 return;
             }
@@ -87,11 +88,13 @@ fn run_client_worker<S>(
         let now = Instant::now();
         if heartbeat_supported {
             if awaiting_pong && now.duration_since(last_heartbeat) >= heartbeat_timeout {
+                log::warn!(target: "shared_data", "shared-data heartbeat timed out");
                 let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
                 return;
             }
             if !awaiting_pong && now.duration_since(last_heartbeat) >= heartbeat_interval {
                 if !send_worker_command(&mut reader, &SharedDataCmd::Ping) {
+                    log::warn!(target: "shared_data", "shared-data connection closed while sending heartbeat");
                     let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
                     return;
                 }
@@ -102,22 +105,31 @@ fn run_client_worker<S>(
 
         match reader.read_line(&mut line) {
             Ok(0) => {
+                log::warn!(target: "shared_data", "shared-data server closed the connection");
                 let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
                 return;
             }
             Ok(_) => {
-                if let Ok(event) = serde_json::from_str::<SharedDataEvent>(line.trim()) {
-                    if matches!(event, SharedDataEvent::Pong) {
-                        awaiting_pong = false;
-                        last_heartbeat = Instant::now();
-                    } else {
-                        let _ = ev_tx.send(event);
+                match serde_json::from_str::<SharedDataEvent>(line.trim()) {
+                    Ok(event) => {
+                        if matches!(event, SharedDataEvent::Pong) {
+                            awaiting_pong = false;
+                            last_heartbeat = Instant::now();
+                        } else {
+                            let _ = ev_tx.send(event);
+                        }
                     }
+                    Err(error) => log::warn!(
+                        target: "shared_data",
+                        "invalid shared-data response ({} bytes): {error}",
+                        line.len()
+                    ),
                 }
                 line.clear();
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-            Err(_) => {
+            Err(error) => {
+                log::warn!(target: "shared_data", "shared-data read failed: {error}");
                 let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
                 return;
             }
@@ -126,6 +138,7 @@ fn run_client_worker<S>(
         match cmd_rx.recv_timeout(Duration::from_millis(20)) {
             Ok(cmd) => {
                 if !send_worker_command(&mut reader, &cmd) {
+                    log::warn!(target: "shared_data", "shared-data connection closed while sending command");
                     let _ = ev_tx.send(SharedDataEvent::ConnectionClosed);
                     return;
                 }
@@ -141,9 +154,44 @@ fn run_client_worker<S>(
 
 fn send_worker_command<S: Write>(writer: &mut BufReader<S>, command: &SharedDataCmd) -> bool {
     let Ok(json) = serde_json::to_string(command) else {
+        log::warn!(target: "shared_data", "failed to serialize shared-data command");
         return false;
     };
-    writeln!(writer.get_mut(), "{json}").is_ok()
+    if let SharedDataCmd::UpdateDocument { kind, .. } | SharedDataCmd::CreateDocument { kind, .. } =
+        command
+    {
+        log::debug!(
+            target: "shared_data",
+            "sending shared-data document kind={} bytes={}",
+            kind.as_str(),
+            json.len()
+        );
+    }
+    let mut message = json.into_bytes();
+    message.push(b'\n');
+    let mut offset = 0;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while offset < message.len() {
+        match writer.get_mut().write(&message[offset..]) {
+            Ok(0) => {
+                log::warn!(target: "shared_data", "shared-data write returned zero bytes");
+                return false;
+            }
+            Ok(written) => offset += written,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                if Instant::now() >= deadline {
+                    log::warn!(target: "shared_data", "shared-data write timed out");
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) => {
+                log::warn!(target: "shared_data", "shared-data write failed: {error}");
+                return false;
+            }
+        }
+    }
+    true
 }
 
 fn connect_tcp(addr: &str) -> Result<TcpStream, String> {

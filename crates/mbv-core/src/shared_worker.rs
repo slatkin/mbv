@@ -225,10 +225,16 @@ pub fn spawn_shared_store_worker(db: Arc<Mutex<Database>>) -> SharedStoreHandle 
                     reply,
                 } => {
                     let result = crate::shared_store::read_document(&db, &user_id, kind);
+                    if let Err(error) = &result {
+                        log::warn!(target: "shared_data", "read document failed: {error}");
+                    }
                     let _ = reply.send(result);
                 }
                 SharedStoreRequest::ReadAll { user_id, reply } => {
                     let result = crate::shared_store::read_all_documents(&db, &user_id);
+                    if let Err(error) = &result {
+                        log::warn!(target: "shared_data", "read all documents failed: {error}");
+                    }
                     let _ = reply.send(result);
                 }
                 SharedStoreRequest::Create {
@@ -238,6 +244,9 @@ pub fn spawn_shared_store_worker(db: Arc<Mutex<Database>>) -> SharedStoreHandle 
                     reply,
                 } => {
                     let result = crate::shared_store::create_document(&db, &user_id, kind, value);
+                    if let Err(error) = &result {
+                        log::warn!(target: "shared_data", "create document failed: {error}");
+                    }
                     let _ = reply.send(result);
                 }
                 SharedStoreRequest::Update {
@@ -254,6 +263,9 @@ pub fn spawn_shared_store_worker(db: Arc<Mutex<Database>>) -> SharedStoreHandle 
                         expected_revision,
                         value,
                     );
+                    if let Err(error) = &result {
+                        log::warn!(target: "shared_data", "update document failed: {error}");
+                    }
                     let _ = reply.send(result);
                 }
                 SharedStoreRequest::GetFeedEntry {

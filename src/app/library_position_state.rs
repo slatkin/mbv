@@ -59,10 +59,15 @@ impl App {
         self.library_position_dirty = false;
         crate::config::save_library_position_state(&self.library_position_state);
         if let Ok(value) = serde_json::to_value(&self.library_position_state) {
-            let _ = self.persist_shared_document(
+            if let Err(error) = self.persist_shared_document(
                 mbv_core::shared_state::SharedDocumentKind::LibraryPositionState,
                 value,
-            );
+            ) {
+                log::warn!(
+                    target: "shared_data",
+                    "library position persistence failed: {error}"
+                );
+            }
         }
     }
 

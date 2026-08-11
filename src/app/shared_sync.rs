@@ -25,6 +25,7 @@ impl App {
             Err(error) => {
                 shared.enter_fallback();
                 self.shared_client = Some(shared);
+                log::warn!(target: "shared_data", "shared-data connect failed: {error}");
                 self.flash(
                     format!("Shared data unavailable; using local state ({error})"),
                     ToastSeverity::Warning,
@@ -39,6 +40,7 @@ impl App {
             Err(error) => {
                 shared.enter_fallback();
                 self.shared_client = Some(shared);
+                log::warn!(target: "shared_data", "shared-data initialization failed: {error}");
                 self.flash(
                     format!("Shared data restore failed; using local state ({error})"),
                     ToastSeverity::Warning,
@@ -141,15 +143,22 @@ impl App {
         value: serde_json::Value,
     ) -> Result<(), String> {
         if self.shared_client.is_none() {
+            log::debug!(target: "shared_data", "shared-data persistence skipped: no client");
             return Ok(());
         }
         mirror_shared_document(kind, &value)?;
 
         let result = {
             let Some(shared) = self.shared_client.as_mut() else {
+                log::debug!(target: "shared_data", "shared-data persistence skipped: client missing");
                 return Ok(());
             };
             if !matches!(shared.state(), SharedClientState::Shared) {
+                log::debug!(
+                    target: "shared_data",
+                    "shared-data persistence skipped: client state={:?}",
+                    shared.state()
+                );
                 return Ok(());
             }
             let expected_revision = match kind {
@@ -281,6 +290,17 @@ impl App {
 
         match result {
             Ok((mut shared, snapshot)) => {
+                let mut snapshot = snapshot;
+                if snapshot.queue_state.as_ref().is_some_and(|record| {
+                    record.value["items"].as_array().is_some_and(Vec::is_empty)
+                }) && !self.player_tab.queue.is_empty()
+                {
+                    log::warn!(
+                        target: "shared_data",
+                        "preserving non-empty local queue over empty reconnect snapshot"
+                    );
+                    snapshot.queue_state = None;
+                }
                 if let Err(error) = self.apply_shared_snapshot(&snapshot) {
                     shared.enter_fallback();
                     self.shared_client = Some(shared);
