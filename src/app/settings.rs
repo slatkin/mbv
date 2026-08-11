@@ -3,6 +3,7 @@ use crate::config::{Config, UiConfig};
 
 pub fn setting_label(key: SettingKey) -> &'static str {
     match key {
+        SettingKey::Services => "Services",
         SettingKey::StayAlive => "Stay alive on exit",
         SettingKey::AutoReconnect => "Auto reconnect",
         SettingKey::SavePlaylistOnQuit => "Save playlist on quit",
@@ -35,6 +36,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
 
 pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
     match key {
+        SettingKey::Services => "Emby, Audiobookshelf, Feeds".into(),
         SettingKey::StayAlive => bool_val(cfg.stay_alive),
         SettingKey::AutoReconnect => bool_val(cfg.auto_reconnect),
         SettingKey::SavePlaylistOnQuit => bool_val(cfg.save_playlist_on_quit),

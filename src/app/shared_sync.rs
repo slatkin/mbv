@@ -9,7 +9,7 @@ use mbv_core::shared_state::{
 
 impl App {
     pub(super) fn initialize_shared_state(&mut self) {
-        let config = self.client.lock().unwrap().config.clone();
+        let config = self.config.lock().unwrap().clone();
         let mut shared = SharedClient::new();
         shared.initialize(&config);
         if matches!(shared.state(), SharedClientState::Disabled) {
@@ -19,7 +19,9 @@ impl App {
             self.apply_roaming_settings(settings);
         }
 
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let snapshot = match shared.connect(&config, &client) {
             Ok(snapshot) => snapshot,
             Err(error) => {
@@ -130,9 +132,9 @@ impl App {
 
     fn apply_roaming_settings(&mut self, settings: RoamingSettings) {
         self.library_routes = settings.library_routes.clone();
-        let mut client = self.client.lock().unwrap();
-        client.config.auto_reconnect = settings.auto_reconnect;
-        client.config.library_routes = settings.library_routes;
+        let mut config = self.config.lock().unwrap();
+        config.auto_reconnect = settings.auto_reconnect;
+        config.library_routes = settings.library_routes;
     }
 
     pub(super) fn persist_shared_document(
@@ -196,10 +198,10 @@ impl App {
 
     pub(super) fn persist_roaming_settings(&mut self) {
         let settings = {
-            let client = self.client.lock().unwrap();
+            let config = self.config.lock().unwrap();
             RoamingSettings {
-                auto_reconnect: client.config.auto_reconnect,
-                library_routes: client.config.library_routes.clone(),
+                auto_reconnect: config.auto_reconnect,
+                library_routes: config.library_routes.clone(),
             }
         };
         if let Ok(value) = serde_json::to_value(settings) {
@@ -323,8 +325,10 @@ impl App {
             return;
         }
 
-        let config = self.client.lock().unwrap().config.clone();
-        let client = self.client.lock().unwrap().clone();
+        let config = self.config.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let local = local_snapshot(&config);
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {

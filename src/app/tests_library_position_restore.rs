@@ -15,7 +15,7 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
         let _ = tx.send(listener.accept().is_ok());
     });
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.server_url = base_url;
+    app.config.lock().unwrap().server_url = base_url;
     app.panel_focus = PanelFocus::Queue;
     app.tab = TabSelection::Library(0);
     let mut library = make_item("Movies", "CollectionFolder");

@@ -25,7 +25,7 @@ impl App {
     /// feed tab state. Called once at startup and when the config is
     /// reloaded.
     pub(super) fn sync_feed_subscriptions(&mut self) {
-        let subs = self.client.lock().unwrap().config.feeds.clone();
+        let subs = self.config.lock().unwrap().feeds.clone();
         self.feed_tab.subscriptions = subs;
         // Ensure per-subscription entries vec is the right length.
         let n = self.feed_tab.subscriptions.len();
@@ -245,7 +245,7 @@ impl App {
         let all_items = self.playback_queue().all_queue_items();
         let start_idx = self.playback_queue().queue_cursor;
         let headless = all_items.iter().all(QueueItem::is_audio);
-        let c = std::sync::Arc::new(self.client.lock().unwrap().clone());
+        let c = self.emby_snapshot().map(std::sync::Arc::new);
         if existing_idx.is_some() && self.player.supports_unified_queue() {
             let slot_id = self
                 .playback_queue()
@@ -265,7 +265,7 @@ impl App {
         }
         if !self
             .player
-            .submit_queue(all_items, start_idx, Some(c), headless, self.ui_volume)
+            .submit_queue(all_items, start_idx, c, headless, self.ui_volume)
         {
             *self.queue_for_scope_mut(scope) = previous_queue;
             self.flash(

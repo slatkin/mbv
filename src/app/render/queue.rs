@@ -42,13 +42,7 @@ impl App {
         layout.queue_scope_remote_area = Rect::default();
 
         let remote_state = self.remote_slot_state();
-        let daemon_endpoint = self
-            .client
-            .lock()
-            .unwrap()
-            .config
-            .daemon_client_endpoint
-            .clone();
+        let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
         let local_selected = self.visible_queue_scope() == QueueScope::Local;
         let has_remote = matches!(remote_state, RemoteSlotState::DirectRemote);
         let has_attached = matches!(remote_state, RemoteSlotState::AttachedSession);

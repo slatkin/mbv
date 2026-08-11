@@ -43,7 +43,7 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
     });
     assert!(!app.is_feed_home_video_group_view(0));
 
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
     assert!(app.is_feed_home_video_group_view(0));
 }
 
@@ -113,14 +113,14 @@ fn feed_home_video_group_view_stays_enabled_with_cached_groups() {
         library_total: None,
     });
 
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
     assert!(app.is_feed_home_video_group_view(0));
 }
 
 #[test]
 fn fetch_home_preserves_feed_home_video_state() {
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
     library.id = "lib-youtube".into();
@@ -465,7 +465,7 @@ fn select_feed_folder_group_updates_feed_state_when_detail_level_exists() {
 fn go_back_keeps_feed_home_video_group_view_intact() {
     let mut app = make_app_stub();
     app.tab = TabSelection::Library(0);
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
     library.id = "lib-youtube".into();
@@ -530,7 +530,7 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
     // must clamp to the groups that actually exist now.
     let mut app = make_app_stub();
     app.tab = TabSelection::Library(0);
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
     library.id = "lib-youtube".into();
@@ -595,7 +595,7 @@ fn refresh_lib_targets_feed_selection() {
     let mut app = make_app_stub();
     app.tab = TabSelection::Library(0);
     app.panel_focus = PanelFocus::Library;
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
     library.id = "lib-youtube".into();

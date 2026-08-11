@@ -82,13 +82,15 @@ impl App {
                 self.save_queue_state();
             }
         }
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let Some(state) = self.playlist_mutations.get_mut(playlist_id) else {
             return;
         };
         let Some(mutation) = state.active.as_mut() else {
             return;
         };
-        let client = self.client.lock().unwrap().clone();
         let tx = self.sessions_tx.clone();
         let playlist_id = playlist_id.to_string();
         let mutation_id = mutation.mutation_id();
@@ -220,7 +222,9 @@ impl App {
             // empty while attached to a remote session — that reflects remote-control
             // UI state, not the user intentionally clearing their local queue.
             if self.connected_session_id.is_none() {
-                crate::config::clear_queue_state();
+                if let Err(e) = crate::config::clear_queue_state() {
+                    log::warn!(target: "queue", "failed to clear queue state: {e}");
+                }
             }
         } else {
             if let Err(e) = crate::config::save_queue_state(&state) {
@@ -256,7 +260,9 @@ impl App {
     pub(in crate::app) fn save_queue_state_after_remote_projection(&mut self) {
         let state = self.build_queue_state();
         if state.items.is_empty() {
-            crate::config::clear_queue_state();
+            if let Err(e) = crate::config::clear_queue_state() {
+                log::warn!(target: "queue", "failed to clear projected queue state: {e}");
+            }
         } else if let Err(e) = crate::config::save_queue_state(&state) {
             log::warn!(target: "queue", "failed to save projected queue state: {e}");
         }
@@ -352,7 +358,9 @@ impl App {
         if item_ids.is_empty() {
             return;
         }
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let mut items = match client.get_items_by_ids(&item_ids) {

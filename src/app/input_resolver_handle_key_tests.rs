@@ -29,7 +29,7 @@ fn daemon_lost_q_runs_normal_quit_cleanup() {
         name: "Saved".into(),
     };
     app.queue_dirty = true;
-    app.client.lock().unwrap().config.save_playlist_on_quit = false;
+    app.config.lock().unwrap().save_playlist_on_quit = false;
     crate::app::QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
 
     assert!(app.handle_key(ev(KeyCode::Char('q'), KeyModifiers::NONE)));

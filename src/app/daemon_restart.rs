@@ -46,7 +46,10 @@ impl App {
             Err(e) => return Err(format!("single-instance check failed: {e}")),
         }
 
-        let auth_token = self.client.lock().unwrap().token.clone();
+        let auth_token = self
+            .emby_client()
+            .map(|client| client.lock().unwrap().token.clone())
+            .unwrap_or_default();
         let (remote, remote_rx) =
             RemotePlayer::connect_endpoint(&DaemonEndpoint::Local, &auth_token)
                 .map_err(|e| format!("failed to attach to local daemon: {e}"))?;
@@ -80,7 +83,7 @@ impl App {
         // Tear down the old (already-dead) connection before overwriting it,
         // mirroring `restore_local_mode`'s remote-to-remote swap (#233).
         self.player.disconnect_remote();
-        let always_play_next = self.client.lock().unwrap().config.always_play_next;
+        let always_play_next = self.config.lock().unwrap().always_play_next;
         let mpris_remote = remote.clone();
         self.player = PlayerProxy::remote(remote, always_play_next);
         self.player_rx = remote_rx;

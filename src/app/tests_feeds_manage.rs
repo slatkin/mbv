@@ -14,19 +14,34 @@ fn sub(name: &str, url: &str, kind: FeedKind) -> FeedSubscription {
     }
 }
 
+#[test]
+fn feed_state_transition_is_safe_without_emby() {
+    let mut app = make_app_stub();
+    assert!(app.emby_runtime.client.is_none());
+    app.config.lock().unwrap().feeds = vec![sub(
+        "Feed-only",
+        "https://example.test/feed.xml",
+        FeedKind::Audio,
+    )];
+    app.sync_feed_subscriptions();
+    app.feed_tab_move_cursor(1);
+    assert_eq!(app.feed_tab.subscriptions[0].name, "Feed-only");
+    assert_eq!(app.feed_tab.cursor, 0);
+}
+
 /// §6.3: editing a subscription changes only its name and kind. A URL
 /// typed into the (read-only, in real input handling) form field must not
 /// reach the persisted subscription -- the original URL is always kept.
 #[test]
 fn edit_changes_name_and_kind_but_not_url() {
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.feeds = vec![sub(
+    app.config.lock().unwrap().feeds = vec![sub(
         "Old Name",
         "https://example.test/original",
         FeedKind::Video,
     )];
     app.feeds_manage_popup = Some(FeedsManagePopup::new());
-    let mut form = FeedForm::new_edit(0, &app.client.lock().unwrap().config.feeds[0].clone());
+    let mut form = FeedForm::new_edit(0, &app.config.lock().unwrap().feeds[0].clone());
     form.name = "New Name".to_string();
     form.url = "https://example.test/attempted-change".to_string();
     form.kind = FeedKind::Audio;
@@ -35,7 +50,7 @@ fn edit_changes_name_and_kind_but_not_url() {
 
     app.submit_feed_form();
 
-    let feeds = app.client.lock().unwrap().config.feeds.clone();
+    let feeds = app.config.lock().unwrap().feeds.clone();
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].name, "New Name");
     assert_eq!(feeds[0].kind, FeedKind::Audio);
@@ -50,7 +65,7 @@ fn edit_changes_name_and_kind_but_not_url() {
 #[test]
 fn remove_feed_confirmed_rewrites_list() {
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.feeds = vec![
+    app.config.lock().unwrap().feeds = vec![
         sub("A", "https://a", FeedKind::Video),
         sub("B", "https://b", FeedKind::Video),
         sub("C", "https://c", FeedKind::Video),
@@ -59,10 +74,9 @@ fn remove_feed_confirmed_rewrites_list() {
     app.remove_feed_confirmed(1);
 
     let names: Vec<String> = app
-        .client
+        .config
         .lock()
         .unwrap()
-        .config
         .feeds
         .iter()
         .map(|s| s.name.clone())
@@ -75,13 +89,13 @@ fn remove_feed_confirmed_rewrites_list() {
 #[test]
 fn removing_last_subscription_falls_back_to_home() {
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.feeds = vec![sub("Only", "https://only", FeedKind::Video)];
+    app.config.lock().unwrap().feeds = vec![sub("Only", "https://only", FeedKind::Video)];
     app.sync_feed_subscriptions();
     app.tab = TabSelection::Feeds;
 
     app.remove_feed_confirmed(0);
 
-    assert!(app.client.lock().unwrap().config.feeds.is_empty());
+    assert!(app.config.lock().unwrap().feeds.is_empty());
     assert!(
         app.tab.is_home(),
         "expected fallback to Home, got {:?}",
@@ -95,7 +109,7 @@ fn removing_last_subscription_falls_back_to_home() {
 #[test]
 fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.feeds = vec![
+    app.config.lock().unwrap().feeds = vec![
         sub("A", "https://a", FeedKind::Video),
         sub("B", "https://b", FeedKind::Video),
     ];
@@ -152,7 +166,7 @@ fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
 #[test]
 fn stale_refresh_result_is_dropped_after_subscription_index_shifts() {
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.feeds = vec![
+    app.config.lock().unwrap().feeds = vec![
         sub("A", "https://a", FeedKind::Video),
         sub("B", "https://b", FeedKind::Video),
     ];
@@ -211,7 +225,7 @@ fn stale_add_result_is_dropped() {
     let had_events = app.drain_feed_add_results();
 
     assert!(had_events, "the stale message should still be drained");
-    assert!(app.client.lock().unwrap().config.feeds.is_empty());
+    assert!(app.config.lock().unwrap().feeds.is_empty());
     assert_eq!(
         app.feeds_manage_popup.as_ref().unwrap().pending_add,
         Some(5),
@@ -245,7 +259,7 @@ fn cancelled_add_result_is_dropped() {
     let had_events = app.drain_feed_add_results();
 
     assert!(had_events);
-    assert!(app.client.lock().unwrap().config.feeds.is_empty());
+    assert!(app.config.lock().unwrap().feeds.is_empty());
 }
 
 /// §6.2/§6.3: a matching add result appends to `config.feeds` and returns
@@ -271,7 +285,7 @@ fn matching_add_result_appends_feed_and_returns_to_list() {
 
     app.drain_feed_add_results();
 
-    let feeds = app.client.lock().unwrap().config.feeds.clone();
+    let feeds = app.config.lock().unwrap().feeds.clone();
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].name, "New Feed");
     assert!(matches!(
@@ -303,6 +317,6 @@ fn add_fetch_failure_does_not_save() {
 
     app.drain_feed_add_results();
 
-    assert!(app.client.lock().unwrap().config.feeds.is_empty());
+    assert!(app.config.lock().unwrap().feeds.is_empty());
     assert!(app.status.contains("Couldn't add feed"));
 }

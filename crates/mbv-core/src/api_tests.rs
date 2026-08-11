@@ -301,6 +301,102 @@ fn ws_url_https_becomes_wss() {
 }
 
 #[test]
+fn service_setup_validation_uses_setup_url_user_and_token() {
+    use std::io::Write;
+    let (listener, setup_url) = local_listener_url();
+    let request = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let request = read_one_request(&mut stream);
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            .unwrap();
+        request
+    });
+
+    let mut config = crate::config::Config::default();
+    config.server_url = "http://stale.example".into();
+    let client = EmbyClient::new(config);
+    let setup = crate::config::EmbySetup::new(&setup_url, "user-42");
+    let authenticated = client
+        .authenticate_service_setup_bounded(
+            "persisted-token".to_string(),
+            &setup,
+            std::time::Duration::from_secs(2),
+        )
+        .unwrap();
+
+    let request = request.join().unwrap();
+    assert!(request.starts_with("GET /Users/user-42 HTTP/1.1"));
+    assert!(request.contains("X-Emby-Token: persisted-token"));
+    assert_eq!(authenticated.config.server_url, setup_url);
+    assert_eq!(authenticated.token, "persisted-token");
+}
+
+#[test]
+fn credential_exchange_returns_identity_without_legacy_persistence() {
+    use std::io::Write;
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (listener, url) = local_listener_url();
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let request = read_one_request(&mut stream);
+        assert!(request.starts_with("POST /Users/AuthenticateByName HTTP/1.1"));
+        let body = serde_json::json!({"AccessToken": "fresh-token", "User": {"Id": "user-42"}})
+            .to_string();
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}",
+            body.len(),
+            body
+        )
+        .unwrap();
+    });
+
+    let client = EmbyClient::new(crate::config::Config::default());
+    let exchange = client
+        .exchange_credentials_bounded(
+            &format!("{url}/"),
+            "alice",
+            "not-stored",
+            std::time::Duration::from_secs(2),
+        )
+        .unwrap();
+    assert_eq!(exchange.server_url, url);
+    assert_eq!(exchange.user_id, "user-42");
+    assert_eq!(exchange.token, "fresh-token");
+    assert!(!crate::config::token_cache_path().exists());
+    assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
+}
+
+#[test]
+fn credential_exchange_rejection_and_connectivity_commit_nothing() {
+    use std::io::Write;
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (listener, url) = local_listener_url();
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let _ = read_one_request(&mut stream);
+        let _ = stream.write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n");
+    });
+    let client = EmbyClient::new(crate::config::Config::default());
+    assert!(client
+        .exchange_credentials_bounded(&url, "alice", "wrong", std::time::Duration::from_secs(2),)
+        .is_err());
+    assert!(!crate::config::token_cache_path().exists());
+    assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
+    assert!(!crate::config::config_path().exists());
+
+    let dead = local_listener_url().1;
+    drop(std::net::TcpListener::bind("127.0.0.1:0").unwrap());
+    assert!(client
+        .exchange_credentials_bounded(&dead, "alice", "wrong", std::time::Duration::from_secs(2),)
+        .is_err());
+    assert!(!crate::config::token_cache_path().exists());
+    assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
+    assert!(!crate::config::config_path().exists());
+}
+
+#[test]
 fn ws_url_contains_device_id() {
     let mut c = client_with_url("http://server:8096");
     c.device_id = "my-device-id".into();

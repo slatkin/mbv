@@ -32,7 +32,14 @@ impl App {
     }
 
     pub(super) fn play_folder(&mut self, folder_id: &str) {
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            self.flash(
+                "Emby is unavailable".into(),
+                super::notify_actions::ToastSeverity::Warning,
+            );
+            return;
+        };
+        let client = client.lock().unwrap();
         match client.get_all_playable_recursive(folder_id) {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
@@ -90,7 +97,14 @@ impl App {
         // include Audio (needed for music libraries -- see the bug this
         // replaced).
         let is_tvshows = self.active_lib_is_tvshows();
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            self.flash(
+                "Emby is unavailable".into(),
+                super::notify_actions::ToastSeverity::Warning,
+            );
+            return;
+        };
+        let client = client.lock().unwrap();
         let fetch = if is_tvshows {
             client.get_all_videos_recursive(folder_id)
         } else {

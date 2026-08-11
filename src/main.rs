@@ -1,7 +1,6 @@
 mod app;
 mod config;
 mod local_daemon;
-mod login;
 mod mpris;
 mod single_instance;
 mod tray;
@@ -26,12 +25,15 @@ use mbv_core::{applog, player, remote_player};
 /// only thing that will ever own the name for a daemon-connected session,
 /// whether the daemon is local or genuinely remote.
 fn run_remote_app(
-    client: EmbyClient,
+    client: Option<EmbyClient>,
     remote: remote_player::RemotePlayer,
     player_rx: std::sync::mpsc::Receiver<player::PlayerEvent>,
     endpoint: remote_player::DaemonEndpoint,
+    config: config::Config,
 ) {
-    if let Err(e) = App::new_remote(client, remote, player_rx, endpoint).run() {
+    if let Err(e) =
+        App::new_remote_optional_with_config(client, remote, player_rx, endpoint, config).run()
+    {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
@@ -57,76 +59,13 @@ fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
 }
 
-fn authenticate_or_login(client: EmbyClient, ui_config: &config::UiConfig) -> EmbyClient {
-    println!("Connecting to {}...", client.config.server_url);
-    let t0 = std::time::Instant::now();
-    let auth_result = client.authenticate_bounded(EmbyClient::AUTHENTICATE_HARD_BOUND);
-    log::info!(target: "startup", "authenticate: {}ms result={}", t0.elapsed().as_millis(), if auth_result.is_ok() { "ok" } else { "err" });
-    match auth_result {
-        Ok(authenticated) => authenticated,
-        Err(reason) => match classify_auth_failure_kind(&reason) {
-            // The server could not be reached (timeout / refused / DNS /
-            // TLS): exit to the command line with a factual error -- the
-            // login screen would be misleading here, and the cached token
-            // is preserved for the next attempt (issue #192).
-            AuthFailure::ServerUnreachable(details) => {
-                eprintln!(
-                    "mbv: could not reach {}: {details}",
-                    client.config.server_url
-                );
-                std::process::exit(1);
-            }
-            AuthFailure::CredentialsExpired => {
-                match login::run(
-                    client,
-                    ui_config,
-                    Some("Your session has expired — please log in again.".to_string()),
-                ) {
-                    Ok(c) => c,
-                    Err(_) => std::process::exit(0),
-                }
-            }
-            AuthFailure::FirstRun => match login::run(client, ui_config, None) {
-                Ok(c) => c,
-                Err(_) => std::process::exit(0),
-            },
-        },
-    }
-}
-
-/// How startup authentication failed, in terms of what mbv should do next
-/// (issue #192). Connectivity-class failures exit to the command line with
-/// an error message; credential-class failures show the login screen.
-#[derive(Debug)]
-enum AuthFailure {
-    /// No cached credentials at all, or no server URL to reach: first run,
-    /// show the login screen with no error text.
-    FirstRun,
-    /// The cached token was rejected with 401/403: show the login screen so
-    /// the user can re-authenticate.
-    CredentialsExpired,
-    /// The server could not be reached (timeout, connection refused, DNS,
-    /// TLS, ...). The `String` carries the underlying error details from
-    /// `authenticate_bounded`, including the `"Cached credential validation
-    /// failed: {ureq error}"` prefix — kept verbatim so the cause is
-    /// traceable.
-    ServerUnreachable(String),
-}
-
-/// Classifies `authenticate_bounded`'s error string into an `AuthFailure`
-/// (issue #192). The first-run and expired-credential cases are recognized
-/// verbatim; everything else maps to `ServerUnreachable`. This covers the
-/// common cases (connectivity failures such as timeout/refused/DNS/TLS) but
-/// also catches HTTP 5xx from a reachable server — `authenticate()` folds
-/// those into the same `Err` path. The "could not reach {url}" user message
-/// is therefore approximate for 5xx; the alternative (exiting silently) is
-/// worse.
-fn classify_auth_failure_kind(reason: &str) -> AuthFailure {
-    match reason {
-        "Cached credentials expired" => AuthFailure::CredentialsExpired,
-        "No cached credentials" | "No server URL configured" => AuthFailure::FirstRun,
-        other => AuthFailure::ServerUnreachable(other.to_string()),
-    }
+fn cached_emby_client(config: &config::Config) -> Option<EmbyClient> {
+    let token = mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby)?;
+    let setup = config.emby_setup.as_ref()?;
+    let mut client = EmbyClient::new(config.clone());
+    client.config.server_url = setup.server_url.clone();
+    client.token = token;
+    Some(client)
 }
 
 fn state_dir() -> std::path::PathBuf {
@@ -302,6 +241,9 @@ fn main() {
         Some(state_dir().join("mbv.log")),
     );
 
+    if let Err(e) = config::migrate_legacy_emby_token() {
+        eprintln!("mbv: Emby setup migration failed: {e}");
+    }
     let config = match load_config() {
         Ok(c) => c,
         Err(e) => {
@@ -310,14 +252,6 @@ fn main() {
         }
     };
     log::info!(target: "startup", "{}", config_diagnostic_summary(&config));
-    let ui_config = match config::load_ui_config() {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("{e}");
-            std::process::exit(1);
-        }
-    };
-
     let explicit_daemon_endpoint = cli_daemon_endpoint
         .or_else(|| {
             let endpoint = config.daemon_client_endpoint.trim();
@@ -332,23 +266,18 @@ fn main() {
 
     log::info!(target: "startup", "mbv starting");
 
-    // Construction only (no network I/O) so `client.config` can be read by
-    // the branches below before any of them decide whether/when to
-    // authenticate.
-    let client = EmbyClient::new(config);
-
     // Explicit endpoint (`--connect-daemon` / config `daemon_client_endpoint`)
     // always wins: a thin client to `mbvd`, owning no Player and taking no
     // flock. Network/mbvd behavior is unchanged by stay-alive (issue #156).
     if let Some(endpoint) = explicit_daemon_endpoint {
-        let client = authenticate_or_login(client, &ui_config);
+        let client = cached_emby_client(&config);
         log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
         println!("Connecting to daemon at {endpoint}...");
-        let auth_token = client.token.clone();
+        let auth_token = client.as_ref().map_or("", |client| client.token.as_str());
         match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon endpoint connected");
-                run_remote_app(client, remote, player_rx, endpoint);
+                run_remote_app(client, remote, player_rx, endpoint, config.clone());
                 return;
             }
             Err(e) => {
@@ -369,8 +298,8 @@ fn main() {
             // others already attached. Clients take no lock -- that is what
             // permits any number of them.
             log::info!(target: "startup", "local daemon detected; attaching");
-            let client = authenticate_or_login(client, &ui_config);
-            let auth_token = client.token.clone();
+            let client = cached_emby_client(&config);
+            let auth_token = client.as_ref().map_or("", |c| c.token.as_str());
             match remote_player::RemotePlayer::connect_endpoint(
                 &remote_player::DaemonEndpoint::Local,
                 &auth_token,
@@ -381,6 +310,7 @@ fn main() {
                         remote,
                         player_rx,
                         remote_player::DaemonEndpoint::Local,
+                        config.clone(),
                     );
                 }
                 Err(e) => {
@@ -404,14 +334,10 @@ fn main() {
             std::process::exit(1);
         }
         Ok(single_instance::Resolution::Fresh(mut guard)) => {
-            let stay_alive = client.config.stay_alive;
-
-            // Authenticate first: a detached local daemon has no terminal
-            // and cannot prompt, so it must be able to pick up an
-            // already-valid cached token (design.md decision 5).
-            let client = authenticate_or_login(client, &ui_config);
+            let stay_alive = config.stay_alive;
 
             if stay_alive {
+                let client = cached_emby_client(&config);
                 // This process was just a liveness probe: release the lock
                 // immediately (the local daemon reacquires it for real,
                 // becoming the actual Player-owning process) and attach to
@@ -421,7 +347,7 @@ fn main() {
                     eprintln!("mbv: failed to start local daemon: {e}");
                     std::process::exit(1);
                 }
-                let auth_token = client.token.clone();
+                let auth_token = client.as_ref().map_or("", |c| c.token.as_str());
                 match remote_player::RemotePlayer::connect_endpoint(
                     &remote_player::DaemonEndpoint::Local,
                     &auth_token,
@@ -432,6 +358,7 @@ fn main() {
                             remote,
                             player_rx,
                             remote_player::DaemonEndpoint::Local,
+                            config.clone(),
                         );
                         return;
                     }
@@ -445,7 +372,7 @@ fn main() {
             if let Err(e) = guard.write_pid() {
                 log::warn!(target: "startup", "failed to write pid into lock file: {e}");
             }
-            if let Err(e) = App::new(client).run() {
+            if let Err(e) = App::new_independent(config).run() {
                 eprintln!("Error: {e}");
                 std::process::exit(1);
             }
@@ -491,47 +418,6 @@ mod tests {
             &["--audio-only=false".into(), "--audio".into()],
             "--audio-only"
         ));
-    }
-
-    #[test]
-    fn classify_auth_failure_kind_expired_credentials_is_credentials_expired() {
-        assert!(matches!(
-            classify_auth_failure_kind("Cached credentials expired"),
-            AuthFailure::CredentialsExpired
-        ));
-    }
-
-    #[test]
-    fn classify_auth_failure_kind_first_run_cases_are_first_run() {
-        assert!(matches!(
-            classify_auth_failure_kind("No cached credentials"),
-            AuthFailure::FirstRun
-        ));
-        assert!(matches!(
-            classify_auth_failure_kind("No server URL configured"),
-            AuthFailure::FirstRun
-        ));
-    }
-
-    #[test]
-    fn classify_auth_failure_kind_network_error_is_server_unreachable() {
-        match classify_auth_failure_kind("Cached credential validation failed: some ureq error") {
-            AuthFailure::ServerUnreachable(details) => {
-                assert_eq!(
-                    details,
-                    "Cached credential validation failed: some ureq error"
-                )
-            }
-            other => panic!("expected ServerUnreachable, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn classify_auth_failure_kind_hard_join_timeout_flows_through_generic_branch() {
-        match classify_auth_failure_kind("timed out after 5s") {
-            AuthFailure::ServerUnreachable(details) => assert_eq!(details, "timed out after 5s"),
-            other => panic!("expected ServerUnreachable, got {other:?}"),
-        }
     }
 
     #[test]

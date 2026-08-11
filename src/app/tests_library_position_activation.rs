@@ -65,7 +65,7 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
 fn activating_saved_position_initializes_feed_home_video_state() {
     let mut app = make_app_stub();
     app.tab = TabSelection::Library(0);
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("Youtube", "CollectionFolder");
     library.id = "lib-youtube".into();

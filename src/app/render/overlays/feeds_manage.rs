@@ -22,7 +22,7 @@ impl App {
     }
 
     fn render_feeds_manage_list(&mut self, f: &mut Frame) {
-        let feeds = self.client.lock().unwrap().config.feeds.clone();
+        let feeds = self.config.lock().unwrap().feeds.clone();
         let cursor = self
             .feeds_manage_popup
             .as_ref()

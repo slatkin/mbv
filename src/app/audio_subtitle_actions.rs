@@ -44,17 +44,17 @@ impl App {
     /// assignment.
     pub(super) fn sync_subtitle_prefs_to_player(&mut self) {
         let prefs = {
-            let client = self.client.lock().unwrap();
-            if client.config.subtitle_mode.is_empty()
-                && client.config.subtitle_lang.is_empty()
-                && client.config.audio_lang.is_empty()
+            let config = self.config.lock().unwrap();
+            if config.subtitle_mode.is_empty()
+                && config.subtitle_lang.is_empty()
+                && config.audio_lang.is_empty()
             {
-                client.get_user_subtitle_prefs().unwrap_or_default()
+                mbv_core::player::SubtitlePrefs::default()
             } else {
                 mbv_core::player::SubtitlePrefs {
-                    mode: client.config.subtitle_mode.clone(),
-                    subtitle_lang: client.config.subtitle_lang.clone(),
-                    audio_lang: client.config.audio_lang.clone(),
+                    mode: config.subtitle_mode.clone(),
+                    subtitle_lang: config.subtitle_lang.clone(),
+                    audio_lang: config.audio_lang.clone(),
                 }
             }
         };
@@ -75,10 +75,10 @@ impl App {
 
     pub(super) fn cycle_subtitle_mode(&mut self) {
         let (new_mode, cfg) = {
-            let mut c = self.client.lock().unwrap();
-            c.config.subtitle_mode =
-                super::ui_util::next_subtitle_mode(&c.config.subtitle_mode).to_string();
-            (c.config.subtitle_mode.clone(), c.config.clone())
+            let mut config = self.config.lock().unwrap();
+            config.subtitle_mode =
+                super::ui_util::next_subtitle_mode(&config.subtitle_mode).to_string();
+            (config.subtitle_mode.clone(), config.clone())
         };
         self.player.subtitle_prefs.lock().unwrap().mode = new_mode.clone();
         self.push_subtitle_prefs();

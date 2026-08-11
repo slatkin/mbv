@@ -52,7 +52,7 @@ fn teardown_fast_when_player_thread_is_not_hung() {
 fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
     app.active_route = Some("music".to_string());
 
     app.teardown(Duration::from_secs(1));
@@ -69,7 +69,7 @@ fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
 fn teardown_persists_connected_session_when_auto_reconnect_enabled() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
     let sess = make_session("living-room-mbv", "mbv");
     app.connected_session_id = Some(sess.id.clone());
     app.connected_session_state = Some(sess);
@@ -88,7 +88,7 @@ fn teardown_persists_connected_session_when_auto_reconnect_enabled() {
 fn teardown_persists_direct_remote_when_auto_reconnect_enabled() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
     let sess = make_session("living-room-mbv", "mbv");
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
 
@@ -117,7 +117,7 @@ fn teardown_clears_persisted_connection_when_exiting_local() {
         },
     ));
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
 
     app.teardown(Duration::from_secs(1));
 
@@ -133,7 +133,7 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
         },
     ));
     let mut app = make_app_stub();
-    assert!(!app.client.lock().unwrap().config.auto_reconnect);
+    assert!(!app.config.lock().unwrap().auto_reconnect);
     app.active_route = None;
 
     app.teardown(Duration::from_secs(1));
@@ -159,7 +159,7 @@ fn teardown_persists_a_reconnected_target_for_a_local_daemon_launch_that_moved_r
     // mutable `is_local_daemon`, would have wrongly skipped this.
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
     app.launched_as_remote = true;
     app.home_is_local_daemon = true;
     app.player_endpoint = Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
@@ -190,7 +190,7 @@ fn teardown_skips_persistence_for_an_explicit_remote_daemon_launch() {
         },
     ));
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
     app.launched_as_remote = true;
     app.home_is_local_daemon = false;
     app.player_endpoint = Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
@@ -304,12 +304,12 @@ fn render_interval_is_slow_when_idle_with_no_fetches_in_flight() {
 #[test]
 fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = false;
+    app.config.lock().unwrap().auto_reconnect = false;
     app.settings_cursor = (0..settings::settings_total_rows())
         .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::AutoReconnect)
         .expect("AutoReconnect setting row must exist");
 
-    let cfg = app.client.lock().unwrap().config.clone();
+    let cfg = app.config.lock().unwrap().clone();
     assert_eq!(
         settings::setting_label(SettingKey::AutoReconnect),
         "Auto reconnect"
@@ -320,7 +320,7 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
     );
 
     app.handle_settings_activate();
-    let cfg = app.client.lock().unwrap().config.clone();
+    let cfg = app.config.lock().unwrap().clone();
     assert!(cfg.auto_reconnect);
     assert_eq!(
         settings::setting_value(SettingKey::AutoReconnect, &cfg, &app.ui_config_snapshot()),
@@ -332,13 +332,13 @@ fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
     );
 
     app.handle_settings_activate();
-    assert!(!app.client.lock().unwrap().config.auto_reconnect);
+    assert!(!app.config.lock().unwrap().auto_reconnect);
 }
 
 #[test]
 fn enabling_auto_reconnect_persists_the_active_remote_target() {
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = false;
+    app.config.lock().unwrap().auto_reconnect = false;
     app.active_route = Some("music".to_string());
     app.settings_cursor = (0..settings::settings_total_rows())
         .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::AutoReconnect)

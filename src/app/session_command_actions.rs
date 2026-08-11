@@ -216,7 +216,9 @@ impl App {
 
     pub(super) fn spawn_sessions_load(&mut self) {
         self.sessions_loading = true;
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.sessions_tx.clone();
         let generation = self.next_session_poll_generation();
         std::thread::spawn(move || match client.get_sessions() {
@@ -355,7 +357,9 @@ impl App {
         reconciliation: Option<ReconciliationCommand>,
         f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
     ) {
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.sessions_tx.clone();
         std::thread::spawn(move || {
             if let Err(e) = f(&client) {

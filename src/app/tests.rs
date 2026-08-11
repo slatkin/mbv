@@ -1,3 +1,4 @@
+use super::types_settings::SettingsDestination;
 use super::*;
 
 use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -154,12 +155,17 @@ pub(crate) fn make_app_stub() -> App {
     let player = PlayerProxy::stub(status.clone());
 
     use crate::config::Config;
-    use mbv_core::api::EmbyClient;
-    let client = EmbyClient::new(Config::default());
+    let config = Config::default();
 
     App {
         _test_state_dir_guard: crate::config::TestStateDirGuard::new_if_unset(),
-        client: Arc::new(Mutex::new(client)),
+        config: Arc::new(Mutex::new(config)),
+        emby_runtime: mbv_core::service_runtime::EmbyRuntime::default(),
+        emby_startup_rx: None,
+        emby_startup_request: None,
+        emby_setup_form: None,
+        emby_setup_rx: None,
+        pending_emby_replacement: None,
         shared_client: None,
         shared_reconnect_rx: None,
         player,
@@ -233,6 +239,8 @@ pub(crate) fn make_app_stub() -> App {
         show_help: false,
         show_settings: false,
         settings_cursor: 0,
+        settings_destination: SettingsDestination::Main,
+        services_cursor: 0,
         settings_scroll: 0,
         settings_save_at: None,
         confirm_logout: false,
@@ -340,6 +348,86 @@ pub(crate) fn make_app_stub() -> App {
     }
 }
 
+#[test]
+fn emby_completion_applies_bootstrap_and_ready_state() {
+    let mut app = make_app_stub();
+    let client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
+    let item = make_item("Ready item", "Audio");
+    app.apply_emby_completion(super::service_startup::Completion {
+        generation: app.emby_runtime.generation(),
+        result: Ok(super::service_startup::Startup {
+            client,
+            bootstrap: mbv_core::service_runtime::EmbyBootstrap {
+                continue_items: vec![item],
+                views: Vec::new(),
+                latest: Vec::new(),
+            },
+            setup: mbv_core::config::EmbySetup::default(),
+        }),
+    });
+    assert_eq!(
+        app.emby_runtime.state,
+        mbv_core::service_runtime::ServiceState::Ready
+    );
+    assert!(app.emby_runtime.client.is_some());
+    assert_eq!(app.home.continue_items.len(), 1);
+    assert!(!app.home_loading);
+}
+
+#[test]
+fn emby_completion_classifies_current_failures_without_client() {
+    let mut app = make_app_stub();
+    app.apply_emby_completion(super::service_startup::Completion {
+        generation: app.emby_runtime.generation(),
+        result: Err(mbv_core::service_runtime::EmbyFailure {
+            class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
+            message: "HTTP 401 unauthorized".into(),
+        }),
+    });
+    assert_eq!(
+        app.emby_runtime.state,
+        mbv_core::service_runtime::ServiceState::NeedsAuthentication
+    );
+    assert!(app.emby_runtime.client.is_none());
+    assert!(!app.home_loading);
+
+    let mut app = make_app_stub();
+    app.apply_emby_completion(super::service_startup::Completion {
+        generation: app.emby_runtime.generation(),
+        result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
+            "connection refused",
+        )),
+    });
+    assert_eq!(
+        app.emby_runtime.state,
+        mbv_core::service_runtime::ServiceState::Unavailable
+    );
+    assert!(app.emby_runtime.client.is_none());
+    assert!(!app.home_loading);
+}
+
+#[test]
+fn stale_emby_completion_does_not_change_runtime_or_home() {
+    let mut app = make_app_stub();
+    app.home.continue_items = vec![make_item("current", "Audio")];
+    app.emby_runtime.replace_setup();
+    let stale_generation = mbv_core::service_runtime::SetupGeneration::default();
+    app.apply_emby_completion(super::service_startup::Completion {
+        generation: stale_generation,
+        result: Ok(super::service_startup::Startup {
+            client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
+            bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
+            setup: mbv_core::config::EmbySetup::default(),
+        }),
+    });
+    assert_eq!(
+        app.emby_runtime.state,
+        mbv_core::service_runtime::ServiceState::Connecting
+    );
+    assert!(app.emby_runtime.client.is_none());
+    assert_eq!(app.home.continue_items[0].name, "current");
+}
+
 pub(crate) fn make_built_app() -> App {
     use mbv_core::player::{PlayerProxy, PlayerStatus};
     use std::sync::{Arc, Mutex};
@@ -361,11 +449,15 @@ pub(crate) fn make_built_app() -> App {
     let player = PlayerProxy::stub(status);
 
     use crate::config::Config;
-    use mbv_core::api::EmbyClient;
-    let client = EmbyClient::new(Config::default());
+    let config = Config::default();
 
     App::build(AppInit {
-        client: Arc::new(Mutex::new(client)),
+        config: Arc::new(Mutex::new(config)),
+        emby_runtime: mbv_core::service_runtime::EmbyRuntime::default(),
+        emby_startup_rx: None,
+        emby_startup_request: None,
+        emby_setup_form: None,
+        emby_setup_rx: None,
         player,
         player_rx,
         ws_rx,
@@ -395,6 +487,12 @@ pub(crate) fn make_built_app() -> App {
         search_rx,
         idle_feed: None,
     })
+}
+
+pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(mbv_core::api::EmbyClient::new(config)),
+    ));
 }
 
 pub(crate) fn left_down(col: u16, row: u16) -> MouseEvent {
@@ -428,11 +526,13 @@ pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec
     use mbv_core::api::EmbyClient;
 
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    let mut app = App::new_remote(
-        EmbyClient::new(Config::default()),
+    let config = Config::default();
+    let mut app = App::new_remote_with_config(
+        EmbyClient::new(config.clone()),
         remote,
         player_rx,
         mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        config,
     );
     app.player_tab
         .set_items(local_items, app.player_tab.queue_cursor);
@@ -449,11 +549,13 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
 
     let (remote, player_rx, cmd_rx) =
         mbv_core::remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
-    let mut app = App::new_remote(
-        EmbyClient::new(Config::default()),
+    let config = Config::default();
+    let mut app = App::new_remote_with_config(
+        EmbyClient::new(config.clone()),
         remote,
         player_rx,
         mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        config,
     );
     app.player_tab
         .set_items(local_items, app.player_tab.queue_cursor);
@@ -470,11 +572,13 @@ pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<EmbyItem>) -> App {
     use mbv_core::api::EmbyClient;
 
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    App::new_remote(
-        EmbyClient::new(Config::default()),
+    let config = Config::default();
+    App::new_remote_with_config(
+        EmbyClient::new(config.clone()),
         remote,
         player_rx,
         mbv_core::remote_player::DaemonEndpoint::Local,
+        config,
     )
 }
 

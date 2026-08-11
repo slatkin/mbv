@@ -246,7 +246,8 @@ impl App {
         let is_video = item.is_some_and(|i| i.is_video());
         let is_audio = item.is_some_and(|i| i.is_audio());
         let (consume_videos, consume_audio) = {
-            let cfg = &self.client.lock().unwrap().config;
+            let config = self.config.lock().unwrap();
+            let cfg = &*config;
             (cfg.consume_videos, cfg.consume_audio)
         };
         let should_consume =

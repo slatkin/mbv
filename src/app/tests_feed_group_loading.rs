@@ -5,7 +5,7 @@ use crate::app::tests::*;
 fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() {
     let mut app = make_app_stub();
     app.tab = TabSelection::Library(0);
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
     library.id = "lib-youtube".into();
@@ -87,7 +87,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
 fn make_home_video_app() -> App {
     let mut app = make_app_stub();
     app.tab = TabSelection::Library(0);
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
     library.id = "lib-youtube".into();
@@ -243,7 +243,7 @@ fn feed_home_video_aggregated_ensure_group_level_does_not_push_and_resolves_sele
 fn refreshed_does_not_overwrite_feed_root_with_video_items() {
     let mut app = make_app_stub();
     app.tab = TabSelection::Library(0);
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
     library.id = "lib-youtube".into();
@@ -310,7 +310,7 @@ fn refreshed_does_not_overwrite_feed_root_with_video_items() {
 fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
     let mut app = make_app_stub();
     app.tab = TabSelection::Library(0);
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
     library.id = "lib-youtube".into();

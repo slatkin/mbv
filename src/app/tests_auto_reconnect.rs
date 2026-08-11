@@ -30,7 +30,7 @@ fn try_auto_reconnect_restores_a_persisted_library_route() {
         },
     ));
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
     app.library_routes
         .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
 
@@ -50,7 +50,7 @@ fn try_auto_reconnect_falls_back_to_local_when_route_no_longer_configured() {
         },
     ));
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
     // No `library_routes` entry for "music" this time -- config changed
     // since the last exit.
 
@@ -77,7 +77,7 @@ fn try_auto_reconnect_restores_a_persisted_direct_session() {
         },
     ));
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
 
     app.try_auto_reconnect();
 
@@ -102,7 +102,7 @@ fn try_auto_reconnect_falls_back_to_local_when_device_not_found() {
         },
     ));
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
 
     app.try_auto_reconnect();
 
@@ -120,7 +120,7 @@ fn try_auto_reconnect_is_a_no_op_when_disabled() {
         },
     ));
     let mut app = make_app_stub();
-    assert!(!app.client.lock().unwrap().config.auto_reconnect);
+    assert!(!app.config.lock().unwrap().auto_reconnect);
     app.library_routes
         .insert("music".to_string(), "living-room-pc".to_string());
 
@@ -134,7 +134,7 @@ fn try_auto_reconnect_is_a_no_op_when_disabled() {
 fn try_auto_reconnect_is_a_no_op_when_nothing_was_persisted() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    app.client.lock().unwrap().config.auto_reconnect = true;
+    app.config.lock().unwrap().auto_reconnect = true;
 
     app.try_auto_reconnect();
 
@@ -179,14 +179,15 @@ fn new_remote_restores_a_persisted_route_when_attached_to_the_local_daemon() {
     config
         .library_routes
         .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-    let client = mbv_core::api::EmbyClient::new(config);
+    let client = mbv_core::api::EmbyClient::new(config.clone());
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
 
-    let app = App::new_remote(
+    let app = App::new_remote_with_config(
         client,
         remote,
         player_rx,
         mbv_core::remote_player::DaemonEndpoint::Local,
+        config,
     );
 
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
@@ -214,14 +215,15 @@ fn new_remote_does_not_auto_reconnect_for_an_explicit_remote_daemon() {
     config
         .library_routes
         .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-    let client = mbv_core::api::EmbyClient::new(config);
+    let client = mbv_core::api::EmbyClient::new(config.clone());
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
 
-    let app = App::new_remote(
+    let app = App::new_remote_with_config(
         client,
         remote,
         player_rx,
         mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        config,
     );
 
     assert!(app.active_route.is_none());

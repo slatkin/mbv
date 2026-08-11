@@ -106,7 +106,10 @@ impl App {
 
     pub(super) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
         self.clear_saved_library_position(lib_idx);
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
         let library_id = self.libs[lib_idx].library.id.clone();
         let name = self.libs[lib_idx].library.name.clone();
         std::thread::spawn(move || {

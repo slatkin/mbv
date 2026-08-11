@@ -150,7 +150,8 @@ impl App {
 
     pub(super) fn autosave_status_spans(&self) -> Option<Vec<Span<'static>>> {
         let autosave_on = self.queue_is_saved_playlist() && {
-            let cfg = &self.client.lock().unwrap().config;
+            let config = self.config.lock().unwrap();
+            let cfg = &*config;
             cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
         };
         if self.queue_dirty {
@@ -271,7 +272,8 @@ impl App {
 
         let remote_state = self.remote_slot_state();
         let (daemon_endpoint, server_url, username) = {
-            let cfg = &self.client.lock().unwrap().config;
+            let config = self.config.lock().unwrap();
+            let cfg = &*config;
             (
                 cfg.daemon_client_endpoint.clone(),
                 cfg.server_url.clone(),

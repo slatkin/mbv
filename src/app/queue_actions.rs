@@ -310,7 +310,10 @@ impl App {
                     );
                     self.submit_attached_sequence(&id, &items, start_idx);
                 } else {
-                    let c = Arc::new(self.client.lock().unwrap().clone());
+                    let Some(c) = self.emby_snapshot().map(Arc::new) else {
+                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                        return;
+                    };
                     self.player.play_queue(
                         items,
                         start_idx,

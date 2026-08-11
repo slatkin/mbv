@@ -622,3 +622,150 @@ url = "https://example.com/feed/"
     std::env::remove_var("XDG_CONFIG_HOME");
     std::fs::remove_dir_all(&dir).ok();
 }
+
+// ── Service-independent startup tests (tasks 1.1–1.4) ────────────────────
+
+#[test]
+fn non_emby_config_sections_parse_and_save_without_server() {
+    // Non-[server] sections (idle_feed, mbvd, library, playback, feeds,
+    // library_routes) must survive both parse and save+reparse when
+    // no [server] section is present.
+    let toml = r#"
+[idle_feed]
+rss_url = "https://custom.example/feed"
+rotation_interval_secs = 30
+
+[library]
+feed_view_libraries = ["YouTube"]
+
+[mbvd]
+broadcast_ms = 250
+
+[playback]
+show_systray_icon = false
+
+[[feeds]]
+name = "Feed A"
+url = "https://a.example/feed"
+kind = "audio"
+"#;
+
+    let cfg = parse_config(toml).unwrap();
+    assert_eq!(cfg.server_url, "", "no [server] means empty server_url");
+    assert_eq!(cfg.idle_feed_rss_url, "https://custom.example/feed");
+    assert_eq!(cfg.idle_feed_rotation_secs, 30);
+    assert_eq!(cfg.feed_view_libraries, vec!["youtube"]);
+    assert_eq!(cfg.daemon_broadcast_ms, 250);
+    assert!(!cfg.show_systray_icon);
+    assert_eq!(cfg.feeds.len(), 1);
+    assert_eq!(cfg.feeds[0].name, "Feed A");
+
+    // Save and reparse: all non-Emby fields must survive.
+    let _g = SYS_ENV_LOCK.lock().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "mbv-no-server-test-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(dir.join("mbv")).unwrap();
+    std::env::set_var("XDG_CONFIG_HOME", &dir);
+    std::env::remove_var("MBV_SYSTEM");
+
+    save_config_settings(&cfg).unwrap();
+
+    let saved = std::fs::read_to_string(config_path()).unwrap();
+    // The saved file must NOT contain a [server] section.
+    assert!(
+        !saved.contains("[server]"),
+        "config without server_url must not write [server]:\n{saved}"
+    );
+
+    let reparsed = parse_config(&saved).unwrap();
+    assert_eq!(reparsed.server_url, "");
+    assert_eq!(reparsed.idle_feed_rss_url, "https://custom.example/feed");
+    assert_eq!(reparsed.idle_feed_rotation_secs, 30);
+    assert_eq!(reparsed.feed_view_libraries, vec!["youtube"]);
+    assert_eq!(reparsed.daemon_broadcast_ms, 250);
+    assert!(!reparsed.show_systray_icon);
+    assert_eq!(reparsed.feeds.len(), 1);
+    assert_eq!(reparsed.feeds[0].name, "Feed A");
+
+    std::env::remove_var("XDG_CONFIG_HOME");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn non_emby_config_sections_including_library_routes_round_trip_without_server() {
+    let toml = r#"
+[library_routes]
+music = "tcp://192.168.0.104:47788"
+
+[queue]
+consume_audio = true
+"#;
+
+    let cfg = parse_config(toml).unwrap();
+    assert_eq!(cfg.server_url, "");
+    assert!(cfg.consume_audio);
+    assert_eq!(
+        cfg.library_routes.get("music").map(String::as_str),
+        Some("tcp://192.168.0.104:47788")
+    );
+
+    let _g = SYS_ENV_LOCK.lock().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "mbv-no-server-routes-test-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(dir.join("mbv")).unwrap();
+    std::env::set_var("XDG_CONFIG_HOME", &dir);
+    std::env::remove_var("MBV_SYSTEM");
+
+    save_config_settings(&cfg).unwrap();
+
+    let saved = std::fs::read_to_string(config_path()).unwrap();
+    assert!(
+        !saved.contains("[server]"),
+        "config with library_routes but no server must not write [server]:\n{saved}"
+    );
+    assert!(
+        saved.contains("library_routes"),
+        "library_routes must survive"
+    );
+    assert!(
+        saved.contains("consume_audio"),
+        "queue section must survive"
+    );
+
+    let reparsed = parse_config(&saved).unwrap();
+    assert_eq!(reparsed.server_url, "");
+    assert!(reparsed.consume_audio);
+    assert_eq!(
+        reparsed.library_routes.get("music").map(String::as_str),
+        Some("tcp://192.168.0.104:47788")
+    );
+
+    std::env::remove_var("XDG_CONFIG_HOME");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn emby_setup_round_trips_url_and_user_id_without_secret_in_config() {
+    let _guard = TestStateDirGuard::new();
+    let setup = EmbySetup::new("http://emby.example/", "user-42");
+    save_emby_setup(&setup).unwrap();
+
+    let saved = std::fs::read_to_string(config_path()).unwrap();
+    assert!(saved.contains("user_id = \"user-42\""));
+    assert!(!saved.contains("token"));
+    let config = load_config().unwrap();
+    assert_eq!(
+        config.emby_setup,
+        Some(EmbySetup::new("http://emby.example", "user-42"))
+    );
+}

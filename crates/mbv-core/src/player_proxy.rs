@@ -96,6 +96,20 @@ impl PlayerProxy {
         }
     }
 
+    pub fn update_emby_credentials(&self, server_url: String, token: String) {
+        if let PlayerProxyInner::Local(player) = &self.inner {
+            player.update_emby_credentials(server_url, token);
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn emby_credentials(&self) -> Option<(String, String)> {
+        match &self.inner {
+            PlayerProxyInner::Local(player) => player.emby_credentials(),
+            PlayerProxyInner::Remote(_) => None,
+        }
+    }
+
     pub fn remote(remote: crate::remote_player::RemotePlayer, always_play_next: bool) -> Self {
         let status = remote.status.clone();
         let subtitle_prefs = remote.subtitle_prefs.clone();

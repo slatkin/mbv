@@ -12,6 +12,8 @@ pub(super) enum ConfirmAction {
     DiscardOrSaveDirtyPlaylist,
     DeletePlaylist { id: String, name: String },
     RemoveFeedSubscription(usize),
+    RemoveEmby,
+    ReplaceEmby(mbv_core::service_runtime::SetupGeneration),
 }
 
 /// State for the shared confirmation-modal overlay: a centered, bordered

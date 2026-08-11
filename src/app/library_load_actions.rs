@@ -58,7 +58,10 @@ impl App {
             .filter_map(|s| s.item.as_emby())
             .map(|i| i.id.clone())
             .collect();
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            return;
+        };
+        let client = client.lock().unwrap();
         if let Ok(fetched) = client.get_items_by_ids(&ids) {
             drop(client);
             let _ = self.merge_refreshed_queue(scope, fetched);
@@ -83,7 +86,10 @@ impl App {
             return;
         }
         self.playlists_loading = true;
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            self.playlists_loading = false;
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || match client.get_playlists() {
             Ok(items) => {
@@ -98,7 +104,9 @@ impl App {
     }
 
     pub(super) fn spawn_rename_playlist(&mut self, playlist_id: String, new_name: String) {
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             if let Err(e) = client.rename_playlist(&playlist_id, &new_name) {
@@ -118,7 +126,9 @@ impl App {
     }
 
     pub(super) fn spawn_delete_playlist(&mut self, playlist_id: String, name: String) {
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             if let Err(e) = client.delete_playlist(&playlist_id) {
@@ -146,7 +156,10 @@ impl App {
         self.playlists_open_items = Vec::new();
         self.playlists_open_cursor = 0;
         self.playlists_open_scroll = 0;
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            self.playlists_open_loading = false;
+            return;
+        };
         let tx = self.lib_tx.clone();
         let playlist_id = playlist.id.clone();
         std::thread::spawn(move || match client.get_playlist_items(&playlist_id) {
@@ -179,7 +192,10 @@ impl App {
             .find(|p| p.id == playlist_id)
             .map(|p| p.name.clone())
             .unwrap_or_default();
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
         let items = match client.get_playlist_items(&playlist_id) {
             Ok(r) => r,
             Err(e) => {
@@ -281,10 +297,21 @@ impl App {
 
     pub(super) fn fetch_home(&mut self) -> Result<(), String> {
         let (continue_items, all_views, user_views) = {
-            let client = self.client.lock().unwrap();
+            let Some(client) = self.emby_client() else {
+                return Err("Emby is unavailable".into());
+            };
+            let client = client.lock().unwrap();
+            let views = match client.get_views_classified() {
+                Ok(views) => views,
+                Err(error) => {
+                    drop(client);
+                    self.handle_emby_runtime_failure(error.clone());
+                    return Err(error.to_string());
+                }
+            };
             (
                 client.get_continue_watching(20).unwrap_or_default(),
-                client.get_views()?,
+                views,
                 client.get_user_views().unwrap_or_default(),
             )
         };
@@ -303,7 +330,10 @@ impl App {
             .collect();
 
         let mut latest: Vec<(String, String, Vec<EmbyItem>, usize)> = Vec::new();
-        let client = self.client.lock().unwrap();
+        let Some(client) = self.emby_client() else {
+            return Err("Emby is unavailable".into());
+        };
+        let client = client.lock().unwrap();
         for v in user_views.iter().filter(|v| {
             let lower = v.name.to_lowercase();
             v.collection_type != "playlists"

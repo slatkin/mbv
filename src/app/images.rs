@@ -71,7 +71,10 @@ impl App {
             return;
         }
         self.album_tracks_loading.insert(album_id.clone());
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            self.album_tracks_loading.remove(&album_id);
+            return;
+        };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let tracks = client
@@ -100,7 +103,10 @@ impl App {
             return;
         }
         self.series_detail_loading.insert(series_id.clone());
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            self.series_detail_loading.remove(&series_id);
+            return;
+        };
         let tx = self.lib_tx.clone();
         let sid = series_id.clone();
         std::thread::spawn(move || {
@@ -167,7 +173,13 @@ impl App {
     fn spawn_album_artist_fetch(&mut self, album_id: String) {
         self.album_artist_fetches_active += 1;
         let (server_url, token) = {
-            let c = self.client.lock().unwrap();
+            let Some(client) = self.emby_client() else {
+                self.album_artist_loading.remove(&album_id);
+                self.album_artist_fetches_active =
+                    self.album_artist_fetches_active.saturating_sub(1);
+                return;
+            };
+            let c = client.lock().unwrap();
             (c.config.server_url.clone(), c.token.clone())
         };
         let tx = self.lib_tx.clone();
@@ -454,7 +466,11 @@ impl App {
     fn spawn_image_fetch(&mut self, req: ImageFetchReq) {
         self.image_fetches_active += 1;
         let (server_url, token) = {
-            let c = self.client.lock().unwrap();
+            let Some(client) = self.emby_client() else {
+                self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
+                return;
+            };
+            let c = client.lock().unwrap();
             (c.config.server_url.clone(), c.token.clone())
         };
         let tx = self.card_image_tx.clone();

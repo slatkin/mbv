@@ -50,6 +50,34 @@ fn hello_rejects_missing_capability() {
 fn current_client_hello_carries_auth_token() {
     let hello = CtrlHello::current_client("token-123".into());
     assert_eq!(hello.auth_token.as_deref(), Some("token-123"));
+    assert_eq!(hello.control_token, None);
+}
+
+#[test]
+fn capable_client_hello_uses_control_credential_field() {
+    let hello = CtrlHello::current_control_client("control-123".into());
+    assert!(hello.supports_control_auth());
+    assert_eq!(hello.control_token.as_deref(), Some("control-123"));
+    assert_eq!(hello.auth_token, None);
+}
+
+#[test]
+fn invalid_control_credential_is_rejected_without_emby_validation() {
+    let mut hello = CtrlHello::current_control_client("not-the-control-secret".into());
+    hello.auth_token = Some("service-token-that-must-not-be-validated".into());
+    assert!(hello.validate_control_credential("control-secret").is_err());
+}
+
+#[test]
+fn legacy_hello_keeps_emby_auth_token_semantics() {
+    let mut hello = CtrlHello::current();
+    hello
+        .capabilities
+        .retain(|cap| cap != CTRL_CAP_CONTROL_AUTH);
+    hello.auth_token = Some("emby-token".into());
+    assert!(!hello.supports_control_auth());
+    assert_eq!(hello.auth_token.as_deref(), Some("emby-token"));
+    assert_eq!(hello.control_token, None);
 }
 
 // The wire tags below are pinned via `#[serde(rename = "...")]` on
@@ -417,6 +445,7 @@ fn old_peer_without_feed_playback_capability_rejects_load_feed() {
         supports_lifecycle_shutdown: false,
         supports_feed_playback: false,
         supports_unified_queue: false,
+        supports_control_auth: false,
     };
     assert!(!compat.supports_feed_playback);
 }

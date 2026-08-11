@@ -643,6 +643,7 @@ fn spawn_ctrl_client<S>(
     merged_tx: mpsc::Sender<DaemonEvent>,
     ctrl_clients: ClientRegistry,
     client: Arc<Mutex<EmbyClient>>,
+    control_credential: Option<String>,
     player_status: Arc<Mutex<crate::player::PlayerStatus>>,
     shared_queue: SharedQueueState,
 ) where
@@ -653,7 +654,12 @@ fn spawn_ctrl_client<S>(
     };
     let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
 
-    let daemon_hello = CtrlHello::current();
+    let mut daemon_hello = CtrlHello::current();
+    if control_credential.is_none() {
+        daemon_hello
+            .capabilities
+            .retain(|cap| cap != crate::ctrl::CTRL_CAP_CONTROL_AUTH);
+    }
     if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(daemon_hello)) {
         ev_tx.send(CtrlOutbound::Event(hello_json)).ok();
     }
@@ -675,7 +681,6 @@ fn spawn_ctrl_client<S>(
         }
         w.shutdown_stream();
     });
-
     std::thread::spawn(move || {
         let reader = BufReader::new(stream);
         let mut lines = reader.lines();
@@ -690,17 +695,25 @@ fn spawn_ctrl_client<S>(
                     log::warn!(target: "daemon", "rejecting ctrl client: {e}");
                     return;
                 }
-                let Some(auth_token) = info.auth_token.as_deref() else {
-                    log::warn!(target: "daemon", "rejecting ctrl client: missing Emby auth token");
-                    return;
-                };
-                let validate_client = client.lock().unwrap().clone();
-                if let Err(e) = validate_client.validate_presented_token(auth_token) {
-                    log::warn!(
-                        target: "daemon",
-                        "rejecting ctrl client: presented Emby token validation failed: {e}"
-                    );
-                    return;
+                if let Some(control_credential) = control_credential.as_deref() {
+                    if info.control_token.is_none() {
+                        log::warn!(target: "daemon", "rejecting ctrl client: missing Control credential");
+                        return;
+                    }
+                    if let Err(e) = info.validate_control_credential(&control_credential) {
+                        log::warn!(target: "daemon", "rejecting ctrl client: {e}");
+                        return;
+                    }
+                } else {
+                    let Some(auth_token) = info.auth_token.as_deref() else {
+                        log::warn!(target: "daemon", "rejecting ctrl client: missing Emby auth token");
+                        return;
+                    };
+                    let validate_client = client.lock().unwrap().clone();
+                    if let Err(e) = validate_client.validate_presented_token(auth_token) {
+                        log::warn!(target: "daemon", "rejecting ctrl client: presented Emby token validation failed: {e}");
+                        return;
+                    }
                 }
                 (info.supports_feed_playback(), info.supports_unified_queue())
             }
@@ -714,8 +727,6 @@ fn spawn_ctrl_client<S>(
             }
         };
 
-        // Send initial state: `UnifiedQueueState` for capable peers,
-        // legacy `CtrlState` for others.
         let status = player_status.lock().unwrap().clone();
         let init_event = if supports_unified_queue {
             let q = shared_queue.queue.lock().unwrap();

@@ -22,7 +22,9 @@ fn try_daemon_route_connect_returns_remote_player_on_successful_connect() {
     }
 
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
-    let app = make_app_stub();
+    let mut app = make_app_stub();
+    let config = app.config.lock().unwrap().clone();
+    install_test_emby(&mut app, config);
     let endpoint = mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
         "/tmp/mbv-music.sock",
     ));

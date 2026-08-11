@@ -58,8 +58,7 @@ impl QuitHandle {
 // ── Player ────────────────────────────────────────────────────────────────────
 
 pub struct Player {
-    server_url: String,
-    token: String,
+    credentials: Arc<Mutex<Option<(String, String)>>>,
     show_audio_window: bool,
     use_mpv_config: bool,
     no_scripts: bool,
@@ -94,8 +93,9 @@ impl Player {
         ws_tx: Option<crate::ws::WsSender>,
     ) -> Self {
         Player {
-            server_url,
-            token,
+            credentials: Arc::new(Mutex::new(
+                (!server_url.is_empty() || !token.is_empty()).then_some((server_url, token)),
+            )),
             show_audio_window,
             use_mpv_config,
             no_scripts,
@@ -138,6 +138,24 @@ impl Player {
                 log::warn!(target: "player", "pre-warm failed: {e}");
             }
         }
+    }
+
+    /// Update the local Player owner's Emby access after late Service setup.
+    /// This is intentionally an in-process seam; it is not part of ctrl.
+    pub fn update_emby_credentials(&self, server_url: String, token: String) {
+        // The playback thread snapshots these fields when a run starts. The
+        // mutexes keep late setup and a concurrent submission from racing.
+        let mut credentials = self.credentials.lock().unwrap();
+        if server_url.is_empty() && token.is_empty() {
+            *credentials = None;
+        } else {
+            *credentials = Some((server_url, token));
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn emby_credentials(&self) -> Option<(String, String)> {
+        self.credentials.lock().unwrap().clone()
     }
 
     pub fn join(&self) {
@@ -365,8 +383,7 @@ impl Player {
         };
         let subtitle_prefs = self.subtitle_prefs.clone();
         let shutdown_report_timeout = self.shutdown_report_timeout.clone();
-        let server_url = self.server_url.clone();
-        let token = self.token.clone();
+        let (server_url, token) = self.credentials.lock().unwrap().clone().unwrap_or_default();
         let origin = if items.len() == 1 {
             PlaybackOrigin::Standalone
         } else {

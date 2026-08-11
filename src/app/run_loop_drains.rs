@@ -90,7 +90,9 @@ impl App {
             return false;
         };
         self.search_debounce_deadline = None;
-        let client = self.client.lock().unwrap().clone();
+        let Some(client) = self.emby_snapshot() else {
+            return true;
+        };
         self.spawn_search_sidebar_query(client, query);
         true
     }

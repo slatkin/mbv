@@ -31,6 +31,9 @@ pub const CTRL_CAP_FEED_PLAYBACK: &str = "feed-playback";
 /// legacy peers use `CtrlState`, `PlayItems`, `AdoptQueue`, and `PlayerCmd`
 /// queue mutations.  Additive — no protocol-version bump.
 pub const CTRL_CAP_UNIFIED_QUEUE: &str = "unified-queue";
+/// Capable Local daemons authenticate ctrl clients with their mbv-owned
+/// Control credential rather than an Emby Service credential.
+pub const CTRL_CAP_CONTROL_AUTH: &str = "control-auth";
 
 pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;
@@ -41,6 +44,10 @@ pub struct CtrlHello {
     pub app_version: String,
     pub capabilities: Vec<String>,
     pub auth_token: Option<String>,
+    /// Control credential used only when the peer advertises `control-auth`.
+    /// Defaulting this field keeps deferred legacy peers wire-compatible.
+    #[serde(default)]
+    pub control_token: Option<String>,
 }
 
 impl CtrlHello {
@@ -55,14 +62,22 @@ impl CtrlHello {
                 CTRL_CAP_LIFECYCLE_SHUTDOWN.to_string(),
                 CTRL_CAP_FEED_PLAYBACK.to_string(),
                 CTRL_CAP_UNIFIED_QUEUE.to_string(),
+                CTRL_CAP_CONTROL_AUTH.to_string(),
             ],
             auth_token: None,
+            control_token: None,
         }
     }
 
     pub fn current_client(auth_token: String) -> Self {
         let mut hello = Self::current();
         hello.auth_token = Some(auth_token);
+        hello
+    }
+
+    pub fn current_control_client(control_token: String) -> Self {
+        let mut hello = Self::current();
+        hello.control_token = Some(control_token);
         hello
     }
 
@@ -113,6 +128,20 @@ impl CtrlHello {
             .iter()
             .any(|cap| cap == CTRL_CAP_UNIFIED_QUEUE)
     }
+
+    pub fn supports_control_auth(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_CONTROL_AUTH)
+    }
+
+    pub fn validate_control_credential(&self, expected: &str) -> Result<(), String> {
+        if self.control_token.as_deref() == Some(expected) {
+            Ok(())
+        } else {
+            Err("invalid Control credential".to_string())
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -123,6 +152,7 @@ pub struct CtrlCompatibility {
     pub supports_lifecycle_shutdown: bool,
     pub supports_feed_playback: bool,
     pub supports_unified_queue: bool,
+    pub supports_control_auth: bool,
 }
 
 impl CtrlCompatibility {
@@ -135,6 +165,7 @@ impl CtrlCompatibility {
                 supports_lifecycle_shutdown: false,
                 supports_feed_playback: true,
                 supports_unified_queue: true,
+                supports_control_auth: true,
             }),
             _ => Err(format!(
                 "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"

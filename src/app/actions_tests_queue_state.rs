@@ -356,7 +356,7 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
 fn ensure_feed_library_preserves_saved_feed_position() {
     let mut app = crate::app::tests::make_app_stub();
     app.tab = TabSelection::Library(0);
-    app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = crate::app::tests::make_item("YouTube", "CollectionFolder");
     library.id = "lib-feed".into();
@@ -725,11 +725,11 @@ fn cycle_sub_local_idle_cycles_subtitle_mode_not_a_track() {
 
     let mut app = crate::app::tests::make_app_stub();
     app.player.status.lock().unwrap().active = false;
-    let before = app.client.lock().unwrap().config.subtitle_mode.clone();
+    let before = app.config.lock().unwrap().subtitle_mode.clone();
 
     app.cycle_sub();
 
-    let after = app.client.lock().unwrap().config.subtitle_mode.clone();
+    let after = app.config.lock().unwrap().subtitle_mode.clone();
     assert_ne!(
         before, after,
         "idle z has no session equivalent, so it should still cycle the default subtitle mode"
@@ -748,14 +748,14 @@ fn cycle_sub_local_active_does_not_fall_back_to_subtitle_mode() {
         status.sub_tracks = vec![(1, "English".to_string(), false)];
         status.sub_id = 0;
     }
-    let before = app.client.lock().unwrap().config.subtitle_mode.clone();
+    let before = app.config.lock().unwrap().subtitle_mode.clone();
 
     // #86: local `z` while active now cycles every track (like the
     // remote path) instead of the old on/off `toggle_sub()` -- assert at
     // minimum that it does *not* take the idle subtitle-mode fallback.
     app.cycle_sub();
 
-    let after = app.client.lock().unwrap().config.subtitle_mode.clone();
+    let after = app.config.lock().unwrap().subtitle_mode.clone();
     assert_eq!(
         before, after,
         "an active player has tracks to cycle and must not touch the idle subtitle-mode fallback"

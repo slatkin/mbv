@@ -16,19 +16,33 @@ impl EmbyClient {
     }
 
     pub fn get_views(&self) -> Result<Vec<EmbyItem>, String> {
+        self.get_views_classified().map_err(|e| e.to_string())
+    }
+
+    pub fn get_views_classified(
+        &self,
+    ) -> Result<Vec<EmbyItem>, crate::service_runtime::EmbyFailure> {
         let vfolders: Value = self
             .get("/Library/VirtualFolders")
             .call()
-            .map_err(|e| e.to_string())?
+            .map_err(|e| Self::service_failure("Emby views request failed", e))?
             .into_json()
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                crate::service_runtime::EmbyFailure::unavailable(format!(
+                    "Emby views response failed: {e}"
+                ))
+            })?;
 
         let user_views: Value = self
             .get(&format!("/Users/{}/Views", self.user_id))
             .call()
-            .map_err(|e| e.to_string())?
+            .map_err(|e| Self::service_failure("Emby user views request failed", e))?
             .into_json()
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                crate::service_runtime::EmbyFailure::unavailable(format!(
+                    "Emby user views response failed: {e}"
+                ))
+            })?;
 
         let mut items: Vec<EmbyItem> = Vec::new();
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();

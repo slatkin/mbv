@@ -589,7 +589,10 @@ impl App {
                     // Cold start: submit the full canonical queue (all
                     // variants) so the player's internal playlist matches
                     // the PlayerTab's queue exactly.
-                    let c = Arc::new(self.client.lock().unwrap().clone());
+                    let Some(c) = self.emby_snapshot().map(Arc::new) else {
+                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                        return false;
+                    };
                     let headless = all_items.iter().all(|i| i.is_audio());
                     self.player
                         .submit_queue(all_items, t, Some(c), headless, self.ui_volume);

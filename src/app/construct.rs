@@ -9,6 +9,7 @@ use super::{
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
 use mbv_core::remote_player::DaemonEndpoint;
+use mbv_core::service_runtime::EmbyRuntime;
 use ratatui_image::picker::Picker;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -27,7 +28,13 @@ impl App {
         let mut app = App {
             #[cfg(test)]
             _test_state_dir_guard,
-            client: init.client,
+            config: init.config,
+            emby_runtime: init.emby_runtime,
+            emby_startup_rx: init.emby_startup_rx,
+            emby_startup_request: init.emby_startup_request,
+            emby_setup_form: init.emby_setup_form,
+            emby_setup_rx: init.emby_setup_rx,
+            pending_emby_replacement: None,
             shared_client: None,
             shared_reconnect_rx: None,
             player: init.player,
@@ -142,6 +149,8 @@ impl App {
             show_help: false,
             show_settings: false,
             settings_cursor: 0,
+            settings_destination: super::types_settings::SettingsDestination::Main,
+            services_cursor: 0,
             settings_scroll: 0,
             settings_save_at: None,
             confirm_logout: false,
@@ -224,7 +233,14 @@ impl App {
         app
     }
 
+    #[cfg(test)]
     pub fn new(client: EmbyClient) -> Self {
+        let config = crate::config::load_config().unwrap_or_default();
+        Self::new_with_config(client, config)
+    }
+
+    #[cfg(test)]
+    pub fn new_with_config(client: EmbyClient, app_config: crate::config::Config) -> Self {
         let (player_tx, player_rx) = mpsc::channel();
         let (ws_tx, ws_rx) = mpsc::channel();
         let (lib_tx, lib_rx) = mpsc::channel();
@@ -236,42 +252,42 @@ impl App {
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
-        let hidden_libraries = client.config.hidden_libraries.clone();
-        let library_routes = client.config.library_routes.clone();
-        let hidden_latest = client.config.hidden_latest.clone();
-        let music_levels = client.config.music_levels.clone();
-        let system_notifications = client.config.system_notifications;
+        let hidden_libraries = app_config.hidden_libraries.clone();
+        let library_routes = app_config.library_routes.clone();
+        let hidden_latest = app_config.hidden_latest.clone();
+        let music_levels = app_config.music_levels.clone();
+        let system_notifications = app_config.system_notifications;
         let image_protocol = ui_config.image_protocol.clone();
         let image_protocol_enabled = image_protocol.is_some();
         let image_cache_size = ui_config.image_cache_size;
         let use_nerd_fonts = ui_config.use_nerd_fonts;
         let indicator_style: render::indicators::IndicatorStyle =
             ui_config.indicator_style.parse().unwrap_or_default();
-        let always_play_next = client.config.always_play_next;
-        let always_skip_intro = client.config.always_skip_intro;
+        let always_play_next = app_config.always_play_next;
+        let always_skip_intro = app_config.always_skip_intro;
         crate::config::evict_old_image_cache();
         let ws_url = client.ws_url();
         let ws_send_tx = mbv_core::ws::start(ws_url, ws_tx);
         let ws_send_tx_app = ws_send_tx.clone();
         // Prefer local config; fall back to Emby server prefs only on first run (all empty).
-        let subtitle_prefs = if client.config.subtitle_mode.is_empty()
-            && client.config.subtitle_lang.is_empty()
-            && client.config.audio_lang.is_empty()
+        let subtitle_prefs = if app_config.subtitle_mode.is_empty()
+            && app_config.subtitle_lang.is_empty()
+            && app_config.audio_lang.is_empty()
         {
             client.get_user_subtitle_prefs().unwrap_or_default()
         } else {
             mbv_core::player::SubtitlePrefs {
-                mode: client.config.subtitle_mode.clone(),
-                subtitle_lang: client.config.subtitle_lang.clone(),
-                audio_lang: client.config.audio_lang.clone(),
+                mode: app_config.subtitle_mode.clone(),
+                subtitle_lang: app_config.subtitle_lang.clone(),
+                audio_lang: app_config.audio_lang.clone(),
             }
         };
         let raw_player = Player::new(
             server_url,
             token,
-            client.config.show_audio_window,
-            client.config.use_mpv_config,
-            client.config.no_scripts,
+            app_config.show_audio_window,
+            app_config.use_mpv_config,
+            app_config.no_scripts,
             always_play_next,
             always_skip_intro,
             subtitle_prefs,
@@ -290,6 +306,10 @@ impl App {
             None,
         );
         let player = PlayerProxy::local(raw_player, always_play_next);
+        // EmbyClient retains this snapshot only for constructing Emby API
+        // requests. App general state owns the independent application copy;
+        // it is never synchronized back into this concrete API boundary.
+        let config = Arc::new(Mutex::new(app_config));
         let client_arc = Arc::new(Mutex::new(client));
         {
             let c = client_arc.clone();
@@ -300,7 +320,12 @@ impl App {
             });
         }
         let mut app = Self::build(AppInit {
-            client: client_arc,
+            config,
+            emby_runtime: EmbyRuntime::ready(client_arc.clone()),
+            emby_startup_rx: None,
+            emby_startup_request: None,
+            emby_setup_form: None,
+            emby_setup_rx: None,
             player,
             player_rx,
             ws_rx,
@@ -336,6 +361,89 @@ impl App {
         app
     }
 
+    /// Construct the bare Player owner without creating an Emby client or
+    /// performing any network work. Configured Emby setup is initialized by
+    /// the bounded worker once `run()` has entered the TUI.
+    pub fn new_independent(app_config: crate::config::Config) -> Self {
+        let (player_tx, player_rx) = mpsc::channel();
+        let (_, ws_rx) = mpsc::channel();
+        let (lib_tx, lib_rx) = mpsc::channel();
+        let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
+        let (card_image_tx, card_image_rx) =
+            mpsc::channel::<(String, Option<image::DynamicImage>)>();
+        let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
+        let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
+        let ui_config = crate::config::load_ui_config().unwrap_or_default();
+        let indicator_style = ui_config.indicator_style.parse().unwrap_or_default();
+        let configured = app_config.emby_setup.is_some();
+        let credential_present =
+            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some();
+        let generation = mbv_core::service_runtime::SetupGeneration::default();
+        let raw_player = Player::new(
+            String::new(),
+            String::new(),
+            app_config.show_audio_window,
+            app_config.use_mpv_config,
+            app_config.no_scripts,
+            app_config.always_play_next,
+            app_config.always_skip_intro,
+            mbv_core::player::SubtitlePrefs {
+                mode: app_config.subtitle_mode.clone(),
+                subtitle_lang: app_config.subtitle_lang.clone(),
+                audio_lang: app_config.audio_lang.clone(),
+            },
+            player_tx,
+            None,
+        );
+        let player = PlayerProxy::local(raw_player, app_config.always_play_next);
+        let mut app = Self::build(AppInit {
+            config: Arc::new(Mutex::new(app_config.clone())),
+            emby_runtime: {
+                let mut runtime = EmbyRuntime::new(configured);
+                runtime.state =
+                    super::service_startup::initial_state(configured, credential_present);
+                runtime
+            },
+            emby_startup_rx: None,
+            emby_startup_request: None,
+            emby_setup_form: None,
+            emby_setup_rx: None,
+            player,
+            player_rx,
+            ws_rx,
+            ws_send_tx: None,
+            player_tab: PlayerTab::default(),
+            remote_player_tab: None,
+            initial_queue_scope: QueueScope::Local,
+            system_notifications: app_config.system_notifications,
+            image_protocol: ui_config.image_protocol.clone(),
+            image_protocol_enabled: ui_config.image_protocol.is_some(),
+            hidden_libraries: app_config.hidden_libraries.clone(),
+            library_routes: app_config.library_routes.clone(),
+            hidden_latest: app_config.hidden_latest.clone(),
+            music_levels: app_config.music_levels.clone(),
+            use_nerd_fonts: ui_config.use_nerd_fonts,
+            indicator_style,
+            image_cache_size: ui_config.image_cache_size,
+            lib_tx,
+            lib_rx,
+            sessions_tx,
+            sessions_rx,
+            card_image_tx,
+            card_image_rx,
+            notif_action_tx,
+            notif_action_rx,
+            search_tx,
+            search_rx,
+            idle_feed: None,
+        });
+        app.emby_startup_request = configured.then_some((app_config.clone(), generation));
+        if super::service_startup::should_open_services(&app_config) {
+            app.open_services_settings();
+        }
+        app
+    }
+
     /// `endpoint` is the daemon endpoint the remote player is connected to.
     /// The endpoint's `is_local()` distinguishes local-daemon attach
     /// (`DaemonEndpoint::Local`) from a genuinely remote daemon:
@@ -345,11 +453,34 @@ impl App {
     /// - `Tcp`/`Unix`: a separate `remote_player_tab` is kept so the user
     ///   can browse locally while a daemon elsewhere plays something else,
     ///   with the Local/Remote scope pill to switch between them.
+    #[cfg(test)]
     pub fn new_remote(
         client: EmbyClient,
         remote: mbv_core::remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: DaemonEndpoint,
+    ) -> Self {
+        let config = crate::config::load_config().unwrap_or_default();
+        Self::new_remote_optional_with_config(Some(client), remote, player_rx, endpoint, config)
+    }
+
+    #[cfg(test)]
+    pub fn new_remote_with_config(
+        client: EmbyClient,
+        remote: mbv_core::remote_player::RemotePlayer,
+        player_rx: mpsc::Receiver<PlayerEvent>,
+        endpoint: DaemonEndpoint,
+        config: crate::config::Config,
+    ) -> Self {
+        Self::new_remote_optional_with_config(Some(client), remote, player_rx, endpoint, config)
+    }
+
+    pub fn new_remote_optional_with_config(
+        client: Option<EmbyClient>,
+        remote: mbv_core::remote_player::RemotePlayer,
+        player_rx: mpsc::Receiver<PlayerEvent>,
+        endpoint: DaemonEndpoint,
+        app_config: crate::config::Config,
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<mbv_core::ws::WsEvent>();
         let (lib_tx, lib_rx) = mpsc::channel();
@@ -359,11 +490,11 @@ impl App {
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
         let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
-        let hidden_libraries = client.config.hidden_libraries.clone();
-        let library_routes = client.config.library_routes.clone();
-        let hidden_latest = client.config.hidden_latest.clone();
-        let music_levels = client.config.music_levels.clone();
-        let always_play_next = client.config.always_play_next;
+        let hidden_libraries = app_config.hidden_libraries.clone();
+        let library_routes = app_config.library_routes.clone();
+        let hidden_latest = app_config.hidden_latest.clone();
+        let music_levels = app_config.music_levels.clone();
+        let always_play_next = app_config.always_play_next;
         let image_protocol = ui_config.image_protocol.clone();
         let image_protocol_enabled = image_protocol.is_some();
         let image_cache_size = ui_config.image_cache_size;
@@ -371,15 +502,14 @@ impl App {
         let indicator_style: render::indicators::IndicatorStyle =
             ui_config.indicator_style.parse().unwrap_or_default();
         crate::config::evict_old_image_cache();
-        let client_arc = Arc::new(Mutex::new(client));
-        {
-            let c = client_arc.clone();
-            std::thread::spawn(move || {
-                let mut probe = c.lock().unwrap().clone();
-                probe.probe_chapter_api();
-                c.lock().unwrap().chapter_api_available = probe.chapter_api_available;
-            });
-        }
+        // EmbyClient retains this snapshot only for constructing Emby API
+        // requests. App general state owns the independent application copy;
+        // it is never synchronized back into this concrete API boundary.
+        let emby_configured = app_config.emby_setup.is_some();
+        let emby_credential_present =
+            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some();
+        let config = Arc::new(Mutex::new(app_config));
+        let client_arc = client.map(|client| Arc::new(Mutex::new(client)));
         let remote_items = remote.items.lock().unwrap().clone();
         let remote_cursor = remote.status.lock().unwrap().current_idx;
         let remote_unified_state = remote.unified_queue_state();
@@ -449,7 +579,22 @@ impl App {
             )
         };
         let mut app = Self::build(AppInit {
-            client: client_arc,
+            config,
+            emby_runtime: client_arc.as_ref().map_or_else(
+                || {
+                    let mut runtime = EmbyRuntime::new(emby_configured);
+                    runtime.state = super::service_startup::initial_state(
+                        emby_configured,
+                        emby_credential_present,
+                    );
+                    runtime
+                },
+                |client| EmbyRuntime::ready(client.clone()),
+            ),
+            emby_startup_rx: None,
+            emby_startup_request: None,
+            emby_setup_form: None,
+            emby_setup_rx: None,
             player,
             player_rx,
             ws_rx,

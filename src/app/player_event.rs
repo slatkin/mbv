@@ -385,7 +385,7 @@ impl App {
                 // reports the boundary neutrally, regardless of daemon-host
                 // config, so this client's own `always_skip_intro` is the
                 // only thing that decides whether to skip.
-                if self.client.lock().unwrap().config.always_skip_intro {
+                if self.config.lock().unwrap().always_skip_intro {
                     let secs = intro_end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
                     self.player.send_command(PlayerCommand::SeekAbsolute(secs));
                     self.player.send_command(PlayerCommand::SkipIntroDismiss);

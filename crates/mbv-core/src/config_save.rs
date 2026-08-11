@@ -21,12 +21,24 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         };
     }
 
-    if !cfg.server_url.is_empty() {
+    let setup = cfg.emby_setup.as_ref().filter(|s| !s.server_url.is_empty());
+    let server_url = setup
+        .map(|s| s.server_url.as_str())
+        .unwrap_or(&cfg.server_url);
+    if !server_url.is_empty() {
         let server = section!("server");
         server.insert(
             "url".to_string(),
-            toml::Value::String(cfg.server_url.clone()),
+            toml::Value::String(server_url.to_string()),
         );
+        if let Some(setup) = setup {
+            server.insert(
+                "user_id".to_string(),
+                toml::Value::String(setup.user_id.clone()),
+            );
+        } else {
+            server.remove("user_id");
+        }
     }
 
     let session = section!("session");
