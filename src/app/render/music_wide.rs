@@ -82,8 +82,17 @@ fn compute_wide_left_layout(
     track_count: usize,
 ) -> WideLeftLayout {
     let total_h = left_area.height;
-    let art_available = images_enabled && left_area.width >= INLINE_ALBUM_ART_RESERVED;
-    let side_metadata_width = left_area.width.saturating_sub(INLINE_ALBUM_ART_RESERVED);
+    // Keep the hero/banner inset against the left pane, like the track block
+    // below it, while leaving the pane itself visible around the content.
+    let hero_content_area = Rect {
+        x: left_area.x.saturating_add(PANE_PAD_X),
+        width: left_area.width.saturating_sub(PANE_PAD_X * 2),
+        ..left_area
+    };
+    let art_available = images_enabled && hero_content_area.width >= INLINE_ALBUM_ART_RESERVED;
+    let side_metadata_width = hero_content_area
+        .width
+        .saturating_sub(INLINE_ALBUM_ART_RESERVED);
     let stack_metadata = art_available && side_metadata_width < MIN_HERO_METADATA_SIDE_WIDTH;
     // Reserve a separator row between hero and tracks.
     let sep: u16 = if total_h > MIN_LEFT_HEIGHT_FOR_SEPARATOR {
@@ -110,9 +119,9 @@ fn compute_wide_left_layout(
     let hero_h = hero_ideal.min(total_h.saturating_sub(track_h + sep));
 
     let hero_area = Rect {
-        x: left_area.x,
+        x: hero_content_area.x,
         y: left_area.y,
-        width: left_area.width,
+        width: hero_content_area.width,
         height: hero_h,
     };
     let track_area = Rect {
@@ -220,7 +229,7 @@ fn render_wrapped_text(
             break;
         }
         f.render_widget(
-            Paragraph::new(Line::from(Span::styled(format!(" {line}"), style))),
+            Paragraph::new(Line::from(Span::styled(line.into_owned(), style))),
             Rect {
                 x: area.x,
                 y: *row,
@@ -247,15 +256,33 @@ impl App {
         layout.wide_music_track_hitmap.clear();
         layout.wide_music_art_area = Rect::default();
 
-        if area.width < TWO_COLUMN_THRESHOLD || area.height < MIN_WIDE_AREA_HEIGHT {
+        let left_content_area = Rect {
+            height: area.height.saturating_sub(1),
+            ..area
+        };
+        if area.width < TWO_COLUMN_THRESHOLD || left_content_area.height < MIN_WIDE_AREA_HEIGHT {
             // Too narrow for wide mode — fall back to narrow rendering.
             self.render_list(f, area, focused, layout);
             return;
         }
 
+        let (mut left_panel, right_panel) = wide_music_panes(area);
+        left_panel.height = left_content_area.height;
+
+        // Keep a library-side separator row below the left pane, while the
+        // right pane remains flush with the status bar below the library area.
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+            Rect {
+                x: left_panel.x,
+                y: left_panel.bottom(),
+                width: left_panel.width,
+                height: 1,
+            },
+        );
+
         let album = self.selected_album_item(lib_idx);
 
-        let (left_panel, right_panel) = wide_music_panes(area);
         // The shared library content area already provides the outer
         // horizontal gutter. Only retain vertical breathing room here so the
         // wide panes do not acquire a second two-column frame.
@@ -298,7 +325,7 @@ impl App {
         let left_bg = if left_focused {
             palette::BG_GREEN
         } else {
-            palette::LIBRARY_SIDE_BG
+            palette::PLAYBACK_PANEL_BG
         };
         f.render_widget(
             Block::default().style(Style::default().bg(left_bg)),
@@ -366,7 +393,7 @@ impl App {
             x: list_panel.x.saturating_add(PANE_PAD_X),
             y: list_panel.y.saturating_add(PANE_PAD_Y),
             width: list_panel.width.saturating_sub(PANE_PAD_X * 2),
-            height: list_panel.height.saturating_sub(PANE_PAD_Y * 2 + 1),
+            height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
         };
         if list_panel.height > 0 {
             let list_bg = if right_focused {
@@ -454,7 +481,7 @@ impl App {
             if release_year > 0 && row < text.bottom() {
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
-                        format!(" {release_year}"),
+                        release_year.to_string(),
                         Style::default().fg(palette::SUBTLE),
                     ))),
                     Rect {
@@ -494,17 +521,28 @@ impl App {
             return;
         }
 
-        // Match the recessed overview block used on Home: one row of vertical
-        // padding and two cells of horizontal padding around the track list.
+        // Match the recessed overview block used on Home: two columns of
+        // outer inset, one row of vertical padding, and two cells of internal
+        // horizontal padding around the track list.
+        let track_panel = Rect {
+            x: track_area.x.saturating_add(PANE_PAD_X),
+            width: track_area.width.saturating_sub(PANE_PAD_X * 2),
+            ..*track_area
+        };
+        let track_panel_bg = if left_focused {
+            palette::TRACK_BLOCK_BG
+        } else {
+            palette::LIBRARY_SIDE_BG
+        };
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
-            *track_area,
+            Block::default().style(Style::default().bg(track_panel_bg)),
+            track_panel,
         );
         let track_content = Rect {
-            x: track_area.x.saturating_add(PANE_PAD_X),
-            y: track_area.y.saturating_add(PANE_PAD_Y),
-            width: track_area.width.saturating_sub(PANE_PAD_X * 2),
-            height: track_area.height.saturating_sub(PANE_PAD_Y * 2),
+            x: track_panel.x.saturating_add(PANE_PAD_X),
+            y: track_panel.y.saturating_add(PANE_PAD_Y),
+            width: track_panel.width.saturating_sub(PANE_PAD_X * 2),
+            height: track_panel.height.saturating_sub(PANE_PAD_Y * 2),
         };
         if track_content.height == 0 || track_content.width == 0 {
             return;
@@ -565,9 +603,9 @@ impl App {
                     let track = &tracks[ti];
                     let row_y = list_area.y + vi as u16;
                     let row_rect = Rect {
-                        x: list_area.x,
+                        x: track_panel.x,
                         y: row_y,
-                        width: list_area.width,
+                        width: track_panel.width,
                         height: 1,
                     };
 
@@ -605,23 +643,25 @@ impl App {
                         "\u{2014}".to_string()
                     };
 
-                    let mut spans = vec![
-                        Span::styled(track_num, Style::default().fg(text_fg)),
-                        Span::styled(name, Style::default().fg(text_fg)),
-                    ];
+                    let used = track_num.chars().count() + name.chars().count();
+                    let mut spans = if selected {
+                        vec![
+                            Span::styled("▍", Style::default().fg(palette::AQUA)),
+                            Span::raw(" "),
+                        ]
+                    } else {
+                        vec![Span::raw("  ")]
+                    };
+                    spans.push(Span::styled(track_num, Style::default().fg(text_fg)));
+                    spans.push(Span::styled(name, Style::default().fg(text_fg)));
                     // Duration right-aligned.
-                    let used: usize = spans.iter().map(|s| s.content.len()).sum();
                     let pad = (list_area.width as usize).saturating_sub(used + duration.len() + 1);
                     if pad > 0 {
                         spans.push(Span::raw(" ".repeat(pad)));
                     }
                     spans.push(Span::styled(
                         format!(" {duration}"),
-                        Style::default().fg(if selected {
-                            palette::YELLOW
-                        } else {
-                            palette::MUTED
-                        }),
+                        Style::default().fg(palette::GREEN),
                     ));
 
                     f.render_widget(Paragraph::new(Line::from(spans)), row_rect);
