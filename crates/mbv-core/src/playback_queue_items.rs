@@ -148,6 +148,12 @@ impl QueueItem {
         }
     }
 
+    /// Whether this is an Emby TV episode. Next Up is only meaningful for
+    /// TVShow library items, not movies, music, or feed entries.
+    pub fn is_tv_episode(&self) -> bool {
+        matches!(self, QueueItem::Emby(item) if item.item_type == "Episode")
+    }
+
     pub fn artwork_url(&self) -> Option<&str> {
         match self {
             QueueItem::Emby(_item) => None,

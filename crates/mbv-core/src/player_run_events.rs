@@ -18,7 +18,12 @@ impl PlaybackRun {
             // 60 s before end. Minimum episode: 10 min. Minimum remaining when shown: 20 s.
             const MIN_RUNTIME_TICKS: i64 = 600 * TICKS_PER_SECOND;
             const MIN_REMAIN_TICKS: i64 = 20 * TICKS_PER_SECOND;
-            if self.current_idx + 1 < self.queue_len() {
+            if self.current_idx + 1 < self.queue_len()
+                && self.active_item().is_some_and(QueueItem::is_tv_episode)
+                && self
+                    .item_at(self.current_idx + 1)
+                    .is_some_and(QueueItem::is_tv_episode)
+            {
                 let runtime = self.status.lock().unwrap().runtime_ticks;
                 if runtime > 0 {
                     let show_at = runtime - 60 * TICKS_PER_SECOND;
