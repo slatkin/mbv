@@ -294,7 +294,6 @@ impl App {
             );
             return;
         }
-        let name = entry.title.clone();
         let scope = self.visible_queue_scope();
         let previous_dirty = self.queue_dirty;
         let previous_queue = self.queue_for_scope(scope).clone();
@@ -305,7 +304,6 @@ impl App {
             self.queue_dirty = true;
         }
         if self.sync_playback_queue_items_after_append(scope, vec![QueueItem::Feed(entry)]) {
-            self.flash(format!("Added: {name}"), ToastSeverity::Success);
             self.persist_local_queue_state_if_needed(scope);
             self.retire_remote_tracking(true);
         } else {
