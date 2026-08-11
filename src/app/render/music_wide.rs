@@ -782,12 +782,10 @@ impl App {
         layout.left_sorted_indices = plan.order;
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::wide_album_metadata;
     use crate::app::tests::make_item;
-
     #[test]
     fn wide_album_metadata_removes_artist_and_year_prefix() {
         let mut album = make_item("Bob Dylan (1970) New Morning", "MusicAlbum");

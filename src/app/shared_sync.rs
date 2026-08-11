@@ -399,6 +399,63 @@ impl App {
         entry
     }
 
+    /// Bulk-hydrate a subscription's fetched entries by scanning the shared
+    /// store once for the given `feed_id` and merging matching rows by entry
+    /// GUID. Unknown stored GUIDs are ignored. Missing capability,
+    /// disconnection, timeout, or scan failure leaves entries unchanged
+    /// (zero position, unplayed) without blocking the refresh.
+    pub(super) fn hydrate_feed_entries_for_subscription(
+        &mut self,
+        feed_id: &str,
+        entries: &mut [mbv_core::playback_queue::FeedEntry],
+    ) {
+        let Some(shared) = self.shared_client.as_mut() else {
+            return;
+        };
+        if !matches!(shared.state(), SharedClientState::Shared) {
+            return;
+        }
+        let scanned = match shared.scan_feed_entries(feed_id.to_string()) {
+            Ok(Some(rows)) => rows,
+            Ok(None) => {
+                log::debug!(
+                    target: "feed_state",
+                    "feed-entry scan unsupported; leaving entries unplayed feed_id={feed_id}",
+                );
+                return;
+            }
+            Err(e) => {
+                log::warn!(
+                    target: "feed_state",
+                    "feed-entry scan failed for feed_id={feed_id}: {e}; leaving entries unplayed",
+                );
+                return;
+            }
+        };
+        if scanned.is_empty() {
+            return;
+        }
+        let lookup: std::collections::HashMap<&str, &mbv_core::shared_store::FeedEntryState> =
+            scanned
+                .iter()
+                .map(|(guid, state)| (guid.as_str(), state))
+                .collect();
+        let mut hydrated = 0usize;
+        for entry in entries.iter_mut() {
+            if let Some(state) = lookup.get(entry.guid.as_str()) {
+                entry.position_ticks = state.position_ticks;
+                entry.played = state.played;
+                hydrated += 1;
+            }
+        }
+        if hydrated > 0 {
+            log::info!(
+                target: "feed_state",
+                "bulk-hydrated {hydrated} entries for feed_id={feed_id}",
+            );
+        }
+    }
+
     /// Write feed-entry state to the shared daemon. Failures are logged and
     /// discarded — they never stop playback.
     pub(super) fn write_feed_entry_state(

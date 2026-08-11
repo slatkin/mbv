@@ -177,6 +177,45 @@ impl App {
         if row < max_y {
             row += 1;
         }
+        // Watched filter indicator line.
+        if row < max_y && has_subs {
+            let filter = state.watched_filter;
+            let mut spans = Vec::new();
+            for (i, f_variant) in [
+                super::super::types_feed_tab::WatchedFilter::All,
+                super::super::types_feed_tab::WatchedFilter::Watched,
+                super::super::types_feed_tab::WatchedFilter::Unwatched,
+            ]
+            .iter()
+            .enumerate()
+            {
+                if i > 0 {
+                    spans.push(Span::styled(" · ", Style::default().fg(palette::MUTED)));
+                }
+                let active = *f_variant == filter;
+                spans.push(Span::styled(
+                    f_variant.label().to_string(),
+                    if active {
+                        Style::default()
+                            .fg(palette::AQUA)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(palette::MUTED)
+                    },
+                ));
+            }
+            f.render_widget(
+                Paragraph::new(Line::from(spans))
+                    .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                Rect {
+                    x: area.x,
+                    y: row,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+            row += 1;
+        }
         if row < max_y {
             row += 1;
         }
@@ -324,22 +363,23 @@ impl App {
                     let mime = entry.mime_type.as_deref().unwrap_or("");
 
                     // Build the display line.
-                    let mut spans = vec![
-                        Span::styled(
-                            marker,
-                            Style::default()
-                                .fg(palette::AQUA)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(
-                            format!("{title}  "),
-                            Style::default().fg(fg).add_modifier(if selected {
-                                Modifier::BOLD
-                            } else {
-                                Modifier::empty()
-                            }),
-                        ),
-                    ];
+                    let mut spans = vec![Span::styled(
+                        marker,
+                        Style::default()
+                            .fg(palette::AQUA)
+                            .add_modifier(Modifier::BOLD),
+                    )];
+                    if entry.played {
+                        spans.push(Span::styled("✓ ", Style::default().fg(palette::GREEN)));
+                    }
+                    spans.push(Span::styled(
+                        format!("{title}  "),
+                        Style::default().fg(fg).add_modifier(if selected {
+                            Modifier::BOLD
+                        } else {
+                            Modifier::empty()
+                        }),
+                    ));
                     if !duration.is_empty() {
                         spans.push(Span::styled(
                             format!("{duration} "),

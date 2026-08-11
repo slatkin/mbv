@@ -337,6 +337,7 @@ impl App {
         let n = self.feed_tab.subscriptions.len();
         self.feed_tab.entries = vec![Vec::new(); n];
         self.feed_tab.all_entries.clear();
+        self.feed_tab.rebuild_filtered_entries();
         self.feed_tab.selected_group = self
             .feed_tab
             .selected_group

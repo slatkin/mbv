@@ -43,24 +43,33 @@ impl App {
         // Drain all available results.
         while let Ok(result) = rx.try_recv() {
             had_events = true;
+            let feed_id = result.feed_id;
             let idx = result.subscription_index;
-            match result.entries {
-                Ok(entries) => {
-                    if idx < self.feed_tab.entries.len() {
-                        self.feed_tab.entries[idx] = entries;
+            let is_current_subscription = self
+                .feed_tab
+                .subscriptions
+                .get(idx)
+                .is_some_and(|subscription| subscription.url == feed_id);
+            if is_current_subscription {
+                match result.entries {
+                    Ok(mut entries) => {
+                        self.hydrate_feed_entries_for_subscription(&feed_id, &mut entries);
+                        if let Some(slot) = self.feed_tab.entries.get_mut(idx) {
+                            *slot = entries;
+                        }
                     }
-                }
-                Err(e) => {
-                    self.flash(
-                        format!("Feed '{}' refresh failed: {e}", {
-                            self.feed_tab
-                                .subscriptions
-                                .get(idx)
-                                .map(|s| s.name.as_str())
-                                .unwrap_or("?")
-                        }),
-                        ToastSeverity::Error,
-                    );
+                    Err(e) => {
+                        self.flash(
+                            format!("Feed '{}' refresh failed: {e}", {
+                                self.feed_tab
+                                    .subscriptions
+                                    .get(idx)
+                                    .map(|s| s.name.as_str())
+                                    .unwrap_or("?")
+                            }),
+                            ToastSeverity::Error,
+                        );
+                    }
                 }
             }
             // Decrement outstanding count; loading stays true until every
@@ -107,6 +116,7 @@ impl App {
             std::thread::spawn(move || {
                 let result = fetch_and_parse_entries(&url, kind, &feed_id);
                 let _ = tx.send(FeedTabRefreshResult {
+                    feed_id,
                     subscription_index: idx,
                     entries: result,
                 });
@@ -144,6 +154,7 @@ impl App {
         self.feed_tab.selected_group = (cur + delta).rem_euclid(n as i64) as usize;
         self.feed_tab.cursor = 0;
         self.feed_tab.scroll = 0;
+        self.feed_tab.rebuild_filtered_entries();
         self.feed_tab.clamp_state();
     }
 
@@ -153,6 +164,7 @@ impl App {
             self.feed_tab.selected_group = group_idx;
             self.feed_tab.cursor = 0;
             self.feed_tab.scroll = 0;
+            self.feed_tab.rebuild_filtered_entries();
             self.feed_tab.clamp_state();
         }
     }

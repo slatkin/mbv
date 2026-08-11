@@ -1,3 +1,4 @@
+use super::types_feed_tab::FeedTabRefreshResult;
 use super::types_feeds_manage::{
     FeedAddResult, FeedForm, FeedFormField, FeedsManagePopup, FeedsManageStage,
 };
@@ -140,11 +141,50 @@ fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
         "fetched entries must be cleared, not carried over"
     );
     assert!(app.feed_tab.all_entries.is_empty());
+    assert!(app.feed_tab.visible_entries().is_empty());
     assert!(
         app.feed_tab.selected_group < app.feed_tab.group_count(),
         "selected_group must be clamped into range"
     );
     assert_eq!(app.feed_tab.cursor, 0);
+}
+
+#[test]
+fn stale_refresh_result_is_dropped_after_subscription_index_shifts() {
+    let mut app = make_app_stub();
+    app.client.lock().unwrap().config.feeds = vec![
+        sub("A", "https://a", FeedKind::Video),
+        sub("B", "https://b", FeedKind::Video),
+    ];
+    app.sync_feed_subscriptions();
+    app.feed_tab.pending_results = 1;
+
+    app.remove_feed_confirmed(0);
+    app.feed_tab
+        .refresh_tx
+        .send(FeedTabRefreshResult {
+            feed_id: "https://a".into(),
+            subscription_index: 0,
+            entries: Ok(vec![mbv_core::playback_queue::FeedEntry {
+                guid: "a1".into(),
+                title: "A1".into(),
+                enclosure_url: Some("https://a/1".into()),
+                link: None,
+                mime_type: None,
+                duration_ticks: None,
+                pub_date_secs: None,
+                feed_kind: Some(FeedKind::Video),
+                feed_id: Some("https://a".into()),
+                position_ticks: 0,
+                played: false,
+            }]),
+        })
+        .unwrap();
+
+    app.drain_feed_tab_results();
+
+    assert!(app.feed_tab.entries[0].is_empty());
+    assert!(app.feed_tab.visible_entries().is_empty());
 }
 
 /// §6.2: a background add result whose id no longer matches the popup's
