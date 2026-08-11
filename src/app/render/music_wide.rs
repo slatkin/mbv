@@ -253,10 +253,7 @@ impl App {
             return;
         }
 
-        let Some(album) = self.selected_album_item(lib_idx) else {
-            super::render_placeholder(f, area, " (no album selected)");
-            return;
-        };
+        let album = self.selected_album_item(lib_idx);
 
         let (left_panel, right_panel) = wide_music_panes(area);
         let left_area = inset_pane(left_panel);
@@ -273,15 +270,24 @@ impl App {
         let right_focused = library_focused && !track_active;
 
         // ── Fetch and cache tracks ──────────────────────────────────────
-        let track_count = self.album_tracks_cache.get(&album.id).map_or(0, Vec::len);
-        if !self.album_tracks_cache.contains_key(&album.id)
-            && !self.album_tracks_loading.contains(&album.id)
-        {
-            self.fetch_album_tracks(album.id.clone());
+        let track_count = album
+            .as_ref()
+            .and_then(|album| self.album_tracks_cache.get(&album.id))
+            .map_or(0, Vec::len);
+        if let Some(album) = album.as_ref() {
+            if !self.album_tracks_cache.contains_key(&album.id)
+                && !self.album_tracks_loading.contains(&album.id)
+            {
+                self.fetch_album_tracks(album.id.clone());
+            }
         }
 
         // ── Left pane: hero + tracks ────────────────────────────────────
-        let left_layout = compute_wide_left_layout(left_area, self.images_enabled(), track_count);
+        let left_layout = compute_wide_left_layout(
+            left_area,
+            album.is_some() && self.images_enabled(),
+            track_count,
+        );
         layout.left_area = left_area;
         layout.hero_area = left_layout.hero_area;
 
@@ -296,25 +302,31 @@ impl App {
             left_panel,
         );
 
-        self.render_wide_left_hero(
-            f,
-            &left_layout,
-            &album,
-            left_focused,
-            library_focused,
-            layout,
-        );
+        if let Some(album) = album.as_ref() {
+            self.render_wide_left_hero(
+                f,
+                &left_layout,
+                album,
+                left_focused,
+                library_focused,
+                layout,
+            );
+        } else {
+            super::render_placeholder(f, left_area, " Loading\u{2026}");
+        }
         layout.wide_music_art_area = left_layout.art_area;
 
-        self.render_wide_left_tracks(
-            f,
-            &left_layout.track_area,
-            &album,
-            lib_idx,
-            left_focused,
-            library_focused,
-            layout,
-        );
+        if let Some(album) = album.as_ref() {
+            self.render_wide_left_tracks(
+                f,
+                &left_layout.track_area,
+                album,
+                lib_idx,
+                left_focused,
+                library_focused,
+                layout,
+            );
+        }
 
         // ── Right pane: pills + album browser ───────────────────────────
         // Keep the pill bar on the library-side surface. The focused green
