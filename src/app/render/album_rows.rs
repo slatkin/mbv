@@ -52,7 +52,7 @@ impl App {
         let gutter_w = if grouped_block { 2 } else { 1 };
         let label_avail = (label_area.width as usize).saturating_sub(gutter_w);
         let artist_label = trunc_str(&header.artist_label, label_avail);
-        let label_style = Style::default().fg(palette::SUBTLE);
+        let label_style = Style::default().fg(palette::YELLOW);
         let mut spans = Vec::with_capacity(3);
         if grouped_block {
             spans.push(super::selection_marker(false));
@@ -110,7 +110,11 @@ impl App {
                 .enumerate()
                 .map(|(line_idx, line)| {
                     let mut spans = if line_idx == 0 {
-                        vec![Span::raw(" ")]
+                        if selected {
+                            vec![Span::raw("  ")]
+                        } else {
+                            vec![Span::raw(" ")]
+                        }
                     } else {
                         vec![Span::raw("  ")]
                     };
@@ -271,10 +275,11 @@ impl App {
         };
         let title_width = panel_area
             .width
-            .saturating_sub(2 + suffix.chars().count() as u16) as usize;
+            .saturating_sub(3 + suffix.chars().count() as u16) as usize;
         let title = trunc_str(title, title_width);
         let mut spans = vec![
             Span::styled("▍", Style::default().fg(palette::AQUA)),
+            Span::raw(" "),
             Span::raw(" "),
             Span::styled(
                 title,
