@@ -148,7 +148,6 @@ impl AudiobookshelfBrowseState {
             .or_else(|| self.selected_id.clone().map(AudiobookshelfRowId::Show))
     }
 
-    #[allow(dead_code)]
     pub fn append_page(
         &mut self,
         page: usize,
@@ -178,7 +177,6 @@ impl AudiobookshelfBrowseState {
         let _ = limit;
     }
 
-    #[allow(dead_code)]
     pub fn needs_page(&self) -> Option<usize> {
         (self.shows.len() < self.total && self.loading_pages.is_empty()).then_some(self.next_page)
     }

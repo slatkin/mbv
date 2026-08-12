@@ -87,6 +87,14 @@ pub(super) enum LibEvent {
             mbv_core::audiobookshelf::AudiobookshelfError,
         >,
     },
+    AudiobookshelfShowsFetched {
+        generation: mbv_core::service_runtime::SetupGeneration,
+        library_id: String,
+        result: Result<
+            mbv_core::audiobookshelf::AudiobookshelfShowPage,
+            mbv_core::audiobookshelf::AudiobookshelfError,
+        >,
+    },
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate nav_stack, stay on current tab).
     NavigateTo {

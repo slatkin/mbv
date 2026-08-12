@@ -213,6 +213,42 @@ impl App {
             }
             return;
         }
+        if let LibEvent::AudiobookshelfShowsFetched {
+            generation,
+            library_id,
+            result,
+        } = ev
+        {
+            if !self.audiobookshelf_runtime.accepts(generation) {
+                return;
+            }
+            if let Some(index) = self
+                .audiobookshelf_libraries
+                .iter()
+                .position(|library| library.id == library_id)
+            {
+                let mut next_page = None;
+                if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
+                    match result {
+                        Ok(page) => {
+                            state.append_page(page.page, page.limit, page.total, page.items);
+                            next_page = state.needs_page();
+                        }
+                        Err(error) => state.error = Some(error.to_string()),
+                    }
+                }
+                if let Some(next_page) = next_page {
+                    super::service_startup::start_audiobookshelf_shows(
+                        self.config.lock().unwrap().clone(),
+                        generation,
+                        library_id,
+                        next_page,
+                        self.lib_tx.clone(),
+                    );
+                }
+            }
+            return;
+        }
         match ev {
             LibEvent::Loaded {
                 lib_idx,
@@ -400,7 +436,8 @@ impl App {
                 }
             }
             LibEvent::AudiobookshelfDetailFetched { .. }
-            | LibEvent::AudiobookshelfShelvesFetched { .. } => unreachable!(),
+            | LibEvent::AudiobookshelfShelvesFetched { .. }
+            | LibEvent::AudiobookshelfShowsFetched { .. } => unreachable!(),
             LibEvent::AlbumArtistFetched { album_id, artist } => {
                 self.album_artist_loading.remove(&album_id);
                 self.album_artist_cache

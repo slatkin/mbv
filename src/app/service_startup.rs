@@ -130,6 +130,32 @@ pub(super) fn start_audiobookshelf_shelves(
     });
 }
 
+pub(super) fn start_audiobookshelf_shows(
+    config: crate::config::Config,
+    generation: SetupGeneration,
+    library_id: String,
+    page: usize,
+    tx: mpsc::Sender<super::types_events::LibEvent>,
+) {
+    const PAGE_LIMIT: usize = 20;
+    std::thread::spawn(move || {
+        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
+            client.podcast_shows_bounded(
+                &key,
+                &library_id,
+                page,
+                PAGE_LIMIT,
+                AudiobookshelfClient::REQUEST_HARD_BOUND,
+            )
+        });
+        let _ = tx.send(super::types_events::LibEvent::AudiobookshelfShowsFetched {
+            generation,
+            library_id,
+            result,
+        });
+    });
+}
+
 pub(super) fn start_audiobookshelf(
     config: crate::config::Config,
     generation: SetupGeneration,
