@@ -68,6 +68,66 @@ fn format_episode_date(value: &str) -> Option<String> {
     Some(format!("{day:02}/{month:02}/{year:04}"))
 }
 
+fn episode_title_without_number(title: &str) -> &str {
+    let title = title.trim_start();
+    let title = title.strip_prefix('#').unwrap_or(title).trim_start();
+    let digit_end = title
+        .char_indices()
+        .take_while(|(_, character)| character.is_ascii_digit())
+        .last()
+        .map(|(index, character)| index + character.len_utf8());
+    let Some(digit_end) = digit_end else {
+        return title;
+    };
+    let suffix = title[digit_end..].trim_start();
+    if matches!(suffix.chars().next(), Some('.' | ':'))
+        && suffix
+            .chars()
+            .nth(1)
+            .is_some_and(|character| character.is_ascii_digit())
+    {
+        return title;
+    }
+    let Some(separator_end) = suffix
+        .char_indices()
+        .take_while(|(_, character)| matches!(character, '.' | ')' | ':' | '-' | '|'))
+        .last()
+        .map(|(index, character)| index + character.len_utf8())
+    else {
+        return title;
+    };
+    let stripped = suffix[separator_end..].trim_start();
+    if stripped.is_empty() {
+        title
+    } else {
+        stripped
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::episode_title_without_number;
+
+    #[test]
+    fn episode_title_without_number_removes_common_prefixes() {
+        for (input, expected) in [
+            ("1. First episode", "First episode"),
+            ("01 - First episode", "First episode"),
+            ("#12: First episode", "First episode"),
+            ("3) First episode", "First episode"),
+        ] {
+            assert_eq!(episode_title_without_number(input), expected);
+        }
+    }
+
+    #[test]
+    fn episode_title_without_number_preserves_non_prefix_numbers() {
+        for title in ["Episode 12", "2026 election", "The 1.5 hour episode"] {
+            assert_eq!(episode_title_without_number(title), title);
+        }
+    }
+}
+
 impl App {
     pub(super) fn render_audiobookshelf_podcasts(
         &mut self,
@@ -433,7 +493,7 @@ impl App {
                     progress.len() + 1
                 };
                 let title = trunc_str(
-                    &episode.title,
+                    episode_title_without_number(&episode.title),
                     title_width.saturating_sub(date_width + progress_width),
                 );
                 let mut title_spans = vec![marker, Span::raw(title)];
