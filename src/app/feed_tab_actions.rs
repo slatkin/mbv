@@ -15,7 +15,7 @@ impl App {
     /// subscriptions exist.
     pub(super) fn feeds_tab_pos(&self) -> Option<usize> {
         if self.has_feeds_subscriptions() {
-            Some(1 + self.libs.len())
+            Some(1 + self.libs.len() + self.audiobookshelf_libraries.len())
         } else {
             None
         }

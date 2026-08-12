@@ -240,7 +240,9 @@ impl App {
             "pre_mute_volume": self.pre_mute_volume,
             "visualizer_enabled": self.visualizer_enabled,
             "panel_focus": self.panel_focus.pref_value(),
-            "library_tab": self.tab.to_position(self.feeds_tab_pos()),
+            "library_tab": self
+                .tab
+                .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
             "queue_column_width": self.queue_column_width,
         });
         if let Ok(s) = serde_json::to_string(&v) {

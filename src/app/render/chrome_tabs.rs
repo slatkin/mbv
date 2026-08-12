@@ -130,7 +130,9 @@ impl App {
                 None
             })
             .collect();
-        let tab_pos = self.tab.to_position(self.feeds_tab_pos());
+        let tab_pos = self
+            .tab
+            .to_position_with_counts(self.libs.len(), self.feeds_tab_pos());
         let selected_tab = if tab_pos < vis_start || tab_pos >= vis_end {
             usize::MAX
         } else {
