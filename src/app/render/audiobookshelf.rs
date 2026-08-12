@@ -26,6 +26,48 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Cell, List, ListItem, Paragraph, Row, Table, TableState};
 use ratatui::Frame;
 
+fn format_episode_date(value: &str) -> Option<String> {
+    let value = value.trim();
+    if let Some((year, month, day)) = value.split_once('T').and_then(|(date, _)| {
+        let mut parts = date.split('-');
+        Some((
+            parts.next()?.parse::<i64>().ok()?,
+            parts.next()?.parse::<u32>().ok()?,
+            parts.next()?.parse::<u32>().ok()?,
+        ))
+    }) {
+        return Some(format!("{day:02}/{month:02}/{year:04}"));
+    }
+    if let Some((year, month, day)) = value.split_once('-').and_then(|_| {
+        let mut parts = value.split('-');
+        Some((
+            parts.next()?.parse::<i64>().ok()?,
+            parts.next()?.parse::<u32>().ok()?,
+            parts.next()?.parse::<u32>().ok()?,
+        ))
+    }) {
+        return Some(format!("{day:02}/{month:02}/{year:04}"));
+    }
+    let timestamp = value.parse::<i128>().ok()?;
+    let seconds = if timestamp.abs() >= 100_000_000_000 {
+        timestamp / 1_000
+    } else {
+        timestamp
+    };
+    let days = seconds.div_euclid(86_400) as i64;
+    let z = days + 719_468;
+    let era = (if z >= 0 { z } else { z - 146_096 }).div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096).div_euclid(365);
+    let year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let month_part = (5 * doy + 2).div_euclid(153);
+    let day = doy - (153 * month_part + 2).div_euclid(5) + 1;
+    let month = month_part + if month_part < 10 { 3 } else { -9 };
+    let year = year + i64::from(month <= 2);
+    Some(format!("{day:02}/{month:02}/{year:04}"))
+}
+
 impl App {
     pub(super) fn render_audiobookshelf_podcasts(
         &mut self,
@@ -96,11 +138,11 @@ impl App {
             .and_then(|show| show.description.as_deref())
             .filter(|description| !description.is_empty())
         {
-            rows += wrap_overview_lines(description, |_| 48).len().min(4) as u16;
             rows += 1;
+            rows += wrap_overview_lines(description, |_| 48).len().min(4) as u16;
         }
-        rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
         if state.episode_selection.is_some() {
+            rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
             rows += state
                 .episodes
                 .as_ref()
@@ -219,6 +261,7 @@ impl App {
             .as_deref()
             .filter(|description| !description.is_empty())
         {
+            row = (row + 1).min(max_y);
             let description_lines =
                 wrap_overview_lines(description, |line| text_width(row + line as u16) as usize);
             for line_text in description_lines.iter().take(4) {
@@ -293,21 +336,10 @@ impl App {
                         prefix: Some(" ⌘ "),
                     },
                 );
-            } else {
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        "All · Played · Unplayed",
-                        Style::default().fg(palette::SOFT_WHITE),
-                    )),
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: text_width(row),
-                        height: 1,
-                    },
-                );
             }
-            row += 1;
+            if state.episode_selection.is_some() {
+                row += 1;
+            }
         }
 
         if state.episode_selection.is_some() && row < max_y {
@@ -363,21 +395,21 @@ impl App {
                 let published = episode
                     .published_at
                     .as_deref()
-                    .map(|value| format!(" · {value}"))
+                    .and_then(format_episode_date)
                     .unwrap_or_default();
                 let progress = state
                     .progress
                     .get(&(episode.library_item_id.clone(), episode.episode_id.clone()))
                     .map(|progress| {
                         if progress.is_finished {
-                            " · Played".to_string()
+                            "Played".to_string()
                         } else if progress.current_time_seconds > 0.0 {
                             episode
                                 .duration_seconds
                                 .filter(|duration| *duration > 0.0)
                                 .map(|duration| {
                                     format!(
-                                        " · {}%",
+                                        "{}%",
                                         (progress.current_time_seconds * 100.0 / duration)
                                             .floor()
                                             .clamp(1.0, 99.0)
@@ -390,11 +422,33 @@ impl App {
                         }
                     })
                     .unwrap_or_default();
+                let date_width = if published.is_empty() {
+                    0
+                } else {
+                    published.len() + 1
+                };
+                let progress_width = if progress.is_empty() {
+                    0
+                } else {
+                    progress.len() + 1
+                };
                 let title = trunc_str(
-                    &format!("{}{}{}", episode.title, published, progress),
-                    title_width,
+                    &episode.title,
+                    title_width.saturating_sub(date_width + progress_width),
                 );
-                let title_cell = Cell::from(Line::from(vec![marker, Span::raw(title)]));
+                let mut title_spans = vec![marker, Span::raw(title)];
+                if !published.is_empty() {
+                    title_spans.push(Span::raw(" "));
+                    title_spans.push(Span::styled(
+                        published,
+                        Style::default().fg(palette::YELLOW),
+                    ));
+                }
+                if !progress.is_empty() {
+                    title_spans.push(Span::raw(" "));
+                    title_spans.push(Span::styled(progress, Style::default().fg(palette::FOAM)));
+                }
+                let title_cell = Cell::from(Line::from(title_spans));
                 let duration = episode
                     .duration_seconds
                     .filter(|seconds| *seconds > 0.0)

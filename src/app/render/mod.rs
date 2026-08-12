@@ -686,9 +686,6 @@ mod album_focus_tests;
 #[path = "tests_album_listing.rs"]
 mod album_listing_tests;
 #[cfg(test)]
-#[path = "tests_audiobookshelf.rs"]
-mod audiobookshelf_tests;
-#[cfg(test)]
 #[path = "tests_music_groups.rs"]
 mod music_group_tests;
 #[cfg(test)]

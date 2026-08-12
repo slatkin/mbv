@@ -16,7 +16,9 @@ impl App {
             self.set_panel_focus(PanelFocus::Library);
         } else if self.tab.is_audiobookshelf() {
             self.set_panel_focus(PanelFocus::Library);
-            self.select_audiobookshelf_show(0);
+            if let Some(index) = self.tab.audiobookshelf_index() {
+                self.activate_audiobookshelf_position(index);
+            }
         } else if let Some(lib_idx) = self.tab.library_index() {
             self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position(lib_idx);

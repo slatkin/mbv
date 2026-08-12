@@ -134,6 +134,7 @@ struct ProgressWire {
     episode_id: Option<String>,
     #[serde(rename = "currentTime")]
     current_time: Option<f64>,
+    #[serde(rename = "isFinished")]
     is_finished: Option<bool>,
 }
 #[derive(Debug, Deserialize)]
@@ -455,6 +456,12 @@ mod tests {
     fn progress_and_shelf_fixtures_preserve_user_and_server_order() {
         let progress: ProgressResponse = serde_json::from_str(&fixture("progress")).unwrap();
         assert_eq!(progress.media_progress[0].library_item_id, "show-2");
+        assert!(!progress.media_progress[0].is_finished.unwrap());
+        let completed: ProgressResponse = serde_json::from_str(
+            r#"{"mediaProgress":[{"libraryItemId":"show-2","episodeId":"episode-2","currentTime":120.0,"isFinished":true}]}"#,
+        )
+        .unwrap();
+        assert_eq!(completed.media_progress[0].is_finished, Some(true));
         let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
         assert_eq!(shelves[0].label, "Continue listening");
         assert!(matches!(

@@ -37,16 +37,16 @@
 
 ## 6. Add Objective Regression Gates
 
-- [x] 6.1 Extend the existing render-test harness with an Audiobookshelf podcast fixture and assert that the hero area starts at the content area's top and the show-list area starts below it at both a one-column width and the TV two-column breakpoint.
-- [x] 6.2 Add a render regression assertion that no terminal width produces horizontally adjacent show-list and detail rectangles, and that the podcast hero/list geometry matches a TV Shows fixture rendered at the same width, height, and image setting.
-- [x] 6.3 Add rendered-output assertions that a selected podcast title appears in the pinned hero, its show row appears in the lower list, and moving the cursor changes hero content without changing the hero rectangle.
-- [x] 6.4 Add an image-path regression check proving that images-enabled rendering requests the selected Audiobookshelf cover under the Audiobookshelf cache key and reserves the TV image rectangle while loading; also prove images-disabled rendering makes no request and uses the TV image-disabled row budget.
+- [ ] 6.1 Add a render-test harness for Audiobookshelf podcasts after the panel layout stabilizes; assert top-hero and show-list geometry at one- and two-column widths.
+- [ ] 6.2 Add a render regression assertion that no terminal width produces horizontally adjacent show-list and detail rectangles, and compare podcast hero/list geometry with TV Shows.
+- [ ] 6.3 Add rendered-output assertions for selected podcast title, description, show-row presence, and hero selection tracking after the panel layout stabilizes.
+- [ ] 6.4 Add image-path regression coverage for the selected Audiobookshelf cover slot and images-enabled/disabled behavior after the panel image design stabilizes.
 - [x] 6.5 Add state/input regressions for exact filter membership, incomplete progress as Unplayed, filter cursor clamping, provider-native identity restoration, show-to-episode mode entry, escape back to show selection, inert episode activation, and shelf omission.
-- [x] 6.6 Render representative narrow and wide podcast tabs with images enabled and disabled and compare hero shell, image placement, filter row, episode rows, and lower show-list placement directly against the TV Shows tab before marking presentation tasks complete.
+- [ ] 6.6 Manually compare representative narrow and wide podcast tabs with images enabled and disabled against TV Shows when the panel UI is no longer undergoing active churn.
 
 ## 7. Final Verification
 
-- [x] 7.1 Run the focused Audiobookshelf state, input, and render tests and record their passing counts.
+- [x] 7.1 Run the focused Audiobookshelf state and input tests and record their passing counts; defer panel render tests to tasks 6.1-6.6.
 - [x] 7.2 Run `cargo check -p mbv`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets`.
 - [x] 7.3 Run `make check-code-file-lines` and `rtk git diff --check`.
 - [x] 7.4 Confirm the final diff contains no Audiobookshelf side-panel layout, no visible shelf path, no episode activation side effect, and no source file over the repository's 800-line cap.

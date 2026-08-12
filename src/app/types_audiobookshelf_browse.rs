@@ -160,8 +160,22 @@ impl AudiobookshelfBrowseState {
         if self.selected_id.is_none() && !self.shows.is_empty() {
             self.select(0);
         }
-        if self.selected_id.is_some() && self.cursor() >= self.shows.len() {
-            self.select(self.shows.len().saturating_sub(1));
+        if let Some(selected_id) = self.selected_id.as_deref() {
+            if self
+                .shows
+                .iter()
+                .any(|show| show.library_item_id == selected_id)
+                && self.cursor() >= self.shows.len()
+            {
+                self.select(self.shows.len().saturating_sub(1));
+            } else if self.shows.len() >= self.total
+                && !self
+                    .shows
+                    .iter()
+                    .any(|show| show.library_item_id == selected_id)
+            {
+                self.select(0);
+            }
         }
         let _ = limit;
     }

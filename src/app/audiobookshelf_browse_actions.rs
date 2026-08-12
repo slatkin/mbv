@@ -22,14 +22,18 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
-            return;
+        let selected_id = {
+            let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
+                return;
+            };
+            if state.shows.is_empty() {
+                return;
+            }
+            state.select(cursor.min(state.shows.len() - 1));
+            state.selected_id.clone()
         };
-        if state.shows.is_empty() {
-            return;
-        }
-        state.select(cursor.min(state.shows.len() - 1));
-        if let Some(id) = state.selected_id.clone() {
+        self.save_audiobookshelf_position(index);
+        if let Some(id) = selected_id {
             self.start_audiobookshelf_detail(id);
         }
     }
