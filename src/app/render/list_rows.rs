@@ -104,10 +104,10 @@ pub(super) fn build_list_row_spans(
     if !dur_str.is_empty() {
         let dur_style = if selected && cols > 1 {
             Style::default()
-                .fg(palette::MUTED)
+                .fg(palette::FOAM)
                 .bg(palette::PLAYBACK_PANEL_BG)
         } else {
-            Style::default().fg(palette::MUTED)
+            Style::default().fg(palette::FOAM)
         };
         spans.push(Span::styled(dur_str, dur_style));
     }
