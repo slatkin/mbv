@@ -16,6 +16,7 @@ pub struct AudiobookshelfShow {
     pub library_item_id: String,
     pub title: String,
     pub author: Option<String>,
+    pub description: Option<String>,
     pub cover_path: Option<String>,
 }
 
@@ -75,16 +76,33 @@ struct ItemsResponse {
     page: usize,
     limit: usize,
     total: usize,
-    items: Vec<ShowWire>,
+    #[serde(alias = "items")]
+    results: Vec<ShowWire>,
 }
 #[derive(Debug, Deserialize)]
 struct ShowWire {
-    #[serde(rename = "libraryItemId")]
+    #[serde(rename = "id", alias = "libraryItemId")]
     library_item_id: String,
-    title: String,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
     author: Option<String>,
-    #[serde(rename = "coverPath")]
+    #[serde(rename = "coverPath", default)]
     cover_path: Option<String>,
+    #[serde(default)]
+    media: Option<PodcastMediaWire>,
+}
+#[derive(Debug, Deserialize)]
+struct PodcastMediaWire {
+    #[serde(rename = "coverPath", default)]
+    cover_path: Option<String>,
+    metadata: Option<PodcastMetadataWire>,
+}
+#[derive(Debug, Deserialize)]
+struct PodcastMetadataWire {
+    title: Option<String>,
+    author: Option<String>,
+    description: Option<String>,
 }
 #[derive(Debug, Deserialize)]
 struct ExpandedWire {
@@ -100,7 +118,7 @@ struct EpisodeWire {
     id: String,
     title: String,
     #[serde(rename = "publishedAt")]
-    published_at: Option<String>,
+    published_at: Option<serde_json::Value>,
     duration: Option<f64>,
 }
 #[derive(Debug, Deserialize)]
@@ -116,6 +134,7 @@ struct ProgressWire {
     episode_id: Option<String>,
     #[serde(rename = "currentTime")]
     current_time: Option<f64>,
+    #[serde(rename = "isFinished")]
     is_finished: Option<bool>,
 }
 #[derive(Debug, Deserialize)]
@@ -175,7 +194,7 @@ impl AudiobookshelfClient {
         let key = key.to_owned();
         let library_id = library_id.to_owned();
         let limit = limit.clamp(1, 100);
-        let page = page.max(1);
+        let page = page;
         self.bounded(bound, move |client| {
             client.podcast_shows(&key, &library_id, page, limit)
         })
@@ -253,7 +272,7 @@ impl AudiobookshelfClient {
             .get(key, &path)?
             .into_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
-        if response.page == 0 || response.limit == 0 {
+        if response.limit == 0 {
             return Err(AudiobookshelfError::protocol());
         }
         Ok(AudiobookshelfShowPage {
@@ -261,13 +280,24 @@ impl AudiobookshelfClient {
             limit: response.limit,
             total: response.total,
             items: response
-                .items
+                .results
                 .into_iter()
-                .map(|x| AudiobookshelfShow {
-                    library_item_id: x.library_item_id,
-                    title: x.title,
-                    author: x.author,
-                    cover_path: x.cover_path,
+                .map(|x| {
+                    let metadata = x.media.as_ref().and_then(|media| media.metadata.as_ref());
+                    AudiobookshelfShow {
+                        library_item_id: x.library_item_id,
+                        title: x
+                            .title
+                            .or_else(|| metadata.and_then(|value| value.title.clone()))
+                            .unwrap_or_default(),
+                        author: x
+                            .author
+                            .or_else(|| metadata.and_then(|value| value.author.clone())),
+                        description: metadata.and_then(|value| value.description.clone()),
+                        cover_path: x
+                            .cover_path
+                            .or_else(|| x.media.and_then(|media| media.cover_path)),
+                    }
                 })
                 .collect(),
         })
@@ -293,7 +323,11 @@ impl AudiobookshelfClient {
                 library_item_id: id.to_owned(),
                 episode_id: x.id,
                 title: x.title,
-                published_at: x.published_at,
+                published_at: x.published_at.and_then(|value| match value {
+                    serde_json::Value::String(value) => Some(value),
+                    serde_json::Value::Number(value) => Some(value.to_string()),
+                    _ => None,
+                }),
                 duration_seconds: x.duration,
             })
             .collect())
@@ -395,8 +429,24 @@ mod tests {
         assert_eq!(libraries.libraries[1].id, "lib-podcast");
         assert_eq!(libraries.libraries[1].media_type, "podcast");
         let page: ItemsResponse = serde_json::from_str(&fixture("items-page")).unwrap();
-        assert_eq!((page.page, page.limit, page.total), (2, 2, 5));
-        assert_eq!(page.items[0].library_item_id, "show-2");
+        assert_eq!((page.page, page.limit, page.total), (0, 20, 2));
+        assert_eq!(page.results[0].library_item_id, "show-2");
+        assert_eq!(
+            page.results[0]
+                .media
+                .as_ref()
+                .and_then(|media| media.metadata.as_ref())
+                .and_then(|metadata| metadata.title.as_deref()),
+            Some("Second Show")
+        );
+        assert_eq!(
+            page.results[0]
+                .media
+                .as_ref()
+                .and_then(|media| media.metadata.as_ref())
+                .and_then(|metadata| metadata.description.as_deref()),
+            Some("Second show description.")
+        );
         let expanded: ExpandedWire = serde_json::from_str(&fixture("item-expanded")).unwrap();
         assert_eq!(expanded.id, "show-2");
         assert_eq!(expanded.media.unwrap().episodes.unwrap()[0].id, "episode-1");
@@ -406,6 +456,12 @@ mod tests {
     fn progress_and_shelf_fixtures_preserve_user_and_server_order() {
         let progress: ProgressResponse = serde_json::from_str(&fixture("progress")).unwrap();
         assert_eq!(progress.media_progress[0].library_item_id, "show-2");
+        assert!(!progress.media_progress[0].is_finished.unwrap());
+        let completed: ProgressResponse = serde_json::from_str(
+            r#"{"mediaProgress":[{"libraryItemId":"show-2","episodeId":"episode-2","currentTime":120.0,"isFinished":true}]}"#,
+        )
+        .unwrap();
+        assert_eq!(completed.media_progress[0].is_finished, Some(true));
         let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
         assert_eq!(shelves[0].label, "Continue listening");
         assert!(matches!(
@@ -455,8 +511,8 @@ mod tests {
     #[test]
     fn invalid_page_metadata_is_a_protocol_failure() {
         let page: ItemsResponse =
-            serde_json::from_str(r#"{"page":0,"limit":20,"total":1,"items":[]}"#).unwrap();
-        assert!(page.page == 0 || page.limit == 0);
+            serde_json::from_str(r#"{"page":0,"limit":20,"total":1,"results":[]}"#).unwrap();
+        assert_eq!(page.page, 0);
     }
 
     #[test]

@@ -209,4 +209,71 @@ impl App {
             );
         }
     }
+
+    fn audiobookshelf_position_key(&self, index: usize) -> Option<String> {
+        let library = self.audiobookshelf_libraries.get(index)?;
+        let server = self
+            .config
+            .lock()
+            .unwrap()
+            .audiobookshelf_setup
+            .as_ref()?
+            .server_url
+            .clone();
+        Some(format!("audiobookshelf:{server}:{}", library.id))
+    }
+
+    pub(super) fn save_audiobookshelf_position(&mut self, index: usize) {
+        let Some(key) = self.audiobookshelf_position_key(index) else {
+            return;
+        };
+        let Some(state) = self.audiobookshelf_browse.get(index) else {
+            return;
+        };
+        let position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: state.library.id.clone(),
+                title: state.library.name.clone(),
+                focused_item_id: state.selected_id.clone(),
+                cursor_index: state.cursor(),
+                item_types: Some("podcast".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: Some(state.total),
+            }],
+            ..Default::default()
+        };
+        self.library_position_state.libraries.insert(key, position);
+        self.library_position_dirty = true;
+        self.library_position_dirty_at = Instant::now();
+    }
+
+    pub(super) fn activate_audiobookshelf_position(&mut self, index: usize) {
+        let saved = self
+            .audiobookshelf_position_key(index)
+            .and_then(|key| self.library_position_state.libraries.get(&key).cloned());
+        let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
+            return;
+        };
+        if state.selected_id.is_none() {
+            state.selected_id = saved
+                .as_ref()
+                .and_then(|position| position.levels.first())
+                .and_then(|level| level.focused_item_id.clone());
+        }
+        let Some(id) = state.selected_id.clone() else {
+            if !state.shows.is_empty() {
+                state.select(0);
+            }
+            return;
+        };
+        if state.shows.iter().any(|show| show.library_item_id == id) {
+            state.episodes = state.detail_cache.get(&id).cloned();
+        }
+        if self.tab.audiobookshelf_index() == Some(index) {
+            self.start_audiobookshelf_detail(id);
+        }
+    }
 }

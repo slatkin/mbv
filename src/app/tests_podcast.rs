@@ -1,6 +1,76 @@
 use super::*;
 use crate::app::tests::*;
 
+fn audiobookshelf_app() -> App {
+    let mut app = make_app_stub();
+    let library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
+        id: "abs-podcasts".into(),
+        name: "ABS Podcasts".into(),
+        media_type: "podcast".into(),
+    };
+    let mut state =
+        super::types_audiobookshelf_browse::AudiobookshelfBrowseState::new(library.clone());
+    state.append_page(
+        0,
+        20,
+        1,
+        vec![mbv_core::audiobookshelf::AudiobookshelfShow {
+            library_item_id: "show-a".into(),
+            title: "Show A".into(),
+            author: None,
+            description: None,
+            cover_path: None,
+        }],
+    );
+    state.episodes = Some(vec![
+        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            published_at: None,
+            duration_seconds: None,
+        },
+    ]);
+    app.audiobookshelf_libraries.push(library);
+    app.audiobookshelf_browse.push(state);
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+    app
+}
+
+#[test]
+fn audiobookshelf_activation_enters_selection_then_remains_inert() {
+    let mut app = audiobookshelf_app();
+    let enter = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Enter,
+        crossterm::event::KeyModifiers::NONE,
+    );
+
+    assert!(!app.handle_queue_key(enter));
+    assert_eq!(app.audiobookshelf_browse[0].episode_selection, Some(0));
+    assert_eq!(app.player_tab.total_queue_len(), 0);
+
+    assert!(!app.handle_queue_key(enter));
+    assert_eq!(app.audiobookshelf_browse[0].episode_selection, Some(0));
+    assert_eq!(app.player_tab.total_queue_len(), 0);
+}
+
+#[test]
+fn audiobookshelf_escape_returns_to_show_selection() {
+    let mut app = audiobookshelf_app();
+    app.enter_audiobookshelf_episode_selection();
+    let escape = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Esc,
+        crossterm::event::KeyModifiers::NONE,
+    );
+    assert!(!app.handle_queue_key(escape));
+    assert_eq!(app.audiobookshelf_browse[0].episode_selection, None);
+    assert_eq!(
+        app.audiobookshelf_browse[0].selected_id.as_deref(),
+        Some("show-a")
+    );
+}
+
 #[test]
 fn podcast_library_detects_collection_type() {
     let mut app = make_app_stub();

@@ -55,19 +55,31 @@ impl App {
                     produced = true;
                     match completion.result {
                          Ok((libraries, progress)) => {
-                             self.audiobookshelf_libraries = libraries.into_iter().filter(|library| library.media_type == "podcast").collect();
-                              self.audiobookshelf_browse = self.audiobookshelf_libraries.iter().cloned().map(super::types_audiobookshelf_browse::AudiobookshelfBrowseState::new).collect();
-                               for state in &mut self.audiobookshelf_browse { state.progress = progress.clone(); }
-                                for library in &self.audiobookshelf_libraries {
-                                    super::service_startup::start_audiobookshelf_shelves(
-                                        self.config.lock().unwrap().clone(), completion.generation,
-                                        library.id.clone(), self.lib_tx.clone());
-                                }
-                                for library in &self.audiobookshelf_libraries {
-                                    super::service_startup::start_audiobookshelf_shows(
-                                        self.config.lock().unwrap().clone(), completion.generation,
-                                        library.id.clone(), 1, self.lib_tx.clone());
-                                }
+                             self.audiobookshelf_libraries = libraries
+                                 .into_iter()
+                                 .filter(|library| library.media_type == "podcast")
+                                 .collect();
+                             self.audiobookshelf_browse = self
+                                 .audiobookshelf_libraries
+                                 .iter()
+                                 .cloned()
+                                 .map(super::types_audiobookshelf_browse::AudiobookshelfBrowseState::new)
+                                 .collect();
+                             for index in 0..self.audiobookshelf_browse.len() {
+                                 self.activate_audiobookshelf_position(index);
+                             }
+                             for state in &mut self.audiobookshelf_browse {
+                                 state.progress = progress.clone();
+                             }
+                             for library in &self.audiobookshelf_libraries {
+                                 super::service_startup::start_audiobookshelf_shows(
+                                     self.config.lock().unwrap().clone(),
+                                     completion.generation,
+                                     library.id.clone(),
+                                     0,
+                                     self.lib_tx.clone(),
+                                 );
+                             }
                          },
                         Err(error) if matches!(error.class, mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected) => self.clear_audiobookshelf_catalog(),
                         Err(_) => {}

@@ -4,6 +4,7 @@ mod album_cursor;
 mod album_detail;
 mod album_plan;
 mod album_rows;
+mod audiobookshelf;
 mod card;
 mod chrome;
 mod chrome_player;

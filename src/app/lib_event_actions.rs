@@ -191,28 +191,6 @@ impl App {
             }
             return;
         }
-        if let LibEvent::AudiobookshelfShelvesFetched {
-            generation,
-            library_id,
-            shelves,
-        } = ev
-        {
-            if !self.audiobookshelf_runtime.accepts(generation) {
-                return;
-            }
-            if let Some(index) = self
-                .audiobookshelf_libraries
-                .iter()
-                .position(|library| library.id == library_id)
-            {
-                if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
-                    if let Ok(shelves) = shelves {
-                        state.apply_shelves(shelves);
-                    }
-                }
-            }
-            return;
-        }
         if let LibEvent::AudiobookshelfShowsFetched {
             generation,
             library_id,
@@ -228,14 +206,21 @@ impl App {
                 .position(|library| library.id == library_id)
             {
                 let mut next_page = None;
+                let mut selected_detail = None;
                 if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
                     match result {
                         Ok(page) => {
                             state.append_page(page.page, page.limit, page.total, page.items);
                             next_page = state.needs_page();
+                            if state.episodes.is_none() && !state.detail_loading {
+                                selected_detail = state.selected_id.clone();
+                            }
                         }
                         Err(error) => state.error = Some(error.to_string()),
                     }
+                }
+                if let Some(selected_detail) = selected_detail {
+                    self.start_audiobookshelf_detail(selected_detail);
                 }
                 if let Some(next_page) = next_page {
                     super::service_startup::start_audiobookshelf_shows(
@@ -436,7 +421,6 @@ impl App {
                 }
             }
             LibEvent::AudiobookshelfDetailFetched { .. }
-            | LibEvent::AudiobookshelfShelvesFetched { .. }
             | LibEvent::AudiobookshelfShowsFetched { .. } => unreachable!(),
             LibEvent::AlbumArtistFetched { album_id, artist } => {
                 self.album_artist_loading.remove(&album_id);

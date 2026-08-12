@@ -31,6 +31,7 @@ impl App {
             || !matches!(self.panel_focus, PanelFocus::Library)
             || self.tab.is_home()
             || self.tab.is_feeds()
+            || self.tab.is_audiobookshelf()
         {
             return None;
         }

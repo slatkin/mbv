@@ -16,29 +16,85 @@ use ratatui::Frame;
 /// to zero rows and the whole list jumps up each switch. The placeholder is
 /// a minimum stand-in only -- the panel grows to fit its content once a
 /// Movie/Series is actually selected.
-const HERO_PLACEHOLDER_ROWS: u16 = 18;
+pub(super) const HERO_PLACEHOLDER_ROWS: u16 = 18;
 /// Row budget for the selected item's title on the hero's top row, rendered
 /// in yellow. Reserved only in two-column lists (`show_title`), where the
 /// list row's own title is truncated to a narrow cell; one-column lists
 /// skip it since the full-width row title right above the hero already shows
 /// the name.
-const HERO_TITLE_ROWS: u16 = 1;
+pub(super) const HERO_TITLE_ROWS: u16 = 1;
 /// Rows the hero *block* adds beyond the content rows, matching the
 /// selected-block look of music/homevideo: a `▁` top border row and a `▔`
 /// bottom border row (painted in `palette::SEEK_TRACK`) plus one bare
 /// colored-bg padding row just inside each border. The borders are part of
 /// the hero block's reserved rows (the list makes room), not painted over
 /// list content like `render_selected_block_borders` does.
-const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
+pub(super) const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
 /// Blank row separating the hero block from the list below it.
 const HERO_SEPARATOR_ROWS: u16 = 1;
+
+pub(super) struct TopHeroLayout {
+    pub hero_area: Rect,
+    pub pills_area: Rect,
+    pub list_area: Rect,
+    pub hero_rows: u16,
+}
+
+pub(super) fn top_hero_layout(
+    content_area: Rect,
+    desired_hero_rows: u16,
+    show_pills: bool,
+) -> TopHeroLayout {
+    let pills_reserved = if show_pills {
+        2.min(content_area.height)
+    } else {
+        0
+    };
+    let separator_reserve = if show_pills { 0 } else { HERO_SEPARATOR_ROWS };
+    let hero_rows = match desired_hero_rows.min(
+        content_area
+            .height
+            .saturating_sub(1 + separator_reserve + pills_reserved),
+    ) {
+        r if r < HERO_BLOCK_EXTRA_ROWS => 0,
+        r => r,
+    };
+    let separator_rows = if hero_rows > 0 { separator_reserve } else { 0 };
+    let hero_shift = if hero_rows > 0 && content_area.y > 0 {
+        1
+    } else {
+        0
+    };
+    let hero_area = Rect {
+        y: content_area.y.saturating_sub(hero_shift),
+        height: hero_rows,
+        ..content_area
+    };
+    let pills_area = Rect {
+        y: content_area.y.saturating_sub(hero_shift) + hero_rows + separator_rows,
+        height: if show_pills { 1 } else { 0 },
+        ..content_area
+    };
+    let list_area = Rect {
+        y: content_area.y.saturating_sub(hero_shift) + hero_rows + separator_rows + pills_reserved,
+        height: (content_area.height + hero_shift)
+            .saturating_sub(hero_rows + separator_rows + pills_reserved),
+        ..content_area
+    };
+    TopHeroLayout {
+        hero_area,
+        pills_area,
+        list_area,
+        hero_rows,
+    }
+}
 
 /// Paints the hero block's outer shell -- the colored bg (focused/unfocused
 /// pattern) plus the `▁` top and `▔` bottom borders in SEEK_TRACK on the
 /// block's outer-row one -- shared by the normal hero path and the empty
 /// "placeholder panel" path (slice loading after a pill switch) so the block
 /// is always drawn identically while it's reserved.
-fn hero_block_shell(f: &mut Frame, hero_area: Rect, hero_rows: u16, focused: bool) {
+pub(super) fn hero_block_shell(f: &mut Frame, hero_area: Rect, hero_rows: u16, focused: bool) {
     let bg = if focused {
         palette::MEDIA_SELECTED_BG
     } else {
@@ -316,61 +372,11 @@ impl App {
             .tab
             .library_index()
             .is_some_and(|lib_idx| self.should_show_letter_pills(lib_idx));
-        let pills_reserved: u16 = if show_pills {
-            2.min(content_area.height)
-        } else {
-            0
-        };
-
-        // The blank separator row only applies between the hero and the
-        // list. When the pill row is shown it sits immediately below the
-        // hero's own bottom border -- no extra gap between them.
-        let separator_reserve = if show_pills { 0 } else { HERO_SEPARATOR_ROWS };
-
-        // Clamp the hero to leave at least 1 row for the list, per the spec
-        // ("...capped at a maximum that leaves at least 1 row for the
-        // list"). Below `HERO_BLOCK_EXTRA_ROWS` there isn't room for even
-        // the hero's own border/padding rows, so suppress it entirely
-        // rather than paint a malformed block.
-        let hero_rows = match hero_rows.min(
-            content_area
-                .height
-                .saturating_sub(1 + separator_reserve + pills_reserved),
-        ) {
-            r if r < HERO_BLOCK_EXTRA_ROWS => 0,
-            r => r,
-        };
-        let separator_rows = if hero_rows > 0 { separator_reserve } else { 0 };
-
-        // The row directly above `content_area` is the player panel's own
-        // trailing blank row (painted in `chrome_player.rs`). When a hero
-        // renders here, its top border can reuse that row instead of adding
-        // a second one right below it -- shift everything up by 1 to borrow
-        // it back for the list. Only possible when there's a row to borrow.
-        let hero_shift: u16 = if hero_rows > 0 && content_area.y > 0 {
-            1
-        } else {
-            0
-        };
-        let hero_area = Rect {
-            y: content_area.y.saturating_sub(hero_shift),
-            height: hero_rows,
-            ..content_area
-        };
-        let pills_area = Rect {
-            y: content_area.y.saturating_sub(hero_shift) + hero_rows + separator_rows,
-            height: if show_pills { 1 } else { 0 },
-            ..content_area
-        };
-        let list_area = Rect {
-            y: content_area.y.saturating_sub(hero_shift)
-                + hero_rows
-                + separator_rows
-                + pills_reserved,
-            height: (content_area.height + hero_shift)
-                .saturating_sub(hero_rows + separator_rows + pills_reserved),
-            ..content_area
-        };
+        let hero_layout = top_hero_layout(content_area, hero_rows, show_pills);
+        let hero_area = hero_layout.hero_area;
+        let pills_area = hero_layout.pills_area;
+        let list_area = hero_layout.list_area;
+        let hero_rows = hero_layout.hero_rows;
 
         if show_pills {
             let lib_idx = self.tab.library_index().unwrap();

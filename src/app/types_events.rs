@@ -79,14 +79,6 @@ pub(super) enum LibEvent {
             mbv_core::audiobookshelf::AudiobookshelfError,
         >,
     },
-    AudiobookshelfShelvesFetched {
-        generation: mbv_core::service_runtime::SetupGeneration,
-        library_id: String,
-        shelves: Result<
-            Vec<mbv_core::audiobookshelf::AudiobookshelfShelf>,
-            mbv_core::audiobookshelf::AudiobookshelfError,
-        >,
-    },
     AudiobookshelfShowsFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,

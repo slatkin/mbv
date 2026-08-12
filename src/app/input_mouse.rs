@@ -98,6 +98,28 @@ impl App {
 
     pub(super) fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
         {
+            if self.tab.is_audiobookshelf() {
+                let pos = (col, row).into();
+                if let Some(episode_index) = self
+                    .layout
+                    .main
+                    .audiobookshelf_episode_rows
+                    .iter()
+                    .find(|(rect, _)| rect.contains(pos))
+                    .map(|(_, index)| *index)
+                {
+                    let Some(index) = self.tab.audiobookshelf_index() else {
+                        return false;
+                    };
+                    if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
+                        if state.episode_selection.is_some() {
+                            state.episode_selection = Some(episode_index);
+                            self.set_panel_focus(PanelFocus::Library);
+                            return true;
+                        }
+                    }
+                }
+            }
             // Click on the inline hero: same as clicking anywhere else in
             // the library pane -- a single click only focuses (the cursor
             // is already on the selected item, so there's nothing else to
@@ -108,7 +130,7 @@ impl App {
             // behavior or from the app-wide "single click only focuses"
             // convention.
             if self.layout.main.hero_area.contains((col, row).into())
-                && self.tab.library_index().is_some()
+                && (self.tab.library_index().is_some() || self.tab.is_audiobookshelf())
             {
                 self.set_panel_focus(PanelFocus::Library);
                 return true;
@@ -242,6 +264,29 @@ impl App {
                             self.feed_tab.cursor = clicked;
                         }
                     }
+                } else if self.tab.is_audiobookshelf() {
+                    let click_y = (row - la.y) as usize;
+                    let cols = crate::app::library_column_width::library_column_count(la.width);
+                    let cell_width =
+                        crate::app::library_column_width::library_cell_width(la, cols) as usize;
+                    let x = (col - la.x) as usize;
+                    let stride =
+                        cell_width + crate::app::library_column_width::LIBRARY_COLUMN_GAP as usize;
+                    let cell = x / stride;
+                    let target = (x % stride < cell_width)
+                        .then(|| {
+                            self.layout
+                                .main
+                                .left_item_rows
+                                .get(self.layout.main.left_screen_offset + click_y)
+                                .and_then(|row| row.get(cell))
+                                .copied()
+                        })
+                        .flatten();
+                    if let Some(target) = target {
+                        self.select_audiobookshelf_show(target);
+                    }
+                    return true;
                 } else {
                     let lib_idx = self.tab.library_index().unwrap();
                     if self.is_music_group_view(lib_idx)
