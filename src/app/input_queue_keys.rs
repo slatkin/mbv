@@ -55,10 +55,67 @@ impl App {
 
     pub(super) fn handle_queue_key(&mut self, key: KeyEvent) -> bool {
         if self.tab.is_audiobookshelf() && matches!(self.panel_focus, PanelFocus::Library) {
+            if key.modifiers.contains(KeyModifiers::ALT)
+                && key.code == KeyCode::Left
+                && self.panel_mode == PanelMode::Both
+            {
+                self.set_panel_focus(PanelFocus::Queue);
+                return false;
+            }
+            if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Up {
+                self.library_tab_prev();
+                return false;
+            }
+            if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Down {
+                self.library_tab_next();
+                return false;
+            }
+            if key.modifiers.contains(KeyModifiers::ALT) {
+                return false;
+            }
+            if key.code == KeyCode::Char('.') && key.modifiers.is_empty() {
+                return false;
+            }
+            if let Some(quit) = self.handle_global_view_key(key) {
+                return quit;
+            }
+            let episode_selection = self
+                .tab
+                .audiobookshelf_index()
+                .and_then(|index| self.audiobookshelf_browse.get(index))
+                .is_some_and(|state| state.episode_selection.is_some());
             match key.code {
-                KeyCode::Up | KeyCode::Char('k') => self.move_audiobookshelf_cursor(-1),
-                KeyCode::Down | KeyCode::Char('j') => self.move_audiobookshelf_cursor(1),
-                KeyCode::Enter | KeyCode::Char(' ') => return true,
+                KeyCode::Up | KeyCode::Char('k') if episode_selection => {
+                    self.move_audiobookshelf_episode_cursor(-1)
+                }
+                KeyCode::Down | KeyCode::Char('j') if episode_selection => {
+                    self.move_audiobookshelf_episode_cursor(1)
+                }
+                KeyCode::Up | KeyCode::Char('k') => self.move_audiobookshelf_show_rows(-1),
+                KeyCode::Down | KeyCode::Char('j') => self.move_audiobookshelf_show_rows(1),
+                KeyCode::Left | KeyCode::Char('h') if !episode_selection => {
+                    self.move_audiobookshelf_show_cursor(-1)
+                }
+                KeyCode::Right | KeyCode::Char('l') if !episode_selection => {
+                    self.move_audiobookshelf_show_cursor(1)
+                }
+                KeyCode::PageUp if !episode_selection => {
+                    self.move_audiobookshelf_show_rows(-(self.lib_page_size() as i64))
+                }
+                KeyCode::PageDown if !episode_selection => {
+                    self.move_audiobookshelf_show_rows(self.lib_page_size() as i64)
+                }
+                KeyCode::Home if !episode_selection => self.jump_audiobookshelf_show_cursor(false),
+                KeyCode::End if !episode_selection => self.jump_audiobookshelf_show_cursor(true),
+                KeyCode::Char('[') if episode_selection => self.cycle_audiobookshelf_filter(-1),
+                KeyCode::Char(']') if episode_selection => self.cycle_audiobookshelf_filter(1),
+                KeyCode::Esc | KeyCode::Backspace if episode_selection => {
+                    self.leave_audiobookshelf_episode_selection()
+                }
+                KeyCode::Enter | KeyCode::Char(' ') if !episode_selection => {
+                    self.enter_audiobookshelf_episode_selection()
+                }
+                KeyCode::Enter | KeyCode::Char(' ') => {}
                 _ => {}
             }
             return false;

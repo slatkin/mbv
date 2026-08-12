@@ -1,20 +1,26 @@
 use mbv_core::audiobookshelf::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
-    AudiobookshelfShelf, AudiobookshelfShelfEntry, AudiobookshelfShow,
+    AudiobookshelfShow,
 };
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum AudiobookshelfRowId {
-    Show(String),
-    Episode {
-        library_item_id: String,
-        episode_id: String,
-    },
-    Shelf {
-        shelf: usize,
-        entry: usize,
-    },
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AudiobookshelfEpisodeFilter {
+    All,
+    Played,
+    Unplayed,
+}
+
+impl AudiobookshelfEpisodeFilter {
+    pub(super) const ALL: [Self; 3] = [Self::All, Self::Played, Self::Unplayed];
+
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::Played => "Played",
+            Self::Unplayed => "Unplayed",
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -31,9 +37,10 @@ pub(super) struct AudiobookshelfBrowseState {
     pub episodes: Option<Vec<AudiobookshelfDownloadedEpisode>>,
     pub detail_cache: HashMap<String, Vec<AudiobookshelfDownloadedEpisode>>,
     pub detail_loading: bool,
-    pub selected_row: Option<AudiobookshelfRowId>,
     pub progress: HashMap<(String, String), AudiobookshelfProgress>,
-    pub shelves: Vec<AudiobookshelfShelf>,
+    pub episode_filter: AudiobookshelfEpisodeFilter,
+    pub episode_selection: Option<usize>,
+    pub scroll: usize,
 }
 
 impl AudiobookshelfBrowseState {
@@ -49,9 +56,10 @@ impl AudiobookshelfBrowseState {
             episodes: None,
             detail_cache: HashMap::new(),
             detail_loading: false,
-            selected_row: None,
             progress: HashMap::new(),
-            shelves: Vec::new(),
+            episode_filter: AudiobookshelfEpisodeFilter::All,
+            episode_selection: None,
+            scroll: 0,
         }
     }
 
@@ -69,83 +77,59 @@ impl AudiobookshelfBrowseState {
     }
 
     pub fn select(&mut self, cursor: usize) {
+        let previous_id = self.selected_id.clone();
         self.selected_id = self
             .shows
             .get(cursor)
             .map(|show| show.library_item_id.clone());
+        if self.selected_id != previous_id {
+            self.episode_filter = AudiobookshelfEpisodeFilter::All;
+        }
         self.episodes = self
             .selected_id
             .as_ref()
             .and_then(|id| self.detail_cache.get(id).cloned());
         self.detail_loading = false;
-        self.selected_row = self.selected_id.clone().map(AudiobookshelfRowId::Show);
+        self.episode_selection = None;
     }
 
     pub fn cache_detail(&mut self, id: String, episodes: Vec<AudiobookshelfDownloadedEpisode>) {
         self.detail_cache.insert(id, episodes);
     }
 
-    pub fn rows(&self) -> Vec<AudiobookshelfRowId> {
-        let mut rows = self
-            .shelves
+    pub fn selected_show(&self) -> Option<&AudiobookshelfShow> {
+        let id = self.selected_id.as_deref()?;
+        self.shows.iter().find(|show| show.library_item_id == id)
+    }
+
+    pub fn visible_episodes(&self) -> Vec<&AudiobookshelfDownloadedEpisode> {
+        self.episodes
+            .as_deref()
+            .unwrap_or_default()
             .iter()
-            .enumerate()
-            .flat_map(|(shelf, value)| {
-                value
-                    .entries
-                    .iter()
-                    .enumerate()
-                    .map(move |(entry, _)| AudiobookshelfRowId::Shelf { shelf, entry })
+            .filter(|episode| match self.episode_filter {
+                AudiobookshelfEpisodeFilter::All => true,
+                AudiobookshelfEpisodeFilter::Played => self
+                    .progress
+                    .get(&(episode.library_item_id.clone(), episode.episode_id.clone()))
+                    .is_some_and(|progress| progress.is_finished),
+                AudiobookshelfEpisodeFilter::Unplayed => !self
+                    .progress
+                    .get(&(episode.library_item_id.clone(), episode.episode_id.clone()))
+                    .is_some_and(|progress| progress.is_finished),
             })
-            .chain(
-                self.shows
-                    .iter()
-                    .map(|s| AudiobookshelfRowId::Show(s.library_item_id.clone())),
-            )
-            .collect::<Vec<_>>();
-        if let Some(episodes) = &self.episodes {
-            if let Some(id) = &self.selected_id {
-                let at = rows
-                    .iter()
-                    .position(
-                        |row| matches!(row, AudiobookshelfRowId::Show(row_id) if row_id == id),
-                    )
-                    .map(|i| i + 1)
-                    .unwrap_or(rows.len());
-                rows.splice(
-                    at..at,
-                    episodes.iter().map(|e| AudiobookshelfRowId::Episode {
-                        library_item_id: e.library_item_id.clone(),
-                        episode_id: e.episode_id.clone(),
-                    }),
-                );
-            }
+            .collect()
+    }
+
+    pub fn set_episode_filter(&mut self, filter: AudiobookshelfEpisodeFilter) {
+        self.episode_filter = filter;
+        if self.episode_selection.is_some() {
+            self.episode_selection = Some(0);
         }
-        rows
     }
 
-    pub fn apply_shelves(&mut self, shelves: Vec<AudiobookshelfShelf>) {
-        let shows: HashSet<&str> = self
-            .shows
-            .iter()
-            .map(|show| show.library_item_id.as_str())
-            .collect();
-        self.shelves = shelves
-            .into_iter()
-            .map(|mut shelf| {
-                shelf.entries.retain(|entry| match entry {
-                    AudiobookshelfShelfEntry::Show(id) => shows.contains(id.as_str()),
-                    AudiobookshelfShelfEntry::Episode { .. } => true,
-                });
-                shelf
-            })
-            .collect();
-    }
-
-    pub fn cursor_row(&self) -> Option<AudiobookshelfRowId> {
-        self.selected_row
-            .clone()
-            .or_else(|| self.selected_id.clone().map(AudiobookshelfRowId::Show))
+    pub fn enter_episode_selection(&mut self) {
+        self.episode_selection = Some(0);
     }
 
     pub fn append_page(
@@ -218,16 +202,11 @@ mod tests {
         let mut state = AudiobookshelfBrowseState::new(library());
         state.append_page(1, 20, 2, vec![show("a", "A"), show("b", "B")]);
         state.episodes = Some(vec![episode("a", "shared"), episode("a", "two")]);
-        assert_eq!(state.rows().len(), 4);
-        state.selected_row = Some(AudiobookshelfRowId::Episode {
-            library_item_id: "a".into(),
-            episode_id: "shared".into(),
-        });
-        assert!(
-            matches!(state.cursor_row(), Some(AudiobookshelfRowId::Episode { episode_id, .. }) if episode_id == "shared")
-        );
+        state.enter_episode_selection();
         state.select(1);
         assert_eq!(state.episodes, None);
+        assert_eq!(state.episode_selection, None);
+        assert_eq!(state.episode_filter, AudiobookshelfEpisodeFilter::All);
     }
 
     #[test]
@@ -235,7 +214,7 @@ mod tests {
         let mut state = AudiobookshelfBrowseState::new(library());
         state.append_page(1, 20, 1, vec![show("a", "A")]);
         state.episodes = Some(Vec::new());
-        assert!(state.rows().len() == 1);
+        assert_eq!(state.shows.len(), 1);
         assert!(!state.progress.contains_key(&("a".into(), "missing".into())));
     }
 
@@ -254,5 +233,46 @@ mod tests {
         assert!(!state.progress.keys().any(|(library_item_id, episode_id)| {
             library_item_id == "b" && episode_id == "shared"
         }));
+    }
+
+    #[test]
+    fn filters_completed_progress_and_treats_partial_as_unplayed() {
+        let mut state = AudiobookshelfBrowseState::new(library());
+        state.append_page(0, 20, 1, vec![show("a", "A")]);
+        state.episodes = Some(vec![
+            episode("a", "finished"),
+            episode("a", "partial"),
+            episode("a", "missing"),
+        ]);
+        state.progress.insert(
+            ("a".into(), "finished".into()),
+            AudiobookshelfProgress {
+                library_item_id: "a".into(),
+                episode_id: "finished".into(),
+                current_time_seconds: 1.0,
+                is_finished: true,
+            },
+        );
+        state.progress.insert(
+            ("a".into(), "partial".into()),
+            AudiobookshelfProgress {
+                library_item_id: "a".into(),
+                episode_id: "partial".into(),
+                current_time_seconds: 1.0,
+                is_finished: false,
+            },
+        );
+
+        state.set_episode_filter(AudiobookshelfEpisodeFilter::Played);
+        assert_eq!(state.visible_episodes()[0].episode_id, "finished");
+        state.set_episode_filter(AudiobookshelfEpisodeFilter::Unplayed);
+        assert_eq!(
+            state
+                .visible_episodes()
+                .into_iter()
+                .map(|episode| episode.episode_id.as_str())
+                .collect::<Vec<_>>(),
+            ["partial", "missing"]
+        );
     }
 }

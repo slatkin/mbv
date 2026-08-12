@@ -1,25 +1,52 @@
-## 1. Browse State
+## 1. Remove The Nonconforming Layout
 
-- [x] 1.1 Add a concrete `All`/`Played`/`Unplayed` episode-filter state to each Audiobookshelf podcast library and keep the selected show identity independent from the episode cursor.
-- [x] 1.2 Derive the visible episode list from downloaded episodes and read-only progress, treating missing or incomplete progress as unplayed.
-- [x] 1.3 Remove shelf entries from Audiobookshelf visible row generation, cursor movement, and selection targets while preserving show pagination and detail loading.
+- [x] 1.1 Delete the Audiobookshelf renderer's horizontal show-list/detail split; at every width, reserve one full-width top hero and put the show list only below it.
+- [x] 1.2 Route Audiobookshelf geometry through the same top-hero/list-area planning rules used by TV Shows, including hero suppression, separator rows, one/two-column breakpoint, content padding, and stable loading placeholder height.
+- [x] 1.3 Populate the lower list exclusively from provider-native podcast shows; keep shelf entries and episodes out of its row map, scrolling, pagination, cursor movement, and mouse hit targets.
+- [x] 1.4 Render podcast show cells with the same one-column and two-column content, selected-cell marker, focus colors, truncation, and scrolling behavior as TV Series cells while retaining Audiobookshelf show identities.
 
-## 2. TV-Style Presentation
+## 2. Reproduce The TV Hero With Podcast Data
 
-- [x] 2.1 Replace the flat Audiobookshelf paragraph renderer with show-only library rows and a selected-show detail block using the established TV layout conventions.
-- [x] 2.2 Render selected podcast metadata, cover/placeholder behavior, and `All`/`Played`/`Unplayed` pills with shared visual primitives.
-- [x] 2.3 Render filtered downloaded episodes as a structured, selectable table with title, publication information, duration, and read-only progress/completion styling.
-- [x] 2.4 Add scoped loading and empty states for detail loading and filters with no matching episodes, without hiding the show list.
+- [x] 2.1 Build the selected-podcast hero in the same full-width shell and content rectangle used by TV Series, matching its border, background, padding, title-row rule, image/text wrapping, and content-derived row budget.
+- [x] 2.2 Fetch the selected podcast's cover through the existing Audiobookshelf cover request and cache-key path, keyed by Service and provider-native library item identity; do not fetch list thumbnails as a substitute for hero artwork.
+- [x] 2.3 Render the fetched cover in the TV Series Primary-image slot with the same right alignment, dimensions, scaling filter, loading placeholder, missing-image behavior, and images-disabled behavior.
+- [x] 2.4 Map podcast title and available author metadata into the TV hero text area without introducing a left hero column, right detail panel, or alternate wide Music layout.
+- [x] 2.5 Keep the pinned hero content synchronized with the selected podcast even when that podcast's row scrolls outside the visible lower list.
 
-## 3. Input And Activation
+## 3. Map Season Selection To Episode Filters
 
-- [x] 3.1 Mirror TV show-selection input: show navigation selects shows, activation enters episode selection, and escape returns to show selection.
-- [x] 3.2 Add episode-filter cycling and episode cursor clamping/reset when the filter or selected show changes.
-- [x] 3.3 Keep episode activation inert and verify it cannot enqueue, play, open a session, or write progress.
-- [x] 3.4 Preserve keyboard and mouse show selection while preventing shelf rows from receiving navigation or activation events.
+- [x] 3.1 Keep exactly one `All`/`Played`/`Unplayed` filter state for the selected podcast and derive matching downloaded episodes from read-only Audiobookshelf progress, treating missing or incomplete progress as Unplayed.
+- [x] 3.2 In show-selection mode, render the filter summary where TV Shows renders its season summary and keep episode rows hidden exactly when TV episode rows are hidden.
+- [x] 3.3 On podcast-show activation, enter episode-selection mode and render the three filter pills in the TV season-selector row using the shared pill appearance, prefix spacing, overflow, and focus treatment.
+- [x] 3.4 Use the same left/right controls as TV season navigation to switch filters, then reset or clamp the episode cursor using the TV season-change rule without changing the selected podcast.
+- [x] 3.5 Use the same up/down, Enter/Space, Escape/Backspace, single-click, and double-click mode transitions as TV show and episode selection, while consuming podcast-episode activation without playback, queue mutation, playback-run or Session creation, Emby action fall-through, or progress writes.
 
-## 4. Verification
+## 4. Match The TV Episode Table
 
-- [x] 4.1 Add or update focused state-transition checks for filter matching, stable show identity, episode identity, shelf omission, and cursor restoration.
-- [x] 4.2 Verify focused and unfocused rendering against the TV-style hierarchy at narrow and wide terminal widths, with images enabled and disabled.
-- [x] 4.3 Run the relevant Audiobookshelf tests, `cargo check -p mbv`, formatting, diff checks, and manual peer-tab/filter/episode navigation verification.
+- [x] 4.1 Render filtered downloaded episodes inside the top hero's TV episode-table rectangle, not beside the show list and not interleaved with show rows.
+- [x] 4.2 Match TV episode rows for row height, selection-marker position, focused/unfocused colors, title and duration column geometry, truncation, column spacing, and available row budget.
+- [x] 4.3 Place podcast publication and read-only progress/completion information within corresponding TV row text or style slots; do not add structural columns or change the table width from the TV layout.
+- [x] 4.4 Preserve both provider-native library item and episode IDs for cursor restoration, filter changes, asynchronous detail results, and inert activation.
+- [x] 4.5 Render scoped loading and no-matching-episodes states inside the episode-table area without moving or collapsing the top hero or hiding the lower show list.
+
+## 5. Remove Shelf Behavior
+
+- [x] 5.1 Remove personalized shelves from visible Audiobookshelf state derivation and ignore shelf-fetch results for podcast-tab rendering.
+- [x] 5.2 Remove shelf headings, shelf entries, and shelf-derived shows or episodes from keyboard navigation, mouse hit testing, selection restoration, and hero selection.
+- [x] 5.3 Verify that identical show-page and selection state produces identical visible rows and hero content whether shelf data is absent, loading, successful, or failed.
+
+## 6. Add Objective Regression Gates
+
+- [x] 6.1 Extend the existing render-test harness with an Audiobookshelf podcast fixture and assert that the hero area starts at the content area's top and the show-list area starts below it at both a one-column width and the TV two-column breakpoint.
+- [x] 6.2 Add a render regression assertion that no terminal width produces horizontally adjacent show-list and detail rectangles, and that the podcast hero/list geometry matches a TV Shows fixture rendered at the same width, height, and image setting.
+- [x] 6.3 Add rendered-output assertions that a selected podcast title appears in the pinned hero, its show row appears in the lower list, and moving the cursor changes hero content without changing the hero rectangle.
+- [x] 6.4 Add an image-path regression check proving that images-enabled rendering requests the selected Audiobookshelf cover under the Audiobookshelf cache key and reserves the TV image rectangle while loading; also prove images-disabled rendering makes no request and uses the TV image-disabled row budget.
+- [x] 6.5 Add state/input regressions for exact filter membership, incomplete progress as Unplayed, filter cursor clamping, provider-native identity restoration, show-to-episode mode entry, escape back to show selection, inert episode activation, and shelf omission.
+- [x] 6.6 Render representative narrow and wide podcast tabs with images enabled and disabled and compare hero shell, image placement, filter row, episode rows, and lower show-list placement directly against the TV Shows tab before marking presentation tasks complete.
+
+## 7. Final Verification
+
+- [x] 7.1 Run the focused Audiobookshelf state, input, and render tests and record their passing counts.
+- [x] 7.2 Run `cargo check -p mbv`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets`.
+- [x] 7.3 Run `make check-code-file-lines` and `rtk git diff --check`.
+- [x] 7.4 Confirm the final diff contains no Audiobookshelf side-panel layout, no visible shelf path, no episode activation side effect, and no source file over the repository's 800-line cap.

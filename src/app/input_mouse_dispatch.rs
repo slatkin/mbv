@@ -110,6 +110,17 @@ impl App {
                         self.cw_move_cursor(delta);
                     } else if self.tab.is_feeds() {
                         self.feed_tab_move_cursor(delta);
+                    } else if self.tab.is_audiobookshelf() {
+                        let in_episodes = self
+                            .tab
+                            .audiobookshelf_index()
+                            .and_then(|index| self.audiobookshelf_browse.get(index))
+                            .is_some_and(|state| state.episode_selection.is_some());
+                        if in_episodes {
+                            self.move_audiobookshelf_episode_cursor(delta * 3);
+                        } else {
+                            self.move_audiobookshelf_show_rows(delta * 3);
+                        }
                     } else {
                         self.move_lib_cursor(delta);
                     }
@@ -165,6 +176,8 @@ impl App {
                                 self.home_select_section(target);
                             } else if self.tab.is_feeds() {
                                 self.feed_tab_select_group(target);
+                            } else if self.tab.is_audiobookshelf() {
+                                self.select_audiobookshelf_filter(target);
                             } else {
                                 let lib_idx = self.tab.library_index().unwrap();
                                 if self.is_music_group_view(lib_idx) {
@@ -207,6 +220,18 @@ impl App {
                         self.home_play();
                     } else if self.tab.is_feeds() {
                         // Double-click on Feeds: no-op (playback wiring pending).
+                    } else if self.tab.is_audiobookshelf()
+                        && (self.layout.main.left_area.contains((col, row).into())
+                            || self.layout.main.hero_area.contains((col, row).into()))
+                    {
+                        let in_episodes = self
+                            .tab
+                            .audiobookshelf_index()
+                            .and_then(|index| self.audiobookshelf_browse.get(index))
+                            .is_some_and(|state| state.episode_selection.is_some());
+                        if !in_episodes {
+                            self.enter_audiobookshelf_episode_selection();
+                        }
                     } else if self.layout.main.left_area.contains((col, row).into())
                         || self.layout.main.hero_area.contains((col, row).into())
                     {
@@ -343,7 +368,7 @@ impl App {
                 self.click_set_cursor(col, row);
             }
             MouseEventKind::Down(MouseButton::Right) => {
-                if self.click_set_cursor(col, row) {
+                if self.click_set_cursor(col, row) && !self.tab.is_audiobookshelf() {
                     self.open_context_menu_at(col, row);
                 }
             }

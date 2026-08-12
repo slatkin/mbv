@@ -110,26 +110,6 @@ pub(super) fn start_audiobookshelf_catalog(
     AudiobookshelfCatalogReceiver { rx }
 }
 
-pub(super) fn start_audiobookshelf_shelves(
-    config: crate::config::Config,
-    generation: SetupGeneration,
-    library_id: String,
-    tx: mpsc::Sender<super::types_events::LibEvent>,
-) {
-    std::thread::spawn(move || {
-        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
-            client.shelves_bounded(&key, &library_id, AudiobookshelfClient::REQUEST_HARD_BOUND)
-        });
-        let _ = tx.send(
-            super::types_events::LibEvent::AudiobookshelfShelvesFetched {
-                generation,
-                library_id,
-                shelves: result,
-            },
-        );
-    });
-}
-
 pub(super) fn start_audiobookshelf_shows(
     config: crate::config::Config,
     generation: SetupGeneration,

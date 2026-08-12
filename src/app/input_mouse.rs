@@ -108,7 +108,7 @@ impl App {
             // behavior or from the app-wide "single click only focuses"
             // convention.
             if self.layout.main.hero_area.contains((col, row).into())
-                && self.tab.library_index().is_some()
+                && (self.tab.library_index().is_some() || self.tab.is_audiobookshelf())
             {
                 self.set_panel_focus(PanelFocus::Library);
                 return true;
@@ -242,6 +242,29 @@ impl App {
                             self.feed_tab.cursor = clicked;
                         }
                     }
+                } else if self.tab.is_audiobookshelf() {
+                    let click_y = (row - la.y) as usize;
+                    let cols = crate::app::library_column_width::library_column_count(la.width);
+                    let cell_width =
+                        crate::app::library_column_width::library_cell_width(la, cols) as usize;
+                    let x = (col - la.x) as usize;
+                    let stride =
+                        cell_width + crate::app::library_column_width::LIBRARY_COLUMN_GAP as usize;
+                    let cell = x / stride;
+                    let target = (x % stride < cell_width)
+                        .then(|| {
+                            self.layout
+                                .main
+                                .left_item_rows
+                                .get(self.layout.main.left_screen_offset + click_y)
+                                .and_then(|row| row.get(cell))
+                                .copied()
+                        })
+                        .flatten();
+                    if let Some(target) = target {
+                        self.select_audiobookshelf_show(target);
+                    }
+                    return true;
                 } else {
                     let lib_idx = self.tab.library_index().unwrap();
                     if self.is_music_group_view(lib_idx)

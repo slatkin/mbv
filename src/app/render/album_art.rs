@@ -66,29 +66,6 @@ fn align_art(container: Rect, w: u16, h: u16, ax: ArtAnchorX, ay: ArtAnchorY) ->
 }
 
 impl App {
-    pub(super) fn render_audiobookshelf_row_image(&mut self, f: &mut Frame, area: Rect, key: &str) {
-        if let Some(state) = self.cached_image_protocol_mut(key) {
-            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-            if state
-                .size_for(
-                    ratatui_image::Resize::Scale(Some(super::RENDER_FILTER)),
-                    ratatui::layout::Size {
-                        width: area.width,
-                        height: area.height,
-                    },
-                )
-                .is_some()
-            {
-                f.render_stateful_widget(
-                    SImg::default()
-                        .resize(ratatui_image::Resize::Scale(Some(super::RENDER_FILTER))),
-                    area,
-                    state,
-                );
-            }
-        }
-    }
-
     pub(super) fn render_inline_album_art(
         &mut self,
         f: &mut Frame,
