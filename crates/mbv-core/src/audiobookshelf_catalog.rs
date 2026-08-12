@@ -16,6 +16,7 @@ pub struct AudiobookshelfShow {
     pub library_item_id: String,
     pub title: String,
     pub author: Option<String>,
+    pub description: Option<String>,
     pub cover_path: Option<String>,
 }
 
@@ -101,6 +102,7 @@ struct PodcastMediaWire {
 struct PodcastMetadataWire {
     title: Option<String>,
     author: Option<String>,
+    description: Option<String>,
 }
 #[derive(Debug, Deserialize)]
 struct ExpandedWire {
@@ -290,6 +292,7 @@ impl AudiobookshelfClient {
                         author: x
                             .author
                             .or_else(|| metadata.and_then(|value| value.author.clone())),
+                        description: metadata.and_then(|value| value.description.clone()),
                         cover_path: x
                             .cover_path
                             .or_else(|| x.media.and_then(|media| media.cover_path)),
@@ -434,6 +437,14 @@ mod tests {
                 .and_then(|media| media.metadata.as_ref())
                 .and_then(|metadata| metadata.title.as_deref()),
             Some("Second Show")
+        );
+        assert_eq!(
+            page.results[0]
+                .media
+                .as_ref()
+                .and_then(|media| media.metadata.as_ref())
+                .and_then(|metadata| metadata.description.as_deref()),
+            Some("Second show description.")
         );
         let expanded: ExpandedWire = serde_json::from_str(&fixture("item-expanded")).unwrap();
         assert_eq!(expanded.id, "show-2");

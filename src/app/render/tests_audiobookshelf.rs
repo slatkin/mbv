@@ -26,18 +26,21 @@ fn podcast_app() -> App {
                 library_item_id: "show-a".into(),
                 title: "Alpha Podcast".into(),
                 author: Some("Host Alpha".into()),
+                description: Some("The Alpha show description.".into()),
                 cover_path: Some("/cover/show-a".into()),
             },
             AudiobookshelfShow {
                 library_item_id: "show-b".into(),
                 title: "Beta Podcast".into(),
                 author: Some("Host Beta".into()),
+                description: None,
                 cover_path: None,
             },
             AudiobookshelfShow {
                 library_item_id: "show-c".into(),
                 title: "Gamma Podcast".into(),
                 author: None,
+                description: None,
                 cover_path: None,
             },
         ],
@@ -97,11 +100,15 @@ fn podcast_hero_tracks_show_selection_without_moving() {
     let first_output = buffer_to_string(&first);
     assert!(first_output.contains("Alpha Podcast"));
     assert!(first_output.contains("Host Alpha"));
+    assert!(first_output.contains("The Alpha show description."));
 
     app.select_audiobookshelf_show(1);
     let (second, second_layout) = render_podcasts(&mut app, 82, 40);
     let second_output = buffer_to_string(&second);
-    assert_eq!(first_layout.hero_area, second_layout.hero_area);
+    assert_eq!(first_layout.hero_area.x, second_layout.hero_area.x);
+    assert_eq!(first_layout.hero_area.y, second_layout.hero_area.y);
+    assert_eq!(first_layout.hero_area.width, second_layout.hero_area.width);
+    assert!(first_layout.hero_area.height >= second_layout.hero_area.height);
     assert!(second_output.contains("Beta Podcast"));
     assert!(second_output.contains("Host Beta"));
     assert!(second_output.contains("Alpha Podcast"));

@@ -202,6 +202,7 @@ mod tests {
             library_item_id: id.into(),
             title: title.into(),
             author: None,
+            description: None,
             cover_path: None,
         }
     }

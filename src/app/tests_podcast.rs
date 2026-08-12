@@ -18,6 +18,7 @@ fn audiobookshelf_app() -> App {
             library_item_id: "show-a".into(),
             title: "Show A".into(),
             author: None,
+            description: None,
             cover_path: None,
         }],
     );

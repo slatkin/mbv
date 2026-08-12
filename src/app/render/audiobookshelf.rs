@@ -1,6 +1,6 @@
 use super::detail::render_hero_title_row;
 use super::detail_series::{
-    SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
+    wrap_overview_lines, SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
     SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS,
     SERIES_IMAGE_ROWS,
 };
@@ -21,7 +21,7 @@ use crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use crate::app::ui_util::{fmt_duration_approx, trunc_str};
 use crate::app::{palette, App};
 use ratatui::layout::{Constraint, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Cell, List, ListItem, Paragraph, Row, Table, TableState};
 use ratatui::Frame;
@@ -91,6 +91,14 @@ impl App {
             .selected_show()
             .and_then(|show| show.author.as_ref())
             .is_some() as u16;
+        if let Some(description) = state
+            .selected_show()
+            .and_then(|show| show.description.as_deref())
+            .filter(|description| !description.is_empty())
+        {
+            rows += wrap_overview_lines(description, |_| 48).len().min(4) as u16;
+            rows += 1;
+        }
         rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
         if state.episode_selection.is_some() {
             rows += state
@@ -206,6 +214,33 @@ impl App {
                 row += 1;
             }
         }
+        if let Some(description) = show
+            .description
+            .as_deref()
+            .filter(|description| !description.is_empty())
+        {
+            let description_lines =
+                wrap_overview_lines(description, |line| text_width(row + line as u16) as usize);
+            for line_text in description_lines.iter().take(4) {
+                if row >= max_y {
+                    break;
+                }
+                let width = text_width(row);
+                f.render_widget(
+                    Paragraph::new(Span::styled(
+                        trunc_str(line_text, width as usize),
+                        Style::default().fg(palette::SUBTLE),
+                    )),
+                    Rect {
+                        x: area.x,
+                        y: row,
+                        width,
+                        height: 1,
+                    },
+                );
+                row += 1;
+            }
+        }
         row = (row + 1).min(max_y);
 
         if image_height > 0 {
@@ -234,21 +269,6 @@ impl App {
         }
 
         if row < max_y {
-            let prefix_width = "Series: ".chars().count() as u16;
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    "Series: ",
-                    Style::default()
-                        .fg(palette::YELLOW)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Rect {
-                    x: area.x,
-                    y: row,
-                    width: prefix_width,
-                    height: 1,
-                },
-            );
             if state.episode_selection.is_some() {
                 let labels = AudiobookshelfEpisodeFilter::ALL
                     .iter()
@@ -258,9 +278,9 @@ impl App {
                 layout.selector_tabs = render_pill_bar(
                     f,
                     Rect {
-                        x: area.x + prefix_width,
+                        x: area.x,
                         y: row,
-                        width: text_width(row).saturating_sub(prefix_width),
+                        width: text_width(row),
                         height: 1,
                     },
                     PillBar {
@@ -275,11 +295,14 @@ impl App {
                 );
             } else {
                 f.render_widget(
-                    Paragraph::new(Span::styled("3", Style::default().fg(palette::SOFT_WHITE))),
+                    Paragraph::new(Span::styled(
+                        "All · Played · Unplayed",
+                        Style::default().fg(palette::SOFT_WHITE),
+                    )),
                     Rect {
-                        x: area.x + prefix_width,
+                        x: area.x,
                         y: row,
-                        width: text_width(row).saturating_sub(prefix_width),
+                        width: text_width(row),
                         height: 1,
                     },
                 );
