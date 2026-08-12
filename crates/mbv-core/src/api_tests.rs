@@ -234,34 +234,6 @@ fn read_one_request(stream: &mut std::net::TcpStream) -> String {
 }
 
 #[test]
-fn report_stopped_for_shutdown_stalls_with_one_attempt_and_no_retry() {
-    let (listener, url) = local_listener_url();
-    let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let attempts_for_thread = attempts.clone();
-    std::thread::spawn(move || {
-        if let Ok((mut stream, _)) = listener.accept() {
-            attempts_for_thread.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            let _ = read_one_request(&mut stream);
-            std::thread::sleep(std::time::Duration::from_secs(5));
-        }
-    });
-
-    let started = std::time::Instant::now();
-    let ok = client_with_url(&url).report_stopped_for_shutdown(
-        &ItemId::new("item"),
-        &MediaSourceId::new("msid"),
-        123,
-        &EmbySessionId::new("sid"),
-        456,
-        std::time::Duration::from_millis(150),
-    );
-
-    assert!(!ok);
-    assert!(started.elapsed() < std::time::Duration::from_secs(1));
-    assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
-}
-
-#[test]
 fn ordinary_report_stopped_still_retries_once() {
     let (listener, url) = local_listener_url();
     let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));

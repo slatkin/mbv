@@ -412,8 +412,8 @@ impl App {
 
     pub(super) fn service_state_label(&self, entry: ServiceEntry) -> &'static str {
         match entry {
-            ServiceEntry::Emby => self.emby_runtime.state.label(),
-            ServiceEntry::Audiobookshelf => self.audiobookshelf_runtime.state.label(),
+            ServiceEntry::Emby => service_state_label(self.emby_runtime.state),
+            ServiceEntry::Audiobookshelf => service_state_label(self.audiobookshelf_runtime.state),
             ServiceEntry::Feeds => "Always present",
         }
     }
@@ -467,18 +467,12 @@ impl App {
     }
 }
 
-trait ServiceStateLabel {
-    fn label(self) -> &'static str;
-}
-
-impl ServiceStateLabel for ServiceState {
-    fn label(self) -> &'static str {
-        match self {
-            ServiceState::NotConfigured => "Not configured",
-            ServiceState::Connecting => "Connecting",
-            ServiceState::Ready => "Ready",
-            ServiceState::NeedsAuthentication => "Needs authentication",
-            ServiceState::Unavailable => "Unavailable",
-        }
+fn service_state_label(state: ServiceState) -> &'static str {
+    match state {
+        ServiceState::NotConfigured => "Not configured",
+        ServiceState::Connecting => "Connecting",
+        ServiceState::Ready => "Ready",
+        ServiceState::NeedsAuthentication => "Needs authentication",
+        ServiceState::Unavailable => "Unavailable",
     }
 }

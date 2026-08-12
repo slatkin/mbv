@@ -287,9 +287,7 @@ pub(super) fn setup_identity_allows_commit(
     existing: Option<&EmbySetup>,
     candidate: &EmbySetup,
 ) -> bool {
-    existing.is_none_or(|existing| {
-        EmbySetup::new(&existing.server_url, &existing.user_id) == *candidate
-    })
+    existing.is_none_or(|existing| existing == candidate)
 }
 
 pub(super) struct StartupReceiver {

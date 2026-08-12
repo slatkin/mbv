@@ -37,15 +37,6 @@ impl ToastSeverity {
     }
 }
 
-// #286: `App::ring_terminal_bell()` writes to a thread-local buffer instead
-// of real stderr in test builds, so tests never touch the process-wide
-// STDERR_FILENO fd. `cargo test` runs each test on its own OS thread, so a
-// thread-local is naturally isolated per test with no locking required.
-#[cfg(test)]
-thread_local! {
-    pub(super) static TEST_BELL_LOG: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
 impl App {
     fn notify_system(&self, msg: &str) {
         if self.system_notifications {
@@ -63,24 +54,7 @@ impl App {
         }
     }
 
-    #[cfg(not(test))]
-    fn ring_terminal_bell() {
-        use std::io::Write;
-
-        let mut stderr = std::io::stderr();
-        let _ = stderr.write_all(b"\x07");
-        let _ = stderr.flush();
-    }
-
-    // See the `TEST_BELL_LOG` doc comment above for why test builds don't
-    // touch real stderr here.
-    #[cfg(test)]
-    fn ring_terminal_bell() {
-        TEST_BELL_LOG.with(|log| log.borrow_mut().push(b'\x07'));
-    }
-
     pub(super) fn notify_with_actions(&self, title: &str, body: &str, actions: &[(&str, &str)]) {
-        Self::ring_terminal_bell();
         if !self.system_notifications {
             return;
         }

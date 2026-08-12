@@ -488,12 +488,6 @@ impl App {
             } else {
                 0
             };
-            if !is_wide && self.visualizer_enabled && visualizer_h == 0 && left_remaining > 0 {
-                self.flash(
-                    "Terminal too short for left visualizer".into(),
-                    super::notify_actions::ToastSeverity::Neutral,
-                );
-            }
             let queue_h = left_remaining
                 .saturating_sub(visualizer_h)
                 .saturating_sub(1);

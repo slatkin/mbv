@@ -28,9 +28,13 @@ Source of truth: `ctrl.rs` (protocol), `api_types.rs` (Emby wire types),
 ## Commands
 Prefer cargo nextest over cargo test.
 
-Additional cargo tools are available and should be preferred: cargo watch, cargo expand, cargo edit
+Additional cargo tools are available and should be preferred: cargo watch, cargo expand,
 
-Builds and tests run_in_background.
+- `cargo edit` - manage cargo dependencies
+- `cargo expand` - show the result of macro expansion
+- `cargo watch` - compiles projects when sources change
+
+Tests:
 - `cargo check -p mbv-core` — prefer over workspace builds
 - `cargo nextest run -p mbv-core`
 - `cargo clippy --workspace --all-targets`

@@ -176,20 +176,6 @@ fn fetch_album_tracks_is_a_no_op_when_already_loading() {
     );
 }
 
-// #286: this used to redirect the process-wide STDERR_FILENO fd to
-// capture the bell byte. Reading `TEST_BELL_LOG` (thread-local, cleared
-// per test thread) instead avoids touching real stderr at all.
-#[test]
-fn notify_with_actions_rings_terminal_bell_even_without_system_notifications() {
-    crate::app::notify_actions::TEST_BELL_LOG.with(|log| log.borrow_mut().clear());
-
-    let app = crate::app::tests::make_app_stub();
-    app.notify_with_actions("mbv", "Next up?", &[("next_up:play", "Play Now")]);
-
-    let rung = crate::app::notify_actions::TEST_BELL_LOG.with(|log| log.borrow().clone());
-    assert_eq!(rung, b"\x07");
-}
-
 #[test]
 fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
     let mut app = make_app_stub();

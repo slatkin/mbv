@@ -2,7 +2,7 @@
 
 - [x] 1.1 Capture minimal sanitized Audiobookshelf 2.36 responses for accessible mixed-media libraries, paginated podcast items, expanded downloaded episodes, current-user progress, personalized podcast shelves, and present/missing covers.
 - [x] 1.2 Add concrete read-only library, podcast show, downloaded episode, progress, and shelf types without queue, stream, or playback-session fields.
-- [x] 1.3 Add bounded Bearer-authenticated methods for library discovery, show pages, expanded podcast detail, bulk progress, personalized podcast shelves, and cover bytes using the existing redacted failure classification.
+- [x] 1.3 Add bounded Bearer-authenticated methods for library discovery, show pages, expanded podcast detail, bulk progress, personalized shelves, and cover bytes using the existing redacted failure classification.
 - [x] 1.4 Verify fixture decoding, pagination metadata, provider-native identity, malformed-response handling, 2.36 incompatibility, authentication rejection, and credential redaction at the core API boundary.
 
 ## 2. Service Startup And Catalog Lifecycle
