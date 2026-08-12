@@ -123,6 +123,7 @@ impl App {
         };
         let all_names: Vec<String> = std::iter::once("Home".to_string())
             .chain(self.libs.iter().map(|l| l.library.name.clone()))
+            .chain(self.audiobookshelf_libraries.iter().map(|l| l.name.clone()))
             .chain(if self.has_feeds_subscriptions() {
                 Some("Feeds".to_string())
             } else {

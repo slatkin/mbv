@@ -56,6 +56,19 @@ pub(super) struct ImageFetchReq {
     /// handed to the protocol. Used by the artist-header collage so its tiles
     /// are uniform squares regardless of the cover's native aspect ratio.
     pub square_crop: bool,
+    pub source: ImageSource,
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum ImageSource {
+    Emby,
+    // Retained for the upcoming Audiobookshelf artwork rendering milestone.
+    #[allow(dead_code)]
+    Audiobookshelf {
+        server_url: String,
+        api_key: String,
+        generation: mbv_core::service_runtime::SetupGeneration,
+    },
 }
 
 impl App {
@@ -276,6 +289,7 @@ impl App {
             series_id,
             types: types.iter().map(|s| s.to_string()).collect(),
             square_crop,
+            source: ImageSource::Emby,
         };
         if self.image_fetches_active >= MAX_IMAGE_FETCHES {
             // Queue instead of dropping: a slot will pick it up on completion.
@@ -283,6 +297,47 @@ impl App {
             return;
         }
         self.spawn_image_fetch(req);
+    }
+
+    // Retained for the upcoming Audiobookshelf artwork rendering milestone.
+    #[allow(dead_code)]
+    pub(super) fn fetch_audiobookshelf_cover(&mut self, server_url: String, item_id: String) {
+        if !self.image_protocol_enabled {
+            return;
+        }
+        let generation = self.audiobookshelf_runtime.generation();
+        let cache_key = format!(
+            "audiobookshelf:{server_url}:cover:{item_id}:{}",
+            self.current_protocol_suffix()
+        );
+        if self.card_image_loading.contains(&cache_key)
+            || self.card_image_states.contains_key(&cache_key)
+        {
+            return;
+        }
+        let Some(api_key) =
+            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
+        else {
+            return;
+        };
+        let req = ImageFetchReq {
+            cache_key: cache_key.clone(),
+            item_id,
+            series_id: String::new(),
+            types: Vec::new(),
+            square_crop: false,
+            source: ImageSource::Audiobookshelf {
+                server_url,
+                api_key,
+                generation,
+            },
+        };
+        self.card_image_loading.insert(cache_key);
+        if self.image_fetches_active >= MAX_IMAGE_FETCHES {
+            self.pending_image_fetches.push_back(req);
+        } else {
+            self.spawn_image_fetch(req);
+        }
     }
 
     pub(in crate::app) fn list_image_fetches_allowed(&self) -> bool {
@@ -465,7 +520,7 @@ impl App {
 
     fn spawn_image_fetch(&mut self, req: ImageFetchReq) {
         self.image_fetches_active += 1;
-        let (server_url, token) = {
+        let (server_url, token) = if matches!(req.source, ImageSource::Emby) {
             let Some(client) = self.emby_client() else {
                 self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
                 let _ = self.card_image_tx.send((req.cache_key, None));
@@ -473,6 +528,8 @@ impl App {
             };
             let c = client.lock().unwrap();
             (c.config.server_url.clone(), c.token.clone())
+        } else {
+            (String::new(), String::new())
         };
         let tx = self.card_image_tx.clone();
         let ImageFetchReq {
@@ -481,6 +538,7 @@ impl App {
             series_id,
             types,
             square_crop,
+            source,
         } = req;
         std::thread::spawn(move || {
             // catch_unwind so a panic during fetch/decode still reports a result,
@@ -489,9 +547,29 @@ impl App {
             let cache_key_outer = cache_key.clone();
             let tx_outer = tx.clone();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let bytes: Option<Vec<u8>> = if let Some(cached) =
-                    crate::config::read_image_disk_cache(&cache_key)
+                let bytes: Option<Vec<u8>> = if let ImageSource::Audiobookshelf {
+                    server_url,
+                    api_key,
+                    generation,
+                } = source
                 {
+                    let _ = generation;
+                    let client =
+                        mbv_core::audiobookshelf::AudiobookshelfClient::new(&server_url).ok();
+                    let result = client.and_then(|client| {
+                        client
+                            .cover_bounded(
+                                &api_key,
+                                &item_id,
+                                mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+                            )
+                            .ok()
+                    });
+                    if let Some(ref bytes) = result {
+                        crate::config::write_image_disk_cache(&cache_key, bytes);
+                    }
+                    result
+                } else if let Some(cached) = crate::config::read_image_disk_cache(&cache_key) {
                     // Mem-cache miss satisfied from the on-disk source bytes
                     // (no network). The protocol-specific re-encode then runs
                     // off-thread via the resize worker, so this is the

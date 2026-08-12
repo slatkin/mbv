@@ -166,6 +166,49 @@ impl App {
     }
 
     pub(super) fn handle_lib_event(&mut self, ev: LibEvent) {
+        if let LibEvent::AudiobookshelfDetailFetched {
+            generation,
+            library_item_id,
+            result,
+        } = ev
+        {
+            if !self.audiobookshelf_runtime.accepts(generation) {
+                return;
+            }
+            if let Some(state) = self
+                .audiobookshelf_browse
+                .iter_mut()
+                .find(|state| state.selected_id.as_deref() == Some(&library_item_id))
+            {
+                state.detail_loading = false;
+                if let Ok(episodes) = result {
+                    state.episodes = Some(episodes);
+                }
+            }
+            return;
+        }
+        if let LibEvent::AudiobookshelfShelvesFetched {
+            generation,
+            library_id,
+            shelves,
+        } = ev
+        {
+            if !self.audiobookshelf_runtime.accepts(generation) {
+                return;
+            }
+            if let Some(index) = self
+                .audiobookshelf_libraries
+                .iter()
+                .position(|library| library.id == library_id)
+            {
+                if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
+                    if let Ok(shelves) = shelves {
+                        state.apply_shelves(shelves);
+                    }
+                }
+            }
+            return;
+        }
         match ev {
             LibEvent::Loaded {
                 lib_idx,
@@ -352,6 +395,8 @@ impl App {
                     detail.episodes.insert(season_id, episodes);
                 }
             }
+            LibEvent::AudiobookshelfDetailFetched { .. }
+            | LibEvent::AudiobookshelfShelvesFetched { .. } => unreachable!(),
             LibEvent::AlbumArtistFetched { album_id, artist } => {
                 self.album_artist_loading.remove(&album_id);
                 self.album_artist_cache

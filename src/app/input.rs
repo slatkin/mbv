@@ -73,7 +73,9 @@ impl App {
     /// Home + one tab per library (no Queue tab -- the queue is the
     /// always-visible left column, not a tab).
     pub(super) fn tab_count(&self) -> usize {
-        1 + self.libs.len() + if self.has_feeds_subscriptions() { 1 } else { 0 }
+        1 + self.libs.len()
+            + self.audiobookshelf_libraries.len()
+            + if self.has_feeds_subscriptions() { 1 } else { 0 }
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent) -> bool {
@@ -182,7 +184,9 @@ impl App {
         if n == 0 {
             return;
         }
-        let pos = self.tab.to_position(self.feeds_tab_pos());
+        let pos = self
+            .tab
+            .to_position_with_counts(self.libs.len(), self.feeds_tab_pos());
         if pos < self.tab_scroll {
             self.tab_scroll = pos;
             return;
@@ -205,6 +209,9 @@ impl App {
         let mut w = vec!["Home".chars().count() as u16 + pad];
         for l in &self.libs {
             w.push(l.library.name.chars().count() as u16 + pad);
+        }
+        for l in &self.audiobookshelf_libraries {
+            w.push(l.name.chars().count() as u16 + pad);
         }
         if self.has_feeds_subscriptions() {
             w.push("Feeds".chars().count() as u16 + pad);

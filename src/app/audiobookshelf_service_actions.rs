@@ -104,6 +104,7 @@ impl App {
         }
         self.config.lock().unwrap().audiobookshelf_setup = None;
         self.audiobookshelf_runtime.remove_setup();
+        self.clear_audiobookshelf_catalog();
         self.flash(
             "Audiobookshelf removed; Emby and Feeds remain available".into(),
             ToastSeverity::Success,
@@ -130,7 +131,10 @@ impl App {
                 candidate.user,
                 candidate.api_key,
             ),
-            || Ok(()),
+            || {
+                self.clear_audiobookshelf_catalog();
+                Ok(())
+            },
             || {},
         );
         match result {

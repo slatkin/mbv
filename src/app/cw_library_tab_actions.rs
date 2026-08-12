@@ -4,7 +4,7 @@ impl App {
     /// Number of selectable left-panel tabs: Home/CW + all libraries + Feeds
     /// (when subscriptions exist).
     pub(super) fn library_tab_count(&self) -> usize {
-        1 + self.libs.len() + if self.has_feeds_subscriptions() { 1 } else { 0 }
+        self.tab_count()
     }
 
     /// Jump directly to left-panel tab `idx` (0 = Home, 1..=libs.len() =
@@ -13,11 +13,19 @@ impl App {
         if idx >= self.library_tab_count() {
             return;
         }
-        self.tab = TabSelection::from_position(idx, self.feeds_tab_pos());
+        self.tab = TabSelection::from_position_with_counts(
+            idx,
+            self.libs.len(),
+            self.audiobookshelf_libraries.len(),
+            self.has_feeds_subscriptions(),
+        );
         self.last_card_height = 0; // reset stale image height for new view
         self.last_card_width = 0;
         if self.tab.is_feeds() {
             self.set_panel_focus(PanelFocus::Library);
+        } else if self.tab.is_audiobookshelf() {
+            self.set_panel_focus(PanelFocus::Library);
+            self.select_audiobookshelf_show(0);
         } else if let Some(lib_idx) = self.tab.library_index() {
             self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position(lib_idx);
@@ -29,14 +37,23 @@ impl App {
     /// Advance the left-panel tab (wrapping); load the library if needed.
     pub(super) fn library_tab_next(&mut self) {
         let n = self.library_tab_count();
-        let fp = self.feeds_tab_pos();
-        let pos = self.tab.to_position(fp);
+        let pos = self
+            .tab
+            .to_position_with_counts(self.libs.len(), self.feeds_tab_pos());
         let new_pos = (pos + 1) % n;
-        self.tab = TabSelection::from_position(new_pos, fp);
+        self.tab = TabSelection::from_position_with_counts(
+            new_pos,
+            self.libs.len(),
+            self.audiobookshelf_libraries.len(),
+            self.has_feeds_subscriptions(),
+        );
         self.last_card_height = 0; // reset stale image height for new view
         self.last_card_width = 0;
         if self.tab.is_feeds() {
             self.set_panel_focus(PanelFocus::Library);
+        } else if self.tab.is_audiobookshelf() {
+            self.set_panel_focus(PanelFocus::Library);
+            self.select_audiobookshelf_show(0);
         } else if let Some(lib_idx) = self.tab.library_index() {
             self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position(lib_idx);
@@ -48,14 +65,23 @@ impl App {
     /// Retreat the left-panel tab (wrapping); load the library if needed.
     pub(super) fn library_tab_prev(&mut self) {
         let n = self.library_tab_count();
-        let fp = self.feeds_tab_pos();
-        let pos = self.tab.to_position(fp);
+        let pos = self
+            .tab
+            .to_position_with_counts(self.libs.len(), self.feeds_tab_pos());
         let new_pos = (pos + n - 1) % n;
-        self.tab = TabSelection::from_position(new_pos, fp);
+        self.tab = TabSelection::from_position_with_counts(
+            new_pos,
+            self.libs.len(),
+            self.audiobookshelf_libraries.len(),
+            self.has_feeds_subscriptions(),
+        );
         self.last_card_height = 0;
         self.last_card_width = 0;
         if self.tab.is_feeds() {
             self.set_panel_focus(PanelFocus::Library);
+        } else if self.tab.is_audiobookshelf() {
+            self.set_panel_focus(PanelFocus::Library);
+            self.select_audiobookshelf_show(0);
         } else if let Some(lib_idx) = self.tab.library_index() {
             self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position(lib_idx);

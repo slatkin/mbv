@@ -54,6 +54,15 @@ impl App {
     }
 
     pub(super) fn handle_queue_key(&mut self, key: KeyEvent) -> bool {
+        if self.tab.is_audiobookshelf() && matches!(self.panel_focus, PanelFocus::Library) {
+            match key.code {
+                KeyCode::Up | KeyCode::Char('k') => self.move_audiobookshelf_cursor(-1),
+                KeyCode::Down | KeyCode::Char('j') => self.move_audiobookshelf_cursor(1),
+                KeyCode::Enter | KeyCode::Char(' ') => return true,
+                _ => {}
+            }
+            return false;
+        }
         // Alt+Left/Right switch focus between the two panels. Queue is on the
         // left; library is on the right. (Bare Left/Right now navigate columns
         // inside the library list, and Alt+Up/Alt+Down cycle tabs -- see
