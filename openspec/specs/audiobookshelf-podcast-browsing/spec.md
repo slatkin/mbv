@@ -63,24 +63,103 @@ mbv SHALL list podcast shows from the selected Audiobookshelf library using boun
 - **WHEN** the show list refreshes and the selected `libraryItemId` is no longer present
 - **THEN** mbv SHALL select the nearest valid show or the library's empty state
 
-### Requirement: Selected shows expand downloaded episodes inline
-Selecting a podcast show SHALL load and display its downloaded episodes inline within the library view. Episode identity SHALL be the Audiobookshelf Service kind plus `libraryItemId` and `episodeId`.
+### Requirement: Podcast libraries use the TV Shows tab composition
+An Audiobookshelf podcast library SHALL use the same outer composition as the TV Shows tab at the same terminal dimensions and image setting. The selected podcast hero SHALL occupy the dedicated full-width area pinned above the podcast show list. The podcast show list SHALL occupy the remaining area below the hero and SHALL NOT appear beside the hero or detail content at any terminal width.
 
-#### Scenario: Selected show has downloaded episodes
-- **WHEN** the selected show's expanded Audiobookshelf response contains downloaded episodes
-- **THEN** mbv SHALL display those episodes inline beneath the selected show with title, publication information, duration, and available listening state
+The following substitutions SHALL be the only domain changes to that composition:
 
-#### Scenario: Selected show has no downloaded episodes
-- **WHEN** the selected show's expanded response contains no downloaded episodes
-- **THEN** mbv SHALL show an inline empty-episodes state without treating remote undownloaded feed episodes as playable catalog entries
+| TV Shows tab | Audiobookshelf podcast tab |
+|---|---|
+| Series | Podcast show |
+| Series Primary image | Audiobookshelf podcast cover |
+| Season selector | `All` / `Played` / `Unplayed` filter selector |
+| Episodes in the selected season | Downloaded episodes matching the selected filter |
 
-#### Scenario: User selects and activates an episode
-- **WHEN** the user moves selection onto an inline episode and presses the ordinary activation key
-- **THEN** mbv SHALL retain the episode selection without starting playback, enqueueing an item, or opening a playback session
+All other observable layout behavior SHALL match the TV Shows tab, including the hero shell and placement, list-below-hero ordering, content padding, image slot, row budgeting, list column count, selected-cell treatment, focus styling, scrolling, narrow-terminal fallback, and loading placeholder stability.
+
+#### Scenario: Podcast library is displayed
+- **WHEN** an Audiobookshelf podcast library and a TV Shows library are displayed at the same terminal dimensions and image setting
+- **THEN** both tabs SHALL divide the content area into the same top hero and lower list geometry
+- **THEN** the podcast tab SHALL render podcast shows in the lower list positions occupied by Series rows in the TV Shows tab
+- **THEN** the podcast tab SHALL NOT render a left catalog column beside a right detail column
+
+#### Scenario: Podcast selection changes
+- **WHEN** the user moves selection between podcast shows
+- **THEN** the fixed hero SHALL update to the newly selected podcast without changing its screen position
+- **THEN** the show list SHALL retain provider-native selection identity across loaded-page changes
+
+#### Scenario: Selected show scrolls outside the visible list rows
+- **WHEN** the selected podcast's row is outside the visible portion of the lower show list
+- **THEN** the pinned hero SHALL continue to display that selected podcast in the same fixed position
+
+#### Scenario: Terminal width crosses the TV list column breakpoint
+- **WHEN** the podcast tab crosses a width at which the TV Shows tab changes between one and two list columns
+- **THEN** the podcast show list SHALL change column count at the same breakpoint
+- **THEN** the hero SHALL remain full-width above the list and SHALL NOT move to the side
+
+#### Scenario: Terminal height cannot fit the hero
+- **WHEN** the TV Shows tab would suppress its hero because the available height cannot fit the minimum hero and a usable list
+- **THEN** the podcast tab SHALL suppress its hero under the same condition and give the show list the corresponding area
+
+### Requirement: The selected podcast hero uses Audiobookshelf cover artwork
+The selected podcast hero SHALL place the selected podcast's Audiobookshelf cover in the same right-aligned image slot, with the same dimensions, scaling, text wrapping, loading treatment, and images-disabled behavior as the selected Series Primary image in the TV Shows hero. The cover SHALL be fetched from the configured Audiobookshelf Service using the selected podcast's provider-native library item identity.
+
+Podcast title and available author metadata SHALL occupy the corresponding TV hero text area. Missing metadata SHALL collapse without moving the image or changing the TV hero's structural rules.
+
+#### Scenario: Selected podcast has a cover
+- **WHEN** images are enabled and the selected podcast has an Audiobookshelf cover
+- **THEN** that cover SHALL be fetched and rendered in the TV Series image position within the top hero
+- **THEN** the cover SHALL NOT be rendered as a thumbnail in the lower show list or in a separate side panel
+
+#### Scenario: Selected podcast cover is loading
+- **WHEN** images are enabled and the selected podcast cover request is pending
+- **THEN** the hero SHALL reserve and paint the same image placeholder area used while a TV Series image is loading
+
+#### Scenario: Selected podcast has no usable cover
+- **WHEN** images are enabled but the selected podcast has no usable cover
+- **THEN** the hero SHALL follow the same missing-Primary-image behavior as the TV Shows hero without breaking its text, filter, or episode layout
+
+#### Scenario: Images are disabled
+- **WHEN** images are disabled
+- **THEN** the podcast hero SHALL omit cover fetching and rendering
+- **THEN** its text SHALL use the same image-disabled width and row budgeting as the TV Shows hero
+
+### Requirement: Selected podcasts map TV season selection to played-state filters
+The selected podcast hero SHALL expose exactly three episode filters: `All`, `Played`, and `Unplayed`. These filters SHALL occupy the same selector row and use the same pill appearance, overflow behavior, focus treatment, and selection-mode visibility as TV season selectors.
+
+#### Scenario: Podcast show is selected but episode selection is inactive
+- **WHEN** a podcast show is selected and the user has not entered episode-selection mode
+- **THEN** the hero SHALL present the filter summary in the same state and position in which the TV hero presents its season summary
+- **THEN** the episode rows SHALL have the same visibility as TV episode rows outside season-selection mode
+
+#### Scenario: User enters episode selection
+- **WHEN** the user activates the selected podcast show
+- **THEN** the `All`, `Played`, and `Unplayed` pills SHALL become selectable in the TV season-selector position
+- **THEN** focus SHALL enter the filtered episode rows using the same visual mode transition as the TV Shows tab
+
+#### Scenario: Played and unplayed filters
+- **WHEN** `Played` or `Unplayed` is selected
+- **THEN** Played SHALL include only completed progress and Unplayed SHALL include missing or incomplete progress
+
+#### Scenario: Filter changes
+- **WHEN** the user changes the active episode filter using the controls corresponding to TV season navigation
+- **THEN** the episode cursor SHALL reset to a valid visible episode
+- **THEN** the selected podcast SHALL remain selected
+
+### Requirement: Downloaded episodes use the TV episode-list presentation
+Downloaded podcast episodes SHALL render in the same table area and with the same row height, marker position, title and duration column geometry, truncation, focused and unfocused colors, cursor styling, and available row budget as TV episodes. The podcast implementation SHALL substitute podcast-native episode data without converting it to an Emby item.
+
+#### Scenario: Podcast has downloaded episodes
+- **WHEN** the selected podcast has matching downloaded episodes and episode selection is active
+- **THEN** the hero SHALL render one selectable TV-style episode row per matching episode with provider-native identities
+
+#### Scenario: Podcast detail is empty or loading
+- **WHEN** matching episodes are empty or detail is loading
+- **THEN** the episode-table area SHALL show a scoped state without collapsing the hero or hiding the lower show list
 
 #### Scenario: User changes shows while detail is loading
 - **WHEN** an expanded-show result completes after the user has selected a different show
-- **THEN** mbv SHALL NOT replace the currently displayed inline episodes with the stale selection's episodes
+- **THEN** mbv SHALL NOT replace the currently displayed episode rows with the stale selection's episodes
 
 ### Requirement: Episode progress is read-only and identity-qualified
 mbv SHALL display the authenticated user's Audiobookshelf progress for downloaded podcast episodes using `libraryItemId` and `episodeId`. Catalog browsing SHALL NOT write, infer, or periodically report progress.
@@ -112,21 +191,12 @@ mbv SHALL fetch Audiobookshelf podcast artwork through the configured Service cr
 - **WHEN** the user confirms Audiobookshelf Service replacement
 - **THEN** cached artwork belonging to the previous server SHALL NOT be displayed for items from the replacement server
 
-### Requirement: Personalized podcast shelves remain library-local
-mbv SHALL display Audiobookshelf 2.36 personalized podcast shelves within the corresponding podcast library. Shelf entries SHALL resolve to provider-qualified shows or downloaded episodes and SHALL NOT be merged into the cross-Service Home tab.
+### Requirement: Personalized shelves are absent from the podcast tab
+The Audiobookshelf podcast tab SHALL NOT render or navigate personalized shelf data, and shelf data SHALL NOT affect show order, selection, scrolling, hit testing, or pagination.
 
-#### Scenario: Library has personalized show and episode shelves
-- **WHEN** Audiobookshelf returns supported personalized shelves for the selected podcast library
-- **THEN** mbv SHALL render each supported shelf with its server-provided label and ordered entries
-- **THEN** selecting a shelf entry SHALL navigate to its corresponding show or downloaded episode within that library
-
-#### Scenario: Shelf refers to unavailable content
-- **WHEN** a shelf entry cannot be resolved to an accessible show or downloaded episode
-- **THEN** mbv SHALL omit or mark that entry unavailable without failing the rest of the library
-
-#### Scenario: Home tab is rendered
-- **WHEN** Audiobookshelf personalized shelves have been loaded
-- **THEN** the Home tab SHALL remain unchanged and SHALL NOT contain those shelves
+#### Scenario: Catalog includes personalized shelves
+- **WHEN** Audiobookshelf returns personalized shelf data
+- **THEN** the top selected-podcast hero and lower podcast show list SHALL remain unaffected
 
 ### Requirement: Catalog results obey the current Service lifecycle
 Every asynchronous Audiobookshelf catalog, detail, progress, shelf, and artwork result SHALL be reconciled with the Service setup generation that initiated it. Replacement, removal, authentication rejection, or a newer setup generation SHALL prevent old-server data from becoming visible.
@@ -140,6 +210,13 @@ Every asynchronous Audiobookshelf catalog, detail, progress, shelf, and artwork 
 - **THEN** mbv SHALL remove its podcast tabs and clear its in-memory catalog, progress, shelf, loading, and artwork state
 - **THEN** Emby and Feeds content SHALL remain unaffected
 
+### Requirement: Podcast activation remains read-only
+The redesigned podcast UI SHALL preserve the existing read-only boundary until Audiobookshelf playback is separately introduced.
+
+#### Scenario: User activates a podcast episode
+- **WHEN** the user activates a selected podcast episode
+- **THEN** mbv SHALL retain selection without playback, queue, Session, or progress side effects
+
 ### Requirement: Podcast browsing remains outside playback boundaries
 This capability SHALL remain read-only catalog integration. It SHALL NOT create Audiobookshelf queue items, resolve streams, open or synchronize playback sessions, write progress, connect to Socket.IO, alter ctrl, or add Audiobookshelf support to any Player owner.
 
@@ -147,4 +224,3 @@ This capability SHALL remain read-only catalog integration. It SHALL NOT create 
 - **WHEN** the user discovers libraries, pages shows, expands episodes, views progress and artwork, or navigates personalized shelves
 - **THEN** no Audiobookshelf media SHALL enter a Composed or Bound queue
 - **THEN** no Audiobookshelf playback lifecycle or daemon transport request SHALL occur
-
