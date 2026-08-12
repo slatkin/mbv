@@ -98,6 +98,28 @@ impl App {
 
     pub(super) fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
         {
+            if self.tab.is_audiobookshelf() {
+                let pos = (col, row).into();
+                if let Some(episode_index) = self
+                    .layout
+                    .main
+                    .audiobookshelf_episode_rows
+                    .iter()
+                    .find(|(rect, _)| rect.contains(pos))
+                    .map(|(_, index)| *index)
+                {
+                    let Some(index) = self.tab.audiobookshelf_index() else {
+                        return false;
+                    };
+                    if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
+                        if state.episode_selection.is_some() {
+                            state.episode_selection = Some(episode_index);
+                            self.set_panel_focus(PanelFocus::Library);
+                            return true;
+                        }
+                    }
+                }
+            }
             // Click on the inline hero: same as clicking anywhere else in
             // the library pane -- a single click only focuses (the cursor
             // is already on the selected item, so there's nothing else to

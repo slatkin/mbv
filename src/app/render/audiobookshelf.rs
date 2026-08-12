@@ -411,7 +411,7 @@ impl App {
                     .saturating_sub(row)
                     .saturating_sub(SERIES_DETAIL_TRAILING_BLANK_ROWS as u16),
             };
-            self.render_audiobookshelf_episode_rows(f, table_area, &state, focused);
+            self.render_audiobookshelf_episode_rows(f, table_area, &state, focused, layout);
         }
     }
 
@@ -421,6 +421,7 @@ impl App {
         area: Rect,
         state: &crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState,
         focused: bool,
+        layout: &mut LayoutMain,
     ) {
         if state.detail_loading || state.episodes.is_none() {
             render_placeholder(f, area, " Loading…");
@@ -537,6 +538,24 @@ impl App {
             area,
             &mut table_state,
         );
+        let offset = table_state.offset();
+        layout.audiobookshelf_episode_rows = episodes
+            .iter()
+            .enumerate()
+            .skip(offset)
+            .take(area.height as usize)
+            .enumerate()
+            .map(|(screen_row, (index, _))| {
+                (
+                    Rect {
+                        y: area.y + screen_row as u16,
+                        height: 1,
+                        ..area
+                    },
+                    index,
+                )
+            })
+            .collect();
     }
 
     fn render_audiobookshelf_show_rows(
