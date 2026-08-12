@@ -72,6 +72,8 @@ impl App {
         self.force_clear = true;
         if matches!(self.panel_focus, PanelFocus::Queue) {
             self.refresh_queue();
+        } else if self.tab.is_audiobookshelf() {
+            self.audiobookshelf_refresh();
         } else if self.tab.is_home() {
             if let Err(e) = self.fetch_home() {
                 self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);

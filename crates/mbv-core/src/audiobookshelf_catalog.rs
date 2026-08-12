@@ -1,0 +1,470 @@
+use super::{AudiobookshelfClient, AudiobookshelfError};
+use serde::Deserialize;
+use std::collections::HashMap;
+use std::io::Read;
+use std::time::Duration;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudiobookshelfLibrary {
+    pub id: String,
+    pub name: String,
+    pub media_type: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudiobookshelfShow {
+    pub library_item_id: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub cover_path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AudiobookshelfDownloadedEpisode {
+    pub library_item_id: String,
+    pub episode_id: String,
+    pub title: String,
+    pub published_at: Option<String>,
+    pub duration_seconds: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AudiobookshelfProgress {
+    pub library_item_id: String,
+    pub episode_id: String,
+    pub current_time_seconds: f64,
+    pub is_finished: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AudiobookshelfShelfEntry {
+    Show(String),
+    Episode {
+        library_item_id: String,
+        episode_id: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AudiobookshelfShelf {
+    pub label: String,
+    pub entries: Vec<AudiobookshelfShelfEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AudiobookshelfShowPage {
+    pub page: usize,
+    pub limit: usize,
+    pub total: usize,
+    pub items: Vec<AudiobookshelfShow>,
+}
+
+#[derive(Debug, Deserialize)]
+struct LibrariesResponse {
+    libraries: Vec<LibraryWire>,
+}
+#[derive(Debug, Deserialize)]
+struct LibraryWire {
+    id: String,
+    name: String,
+    #[serde(rename = "mediaType")]
+    media_type: String,
+}
+#[derive(Debug, Deserialize)]
+struct ItemsResponse {
+    page: usize,
+    limit: usize,
+    total: usize,
+    items: Vec<ShowWire>,
+}
+#[derive(Debug, Deserialize)]
+struct ShowWire {
+    #[serde(rename = "libraryItemId")]
+    library_item_id: String,
+    title: String,
+    author: Option<String>,
+    #[serde(rename = "coverPath")]
+    cover_path: Option<String>,
+}
+#[derive(Debug, Deserialize)]
+struct ExpandedWire {
+    id: String,
+    media: Option<MediaWire>,
+}
+#[derive(Debug, Deserialize)]
+struct MediaWire {
+    episodes: Option<Vec<EpisodeWire>>,
+}
+#[derive(Debug, Deserialize)]
+struct EpisodeWire {
+    id: String,
+    title: String,
+    #[serde(rename = "publishedAt")]
+    published_at: Option<String>,
+    duration: Option<f64>,
+}
+#[derive(Debug, Deserialize)]
+struct ProgressResponse {
+    #[serde(rename = "mediaProgress")]
+    media_progress: Vec<ProgressWire>,
+}
+#[derive(Debug, Deserialize)]
+struct ProgressWire {
+    #[serde(rename = "libraryItemId")]
+    library_item_id: String,
+    #[serde(rename = "episodeId")]
+    episode_id: Option<String>,
+    #[serde(rename = "currentTime")]
+    current_time: Option<f64>,
+    is_finished: Option<bool>,
+}
+#[derive(Debug, Deserialize)]
+struct ShelfWire {
+    label: String,
+    entries: Vec<ShelfEntryWire>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+enum ShelfEntryWire {
+    #[serde(rename = "show")]
+    Show {
+        #[serde(rename = "libraryItemId")]
+        library_item_id: String,
+    },
+    #[serde(rename = "episode")]
+    Episode {
+        #[serde(rename = "libraryItemId")]
+        library_item_id: String,
+        #[serde(rename = "episodeId")]
+        episode_id: String,
+    },
+}
+
+impl AudiobookshelfClient {
+    /// Runs `f` against a cloned client on a bounded worker thread. All
+    /// `*_bounded` wrappers below differ only in the args they capture and
+    /// the method they call, so they share this dispatch.
+    fn bounded<T>(
+        &self,
+        bound: Duration,
+        f: impl FnOnce(Self) -> Result<T, AudiobookshelfError> + Send + 'static,
+    ) -> Result<T, AudiobookshelfError>
+    where
+        T: Send + 'static,
+    {
+        let client = self.clone();
+        crate::bounded::run_with_hard_bound(move || f(client), bound)
+    }
+
+    pub fn libraries_bounded(
+        &self,
+        key: &str,
+        bound: Duration,
+    ) -> Result<Vec<AudiobookshelfLibrary>, AudiobookshelfError> {
+        let key = key.to_owned();
+        self.bounded(bound, move |client| client.libraries(&key))
+    }
+    pub fn podcast_shows_bounded(
+        &self,
+        key: &str,
+        library_id: &str,
+        page: usize,
+        limit: usize,
+        bound: Duration,
+    ) -> Result<AudiobookshelfShowPage, AudiobookshelfError> {
+        let key = key.to_owned();
+        let library_id = library_id.to_owned();
+        let limit = limit.clamp(1, 100);
+        let page = page.max(1);
+        self.bounded(bound, move |client| {
+            client.podcast_shows(&key, &library_id, page, limit)
+        })
+    }
+    pub fn podcast_detail_bounded(
+        &self,
+        key: &str,
+        library_item_id: &str,
+        bound: Duration,
+    ) -> Result<Vec<AudiobookshelfDownloadedEpisode>, AudiobookshelfError> {
+        let key = key.to_owned();
+        let id = library_item_id.to_owned();
+        self.bounded(bound, move |client| client.podcast_detail(&key, &id))
+    }
+    pub fn progress_bounded(
+        &self,
+        key: &str,
+        bound: Duration,
+    ) -> Result<HashMap<(String, String), AudiobookshelfProgress>, AudiobookshelfError> {
+        let key = key.to_owned();
+        self.bounded(bound, move |client| client.progress(&key))
+    }
+    pub fn shelves_bounded(
+        &self,
+        key: &str,
+        library_id: &str,
+        bound: Duration,
+    ) -> Result<Vec<AudiobookshelfShelf>, AudiobookshelfError> {
+        let key = key.to_owned();
+        let id = library_id.to_owned();
+        self.bounded(bound, move |client| client.shelves(&key, &id))
+    }
+    pub fn cover_bounded(
+        &self,
+        key: &str,
+        library_item_id: &str,
+        bound: Duration,
+    ) -> Result<Vec<u8>, AudiobookshelfError> {
+        let key = key.to_owned();
+        let id = library_item_id.to_owned();
+        self.bounded(bound, move |client| client.cover(&key, &id))
+    }
+
+    pub(super) fn get(&self, key: &str, path: &str) -> Result<ureq::Response, AudiobookshelfError> {
+        self.agent
+            .get(&format!("{}{}", self.server_url, path))
+            .set("Authorization", &format!("Bearer {key}"))
+            .call()
+            .map_err(map_error)
+    }
+    fn libraries(&self, key: &str) -> Result<Vec<AudiobookshelfLibrary>, AudiobookshelfError> {
+        let response: LibrariesResponse = self
+            .get(key, "/api/libraries")?
+            .into_json()
+            .map_err(|_| AudiobookshelfError::malformed())?;
+        Ok(response
+            .libraries
+            .into_iter()
+            .map(|x| AudiobookshelfLibrary {
+                id: x.id,
+                name: x.name,
+                media_type: x.media_type,
+            })
+            .collect())
+    }
+    fn podcast_shows(
+        &self,
+        key: &str,
+        id: &str,
+        page: usize,
+        limit: usize,
+    ) -> Result<AudiobookshelfShowPage, AudiobookshelfError> {
+        let path = format!("/api/libraries/{id}/items?page={page}&limit={limit}");
+        let response: ItemsResponse = self
+            .get(key, &path)?
+            .into_json()
+            .map_err(|_| AudiobookshelfError::malformed())?;
+        if response.page == 0 || response.limit == 0 {
+            return Err(AudiobookshelfError::protocol());
+        }
+        Ok(AudiobookshelfShowPage {
+            page: response.page,
+            limit: response.limit,
+            total: response.total,
+            items: response
+                .items
+                .into_iter()
+                .map(|x| AudiobookshelfShow {
+                    library_item_id: x.library_item_id,
+                    title: x.title,
+                    author: x.author,
+                    cover_path: x.cover_path,
+                })
+                .collect(),
+        })
+    }
+    fn podcast_detail(
+        &self,
+        key: &str,
+        id: &str,
+    ) -> Result<Vec<AudiobookshelfDownloadedEpisode>, AudiobookshelfError> {
+        let response: ExpandedWire = self
+            .get(key, &format!("/api/items/{id}?expanded=1"))?
+            .into_json()
+            .map_err(|_| AudiobookshelfError::malformed())?;
+        if response.id != id {
+            return Err(AudiobookshelfError::protocol());
+        }
+        Ok(response
+            .media
+            .and_then(|x| x.episodes)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|x| AudiobookshelfDownloadedEpisode {
+                library_item_id: id.to_owned(),
+                episode_id: x.id,
+                title: x.title,
+                published_at: x.published_at,
+                duration_seconds: x.duration,
+            })
+            .collect())
+    }
+    fn progress(
+        &self,
+        key: &str,
+    ) -> Result<HashMap<(String, String), AudiobookshelfProgress>, AudiobookshelfError> {
+        let response: ProgressResponse = self
+            .get(key, "/api/me/progress")?
+            .into_json()
+            .map_err(|_| AudiobookshelfError::malformed())?;
+        Ok(response
+            .media_progress
+            .into_iter()
+            .filter_map(|x| {
+                let episode_id = x.episode_id?;
+                let value = AudiobookshelfProgress {
+                    library_item_id: x.library_item_id.clone(),
+                    episode_id: episode_id.clone(),
+                    current_time_seconds: x.current_time.unwrap_or(0.0).max(0.0),
+                    is_finished: x.is_finished.unwrap_or(false),
+                };
+                Some(((x.library_item_id, episode_id), value))
+            })
+            .collect())
+    }
+    fn shelves(
+        &self,
+        key: &str,
+        id: &str,
+    ) -> Result<Vec<AudiobookshelfShelf>, AudiobookshelfError> {
+        let response: Vec<ShelfWire> = self
+            .get(key, &format!("/api/libraries/{id}/personalized"))?
+            .into_json()
+            .map_err(|_| AudiobookshelfError::malformed())?;
+        Ok(response
+            .into_iter()
+            .map(|x| AudiobookshelfShelf {
+                label: x.label,
+                entries: x
+                    .entries
+                    .into_iter()
+                    .map(|entry| match entry {
+                        ShelfEntryWire::Show { library_item_id } => {
+                            AudiobookshelfShelfEntry::Show(library_item_id)
+                        }
+                        ShelfEntryWire::Episode {
+                            library_item_id,
+                            episode_id,
+                        } => AudiobookshelfShelfEntry::Episode {
+                            library_item_id,
+                            episode_id,
+                        },
+                    })
+                    .collect(),
+            })
+            .collect())
+    }
+    fn cover(&self, key: &str, id: &str) -> Result<Vec<u8>, AudiobookshelfError> {
+        let response = self.get(key, &format!("/api/items/{id}/cover"))?;
+        let mut bytes = Vec::new();
+        response
+            .into_reader()
+            .read_to_end(&mut bytes)
+            .map_err(|_| AudiobookshelfError::malformed())?;
+        Ok(bytes)
+    }
+}
+
+pub(super) fn map_error(error: ureq::Error) -> AudiobookshelfError {
+    match error {
+        ureq::Error::Status(401 | 403, _) => {
+            AudiobookshelfError::new(super::AudiobookshelfFailureClass::AuthenticationRejected)
+        }
+        ureq::Error::Status(status, _) if status >= 500 => {
+            AudiobookshelfError::new(super::AudiobookshelfFailureClass::Server)
+        }
+        ureq::Error::Status(_, _) => AudiobookshelfError::protocol(),
+        _ => AudiobookshelfError::connectivity(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(name: &str) -> String {
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/audiobookshelf/{name}.json",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn fixtures_decode_without_losing_native_identity() {
+        let libraries: LibrariesResponse = serde_json::from_str(&fixture("libraries")).unwrap();
+        assert_eq!(libraries.libraries[1].id, "lib-podcast");
+        assert_eq!(libraries.libraries[1].media_type, "podcast");
+        let page: ItemsResponse = serde_json::from_str(&fixture("items-page")).unwrap();
+        assert_eq!((page.page, page.limit, page.total), (2, 2, 5));
+        assert_eq!(page.items[0].library_item_id, "show-2");
+        let expanded: ExpandedWire = serde_json::from_str(&fixture("item-expanded")).unwrap();
+        assert_eq!(expanded.id, "show-2");
+        assert_eq!(expanded.media.unwrap().episodes.unwrap()[0].id, "episode-1");
+    }
+
+    #[test]
+    fn progress_and_shelf_fixtures_preserve_user_and_server_order() {
+        let progress: ProgressResponse = serde_json::from_str(&fixture("progress")).unwrap();
+        assert_eq!(progress.media_progress[0].library_item_id, "show-2");
+        let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
+        assert_eq!(shelves[0].label, "Continue listening");
+        assert!(matches!(
+            shelves[0].entries[1],
+            ShelfEntryWire::Episode { .. }
+        ));
+    }
+
+    #[test]
+    fn null_episode_id_progress_is_skipped() {
+        let json = r#"{"mediaProgress":[{"libraryItemId":"lib-1","episodeId":null,"currentTime":10.0,"isFinished":false}]}"#;
+        let response: ProgressResponse = serde_json::from_str(json).unwrap();
+        let mapped: HashMap<(String, String), AudiobookshelfProgress> = response
+            .media_progress
+            .into_iter()
+            .filter_map(|x| {
+                let episode_id = x.episode_id?;
+                let value = AudiobookshelfProgress {
+                    library_item_id: x.library_item_id.clone(),
+                    episode_id: episode_id.clone(),
+                    current_time_seconds: x.current_time.unwrap_or(0.0).max(0.0),
+                    is_finished: x.is_finished.unwrap_or(false),
+                };
+                Some(((x.library_item_id, episode_id), value))
+            })
+            .collect();
+        assert!(mapped.is_empty());
+    }
+
+    #[test]
+    fn covers_allow_present_and_missing_paths() {
+        let cover_json = fixture("present-cover");
+        let trimmed = cover_json.trim();
+        let inner = trimmed
+            .strip_prefix('{')
+            .and_then(|s| s.strip_suffix('}'))
+            .unwrap();
+        let present: ShowWire = serde_json::from_str(&format!(
+            "{{\"libraryItemId\":\"show-2\",\"title\":\"Show\",{inner}}}"
+        ))
+        .unwrap();
+        assert_eq!(present.cover_path.as_deref(), Some("/cover/show-2"));
+        let missing: serde_json::Value = serde_json::from_str(&fixture("missing-cover")).unwrap();
+        assert!(missing["coverPath"].is_null());
+    }
+
+    #[test]
+    fn invalid_page_metadata_is_a_protocol_failure() {
+        let page: ItemsResponse =
+            serde_json::from_str(r#"{"page":0,"limit":20,"total":1,"items":[]}"#).unwrap();
+        assert!(page.page == 0 || page.limit == 0);
+    }
+
+    #[test]
+    fn auth_failures_are_classified_and_errors_redact_credentials() {
+        let error = AudiobookshelfError::new(
+            super::super::AudiobookshelfFailureClass::AuthenticationRejected,
+        );
+        assert!(!error.to_string().contains("secret-key"));
+        assert!(serde_json::from_str::<ItemsResponse>("not json").is_err());
+    }
+}

@@ -261,11 +261,15 @@ impl App {
             return;
         }
         // Apply the tab saved from the previous session once libs have loaded.
-        if self.library_tab_pending > 0 && !self.libs.is_empty() {
+        if self.library_tab_pending > 0
+            && (!self.libs.is_empty() || !self.audiobookshelf_libraries.is_empty())
+        {
             let fp = self.feeds_tab_pos();
-            let max_pos = fp.unwrap_or(self.libs.len());
+            let emby = self.libs.len();
+            let audio = self.audiobookshelf_libraries.len();
+            let max_pos = fp.unwrap_or(emby + audio);
             let pos = self.library_tab_pending.min(max_pos);
-            self.tab = TabSelection::from_position(pos, fp);
+            self.tab = TabSelection::from_position_with_counts(pos, emby, audio, fp.is_some());
             self.library_tab_pending = 0;
         }
         // Safety clamp -- tab should already be valid, but guard against

@@ -175,6 +175,18 @@ pub fn write_image_disk_cache(key: &str, bytes: &[u8]) {
     let _ = std::fs::write(dir.join(safe_cache_filename(key)), bytes);
 }
 
+pub fn clear_image_disk_cache_prefix(prefix: &str) {
+    let Ok(entries) = std::fs::read_dir(image_disk_cache_dir()) else {
+        return;
+    };
+    let prefix = safe_cache_filename(prefix);
+    for entry in entries.flatten() {
+        if entry.file_name().to_string_lossy().starts_with(&prefix) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 pub fn evict_old_image_cache() {
     std::thread::spawn(|| {
         let dir = image_disk_cache_dir();

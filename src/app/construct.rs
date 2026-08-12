@@ -35,6 +35,9 @@ impl App {
             emby_startup_request: init.emby_startup_request,
             audiobookshelf_startup_rx: init.audiobookshelf_startup_rx,
             audiobookshelf_startup_request: init.audiobookshelf_startup_request,
+            audiobookshelf_catalog_rx: None,
+            audiobookshelf_libraries: Vec::new(),
+            audiobookshelf_browse: Vec::new(),
             audiobookshelf_test_rx: init.audiobookshelf_test_rx,
             audiobookshelf_setup_rx: init.audiobookshelf_setup_rx,
             emby_setup_form: init.emby_setup_form,
@@ -699,6 +702,10 @@ impl App {
         if endpoint.is_local() {
             app.try_auto_reconnect();
         }
+        let generation = app.audiobookshelf_runtime.generation();
+        app.audiobookshelf_startup_request = (audiobookshelf_configured
+            && audiobookshelf_credential_present)
+            .then_some((app.config.lock().unwrap().clone(), generation));
         app
     }
 

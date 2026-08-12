@@ -553,6 +553,10 @@ impl App {
             self.render_feeds(f, area, focused, layout);
             return;
         }
+        if self.tab.is_audiobookshelf() {
+            self.render_audiobookshelf_library(f, area, focused, layout);
+            return;
+        }
         let lib_idx = self.tab.library_index().unwrap();
         let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
         let is_album_folders = self.is_viewing_album_folders(lib_idx);
@@ -566,6 +570,175 @@ impl App {
         } else {
             self.render_list(f, area, focused, layout);
         }
+    }
+
+    fn render_audiobookshelf_library(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        focused: bool,
+        layout: &mut LayoutMain,
+    ) {
+        let Some(index) = self.tab.audiobookshelf_index() else {
+            return;
+        };
+        let Some(state) = self.audiobookshelf_browse.get(index).cloned() else {
+            render_placeholder(f, area, "Audiobookshelf loading…");
+            return;
+        };
+        if state.shows.is_empty() {
+            render_placeholder(
+                f,
+                area,
+                state
+                    .error
+                    .as_deref()
+                    .unwrap_or(if state.loading_pages.is_empty() {
+                        "No podcast shows"
+                    } else {
+                        "Loading podcast shows…"
+                    }),
+            );
+            return;
+        }
+        let rows = state.rows();
+        // Queue visible show covers before taking the immutable browse-state
+        // borrow needed to build row labels. The request path is shared with
+        // Emby cards and uses the Service-scoped, generation-aware cache.
+        let server_url = self
+            .config
+            .lock()
+            .unwrap()
+            .audiobookshelf_setup
+            .as_ref()
+            .map(|setup| setup.server_url.clone());
+        if self.images_enabled() {
+            if let Some(ref server_url) = server_url {
+                let ids: Vec<String> = rows
+                    .iter()
+                    .filter_map(|row| match row {
+                        super::super::types_audiobookshelf_browse::AudiobookshelfRowId::Show(
+                            id,
+                        ) => Some(id.clone()),
+                        super::super::types_audiobookshelf_browse::AudiobookshelfRowId::Shelf {
+                            shelf,
+                            entry,
+                        } => state
+                            .shelves
+                            .get(*shelf)
+                            .and_then(|s| s.entries.get(*entry))
+                            .and_then(|entry| match entry {
+                                mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Show(id) => {
+                                    Some(id.clone())
+                                }
+                                _ => None,
+                            }),
+                        _ => None,
+                    })
+                    .collect();
+                for id in ids {
+                    self.fetch_audiobookshelf_cover(server_url.clone(), id);
+                }
+            }
+        }
+        let selected = rows
+            .iter()
+            .position(|row| Some(row) == state.cursor_row().as_ref())
+            .unwrap_or(0);
+        let items = rows
+            .into_iter()
+            .enumerate()
+            .map(|(i, row)| {
+                if let Some((id, server)) = show_id_and_server(&state, &row, server_url.as_deref())
+                {
+                    let key = crate::app::images::audiobookshelf_cover_cache_key(
+                        server,
+                        &id,
+                        self.current_protocol_suffix(),
+                    );
+                    if self.images_enabled() {
+                        self.render_audiobookshelf_row_image(
+                            f,
+                            Rect {
+                                x: area.x,
+                                y: area.y + i as u16,
+                                width: 8.min(area.width),
+                                height: 1,
+                            },
+                            &key,
+                        );
+                    }
+                }
+                let title = match row {
+                    super::super::types_audiobookshelf_browse::AudiobookshelfRowId::Show(id) => {
+                        state
+                            .shows
+                            .iter()
+                            .find(|show| show.library_item_id == id)
+                            .map(|show| show.title.clone())
+                            .unwrap_or_default()
+                    }
+                    super::super::types_audiobookshelf_browse::AudiobookshelfRowId::Episode {
+                        library_item_id,
+                        episode_id,
+                    } => state
+                        .episodes
+                        .as_ref()
+                        .and_then(|episodes| {
+                            episodes.iter().find(|episode| {
+                                episode.library_item_id == library_item_id
+                                    && episode.episode_id == episode_id
+                            })
+                        })
+                        .map(|episode| {
+                            format!(
+                                "{}  {}",
+                                episode.title,
+                                episode.published_at.as_deref().unwrap_or("")
+                            )
+                        })
+                        .unwrap_or_else(|| "Episode".into()),
+                    super::super::types_audiobookshelf_browse::AudiobookshelfRowId::Shelf {
+                        shelf,
+                        entry,
+                    } => state
+                        .shelves
+                        .get(shelf)
+                        .and_then(|value| value.entries.get(entry))
+                        .map(|value| match value {
+                            mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Show(id) => state
+                                .shows
+                                .iter()
+                                .find(|show| &show.library_item_id == id)
+                                .map(|show| show.title.clone())
+                                .unwrap_or_else(|| "Unavailable show".into()),
+                            mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Episode {
+                                episode_id,
+                                ..
+                            } => format!("Episode {episode_id}"),
+                        })
+                        .unwrap_or_else(|| "Unavailable shelf entry".into()),
+                };
+                let style = if i == selected && focused {
+                    Style::default().fg(palette::AQUA)
+                } else {
+                    Style::default().fg(palette::WHITE)
+                };
+                Line::from(Span::styled(
+                    format!("{} {}", if i == selected { "▸" } else { " " }, title),
+                    style,
+                ))
+            })
+            .collect::<Vec<_>>();
+        f.render_widget(
+            Paragraph::new(items),
+            Rect {
+                x: area.x + 9.min(area.width),
+                width: area.width.saturating_sub(9),
+                ..area
+            },
+        );
+        layout.left_area = area;
     }
 
     /// Returns the currently cursor-selected item at the album-folder-listing
@@ -597,4 +770,27 @@ impl App {
             self.album_artist_cache.get(&item.id).map(String::as_str),
         )
     }
+}
+
+fn show_id_and_server<'a>(
+    state: &super::super::types_audiobookshelf_browse::AudiobookshelfBrowseState,
+    row: &super::super::types_audiobookshelf_browse::AudiobookshelfRowId,
+    server: Option<&'a str>,
+) -> Option<(String, &'a str)> {
+    let id = match row {
+        super::super::types_audiobookshelf_browse::AudiobookshelfRowId::Show(id) => id,
+        super::super::types_audiobookshelf_browse::AudiobookshelfRowId::Shelf { shelf, entry } => {
+            match state.shelves.get(*shelf)?.entries.get(*entry)? {
+                mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Show(id) => id,
+                _ => return None,
+            }
+        }
+        _ => return None,
+    };
+    let server = server?;
+    state
+        .shows
+        .iter()
+        .any(|show| &show.library_item_id == id)
+        .then(|| (id.clone(), server))
 }

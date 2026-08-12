@@ -47,6 +47,11 @@ pub struct App {
         crate::config::Config,
         mbv_core::service_runtime::SetupGeneration,
     )>,
+    pub(super) audiobookshelf_catalog_rx:
+        Option<super::service_startup::AudiobookshelfCatalogReceiver>,
+    pub(super) audiobookshelf_libraries: Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
+    pub(super) audiobookshelf_browse:
+        Vec<super::types_audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(super) audiobookshelf_test_rx:
         Option<super::service_startup::AudiobookshelfStartupReceiver>,
     pub(super) audiobookshelf_setup_rx:
@@ -371,6 +376,69 @@ impl App {
         ));
     }
 
+    pub(super) fn clear_audiobookshelf_catalog(&mut self) {
+        self.audiobookshelf_catalog_rx = None;
+        self.audiobookshelf_libraries.clear();
+        self.audiobookshelf_browse.clear();
+        self.clear_audiobookshelf_images();
+    }
+
+    pub(super) fn clear_audiobookshelf_images(&mut self) {
+        self.card_image_states
+            .retain(|key, _| !key.starts_with(super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX));
+        self.card_image_loading
+            .retain(|key| !key.starts_with(super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX));
+        self.pending_image_fetches.retain(|request| {
+            !matches!(
+                request.source,
+                super::images::ImageSource::Audiobookshelf { .. }
+            )
+        });
+        crate::config::clear_image_disk_cache_prefix(
+            super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX,
+        );
+    }
+    pub(super) fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
+        let Some(index) = self.tab.audiobookshelf_index() else {
+            return;
+        };
+        let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
+            return;
+        };
+        if let Some(cached) = state.detail_cache.get(&library_item_id).cloned() {
+            state.episodes = Some(cached);
+            state.detail_loading = false;
+            return;
+        }
+        if state.episodes.is_some() || state.detail_loading {
+            return;
+        }
+        state.detail_loading = true;
+        let config_snapshot = self.config.lock().unwrap().clone();
+        let Some((setup, key)) =
+            super::service_startup::audiobookshelf_setup_and_key(&config_snapshot)
+        else {
+            return;
+        };
+        let generation = self.audiobookshelf_runtime.generation();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let result = mbv_core::audiobookshelf::AudiobookshelfClient::new(&setup.server_url)
+                .and_then(|client| {
+                    client.podcast_detail_bounded(
+                        &key,
+                        &library_item_id,
+                        mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+                    )
+                });
+            let _ = tx.send(super::types_events::LibEvent::AudiobookshelfDetailFetched {
+                generation,
+                library_item_id,
+                result,
+            });
+        });
+    }
+
     pub(super) fn apply_audiobookshelf_completion(
         &mut self,
         completion: super::service_startup::AudiobookshelfCompletion,
@@ -387,6 +455,11 @@ impl App {
                 };
                 self.audiobookshelf_runtime
                     .commit_ready(completion.generation, user.clone());
+                self.audiobookshelf_catalog_rx =
+                    Some(super::service_startup::start_audiobookshelf_catalog(
+                        self.config.lock().unwrap().clone(),
+                        completion.generation,
+                    ));
                 if matches!(
                     completion.kind,
                     super::service_startup::AudiobookshelfCompletionKind::Test
@@ -405,6 +478,7 @@ impl App {
                 self.audiobookshelf_runtime
                     .complete(completion.generation, state);
                 if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
+                    self.clear_audiobookshelf_catalog();
                     self.audiobookshelf_runtime.user = None;
                     let deletion = mbv_core::config::clear_service_secret_result(
                         mbv_core::config::ServiceKind::Audiobookshelf,
@@ -723,55 +797,4 @@ impl App {
         self.home.section = self.home.section.min(sections.saturating_sub(1));
         self.home_loading = false;
     }
-}
-
-pub(super) struct AppInit {
-    pub(super) config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
-    pub(super) emby_runtime: EmbyRuntime,
-    pub(super) audiobookshelf_runtime: AudiobookshelfRuntime,
-    pub(super) emby_startup_rx: Option<super::service_startup::StartupReceiver>,
-    pub(super) emby_startup_request: Option<(
-        crate::config::Config,
-        mbv_core::service_runtime::SetupGeneration,
-    )>,
-    pub(super) audiobookshelf_startup_rx:
-        Option<super::service_startup::AudiobookshelfStartupReceiver>,
-    pub(super) audiobookshelf_startup_request: Option<(
-        crate::config::Config,
-        mbv_core::service_runtime::SetupGeneration,
-    )>,
-    pub(super) audiobookshelf_test_rx:
-        Option<super::service_startup::AudiobookshelfStartupReceiver>,
-    pub(super) audiobookshelf_setup_rx:
-        Option<std::sync::mpsc::Receiver<super::service_startup::AudiobookshelfSetupCompletion>>,
-    pub(super) emby_setup_form: Option<super::services_settings::EmbySetupForm>,
-    pub(super) emby_setup_rx: Option<mpsc::Receiver<super::service_startup::SetupCompletion>>,
-    pub(super) player: mbv_core::player::PlayerProxy,
-    pub(super) player_rx: std::sync::mpsc::Receiver<mbv_core::player::PlayerEvent>,
-    pub(super) ws_rx: std::sync::mpsc::Receiver<WsEvent>,
-    pub(super) ws_send_tx: Option<mbv_core::ws::WsSender>,
-    pub(super) player_tab: PlayerTab,
-    pub(super) remote_player_tab: Option<PlayerTab>,
-    pub(super) initial_queue_scope: QueueScope,
-    pub(super) system_notifications: bool,
-    pub(super) image_protocol: Option<String>,
-    pub(super) image_protocol_enabled: bool,
-    pub(super) hidden_libraries: Vec<String>,
-    pub(super) library_routes: std::collections::HashMap<String, String>,
-    pub(super) hidden_latest: Vec<String>,
-    pub(super) music_levels: Vec<String>,
-    pub(super) use_nerd_fonts: bool,
-    pub(super) indicator_style: render::indicators::IndicatorStyle,
-    pub(super) image_cache_size: usize,
-    pub(super) lib_tx: mpsc::Sender<LibEvent>,
-    pub(super) lib_rx: mpsc::Receiver<LibEvent>,
-    pub(super) sessions_tx: mpsc::Sender<SessionEvent>,
-    pub(super) sessions_rx: mpsc::Receiver<SessionEvent>,
-    pub(super) card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
-    pub(super) card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
-    pub(super) notif_action_tx: mpsc::Sender<String>,
-    pub(super) notif_action_rx: mpsc::Receiver<String>,
-    pub(super) search_tx: mpsc::Sender<(String, Result<Vec<EmbyItem>, String>)>,
-    pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<EmbyItem>, String>)>,
-    pub(super) idle_feed: Option<IdleFeed>,
 }

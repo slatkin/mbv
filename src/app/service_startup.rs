@@ -1,4 +1,5 @@
 use mbv_core::api::EmbyClient;
+use mbv_core::audiobookshelf::AudiobookshelfClient;
 use mbv_core::config::{load_service_secret, EmbySetup, ServiceKind};
 use mbv_core::service_runtime::{EmbyFailure, EmbyFailureClass, ServiceState, SetupGeneration};
 use std::sync::mpsc;
@@ -41,6 +42,120 @@ pub(super) struct AudiobookshelfStartupReceiver {
     pub(super) rx: mpsc::Receiver<AudiobookshelfCompletion>,
 }
 
+type AudiobookshelfProgressMap =
+    std::collections::HashMap<(String, String), mbv_core::audiobookshelf::AudiobookshelfProgress>;
+
+pub(super) struct AudiobookshelfCatalogCompletion {
+    pub(super) generation: SetupGeneration,
+    pub(super) result: Result<
+        (
+            Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
+            AudiobookshelfProgressMap,
+        ),
+        mbv_core::audiobookshelf::AudiobookshelfError,
+    >,
+}
+
+pub(super) struct AudiobookshelfCatalogReceiver {
+    pub(super) rx: mpsc::Receiver<AudiobookshelfCatalogCompletion>,
+}
+
+/// Resolves the configured Audiobookshelf setup, loads its Bearer secret,
+/// and constructs a client. Shared by the startup paths below; the missing-
+/// setup and missing-secret error classes match `start_audiobookshelf`'s
+/// established precedent (`Protocol` / `Unavailable`).
+fn audiobookshelf_client(
+    config: &crate::config::Config,
+) -> Result<(AudiobookshelfClient, String), mbv_core::audiobookshelf::AudiobookshelfError> {
+    let setup = config.audiobookshelf_setup.as_ref().ok_or(
+        mbv_core::audiobookshelf::AudiobookshelfError {
+            class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Protocol,
+        },
+    )?;
+    let key = load_service_secret(ServiceKind::Audiobookshelf).ok_or(
+        mbv_core::audiobookshelf::AudiobookshelfError {
+            class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Unavailable,
+        },
+    )?;
+    let client = AudiobookshelfClient::new(&setup.server_url)?;
+    Ok((client, key))
+}
+
+/// Resolves the configured Audiobookshelf setup and loads its Bearer secret
+/// without constructing a client, for call sites that early-return silently
+/// on missing setup/credentials rather than surfacing a typed error.
+pub(super) fn audiobookshelf_setup_and_key(
+    config: &crate::config::Config,
+) -> Option<(mbv_core::config::AudiobookshelfSetup, String)> {
+    let setup = config.audiobookshelf_setup.clone()?;
+    let key = load_service_secret(ServiceKind::Audiobookshelf)?;
+    Some((setup, key))
+}
+
+pub(super) fn start_audiobookshelf_catalog(
+    config: crate::config::Config,
+    generation: SetupGeneration,
+) -> AudiobookshelfCatalogReceiver {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
+            let libraries =
+                client.libraries_bounded(&key, AudiobookshelfClient::REQUEST_HARD_BOUND)?;
+            let progress =
+                client.progress_bounded(&key, AudiobookshelfClient::REQUEST_HARD_BOUND)?;
+            Ok((libraries, progress))
+        });
+        let _ = tx.send(AudiobookshelfCatalogCompletion { generation, result });
+    });
+    AudiobookshelfCatalogReceiver { rx }
+}
+
+pub(super) fn start_audiobookshelf_shelves(
+    config: crate::config::Config,
+    generation: SetupGeneration,
+    library_id: String,
+    tx: mpsc::Sender<super::types_events::LibEvent>,
+) {
+    std::thread::spawn(move || {
+        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
+            client.shelves_bounded(&key, &library_id, AudiobookshelfClient::REQUEST_HARD_BOUND)
+        });
+        let _ = tx.send(
+            super::types_events::LibEvent::AudiobookshelfShelvesFetched {
+                generation,
+                library_id,
+                shelves: result,
+            },
+        );
+    });
+}
+
+pub(super) fn start_audiobookshelf_shows(
+    config: crate::config::Config,
+    generation: SetupGeneration,
+    library_id: String,
+    page: usize,
+    tx: mpsc::Sender<super::types_events::LibEvent>,
+) {
+    const PAGE_LIMIT: usize = 20;
+    std::thread::spawn(move || {
+        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
+            client.podcast_shows_bounded(
+                &key,
+                &library_id,
+                page,
+                PAGE_LIMIT,
+                AudiobookshelfClient::REQUEST_HARD_BOUND,
+            )
+        });
+        let _ = tx.send(super::types_events::LibEvent::AudiobookshelfShowsFetched {
+            generation,
+            library_id,
+            result,
+        });
+    });
+}
+
 pub(super) fn start_audiobookshelf(
     config: crate::config::Config,
     generation: SetupGeneration,
@@ -48,22 +163,9 @@ pub(super) fn start_audiobookshelf(
 ) -> AudiobookshelfStartupReceiver {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let result = config
-            .audiobookshelf_setup
-            .as_ref()
-            .ok_or(mbv_core::audiobookshelf::AudiobookshelfError {
-                class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Protocol,
-            })
-            .and_then(|setup| {
-                load_service_secret(ServiceKind::Audiobookshelf)
-                    .ok_or(mbv_core::audiobookshelf::AudiobookshelfError {
-                        class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Unavailable,
-                    })
-                    .and_then(|key| {
-                        mbv_core::audiobookshelf::AudiobookshelfClient::new(&setup.server_url)
-                            .and_then(|client| client.me_bounded(&key, mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND))
-                    })
-            });
+        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
+            client.me_bounded(&key, AudiobookshelfClient::REQUEST_HARD_BOUND)
+        });
         let _ = tx.send(AudiobookshelfCompletion {
             generation,
             kind,
@@ -221,7 +323,7 @@ pub(super) fn initial_state(configured: bool, credential_present: bool) -> Servi
 /// Initial routing uses only validated setup and local feed subscriptions.
 /// Legacy `[server]` data is intentionally not consulted.
 pub(super) fn should_open_services(config: &crate::config::Config) -> bool {
-    config.emby_setup.is_none() && config.feeds.is_empty()
+    config.emby_setup.is_none() && config.audiobookshelf_setup.is_none() && config.feeds.is_empty()
 }
 
 pub(super) fn startup_status(state: ServiceState) -> &'static str {

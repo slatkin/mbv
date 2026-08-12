@@ -7,6 +7,7 @@
 pub(super) enum TabSelection {
     Home,
     Library(usize),
+    AudiobookshelfLibrary(usize),
     Feeds,
 }
 
@@ -21,11 +22,51 @@ impl TabSelection {
         matches!(self, Self::Feeds)
     }
 
+    pub(super) fn is_audiobookshelf(self) -> bool {
+        matches!(self, Self::AudiobookshelfLibrary(_))
+    }
+
     /// The 0-based library index, or `None` on Home and Feeds.
     pub(super) fn library_index(self) -> Option<usize> {
         match self {
             Self::Home | Self::Feeds => None,
             Self::Library(i) => Some(i),
+            Self::AudiobookshelfLibrary(_) => None,
+        }
+    }
+
+    pub(super) fn audiobookshelf_index(self) -> Option<usize> {
+        match self {
+            Self::AudiobookshelfLibrary(i) => Some(i),
+            _ => None,
+        }
+    }
+
+    pub(super) fn from_position_with_counts(
+        pos: usize,
+        emby: usize,
+        audio: usize,
+        feeds: bool,
+    ) -> Self {
+        if pos == 0 {
+            Self::Home
+        } else if pos <= emby {
+            Self::Library(pos - 1)
+        } else if pos <= emby + audio {
+            Self::AudiobookshelfLibrary(pos - emby - 1)
+        } else if feeds {
+            Self::Feeds
+        } else {
+            Self::Home
+        }
+    }
+
+    pub(super) fn to_position_with_counts(self, emby: usize, feeds_pos: Option<usize>) -> usize {
+        match self {
+            Self::Home => 0,
+            Self::Library(i) => i + 1,
+            Self::AudiobookshelfLibrary(i) => emby + i + 1,
+            Self::Feeds => feeds_pos.unwrap_or(0),
         }
     }
 
@@ -47,6 +88,7 @@ impl TabSelection {
         match self {
             Self::Home => 0,
             Self::Library(i) => i + 1,
+            Self::AudiobookshelfLibrary(i) => i + 1,
             Self::Feeds => feeds_tab_pos.unwrap_or(0),
         }
     }

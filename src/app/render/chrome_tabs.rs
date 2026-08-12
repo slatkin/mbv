@@ -123,13 +123,16 @@ impl App {
         };
         let all_names: Vec<String> = std::iter::once("Home".to_string())
             .chain(self.libs.iter().map(|l| l.library.name.clone()))
+            .chain(self.audiobookshelf_libraries.iter().map(|l| l.name.clone()))
             .chain(if self.has_feeds_subscriptions() {
                 Some("Feeds".to_string())
             } else {
                 None
             })
             .collect();
-        let tab_pos = self.tab.to_position(self.feeds_tab_pos());
+        let tab_pos = self
+            .tab
+            .to_position_with_counts(self.libs.len(), self.feeds_tab_pos());
         let selected_tab = if tab_pos < vis_start || tab_pos >= vis_end {
             usize::MAX
         } else {
