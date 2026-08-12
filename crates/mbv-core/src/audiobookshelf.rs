@@ -177,21 +177,7 @@ impl AudiobookshelfClient {
     }
 
     fn me(&self, api_key: &str) -> Result<AudiobookshelfUser, AudiobookshelfError> {
-        let response = self
-            .agent
-            .get(&format!("{}/api/me", self.server_url))
-            .set("Authorization", &format!("Bearer {api_key}"))
-            .call()
-            .map_err(|error| match error {
-                ureq::Error::Status(401 | 403, _) => {
-                    AudiobookshelfError::new(AudiobookshelfFailureClass::AuthenticationRejected)
-                }
-                ureq::Error::Status(status, _) if status >= 500 => {
-                    AudiobookshelfError::new(AudiobookshelfFailureClass::Server)
-                }
-                ureq::Error::Status(_, _) => AudiobookshelfError::protocol(),
-                _ => AudiobookshelfError::connectivity(),
-            })?;
+        let response = self.get(api_key, "/api/me")?;
         let user: AudiobookshelfMeResponse = response
             .into_json()
             .map_err(|_| AudiobookshelfError::malformed())?;

@@ -60,40 +60,51 @@ pub(super) struct AudiobookshelfCatalogReceiver {
     pub(super) rx: mpsc::Receiver<AudiobookshelfCatalogCompletion>,
 }
 
+/// Resolves the configured Audiobookshelf setup, loads its Bearer secret,
+/// and constructs a client. Shared by the startup paths below; the missing-
+/// setup and missing-secret error classes match `start_audiobookshelf`'s
+/// established precedent (`Protocol` / `Unavailable`).
+fn audiobookshelf_client(
+    config: &crate::config::Config,
+) -> Result<(AudiobookshelfClient, String), mbv_core::audiobookshelf::AudiobookshelfError> {
+    let setup = config.audiobookshelf_setup.as_ref().ok_or(
+        mbv_core::audiobookshelf::AudiobookshelfError {
+            class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Protocol,
+        },
+    )?;
+    let key = load_service_secret(ServiceKind::Audiobookshelf).ok_or(
+        mbv_core::audiobookshelf::AudiobookshelfError {
+            class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Unavailable,
+        },
+    )?;
+    let client = AudiobookshelfClient::new(&setup.server_url)?;
+    Ok((client, key))
+}
+
+/// Resolves the configured Audiobookshelf setup and loads its Bearer secret
+/// without constructing a client, for call sites that early-return silently
+/// on missing setup/credentials rather than surfacing a typed error.
+pub(super) fn audiobookshelf_setup_and_key(
+    config: &crate::config::Config,
+) -> Option<(mbv_core::config::AudiobookshelfSetup, String)> {
+    let setup = config.audiobookshelf_setup.clone()?;
+    let key = load_service_secret(ServiceKind::Audiobookshelf)?;
+    Some((setup, key))
+}
+
 pub(super) fn start_audiobookshelf_catalog(
     config: crate::config::Config,
     generation: SetupGeneration,
 ) -> AudiobookshelfCatalogReceiver {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let result = config.audiobookshelf_setup.as_ref().map_or_else(
-            || {
-                Err(mbv_core::audiobookshelf::AudiobookshelfError {
-                    class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Unavailable,
-                })
-            },
-            |setup| {
-                load_service_secret(ServiceKind::Audiobookshelf).map_or_else(
-                    || {
-                        Err(mbv_core::audiobookshelf::AudiobookshelfError {
-                            class:
-                                mbv_core::audiobookshelf::AudiobookshelfFailureClass::Unavailable,
-                        })
-                    },
-                    |key| {
-                        AudiobookshelfClient::new(&setup.server_url).and_then(|client| {
-                            let libraries = client.libraries_bounded(
-                                &key,
-                                AudiobookshelfClient::REQUEST_HARD_BOUND,
-                            )?;
-                            let progress = client
-                                .progress_bounded(&key, AudiobookshelfClient::REQUEST_HARD_BOUND)?;
-                            Ok((libraries, progress))
-                        })
-                    },
-                )
-            },
-        );
+        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
+            let libraries =
+                client.libraries_bounded(&key, AudiobookshelfClient::REQUEST_HARD_BOUND)?;
+            let progress =
+                client.progress_bounded(&key, AudiobookshelfClient::REQUEST_HARD_BOUND)?;
+            Ok((libraries, progress))
+        });
         let _ = tx.send(AudiobookshelfCatalogCompletion { generation, result });
     });
     AudiobookshelfCatalogReceiver { rx }
@@ -106,31 +117,9 @@ pub(super) fn start_audiobookshelf_shelves(
     tx: mpsc::Sender<super::types_events::LibEvent>,
 ) {
     std::thread::spawn(move || {
-        let result = config.audiobookshelf_setup.as_ref().map_or_else(
-            || {
-                Err(mbv_core::audiobookshelf::AudiobookshelfError {
-                    class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Protocol,
-                })
-            },
-            |setup| {
-                load_service_secret(ServiceKind::Audiobookshelf).map_or_else(
-                    || {
-                        Err(mbv_core::audiobookshelf::AudiobookshelfError {
-                            class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Protocol,
-                        })
-                    },
-                    |key| {
-                        AudiobookshelfClient::new(&setup.server_url).and_then(|client| {
-                            client.shelves_bounded(
-                                &key,
-                                &library_id,
-                                AudiobookshelfClient::REQUEST_HARD_BOUND,
-                            )
-                        })
-                    },
-                )
-            },
-        );
+        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
+            client.shelves_bounded(&key, &library_id, AudiobookshelfClient::REQUEST_HARD_BOUND)
+        });
         let _ = tx.send(
             super::types_events::LibEvent::AudiobookshelfShelvesFetched {
                 generation,
@@ -148,22 +137,9 @@ pub(super) fn start_audiobookshelf(
 ) -> AudiobookshelfStartupReceiver {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let result = config
-            .audiobookshelf_setup
-            .as_ref()
-            .ok_or(mbv_core::audiobookshelf::AudiobookshelfError {
-                class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Protocol,
-            })
-            .and_then(|setup| {
-                load_service_secret(ServiceKind::Audiobookshelf)
-                    .ok_or(mbv_core::audiobookshelf::AudiobookshelfError {
-                        class: mbv_core::audiobookshelf::AudiobookshelfFailureClass::Unavailable,
-                    })
-                    .and_then(|key| {
-                        mbv_core::audiobookshelf::AudiobookshelfClient::new(&setup.server_url)
-                            .and_then(|client| client.me_bounded(&key, mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND))
-                    })
-            });
+        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
+            client.me_bounded(&key, AudiobookshelfClient::REQUEST_HARD_BOUND)
+        });
         let _ = tx.send(AudiobookshelfCompletion {
             generation,
             kind,

@@ -385,16 +385,18 @@ impl App {
 
     pub(super) fn clear_audiobookshelf_images(&mut self) {
         self.card_image_states
-            .retain(|key, _| !key.starts_with("audiobookshelf:"));
+            .retain(|key, _| !key.starts_with(super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX));
         self.card_image_loading
-            .retain(|key| !key.starts_with("audiobookshelf:"));
+            .retain(|key| !key.starts_with(super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX));
         self.pending_image_fetches.retain(|request| {
             !matches!(
                 request.source,
                 super::images::ImageSource::Audiobookshelf { .. }
             )
         });
-        crate::config::clear_image_disk_cache_prefix("audiobookshelf:");
+        crate::config::clear_image_disk_cache_prefix(
+            super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX,
+        );
     }
 
     pub(super) fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
@@ -408,11 +410,9 @@ impl App {
             return;
         }
         state.detail_loading = true;
-        let Some(setup) = self.config.lock().unwrap().audiobookshelf_setup.clone() else {
-            return;
-        };
-        let Some(key) =
-            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
+        let config_snapshot = self.config.lock().unwrap().clone();
+        let Some((setup, key)) =
+            super::service_startup::audiobookshelf_setup_and_key(&config_snapshot)
         else {
             return;
         };

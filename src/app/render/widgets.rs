@@ -652,9 +652,10 @@ impl App {
             .map(|(i, row)| {
                 if let Some((id, server)) = show_id_and_server(&state, &row, server_url.as_deref())
                 {
-                    let key = format!(
-                        "audiobookshelf:{server}:cover:{id}:{}",
-                        self.current_protocol_suffix()
+                    let key = crate::app::images::audiobookshelf_cover_cache_key(
+                        server,
+                        &id,
+                        self.current_protocol_suffix(),
                     );
                     if self.images_enabled() {
                         self.render_audiobookshelf_row_image(

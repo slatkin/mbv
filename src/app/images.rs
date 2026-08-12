@@ -9,6 +9,16 @@ pub(super) fn mem_key(cache_key: &str, suffix: &str) -> String {
     format!("{cache_key}@{suffix}")
 }
 
+/// Prefix shared by every Audiobookshelf-sourced cache key, used to filter
+/// or clear Audiobookshelf entries from the image caches.
+pub(super) const AUDIOBOOKSHELF_CACHE_KEY_PREFIX: &str = "audiobookshelf:";
+
+/// Cache key for an Audiobookshelf cover under `server`, keyed by the
+/// library item's `id` and the active protocol `suffix`.
+pub(super) fn audiobookshelf_cover_cache_key(server: &str, id: &str, suffix: &str) -> String {
+    format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:cover:{id}:{suffix}")
+}
+
 const MAX_IMAGE_FETCHES: usize = 6;
 const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 
@@ -62,13 +72,7 @@ pub(super) struct ImageFetchReq {
 #[derive(Debug, Clone)]
 pub(super) enum ImageSource {
     Emby,
-    // Retained for the upcoming Audiobookshelf artwork rendering milestone.
-    #[allow(dead_code)]
-    Audiobookshelf {
-        server_url: String,
-        api_key: String,
-        generation: mbv_core::service_runtime::SetupGeneration,
-    },
+    Audiobookshelf { server_url: String, api_key: String },
 }
 
 impl App {
@@ -299,17 +303,12 @@ impl App {
         self.spawn_image_fetch(req);
     }
 
-    // Retained for the upcoming Audiobookshelf artwork rendering milestone.
-    #[allow(dead_code)]
     pub(super) fn fetch_audiobookshelf_cover(&mut self, server_url: String, item_id: String) {
         if !self.image_protocol_enabled {
             return;
         }
-        let generation = self.audiobookshelf_runtime.generation();
-        let cache_key = format!(
-            "audiobookshelf:{server_url}:cover:{item_id}:{}",
-            self.current_protocol_suffix()
-        );
+        let cache_key =
+            audiobookshelf_cover_cache_key(&server_url, &item_id, self.current_protocol_suffix());
         if self.card_image_loading.contains(&cache_key)
             || self.card_image_states.contains_key(&cache_key)
         {
@@ -329,7 +328,6 @@ impl App {
             source: ImageSource::Audiobookshelf {
                 server_url,
                 api_key,
-                generation,
             },
         };
         self.card_image_loading.insert(cache_key);
@@ -550,10 +548,8 @@ impl App {
                 let bytes: Option<Vec<u8>> = if let ImageSource::Audiobookshelf {
                     server_url,
                     api_key,
-                    generation,
                 } = source
                 {
-                    let _ = generation;
                     let client =
                         mbv_core::audiobookshelf::AudiobookshelfClient::new(&server_url).ok();
                     let result = client.and_then(|client| {

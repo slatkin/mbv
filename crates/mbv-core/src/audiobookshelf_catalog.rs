@@ -136,14 +136,28 @@ enum ShelfEntryWire {
 }
 
 impl AudiobookshelfClient {
+    /// Runs `f` against a cloned client on a bounded worker thread. All
+    /// `*_bounded` wrappers below differ only in the args they capture and
+    /// the method they call, so they share this dispatch.
+    fn bounded<T>(
+        &self,
+        bound: Duration,
+        f: impl FnOnce(Self) -> Result<T, AudiobookshelfError> + Send + 'static,
+    ) -> Result<T, AudiobookshelfError>
+    where
+        T: Send + 'static,
+    {
+        let client = self.clone();
+        crate::bounded::run_with_hard_bound(move || f(client), bound)
+    }
+
     pub fn libraries_bounded(
         &self,
         key: &str,
         bound: Duration,
     ) -> Result<Vec<AudiobookshelfLibrary>, AudiobookshelfError> {
-        let client = self.clone();
         let key = key.to_owned();
-        crate::bounded::run_with_hard_bound(move || client.libraries(&key), bound)
+        self.bounded(bound, move |client| client.libraries(&key))
     }
     pub fn podcast_shows_bounded(
         &self,
@@ -153,15 +167,13 @@ impl AudiobookshelfClient {
         limit: usize,
         bound: Duration,
     ) -> Result<AudiobookshelfShowPage, AudiobookshelfError> {
-        let client = self.clone();
         let key = key.to_owned();
         let library_id = library_id.to_owned();
         let limit = limit.clamp(1, 100);
         let page = page.max(1);
-        crate::bounded::run_with_hard_bound(
-            move || client.podcast_shows(&key, &library_id, page, limit),
-            bound,
-        )
+        self.bounded(bound, move |client| {
+            client.podcast_shows(&key, &library_id, page, limit)
+        })
     }
     pub fn podcast_detail_bounded(
         &self,
@@ -169,19 +181,17 @@ impl AudiobookshelfClient {
         library_item_id: &str,
         bound: Duration,
     ) -> Result<Vec<AudiobookshelfDownloadedEpisode>, AudiobookshelfError> {
-        let client = self.clone();
         let key = key.to_owned();
         let id = library_item_id.to_owned();
-        crate::bounded::run_with_hard_bound(move || client.podcast_detail(&key, &id), bound)
+        self.bounded(bound, move |client| client.podcast_detail(&key, &id))
     }
     pub fn progress_bounded(
         &self,
         key: &str,
         bound: Duration,
     ) -> Result<HashMap<(String, String), AudiobookshelfProgress>, AudiobookshelfError> {
-        let client = self.clone();
         let key = key.to_owned();
-        crate::bounded::run_with_hard_bound(move || client.progress(&key), bound)
+        self.bounded(bound, move |client| client.progress(&key))
     }
     pub fn shelves_bounded(
         &self,
@@ -189,10 +199,9 @@ impl AudiobookshelfClient {
         library_id: &str,
         bound: Duration,
     ) -> Result<Vec<AudiobookshelfShelf>, AudiobookshelfError> {
-        let client = self.clone();
         let key = key.to_owned();
         let id = library_id.to_owned();
-        crate::bounded::run_with_hard_bound(move || client.shelves(&key, &id), bound)
+        self.bounded(bound, move |client| client.shelves(&key, &id))
     }
     pub fn cover_bounded(
         &self,
@@ -200,13 +209,12 @@ impl AudiobookshelfClient {
         library_item_id: &str,
         bound: Duration,
     ) -> Result<Vec<u8>, AudiobookshelfError> {
-        let client = self.clone();
         let key = key.to_owned();
         let id = library_item_id.to_owned();
-        crate::bounded::run_with_hard_bound(move || client.cover(&key, &id), bound)
+        self.bounded(bound, move |client| client.cover(&key, &id))
     }
 
-    fn get(&self, key: &str, path: &str) -> Result<ureq::Response, AudiobookshelfError> {
+    pub(super) fn get(&self, key: &str, path: &str) -> Result<ureq::Response, AudiobookshelfError> {
         self.agent
             .get(&format!("{}{}", self.server_url, path))
             .set("Authorization", &format!("Bearer {key}"))
@@ -349,7 +357,7 @@ impl AudiobookshelfClient {
     }
 }
 
-fn map_error(error: ureq::Error) -> AudiobookshelfError {
+pub(super) fn map_error(error: ureq::Error) -> AudiobookshelfError {
     match error {
         ureq::Error::Status(401 | 403, _) => {
             AudiobookshelfError::new(super::AudiobookshelfFailureClass::AuthenticationRejected)

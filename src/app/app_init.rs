@@ -1,4 +1,3 @@
-use super::app_struct::App;
 use super::types_events::{LibEvent, SessionEvent};
 use super::types_feed::IdleFeed;
 use super::types_playback::QueueScope;
@@ -58,8 +57,4 @@ pub(super) struct AppInit {
     pub(super) search_tx: mpsc::Sender<(String, Result<Vec<EmbyItem>, String>)>,
     pub(super) search_rx: mpsc::Receiver<(String, Result<Vec<EmbyItem>, String>)>,
     pub(super) idle_feed: Option<IdleFeed>,
-}
-
-impl App {
-    pub(super) fn _app_init_marker(&self) {}
 }

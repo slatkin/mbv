@@ -28,6 +28,23 @@ impl App {
         }
     }
 
+    /// Selects the show at `index`'s show list whose `library_item_id`
+    /// matches `id`, if one exists. Returns whether a match was found.
+    fn select_show_by_id(&mut self, index: usize, id: &str) -> bool {
+        let Some(state) = self.audiobookshelf_browse.get(index) else {
+            return false;
+        };
+        let Some(show) = state
+            .shows
+            .iter()
+            .position(|show| show.library_item_id == id)
+        else {
+            return false;
+        };
+        self.select_audiobookshelf_show(show);
+        true
+    }
+
     pub(super) fn move_audiobookshelf_cursor(&mut self, delta: i64) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
@@ -47,13 +64,7 @@ impl App {
         if let Some(row) = rows.get(cursor).cloned() {
             match row {
                 super::types_audiobookshelf_browse::AudiobookshelfRowId::Show(id) => {
-                    if let Some(show) = state
-                        .shows
-                        .iter()
-                        .position(|show| show.library_item_id == id)
-                    {
-                        self.select_audiobookshelf_show(show);
-                    }
+                    self.select_show_by_id(index, &id);
                 }
                 super::types_audiobookshelf_browse::AudiobookshelfRowId::Shelf { shelf, entry } => {
                     let target = state
@@ -64,24 +75,13 @@ impl App {
                     if let Some(target) = target {
                         match target {
                             mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Show(id) => {
-                                if let Some(show) = state
-                                    .shows
-                                    .iter()
-                                    .position(|show| show.library_item_id == id)
-                                {
-                                    self.select_audiobookshelf_show(show);
-                                }
+                                self.select_show_by_id(index, &id);
                             }
                             mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Episode {
                                 library_item_id,
                                 episode_id,
                             } => {
-                                let show = state
-                                    .shows
-                                    .iter()
-                                    .position(|show| show.library_item_id == library_item_id);
-                                if let Some(show) = show {
-                                    self.select_audiobookshelf_show(show);
+                                if self.select_show_by_id(index, &library_item_id) {
                                     if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
                                         state.selected_row = Some(super::types_audiobookshelf_browse::AudiobookshelfRowId::Episode { library_item_id, episode_id });
                                     }
