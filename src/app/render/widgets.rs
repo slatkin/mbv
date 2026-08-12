@@ -601,6 +601,7 @@ impl App {
             );
             return;
         }
+        let rows = state.rows();
         // Queue visible show covers before taking the immutable browse-state
         // borrow needed to build row labels. The request path is shared with
         // Emby cards and uses the Service-scoped, generation-aware cache.
@@ -613,8 +614,7 @@ impl App {
             .map(|setup| setup.server_url.clone());
         if self.images_enabled() {
             if let Some(ref server_url) = server_url {
-                let ids: Vec<String> = state
-                    .rows()
+                let ids: Vec<String> = rows
                     .iter()
                     .filter_map(|row| match row {
                         super::super::types_audiobookshelf_browse::AudiobookshelfRowId::Show(
@@ -641,7 +641,6 @@ impl App {
                 }
             }
         }
-        let rows = state.rows();
         let selected = rows
             .iter()
             .position(|row| Some(row) == state.cursor_row().as_ref())

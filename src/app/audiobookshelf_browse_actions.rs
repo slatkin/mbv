@@ -10,6 +10,7 @@ impl App {
             state.total = 0;
             state.next_page = 0;
             state.error = None;
+            state.detail_cache.clear();
         }
     }
     pub(super) fn select_audiobookshelf_show(&mut self, cursor: usize) {
@@ -64,7 +65,12 @@ impl App {
         if let Some(row) = rows.get(cursor).cloned() {
             match row {
                 super::types_audiobookshelf_browse::AudiobookshelfRowId::Show(id) => {
-                    self.select_show_by_id(index, &id);
+                    if state.selected_id.as_deref() == Some(&id) {
+                        self.audiobookshelf_browse[index].selected_row =
+                            Some(super::types_audiobookshelf_browse::AudiobookshelfRowId::Show(id));
+                    } else {
+                        self.select_show_by_id(index, &id);
+                    }
                 }
                 super::types_audiobookshelf_browse::AudiobookshelfRowId::Shelf { shelf, entry } => {
                     let target = state
@@ -75,16 +81,23 @@ impl App {
                     if let Some(target) = target {
                         match target {
                             mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Show(id) => {
-                                self.select_show_by_id(index, &id);
+                                if state.selected_id.as_deref() == Some(&id) {
+                                    self.audiobookshelf_browse[index].selected_row =
+                                        Some(super::types_audiobookshelf_browse::AudiobookshelfRowId::Shelf { shelf, entry });
+                                } else {
+                                    self.select_show_by_id(index, &id);
+                                }
                             }
                             mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Episode {
                                 library_item_id,
                                 episode_id,
                             } => {
-                                if self.select_show_by_id(index, &library_item_id) {
-                                    if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
-                                        state.selected_row = Some(super::types_audiobookshelf_browse::AudiobookshelfRowId::Episode { library_item_id, episode_id });
-                                    }
+                                let selected =
+                                    state.selected_id.as_deref() == Some(&library_item_id);
+                                if selected || self.select_show_by_id(index, &library_item_id) {
+                                    self.audiobookshelf_browse[index].selected_row = Some(
+                                        super::types_audiobookshelf_browse::AudiobookshelfRowId::Episode { library_item_id, episode_id },
+                                    );
                                 }
                             }
                         }

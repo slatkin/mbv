@@ -29,6 +29,7 @@ pub(super) struct AudiobookshelfBrowseState {
     pub selected_id: Option<String>,
     pub error: Option<String>,
     pub episodes: Option<Vec<AudiobookshelfDownloadedEpisode>>,
+    pub detail_cache: HashMap<String, Vec<AudiobookshelfDownloadedEpisode>>,
     pub detail_loading: bool,
     pub selected_row: Option<AudiobookshelfRowId>,
     pub progress: HashMap<(String, String), AudiobookshelfProgress>,
@@ -46,6 +47,7 @@ impl AudiobookshelfBrowseState {
             selected_id: None,
             error: None,
             episodes: None,
+            detail_cache: HashMap::new(),
             detail_loading: false,
             selected_row: None,
             progress: HashMap::new(),
@@ -71,9 +73,16 @@ impl AudiobookshelfBrowseState {
             .shows
             .get(cursor)
             .map(|show| show.library_item_id.clone());
-        self.episodes = None;
+        self.episodes = self
+            .selected_id
+            .as_ref()
+            .and_then(|id| self.detail_cache.get(id).cloned());
         self.detail_loading = false;
         self.selected_row = self.selected_id.clone().map(AudiobookshelfRowId::Show);
+    }
+
+    pub fn cache_detail(&mut self, id: String, episodes: Vec<AudiobookshelfDownloadedEpisode>) {
+        self.detail_cache.insert(id, episodes);
     }
 
     pub fn rows(&self) -> Vec<AudiobookshelfRowId> {

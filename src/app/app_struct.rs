@@ -398,7 +398,6 @@ impl App {
             super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX,
         );
     }
-
     pub(super) fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
@@ -406,6 +405,11 @@ impl App {
         let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
             return;
         };
+        if let Some(cached) = state.detail_cache.get(&library_item_id).cloned() {
+            state.episodes = Some(cached);
+            state.detail_loading = false;
+            return;
+        }
         if state.episodes.is_some() || state.detail_loading {
             return;
         }

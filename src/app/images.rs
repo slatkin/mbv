@@ -550,21 +550,25 @@ impl App {
                     api_key,
                 } = source
                 {
-                    let client =
-                        mbv_core::audiobookshelf::AudiobookshelfClient::new(&server_url).ok();
-                    let result = client.and_then(|client| {
-                        client
-                            .cover_bounded(
-                                &api_key,
-                                &item_id,
-                                mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
-                            )
-                            .ok()
-                    });
-                    if let Some(ref bytes) = result {
-                        crate::config::write_image_disk_cache(&cache_key, bytes);
+                    if let Some(cached) = crate::config::read_image_disk_cache(&cache_key) {
+                        Some(cached)
+                    } else {
+                        let client =
+                            mbv_core::audiobookshelf::AudiobookshelfClient::new(&server_url).ok();
+                        let result = client.and_then(|client| {
+                            client
+                                .cover_bounded(
+                                    &api_key,
+                                    &item_id,
+                                    mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+                                )
+                                .ok()
+                        });
+                        if let Some(ref bytes) = result {
+                            crate::config::write_image_disk_cache(&cache_key, bytes);
+                        }
+                        result
                     }
-                    result
                 } else if let Some(cached) = crate::config::read_image_disk_cache(&cache_key) {
                     // Mem-cache miss satisfied from the on-disk source bytes
                     // (no network). The protocol-specific re-encode then runs

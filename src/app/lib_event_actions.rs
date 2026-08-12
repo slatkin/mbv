@@ -175,14 +175,18 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(generation) {
                 return;
             }
-            if let Some(state) = self
-                .audiobookshelf_browse
-                .iter_mut()
-                .find(|state| state.selected_id.as_deref() == Some(&library_item_id))
-            {
+            if let Some(state) = self.audiobookshelf_browse.iter_mut().find(|state| {
+                state
+                    .shows
+                    .iter()
+                    .any(|show| show.library_item_id == library_item_id)
+            }) {
                 state.detail_loading = false;
                 if let Ok(episodes) = result {
-                    state.episodes = Some(episodes);
+                    state.cache_detail(library_item_id.clone(), episodes.clone());
+                    if state.selected_id.as_deref() == Some(&library_item_id) {
+                        state.episodes = Some(episodes);
+                    }
                 }
             }
             return;
