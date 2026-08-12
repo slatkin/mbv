@@ -103,7 +103,8 @@ impl AudiobookshelfBrowseState {
     }
 
     pub fn visible_episodes(&self) -> Vec<&AudiobookshelfDownloadedEpisode> {
-        self.episodes
+        let mut episodes = self
+            .episodes
             .as_deref()
             .unwrap_or_default()
             .iter()
@@ -118,7 +119,11 @@ impl AudiobookshelfBrowseState {
                     .get(&(episode.library_item_id.clone(), episode.episode_id.clone()))
                     .is_some_and(|progress| progress.is_finished),
             })
-            .collect()
+            .collect::<Vec<_>>();
+        episodes.sort_by(|left, right| {
+            compare_publication_dates(left.published_at.as_deref(), right.published_at.as_deref())
+        });
+        episodes
     }
 
     pub fn set_episode_filter(&mut self, filter: AudiobookshelfEpisodeFilter) {
@@ -163,6 +168,20 @@ impl AudiobookshelfBrowseState {
 
     pub fn needs_page(&self) -> Option<usize> {
         (self.shows.len() < self.total && self.loading_pages.is_empty()).then_some(self.next_page)
+    }
+}
+
+fn compare_publication_dates(left: Option<&str>, right: Option<&str>) -> std::cmp::Ordering {
+    match (left, right) {
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (Some(left), Some(right)) => match (left.parse::<f64>(), right.parse::<f64>()) {
+            (Ok(left), Ok(right)) => right
+                .partial_cmp(&left)
+                .unwrap_or(std::cmp::Ordering::Equal),
+            _ => right.cmp(left),
+        },
     }
 }
 
@@ -274,5 +293,39 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["partial", "missing"]
         );
+    }
+
+    #[test]
+    fn visible_episodes_are_newest_first_with_undated_last() {
+        let mut state = AudiobookshelfBrowseState::new(library());
+        state.append_page(0, 20, 1, vec![show("a", "A")]);
+        state.episodes = Some(vec![
+            episode_with_date("a", "old", Some("2026-01-01")),
+            episode_with_date("a", "undated", None),
+            episode_with_date("a", "new", Some("2026-08-12")),
+        ]);
+
+        assert_eq!(
+            state
+                .visible_episodes()
+                .into_iter()
+                .map(|episode| episode.episode_id.as_str())
+                .collect::<Vec<_>>(),
+            ["new", "old", "undated"]
+        );
+    }
+
+    fn episode_with_date(
+        show: &str,
+        id: &str,
+        published_at: Option<&str>,
+    ) -> AudiobookshelfDownloadedEpisode {
+        AudiobookshelfDownloadedEpisode {
+            library_item_id: show.into(),
+            episode_id: id.into(),
+            title: id.into(),
+            published_at: published_at.map(str::to_string),
+            duration_seconds: None,
+        }
     }
 }

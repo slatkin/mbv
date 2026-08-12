@@ -117,6 +117,7 @@ fn episode_selection_uses_filter_pills_and_tv_style_episode_rows_in_the_hero() {
     assert!(output.contains("Played"));
     assert!(output.contains("Unplayed"));
     assert!(output.contains("First Episode"));
+    assert!(!output.contains("1. First Episode"));
     assert_eq!(layout.selector_tabs.len(), 3);
     assert!(layout
         .selector_tabs

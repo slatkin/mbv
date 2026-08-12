@@ -368,7 +368,7 @@ impl App {
                     })
                     .unwrap_or_default();
                 let title = trunc_str(
-                    &format!("{}. {}{}{}", index + 1, episode.title, published, progress),
+                    &format!("{}{}{}", episode.title, published, progress),
                     title_width,
                 );
                 let title_cell = Cell::from(Line::from(vec![marker, Span::raw(title)]));
