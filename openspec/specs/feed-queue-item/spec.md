@@ -5,7 +5,7 @@ The playback queue is a play mechanism that can hold and play either an Emby lib
 ## Requirements
 ### Requirement: A queue slot holds either an Emby item or a feed entry
 
-Each playback-queue slot SHALL carry exactly one of two item kinds: an Emby library item or a feed entry. The queue SHALL treat a slot uniformly for ordering, selection, and playback regardless of which kind it holds.
+Each playback-queue slot SHALL carry exactly one of two item kinds: an Emby library item or a feed entry. The queue SHALL treat a slot uniformly for ordering, selection, mutation, persistence, synchronization, and playback regardless of which kind it holds. Neither kind SHALL be stored in a parallel prefix or tail outside the canonical slot sequence.
 
 #### Scenario: Emby item in a slot
 
@@ -15,11 +15,25 @@ Each playback-queue slot SHALL carry exactly one of two item kinds: an Emby libr
 #### Scenario: Feed entry in a slot
 
 - **WHEN** a slot holds a feed entry
-- **THEN** the queue SHALL expose the entry's title, its duration if known (else none), its media kind, and no artwork, through the same accessors
+- **THEN** the queue SHALL expose the entry's title, its duration if known (else none), its canonical media kind, and no artwork, through the same accessors
+- **AND** a recognized enclosure MIME type SHALL refine that media kind
+- **AND** the subscription's stored `FeedKind` SHALL remain canonical when MIME is absent or unrecognized
+
+#### Scenario: Mixed item order
+
+- **WHEN** Emby items and Feed entries occupy arbitrary positions in one queue
+- **THEN** every queue consumer SHALL preserve that slot order without projecting either kind into a separate collection
 
 ### Requirement: A feed entry carries only identity and playback fields
 
-A feed entry in the queue SHALL carry the fields needed to identify and play it: a stable identifier, a title, an enclosure URL when present, a link URL when present, a MIME type when present, and a duration in ticks when known. It SHALL NOT carry playback-progress state (position or played/watched) — that state is out of scope for this capability.
+A feed entry in the queue SHALL carry the fields needed to identify, address,
+and play it: a stable entry identifier, stable feed identity, title, enclosure
+URL when present, link URL when present, MIME type when present, duration in
+ticks when known, playback position, and played state. The feed identity and
+playback fields SHALL survive queue persistence and supported ctrl transport.
+Legacy serialized feed entries that lack the added identity or playback fields
+SHALL continue to load with unavailable feed identity, zero position, and
+unplayed state.
 
 #### Scenario: Entry with an enclosure
 
@@ -31,24 +45,36 @@ A feed entry in the queue SHALL carry the fields needed to identify and play it:
 - **WHEN** a feed entry has no enclosure URL but has a link
 - **THEN** the link SHALL be available as the fallback playable source
 
-### Requirement: Playback selects the play path by item kind
+#### Scenario: Entry carries stored progress
 
-At the play boundary the system SHALL choose the play path from the slot's item kind. An Emby item SHALL play through the existing Emby streaming-URL path, unchanged. A feed entry SHALL play by handing its enclosure URL — or its link when there is no enclosure — to the player directly.
+- **WHEN** stored state is available for a feed entry
+- **THEN** the queued entry SHALL carry that position and played state with its
+  stable feed and entry identities
+
+#### Scenario: Legacy entry lacks progress fields
+
+- **WHEN** a persisted or transported feed entry predates feed playback state
+- **THEN** it SHALL load as unplayed at position zero and SHALL remain playable
+
+### Requirement: Playback selects source resolution by item kind
+
+At the source-resolution boundary the system SHALL choose the media source from the slot's item kind while preserving one shared playback lifecycle. An Emby item SHALL resolve through the existing authenticated Emby streaming-URL path. A feed entry SHALL resolve to its enclosure URL, or its link when there is no enclosure. Item kind SHALL NOT select a separate append, queue-state, Player-lifecycle, or mpv-loading path.
 
 #### Scenario: Play an Emby item
 
 - **WHEN** a slot holding an Emby item is played
-- **THEN** the item SHALL play via the existing Emby streaming path with no change in behavior
+- **THEN** the item SHALL resolve through the authenticated Emby streaming path
+- **AND** SHALL enter the same Player lifecycle used by any queue slot
 
 #### Scenario: Play a feed entry with an enclosure
 
 - **WHEN** a slot holding a feed entry with an enclosure URL is played
-- **THEN** the enclosure URL SHALL be handed to the player directly
+- **THEN** the enclosure URL SHALL be handed to the player directly through the shared playback lifecycle
 
 #### Scenario: Play a feed entry without an enclosure
 
 - **WHEN** a slot holding a feed entry with no enclosure URL but a link is played
-- **THEN** the link SHALL be handed to the player directly
+- **THEN** the link SHALL be handed to the player directly through the shared playback lifecycle
 
 ### Requirement: Queue persistence reads legacy state and writes the tagged shape
 
@@ -64,50 +90,105 @@ Saved queue state SHALL round-trip through a tagged item shape that distinguishe
 - **WHEN** a queue containing both Emby items and feed entries is saved and then reloaded
 - **THEN** the reloaded queue SHALL contain the same slots, each with its original item kind preserved
 
-### Requirement: Feed items cross the ctrl boundary as capability-gated state
+### Requirement: Feed playback reads stored state before starting
 
-Feed playback over the ctrl protocol SHALL be gated on an additive `feed-playback` capability; a peer that does not advertise it SHALL receive Emby items only, exactly as before. `CTRL_PROTOCOL_VERSION` SHALL NOT change.
+Before starting an addressable feed entry, mbv SHALL read its state from the
+feed-entry store and apply the shared resume rule. A qualifying position SHALL
+start at the saved position; a non-qualifying position or played entry with a
+zero position SHALL start from the beginning.
 
-Between capable peers, the atomic ctrl state snapshot SHALL carry feed entries in a `feed_items` tail field that defaults to empty for absent or legacy senders. A mixed queue SHALL be ordered as Emby items followed by feed items, so a feed entry's position is `emby_items.len() + n` and no absolute mixed-queue indices are transmitted. While any feed entry is present, the daemon SHALL reject Emby queue mutations that would break the Emby-then-feed tail invariant (append, move, replace, adopt); only mutations preserving it remain available. Adoption is rejected because it would discard live Feed state without a corresponding Feed-removal event. Feed-entry additions and removals SHALL be reflected atomically in the next state snapshot and in the reconnect snapshot.
+#### Scenario: Feed entry has qualifying saved progress
 
-#### Scenario: Capable peer receives a mixed queue
+- **WHEN** a feed entry has stored progress that qualifies under the shared
+  resume rule
+- **THEN** playback SHALL begin from the stored position
 
-- **WHEN** a queue of Emby items followed by feed entries is synchronized to a peer advertising `feed-playback`
-- **THEN** the Emby items SHALL be transmitted in their existing wire shape
-- **AND** the feed entries SHALL be carried in the `feed_items` tail of the same atomic snapshot
-- **AND** the peer SHALL reconstruct a slot-identical mixed queue from the two fields
+#### Scenario: Feed entry has only trivial progress
 
-#### Scenario: Legacy peer receives a mixed queue
+- **WHEN** a known-runtime feed entry has stored progress below 6%
+- **THEN** playback SHALL begin from the start
 
-- **WHEN** a queue containing feed entries is synchronized to a peer that does not advertise `feed-playback`
-- **THEN** only the Emby items SHALL be transmitted in their existing wire shape
-- **AND** the feed entries SHALL be omitted
+#### Scenario: Stored feed entry is played
 
-#### Scenario: Emby mutation that breaks the tail invariant is rejected
+- **WHEN** a feed entry's stored state is played with position zero
+- **THEN** replaying it SHALL begin from the start
 
-- **WHEN** feed entries are present and an Emby queue mutation would place an Emby item after a feed entry
-- **THEN** the daemon SHALL reject the mutation
+### Requirement: Feed progress is persisted only on playback lifecycle events
 
-#### Scenario: Queue adoption with live Feed state is rejected
+mbv SHALL write a feed entry's current position and played state on stop,
+pause, confirmed seek completion, and EOF. It SHALL NOT perform periodic or
+time-tick feed-state writes.
 
-- **WHEN** feed entries are present and a peer requests adoption of a replacement Emby queue
-- **THEN** the daemon SHALL reject the request rather than silently discard the live Feed tail
+#### Scenario: Feed playback stops before completion
 
-### Requirement: Capability-gated Feed playback reaches a Player owner
+- **WHEN** a feed entry stops below 95% of a known runtime
+- **THEN** mbv SHALL store its current position with played set to false
 
-The ctrl protocol SHALL advertise an additive `feed-playback` capability. A peer supporting that capability SHALL accept a `LoadFeed` command carrying one FeedEntry and append/play it through the Player owner's Feed play path. The resulting live Feed state SHALL follow the capability-gated ctrl-state requirement. The protocol version SHALL not change.
+#### Scenario: Feed playback pauses
 
-#### Scenario: Capability-supporting peer plays a Feed entry
+- **WHEN** feed playback enters the paused state
+- **THEN** mbv SHALL store the current position and current played state once
+  for that pause event
 
-- **WHEN** a peer advertises `feed-playback` and receives `LoadFeed` for a Feed entry with a playable source
-- **THEN** the Player owner SHALL append the Feed entry and begin playback
+#### Scenario: Feed seek completes
 
-#### Scenario: Capable peer has no Player owner
+- **WHEN** a seek during feed playback reaches its confirmed destination
+- **THEN** mbv SHALL store the resulting position and current played state
 
-- **WHEN** a peer advertising `feed-playback` receives `LoadFeed` but no Player owner is available
-- **THEN** the daemon SHALL reject the command and SHALL NOT add the Feed entry to its live queue state
+#### Scenario: No lifecycle event occurs
 
-#### Scenario: Peer lacks Feed-playback capability
+- **WHEN** feed playback advances normally without stop, pause, seek completion,
+  or EOF
+- **THEN** mbv SHALL NOT write feed state merely because time advanced
 
-- **WHEN** a controlling client attempts Feed playback through a peer that does not advertise `feed-playback`
-- **THEN** the command SHALL not be sent or interpreted as another command
+### Requirement: Feed completion uses known runtime and a 95 percent boundary
+
+A feed entry with known runtime SHALL be marked played when it reaches EOF or
+when it stops at or beyond 95% of runtime. Marking an entry played SHALL store
+position zero. An entry with unknown runtime SHALL NOT be marked played solely
+from EOF or a percentage calculation that cannot be made.
+
+#### Scenario: Known-runtime entry reaches EOF
+
+- **WHEN** a feed entry with known runtime reaches EOF
+- **THEN** mbv SHALL store played as true and position as zero
+
+#### Scenario: Entry stops exactly at 95 percent
+
+- **WHEN** a feed entry with known runtime stops at exactly 95% of runtime
+- **THEN** mbv SHALL store played as true and position as zero
+
+#### Scenario: Entry stops below 95 percent
+
+- **WHEN** a feed entry with known runtime stops below 95% of runtime
+- **THEN** mbv SHALL store played as false with its current position
+
+#### Scenario: Unknown-runtime entry reaches EOF
+
+- **WHEN** a feed entry without known runtime reaches EOF
+- **THEN** mbv SHALL NOT infer played state from completion alone
+
+### Requirement: Feed state is optional and never reported to Emby
+
+When the feed-entry store or stable feed identity is unavailable, state reads
+and writes SHALL degrade to no-ops and feed playback SHALL remain available from
+the beginning. Feed progress SHALL NOT be sent to the Emby playback-reporting
+API and SHALL NOT create an Emby Session.
+
+#### Scenario: Store is unavailable
+
+- **WHEN** a feed entry is played without an available feed-entry store
+- **THEN** playback SHALL proceed from the beginning without a state read or
+  write failure
+
+#### Scenario: Legacy entry has no feed identity
+
+- **WHEN** a legacy queued feed entry cannot address the keyed store
+- **THEN** playback SHALL proceed statelessly
+
+#### Scenario: Feed lifecycle event occurs
+
+- **WHEN** mbv records a feed stop, pause, seek completion, or EOF
+- **THEN** it SHALL use only the feed-entry state path and SHALL NOT report that
+  progress to Emby
+

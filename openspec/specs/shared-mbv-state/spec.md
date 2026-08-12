@@ -3,9 +3,7 @@
 ## Purpose
 
 Provide optional, durable, per-user roaming of mbv-owned state through a canonical `mbvd` while preserving local operation whenever that service is unavailable.
-
 ## Requirements
-
 ### Requirement: Shared-data hosting and use are explicit opt-ins
 
 The system SHALL host shared data only when the canonical daemon has shared-data hosting enabled. A client SHALL use shared data only when configured with an explicit shared-data endpoint. The shared-data endpoint SHALL be independent of the client's playback endpoint and library routes.
@@ -234,3 +232,23 @@ An administrator on the daemon host SHALL be able to export all committed docume
 - **WHEN** a local administrator requests an export from a readable database
 - **THEN** the output SHALL contain each user-scoped document value, type, and revision as JSON
 - **THEN** it SHALL contain no authentication token
+
+### Requirement: Remote shared-data transport is encrypted
+
+The service SHALL NOT send bearer tokens or shared documents over plaintext remote TCP. Network clients SHALL authenticate the server through TLS certificate validation before sending an Emby token. A local Unix-domain connection MAY rely on operating-system transport isolation without TLS.
+
+#### Scenario: Valid TLS endpoint
+
+- **WHEN** a client connects to a network endpoint whose certificate is valid for the configured endpoint
+- **THEN** the client MAY proceed with Emby token authentication
+
+#### Scenario: Invalid server certificate
+
+- **WHEN** certificate validation fails
+- **THEN** the client SHALL send no Emby token and SHALL enter local fallback
+
+#### Scenario: Plaintext remote endpoint
+
+- **WHEN** a client is configured with a plaintext non-local TCP shared-data endpoint
+- **THEN** the client SHALL reject the endpoint and SHALL enter local fallback
+

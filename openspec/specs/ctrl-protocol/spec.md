@@ -143,3 +143,99 @@ The daemon SHALL send `CtrlEvent::Disconnected { reason: TakenOverByEmbyRemote }
 - **THEN** the daemon SHALL NOT send `CtrlOutbound::Close`
 - **THEN** all ctrl clients SHALL remain connected
 
+### Requirement: Local daemon control authentication is Service-independent
+The Local daemon SHALL authenticate ctrl clients with a stable mbv-owned Control credential scoped to that Player owner. It SHALL NOT use, validate, or receive an Emby or Audiobookshelf Service credential as its control credential.
+
+#### Scenario: Client presents the Local daemon Control credential
+- **WHEN** a client presents the valid Control credential during the ctrl handshake
+- **THEN** the Local daemon SHALL authenticate the client independently of all Remote Service states
+
+#### Scenario: Client presents a Service credential as control authentication
+- **WHEN** a client presents an Emby or Audiobookshelf credential where the Local daemon requires its Control credential
+- **THEN** the Local daemon SHALL reject the connection
+- **THEN** it SHALL NOT attempt to validate that credential with a Remote Service
+
+#### Scenario: Feed-only client attaches
+- **WHEN** a client has no configured Remote Service but presents the valid Local daemon Control credential
+- **THEN** the Local daemon SHALL accept the ctrl connection
+
+### Requirement: Control authentication migration is capability-gated
+Control-credential authentication SHALL be advertised and selected through an additive ctrl capability. A new client SHALL use Control authentication with a capable Local daemon and SHALL preserve legacy Emby-token authentication only when connecting to a peer that does not advertise the capability, including deferred `mbvd` implementations.
+
+#### Scenario: New client connects to capable Local daemon
+- **WHEN** the daemon hello advertises Control-credential authentication
+- **THEN** the client SHALL respond with its Control credential
+- **THEN** it SHALL send no Service credential in the Control-credential field
+
+#### Scenario: New client connects to deferred mbvd
+- **WHEN** a daemon hello does not advertise Control-credential authentication
+- **WHEN** the client has a Ready Emby Service and a legacy Emby credential
+- **THEN** the client MAY use the existing Emby-authenticated handshake for that peer
+
+#### Scenario: Feed-only client reaches a legacy peer
+- **WHEN** a daemon hello does not advertise Control-credential authentication
+- **WHEN** the client has no Emby credential for the legacy handshake
+- **THEN** the client SHALL reject the attachment with a compatibility diagnostic
+
+### Requirement: Disconnect reason for deliberate daemon shutdown
+The `DisconnectReason` enum SHALL carry a variant meaning "the daemon is shutting down
+deliberately". The daemon SHALL broadcast `CtrlEvent::Disconnected` with that reason to every
+connected client before closing their connections during an explicit shutdown. Unlike the Emby
+authority reason, this reason SHALL indicate that the connection is about to close.
+
+#### Scenario: Daemon shuts down explicitly
+- **WHEN** the daemon begins an explicit shutdown with clients connected
+- **THEN** the daemon SHALL broadcast `CtrlEvent::Disconnected` with the shutdown reason to all connected clients
+- **THEN** the daemon SHALL then close those connections
+
+#### Scenario: Client classifies the disconnect
+- **WHEN** a client receives `CtrlEvent::Disconnected` with the shutdown reason
+- **THEN** the client SHALL treat the subsequent connection close as expected
+- **THEN** the client SHALL NOT synthesise a stopped-playback event as it does for an unexpected close
+
+#### Scenario: Emby authority reason is unchanged
+- **WHEN** a client receives `CtrlEvent::Disconnected { reason: TakenOverByEmbyRemote }`
+- **THEN** the client SHALL treat it as a notification and SHALL remain connected
+
+### Requirement: Audio-only capability advertisement
+
+A daemon that cannot play non-audio items SHALL advertise an audio-only
+capability in its hello handshake. The capability SHALL be additive: the
+protocol version SHALL NOT change, and a peer that does not recognise the
+capability SHALL ignore it and behave as it does without it.
+
+#### Scenario: Audio-only daemon greets a client
+
+- **WHEN** a daemon running audio-only accepts a ctrl connection
+- **THEN** its hello SHALL include the audio-only capability
+
+#### Scenario: Daemon that can play video greets a client
+
+- **WHEN** a daemon that can play non-audio items accepts a ctrl connection
+- **THEN** its hello SHALL NOT include the audio-only capability
+
+#### Scenario: Client that does not know the capability
+
+- **WHEN** a client that does not recognise the audio-only capability connects
+  to a daemon advertising it
+- **THEN** the connection SHALL proceed
+- **THEN** the client SHALL submit playback as it does today
+- **THEN** the daemon SHALL admit that submission on its normal terms
+
+### Requirement: Capability is the primary routing signal, rejection the backstop
+
+A client that recognises the audio-only capability SHALL use it to decide where
+to send eligible explicit playback before submitting. Relationship eligibility
+is a client concern independent of the handshake. The existing structured
+rejection SHALL remain available for cases the client did not anticipate, and
+SHALL NOT be the mechanism a client relies on to discover that a daemon is
+audio-only.
+
+#### Scenario: Client routes before submitting
+
+- **WHEN** a client holding a connection to a daemon advertising audio-only
+  decides where to send a non-audio selection
+- **THEN** it SHALL decide from the advertised capability
+- **THEN** it SHALL NOT submit the selection in order to learn the answer from a
+  rejection
+
