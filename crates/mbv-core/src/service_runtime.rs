@@ -100,9 +100,11 @@ impl EmbyRuntime {
     pub fn new(configured: bool) -> Self {
         Self {
             client: None,
-            state: configured
-                .then_some(ServiceState::Connecting)
-                .unwrap_or(ServiceState::NotConfigured),
+            state: if configured {
+                ServiceState::Connecting
+            } else {
+                ServiceState::NotConfigured
+            },
             generation: SetupGeneration::default(),
         }
     }
@@ -118,19 +120,19 @@ impl EmbyRuntime {
         self.generation
     }
 
-    /// Start a retry without discarding the last usable runtime. A failed
-    /// retry can therefore return to Unavailable without losing fallback
-    /// access that was still safe to retain.
-    pub fn begin_retry(&mut self) -> SetupGeneration {
+    fn begin_attempt(&mut self) -> SetupGeneration {
         self.generation = self.generation.next();
         self.state = ServiceState::Connecting;
         self.generation
     }
 
+    /// Start a retry without discarding the last usable runtime.
+    pub fn begin_retry(&mut self) -> SetupGeneration {
+        self.begin_attempt()
+    }
+
     pub fn begin_setup(&mut self) -> SetupGeneration {
-        self.generation = self.generation.next();
-        self.state = ServiceState::Connecting;
-        self.generation
+        self.begin_attempt()
     }
 
     pub fn cancel_setup(&mut self, generation: SetupGeneration, state: ServiceState) -> bool {

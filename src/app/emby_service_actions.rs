@@ -175,7 +175,7 @@ impl App {
         self.ws_send_tx = Some(mbv_core::ws::start(ws_url, ws_tx));
         self.ws_rx = ws_rx;
         self.player
-            .update_emby_credentials(client.lock().unwrap().config.server_url.clone(), token);
+            .update_emby_credentials(replacement.server_url.clone(), token);
         self.emby_runtime.client = Some(client);
         self.apply_emby_bootstrap(candidate.bootstrap);
         let mut config = self.config.lock().unwrap();

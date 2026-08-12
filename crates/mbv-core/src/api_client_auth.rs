@@ -34,14 +34,17 @@ impl EmbyClient {
         format!("{}{}", self.config.server_url, path)
     }
 
-    fn auth_header(&self) -> String {
+    fn unauthenticated_header(&self) -> String {
         format!(
-            "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"{}\"",
+            "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\"",
             self.device_name,
             self.device_id,
-            env!("CARGO_PKG_VERSION"),
-            self.token
+            env!("CARGO_PKG_VERSION")
         )
+    }
+
+    fn auth_header(&self) -> String {
+        format!("{}, Token=\"{}\"", self.unauthenticated_header(), self.token)
     }
 
     fn get(&self, path: &str) -> ureq::Request {
@@ -192,7 +195,7 @@ impl EmbyClient {
         hard_bound: std::time::Duration,
     ) -> Result<EmbyClient, crate::service_runtime::EmbyFailure> {
         let mut clone = self.clone();
-        clone.config.server_url = setup.server_url.trim_end_matches('/').to_string();
+        clone.config.server_url = setup.server_url.clone();
         clone.user_id = setup.user_id.clone();
         clone.token = token;
         crate::bounded::run_with_hard_bound(
@@ -231,15 +234,7 @@ impl EmbyClient {
                 let resp: Value = client
                     .agent
                     .post(&client.url("/Users/AuthenticateByName"))
-                    .set(
-                        "Authorization",
-                        &format!(
-                            "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\"",
-                            client.device_name,
-                            client.device_id,
-                            env!("CARGO_PKG_VERSION")
-                        ),
-                    )
+                    .set("Authorization", &client.unauthenticated_header())
                     .send_json(ureq::json!({"Username": username, "Pw": password}))
                     .map_err(|e| format!("Emby authentication failed: {e}"))?
                     .into_json()
@@ -319,15 +314,7 @@ impl EmbyClient {
             let resp: Value = self
                 .agent
                 .post(&self.url("/Users/AuthenticateByName"))
-                .set(
-                    "Authorization",
-                    &format!(
-                        "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\"",
-                        self.device_name,
-                        self.device_id,
-                        env!("CARGO_PKG_VERSION")
-                    ),
-                )
+                .set("Authorization", &self.unauthenticated_header())
                 .send_json(ureq::json!({
                     "Username": self.config.username,
                     "Pw": self.config.password,
