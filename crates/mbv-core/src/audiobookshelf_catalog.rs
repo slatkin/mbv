@@ -104,11 +104,16 @@ struct EpisodeWire {
     duration: Option<f64>,
 }
 #[derive(Debug, Deserialize)]
+struct ProgressResponse {
+    #[serde(rename = "mediaProgress")]
+    media_progress: Vec<ProgressWire>,
+}
+#[derive(Debug, Deserialize)]
 struct ProgressWire {
     #[serde(rename = "libraryItemId")]
     library_item_id: String,
     #[serde(rename = "episodeId")]
-    episode_id: String,
+    episode_id: Option<String>,
     #[serde(rename = "currentTime")]
     current_time: Option<f64>,
     is_finished: Option<bool>,
@@ -297,20 +302,22 @@ impl AudiobookshelfClient {
         &self,
         key: &str,
     ) -> Result<HashMap<(String, String), AudiobookshelfProgress>, AudiobookshelfError> {
-        let response: Vec<ProgressWire> = self
+        let response: ProgressResponse = self
             .get(key, "/api/me/progress")?
             .into_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
         Ok(response
+            .media_progress
             .into_iter()
-            .map(|x| {
+            .filter_map(|x| {
+                let episode_id = x.episode_id?;
                 let value = AudiobookshelfProgress {
                     library_item_id: x.library_item_id.clone(),
-                    episode_id: x.episode_id.clone(),
+                    episode_id: episode_id.clone(),
                     current_time_seconds: x.current_time.unwrap_or(0.0).max(0.0),
                     is_finished: x.is_finished.unwrap_or(false),
                 };
-                ((x.library_item_id, x.episode_id), value)
+                Some(((x.library_item_id, episode_id), value))
             })
             .collect())
     }
@@ -397,14 +404,35 @@ mod tests {
 
     #[test]
     fn progress_and_shelf_fixtures_preserve_user_and_server_order() {
-        let progress: Vec<ProgressWire> = serde_json::from_str(&fixture("progress")).unwrap();
-        assert_eq!(progress[0].library_item_id, "show-2");
+        let progress: ProgressResponse = serde_json::from_str(&fixture("progress")).unwrap();
+        assert_eq!(progress.media_progress[0].library_item_id, "show-2");
         let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
         assert_eq!(shelves[0].label, "Continue listening");
         assert!(matches!(
             shelves[0].entries[1],
             ShelfEntryWire::Episode { .. }
         ));
+    }
+
+    #[test]
+    fn null_episode_id_progress_is_skipped() {
+        let json = r#"{"mediaProgress":[{"libraryItemId":"lib-1","episodeId":null,"currentTime":10.0,"isFinished":false}]}"#;
+        let response: ProgressResponse = serde_json::from_str(json).unwrap();
+        let mapped: HashMap<(String, String), AudiobookshelfProgress> = response
+            .media_progress
+            .into_iter()
+            .filter_map(|x| {
+                let episode_id = x.episode_id?;
+                let value = AudiobookshelfProgress {
+                    library_item_id: x.library_item_id.clone(),
+                    episode_id: episode_id.clone(),
+                    current_time_seconds: x.current_time.unwrap_or(0.0).max(0.0),
+                    is_finished: x.is_finished.unwrap_or(false),
+                };
+                Some(((x.library_item_id, episode_id), value))
+            })
+            .collect();
+        assert!(mapped.is_empty());
     }
 
     #[test]
