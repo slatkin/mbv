@@ -29,7 +29,8 @@ _Avoid_: no-auth mode, offline mode, provider mode
 
 **Services view**:
 The Settings surface for setting up remote Services and managing feed
-subscriptions. mbv opens it initially when no Service has content configured.
+subscriptions. mbv opens it initially when no Remote Service is configured and
+Feeds has no subscriptions.
 _Avoid_: login screen, setup wizard, authentication gate
 
 **Service state**:
@@ -54,9 +55,16 @@ It belongs only to that Service.
 _Avoid_: account credential, mbv token, control token
 
 **Control credential**:
-An mbv-owned secret that authorizes a Client to a Player owner, independently of
-all Service credentials.
+An mbv-owned secret used by a Local daemon to admit Clients independently of all
+Service credentials. It grants control access, not an identity or login;
+packaged mbvd does not use this mechanism yet.
 _Avoid_: Emby token, API key, login token
+
+**Service-owned state**:
+Local state whose remote-native identity is meaningful only for one Remote
+Service setup. Authentication repair preserves it; Service replacement or
+removal invalidates it.
+_Avoid_: provider cache, account state
 
 ## Playback ownership
 
@@ -78,9 +86,9 @@ _Avoid_: daemon mode, background mode, alive mode, persistent mode
 **Playback run**:
 The local mpv playback loop — one per mpv invocation, owned by a Player owner.
 Distinct from Session (the Emby-tracked record that exists independently of
-mbv). Each run holds the mpv instance, playlist, and per-item lifecycle state
-(load pending, stop-report handshake, next-up arming, intro visibility,
-startup-pause holdoff).
+mbv) and from an Audiobookshelf playback session. The owner's canonical queue
+remains authoritative whether mpv mirrors it or materializes only its active
+file; the run holds mpv and per-item lifecycle state.
 _Avoid_: session, playback session
 
 ## Processes
@@ -97,9 +105,9 @@ daemon, never started by a terminal UI.
 _Avoid_: system daemon, the daemon
 
 **Client**:
-A terminal UI that reaches a Player owner over the control socket. It does not
-own the Player it attaches to, but its process may also host a local Player owner
-during fall-through. Any number may attach at once, and each is disposable.
+A terminal UI that reaches an out-of-process Player owner over ctrl. Attachment
+does not log it into the owner or establish a Service identity. Any number may
+attach at once, and each is disposable.
 _Avoid_: thin client, terminal client, viewer, attachment
 
 **Tray**:
@@ -127,11 +135,23 @@ continuity is.
 _Avoid_: terminal continuity, UI state
 
 **Attach**:
-A client connecting to an existing Player owner. Never displaces another client;
-several may be attached at once.
+A Client establishing a ctrl connection to an existing Player owner. It is a
+control relationship, not login or Service setup; its handshake may present a
+Control or legacy Service credential for admission without establishing Client
+identity. Several Clients may attach at once without displacing one another.
 _Avoid_: reattach, connect, resume, take over
 
 ## Queue
+
+**Queue slot**:
+One independently addressable occurrence of a QueueItem in a canonical queue.
+Two slots may contain the same content while retaining distinct slot identities.
+_Avoid_: queue item, content ID, playlist index
+
+**Content identity**:
+The Service-qualified identity of media content, distinct from the identity of
+each Queue slot containing it.
+_Avoid_: item ID, queue ID, slot ID
 
 **Consume**:
 Removal of an item from the queue once it finishes playing, as in ncmpcpp.
@@ -161,10 +181,10 @@ Bound to two owners at once while only one of them plays.
 _Avoid_: active queue, live queue, running queue, attached queue
 
 **Unplayable item**:
-An item a Player owner cannot play, such as video on an audio-only owner or an
-item belonging to a remote Service the owner does not have configured. It never
-enters that owner's queue: a controlling client strips it before submitting,
-and the owner discards any that reach it regardless.
+An item a Player owner lacks the capability to play, because of media kind,
+required Service availability, or playback support. It never enters that
+owner's queue: a controlling Client strips it before submitting, and the owner
+discards any that reach it regardless.
 _Avoid_: rejected item, filtered item, invalid item, blocked item
 
 **EmbyItem**:
@@ -174,12 +194,32 @@ field names are unchanged. Positions for EmbyItems report to the Emby API.
 _Avoid_: MediaItem, media item, emby entry
 
 **QueueItem**:
-The queue's item enum — either an EmbyItem or a FeedEntry. Queue, rendering,
-and transport code work through its shared accessors (title, duration,
-position_key, artwork_url, media_kind); branching on the variant happens
-only where behavior is genuinely variant-specific: URL resolution at the
-play boundary, and progress reporting at the reporting boundary.
+The queue's media snapshot — an EmbyItem, FeedEntry, or
+AudiobookshelfQueueItem. Generic queue operations use shared presentation and
+identity behavior; Service-specific admission, source preparation, lifecycle,
+progress, and cleanup remain explicit boundaries.
 _Avoid_: queue entry, playable, mixed item
+
+## Audiobookshelf
+
+**Downloaded podcast episode**:
+An Audiobookshelf podcast episode available as downloaded media, identified by
+its `libraryItemId` and `episodeId`. It is distinct from an RSS FeedEntry and
+from a remote podcast episode Audiobookshelf has not downloaded.
+_Avoid_: feed episode, podcast item, track
+
+**AudiobookshelfQueueItem**:
+The QueueItem snapshot of a downloaded podcast episode. It carries content
+identity, presentation, progress, completion, and Service-scoped artwork
+identity, but no credential, server URL, playback-session ID, resolved source,
+or request headers.
+_Avoid_: Audiobookshelf episode, ABS item, feed entry
+
+**Audiobookshelf playback session**:
+Ephemeral Audiobookshelf lifecycle state opened to resolve and play one episode
+and synchronize its progress. It is neither an Emby Session nor an mbv Playback
+run.
+_Avoid_: session, playback run, Emby session
 
 ## Feeds
 
@@ -242,29 +282,6 @@ the directly controlled remote Player owner's queue is currently shown in the
 queue panel. Exists during Sessions-panel Direct remote control and explicit
 remote daemon attachment, not Session watch or a Library route.
 _Avoid_: split view, pill state
-
-**Fall-through**:
-A non-audio item explicitly played or enqueued while a client directly controls
-an audio-only Player owner, landing in the controlling client's own queue
-instead of that owner's. The item falls through; the control attachment does
-not — it stays up, and the next explicit submission is evaluated against the
-owner again. Applies to Sessions-panel Direct remote control and explicit
-remote daemon attachment, never to a Library route or an item already inside a
-Bound queue.
-_Avoid_: local fallback, routing back, handoff, video routing
-
-**Transport owner**:
-The Player owner that currently receives pause, seek, stop, skip, and other
-transport controls. It may be the local Player owner in the controlling terminal
-process while a different owner remains attached and its Bound queue remains
-visible.
-_Avoid_: active target, playback target, current remote
-
-**Submission destination**:
-The Player owner or Composed queue chosen for one explicit play or enqueue
-action. It is decided per action and is not a persistent mode or the visible
-Queue scope.
-_Avoid_: playback target, route, active queue
 
 **Library route**:
 A persistent per-library assignment sending that library's playback to a

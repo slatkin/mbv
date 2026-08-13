@@ -33,12 +33,11 @@ Route resolution order:
    already active rather than re-resolving or clearing it.
 4. No match in any case means local playback.
 
-Connecting to a routed library's daemon **is** takeover of that daemon's
-driving-client slot (ADR 0003/0007) -- an accepted, explicit consequence,
-not a hidden side effect. This matters if multiple devices route to the
-same music-only daemon. The connect attempt itself, including this
-consequence, is delegated to `App::try_daemon_route_connect`
-(ADR 0010, #222) rather than re-implemented here.
+Connecting to a routed library's daemon creates an ordinary ctrl attachment
+under ADR 0014. It does not evict another Client or take authority merely by
+connecting; accepted commands share ctrl authority and follow ADR 0007. The
+connect attempt is delegated to `App::try_daemon_route_connect` (ADR 0010,
+#222) rather than re-implemented here.
 
 Library routing (`active_route`) is tracked independently of the
 Sessions-panel direct-remote concept (`connected_session_id` /
@@ -64,15 +63,12 @@ was meant to fix.
 
 ## Context
 
-ADR 0010 (#222) established the connection lifecycle this depends on:
-fully lazy connect (never at startup), fallback to local playback with a
-status-bar warning on a failed connect via `App::try_daemon_route_connect`,
-no background retry, no connection parking (disconnect cleanly on
-swap-away; reconnect fresh next time). This issue (#223) reuses that
-lifecycle -- calling `try_daemon_route_connect` directly, on the same
-`DAEMON_ROUTE_CONNECT_OVERRIDE` test seam ADR 0010 introduced -- for
-per-library routing rather than only the wildcard "route everything" case
-#222 introduced.
+ADR 0010 (#222) established the connection lifecycle this depends on: connect
+on the first routed action, with one opt-in startup restoration attempt when
+`auto_reconnect` is enabled; fall back to local playback with a status warning;
+schedule no background retry; and do not park route connections. This issue
+(#223) reuses that lifecycle for per-library routing rather than only the
+wildcard "route everything" case #222 introduced.
 
 ## Consequences
 

@@ -20,9 +20,9 @@ eviction between ctrl clients. Authority and connection are separate axes:
   the **next ctrl command** (not on connect).
 - **Authority goes to `None`** only when the **last** ctrl client disconnects.
   Individual client disconnects do not change authority.
-- **Protocol version 4**: v2 and v3 clients are rejected. The behavioral changes
-  (no eviction, authority-based command rejection, `Disconnected` event
-  semantics) are incompatible with earlier versions.
+- **Introduced with protocol version 4**: v2 and v3 clients were rejected
+  because the no-eviction and authority semantics were incompatible. The
+  current protocol number remains defined only by `CTRL_PROTOCOL_VERSION`.
 
 ## Context
 

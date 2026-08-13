@@ -39,12 +39,12 @@ branch), which is unaffected by this ADR:
    direct-remote takeover. The next time that route is needed, it
    reconnects fresh.
 
-Connecting to a daemon route **is** taking that daemon's driving-client
-authority (ADR 0003, ADR 0007) — an accepted, explicit consequence, not a
-hidden side effect. This matters most for rule 4: a daemon route connection
-is not something mbv should hold open "just in case," because doing so
-continues to occupy that daemon's single ctrl-connection slot (ADR 0003)
-even while the route sits idle.
+ADR 0014 later separated ctrl connection from command authority and allowed
+multiple Clients to attach concurrently. Rule 4 still stands for lifecycle
+ownership rather than exclusivity: an idle parked route would retain a live
+socket, background reader, stale compatibility state, and another owner
+relationship without improving playback continuity. Reconnecting when the
+route is needed keeps the active attachment set explicit.
 
 ## Context
 
@@ -89,12 +89,9 @@ self-documenting case, not silently worked around.
   swap that created it (no new `SuspendedLocalSession`-style parking
   struct for daemon routes). #223's swap-back path should simply let the
   `RemotePlayer` drop.
-- Multiple devices routing to the same music-only `mbvd` (the scenario
-  #223's design doc calls out) will see ordinary ADR 0003 eviction
-  behavior — the newest connecting client takes over, the previous one is
-  evicted with the existing structured disconnect event. This ADR does not
-  change that; it only makes explicit that *initiating* a route connect is
-  choosing to trigger it.
+- Multiple devices may route to the same music-only `mbvd` under ADR 0014's
+  multi-connection semantics. Connections coexist; commands share ctrl
+  authority and the last accepted command determines the resulting state.
 - The existing bounded intra-attempt retry loop for `DaemonEndpoint::Local`
   in `DaemonEndpoint::connect_stream` (`crates/mbv-core/src/remote_player.rs`,
   `LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT`/`LOCAL_DAEMON_CONNECT_RETRY_INTERVAL`)

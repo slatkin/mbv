@@ -1,5 +1,10 @@
 # Composed and Bound Queue Stages
 
+> **Accepted core model; proposed audio-only application.** The Composed/Bound
+> distinction and owner-side unplayable-item admission are current. The
+> audio-only mixed-submission and Client fall-through behavior below belongs to
+> open issue #431 and is not implemented on `main`.
+
 ## Decision
 
 A queue is either Composed or Bound, and which rules apply to it depends on
@@ -16,7 +21,7 @@ owners can each hold a queue while only one of them plays.
 From this: **constraints that protect execution apply when a queue binds, not
 when it is edited.**
 
-Applied to an audio-only Player owner (`mbvd`):
+Proposed application to an audio-only Player owner (`mbvd`):
 
 - It never holds an item it cannot play. A directly controlling client strips
   non-audio items before submitting; the owner discards any that arrive
@@ -100,7 +105,8 @@ is where the user is and where the strip decision is made anyway.
   playlist as the same list with no index mapping. A lifecycle-backed source
   may instead use owner-driven active-file projection, where mpv contains only
   the active canonical slot; mpv position/count are then projection-local and
-  never become queue authority.
+  never become queue authority. ADR 0019 records why Service-backed source and
+  lifecycle state stay with the Player owner.
 - The Player owner resolves completion and consume against runtime
   `QueueSlotId` before emitting existing index-based local UI events. Those
   indices are snapshots for presentation, not prepared-source or ctrl state;
@@ -170,7 +176,8 @@ before implementation.
   the queue's (ADR 0011). This ADR gives the test by which to revisit them. It
   does not revisit them.
 
-This ADR records the model. Implementation is #431, split in two: the daemon's
-admission filter (`openspec/changes/audio-only-mixed-queue-admission`) ships on
-its own and fixes the mixed-queue refusal; client fall-through
-(`openspec/changes/audio-only-owner-fall-through`) builds on it.
+This ADR records the accepted queue-stage model and the proposed #431
+application. Generic daemon admission already discards owner-inadmissible
+QueueItems. The proposed audio-only capability and mixed-submission semantics
+(`openspec/changes/audio-only-mixed-queue-admission`) and Client fall-through
+(`openspec/changes/audio-only-owner-fall-through`) remain unimplemented.

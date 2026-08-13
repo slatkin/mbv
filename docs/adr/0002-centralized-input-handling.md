@@ -81,9 +81,10 @@ Tracked as separate issues under a GitHub Project.
    a separate, labeled behavior change: `c`/`h` reaching past an open context menu,
    each gated with its own `context_menu.is_some()` check and a dedicated regression
    test (matching the guard `home_search` already used).
-7. **Done (#136). Guardrail docs** — no raw shortcut handling outside the registry
-   except text entry and external setup (e.g. login); see AGENTS.md's "Rules" and
-   CONTEXT.md's "Input handling" section.
+7. **Done (#136). Guardrail docs** — no raw shortcut handling outside the
+   registry except text-entry state machines. `src/app/input_resolver.rs` owns
+   the `CONTEXT_STACK`; `src/app/input_browse_dispatch.rs` is the final
+   destination-specific browse rendezvous beneath it.
 
 ## Roadmap (not scheduled): user-configurable keybindings
 
