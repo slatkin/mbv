@@ -170,8 +170,8 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(update.generation) {
                 return;
             }
-            let position_ticks = (update.current_time_seconds.max(0.0)
-                * mbv_core::api::TICKS_PER_SECOND as f64) as i64;
+            let position_ticks =
+                super::audiobookshelf_browse_actions::seconds_to_ticks(update.current_time_seconds);
             let matching_slot_ids: Vec<_> = self
                 .player_tab
                 .queue
@@ -190,14 +190,18 @@ impl App {
                     .queue
                     .apply_progress(slot_id, position_ticks, update.is_finished);
             }
+            let library_item_id = update.library_item_id.clone();
+            let episode_id = update.episode_id.clone();
+            let current_time_seconds = update.current_time_seconds;
+            let is_finished = update.is_finished;
             for state in &mut self.audiobookshelf_browse {
                 state.progress.insert(
-                    (update.library_item_id.clone(), update.episode_id.clone()),
+                    (library_item_id.clone(), episode_id.clone()),
                     mbv_core::audiobookshelf::AudiobookshelfProgress {
-                        library_item_id: update.library_item_id.clone(),
-                        episode_id: update.episode_id.clone(),
-                        current_time_seconds: update.current_time_seconds,
-                        is_finished: update.is_finished,
+                        library_item_id: library_item_id.clone(),
+                        episode_id: episode_id.clone(),
+                        current_time_seconds,
+                        is_finished,
                     },
                 );
             }

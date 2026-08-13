@@ -148,7 +148,6 @@ impl AudiobookshelfPlaybackLifecycle {
             progress,
             crate::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
         );
-        self.closed = true;
     }
 }
 

@@ -605,6 +605,7 @@ impl App {
                     // Cold start: submit the full canonical queue (all
                     // variants) so the player's internal playlist matches
                     // the PlayerTab's queue exactly.
+                    let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
                     let eligible: Vec<_> = all_items
                         .into_iter()
                         .filter(|i| {
@@ -612,9 +613,9 @@ impl App {
                                 false,
                                 |service| {
                                     service != mbv_core::config::ServiceKind::Audiobookshelf
-                                        || self.player.can_admit_audiobookshelf()
+                                        || owner_can_admit_audiobookshelf
                                 },
-                                self.player.can_admit_audiobookshelf(),
+                                owner_can_admit_audiobookshelf,
                             )
                         })
                         .collect();

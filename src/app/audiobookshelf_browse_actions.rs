@@ -218,13 +218,10 @@ impl App {
         }
 
         let all_items = self.queue_for_scope(scope).all_queue_items();
-        let submitted = self.player.submit_queue(
-            all_items.clone(),
-            selected_index,
-            None,
-            all_items.iter().all(QueueItem::is_audio),
-            self.ui_volume,
-        );
+        let audio_only = all_items.iter().all(QueueItem::is_audio);
+        let submitted =
+            self.player
+                .submit_queue(all_items, selected_index, None, audio_only, self.ui_volume);
         if !submitted {
             *self.queue_for_scope_mut(scope) = previous_queue;
             self.flash(
@@ -312,7 +309,7 @@ impl App {
     }
 }
 
-fn seconds_to_ticks(seconds: f64) -> i64 {
+pub(super) fn seconds_to_ticks(seconds: f64) -> i64 {
     seconds_to_ticks_u64(seconds)
         .and_then(|ticks| i64::try_from(ticks).ok())
         .unwrap_or(0)
