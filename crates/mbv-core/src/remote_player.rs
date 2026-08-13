@@ -353,7 +353,7 @@ impl RemotePlayer {
         }
         if self.supports_unified_queue() {
             self.send_ctrl_cmd(CtrlCmd::UnifiedQueueAppend { items })
-        } else if items.iter().any(|item| matches!(item, QueueItem::Feed(_))) {
+        } else if items.iter().any(|item| !matches!(item, QueueItem::Emby(_))) {
             false
         } else {
             self.send_command(PlayerCommand::QueueAppend { items })

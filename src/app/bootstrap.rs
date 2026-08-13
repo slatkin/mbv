@@ -65,6 +65,7 @@ pub(super) fn bootstrap_local_daemon_queue(
     let cursor = super::actions::queue_restore_cursor(
         &queue_items,
         state.cursor,
+        state.last_played_content_id.as_ref(),
         state.last_played_item_id.as_deref(),
         state.last_played_completed,
     );

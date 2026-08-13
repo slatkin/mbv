@@ -209,6 +209,12 @@ impl App {
                 .map(|s| s.item.clone())
                 .collect(),
             cursor: self.player_tab.queue_cursor,
+            last_played_content_id: self
+                .player_tab
+                .queue
+                .slots()
+                .get(self.player_tab.queue_cursor)
+                .map(|slot| slot.item.content_id()),
             last_played_item_id: self.last_played_item_id.clone(),
             last_played_completed: self.last_played_completed,
             positions,
@@ -326,6 +332,7 @@ impl App {
         let cursor = super::super::actions::queue_restore_cursor(
             &queue_items,
             state.cursor,
+            state.last_played_content_id.as_ref(),
             state.last_played_item_id.as_deref(),
             state.last_played_completed,
         );

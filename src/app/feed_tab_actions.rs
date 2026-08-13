@@ -245,7 +245,6 @@ impl App {
         let all_items = self.playback_queue().all_queue_items();
         let start_idx = self.playback_queue().queue_cursor;
         let headless = all_items.iter().all(QueueItem::is_audio);
-        let c = self.emby_snapshot().map(std::sync::Arc::new);
         if existing_idx.is_some() && self.player.supports_unified_queue() {
             let slot_id = self
                 .playback_queue()
@@ -265,7 +264,7 @@ impl App {
         }
         if !self
             .player
-            .submit_queue(all_items, start_idx, c, headless, self.ui_volume)
+            .submit_queue(all_items, start_idx, None, headless, self.ui_volume)
         {
             *self.queue_for_scope_mut(scope) = previous_queue;
             self.flash(

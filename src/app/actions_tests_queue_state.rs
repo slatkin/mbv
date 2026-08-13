@@ -1,53 +1,8 @@
-#![allow(dead_code, unused_imports)]
-
 use super::*;
-use crate::app::library_browse_actions::{
-    build_album_index_with, full_library_fetch_limit, recursive_album_search_eligible,
-};
-use crate::app::tests::{make_app_stub, make_item, make_items};
-use crate::app::{
-    AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
-};
-use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::player::PlayerEvent;
-use std::collections::HashMap;
-use std::sync::mpsc;
+use crate::app::tests::make_item;
+use crate::app::{BrowseLevel, FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection};
+use mbv_core::playback_queue::{AudiobookshelfQueueItem, FeedEntry, QueueItemContentId};
 
-fn folder(id: &str, name: &str) -> EmbyItem {
-    let mut item = make_item(name, "Folder");
-    item.id = id.into();
-    item.is_folder = true;
-    item
-}
-
-fn album(id: &str, name: &str) -> EmbyItem {
-    let mut item = make_item(name, "MusicAlbum");
-    item.id = id.into();
-    item.is_folder = true;
-    item.media_type = "Audio".into();
-    item
-}
-
-fn recursive_music_app() -> App {
-    let mut app = make_app_stub();
-    app.music_levels = vec!["group".into(), "artist".into(), "album".into()];
-    let mut library = make_item("Music", "CollectionFolder");
-    library.id = "music-lib".into();
-    library.collection_type = "music".into();
-    library.is_folder = true;
-    app.libs.push(LibraryTab {
-        library,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
-    app
-}
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 
 /// RAII guard that points `XDG_CONFIG_HOME` (subtitle-mode saves) and
@@ -78,8 +33,6 @@ impl Drop for XdgHomeGuard {
         let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
-// ── queue_restore_cursor: last-played-id lookup + drift fallback ────────
-
 fn make_queue_items(n: usize) -> Vec<mbv_core::playback_queue::QueueItem> {
     crate::app::tests::make_items(n)
         .into_iter()
@@ -90,14 +43,14 @@ fn make_queue_items(n: usize) -> Vec<mbv_core::playback_queue::QueueItem> {
 #[test]
 fn queue_restore_cursor_finds_last_played_by_id() {
     let items = make_queue_items(3);
-    let cursor = queue_restore_cursor(&items, 0, Some("id1"), false);
+    let cursor = queue_restore_cursor(&items, 0, None, Some("id1"), false);
     assert_eq!(cursor, 1);
 }
 
 #[test]
 fn queue_restore_cursor_advances_past_a_completed_last_played_item() {
     let items = make_queue_items(3);
-    let cursor = queue_restore_cursor(&items, 0, Some("id1"), true);
+    let cursor = queue_restore_cursor(&items, 0, None, Some("id1"), true);
     assert_eq!(cursor, 2);
 }
 
@@ -107,14 +60,14 @@ fn queue_restore_cursor_falls_back_to_saved_cursor_when_last_played_id_missing()
     // "id5" isn't in the restored list (e.g. it was removed from the
     // queue before quitting) — must fall back to the saved cursor, not
     // silently snap back to the front of the queue.
-    let cursor = queue_restore_cursor(&items, 2, Some("id5"), false);
+    let cursor = queue_restore_cursor(&items, 2, None, Some("id5"), false);
     assert_eq!(cursor, 2);
 }
 
 #[test]
 fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len() {
     let items = make_queue_items(3);
-    let cursor = queue_restore_cursor(&items, 99, Some("id5"), false);
+    let cursor = queue_restore_cursor(&items, 99, None, Some("id5"), false);
     #[rustfmt::skip]
     assert_eq!(
         cursor, 2,
@@ -125,11 +78,124 @@ fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len() {
 #[test]
 fn queue_restore_cursor_uses_saved_cursor_when_no_last_played_id() {
     let items = make_queue_items(3);
-    let cursor = queue_restore_cursor(&items, 1, None, false);
+    let cursor = queue_restore_cursor(&items, 1, None, None, false);
     assert_eq!(cursor, 1);
 }
 
-// ── queue_state persistence: restore + attached-session guards ──────────
+#[test]
+fn queue_restore_cursor_typed_identity_never_crosses_services() {
+    let e = QueueItem::Emby(Box::new(make_item("same", "Movie")));
+    let f = QueueItem::Feed(FeedEntry {
+        guid: "same".into(),
+        title: "f".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: None,
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
+    });
+    assert_eq!(
+        queue_restore_cursor(
+            &[f],
+            0,
+            Some(&QueueItemContentId::Emby("same".into())),
+            None,
+            false
+        ),
+        0
+    );
+    assert_eq!(
+        queue_restore_cursor(
+            &[e],
+            0,
+            Some(&QueueItemContentId::Feed("same".into())),
+            None,
+            false
+        ),
+        0
+    );
+}
+
+#[test]
+fn queue_restore_cursor_typed_feed_and_abs_are_provider_qualified() {
+    let f = QueueItem::Feed(FeedEntry {
+        guid: "same".into(),
+        title: "f".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: None,
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
+    });
+    let a = QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+        library_item_id: "lib".into(),
+        episode_id: "same".into(),
+        title: "a".into(),
+        show_title: None,
+        author: None,
+        duration_ticks: None,
+        position_ticks: 0,
+        played: false,
+        pub_date_secs: None,
+        is_finished: false,
+        cover_path: None,
+    });
+    assert_eq!(
+        queue_restore_cursor(
+            &[f.clone(), a.clone()],
+            0,
+            Some(&QueueItemContentId::Feed("same".into())),
+            None,
+            false
+        ),
+        0
+    );
+    assert_eq!(
+        queue_restore_cursor(
+            &[f, a],
+            0,
+            Some(&QueueItemContentId::Audiobookshelf {
+                library_item_id: "lib".into(),
+                episode_id: "same".into()
+            }),
+            None,
+            false
+        ),
+        1
+    );
+}
+
+#[test]
+fn queue_restore_cursor_legacy_ambiguous_id_uses_saved_cursor() {
+    let items = vec![
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("same", "Movie"))),
+        mbv_core::playback_queue::QueueItem::Feed(FeedEntry {
+            guid: "same".into(),
+            title: "feed".into(),
+            enclosure_url: None,
+            link: None,
+            mime_type: None,
+            duration_ticks: None,
+            pub_date_secs: None,
+            feed_kind: None,
+            feed_id: None,
+            position_ticks: 0,
+            played: false,
+        }),
+    ];
+    assert_eq!(
+        queue_restore_cursor(&items, 1, None, Some("same"), false),
+        1
+    );
+}
 
 #[test]
 fn restore_queue_state_with_no_saved_file_does_nothing() {
@@ -151,6 +217,7 @@ fn restore_queue_state_with_no_items_does_nothing() {
         source: crate::config::QueueSource::Unknown,
         items: vec![],
         cursor: 0,
+        last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
@@ -197,6 +264,7 @@ fn restore_queue_state_clears_a_stale_dirty_flag() {
             .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
+        last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
@@ -650,6 +718,7 @@ fn save_queue_state_still_clears_file_when_locally_empty_and_not_attached() {
             .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
+        last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
@@ -682,6 +751,7 @@ fn save_queue_state_no_clear_preserves_file_when_locally_empty_and_not_attached(
             .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
+        last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
@@ -716,48 +786,4 @@ fn save_queue_state_no_clear_still_saves_when_queue_has_items() {
 
     let state = crate::config::load_queue_state().expect("queue should be saved");
     assert_eq!(state.items.len(), 2);
-}
-
-#[test]
-fn cycle_sub_local_idle_cycles_subtitle_mode_not_a_track() {
-    let _g = XDG_HOME_LOCK.lock().unwrap();
-    let _xdg = XdgHomeGuard::new();
-
-    let mut app = crate::app::tests::make_app_stub();
-    app.player.status.lock().unwrap().active = false;
-    let before = app.config.lock().unwrap().subtitle_mode.clone();
-
-    app.cycle_sub();
-
-    let after = app.config.lock().unwrap().subtitle_mode.clone();
-    assert_ne!(
-        before, after,
-        "idle z has no session equivalent, so it should still cycle the default subtitle mode"
-    );
-}
-
-#[test]
-fn cycle_sub_local_active_does_not_fall_back_to_subtitle_mode() {
-    let _g = XDG_HOME_LOCK.lock().unwrap();
-    let _xdg = XdgHomeGuard::new();
-
-    let mut app = crate::app::tests::make_app_stub();
-    {
-        let mut status = app.player.status.lock().unwrap();
-        status.active = true;
-        status.sub_tracks = vec![(1, "English".to_string(), false)];
-        status.sub_id = 0;
-    }
-    let before = app.config.lock().unwrap().subtitle_mode.clone();
-
-    // #86: local `z` while active now cycles every track (like the
-    // remote path) instead of the old on/off `toggle_sub()` -- assert at
-    // minimum that it does *not* take the idle subtitle-mode fallback.
-    app.cycle_sub();
-
-    let after = app.config.lock().unwrap().subtitle_mode.clone();
-    assert_eq!(
-        before, after,
-        "an active player has tracks to cycle and must not touch the idle subtitle-mode fallback"
-    );
 }

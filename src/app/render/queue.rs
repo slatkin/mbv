@@ -429,9 +429,17 @@ impl App {
                             layout.queue_row_map.push(Some(slot_idx));
                             line_offset += 1;
                         }
-                        QueueItem::Feed(entry) => {
-                            let len_secs =
-                                entry.duration_ticks.unwrap_or(0) as i64 / TICKS_PER_SECOND;
+                        other => {
+                            let (title_raw, duration_ticks) = match other {
+                                QueueItem::Feed(entry) => {
+                                    (entry.title.as_str(), entry.duration_ticks.unwrap_or(0))
+                                }
+                                QueueItem::Audiobookshelf(ep) => {
+                                    (ep.title.as_str(), ep.duration_ticks.unwrap_or(0) as u64)
+                                }
+                                QueueItem::Emby(_) => unreachable!(),
+                            };
+                            let len_secs = duration_ticks as i64 / TICKS_PER_SECOND;
                             let dur = if len_secs > 0 {
                                 fmt_duration_short(len_secs)
                             } else {
@@ -447,7 +455,7 @@ impl App {
                             let right_w = if dur_visible { dur.width() } else { 0 };
                             let title_w = track_content_w
                                 .saturating_sub(indent + right_w + QUEUE_TITLE_QUIET_COLUMNS);
-                            let title = trunc_str(&entry.title, title_w);
+                            let title = trunc_str(title_raw, title_w);
 
                             if is_cursor {
                                 f.render_widget(

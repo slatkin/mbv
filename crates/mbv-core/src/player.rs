@@ -37,6 +37,7 @@ fn mpv_title_opt(title: &str) -> String {
 fn resume_start_pos(item: &QueueItem) -> f64 {
     match item {
         QueueItem::Emby(emby) if !emby.is_audio() && emby.should_resume() => emby.resume_seconds(),
+        QueueItem::Emby(_) => 0.0,
         QueueItem::Feed(entry) => {
             let runtime = entry.duration_ticks.unwrap_or(0) as i64;
             if crate::api::should_resume(entry.position_ticks, runtime) {
@@ -45,7 +46,14 @@ fn resume_start_pos(item: &QueueItem) -> f64 {
                 0.0
             }
         }
-        _ => 0.0,
+        QueueItem::Audiobookshelf(ep) => {
+            let runtime = ep.duration_ticks.unwrap_or(0) as i64;
+            if crate::api::should_resume(ep.position_ticks, runtime) {
+                ep.position_ticks as f64 / crate::api::TICKS_PER_SECOND as f64
+            } else {
+                0.0
+            }
+        }
     }
 }
 

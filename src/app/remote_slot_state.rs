@@ -7,6 +7,17 @@ impl App {
         matches!(self.player_endpoint, Some(DaemonEndpoint::Local))
     }
 
+    /// Whether the Player owner lives in this process (bare mode): no daemon
+    /// endpoint at all, i.e. the in-process embedded mpv. Distinct from
+    /// same-machine ownership (`player_owner_is_on_this_machine`) which also
+    /// includes the local daemon, and from launch mode (`home_is_local_daemon`
+    /// / `launched_as_remote`) which records how we started, not where the
+    /// owner lives now. Derived purely from `player_endpoint == None`.
+    #[allow(dead_code)]
+    pub(super) fn is_in_process_player_owner(&self) -> bool {
+        self.player_endpoint.is_none()
+    }
+
     pub(super) fn player_owner_is_on_this_machine(&self) -> bool {
         !matches!(
             self.player_endpoint,

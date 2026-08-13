@@ -468,6 +468,8 @@ impl PlaybackRun {
 /// Constructs the mpv loadfile URL for a `QueueItem`.
 /// - Emby: the standard Emby streaming URL.
 /// - Feed: the enclosure/link URL handed directly to mpv.
+/// - Audiobookshelf: not yet playable; returns empty (will fail visibly
+///   rather than crash; owner admission will reject before this path).
 fn mpv_url_for_queue_item(item: &QueueItem, server_url: &str, token: &str) -> String {
     match item {
         QueueItem::Emby(emby) => {
@@ -478,5 +480,8 @@ fn mpv_url_for_queue_item(item: &QueueItem, server_url: &str, token: &str) -> St
             )
         }
         QueueItem::Feed(entry) => entry.primary_source().unwrap_or("").to_string(),
+        QueueItem::Audiobookshelf(_) => {
+            unreachable!("Audiobookshelf admission must precede URL resolution")
+        }
     }
 }

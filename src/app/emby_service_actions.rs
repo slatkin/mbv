@@ -49,12 +49,12 @@ impl App {
             queues.push(queue);
         }
         for queue in queues {
-            let feed_items = queue
+            let non_emby_items = queue
                 .all_queue_items()
                 .into_iter()
-                .filter(|item| matches!(item, QueueItem::Feed(_)))
+                .filter(|item| !matches!(item, QueueItem::Emby(_)))
                 .collect::<Vec<_>>();
-            queue.set_queue_items(feed_items, 0);
+            queue.set_queue_items(non_emby_items, 0);
         }
         self.queue_source = crate::config::QueueSource::Unknown;
         self.queue_dirty = false;

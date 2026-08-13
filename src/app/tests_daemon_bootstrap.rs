@@ -18,6 +18,7 @@ fn local_daemon_bootstrap_adopts_saved_local_queue_and_source() {
                 .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: 1,
+            last_played_content_id: None,
             last_played_item_id: None,
             last_played_completed: false,
             positions: Default::default(),
@@ -68,6 +69,7 @@ fn local_daemon_bootstrap_carries_saved_positions_for_enrichment() {
                 .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: 0,
+            last_played_content_id: None,
             last_played_item_id: None,
             last_played_completed: false,
             positions: positions.clone(),
@@ -100,6 +102,7 @@ fn local_daemon_bootstrap_uses_restore_cursor_and_carries_last_played_state() {
                 .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: 0,
+            last_played_content_id: None,
             last_played_item_id: Some(last_played_id.clone()),
             last_played_completed: true,
             positions: Default::default(),
@@ -134,6 +137,7 @@ fn local_daemon_bootstrap_prefers_existing_daemon_queue_state() {
                 .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: 0,
+            last_played_content_id: None,
             last_played_item_id: None,
             last_played_completed: false,
             positions: Default::default(),
@@ -169,6 +173,7 @@ fn local_daemon_app_keeps_live_queue_over_stale_disk_snapshot() {
             .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
+        last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),
@@ -187,6 +192,6 @@ fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
         .into_iter()
         .map(|i| mbv_core::playback_queue::QueueItem::Emby(Box::new(i)))
         .collect();
-    let cursor = super::actions::queue_restore_cursor(&items, 2, None, false);
+    let cursor = super::actions::queue_restore_cursor(&items, 2, None, None, false);
     assert_eq!(cursor, 2);
 }

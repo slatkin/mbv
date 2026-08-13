@@ -47,16 +47,18 @@ fn project_queue_state(
         source: source.clone(),
         items: queue_items,
         cursor: active_idx,
+        last_played_content_id: if player_status.active && active_idx < slots.len() {
+            Some(slots[active_idx].item.content_id())
+        } else {
+            None
+        },
         last_played_item_id,
         last_played_completed: false,
         positions,
     }
 }
 
-/// Applies a freshly-decided queue snapshot to the cross-thread shared state
-/// and broadcasts it to every connected client.  Derives both the legacy
-/// `CtrlState` (for peers without `unified-queue`) and the canonical
-/// `UnifiedQueueState` (for capable peers) from the single canonical queue.
+/// Broadcasts a queue snapshot to clients and shared state.
 fn broadcast_queue_state(
     ctrl_clients: &ClientRegistry,
     player: &Player,
@@ -125,9 +127,33 @@ fn split_queue_for_legacy(queue: &PlaybackQueue) -> (Vec<EmbyItem>, Vec<FeedEntr
         match &slot.item {
             QueueItem::Emby(e) => emby.push((**e).clone()),
             QueueItem::Feed(f) => feed.push(f.clone()),
+            QueueItem::Audiobookshelf(_) => {}
         }
     }
     (emby, feed)
+}
+
+fn admit_queue_items(
+    original: Vec<QueueItem>,
+    requested_cursor: Option<usize>,
+    audio_only: bool,
+) -> (Vec<QueueItem>, usize) {
+    let requested = requested_cursor.unwrap_or(0);
+    let rebased = original
+        .iter()
+        .take(requested)
+        .filter(|item| item.admissible_for_owner(audio_only, |_| false))
+        .count();
+    let items: Vec<_> = original
+        .into_iter()
+        .filter(|item| item.admissible_for_owner(audio_only, |_| false))
+        .collect();
+    let cursor = if items.is_empty() {
+        0
+    } else {
+        rebased.min(items.len() - 1)
+    };
+    (items, cursor)
 }
 
 /// Rejects a queue command with `reason` and echoes the daemon's
@@ -316,11 +342,7 @@ fn handle_ctrl(
                 );
                 return;
             }
-            let next_cursor = if items.is_empty() {
-                0
-            } else {
-                cursor.min(items.len().saturating_sub(1))
-            };
+            let (items, next_cursor) = admit_queue_items(items, Some(cursor), audio_only);
             player.set_initial_queue(&items, next_cursor);
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
@@ -608,6 +630,19 @@ fn handle_ctrl(
         }
         // ── Unified queue commands ──────────────────────────────────────
         CtrlCmd::UnifiedQueueReplace { items, start_idx } => {
+            let (items, next_cursor) = admit_queue_items(items, start_idx, audio_only);
+            if items.is_empty() {
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    "Playback owner rejected the queue replacement".to_string(),
+                );
+                return;
+            }
             // Audio-only admission: reject if the daemon is in audio-only
             // mode and any item is non-audio.
             if let Some(reason) = audio_only_rejection(audio_only, &items) {
@@ -622,11 +657,6 @@ fn handle_ctrl(
                 );
                 return;
             }
-            let next_cursor = if items.is_empty() {
-                0
-            } else {
-                start_idx.unwrap_or(0).min(items.len().saturating_sub(1))
-            };
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
             // `send_command` alone only reaches an already-running mpv
@@ -642,6 +672,20 @@ fn handle_ctrl(
         }
         CtrlCmd::UnifiedQueueAppend { items } => {
             if items.is_empty() {
+                return;
+            }
+            let mut items = items;
+            items.retain(|item| item.admissible_for_owner(audio_only, |_| false));
+            if items.is_empty() {
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    "Playback owner rejected the queue append".to_string(),
+                );
                 return;
             }
             // Audio-only admission: reject if any appended item is non-audio.

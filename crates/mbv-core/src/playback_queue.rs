@@ -53,14 +53,18 @@ impl SlotProgress {
         }
     }
 
-    /// Progress from either item kind. Feed slots carry their local
-    /// position and played state without entering Emby sync.
+    /// Progress from any item kind. Feed and Audiobookshelf slots carry
+    /// their local position and played state without entering Emby sync.
     fn from_queue_item(item: &QueueItem) -> Self {
         match item {
             QueueItem::Emby(emby) => Self::from_item(emby),
             QueueItem::Feed(entry) => Self {
                 position_ticks: entry.position_ticks,
                 played: entry.played,
+            },
+            QueueItem::Audiobookshelf(ep) => Self {
+                position_ticks: ep.position_ticks,
+                played: ep.played || ep.is_finished,
             },
         }
     }
@@ -79,9 +83,9 @@ pub struct ProgressState {
 }
 
 impl ProgressState {
-    /// Progress from either item kind. Feed slots retain local position
-    /// and played state but never enter Emby sync (`pending_sync` stays
-    /// `None`).
+    /// Progress from any item kind. Feed and Audiobookshelf slots retain
+    /// local position and played state but never enter Emby sync
+    /// (`pending_sync` stays `None`).
     fn from_queue_item(item: &QueueItem) -> Self {
         match item {
             QueueItem::Emby(emby) => Self {
@@ -95,11 +99,18 @@ impl ProgressState {
                 },
                 pending_sync: None,
             },
+            QueueItem::Audiobookshelf(ep) => Self {
+                local: SlotProgress {
+                    position_ticks: ep.position_ticks,
+                    played: ep.played || ep.is_finished,
+                },
+                pending_sync: None,
+            },
         }
     }
 
-    /// Applies progress back to the item. Touches both EmbyItem and
-    /// FeedEntry fields; Feed entries never participate in Emby sync.
+    /// Applies progress back to the item. Feed and Audiobookshelf entries
+    /// never participate in Emby sync.
     fn apply_to_item(&self, item: &mut QueueItem) {
         match item {
             QueueItem::Emby(emby) => {
@@ -109,6 +120,11 @@ impl ProgressState {
             QueueItem::Feed(entry) => {
                 entry.position_ticks = self.local.position_ticks;
                 entry.played = self.local.played;
+            }
+            QueueItem::Audiobookshelf(ep) => {
+                ep.position_ticks = self.local.position_ticks;
+                ep.played = self.local.played;
+                ep.is_finished = self.local.played;
             }
         }
     }
@@ -254,8 +270,8 @@ impl PlaybackQueue {
 
     /// Cursor for the legacy `CtrlState` projection: the active slot's index
     /// within the Emby slots in canonical order, optionally followed by the
-    /// Feed tail. Returns 0 when the active slot is a Feed but
-    /// `include_feed_tail` is false, since it isn't representable there.
+    /// Feed tail. Returns 0 when the active slot is not Emby-representable
+    /// but `include_feed_tail` is false.
     pub fn legacy_cursor(&self, include_feed_tail: bool) -> usize {
         let Some(active_id) = self.active_slot_id else {
             return 0;
@@ -273,11 +289,13 @@ impl PlaybackQueue {
                     QueueItem::Emby(_) => emby_seen,
                     QueueItem::Feed(_) if include_feed_tail => emby_total + feed_seen,
                     QueueItem::Feed(_) => 0,
+                    QueueItem::Audiobookshelf(_) => 0,
                 };
             }
             match &slot.item {
                 QueueItem::Emby(_) => emby_seen += 1,
                 QueueItem::Feed(_) => feed_seen += 1,
+                QueueItem::Audiobookshelf(_) => {}
             }
         }
         0
@@ -303,6 +321,27 @@ impl PlaybackQueue {
         self.slots
             .iter()
             .any(|s| matches!(s.item, QueueItem::Feed(_)))
+    }
+
+    /// Returns `true` when the queue contains any Audiobookshelf slots.
+    pub fn has_audiobookshelf_entries(&self) -> bool {
+        self.slots
+            .iter()
+            .any(|s| matches!(s.item, QueueItem::Audiobookshelf(_)))
+    }
+
+    /// Returns `true` when the queue contains any non-Emby slots (Feed or
+    /// Audiobookshelf). Used at boundaries that strip server-owned state.
+    pub fn has_non_emby_entries(&self) -> bool {
+        self.slots
+            .iter()
+            .any(|s| !matches!(s.item, QueueItem::Emby(_)))
+    }
+
+    /// Helper for owner admission and service cleanup: whether a slot is
+    /// Audiobookshelf-owned.
+    pub fn is_audiobookshelf_slot(slot: &QueueSlot) -> bool {
+        matches!(slot.item, QueueItem::Audiobookshelf(_))
     }
 
     pub fn clear_active_slot(&mut self) {
@@ -480,8 +519,9 @@ impl PlaybackQueue {
         let active_slot_id = self.active_slot_id;
 
         for mut slot in old_slots {
-            // Feed slots have no server-side counterpart; keep them as-is.
-            if matches!(slot.item, QueueItem::Feed(_)) {
+            // Feed and Audiobookshelf slots have no Emby server counterpart;
+            // keep them as-is (group_fetched_items_by_item_id is Emby-only).
+            if matches!(slot.item, QueueItem::Feed(_) | QueueItem::Audiobookshelf(_)) {
                 if should_protect_missing_slot(&slot, active_slot_id) {
                     result.protected_slots.push(slot.slot_id);
                 }
@@ -489,7 +529,7 @@ impl PlaybackQueue {
                 continue;
             }
             let fetched = fetched_by_item_id
-                .get_mut(slot.item.id())
+                .get_mut(&slot.item.content_id())
                 .map(FetchedItemMatches::next_match);
             match fetched {
                 Some(fetched_item) => {
@@ -610,11 +650,13 @@ impl FetchedItemMatches {
     }
 }
 
-fn group_fetched_items_by_item_id(items: Vec<EmbyItem>) -> HashMap<String, FetchedItemMatches> {
+fn group_fetched_items_by_item_id(
+    items: Vec<EmbyItem>,
+) -> HashMap<QueueItemContentId, FetchedItemMatches> {
     let mut grouped = HashMap::new();
     for item in items {
         grouped
-            .entry(item.id.clone())
+            .entry(QueueItemContentId::Emby(item.id.clone()))
             .and_modify(|matches: &mut FetchedItemMatches| matches.push(item.clone()))
             .or_insert_with(|| FetchedItemMatches::new(item));
     }

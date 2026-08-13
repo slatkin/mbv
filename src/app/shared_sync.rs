@@ -99,6 +99,7 @@ impl App {
         let cursor = super::actions::queue_restore_cursor(
             &queue_items,
             state.cursor,
+            state.last_played_content_id.as_ref(),
             state.last_played_item_id.as_deref(),
             state.last_played_completed,
         );
@@ -666,6 +667,7 @@ mod tests {
                 .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
                 .collect(),
             cursor: 4,
+            last_played_content_id: None,
             last_played_item_id: None,
             last_played_completed: false,
             positions: Default::default(),

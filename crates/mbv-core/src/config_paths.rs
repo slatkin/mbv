@@ -709,15 +709,16 @@ pub fn config_path() -> PathBuf {
 }
 
 impl QueueState {
-    /// Remove only Emby slots and native-ID keyed positions. Feed snapshots
-    /// remain intact for mixed queue restoration.
-    pub fn without_emby(&self) -> Self {
-        let items = self
+    fn without_items<F>(&self, keep: F) -> Self
+    where
+        F: Fn(&crate::playback_queue::QueueItem) -> bool,
+    {
+        let items: Vec<crate::playback_queue::QueueItem> = self
             .items
             .iter()
-            .filter(|item| matches!(item, crate::playback_queue::QueueItem::Feed(_)))
+            .filter(|item| keep(item))
             .cloned()
-            .collect::<Vec<_>>();
+            .collect();
         let positions = self
             .positions
             .iter()
@@ -731,6 +732,11 @@ impl QueueState {
                 self.source.clone()
             },
             cursor: self.cursor.min(items.len().saturating_sub(1)),
+            last_played_content_id: self
+                .last_played_content_id
+                .as_ref()
+                .filter(|id| items.iter().any(|item| item.content_id() == **id))
+                .cloned(),
             last_played_item_id: self
                 .last_played_item_id
                 .as_ref()
@@ -740,5 +746,30 @@ impl QueueState {
             items,
             positions,
         }
+    }
+
+    /// Remove only Emby slots and native-ID keyed positions. Feed and
+    /// Audiobookshelf snapshots remain intact for mixed queue restoration.
+    /// After this change Emby removal preserves non-Emby items (Feed +
+    /// Audiobookshelf) as required by the Audiobookshelf lifecycle.
+    pub fn without_emby(&self) -> Self {
+        self.without_items(|item| !matches!(item, crate::playback_queue::QueueItem::Emby(_)))
+    }
+
+    /// Remove only Audiobookshelf slots and their keyed positions. Emby and
+    /// Feed items remain intact. Used on confirmed Audiobookshelf Service
+    /// replacement/removal to purge Service-owned queue state without
+    /// affecting other Services.
+    pub fn without_audiobookshelf(&self) -> Self {
+        self.without_items(|item| {
+            !matches!(item, crate::playback_queue::QueueItem::Audiobookshelf(_))
+        })
+    }
+
+    /// Remove both Emby and Audiobookshelf items, keeping only Feed entries.
+    /// Composition of `without_emby` and `without_audiobookshelf` would also
+    /// work, but this single-pass form avoids double allocation.
+    pub fn without_emby_and_audiobookshelf(&self) -> Self {
+        self.without_items(|item| matches!(item, crate::playback_queue::QueueItem::Feed(_)))
     }
 }
