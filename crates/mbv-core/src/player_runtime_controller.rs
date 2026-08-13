@@ -161,6 +161,15 @@ impl Player {
         *self.audiobookshelf_context.lock().unwrap() = context;
     }
 
+    /// Audiobookshelf admission belongs only to this in-process Player. The
+    /// prepared-source boundary and the closed reporting/finalization
+    /// lifecycle are owner-local code paths in `PlaybackRun`; the current
+    /// context is the runtime gate that makes that complete capability
+    /// available. Clearing it immediately makes new Bound admission fail.
+    pub fn can_admit_audiobookshelf(&self) -> bool {
+        self.audiobookshelf_context.lock().unwrap().is_some()
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub fn audiobookshelf_generation(&self) -> Option<crate::service_runtime::SetupGeneration> {
         self.audiobookshelf_context
@@ -342,7 +351,9 @@ impl Player {
         headless: bool,
         initial_volume: u8,
     ) -> bool {
-        if items.is_empty() || items.iter().any(QueueItem::is_audiobookshelf) {
+        if items.is_empty()
+            || (items.iter().any(QueueItem::is_audiobookshelf) && !self.can_admit_audiobookshelf())
+        {
             return false;
         }
         let start_idx = start_idx.min(items.len() - 1);
@@ -513,6 +524,8 @@ impl Player {
                         "submit_queue loadfile error: {e} | mode={mode}",
                     );
                     if i == start_idx {
+                        let mut prepared = prepared;
+                        prepared.close(0.0);
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
                             idx: 0,
@@ -634,6 +647,15 @@ impl Player {
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
         true
+    }
+
+    pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
+        if items.is_empty()
+            || (items.iter().any(QueueItem::is_audiobookshelf) && !self.can_admit_audiobookshelf())
+        {
+            return false;
+        }
+        self.send_command(PlayerCommand::QueueAppend { items })
     }
 
     pub fn stop(&self) {

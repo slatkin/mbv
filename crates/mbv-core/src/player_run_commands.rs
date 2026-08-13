@@ -84,6 +84,7 @@ impl PlaybackRun {
                     }
                     let _ = mpv.command("playlist-remove", &[&idx.to_string()]);
                     if active_slot_id == Some(slot_id) {
+                        self.close_prepared_source();
                         let _ = self.queue.remove_active_slot_confirmed(slot_id);
                     } else {
                         let _ = self.queue.remove_slot(slot_id);
@@ -228,6 +229,7 @@ impl PlaybackRun {
         }
         self.cancel_pending_quit();
         if new_items.is_empty() {
+            self.close_prepared_source();
             self.stop_report =
                 StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
@@ -246,6 +248,7 @@ impl PlaybackRun {
             self.episode = 0;
             return;
         }
+        self.close_prepared_source();
         // report_stopped for current item; is_audio zeroing handled inside.
         self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
         // Replacing the playlist should always start playing it, even if mpv
@@ -363,6 +366,7 @@ impl PlaybackRun {
     ) {
         self.cancel_pending_quit();
         self.origin = PlaybackOrigin::Standalone;
+        self.close_prepared_source();
         // Loading a new item should always start playing it, even if mpv
         // was left paused on the previous item (reused-window fast path).
         let _ = mpv.set_property("pause", false);
@@ -435,6 +439,7 @@ impl PlaybackRun {
             return;
         }
         let start_idx = start_idx.min(items.len() - 1);
+        self.close_prepared_source();
 
         // Loading new items should always start playing, even if mpv was
         // left paused on the previous item (reused-window fast path).

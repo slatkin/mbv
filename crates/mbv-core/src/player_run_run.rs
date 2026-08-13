@@ -73,6 +73,7 @@ impl PlaybackRun {
                 while let Ok(cmd) = cmd_rx.try_recv() {
                     cancel_stop |= self.handle_command(cmd, &mpv, &mut progress);
                 }
+                self.observe_reporting(false);
 
                 if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
                     // A synchronous quit exits promptly for regular playback.
@@ -142,6 +143,7 @@ impl PlaybackRun {
                                 continue;
                             }
                             let _ = self.event_tx.send(PlayerEvent::PausedChanged(paused));
+                            self.observe_reporting(true);
                             if self.quit_at.is_none() {
                                 let event_name = if paused { "Pause" } else { "Unpause" };
                                 let _ = progress_report_tx.send(event_name.to_string());

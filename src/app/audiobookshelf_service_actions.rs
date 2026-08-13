@@ -16,10 +16,25 @@ impl App {
     }
 
     pub(super) fn clear_audiobookshelf_authentication(&mut self) -> Result<(), String> {
+        let current_generation = self.audiobookshelf_runtime.generation();
+        self.audiobookshelf_runtime
+            .cancel_setup(current_generation, ServiceState::NeedsAuthentication);
         self.clear_audiobookshelf_catalog();
+        self.stop_active_audiobookshelf_playback();
         self.update_local_audiobookshelf_context(None);
         self.audiobookshelf_runtime.user = None;
         mbv_core::config::clear_service_secret_result(mbv_core::config::ServiceKind::Audiobookshelf)
+    }
+
+    fn stop_active_audiobookshelf_playback(&self) {
+        let active_is_audiobookshelf = self
+            .playback_queue()
+            .queue
+            .active_slot()
+            .is_some_and(|slot| matches!(slot.item, QueueItem::Audiobookshelf(_)));
+        if active_is_audiobookshelf {
+            self.player.stop();
+        }
     }
 
     pub(super) fn apply_audiobookshelf_setup_completion(
@@ -160,6 +175,7 @@ impl App {
     }
 
     pub(super) fn remove_audiobookshelf_confirmed(&mut self) {
+        self.stop_active_audiobookshelf_playback();
         // Snapshot for rollback if persistence fails, mirroring Emby removal.
         let old_queue = mbv_core::config::load_queue_state();
         let filtered = old_queue.as_ref().map(QueueState::without_audiobookshelf);
@@ -201,11 +217,17 @@ impl App {
         if !self.audiobookshelf_runtime.accepts(generation) {
             return;
         }
+        let previous_state = self
+            .pending_audiobookshelf_replacement
+            .as_ref()
+            .map_or(self.audiobookshelf_runtime.state, |pending| {
+                pending.previous_state
+            });
+        self.stop_active_audiobookshelf_playback();
         let Some(pending) = self.pending_audiobookshelf_replacement.take() else {
             return;
         };
         let candidate = pending.candidate;
-        let previous_state = pending.previous_state;
         let user = candidate.user.clone();
         let setup = candidate.setup.clone();
 
@@ -244,12 +266,15 @@ impl App {
         );
         match result {
             Ok(_) => {
+                self.audiobookshelf_runtime
+                    .cancel_setup(generation, previous_state);
+                let replacement_generation = self.audiobookshelf_runtime.generation();
                 self.clear_audiobookshelf_catalog();
                 self.clear_audiobookshelf_queue_memory();
                 self.config.lock().unwrap().audiobookshelf_setup = Some(setup.clone());
                 self.audiobookshelf_runtime
-                    .commit_ready(generation, user.clone());
-                self.install_audiobookshelf_player_context(generation);
+                    .commit_ready(replacement_generation, user.clone());
+                self.install_audiobookshelf_player_context(replacement_generation);
                 self.flash(
                     format!(
                         "Audiobookshelf {} is ready for {}",
@@ -282,6 +307,25 @@ impl App {
                 credential,
                 mbv_core::api::device_id(),
             )
+            .map(|context| {
+                let (sender, receiver) = std::sync::mpsc::channel();
+                let context = context.with_progress_updates(sender);
+                let lib_tx = self.lib_tx.clone();
+                let _ =
+                    std::thread::spawn(move || {
+                        for update in receiver {
+                            if lib_tx
+                            .send(super::types_events::LibEvent::AudiobookshelfProgressAcknowledged(
+                                update,
+                            ))
+                            .is_err()
+                        {
+                            break;
+                        }
+                        }
+                    });
+                context
+            })
         });
         self.update_local_audiobookshelf_context(context);
     }

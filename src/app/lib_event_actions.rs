@@ -166,6 +166,46 @@ impl App {
     }
 
     pub(super) fn handle_lib_event(&mut self, ev: LibEvent) {
+        if let LibEvent::AudiobookshelfProgressAcknowledged(update) = ev {
+            if !self.audiobookshelf_runtime.accepts(update.generation) {
+                return;
+            }
+            let position_ticks = (update.current_time_seconds.max(0.0)
+                * mbv_core::api::TICKS_PER_SECOND as f64) as i64;
+            let matching_slot_ids: Vec<_> = self
+                .player_tab
+                .queue
+                .slots()
+                .iter()
+                .filter_map(|slot| {
+                    slot.item.as_audiobookshelf().and_then(|episode| {
+                        (episode.library_item_id == update.library_item_id
+                            && episode.episode_id == update.episode_id)
+                            .then_some(slot.slot_id)
+                    })
+                })
+                .collect();
+            for slot_id in matching_slot_ids.iter().cloned() {
+                self.player_tab
+                    .queue
+                    .apply_progress(slot_id, position_ticks, update.is_finished);
+            }
+            for state in &mut self.audiobookshelf_browse {
+                state.progress.insert(
+                    (update.library_item_id.clone(), update.episode_id.clone()),
+                    mbv_core::audiobookshelf::AudiobookshelfProgress {
+                        library_item_id: update.library_item_id.clone(),
+                        episode_id: update.episode_id.clone(),
+                        current_time_seconds: update.current_time_seconds,
+                        is_finished: update.is_finished,
+                    },
+                );
+            }
+            if !matching_slot_ids.is_empty() {
+                self.save_queue_state();
+            }
+            return;
+        }
         if let LibEvent::AudiobookshelfDetailFetched {
             generation,
             library_item_id,
@@ -421,7 +461,8 @@ impl App {
                 }
             }
             LibEvent::AudiobookshelfDetailFetched { .. }
-            | LibEvent::AudiobookshelfShowsFetched { .. } => unreachable!(),
+            | LibEvent::AudiobookshelfShowsFetched { .. }
+            | LibEvent::AudiobookshelfProgressAcknowledged(_) => unreachable!(),
             LibEvent::AlbumArtistFetched { album_id, artist } => {
                 self.album_artist_loading.remove(&album_id);
                 self.album_artist_cache

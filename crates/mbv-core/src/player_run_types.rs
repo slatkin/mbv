@@ -15,6 +15,7 @@ struct PlaybackRun {
     token: String,
     queue: PlaybackQueue,
     audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
+    active_lifecycle: ActiveItemLifecycle,
     projection: QueueProjection,
     prepared_source: Option<PreparedSource>,
     active_file_starting: bool,

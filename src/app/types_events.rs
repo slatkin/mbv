@@ -87,6 +87,7 @@ pub(super) enum LibEvent {
             mbv_core::audiobookshelf::AudiobookshelfError,
         >,
     },
+    AudiobookshelfProgressAcknowledged(mbv_core::player::AudiobookshelfProgressUpdate),
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate nav_stack, stay on current tab).
     NavigateTo {

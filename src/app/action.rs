@@ -475,9 +475,17 @@ impl App {
                 let Some(item) = item else {
                     return false;
                 };
-                if item.is_audiobookshelf() {
+                let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
+                if !item.admissible_for_owner_with_audiobookshelf(
+                    false,
+                    |service| {
+                        service != mbv_core::config::ServiceKind::Audiobookshelf
+                            || owner_can_admit_audiobookshelf
+                    },
+                    owner_can_admit_audiobookshelf,
+                ) {
                     self.flash(
-                        "Audiobookshelf playback is not supported yet".into(),
+                        "Playback owner rejected this Audiobookshelf item".into(),
                         super::notify_actions::ToastSeverity::Error,
                     );
                     return false;
@@ -599,7 +607,16 @@ impl App {
                     // the PlayerTab's queue exactly.
                     let eligible: Vec<_> = all_items
                         .into_iter()
-                        .filter(|i| i.admissible_for_owner(false, |_| false))
+                        .filter(|i| {
+                            i.admissible_for_owner_with_audiobookshelf(
+                                false,
+                                |service| {
+                                    service != mbv_core::config::ServiceKind::Audiobookshelf
+                                        || self.player.can_admit_audiobookshelf()
+                                },
+                                self.player.can_admit_audiobookshelf(),
+                            )
+                        })
                         .collect();
                     if eligible.is_empty() {
                         self.flash(

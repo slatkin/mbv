@@ -1,9 +1,19 @@
 use crate::audiobookshelf::{
     AudiobookshelfClient, AudiobookshelfError, AudiobookshelfFailureClass,
-    AudiobookshelfPlaybackProgress, AudiobookshelfSourceMethod,
+    AudiobookshelfSourceMethod,
 };
 use crate::config::AudiobookshelfSetup;
 use crate::service_runtime::SetupGeneration;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AudiobookshelfProgressUpdate {
+    pub generation: SetupGeneration,
+    pub library_item_id: String,
+    pub episode_id: String,
+    pub current_time_seconds: f64,
+    pub duration_seconds: f64,
+    pub is_finished: bool,
+}
 
 /// In-process Audiobookshelf access owned by a Player. The credential is
 /// intentionally absent from Debug and every serializable boundary.
@@ -13,6 +23,7 @@ pub struct AudiobookshelfPlayerContext {
     setup: AudiobookshelfSetup,
     credential: String,
     device_id: String,
+    progress_updates: Option<std::sync::mpsc::Sender<AudiobookshelfProgressUpdate>>,
 }
 
 impl AudiobookshelfPlayerContext {
@@ -30,7 +41,16 @@ impl AudiobookshelfPlayerContext {
             setup,
             credential,
             device_id,
+            progress_updates: None,
         })
+    }
+
+    pub fn with_progress_updates(
+        mut self,
+        sender: std::sync::mpsc::Sender<AudiobookshelfProgressUpdate>,
+    ) -> Self {
+        self.progress_updates = Some(sender);
+        self
     }
 
     pub const fn generation(&self) -> SetupGeneration {
@@ -38,47 +58,11 @@ impl AudiobookshelfPlayerContext {
     }
 }
 
-struct AudiobookshelfLifecycle {
-    client: AudiobookshelfClient,
-    credential: String,
-    session_id: String,
-    duration: f64,
-    last_valid_pos: f64,
-    closed: bool,
-}
-
-impl AudiobookshelfLifecycle {
-    fn close(&mut self, current_time: f64) {
-        if self.closed {
-            return;
-        }
-        self.last_valid_pos = current_time.max(0.0);
-        let progress = AudiobookshelfPlaybackProgress {
-            current_time: self.last_valid_pos,
-            time_listened: 0.0,
-            duration: self.duration,
-        };
-        let _ = self.client.close_playback_session_bounded(
-            &self.credential,
-            &self.session_id,
-            progress,
-            AudiobookshelfClient::REQUEST_HARD_BOUND,
-        );
-        self.closed = true;
-    }
-}
-
-impl Drop for AudiobookshelfLifecycle {
-    fn drop(&mut self) {
-        self.close(self.last_valid_pos);
-    }
-}
-
 pub(crate) struct PreparedSource {
     pub(crate) url: String,
     pub(crate) mpv_options: Vec<String>,
     pub(crate) start_seconds: f64,
-    lifecycle: Option<AudiobookshelfLifecycle>,
+    lifecycle: Option<AudiobookshelfPlaybackLifecycle>,
 }
 
 impl PreparedSource {
@@ -102,9 +86,13 @@ impl PreparedSource {
 
     fn close(&mut self, current_time: f64) {
         if let Some(lifecycle) = self.lifecycle.as_mut() {
-            lifecycle.close(current_time);
+            lifecycle.close((current_time.max(0.0) * crate::api::TICKS_PER_SECOND as f64) as i64);
         }
         self.lifecycle = None;
+    }
+
+    fn take_lifecycle(&mut self) -> Option<AudiobookshelfPlaybackLifecycle> {
+        self.lifecycle.take()
     }
 
     fn has_sensitive_lifecycle(&self) -> bool {
@@ -136,14 +124,17 @@ fn prepare_source(
         url: session.source.url,
         mpv_options: Vec::new(),
         start_seconds: session.current_time_seconds,
-        lifecycle: Some(AudiobookshelfLifecycle {
-            client: client.clone(),
-            credential: context.credential.clone(),
-            session_id: session.id,
-            duration: session.duration_seconds,
-            last_valid_pos: session.current_time_seconds,
-            closed: false,
-        }),
+        lifecycle: Some(AudiobookshelfPlaybackLifecycle::new(
+            context.generation,
+            client.clone(),
+            context.credential.clone(),
+            session.id,
+            episode.library_item_id.clone(),
+            episode.episode_id.clone(),
+            session.current_time_seconds,
+            session.duration_seconds,
+            context.progress_updates.clone(),
+        )),
     };
     match session.source.method {
         AudiobookshelfSourceMethod::Direct => {
@@ -205,7 +196,7 @@ mod source_tests {
         (format!("http://{address}"), rx)
     }
 
-    fn serve_close(current_time: f64) -> (String, std::sync::mpsc::Receiver<String>) {
+    pub(super) fn serve_close(current_time: f64) -> (String, std::sync::mpsc::Receiver<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         let (tx, rx) = std::sync::mpsc::channel();
@@ -219,6 +210,7 @@ mod source_tests {
                         "\"currentTime\": 1",
                         &format!("\"currentTime\": {current_time}"),
                     ),
+                fixture("session-sync.json"),
                 fixture("session-close.json"),
             ] {
                 let (mut stream, _) = listener.accept().unwrap();
@@ -324,6 +316,51 @@ mod source_tests {
     }
 
     #[test]
+    fn progress_sender_builder_stays_owner_local() {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let context = AudiobookshelfPlayerContext::new(
+            SetupGeneration::new(7),
+            AudiobookshelfSetup::new("http://server"),
+            "secret".into(),
+            "device".into(),
+        )
+        .unwrap()
+        .with_progress_updates(sender);
+
+        assert!(context.progress_updates.is_some());
+        assert!(receiver.try_recv().is_err());
+    }
+
+    #[test]
+    fn successful_bounded_sync_emits_progress_update() {
+        let (base, requests) = serve_close(1.0);
+        let (sender, updates) = std::sync::mpsc::channel();
+        let context = AudiobookshelfPlayerContext::new(
+            SetupGeneration::new(8),
+            AudiobookshelfSetup::new(base),
+            "secret".into(),
+            "device".into(),
+        )
+        .unwrap()
+        .with_progress_updates(sender);
+        let mut prepared = prepare_source(&episode(), "", "", Some(&context)).unwrap();
+        let duration = prepared.lifecycle.as_ref().unwrap().duration;
+
+        prepared.close(duration);
+
+        let _create = requests.recv().unwrap();
+        let _sync = requests.recv().unwrap();
+        let _close = requests.recv().unwrap();
+        let update = updates.recv().unwrap();
+        assert_eq!(update.generation, SetupGeneration::new(8));
+        assert_eq!(update.library_item_id, "show");
+        assert_eq!(update.episode_id, "episode");
+        assert!((update.current_time_seconds - duration).abs() < 0.000001);
+        assert_eq!(update.duration_seconds, duration);
+        assert!(update.is_finished);
+    }
+
+    #[test]
     fn lifecycle_close_loopback_captures_selected_position_and_resume_on_drop() {
         for (fixture_time, close_position) in [(1.0, Some(3054.336)), (42.0, None)] {
             let (base, requests) = serve_close(fixture_time);
@@ -343,12 +380,14 @@ mod source_tests {
                 fixture_time
             };
             let _create = requests.recv().unwrap();
+            let sync = requests.recv().unwrap();
             let close = requests.recv().unwrap();
-            let body = close.split("\r\n\r\n").nth(1).unwrap();
+            let body = sync.split("\r\n\r\n").nth(1).unwrap();
             assert!(
                 body.contains(&format!("\"currentTime\":{expected}")),
                 "{body}"
             );
+            assert!(close.starts_with("POST /api/session/%3CSESSION_ID%3E/close HTTP/1.1"));
         }
     }
 }

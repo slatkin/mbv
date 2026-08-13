@@ -180,3 +180,82 @@ fn submit_queue_cold_start_sets_active_before_spawning_thread() {
     assert_eq!(st.current_idx, 0);
     assert_eq!(st.title, "Cold Feed");
 }
+
+fn audiobookshelf_item() -> QueueItem {
+    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfQueueItem {
+        library_item_id: "show-1".into(),
+        episode_id: "episode-1".into(),
+        title: "Episode 1".into(),
+        show_title: Some("Show".into()),
+        author: None,
+        duration_ticks: Some(100),
+        position_ticks: 0,
+        played: false,
+        pub_date_secs: None,
+        is_finished: false,
+        cover_path: None,
+    })
+}
+
+fn audiobookshelf_context() -> AudiobookshelfPlayerContext {
+    AudiobookshelfPlayerContext::new(
+        crate::service_runtime::SetupGeneration::new(7),
+        crate::config::AudiobookshelfSetup::new("https://books.example"),
+        "secret".into(),
+        "device".into(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
+    let (event_tx, _event_rx) = mpsc::channel();
+    let player = Player::new(
+        String::new(),
+        String::new(),
+        false,
+        false,
+        false,
+        false,
+        false,
+        SubtitlePrefs::default(),
+        event_tx,
+        None,
+    );
+    player.update_audiobookshelf_context(Some(audiobookshelf_context()));
+    player.status.lock().unwrap().active = true;
+    let commands = player.spy_on_commands();
+
+    assert!(player.can_admit_audiobookshelf());
+    assert!(player.submit_queue(vec![audiobookshelf_item()], 0, None, false, 100));
+    assert!(matches!(
+        commands.try_recv().unwrap(),
+        PlayerCommand::SubmitQueue { items, start_idx }
+            if start_idx == 0 && items.len() == 1 && items[0].is_audiobookshelf()
+    ));
+}
+
+#[test]
+fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
+    let (event_tx, _event_rx) = mpsc::channel();
+    let player = Player::new(
+        String::new(),
+        String::new(),
+        false,
+        false,
+        false,
+        false,
+        false,
+        SubtitlePrefs::default(),
+        event_tx,
+        None,
+    );
+    player.update_audiobookshelf_context(Some(audiobookshelf_context()));
+    player.status.lock().unwrap().active = true;
+    let commands = player.spy_on_commands();
+    player.update_audiobookshelf_context(None);
+
+    assert!(!player.can_admit_audiobookshelf());
+    assert!(!player.submit_queue(vec![audiobookshelf_item()], 0, None, false, 100));
+    assert!(commands.try_recv().is_err());
+}

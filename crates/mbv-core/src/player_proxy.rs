@@ -16,7 +16,7 @@ impl PlayerProxy {
     #[cfg(any(test, feature = "test-support"))]
     pub fn stub(status: Arc<Mutex<PlayerStatus>>) -> Self {
         let (tx, _rx) = std::sync::mpsc::channel();
-        let player = Player::new(
+        let mut player = Player::new(
             String::new(),
             String::new(),
             false,
@@ -28,6 +28,7 @@ impl PlayerProxy {
             tx,
             None,
         );
+        player.status = status.clone();
         let subtitle_prefs = player.subtitle_prefs.clone();
         PlayerProxy {
             always_play_next: false,
@@ -47,7 +48,7 @@ impl PlayerProxy {
     #[cfg(any(test, feature = "test-support"))]
     pub fn stub_with_hung_thread(status: Arc<Mutex<PlayerStatus>>, sleep: Duration) -> Self {
         let (tx, _rx) = std::sync::mpsc::channel();
-        let player = Player::new(
+        let mut player = Player::new(
             String::new(),
             String::new(),
             false,
@@ -59,6 +60,7 @@ impl PlayerProxy {
             tx,
             None,
         );
+        player.status = status.clone();
         let handle = std::thread::spawn(move || {
             std::thread::sleep(sleep);
         });
@@ -80,6 +82,7 @@ impl PlayerProxy {
     pub fn spy_on_commands(&self) -> mpsc::Receiver<PlayerCommand> {
         let (tx, rx) = mpsc::channel();
         if let PlayerProxyInner::Local(p) = &self.inner {
+            p.current_is_headless.store(true, Ordering::Relaxed);
             *p.cmd_tx.lock().unwrap() = Some(tx);
         }
         rx
@@ -105,6 +108,15 @@ impl PlayerProxy {
     pub fn update_audiobookshelf_context(&self, context: Option<AudiobookshelfPlayerContext>) {
         if let PlayerProxyInner::Local(player) = &self.inner {
             player.update_audiobookshelf_context(context);
+        }
+    }
+
+    /// Only the in-process Player can own Audiobookshelf credentials and its
+    /// playback lifecycle. Ctrl owners are deliberately never eligible.
+    pub fn can_admit_audiobookshelf(&self) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(player) => player.can_admit_audiobookshelf(),
+            PlayerProxyInner::Remote(_) => false,
         }
     }
 
@@ -179,19 +191,15 @@ impl PlayerProxy {
         headless: bool,
         initial_volume: u8,
     ) -> bool {
-        // Audiobookshelf queueing is staged-only in this milestone. Keep the
-        // transport boundary defensive as well as the App/daemon admission
-        // paths, so a direct caller cannot put ABS data on ctrl.
-        let items: Vec<QueueItem> = items
-            .into_iter()
-            .filter(|item| !item.is_audiobookshelf())
-            .collect();
         match &self.inner {
             PlayerProxyInner::Local(p) => {
                 p.submit_queue(items, start_idx, client, headless, initial_volume)
             }
             PlayerProxyInner::Remote(r) => {
-                if items.is_empty() {
+                // Never strip an unsupported item and send the remainder: a
+                // ctrl owner must reject the whole submission without local
+                // fall-through or Bound queue mutation.
+                if items.is_empty() || items.iter().any(QueueItem::is_audiobookshelf) {
                     return false;
                 }
                 let start_idx = start_idx.min(items.len() - 1);
@@ -328,8 +336,13 @@ impl PlayerProxy {
 
     pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.send_command(PlayerCommand::QueueAppend { items }),
-            PlayerProxyInner::Remote(r) => r.queue_append(items),
+            PlayerProxyInner::Local(p) => p.queue_append(items),
+            PlayerProxyInner::Remote(r) => {
+                if items.iter().any(QueueItem::is_audiobookshelf) {
+                    return false;
+                }
+                r.queue_append(items)
+            }
         }
     }
 
