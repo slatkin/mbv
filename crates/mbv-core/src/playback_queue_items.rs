@@ -363,8 +363,9 @@ impl QueueItem {
     }
 
     /// The Remote Service required to play this item. Emby and Feed items
-    /// retain their existing local/source behavior; Audiobookshelf remains
-    /// unplayable until a later playback capability enables an owner.
+    /// retain their existing local/source behavior; Audiobookshelf admission
+    /// is decided by the owner capability supplied to
+    /// `admissible_for_owner`.
     pub fn required_service(&self) -> Option<crate::config::ServiceKind> {
         match self {
             QueueItem::Audiobookshelf(_) => Some(crate::config::ServiceKind::Audiobookshelf),
@@ -377,9 +378,16 @@ impl QueueItem {
         audio_only: bool,
         has_service: impl Fn(crate::config::ServiceKind) -> bool,
     ) -> bool {
-        // Audiobookshelf queue representation deliberately predates playback
-        // support: no current owner may bind it, even if its Service exists.
-        if self.is_audiobookshelf() {
+        self.admissible_for_owner_with_audiobookshelf(audio_only, has_service, false)
+    }
+
+    pub fn admissible_for_owner_with_audiobookshelf(
+        &self,
+        audio_only: bool,
+        has_service: impl Fn(crate::config::ServiceKind) -> bool,
+        can_admit_audiobookshelf: bool,
+    ) -> bool {
+        if self.is_audiobookshelf() && !can_admit_audiobookshelf {
             return false;
         }
         (!audio_only || self.is_audio()) && self.required_service().is_none_or(has_service)

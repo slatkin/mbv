@@ -127,6 +127,16 @@ impl PlaybackRun {
         s.queue_len = self.queue_len();
     }
 
+    fn observe_reporting(&mut self, force_sync: bool) {
+        let (active, paused, position_ticks) = {
+            let status = self.status.lock().unwrap();
+            (status.active, status.paused, status.position_ticks)
+        };
+        let now = Instant::now();
+        self.active_lifecycle.observe(now, active && !paused);
+        self.active_lifecycle.sync(position_ticks, now, force_sync);
+    }
+
     fn refresh_current_idx_from_queue(&mut self) {
         if let Some(slot_id) = self.active_slot_id() {
             if let Some(idx) = self.queue.slot_index(slot_id) {
@@ -155,7 +165,11 @@ impl PlaybackRun {
         true
     }
 
-    fn prepare_item(&self, item: &QueueItem) -> Result<PreparedSource, AudiobookshelfError> {
+    fn prepare_item(&mut self, item: &QueueItem) -> Result<PreparedSource, AudiobookshelfError> {
+        // A new Audiobookshelf source opens a server session during preparation.
+        // Finalize the current lifecycle first so normal transitions cannot
+        // overlap the outgoing and incoming sessions.
+        self.close_prepared_source();
         prepare_source(
             item,
             &self.server_url,
@@ -167,7 +181,7 @@ impl PlaybackRun {
     fn install_active_projection(
         &mut self,
         mpv: &Mpv,
-        prepared: PreparedSource,
+        mut prepared: PreparedSource,
         item: &QueueItem,
     ) -> Result<(), AudiobookshelfError> {
         let options = prepared.mpv_load_options(item);
@@ -180,13 +194,16 @@ impl PlaybackRun {
             .is_err()
         {
             self.close_prepared_source();
+            prepared.close(0.0);
             self.status.lock().unwrap().active = false;
             return Err(AudiobookshelfError::from_class(
                 AudiobookshelfFailureClass::Unavailable,
             ));
         }
         self.close_prepared_source();
+        let prepared_lifecycle = prepared.take_lifecycle();
         self.prepared_source = Some(prepared);
+        self.active_lifecycle = ActiveItemLifecycle::for_item(item, prepared_lifecycle);
         self.active_file_starting = true;
         self.load_state = LoadState::begin_single();
         self.pending_initial_playlist_layout = false;
@@ -216,6 +233,8 @@ impl PlaybackRun {
     }
 
     fn close_prepared_source_at(&mut self, position_ticks: i64) {
+        self.active_lifecycle.close(position_ticks);
+        self.active_lifecycle = ActiveItemLifecycle::None;
         if let Some(mut prepared) = self.prepared_source.take() {
             prepared.close(position_ticks as f64 / TICKS_PER_SECOND as f64);
         }
@@ -422,6 +441,13 @@ impl PlaybackRun {
         let mut projection = QueueProjection::eager();
         projection.activate_for(&queue);
         let active_file_starting = projection.is_active_file() && prepared_source.is_some();
+        let mut prepared_source = prepared_source;
+        let active_lifecycle = ActiveItemLifecycle::for_item(
+            &initial_item,
+            prepared_source
+                .as_mut()
+                .and_then(PreparedSource::take_lifecycle),
+        );
         PlaybackRun {
             origin,
             config,
@@ -435,6 +461,7 @@ impl PlaybackRun {
             audiobookshelf_context,
             projection,
             prepared_source,
+            active_lifecycle,
             active_file_starting,
             ext_sub_urls,
             current_idx: start_idx,

@@ -731,6 +731,10 @@ mod tests_audiobookshelf_runtime;
 mod tests_podcast;
 
 #[cfg(test)]
+#[path = "tests_podcast_playback.rs"]
+mod tests_podcast_playback;
+
+#[cfg(test)]
 #[path = "tests_queue_scope.rs"]
 mod tests_queue_scope;
 

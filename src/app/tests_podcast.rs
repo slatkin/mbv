@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::tests::*;
 
-fn audiobookshelf_app() -> App {
+pub(super) fn audiobookshelf_app() -> App {
     let mut app = make_app_stub();
     let library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
@@ -142,11 +142,10 @@ fn audiobookshelf_tab_keys_cannot_enter_emby_action_paths() {
     assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(_)));
 }
 
-/// `Space` and `Ctrl+a` in Audiobookshelf episode selection are inert the way
-/// `Enter` is: the selected episode is preserved and no queue, playback, or
-/// Emby state changes.
+/// Unsupported-owner play remains inert while enqueue still edits the
+/// Composed queue without involving the owner.
 #[test]
-fn audiobookshelf_episode_space_and_enqueue_are_inert() {
+fn audiobookshelf_episode_space_and_enqueue_are_inert_without_owner() {
     let mut app = audiobookshelf_app();
     add_emby_movie_library(&mut app);
     app.enter_audiobookshelf_episode_selection();
@@ -168,17 +167,15 @@ fn audiobookshelf_episode_space_and_enqueue_are_inert() {
         Some(0),
         "selected episode must be preserved"
     );
-    assert_eq!(
-        app.player_tab.total_queue_len(),
-        0,
-        "inert activation must not mutate the queue"
-    );
+    assert_eq!(app.player_tab.total_queue_len(), 1);
     assert_eq!(
         app.libs[0].nav_stack.len(),
         nav_len,
         "inert activation must not navigate the Emby library"
     );
-    assert!(app.status.is_empty());
+    assert!(app
+        .status
+        .contains("Audiobookshelf playback owner is unavailable"));
 }
 
 /// The Audiobookshelf destination never opens an Emby context menu, even when
@@ -248,7 +245,7 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
 }
 
 #[test]
-fn audiobookshelf_activation_enters_selection_then_remains_inert() {
+fn audiobookshelf_activation_enters_selection_then_remains_inert_without_owner() {
     let mut app = audiobookshelf_app();
     let enter = crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Enter,
@@ -272,12 +269,10 @@ fn audiobookshelf_activation_enters_selection_then_remains_inert() {
     assert_eq!(app.player_tab.total_queue_len(), 0);
 }
 
-/// The `activate_audiobookshelf_episode` / `enqueue_audiobookshelf_episode`
-/// seams (design §6) are inert until #518: with a populated Audiobookshelf
-/// browse state and a selected episode they preserve the selection and all
-/// queue, playback, and Service state.
+/// The provider-specific resolver seams remain read-only; task 4.3 consumes
+/// their QueueItem result through ordinary actions.
 #[test]
-fn audiobookshelf_episode_activation_seams_are_inert() {
+fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
     let mut app = audiobookshelf_app();
     add_emby_movie_library(&mut app);
     app.enter_audiobookshelf_episode_selection();
@@ -310,6 +305,84 @@ fn audiobookshelf_episode_activation_seams_are_inert() {
     );
     assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
     assert!(!app.audiobookshelf_browse[0].shows.is_empty());
+}
+
+#[test]
+fn audiobookshelf_episode_handlers_build_native_item_from_read_only_snapshot() {
+    let mut app = audiobookshelf_app();
+    let state = &mut app.audiobookshelf_browse[0];
+    state.episodes = Some(vec![
+        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            published_at: Some("2024-01-02T00:00:00Z".into()),
+            duration_seconds: Some(1234.5),
+        },
+    ]);
+    state.progress.insert(
+        ("show-a".into(), "episode-a".into()),
+        mbv_core::audiobookshelf::AudiobookshelfProgress {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            current_time_seconds: 42.5,
+            is_finished: false,
+        },
+    );
+    state.enter_episode_selection();
+
+    let item = app
+        .activate_audiobookshelf_episode(0)
+        .expect("selected downloaded episode");
+    let queued = item.as_audiobookshelf().expect("Audiobookshelf QueueItem");
+    assert_eq!(queued.library_item_id, "show-a");
+    assert_eq!(queued.episode_id, "episode-a");
+    assert_eq!(queued.title, "Episode A");
+    assert_eq!(queued.show_title.as_deref(), Some("Show A"));
+    assert_eq!(
+        queued.duration_ticks,
+        Some((1234.5 * mbv_core::api::TICKS_PER_SECOND as f64).round() as u64)
+    );
+    assert_eq!(
+        queued.position_ticks,
+        (42.5 * mbv_core::api::TICKS_PER_SECOND as f64).round() as i64
+    );
+    assert_eq!(queued.pub_date_secs, Some(1_704_153_600));
+    assert!(!queued.is_finished);
+
+    let serialized = serde_json::to_string(&item).unwrap();
+    assert!(!serialized.contains("credential"));
+    assert!(!serialized.contains("sessionId"));
+    assert!(!serialized.contains("Authorization"));
+    assert_eq!(app.player_tab.total_queue_len(), 0);
+
+    let enqueued = app
+        .enqueue_audiobookshelf_episode(0)
+        .expect("selected downloaded episode");
+    assert_eq!(
+        enqueued.as_audiobookshelf().unwrap().content_id(),
+        queued.content_id()
+    );
+    assert_eq!(app.player_tab.total_queue_len(), 0);
+}
+
+#[test]
+fn audiobookshelf_episode_handlers_leave_unselected_rows_without_queue_items() {
+    let mut app = audiobookshelf_app();
+    assert!(app.activate_audiobookshelf_episode(0).is_none());
+    assert!(app.enqueue_audiobookshelf_episode(0).is_none());
+
+    app.audiobookshelf_browse[0].enter_episode_selection();
+    app.audiobookshelf_browse[0].episode_selection = Some(99);
+    assert!(app.activate_audiobookshelf_episode(0).is_none());
+    assert!(app.enqueue_audiobookshelf_episode(0).is_none());
+    assert_eq!(app.player_tab.total_queue_len(), 0);
+
+    app.audiobookshelf_browse[0].episodes = Some(Vec::new());
+    app.audiobookshelf_browse[0].episode_selection = Some(0);
+    assert!(app.activate_audiobookshelf_episode(0).is_none());
+    assert!(app.enqueue_audiobookshelf_episode(0).is_none());
+    assert_eq!(app.player_tab.total_queue_len(), 0);
 }
 
 /// An absent or stale Audiobookshelf index is a silent no-op for both seams.

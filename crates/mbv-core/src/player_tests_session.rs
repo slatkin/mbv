@@ -201,6 +201,35 @@ fn progress_guard_stop_and_join_fast_when_thread_finishes_quickly() {
 }
 
 #[test]
+fn player_join_or_timeout_does_not_wait_for_a_stuck_run() {
+    let (event_tx, _event_rx) = mpsc::channel();
+    let player = Player::new(
+        String::new(),
+        String::new(),
+        false,
+        false,
+        false,
+        false,
+        false,
+        SubtitlePrefs::default(),
+        event_tx,
+        None,
+    );
+    *player.thread_handle.lock().unwrap() = Some(std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_secs(5));
+    }));
+
+    let started = Instant::now();
+    player.join_or_timeout(Duration::from_millis(100));
+
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "player teardown exceeded its bound: {:?}",
+        started.elapsed()
+    );
+}
+
+#[test]
 fn ordinary_stop_marks_stop_report_accepted_not_sent() {
     // Regression test for a code-review finding: the non-shutdown (fast)
     // path in report_stop_now_or_background used to hardcode

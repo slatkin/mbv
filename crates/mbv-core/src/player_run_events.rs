@@ -161,6 +161,7 @@ impl PlaybackRun {
     }
 
     fn on_playback_restart(&mut self, mpv: &Mpv) {
+        let was_seek = self.last_seek_at.is_some();
         self.active_file_starting = false;
         // `PlaybackRestart` is the concrete mpv-owned event used by mbvd as
         // its output-started boundary. It says nothing about downstream pipe
@@ -224,6 +225,9 @@ impl PlaybackRun {
                 self.reporter.report_progress("TimeUpdate");
             }
         }
+        if was_seek {
+            self.observe_reporting(true);
+        }
     }
 
     // Returns true if the event loop should `continue`.
@@ -254,6 +258,7 @@ impl PlaybackRun {
             self.active_file_starting = false;
             self.close_prepared_source();
             progress.stop_and_join(self.progress_join_budget());
+            self.close_prepared_source_at(self.last_valid_pos);
             self.status.lock().unwrap().active = false;
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 idx: self.current_idx,
@@ -309,12 +314,10 @@ impl PlaybackRun {
                 self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
             }
 
-            if natural_end {
-                let lifecycle_pos = self.active_item().map_or(self.last_valid_pos, |item| {
-                    provider_lifecycle_close_pos(item, natural_end, runtime, self.last_valid_pos)
-                });
-                self.close_prepared_source_at(lifecycle_pos);
-            }
+            let lifecycle_pos = self.active_item().map_or(self.last_valid_pos, |item| {
+                provider_lifecycle_close_pos(item, natural_end, runtime, self.last_valid_pos)
+            });
+            self.close_prepared_source_at(lifecycle_pos);
 
             if natural_end && self.reporter.has_session() {
                 let id = self.reporter.ids.lock().unwrap().0.clone();

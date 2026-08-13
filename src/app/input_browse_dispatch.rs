@@ -229,14 +229,12 @@ impl App {
                 self.enter_audiobookshelf_episode_selection()
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
-                // Episode-mode activation: inert seam for #518.
-                self.activate_audiobookshelf_episode(index)
+                self.play_selected_audiobookshelf_episode(index);
             }
             KeyCode::Char('a')
                 if episode_selection && key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
-                // Episode-mode enqueue: inert seam for #518.
-                self.enqueue_audiobookshelf_episode(index)
+                self.enqueue_selected_audiobookshelf_episode(index);
             }
             _ => {}
         }
