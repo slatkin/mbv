@@ -1,4 +1,80 @@
 // ---------------------------------------------------------------------------
+// Content identity — typed provider-qualified identity, avoiding formatted
+// string matching like `format!("abs:{}:{}", lib, ep)`.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "provider", content = "value")]
+pub enum QueueItemContentId {
+    Emby(String),
+    Feed(String),
+    Audiobookshelf {
+        library_item_id: String,
+        episode_id: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum QueueItemKind {
+    Emby,
+    Feed,
+    Audiobookshelf,
+}
+
+// ---------------------------------------------------------------------------
+// AudiobookshelfQueueItem — identity, presentation, duration, progress,
+// completion, and Service-scoped artwork identity. Excludes credentials,
+// server URL, playback sessionId, resolved source URL, and headers.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AudiobookshelfQueueItem {
+    #[serde(rename = "libraryItemId")]
+    pub library_item_id: String,
+    #[serde(rename = "episodeId")]
+    pub episode_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub show_title: Option<String>,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default)]
+    pub duration_ticks: Option<u64>,
+    /// Playback position in ticks. Zero means start from the beginning.
+    #[serde(default)]
+    pub position_ticks: i64,
+    #[serde(default)]
+    pub played: bool,
+    /// Publish time in Unix seconds, when available from the catalog.
+    #[serde(default)]
+    pub pub_date_secs: Option<u64>,
+    /// Mirrors Audiobookshelf `is_finished` (distinct from played state
+    /// persisted here). Defaulted for backward compat.
+    #[serde(default)]
+    pub is_finished: bool,
+    /// Service-scoped artwork identity (cover path, not server URL).
+    #[serde(default)]
+    pub cover_path: Option<String>,
+}
+
+impl AudiobookshelfQueueItem {
+    pub fn content_id(&self) -> QueueItemContentId {
+        QueueItemContentId::Audiobookshelf {
+            library_item_id: self.library_item_id.clone(),
+            episode_id: self.episode_id.clone(),
+        }
+    }
+
+    pub fn resume_seconds(&self) -> f64 {
+        if crate::api::should_resume(self.position_ticks, self.duration_ticks.unwrap_or(0) as i64) {
+            self.position_ticks as f64 / crate::api::TICKS_PER_SECOND as f64
+        } else {
+            0.0
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // FeedEntry — identity, playback, and resume fields for RSS/podcast/YouTube
 // items. Identity (`feed_id`) and progress (`position_ticks`, `played`) are
 // serde-defaulted so old queue payloads and ctrl snapshots remain loadable.
@@ -48,7 +124,7 @@ impl FeedEntry {
 }
 
 // ---------------------------------------------------------------------------
-// QueueItem — enum wrapping the two item kinds the playback queue can hold.
+// QueueItem — enum wrapping the three item kinds the playback queue can hold.
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -58,12 +134,15 @@ pub enum QueueItem {
     Emby(Box<EmbyItem>),
     #[serde(rename = "Feed")]
     Feed(FeedEntry),
+    #[serde(rename = "Audiobookshelf")]
+    Audiobookshelf(AudiobookshelfQueueItem),
 }
 
 /// Custom deserializer for `QueueItem` that accepts both the tagged form
-/// (with `"kind": "Emby"` or `"kind": "Feed"`) and legacy bare `EmbyItem`
-/// objects (no `kind` field). This preserves backward compatibility with
-/// `queue_state.json` files written before the `QueueItem` enum existed.
+/// (with `"kind": "Emby"`, `"kind": "Feed"`, or `"kind": "Audiobookshelf"`)
+/// and legacy bare `EmbyItem` objects (no `kind` field). This preserves
+/// backward compatibility with `queue_state.json` files written before the
+/// `QueueItem` enum existed.
 impl<'de> serde::Deserialize<'de> for QueueItem {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -84,7 +163,15 @@ impl<'de> serde::Deserialize<'de> for QueueItem {
                     let entry = FeedEntry::deserialize(value).map_err(de::Error::custom)?;
                     Ok(QueueItem::Feed(entry))
                 }
-                other => Err(de::Error::unknown_variant(other, &["Emby", "Feed"])),
+                "Audiobookshelf" => {
+                    let ep =
+                        AudiobookshelfQueueItem::deserialize(value).map_err(de::Error::custom)?;
+                    Ok(QueueItem::Audiobookshelf(ep))
+                }
+                other => Err(de::Error::unknown_variant(
+                    other,
+                    &["Emby", "Feed", "Audiobookshelf"],
+                )),
             };
         }
 
@@ -99,6 +186,7 @@ impl QueueItem {
         match self {
             QueueItem::Emby(item) => &item.name,
             QueueItem::Feed(entry) => &entry.title,
+            QueueItem::Audiobookshelf(ep) => &ep.title,
         }
     }
 
@@ -112,6 +200,7 @@ impl QueueItem {
                 }
             }
             QueueItem::Feed(entry) => entry.duration_ticks,
+            QueueItem::Audiobookshelf(ep) => ep.duration_ticks,
         }
     }
 
@@ -123,6 +212,7 @@ impl QueueItem {
                 Some(m) if m.starts_with("video/") => "Video",
                 _ => entry.feed_kind.map(|k| k.as_str()).unwrap_or("Video"),
             },
+            QueueItem::Audiobookshelf(_) => "Audio",
         }
     }
 
@@ -134,6 +224,7 @@ impl QueueItem {
                 Some(m) if m.starts_with("video/") => false,
                 _ => entry.feed_kind == Some(crate::config::FeedKind::Audio),
             },
+            QueueItem::Audiobookshelf(_) => true,
         }
     }
 
@@ -145,6 +236,7 @@ impl QueueItem {
                 Some(m) if m.starts_with("audio/") => false,
                 _ => entry.feed_kind == Some(crate::config::FeedKind::Video),
             },
+            QueueItem::Audiobookshelf(_) => false,
         }
     }
 
@@ -158,16 +250,18 @@ impl QueueItem {
         match self {
             QueueItem::Emby(_item) => None,
             QueueItem::Feed(_entry) => None,
+            QueueItem::Audiobookshelf(ep) => ep.cover_path.as_deref(),
         }
     }
 
     /// The Emby item ID for Emby items, or the feed GUID for feed entries.
-    /// Used for server-refresh matching (only Emby items have server IDs,
-    /// but this keeps the lookup uniform).
+    /// For Audiobookshelf, returns the episode ID (typed identity is via
+    /// `content_id()`).
     pub fn id(&self) -> &str {
         match self {
             QueueItem::Emby(item) => &item.id,
             QueueItem::Feed(entry) => &entry.guid,
+            QueueItem::Audiobookshelf(ep) => &ep.episode_id,
         }
     }
 
@@ -175,6 +269,13 @@ impl QueueItem {
         match self {
             QueueItem::Emby(item) => item.display_name(),
             QueueItem::Feed(entry) => entry.title.clone(),
+            QueueItem::Audiobookshelf(ep) => {
+                if let Some(show) = ep.show_title.as_deref().filter(|s| !s.is_empty()) {
+                    format!("{show} - {}", ep.title)
+                } else {
+                    ep.title.clone()
+                }
+            }
         }
     }
 
@@ -182,6 +283,7 @@ impl QueueItem {
         match self {
             QueueItem::Emby(item) => item.runtime_ticks,
             QueueItem::Feed(entry) => entry.duration_ticks.unwrap_or(0) as i64,
+            QueueItem::Audiobookshelf(ep) => ep.duration_ticks.unwrap_or(0) as i64,
         }
     }
 
@@ -189,6 +291,7 @@ impl QueueItem {
         match self {
             QueueItem::Emby(item) => item.playback_position_ticks,
             QueueItem::Feed(entry) => entry.position_ticks,
+            QueueItem::Audiobookshelf(ep) => ep.position_ticks,
         }
     }
 
@@ -196,6 +299,7 @@ impl QueueItem {
         match self {
             QueueItem::Emby(item) => item.played,
             QueueItem::Feed(entry) => entry.played,
+            QueueItem::Audiobookshelf(ep) => ep.played || ep.is_finished,
         }
     }
 
@@ -205,14 +309,87 @@ impl QueueItem {
     pub fn as_emby(&self) -> Option<&EmbyItem> {
         match self {
             QueueItem::Emby(item) => Some(item),
-            QueueItem::Feed(_) => None,
+            _ => None,
         }
+    }
+
+    pub fn as_feed(&self) -> Option<&FeedEntry> {
+        match self {
+            QueueItem::Feed(entry) => Some(entry),
+            _ => None,
+        }
+    }
+
+    pub fn as_audiobookshelf(&self) -> Option<&AudiobookshelfQueueItem> {
+        match self {
+            QueueItem::Audiobookshelf(ep) => Some(ep),
+            _ => None,
+        }
+    }
+
+    pub fn is_emby(&self) -> bool {
+        matches!(self, QueueItem::Emby(_))
+    }
+
+    pub fn is_feed(&self) -> bool {
+        matches!(self, QueueItem::Feed(_))
+    }
+
+    pub fn is_audiobookshelf(&self) -> bool {
+        matches!(self, QueueItem::Audiobookshelf(_))
+    }
+
+    pub fn kind(&self) -> QueueItemKind {
+        match self {
+            QueueItem::Emby(_) => QueueItemKind::Emby,
+            QueueItem::Feed(_) => QueueItemKind::Feed,
+            QueueItem::Audiobookshelf(_) => QueueItemKind::Audiobookshelf,
+        }
+    }
+
+    /// Typed Service-qualified content identity. Use this for matching
+    /// and reconciliation instead of `format!("abs:{}:{}", library, episode)`.
+    pub fn content_id(&self) -> QueueItemContentId {
+        match self {
+            QueueItem::Emby(item) => QueueItemContentId::Emby(item.id.clone()),
+            QueueItem::Feed(entry) => QueueItemContentId::Feed(entry.guid.clone()),
+            QueueItem::Audiobookshelf(ep) => ep.content_id(),
+        }
+    }
+
+    /// Alias for typed identity (position tracking reuses content identity).
+    pub fn content_key(&self) -> QueueItemContentId {
+        self.content_id()
+    }
+
+    /// The Remote Service required to play this item. Emby and Feed items
+    /// retain their existing local/source behavior; Audiobookshelf remains
+    /// unplayable until a later playback capability enables an owner.
+    pub fn required_service(&self) -> Option<crate::config::ServiceKind> {
+        match self {
+            QueueItem::Audiobookshelf(_) => Some(crate::config::ServiceKind::Audiobookshelf),
+            QueueItem::Emby(_) | QueueItem::Feed(_) => None,
+        }
+    }
+
+    pub fn admissible_for_owner(
+        &self,
+        audio_only: bool,
+        has_service: impl Fn(crate::config::ServiceKind) -> bool,
+    ) -> bool {
+        // Audiobookshelf queue representation deliberately predates playback
+        // support: no current owner may bind it, even if its Service exists.
+        if self.is_audiobookshelf() {
+            return false;
+        }
+        (!audio_only || self.is_audio()) && self.required_service().is_none_or(has_service)
     }
 
     pub fn playlist_item_id(&self) -> &str {
         match self {
             QueueItem::Emby(item) => &item.playlist_item_id,
             QueueItem::Feed(_) => "",
+            QueueItem::Audiobookshelf(_) => "",
         }
     }
 }

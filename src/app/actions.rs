@@ -4,31 +4,49 @@ use super::{
     App, BrowseLevel, LocalPlaybackTarget, PanelFocus, PlaybackTarget, RemotePlaybackTarget,
 };
 use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueItem;
+use mbv_core::playback_queue::{QueueItem, QueueItemContentId};
 use mbv_core::player::PlayerCommand;
 use mbv_core::ItemId;
 use std::sync::Arc;
 
 /// Where playback should resume within a restored queue. Prefers locating
-/// `last_played_item_id` by ID (robust to the saved `cursor` index having
+/// `last_played_content_id` by identity (robust to the saved `cursor` index having
 /// drifted, e.g. if the list was edited before the last save) and falls back
 /// to the saved cursor only when there's no last-played id to anchor on.
 pub(crate) fn queue_restore_cursor(
     items: &[QueueItem],
     saved_cursor: usize,
-    last_played_item_id: Option<&str>,
+    last_played_content_id: Option<&QueueItemContentId>,
+    legacy_last_played_item_id: Option<&str>,
     last_played_completed: bool,
 ) -> usize {
     let fallback = saved_cursor.min(items.len().saturating_sub(1));
-    let Some(id) = last_played_item_id else {
+    let identity = last_played_content_id.cloned().or_else(|| {
+        let id = legacy_last_played_item_id?;
+        let mut matches = items.iter().filter(|item| item.id() == id);
+        let first = matches.next()?;
+        if matches.next().is_some() {
+            None
+        } else {
+            Some(first.content_id())
+        }
+    });
+    let Some(identity) = identity else {
         return fallback;
     };
     // If the last-played item is no longer in the restored list (e.g. it was
     // removed from the queue before quitting), fall back to the saved cursor
     // rather than silently jumping to the front of the queue.
-    let Some(idx) = items.iter().position(|i| i.id() == id) else {
+    let mut matches = items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| item.content_id() == identity);
+    let Some((idx, _)) = matches.next() else {
         return fallback;
     };
+    if matches.next().is_some() {
+        return fallback;
+    }
     if last_played_completed {
         (idx + 1).min(items.len().saturating_sub(1))
     } else {
@@ -650,6 +668,9 @@ impl App {
 #[cfg(test)]
 #[path = "actions_tests_letter.rs"]
 mod letter_tests;
+#[cfg(test)]
+#[path = "actions_tests_queue_state_controls.rs"]
+mod queue_state_control_tests;
 #[cfg(test)]
 #[path = "actions_tests_queue_state.rs"]
 mod queue_state_tests;

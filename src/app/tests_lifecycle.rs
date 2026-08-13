@@ -249,6 +249,7 @@ fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
             .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
             .collect(),
         cursor: 0,
+        last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
         positions: Default::default(),

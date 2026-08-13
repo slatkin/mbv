@@ -691,6 +691,10 @@ pub struct QueueState {
     pub items: Vec<crate::playback_queue::QueueItem>,
     #[serde(default)]
     pub cursor: usize,
+    /// Provider-qualified anchor. The raw ID below remains readable for old
+    /// snapshots, but is only used when it identifies one provider uniquely.
+    #[serde(default)]
+    pub last_played_content_id: Option<crate::playback_queue::QueueItemContentId>,
     pub last_played_item_id: Option<String>,
     pub last_played_completed: bool,
     // Per-item resume positions saved at quit time. Used on restore to override stale Emby
@@ -702,13 +706,14 @@ pub struct QueueState {
 impl QueueState {
     /// Returns only the Emby items from the queue state.
     /// Used by the UI layer (PlayerTab) and ctrl boundary, which only
-    /// operate on Emby items.
+    /// operate on Emby items. Skips both Feed and Audiobookshelf items.
     pub fn emby_items(&self) -> Vec<crate::api::EmbyItem> {
         self.items
             .iter()
             .filter_map(|qi| match qi {
                 crate::playback_queue::QueueItem::Emby(e) => Some((**e).clone()),
                 crate::playback_queue::QueueItem::Feed(_) => None,
+                crate::playback_queue::QueueItem::Audiobookshelf(_) => None,
             })
             .collect()
     }
@@ -734,6 +739,7 @@ impl QueueState {
             cursor,
             source,
             last_played_item_id: None,
+            last_played_content_id: None,
             last_played_completed: false,
             positions: Default::default(),
         }

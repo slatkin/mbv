@@ -475,6 +475,13 @@ impl App {
                 let Some(item) = item else {
                     return false;
                 };
+                if item.is_audiobookshelf() {
+                    self.flash(
+                        "Audiobookshelf playback is not supported yet".into(),
+                        super::notify_actions::ToastSeverity::Error,
+                    );
+                    return false;
+                }
                 // Validate source for Feed entries early.
                 if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = item {
                     if entry.primary_source().is_none() {
@@ -590,13 +597,35 @@ impl App {
                     // Cold start: submit the full canonical queue (all
                     // variants) so the player's internal playlist matches
                     // the PlayerTab's queue exactly.
-                    let Some(c) = self.emby_snapshot().map(Arc::new) else {
-                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                    let eligible: Vec<_> = all_items
+                        .into_iter()
+                        .filter(|i| i.admissible_for_owner(false, |_| false))
+                        .collect();
+                    if eligible.is_empty() {
+                        self.flash(
+                            "Playback owner rejected the queue".into(),
+                            ToastSeverity::Error,
+                        );
                         return false;
-                    };
-                    let headless = all_items.iter().all(|i| i.is_audio());
-                    self.player
-                        .submit_queue(all_items, t, Some(c), headless, self.ui_volume);
+                    }
+                    let start_idx = eligible
+                        .iter()
+                        .position(|i| i.content_id() == item.content_id())
+                        .unwrap_or_else(|| {
+                            eligible
+                                .iter()
+                                .take(t)
+                                .count()
+                                .min(eligible.len().saturating_sub(1))
+                        });
+                    let headless = eligible.iter().all(|item| item.is_audio());
+                    self.player.submit_queue(
+                        eligible,
+                        start_idx,
+                        self.emby_snapshot().map(Arc::new),
+                        headless,
+                        self.ui_volume,
+                    );
                 }
             }
 

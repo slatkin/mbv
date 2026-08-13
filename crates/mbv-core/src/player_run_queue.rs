@@ -222,6 +222,21 @@ impl PlaybackRun {
                 self.intro_end = 0;
                 self.intro_state = IntroState::Pending;
             }
+            QueueItem::Audiobookshelf(ep) => {
+                self.osd_title = ep.title.clone();
+                let runtime = ep.duration_ticks.unwrap_or(0) as i64;
+                self.last_valid_pos = if crate::api::should_resume(ep.position_ticks, runtime) {
+                    ep.position_ticks
+                } else {
+                    0
+                };
+                self.series_id.clear();
+                self.season = 0;
+                self.episode = 0;
+                self.intro_start = 0;
+                self.intro_end = 0;
+                self.intro_state = IntroState::Pending;
+            }
         }
     }
 
@@ -315,6 +330,15 @@ impl PlaybackRun {
                         0
                     };
                     (pos, entry.title.clone(), ItemId::empty(), 0, 0, 0, 0, false)
+                }
+                QueueItem::Audiobookshelf(ep) => {
+                    let runtime = ep.duration_ticks.unwrap_or(0) as i64;
+                    let pos = if crate::api::should_resume(ep.position_ticks, runtime) {
+                        ep.position_ticks
+                    } else {
+                        0
+                    };
+                    (pos, ep.title.clone(), ItemId::empty(), 0, 0, 0, 0, false)
                 }
             };
 

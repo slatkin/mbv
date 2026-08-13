@@ -165,6 +165,13 @@ impl PlayerProxy {
         headless: bool,
         initial_volume: u8,
     ) -> bool {
+        // Audiobookshelf queueing is staged-only in this milestone. Keep the
+        // transport boundary defensive as well as the App/daemon admission
+        // paths, so a direct caller cannot put ABS data on ctrl.
+        let items: Vec<QueueItem> = items
+            .into_iter()
+            .filter(|item| !item.is_audiobookshelf())
+            .collect();
         match &self.inner {
             PlayerProxyInner::Local(p) => {
                 p.submit_queue(items, start_idx, client, headless, initial_volume)
@@ -196,11 +203,12 @@ impl PlayerProxy {
                             }
                         }
                         QueueItem::Feed(entry) => r.play_feed(entry.clone()),
+                        QueueItem::Audiobookshelf(_) => false,
                     }
-                } else if items.iter().any(|item| matches!(item, QueueItem::Feed(_))) {
-                    // A legacy peer cannot represent a mixed canonical queue;
-                    // filtering Feed slots would silently replace the owner's
-                    // queue with a different order and cursor.
+                } else if items.iter().any(|item| !matches!(item, QueueItem::Emby(_))) {
+                    // A legacy peer cannot represent a mixed canonical queue
+                    // or Audiobookshelf items; filtering would silently replace
+                    // the owner's queue with a different order and cursor.
                     false
                 } else {
                     // Legacy multi-item path: all items are Emby here.

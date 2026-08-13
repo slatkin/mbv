@@ -735,6 +735,7 @@ fn spawn_ctrl_client<S>(
                 slots: q
                     .slots()
                     .iter()
+                    .filter(|s| !s.item.is_audiobookshelf())
                     .map(|s| UnifiedQueueSlot {
                         slot_id: slot_id_to_u64(s.slot_id),
                         item: s.item.clone(),

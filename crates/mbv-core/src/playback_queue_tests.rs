@@ -36,6 +36,22 @@ fn item(id: &str) -> EmbyItem {
     }
 }
 
+fn audiobookshelf_episode(library_item_id: &str, episode_id: &str) -> AudiobookshelfQueueItem {
+    AudiobookshelfQueueItem {
+        library_item_id: library_item_id.into(),
+        episode_id: episode_id.into(),
+        title: "ABS episode".into(),
+        show_title: Some("Show".into()),
+        author: Some("Author".into()),
+        duration_ticks: Some(120 * TICKS_PER_SECOND as u64),
+        position_ticks: 30 * TICKS_PER_SECOND as i64,
+        played: false,
+        pub_date_secs: Some(1_700_000_000),
+        is_finished: false,
+        cover_path: Some("/covers/show.jpg".into()),
+    }
+}
+
 fn item_with_progress(id: &str, position_seconds: i64, played: bool) -> EmbyItem {
     let mut item = item(id);
     item.playback_position_ticks = position_seconds * TICKS_PER_SECOND;
@@ -515,6 +531,7 @@ fn queue_state_round_trip_preserves_item_kind() {
     match &restored[0] {
         QueueItem::Emby(e) => assert_eq!(e.id, "emby-1"),
         QueueItem::Feed(_) => panic!("expected Emby variant"),
+        QueueItem::Audiobookshelf(_) => panic!("expected Emby variant"),
     }
 
     // Feed kind preserved
@@ -528,7 +545,74 @@ fn queue_state_round_trip_preserves_item_kind() {
                 Some("https://example.com/ep1.mp3")
             );
         }
+        QueueItem::Audiobookshelf(_) => panic!("expected Feed variant"),
     }
+}
+
+#[test]
+fn audiobookshelf_identity_and_mixed_queue_round_trip_are_typed() {
+    let first = QueueItem::Audiobookshelf(audiobookshelf_episode("library-a", "episode-1"));
+    let second = first.clone();
+    assert_eq!(first.content_id(), second.content_id());
+
+    let mut queue = PlaybackQueue::from_queue_items(
+        vec![
+            QueueItem::Emby(Box::new(item("emby-1"))),
+            first,
+            QueueItem::Feed(feed("feed-1")),
+            second,
+        ],
+        Some(1),
+    );
+    assert_ne!(queue.slots()[1].slot_id, queue.slots()[3].slot_id);
+    assert!(matches!(
+        queue.move_slot(queue.slots()[3].slot_id, 0),
+        QueueMutationResult::Applied(())
+    ));
+    assert_eq!(queue.active_index(), Some(2));
+
+    let json = serde_json::to_string(
+        &queue
+            .slots()
+            .iter()
+            .map(|slot| &slot.item)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    assert!(json.contains(r#""kind":"Audiobookshelf""#));
+    assert!(!json.contains("api_key"));
+    assert!(!json.contains("sessionId"));
+    assert!(!json.contains("resolved_url"));
+    let restored: Vec<QueueItem> = serde_json::from_str(&json).unwrap();
+    assert!(matches!(restored[0], QueueItem::Audiobookshelf(_)));
+    assert!(matches!(restored[2], QueueItem::Audiobookshelf(_)));
+}
+
+#[test]
+fn audiobookshelf_admission_and_purge_keep_other_kinds() {
+    let abs = QueueItem::Audiobookshelf(audiobookshelf_episode("library-a", "episode-1"));
+    assert!(!abs.admissible_for_owner(false, |_| true));
+    assert!(!abs.admissible_for_owner(true, |_| false));
+    assert!(QueueItem::Feed(feed("feed-1")).admissible_for_owner(true, |_| false));
+
+    let state = crate::config::QueueState {
+        source: crate::config::QueueSource::Unknown,
+        items: vec![
+            QueueItem::Emby(Box::new(item("emby-1"))),
+            abs,
+            QueueItem::Feed(feed("feed-1")),
+        ],
+        cursor: 1,
+        last_played_content_id: None,
+        last_played_item_id: None,
+        last_played_completed: false,
+        positions: Default::default(),
+    };
+    let filtered = state.without_audiobookshelf();
+    assert_eq!(filtered.items.len(), 2);
+    assert!(filtered.items.iter().all(|item| !item.is_audiobookshelf()));
+    assert!(filtered.items.iter().any(QueueItem::is_emby));
+    assert!(filtered.items.iter().any(QueueItem::is_feed));
 }
 
 #[test]
