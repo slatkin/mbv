@@ -164,16 +164,7 @@ impl App {
     /// request, and preserves selection and all queue/playback/Service state.
     /// #518 replaces the no-op body with native episode extraction and an
     /// explicit play submission (design §6).
-    pub(super) fn activate_audiobookshelf_episode(&mut self, audiobookshelf_library_index: usize) {
-        // Bound-check the resolved browse state; an absent or stale index is
-        // a silent no-op. The selected episode is preserved untouched.
-        if self
-            .audiobookshelf_browse
-            .get(audiobookshelf_library_index)
-            .is_none()
-        {
-            return;
-        }
+    pub(super) fn activate_audiobookshelf_episode(&mut self, _audiobookshelf_library_index: usize) {
     }
 
     /// Inert until #518 (`activate-audiobookshelf-podcast-playback`) is
@@ -181,16 +172,5 @@ impl App {
     /// request, and preserves selection and all queue/playback/Service state.
     /// #518 replaces the no-op body with native episode extraction and an
     /// explicit enqueue submission (design §6).
-    pub(super) fn enqueue_audiobookshelf_episode(&mut self, audiobookshelf_library_index: usize) {
-        // Bound-check the resolved browse state; an absent or stale index is
-        // a silent no-op. No queue item is created merely because this seam
-        // exists.
-        if self
-            .audiobookshelf_browse
-            .get(audiobookshelf_library_index)
-            .is_none()
-        {
-            return;
-        }
-    }
+    pub(super) fn enqueue_audiobookshelf_episode(&mut self, _audiobookshelf_library_index: usize) {}
 }

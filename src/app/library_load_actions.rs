@@ -74,26 +74,21 @@ impl App {
             // Queue refresh is a refresh of the visible queue only and never
             // indexes the selected browse destination.
             PanelFocus::Queue => self.refresh_queue(),
-            PanelFocus::Library => match self.tab {
-                TabSelection::Home => {
-                    if let Err(e) = self.fetch_home() {
-                        self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
-                    }
+            PanelFocus::Library => {
+                if self.normalize_stale_browse_destination() {
+                    return;
                 }
-                TabSelection::EmbyLibrary(lib_idx) => {
-                    if self.normalize_stale_browse_destination() {
-                        return;
+                match self.tab {
+                    TabSelection::Home => {
+                        if let Err(e) = self.fetch_home() {
+                            self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
+                        }
                     }
-                    self.refresh_lib(lib_idx);
+                    TabSelection::EmbyLibrary(lib_idx) => self.refresh_lib(lib_idx),
+                    TabSelection::AudiobookshelfLibrary(_) => self.audiobookshelf_refresh(),
+                    TabSelection::Feeds => self.refresh_feeds(),
                 }
-                TabSelection::AudiobookshelfLibrary(_) => {
-                    if self.normalize_stale_browse_destination() {
-                        return;
-                    }
-                    self.audiobookshelf_refresh();
-                }
-                TabSelection::Feeds => self.refresh_feeds(),
-            },
+            }
         }
     }
 

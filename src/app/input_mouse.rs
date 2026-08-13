@@ -294,11 +294,17 @@ impl App {
                     }
                     TabSelection::Feeds => {
                         // Feeds tab: pill-bar click and row click.
-                        for (rect, target) in self.layout.main.selector_tabs.clone() {
-                            if rect.contains((col, row).into()) {
-                                self.feed_tab_select_group(target);
-                                return true;
-                            }
+                        let target = self
+                            .layout
+                            .main
+                            .selector_tabs
+                            .iter()
+                            .copied()
+                            .find(|(rect, _)| rect.contains((col, row).into()))
+                            .map(|(_, target)| target);
+                        if let Some(target) = target {
+                            self.feed_tab_select_group(target);
+                            return true;
                         }
                         let click_y = (row - la.y) as usize;
                         let use_row_map = !self.layout.main.left_row_map.is_empty();
@@ -357,17 +363,23 @@ impl App {
                             || self.is_feed_home_video_group_view(lib_idx)
                             || self.should_show_letter_pills(lib_idx)
                         {
-                            for (rect, target) in self.layout.main.selector_tabs.clone() {
-                                if rect.contains((col, row).into()) {
-                                    if self.is_music_group_view(lib_idx) {
-                                        self.select_music_group(lib_idx, target);
-                                    } else if self.is_feed_home_video_group_view(lib_idx) {
-                                        self.select_feed_folder_group(lib_idx, target);
-                                    } else {
-                                        self.select_letter_pill(lib_idx, target);
-                                    }
-                                    return true;
+                            let target = self
+                                .layout
+                                .main
+                                .selector_tabs
+                                .iter()
+                                .copied()
+                                .find(|(rect, _)| rect.contains((col, row).into()))
+                                .map(|(_, target)| target);
+                            if let Some(target) = target {
+                                if self.is_music_group_view(lib_idx) {
+                                    self.select_music_group(lib_idx, target);
+                                } else if self.is_feed_home_video_group_view(lib_idx) {
+                                    self.select_feed_folder_group(lib_idx, target);
+                                } else {
+                                    self.select_letter_pill(lib_idx, target);
                                 }
+                                return true;
                             }
                         }
                         let click_y = (row - la.y) as usize;

@@ -54,64 +54,43 @@ impl App {
 /// below it. Retained sections must not be presented as the matched
 /// destination's own behavior.
 fn help_section_order(dest: HelpDestination) -> Vec<HelpSection> {
-    let (matched, rest) = match dest {
-        HelpDestination::Queue => (
-            HelpSection::Queue,
-            vec![
-                HelpSection::Global,
-                HelpSection::Playback,
-                HelpSection::Home,
-                HelpSection::EmbyLibrary,
-                HelpSection::Audiobookshelf,
-                HelpSection::Feeds,
-            ],
-        ),
-        HelpDestination::Home => (
-            HelpSection::Home,
-            vec![
-                HelpSection::Global,
-                HelpSection::Playback,
-                HelpSection::Queue,
-                HelpSection::EmbyLibrary,
-                HelpSection::Audiobookshelf,
-                HelpSection::Feeds,
-            ],
-        ),
-        HelpDestination::EmbyLibrary => (
-            HelpSection::EmbyLibrary,
-            vec![
-                HelpSection::Global,
-                HelpSection::Playback,
-                HelpSection::Queue,
-                HelpSection::Home,
-                HelpSection::Audiobookshelf,
-                HelpSection::Feeds,
-            ],
-        ),
-        HelpDestination::Audiobookshelf => (
-            HelpSection::Audiobookshelf,
-            vec![
-                HelpSection::Global,
-                HelpSection::Playback,
-                HelpSection::Queue,
-                HelpSection::Home,
-                HelpSection::EmbyLibrary,
-                HelpSection::Feeds,
-            ],
-        ),
-        HelpDestination::Feeds => (
-            HelpSection::Feeds,
-            vec![
-                HelpSection::Global,
-                HelpSection::Playback,
-                HelpSection::Queue,
-                HelpSection::Home,
-                HelpSection::EmbyLibrary,
-                HelpSection::Audiobookshelf,
-            ],
-        ),
+    let matched = match dest {
+        HelpDestination::Queue => HelpSection::Queue,
+        HelpDestination::Home => HelpSection::Home,
+        HelpDestination::EmbyLibrary => HelpSection::EmbyLibrary,
+        HelpDestination::Audiobookshelf => HelpSection::Audiobookshelf,
+        HelpDestination::Feeds => HelpSection::Feeds,
     };
-    std::iter::once(matched).chain(rest.into_iter()).collect()
+    let canonical = [
+        HelpSection::Global,
+        HelpSection::Playback,
+        HelpSection::Queue,
+        HelpSection::Home,
+        HelpSection::EmbyLibrary,
+        HelpSection::Audiobookshelf,
+        HelpSection::Feeds,
+    ];
+    std::iter::once(matched)
+        .chain(
+            canonical
+                .into_iter()
+                .filter(move |section| *section != matched),
+        )
+        .collect()
+}
+
+impl HelpSection {
+    fn index(self) -> usize {
+        match self {
+            Self::Global => 0,
+            Self::Playback => 1,
+            Self::Queue => 2,
+            Self::Home => 3,
+            Self::EmbyLibrary => 4,
+            Self::Audiobookshelf => 5,
+            Self::Feeds => 6,
+        }
+    }
 }
 
 fn help_line(key_w: usize, key: &str, desc: &str) -> Line<'static> {
@@ -273,13 +252,16 @@ impl App {
         };
         let key_w = 16usize;
 
-        let sections = build_help_sections(key_w);
+        let mut sections: [Option<Vec<Line<'static>>>; 7] = std::array::from_fn(|_| None);
+        for (name, lines) in build_help_sections(key_w) {
+            sections[name.index()] = Some(lines);
+        }
         let dest = self.help_destination();
         let order = help_section_order(dest);
         let mut lines: Vec<Line> = Vec::new();
         for section in order {
-            if let Some((_, sec)) = sections.iter().find(|(name, _)| *name == section) {
-                lines.extend(sec.iter().cloned());
+            if let Some(section_lines) = sections[section.index()].take() {
+                lines.extend(section_lines);
             }
         }
         lines.push(help_blank());

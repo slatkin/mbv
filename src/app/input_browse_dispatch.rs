@@ -70,51 +70,36 @@ impl App {
         if !key.modifiers.contains(KeyModifiers::CONTROL)
             && !key.modifiers.contains(KeyModifiers::ALT)
         {
-            if key.code == KeyCode::Char('[') && self.is_music_group_view(lib_idx) {
-                self.switch_music_group(lib_idx, -1);
-                return Some(false);
-            }
-            if key.code == KeyCode::Char(']') && self.is_music_group_view(lib_idx) {
-                self.switch_music_group(lib_idx, 1);
-                return Some(false);
-            }
-            if key.code == KeyCode::Char('[') && self.is_feed_home_video_group_view(lib_idx) {
-                self.switch_feed_folder_group(lib_idx, -1);
-                return Some(false);
-            }
-            if key.code == KeyCode::Char(']') && self.is_feed_home_video_group_view(lib_idx) {
-                self.switch_feed_folder_group(lib_idx, 1);
-                return Some(false);
-            }
-            // Letter-range pill cycling for large non-music libraries
-            // (`[`/`]` are otherwise free at the top browse level).
-            if key.code == KeyCode::Char('[') && self.should_show_letter_pills(lib_idx) {
-                self.cycle_letter_pill(lib_idx, -1);
-                return Some(false);
-            }
-            if key.code == KeyCode::Char(']') && self.should_show_letter_pills(lib_idx) {
-                self.cycle_letter_pill(lib_idx, 1);
-                return Some(false);
+            if let Some(delta) = match key.code {
+                KeyCode::Char('[') => Some(-1),
+                KeyCode::Char(']') => Some(1),
+                _ => None,
+            } {
+                if self.is_music_group_view(lib_idx) {
+                    self.switch_music_group(lib_idx, delta);
+                    return Some(false);
+                }
+                if self.is_feed_home_video_group_view(lib_idx) {
+                    self.switch_feed_folder_group(lib_idx, delta);
+                    return Some(false);
+                }
+                // Letter-range pill cycling for large non-music libraries.
+                if self.should_show_letter_pills(lib_idx) {
+                    self.cycle_letter_pill(lib_idx, delta);
+                    return Some(false);
+                }
             }
         }
-
-        // Alt-modified keys are consumed earlier in `handle_key_view_dispatch`,
-        // so this is always false here; kept to mirror the historical routing
-        // that also excluded Alt+arrow panel/tab navigation from this block.
-        let is_nav = matches!(
-            key.code,
-            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
-        ) && key.modifiers.contains(KeyModifiers::ALT);
 
         // Track-selection mode (#145 task 3): while the left panel is sitting
         // on the album-folder-listing nav level, Enter/Escape/Up/Down are
         // reinterpreted for moving a track focus within the currently
         // displayed album instead of drilling into `nav_stack` (`select`) or
-        // moving the album cursor (`move_lib_cursor`). Scoped strictly to
-        // `!is_nav` (so the Alt+arrow panel-switch / tab-cycling bindings are
-        // untouched) and to `is_viewing_album_folders` (so movies/series/
+        // moving the album cursor (`move_lib_cursor`). Alt-modified keys are
+        // already handled by `handle_key_view_dispatch`; this is scoped to
+        // `is_viewing_album_folders` (so movies/series/
         // home-video panels and other tabs are completely unaffected).
-        if !is_nav && self.is_viewing_album_folders(lib_idx) {
+        if self.is_viewing_album_folders(lib_idx) {
             match key.code {
                 KeyCode::Enter => {
                     self.activate_album_folder_row(lib_idx);
@@ -150,18 +135,10 @@ impl App {
         // selected and selection mode is active, Enter/Escape/Up/Down/[/] are
         // intercepted for navigating within the inline series detail (season
         // pills + episode list) instead of drilling into `nav_stack`.
-        if !is_nav && self.libs[lib_idx].series_selection.is_some() {
+        if self.libs[lib_idx].series_selection.is_some() {
             match key.code {
                 KeyCode::Enter => {
-                    // Play the focused episode in selection mode.
-                    if let Some(episodes) = self.series_selection_episodes(lib_idx) {
-                        let ep_idx = self.libs[lib_idx].series_selection.unwrap_or(0);
-                        if let Some(ep) = episodes.get(ep_idx) {
-                            let ep = ep.clone();
-                            self.libs[lib_idx].series_selection = None;
-                            self.play_item(ep);
-                        }
-                    }
+                    self.activate_series_selection_episode(lib_idx);
                     return Some(false);
                 }
                 KeyCode::Esc | KeyCode::Backspace => {
@@ -193,20 +170,17 @@ impl App {
         }
         // Activate series-selection mode on Enter when the cursor is on a
         // Series item (instead of drilling down via `select`).
-        if !is_nav && key.code == KeyCode::Enter && self.libs[lib_idx].series_selection.is_none() {
+        if key.code == KeyCode::Enter && self.libs[lib_idx].series_selection.is_none() {
             if let Some(item) = self.selected_series_item(lib_idx) {
                 self.enter_series_selection(lib_idx, &item);
                 return Some(false);
             }
         }
 
-        // Let the shared Tab/BackTab cycling path run before this block
-        // (though Tab/BackTab are consumed by `handle_global_view_key` in
-        // `handle_key_view_dispatch` before browse dispatch is reached).
-        if !is_nav && !matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
-            if let Some(quit) = self.handle_lib_key(lib_idx, key) {
-                return Some(quit);
-            }
+        // Tab/BackTab are consumed by `handle_global_view_key` in
+        // `handle_key_view_dispatch` before browse dispatch is reached.
+        if let Some(quit) = self.handle_lib_key(lib_idx, key) {
+            return Some(quit);
         }
         // Every other key is consumed here, never falling through to
         // queue-item handling.

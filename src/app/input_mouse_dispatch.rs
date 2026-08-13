@@ -222,9 +222,8 @@ impl App {
                             TabSelection::AudiobookshelfLibrary(index) => {
                                 if in_left {
                                     let in_episodes = self
-                                        .tab
-                                        .audiobookshelf_index()
-                                        .and_then(|index| self.audiobookshelf_browse.get(index))
+                                        .audiobookshelf_browse
+                                        .get(index)
                                         .is_some_and(|state| state.episode_selection.is_some());
                                     if !in_episodes {
                                         self.enter_audiobookshelf_episode_selection();
@@ -266,18 +265,7 @@ impl App {
                                     } else if self.is_viewing_album_folders(lib_idx) {
                                         self.activate_album_folder_row(lib_idx);
                                     } else if self.libs[lib_idx].series_selection.is_some() {
-                                        // Play the focused episode in selection mode.
-                                        if let Some(episodes) =
-                                            self.series_selection_episodes(lib_idx)
-                                        {
-                                            let ep_idx =
-                                                self.libs[lib_idx].series_selection.unwrap_or(0);
-                                            if let Some(ep) = episodes.get(ep_idx) {
-                                                let ep = ep.clone();
-                                                self.libs[lib_idx].series_selection = None;
-                                                self.play_item(ep);
-                                            }
-                                        }
+                                        self.activate_series_selection_episode(lib_idx);
                                     } else if let Some(item) = self.selected_series_item(lib_idx) {
                                         self.enter_series_selection(lib_idx, &item);
                                     } else {
@@ -368,13 +356,20 @@ impl App {
                     if !self.browse_mouse_ready() {
                         return;
                     }
-                    let crumbs = self.layout.main.breadcrumbs.clone();
-                    for (x_start, x_end, crumb_row, target_depth) in crumbs {
-                        if row == crumb_row && col >= x_start && col < x_end {
-                            self.libs[lib_idx].nav_stack.truncate(target_depth);
-                            self.save_default_library_position(lib_idx);
-                            return;
-                        }
+                    let target_depth = self
+                        .layout
+                        .main
+                        .breadcrumbs
+                        .iter()
+                        .copied()
+                        .find(|&(x_start, x_end, crumb_row, _)| {
+                            row == crumb_row && col >= x_start && col < x_end
+                        })
+                        .map(|(_, _, _, target_depth)| target_depth);
+                    if let Some(target_depth) = target_depth {
+                        self.libs[lib_idx].nav_stack.truncate(target_depth);
+                        self.save_default_library_position(lib_idx);
+                        return;
                     }
                 }
 

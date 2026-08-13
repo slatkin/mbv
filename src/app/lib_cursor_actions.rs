@@ -318,6 +318,18 @@ impl App {
         detail.episodes.get(&season.id).cloned()
     }
 
+    pub(super) fn activate_series_selection_episode(&mut self, lib_idx: usize) {
+        let Some(episodes) = self.series_selection_episodes(lib_idx) else {
+            return;
+        };
+        let ep_idx = self.libs[lib_idx].series_selection.unwrap_or(0);
+        let Some(episode) = episodes.get(ep_idx).cloned() else {
+            return;
+        };
+        self.libs[lib_idx].series_selection = None;
+        self.play_item(episode);
+    }
+
     /// Switches to the previous (`delta == -1`) or next (`delta == 1`)
     /// season while in series-selection mode. Adjusts the season cursor
     /// and ensures episodes for the new season are fetched.
