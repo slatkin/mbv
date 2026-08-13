@@ -212,8 +212,12 @@ impl PlaybackRun {
     }
 
     fn close_prepared_source(&mut self) {
+        self.close_prepared_source_at(self.last_valid_pos);
+    }
+
+    fn close_prepared_source_at(&mut self, position_ticks: i64) {
         if let Some(mut prepared) = self.prepared_source.take() {
-            prepared.close(self.last_valid_pos as f64 / TICKS_PER_SECOND as f64);
+            prepared.close(position_ticks as f64 / TICKS_PER_SECOND as f64);
         }
     }
 

@@ -47,3 +47,12 @@ struct PlaybackRun {
     intro_end: i64,
     intro_state: IntroState,
 }
+
+impl Drop for PlaybackRun {
+    fn drop(&mut self) {
+        // This is the last-resort path for delayed quit, FIFO shutdown, and
+        // panic unwinding. Keep the owner-known position for the lifecycle's
+        // own Drop instead of falling back to zero.
+        self.close_prepared_source();
+    }
+}

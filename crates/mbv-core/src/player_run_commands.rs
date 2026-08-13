@@ -563,6 +563,14 @@ impl PlaybackRun {
             Ok(prepared) => prepared,
             Err(error) => {
                 log::warn!(target: "player", "active-file replacement preparation failed: {error}");
+                self.accept_stopped_replacement(
+                    items,
+                    start_idx,
+                    &active_item,
+                    mpv,
+                    progress,
+                    format!("failed to prepare media: {error}"),
+                );
                 return;
             }
         };
@@ -574,6 +582,14 @@ impl PlaybackRun {
         self.projection.activate();
         if let Err(error) = self.install_active_projection(mpv, prepared, &active_item) {
             log::warn!(target: "player", "active-file replacement failed: {error}");
+            self.accept_stopped_replacement(
+                Vec::new(),
+                start_idx,
+                &active_item,
+                mpv,
+                progress,
+                format!("failed to load media: {error}"),
+            );
             return;
         }
         self.origin = if self.queue_len() == 1 {
@@ -600,6 +616,69 @@ impl PlaybackRun {
         status.runtime_ticks = active_item.runtime_ticks();
         status.current_idx = start_idx;
         status.queue_len = self.queue_len();
+    }
+
+    fn accept_stopped_replacement(
+        &mut self,
+        items: Vec<QueueItem>,
+        start_idx: usize,
+        active_item: &QueueItem,
+        mpv: &Mpv,
+        progress: &mut ProgressGuard,
+        error: String,
+    ) {
+        let old_pos = self.last_valid_pos;
+        progress.stop_and_join(self.progress_join_budget());
+        if self.stop_report == StopReport::NotSent {
+            self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(old_pos));
+        }
+        self.close_prepared_source_at(old_pos);
+        let _ = mpv.command("stop", &[]);
+        let _ = mpv.command("playlist-clear", &[]);
+
+        if !items.is_empty() {
+            self.queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
+        }
+        self.current_idx = start_idx;
+        self.projection.activate();
+        self.origin = if self.queue_len() == 1 {
+            PlaybackOrigin::Standalone
+        } else {
+            PlaybackOrigin::Queue
+        };
+        self.load_active_item_state();
+        self.begin_item_lifecycle();
+        self.active_file_starting = false;
+        self.load_state = LoadState::begin_single();
+        self.pending_initial_playlist_layout = false;
+        self.ext_sub_urls.clear();
+        self.reporter.clear_session();
+
+        let position_ticks = active_item.playback_position_ticks();
+        let mut status = self.status.lock().unwrap();
+        status.position_ticks = position_ticks;
+        status.last_valid_pos = position_ticks;
+        status.runtime_ticks = active_item.runtime_ticks();
+        status.current_idx = start_idx;
+        status.queue_len = self.queue_len();
+        if let Some(emby) = active_item.as_emby() {
+            status.set_current_item_metadata(emby);
+        } else {
+            status.clear_current_item_metadata();
+            status.title = active_item.title().to_string();
+            status.art_item_id = active_item.id().to_string();
+        }
+        status.active = false;
+        drop(status);
+
+        let _ = self.event_tx.send(PlayerEvent::Stopped {
+            idx: start_idx,
+            position_ticks,
+            played: false,
+            consume: false,
+            progress_report_accepted: false,
+            error: Some(error),
+        });
     }
 }
 

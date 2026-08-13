@@ -43,6 +43,7 @@ struct AudiobookshelfLifecycle {
     credential: String,
     session_id: String,
     duration: f64,
+    last_valid_pos: f64,
     closed: bool,
 }
 
@@ -51,8 +52,9 @@ impl AudiobookshelfLifecycle {
         if self.closed {
             return;
         }
+        self.last_valid_pos = current_time.max(0.0);
         let progress = AudiobookshelfPlaybackProgress {
-            current_time: current_time.max(0.0),
+            current_time: self.last_valid_pos,
             time_listened: 0.0,
             duration: self.duration,
         };
@@ -68,7 +70,7 @@ impl AudiobookshelfLifecycle {
 
 impl Drop for AudiobookshelfLifecycle {
     fn drop(&mut self) {
-        self.close(0.0);
+        self.close(self.last_valid_pos);
     }
 }
 
@@ -139,6 +141,7 @@ fn prepare_source(
             credential: context.credential.clone(),
             session_id: session.id,
             duration: session.duration_seconds,
+            last_valid_pos: session.current_time_seconds,
             closed: false,
         }),
     };
@@ -200,6 +203,60 @@ mod source_tests {
             let _ = tx.send(request);
         });
         (format!("http://{address}"), rx)
+    }
+
+    fn serve_close(current_time: f64) -> (String, std::sync::mpsc::Receiver<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            for body in [
+                fixture("play-direct.json")
+                    .replace("<LIBRARY_ITEM_ID>", "show")
+                    .replace("<EPISODE_ID>", "episode")
+                    .replace("<DIRECT_PATH>", "/direct.mp3")
+                    .replace(
+                        "\"currentTime\": 1",
+                        &format!("\"currentTime\": {current_time}"),
+                    ),
+                fixture("session-close.json"),
+            ] {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut bytes = Vec::new();
+                let mut chunk = [0; 4096];
+                loop {
+                    let read = stream.read(&mut chunk).unwrap();
+                    bytes.extend_from_slice(&chunk[..read]);
+                    let text = String::from_utf8_lossy(&bytes);
+                    let Some(end) = text.find("\r\n\r\n") else {
+                        continue;
+                    };
+                    let length = text[..end]
+                        .lines()
+                        .find_map(|line| {
+                            line.to_ascii_lowercase()
+                                .strip_prefix("content-length: ")
+                                .and_then(|value| value.parse::<usize>().ok())
+                        })
+                        .unwrap_or(0);
+                    if bytes.len() >= end + 4 + length {
+                        break;
+                    }
+                }
+                let request = String::from_utf8(bytes).unwrap();
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+                tx.send(request).unwrap();
+            }
+        });
+        (format!("http://{address}"), rx)
+    }
+
+    fn fixture(name: &str) -> String {
+        std::fs::read_to_string(format!(
+            "{}/tests/fixtures/audiobookshelf/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap()
     }
 
     fn episode() -> QueueItem {
@@ -264,5 +321,34 @@ mod source_tests {
         let prepared = prepare_source(&feed, "", "", None).unwrap();
         assert!(prepared.mpv_options.is_empty());
         assert!(!prepared.mpv_load_options(&feed).contains("Authorization"));
+    }
+
+    #[test]
+    fn lifecycle_close_loopback_captures_selected_position_and_resume_on_drop() {
+        for (fixture_time, close_position) in [(1.0, Some(3054.336)), (42.0, None)] {
+            let (base, requests) = serve_close(fixture_time);
+            let context = AudiobookshelfPlayerContext::new(
+                SetupGeneration::new(8),
+                AudiobookshelfSetup::new(base),
+                "secret".into(),
+                "device".into(),
+            )
+            .unwrap();
+            let mut prepared = prepare_source(&episode(), "", "", Some(&context)).unwrap();
+            let expected = if let Some(position) = close_position {
+                prepared.close(position);
+                position
+            } else {
+                drop(prepared);
+                fixture_time
+            };
+            let _create = requests.recv().unwrap();
+            let close = requests.recv().unwrap();
+            let body = close.split("\r\n\r\n").nth(1).unwrap();
+            assert!(
+                body.contains(&format!("\"currentTime\":{expected}")),
+                "{body}"
+            );
+        }
     }
 }

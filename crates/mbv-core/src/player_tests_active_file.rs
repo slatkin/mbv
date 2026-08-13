@@ -27,7 +27,7 @@ fn abs_item() -> QueueItem {
         title: "Episode".into(),
         show_title: None,
         author: None,
-        duration_ticks: Some(TICKS_PER_SECOND as u64),
+        duration_ticks: Some(100_u64),
         position_ticks: 0,
         played: false,
         pub_date_secs: None,
@@ -58,6 +58,58 @@ fn failed_eager_transition_preserves_canonical_queue_and_mode() {
     );
     assert_eq!(run.active_slot_id(), old_active);
     assert!(!run.projection.is_active_file());
+}
+
+#[test]
+fn replacement_prepare_failure_accepts_new_stopped_queue_and_clears_mpv() {
+    let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
+    let mut replacement = abs_item();
+    let QueueItem::Audiobookshelf(item) = &mut replacement else {
+        unreachable!()
+    };
+    item.title = "Replacement".into();
+    item.duration_ticks = Some(900);
+    item.position_ticks = 123;
+    let mpv = test_mpv();
+    mpv.command("loadfile", &["av://lavfi:sine=frequency=1000", "replace"])
+        .unwrap();
+    assert_eq!(mpv.get_property::<i64>("playlist-count").unwrap(), 1);
+    let mut progress = noop_progress();
+
+    run.replace_with_queue_items(vec![replacement], 0, &mpv, &mut progress);
+
+    assert_eq!(run.queue_len(), 1);
+    assert_eq!(run.active_item().unwrap().title(), "Replacement");
+    assert_eq!(run.current_idx, 0);
+    assert!(run.projection.is_active_file());
+    assert_eq!(run.active_item().unwrap().id(), "episode");
+    assert_eq!(mpv.get_property::<i64>("playlist-count").unwrap(), 0);
+    let status = status.lock().unwrap();
+    assert!(!status.active);
+    assert_eq!(status.current_idx, 0);
+    assert_eq!(status.queue_len, 1);
+    assert_eq!(status.position_ticks, 123);
+    assert_eq!(status.last_valid_pos, 123);
+    assert_eq!(status.runtime_ticks, 900);
+    assert_eq!(status.title, "Replacement");
+    drop(status);
+    let event = events.recv().unwrap();
+    let PlayerEvent::Stopped {
+        idx,
+        position_ticks,
+        error,
+        ..
+    } = event
+    else {
+        panic!("expected replacement failure stop event");
+    };
+    assert_eq!(idx, 0);
+    assert_eq!(position_ticks, 123);
+    assert_eq!(
+        error.as_deref(),
+        Some("failed to prepare media: service unavailable")
+    );
+    assert!(events.try_recv().is_err());
 }
 
 #[test]

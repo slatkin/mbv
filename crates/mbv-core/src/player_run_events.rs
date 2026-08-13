@@ -309,6 +309,13 @@ impl PlaybackRun {
                 self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
             }
 
+            if natural_end {
+                let lifecycle_pos = self.active_item().map_or(self.last_valid_pos, |item| {
+                    provider_lifecycle_close_pos(item, natural_end, runtime, self.last_valid_pos)
+                });
+                self.close_prepared_source_at(lifecycle_pos);
+            }
+
             if natural_end && self.reporter.has_session() {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
                 if !completed_is_audio {
@@ -400,6 +407,12 @@ impl PlaybackRun {
             progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
             self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(completed_pos));
+            self.close_prepared_source_at(provider_lifecycle_close_pos(
+                &completed_item,
+                natural,
+                completed_runtime,
+                self.last_valid_pos,
+            ));
             if played_out {
                 if let Some(emby) = completed_item.as_emby() {
                     let id = emby.id.clone();
@@ -425,6 +438,12 @@ impl PlaybackRun {
         // (which only fails when the index is out of bounds) cannot fail here.
         let next_slot_id = self.slot_id_at(next_idx);
         let advanced = if self.projection.is_active_file() {
+            self.close_prepared_source_at(provider_lifecycle_close_pos(
+                &completed_item,
+                natural,
+                completed_runtime,
+                self.last_valid_pos,
+            ));
             next_slot_id.is_some_and(|slot_id| self.select_active_slot(slot_id, mpv).is_ok())
         } else {
             self.set_active_index(next_idx)
@@ -578,5 +597,18 @@ impl PlaybackRun {
         if self.quit_at.is_none() {
             let _ = self.event_tx.send(PlayerEvent::MpvQuit);
         }
+    }
+}
+
+fn provider_lifecycle_close_pos(
+    item: &QueueItem,
+    natural_end: bool,
+    runtime: i64,
+    last_valid_pos: i64,
+) -> i64 {
+    if item.is_audiobookshelf() && natural_end {
+        runtime.max(0)
+    } else {
+        last_valid_pos
     }
 }
