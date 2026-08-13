@@ -230,6 +230,15 @@ impl App {
             self.render_daemon_lost_modal(f);
         }
 
+        // Record the destination this completed frame was rendered for, on
+        // the layout about to be installed. The tag is set only here (never
+        // on the intermediate/draft `layout`), so browse mouse handling can
+        // tell whether the installed layout describes the currently selected
+        // destination and refuse to interpret stale geometry otherwise
+        // (design §4). `self.tab` was already normalized to a live
+        // destination inside `render_main`.
+        layout.main.browse_destination = Some(self.tab);
+
         // One atomic replace, reached only once the full pass above has
         // completed -- `self.layout` never observes a half-updated frame.
         self.layout = layout;
@@ -273,15 +282,12 @@ impl App {
             self.tab = TabSelection::from_position_with_counts(pos, emby, audio, fp.is_some());
             self.library_tab_pending = 0;
         }
-        // Safety clamp -- tab should already be valid, but guard against
-        // any edge case where libs haven't populated yet.
-        if self
-            .tab
-            .library_index()
-            .is_some_and(|i| i >= self.libs.len())
-        {
-            self.tab = TabSelection::Home;
-        }
+        // A selected Service library index that no longer exists (async
+        // Service removal/replacement) becomes Home. Home needs no
+        // Service-specific library state, so we keep rendering the (now)
+        // Home view instead of aborting to a blank, mostly-default frame:
+        // the completed frame installs a full Home layout tagged Home below.
+        self.normalize_stale_browse_destination();
 
         // Left panel (card + queue) | Right panel (library, remaining).
         let left_w = match self.panel_mode {
@@ -516,16 +522,16 @@ impl App {
             && lib_area.width >= TWO_COLUMN_THRESHOLD
             && self
                 .tab
-                .library_index()
+                .emby_library_index()
                 .is_some_and(|lib_idx| self.is_music_group_view(lib_idx));
         if right_visible
             && !is_wide_music
             && self
                 .tab
-                .library_index()
+                .emby_library_index()
                 .is_some_and(|lib_idx| self.is_music_group_view(lib_idx))
         {
-            let lib_idx = self.tab.library_index().unwrap();
+            let lib_idx = self.tab.emby_library_index().unwrap();
             if lib_area.height > 0 {
                 let pills_area = Rect {
                     x: lib_area.x,

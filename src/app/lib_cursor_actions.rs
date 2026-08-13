@@ -32,8 +32,14 @@ impl App {
     /// maps to row by division. Grouped album views stride by `cols` too;
     /// the single-column views (feed home-video groups, season grids)
     /// receive `item_rows` exactly as they do today.
-    pub(super) fn move_lib_cursor_rows(&mut self, item_rows: i64) {
-        let lib_idx = self.tab.library_index().unwrap_or(0);
+    pub(super) fn move_lib_cursor_rows(&mut self, lib_idx: usize, item_rows: i64) {
+        // Defensive bounds check: the dispatch front door normalizes a stale
+        // destination first, but async Service removal can invalidate the
+        // matched index between normalization and this call. No-op (never
+        // substitute library zero) on a miss.
+        if lib_idx >= self.libs.len() {
+            return;
+        }
 
         // Letter-grouped lists: resolve the target item through the last
         // frame's laid-out item rows. The grouped-album view also publishes
@@ -45,13 +51,13 @@ impl App {
             && !self.layout.main.left_sorted_indices.is_empty()
         {
             if let Some(delta) = self.letter_vertical_delta(lib_idx, item_rows) {
-                self.move_lib_cursor(delta);
+                self.move_lib_cursor(lib_idx, delta);
                 return;
             }
         }
 
         let cols = self.current_library_columns(lib_idx);
-        self.move_lib_cursor(item_rows * cols as i64);
+        self.move_lib_cursor(lib_idx, item_rows * cols as i64);
     }
 
     /// Computes the flat (sorted-order) delta that lands the cursor on the
@@ -110,12 +116,16 @@ impl App {
         Some(target_pos? as i64 - cur_pos? as i64)
     }
 
-    pub(super) fn move_lib_cursor(&mut self, delta: i64) {
+    pub(super) fn move_lib_cursor(&mut self, lib_idx: usize, delta: i64) {
+        // Defensive bounds check; see `move_lib_cursor_rows` for the stale
+        // index contract. Never substitute library zero on a miss.
+        if lib_idx >= self.libs.len() {
+            return;
+        }
         let now = Instant::now();
         let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
         self.last_nav_at = now;
         self.mark_library_navigation(now);
-        let lib_idx = self.tab.library_index().unwrap_or(0);
 
         if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
@@ -189,9 +199,12 @@ impl App {
         }
     }
 
-    pub(super) fn jump_lib_cursor(&mut self, to_end: bool) {
-        let lib_idx = self.tab.library_index().unwrap_or(0);
-
+    pub(super) fn jump_lib_cursor(&mut self, lib_idx: usize, to_end: bool) {
+        // Defensive bounds check; see `move_lib_cursor_rows` for the stale
+        // index contract. Never substitute library zero on a miss.
+        if lib_idx >= self.libs.len() {
+            return;
+        }
         if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
@@ -303,6 +316,18 @@ impl App {
             .seasons
             .get(self.libs[lib_idx].series_season_cursor)?;
         detail.episodes.get(&season.id).cloned()
+    }
+
+    pub(super) fn activate_series_selection_episode(&mut self, lib_idx: usize) {
+        let Some(episodes) = self.series_selection_episodes(lib_idx) else {
+            return;
+        };
+        let ep_idx = self.libs[lib_idx].series_selection.unwrap_or(0);
+        let Some(episode) = episodes.get(ep_idx).cloned() else {
+            return;
+        };
+        self.libs[lib_idx].series_selection = None;
+        self.play_item(episode);
     }
 
     /// Switches to the previous (`delta == -1`) or next (`delta == 1`)

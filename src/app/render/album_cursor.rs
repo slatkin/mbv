@@ -154,7 +154,7 @@ impl App {
         lib_idx: usize,
         page_down: bool,
     ) -> bool {
-        if self.tab.library_index() != Some(lib_idx)
+        if self.tab.emby_library_index() != Some(lib_idx)
             || !matches!(self.panel_focus, crate::app::PanelFocus::Library)
             || self.libs[lib_idx].album_track_focus.is_some()
             || !self.is_viewing_album_folders(lib_idx)

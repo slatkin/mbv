@@ -117,8 +117,7 @@ impl App {
         }
     }
 
-    pub(super) fn current_lib_item(&self) -> Option<EmbyItem> {
-        let lib_idx = self.tab.library_index()?;
+    pub(super) fn current_lib_item(&self, lib_idx: usize) -> Option<EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
@@ -413,12 +412,11 @@ impl App {
         }
     }
 
-    pub(super) fn select(&mut self) {
-        let Some(item) = self.current_lib_item() else {
+    pub(super) fn select(&mut self, lib_idx: usize) {
+        let Some(item) = self.current_lib_item(lib_idx) else {
             return;
         };
         if item.is_folder {
-            let lib_idx = self.tab.library_index().unwrap();
             let lib = &mut self.libs[lib_idx];
             lib.search = None;
             lib.nav_stack.push(BrowseLevel {
@@ -448,7 +446,6 @@ impl App {
                 "Ascending".into(),
             );
         } else if is_playable(&item) {
-            let lib_idx = self.tab.library_index().unwrap();
             if self.libs[lib_idx].search.is_some() {
                 self.libs[lib_idx].search = None;
                 if self.is_feed_home_video_group_view(lib_idx) {
@@ -575,76 +572,78 @@ impl App {
             // Track already focused: play it. Reuses `select()` (track-focus
             // aware via `current_lib_item()`) rather than duplicating
             // queue-build logic here.
-            self.select();
+            self.select(lib_idx);
         }
     }
 
-    pub(super) fn go_back(&mut self) {
-        if let Some(lib_idx) = self.tab.library_index() {
-            // Guard: don't pop when already at the root of a synthetic "group" view
-            // (music groups: nav_stack[0]=groups, nav_stack[1]=albums; feed home
-            // videos: nav_stack[0]=folders, nav_stack[1]=grouped videos) -- there is
-            // no list above to go back to. Search-clearing still falls through
-            // because this guard only fires when search is None.
-            if self.libs[lib_idx].search.is_none()
-                && self.libs[lib_idx].nav_stack.len() == 2
-                && (self.is_music_group_view(lib_idx)
-                    || self.is_feed_home_video_group_view(lib_idx))
-            {
-                return;
-            }
+    pub(super) fn go_back(&mut self, lib_idx: usize) {
+        // Defensive bounds check; see `move_lib_cursor_rows` in
+        // `lib_cursor_actions.rs` for the stale index contract. Never
+        // substitute library zero on a miss.
+        if lib_idx >= self.libs.len() {
+            return;
+        }
+        // Guard: don't pop when already at the root of a synthetic "group" view
+        // (music groups: nav_stack[0]=groups, nav_stack[1]=albums; feed home
+        // videos: nav_stack[0]=folders, nav_stack[1]=grouped videos) -- there is
+        // no list above to go back to. Search-clearing still falls through
+        // because this guard only fires when search is None.
+        if self.libs[lib_idx].search.is_none()
+            && self.libs[lib_idx].nav_stack.len() == 2
+            && (self.is_music_group_view(lib_idx) || self.is_feed_home_video_group_view(lib_idx))
+        {
+            return;
+        }
 
-            // Primary pop -- scoped so the mutable borrow of libs[lib_idx] ends here.
-            let did_pop = {
-                let lib = &mut self.libs[lib_idx];
-                if lib.search.take().is_none() && lib.nav_stack.len() > 1 {
-                    let child_folder_id = lib.nav_stack.last().map(|l| l.parent_id.clone());
-                    lib.nav_stack.pop();
-                    if let (Some(folder_id), Some(parent)) =
-                        (child_folder_id, lib.nav_stack.last_mut())
-                    {
-                        if let Some(idx) = parent.items.iter().position(|i| i.id == folder_id) {
-                            parent.cursor = idx;
-                        }
+        // Primary pop -- scoped so the mutable borrow of libs[lib_idx] ends here.
+        let did_pop = {
+            let lib = &mut self.libs[lib_idx];
+            if lib.search.take().is_none() && lib.nav_stack.len() > 1 {
+                let child_folder_id = lib.nav_stack.last().map(|l| l.parent_id.clone());
+                lib.nav_stack.pop();
+                if let (Some(folder_id), Some(parent)) = (child_folder_id, lib.nav_stack.last_mut())
+                {
+                    if let Some(idx) = parent.items.iter().position(|i| i.id == folder_id) {
+                        parent.cursor = idx;
                     }
-                    true
-                } else {
-                    false
                 }
-            };
+                true
+            } else {
+                false
+            }
+        };
 
-            if did_pop {
-                self.save_default_library_position(lib_idx);
+        if did_pop {
+            self.save_default_library_position(lib_idx);
 
-                // Skip past the auto-pushed Season level so a single Escape
-                // takes the user back to the series list.
-                let exposed_seasons = self.libs[lib_idx]
+            // Skip past the auto-pushed Season level so a single Escape
+            // takes the user back to the series list.
+            let exposed_seasons = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|l| {
+                    l.items
+                        .first()
+                        .map(|i| i.item_type == "Season")
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
+            if exposed_seasons && self.libs[lib_idx].nav_stack.len() > 1 {
+                let child_id2 = self.libs[lib_idx]
                     .nav_stack
                     .last()
-                    .map(|l| {
-                        l.items
-                            .first()
-                            .map(|i| i.item_type == "Season")
-                            .unwrap_or(false)
-                    })
-                    .unwrap_or(false);
-                if exposed_seasons && self.libs[lib_idx].nav_stack.len() > 1 {
-                    let child_id2 = self.libs[lib_idx]
-                        .nav_stack
-                        .last()
-                        .map(|l| l.parent_id.clone());
-                    self.libs[lib_idx].nav_stack.pop();
-                    if let (Some(fid), Some(parent)) =
-                        (child_id2, self.libs[lib_idx].nav_stack.last_mut())
-                    {
-                        if let Some(idx) = parent.items.iter().position(|i| i.id == fid) {
-                            parent.cursor = idx;
-                        }
+                    .map(|l| l.parent_id.clone());
+                self.libs[lib_idx].nav_stack.pop();
+                if let (Some(fid), Some(parent)) =
+                    (child_id2, self.libs[lib_idx].nav_stack.last_mut())
+                {
+                    if let Some(idx) = parent.items.iter().position(|i| i.id == fid) {
+                        parent.cursor = idx;
                     }
                 }
             }
-            self.save_default_library_position(lib_idx);
         }
+        self.save_default_library_position(lib_idx);
     }
 }
 

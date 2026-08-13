@@ -38,6 +38,215 @@ fn audiobookshelf_app() -> App {
     app
 }
 
+/// A populated Emby movie library, so a key or action that leaks across the
+/// Service seam would have Emby state to mutate.
+fn add_emby_movie_library(app: &mut App) {
+    let mut library = make_item("Movies", "CollectionFolder");
+    library.id = "lib-movies".into();
+    library.collection_type = "movies".into();
+    library.is_folder = true;
+    app.libs.push(LibraryTab {
+        library,
+        search: None,
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            items: vec![make_item("Item 0", "Movie")],
+            total_count: 1,
+            cursor: 0,
+            scroll: 0,
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        }],
+        feed_home_video: None,
+        album_track_focus: None,
+        series_selection: None,
+        series_season_cursor: 0,
+        library_total: None,
+    });
+}
+
+/// PR #514's keyboard guard: while the Audiobookshelf tab is selected and the
+/// library panel has focus, Emby-only keys (search, watched, shuffle,
+/// enqueue, context menu) must be consumed without touching Emby, queue,
+/// playback, or help state.
+#[test]
+fn audiobookshelf_tab_keys_cannot_enter_emby_action_paths() {
+    let mut app = audiobookshelf_app();
+    add_emby_movie_library(&mut app);
+    let nav_len = app.libs[0].nav_stack.len();
+
+    let slash = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('/'),
+        crossterm::event::KeyModifiers::NONE,
+    );
+    let ctrl_w = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('w'),
+        crossterm::event::KeyModifiers::CONTROL,
+    );
+    let ctrl_s = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('s'),
+        crossterm::event::KeyModifiers::CONTROL,
+    );
+    let ctrl_a = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('a'),
+        crossterm::event::KeyModifiers::CONTROL,
+    );
+    let ctrl_r = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('r'),
+        crossterm::event::KeyModifiers::CONTROL,
+    );
+    let dot = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('.'),
+        crossterm::event::KeyModifiers::NONE,
+    );
+
+    for key in [slash, ctrl_w, ctrl_s, ctrl_a, ctrl_r, dot] {
+        assert_eq!(
+            app.handle_key_view_dispatch(key),
+            Some(false),
+            "Audiobookshelf tab must consume {key:?}"
+        );
+        assert!(
+            app.libs[0].search.is_none(),
+            "{key:?} must not open an Emby search"
+        );
+        assert_eq!(
+            app.libs[0].nav_stack.len(),
+            nav_len,
+            "{key:?} must not navigate the Emby library"
+        );
+        assert!(!app.libs[0].nav_stack[0].items[0].played);
+        assert_eq!(
+            app.player_tab.total_queue_len(),
+            0,
+            "{key:?} must not enqueue anything"
+        );
+        assert!(app.context_menu.is_none(), "{key:?} must not open a menu");
+        assert!(
+            app.confirm_modal.is_none(),
+            "{key:?} must not open a rescan confirmation"
+        );
+        assert!(
+            app.status.is_empty(),
+            "{key:?} must not flash, got {:?}",
+            app.status
+        );
+    }
+    assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(_)));
+}
+
+/// `Space` and `Ctrl+a` in Audiobookshelf episode selection are inert the way
+/// `Enter` is: the selected episode is preserved and no queue, playback, or
+/// Emby state changes.
+#[test]
+fn audiobookshelf_episode_space_and_enqueue_are_inert() {
+    let mut app = audiobookshelf_app();
+    add_emby_movie_library(&mut app);
+    app.enter_audiobookshelf_episode_selection();
+    let nav_len = app.libs[0].nav_stack.len();
+
+    let space = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char(' '),
+        crossterm::event::KeyModifiers::NONE,
+    );
+    assert_eq!(app.handle_key_view_dispatch(space), Some(false));
+    let ctrl_a = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('a'),
+        crossterm::event::KeyModifiers::CONTROL,
+    );
+    assert_eq!(app.handle_key_view_dispatch(ctrl_a), Some(false));
+
+    assert_eq!(
+        app.audiobookshelf_browse[0].episode_selection,
+        Some(0),
+        "selected episode must be preserved"
+    );
+    assert_eq!(
+        app.player_tab.total_queue_len(),
+        0,
+        "inert activation must not mutate the queue"
+    );
+    assert_eq!(
+        app.libs[0].nav_stack.len(),
+        nav_len,
+        "inert activation must not navigate the Emby library"
+    );
+    assert!(app.status.is_empty());
+}
+
+/// The Audiobookshelf destination never opens an Emby context menu, even when
+/// a populated Emby library would produce one if selected.
+#[test]
+fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
+    let mut app = audiobookshelf_app();
+    add_emby_movie_library(&mut app);
+
+    app.open_context_menu();
+    assert!(
+        app.context_menu.is_none(),
+        "Audiobookshelf must not open an Emby context menu"
+    );
+
+    // Control: selecting the Emby library with the same state does produce a
+    // menu, so the absence above is the destination guard, not an empty setup.
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.open_context_menu();
+    assert!(app.context_menu.is_some());
+}
+
+#[test]
+fn feeds_destination_never_opens_an_emby_context_menu() {
+    let mut app = make_app_stub();
+    add_emby_movie_library(&mut app);
+    app.panel_focus = PanelFocus::Library;
+    app.tab = TabSelection::Feeds;
+
+    app.open_context_menu();
+    assert!(
+        app.context_menu.is_none(),
+        "Feeds must not open an Emby context menu"
+    );
+
+    // Control: selecting the Emby library with the same state does produce a
+    // menu, so the absence above is the destination guard, not an empty setup.
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.open_context_menu();
+    assert!(app.context_menu.is_some());
+}
+
+/// An Emby item in the queue panel still opens the queue panel menu (Remove
+/// from Queue / Go to Library), independent of the selected browse destination.
+#[test]
+fn emby_queue_item_still_opens_queue_panel_menu() {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Queue;
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+    app.player_tab
+        .set_items(vec![make_item("Queue Movie", "Movie")], 0);
+
+    app.open_context_menu();
+    let menu = app
+        .context_menu
+        .as_ref()
+        .expect("queue panel must open a menu");
+    let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
+    assert!(
+        labels.contains(&"Remove from Queue"),
+        "queue item menu must include Remove from Queue, got {labels:?}"
+    );
+    assert!(
+        labels.contains(&"Go to Library"),
+        "queue item menu must include Go to Library, got {labels:?}"
+    );
+}
+
 #[test]
 fn audiobookshelf_activation_enters_selection_then_remains_inert() {
     let mut app = audiobookshelf_app();
@@ -46,24 +255,86 @@ fn audiobookshelf_activation_enters_selection_then_remains_inert() {
         crossterm::event::KeyModifiers::NONE,
     );
 
-    assert!(!app.handle_queue_key(enter));
+    assert_eq!(
+        app.handle_key_view_dispatch(enter),
+        Some(false),
+        "Enter must be consumed"
+    );
     assert_eq!(app.audiobookshelf_browse[0].episode_selection, Some(0));
     assert_eq!(app.player_tab.total_queue_len(), 0);
 
-    assert!(!app.handle_queue_key(enter));
+    assert_eq!(
+        app.handle_key_view_dispatch(enter),
+        Some(false),
+        "second Enter stays inert"
+    );
     assert_eq!(app.audiobookshelf_browse[0].episode_selection, Some(0));
     assert_eq!(app.player_tab.total_queue_len(), 0);
+}
+
+/// The `activate_audiobookshelf_episode` / `enqueue_audiobookshelf_episode`
+/// seams (design §6) are inert until #518: with a populated Audiobookshelf
+/// browse state and a selected episode they preserve the selection and all
+/// queue, playback, and Service state.
+#[test]
+fn audiobookshelf_episode_activation_seams_are_inert() {
+    let mut app = audiobookshelf_app();
+    add_emby_movie_library(&mut app);
+    app.enter_audiobookshelf_episode_selection();
+    let before_selection = app.audiobookshelf_browse[0].episode_selection;
+    let before_queue = app.player_tab.total_queue_len();
+    let before_nav = app.libs[0].nav_stack.len();
+    let before_active = app.player.status.lock().unwrap().active;
+
+    app.activate_audiobookshelf_episode(0);
+    app.enqueue_audiobookshelf_episode(0);
+
+    assert_eq!(
+        app.audiobookshelf_browse[0].episode_selection, before_selection,
+        "activation seams must preserve the selected episode"
+    );
+    assert_eq!(
+        app.player_tab.total_queue_len(),
+        before_queue,
+        "activation seams must not mutate the queue"
+    );
+    assert_eq!(
+        app.libs[0].nav_stack.len(),
+        before_nav,
+        "activation seams must not navigate the Emby library"
+    );
+    assert_eq!(
+        app.player.status.lock().unwrap().active,
+        before_active,
+        "activation seams must not change playback state"
+    );
+    assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
+    assert!(!app.audiobookshelf_browse[0].shows.is_empty());
+}
+
+/// An absent or stale Audiobookshelf index is a silent no-op for both seams.
+#[test]
+fn audiobookshelf_episode_seams_noop_on_absent_index() {
+    let mut app = audiobookshelf_app();
+    app.activate_audiobookshelf_episode(1);
+    app.enqueue_audiobookshelf_episode(1);
+    assert_eq!(app.player_tab.total_queue_len(), 0);
+    assert_eq!(app.audiobookshelf_browse.len(), 1);
+    assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
 }
 
 #[test]
 fn audiobookshelf_escape_returns_to_show_selection() {
     let mut app = audiobookshelf_app();
-    app.enter_audiobookshelf_episode_selection();
     let escape = crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Esc,
         crossterm::event::KeyModifiers::NONE,
     );
-    assert!(!app.handle_queue_key(escape));
+    assert_eq!(
+        app.handle_key_view_dispatch(escape),
+        Some(false),
+        "Escape must be consumed"
+    );
     assert_eq!(app.audiobookshelf_browse[0].episode_selection, None);
     assert_eq!(
         app.audiobookshelf_browse[0].selected_id.as_deref(),
@@ -155,7 +426,7 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
         series_season_cursor: 0,
         library_total: None,
     });
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     app.open_context_menu();
 
@@ -206,7 +477,7 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
         series_season_cursor: 0,
         library_total: None,
     });
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     app.open_context_menu();
 
@@ -272,7 +543,7 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
         library_total: None,
     });
     app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     app.open_context_menu();
 
@@ -376,7 +647,7 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
         library_total: None,
     });
     app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     app.open_context_menu();
 
@@ -398,4 +669,37 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
             Some(ContextAction::MarkItemsUnplayed(ids)) if ids.is_empty()
         )
     }));
+}
+
+/// F5 on the Audiobookshelf destination clears the current catalog and then
+/// restarts the catalog request from the first page: shows/total/episodes are
+/// reset, page 0 is marked pending, and neither the Emby library nor the
+/// queue is touched.
+#[test]
+fn audiobookshelf_f5_restarts_catalog_after_clear() {
+    let mut app = audiobookshelf_app();
+    add_emby_movie_library(&mut app);
+    app.panel_focus = PanelFocus::Library;
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+
+    app.refresh_current_view();
+
+    let state = &app.audiobookshelf_browse[0];
+    assert!(state.shows.is_empty(), "catalog must be cleared on refresh");
+    assert_eq!(state.total, 0);
+    assert!(state.episodes.is_none());
+    assert_eq!(state.episode_selection, None);
+    assert!(
+        state.loading_pages.contains(&0),
+        "page 0 must be marked pending so the catalog request restarts"
+    );
+    assert!(
+        !app.libs[0].nav_stack[0].loading,
+        "Audiobookshelf refresh must not reload the Emby library"
+    );
+    assert_eq!(
+        app.player_tab.total_queue_len(),
+        0,
+        "Audiobookshelf refresh must not touch the queue"
+    );
 }

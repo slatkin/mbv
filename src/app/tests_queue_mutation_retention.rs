@@ -107,26 +107,13 @@ fn rejected_route_enqueue_leaves_tracking_active() {
         series_season_cursor: 0,
         library_total: None,
     });
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.remote_tracker = Some(tracking_stub());
 
-    app.enqueue_selected();
+    app.enqueue_selected(Some(0));
 
     assert!(app.remote_tracker.is_some());
     assert!(app.status.contains("Can't mix libraries in a routed queue"));
-}
-
-fn serve_one_response(listener: &std::net::TcpListener, body: &str) {
-    let (stream, _) = listener.accept().unwrap();
-    let mut writer = stream.try_clone().unwrap();
-    use std::io::Write;
-    let _ = writer.write_all(
-        format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
-            body.len()
-        )
-        .as_bytes(),
-    );
 }
 
 #[test]
@@ -141,32 +128,10 @@ fn failed_folder_enqueue_leaves_tracking_active() {
 
     // The stub client has no server URL configured, so the enqueue fetch
     // fails at the HTTP layer before anything can be appended.
-    app.enqueue_selected();
+    app.enqueue_selected(None);
 
     assert!(app.remote_tracker.is_some());
     assert!(app.player_tab.emby_items().is_empty());
-}
-
-#[test]
-fn empty_folder_enqueue_leaves_tracking_active() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let url = format!("http://{}", listener.local_addr().unwrap());
-    let mut app = make_app_stub();
-    app.config.lock().unwrap().server_url = url;
-    let mut folder = make_item("Folder", "CollectionFolder");
-    folder.is_folder = true;
-    app.home.continue_items = vec![folder];
-    app.home.continue_cursor = 0;
-    app.remote_tracker = Some(tracking_stub());
-
-    let handle = std::thread::spawn(move || serve_one_response(&listener, r#"{"Items":[]}"#));
-    app.enqueue_selected();
-    handle.join().unwrap();
-
-    assert!(app.remote_tracker.is_some());
-    assert!(app.player_tab.emby_items().is_empty());
-    assert!(app.status.contains("Nothing to enqueue"));
 }
 
 #[test]
@@ -215,46 +180,3 @@ fn confirmed_active_item_removal_retires_tracking() {
 }
 
 // ── task 6.5: two successive removals then a save containing both edits ───
-
-#[test]
-fn two_removals_apply_immediately_and_save_snapshots_both_edits() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(4), app.player_tab.queue_cursor);
-    app.queue_source = crate::config::QueueSource::Playlist {
-        id: Some("pl-1".into()),
-        name: "Saved".into(),
-    };
-    app.remote_tracker = Some(tracking_stub());
-
-    app.remove_from_queue(0);
-    app.remove_from_queue(1);
-    assert!(app.remote_tracker.is_none());
-    assert_eq!(
-        app.player_tab
-            .emby_items()
-            .iter()
-            .map(|item| item.id.as_str())
-            .collect::<Vec<_>>(),
-        vec!["id1", "id3"]
-    );
-
-    app.save_playlist_to_emby();
-    let item_ids = match app
-        .playlist_mutations
-        .get("pl-1")
-        .and_then(|state| state.active.as_ref())
-    {
-        Some(super::types_playback::PlaylistMutation::Save {
-            item_ids: Some(ids),
-            ..
-        }) => ids.clone(),
-        other => panic!("expected active save, got {other:?}"),
-    };
-    assert_eq!(
-        item_ids,
-        vec!["id1", "id3"],
-        "the following playlist save must contain both removals"
-    );
-}

@@ -2,6 +2,19 @@ use super::{App, PanelFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 impl App {
+    /// The Feeds destination keyboard handler called from the exhaustive
+    /// browse dispatch (`handle_key_browse_dispatch`). Delegates to
+    /// `handle_feed_tab_key` for the Feeds key set (refresh, watched filter,
+    /// cursor navigation, group cycling, play, enqueue) and consumes every
+    /// other key so Emby-only actions and queue-item handling are
+    /// unreachable while Feeds is focused.
+    pub(super) fn handle_key_feeds(&mut self, key: KeyEvent) -> Option<bool> {
+        if let Some(quit) = self.handle_feed_tab_key(key) {
+            return Some(quit);
+        }
+        Some(false)
+    }
+
     /// Handle key events while the Feeds tab is active and the library
     /// panel has focus. Returns `Some(quit)` if the key was consumed, or
     /// `None` to fall through to the global view keys.

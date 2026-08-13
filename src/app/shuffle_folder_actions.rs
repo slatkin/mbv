@@ -4,11 +4,14 @@ use super::{App, PanelFocus};
 use rand::seq::SliceRandom;
 
 impl App {
-    pub(super) fn shuffle_play(&mut self) {
-        if self.tab.is_home() || self.tab.is_feeds() {
+    pub(super) fn shuffle_play(&mut self, lib_idx: usize) {
+        // Defensive bounds check: the dispatch front door normalizes a stale
+        // destination first, but async Service removal can invalidate the
+        // matched index between normalization and this call. No-op (never
+        // substitute library zero) on a miss.
+        if lib_idx >= self.libs.len() {
             return;
         }
-        let lib_idx = self.tab.library_index().unwrap();
         let parent_id = {
             let lib = &self.libs[lib_idx];
             let item = lib
@@ -28,7 +31,7 @@ impl App {
         // fetched zero items and reported "Nothing to shuffle" even though
         // the album had playable tracks, while the context menu (already on
         // `get_all_playable_recursive`, which includes Audio) worked fine.
-        self.shuffle_folder(&parent_id);
+        self.shuffle_folder(lib_idx, &parent_id);
     }
 
     pub(super) fn play_folder(&mut self, folder_id: &str) {
@@ -65,38 +68,23 @@ impl App {
         self.libs[lib_idx].library.collection_type == "tvshows"
     }
 
-    /// Whether the currently focused library tab is a tvshows library.
-    /// Same bounds-check-then-delegate shape as `is_in_podcast_library`.
-    ///
-    /// Caveat: this reads the *active tab*, not the folder actually being
-    /// shuffled -- `shuffle_folder`'s `folder_id` argument is not consulted
-    /// here. That's fine for its two current callers (`shuffle_play`, only
-    /// reachable once the left panel is already on a library tab; and the
-    /// context menu's Shuffle action, only offered for a folder while
-    /// browsing a library tab), but it would silently pick the wrong fetch
-    /// for a folder reached some other way -- e.g. a future caller
-    /// shuffling a folder surfaced by the global search overlay, or a
-    /// Home-tab aggregate (Continue Watching/Latest), while a *different*
-    /// library tab happens to be focused underneath. A robust fix for that
-    /// case would resolve `folder_id`'s owning library via
-    /// `get_ancestors`, the way `route_for_item_via_ancestors` in
-    /// `library_route.rs` already does for the analogous "which library
-    /// actually owns this item" problem in route resolution.
-    pub(super) fn active_lib_is_tvshows(&self) -> bool {
-        let Some(lib_idx) = self.tab.library_index() else {
-            return false;
-        };
+    /// Whether the given Emby library is a tvshows library. The index
+    /// arrives explicitly from the shuffle chain (`shuffle_play` /
+    /// `execute_context_action` pass the library the folder was reached
+    /// through), so this no longer reads the selected tab. Bounds-misses
+    /// return false (defensive; never substitute library zero).
+    pub(super) fn active_lib_is_tvshows(&self, lib_idx: usize) -> bool {
         lib_idx < self.libs.len() && self.is_tvshows_library(lib_idx)
     }
 
-    pub(super) fn shuffle_folder(&mut self, folder_id: &str) {
+    pub(super) fn shuffle_folder(&mut self, lib_idx: usize, folder_id: &str) {
         // TV libraries shuffle from a video-only fetch (Episode/Movie/Video)
         // so a season/series shuffle can't pull in stray Audio items (e.g.
         // theme songs); every other library type keeps the broader
         // playable-items fetch used for enqueue/play-all, which does
         // include Audio (needed for music libraries -- see the bug this
         // replaced).
-        let is_tvshows = self.active_lib_is_tvshows();
+        let is_tvshows = self.active_lib_is_tvshows(lib_idx);
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),

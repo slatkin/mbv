@@ -612,7 +612,7 @@ impl App {
                     })
                     .is_some()
                 {
-                    self.select();
+                    self.select(lib_idx);
                 }
             }
             Command::AlbumTrackDismiss(lib_idx) => {

@@ -66,7 +66,7 @@ fn letter_filter_default_is_the_first_bucket() {
 #[test]
 fn tv_series_list_computes_sorted_indices_when_above_threshold() {
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     let mut library = make_item("Shows", "CollectionFolder");
     library.id = "lib-shows".into();

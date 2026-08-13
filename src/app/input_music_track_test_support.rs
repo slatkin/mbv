@@ -16,7 +16,7 @@ use std::io::{Read, Write};
 pub(super) fn make_music_album_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.music_levels = vec!["group".into(), "album".into()];
 
     let mut library = make_item("Music", "CollectionFolder");
@@ -112,7 +112,7 @@ pub(super) fn push_tracks(app: &mut App, album_id: &str, count: usize) {
 pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.music_levels = vec!["group".into(), "album".into()];
 
     let mut library = make_item("Music", "CollectionFolder");

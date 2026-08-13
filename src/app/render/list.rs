@@ -155,7 +155,7 @@ impl App {
         }
 
         // Ensure the library is loaded when a library tab is selected.
-        if let Some(lib_idx) = self.tab.library_index() {
+        if let Some(lib_idx) = self.tab.emby_library_index() {
             self.ensure_lib_loaded_for(lib_idx);
         }
 
@@ -163,7 +163,7 @@ impl App {
         // above the shared 82-column breakpoint. The narrow path
         // (below breakpoint) continues unchanged through the existing hero-
         // above-list renderer.
-        if let Some(lib_idx) = self.tab.library_index() {
+        if let Some(lib_idx) = self.tab.emby_library_index() {
             if self.is_music_group_view(lib_idx)
                 && self.is_viewing_album_folders(lib_idx)
                 && area.width >= TWO_COLUMN_THRESHOLD
@@ -177,13 +177,13 @@ impl App {
 
         // First row area: search input box (when searching).
         if focused
-            && self.tab.library_index().is_some()
-            && self.libs[self.tab.library_index().unwrap()]
+            && self.tab.emby_library_index().is_some()
+            && self.libs[self.tab.emby_library_index().unwrap()]
                 .search
                 .is_some()
             && content_area.height >= 3
         {
-            let lib_idx = self.tab.library_index().unwrap();
+            let lib_idx = self.tab.emby_library_index().unwrap();
             // 3-row bordered search input, matching the home-search visual style.
             let search_area = Rect {
                 height: 3,
@@ -226,18 +226,18 @@ impl App {
         // frame instead of three.
         let selected_movie_item = self
             .tab
-            .library_index()
+            .emby_library_index()
             .and_then(|lib_idx| self.selected_movie_item(lib_idx));
         let selected_series_item = if selected_movie_item.is_none() {
             self.tab
-                .library_index()
+                .emby_library_index()
                 .and_then(|lib_idx| self.selected_series_item(lib_idx))
         } else {
             None
         };
         let selected_album_item = if selected_series_item.is_none() {
             self.tab
-                .library_index()
+                .emby_library_index()
                 .and_then(|lib_idx| self.selected_album_hero_item(lib_idx))
         } else {
             None
@@ -251,7 +251,7 @@ impl App {
         // stride (see `is_viewing_season_grid`).
         let cols = if self
             .tab
-            .library_index()
+            .emby_library_index()
             .is_some_and(|lib_idx| self.is_viewing_season_grid(lib_idx))
         {
             1
@@ -274,8 +274,8 @@ impl App {
         // hero-capable content (folders, music, non-hero collections) --
         // the list then takes the whole remaining area.
         //
-        let hero_rows: u16 = if self.tab.library_index().is_some() {
-            let lib_idx = self.tab.library_index().unwrap();
+        let hero_rows: u16 = if self.tab.emby_library_index().is_some() {
+            let lib_idx = self.tab.emby_library_index().unwrap();
             if let Some(item) = &selected_movie_item {
                 // Actual content rows the banner will paint (meta line,
                 // overview/director text, never fewer than the poster's own
@@ -370,7 +370,7 @@ impl App {
         // Reserves 1 row for the pills plus 1 blank gap row below them.
         let show_pills = self
             .tab
-            .library_index()
+            .emby_library_index()
             .is_some_and(|lib_idx| self.should_show_letter_pills(lib_idx));
         let hero_layout = top_hero_layout(content_area, hero_rows, show_pills);
         let hero_area = hero_layout.hero_area;
@@ -379,7 +379,7 @@ impl App {
         let hero_rows = hero_layout.hero_rows;
 
         if show_pills {
-            let lib_idx = self.tab.library_index().unwrap();
+            let lib_idx = self.tab.emby_library_index().unwrap();
             self.render_letter_pills_row(f, pills_area, lib_idx, layout);
         }
 
@@ -392,7 +392,7 @@ impl App {
             let total = items.len();
             (items, cursor, 0usize, total)
         } else {
-            let lib_idx = self.tab.library_index().unwrap();
+            let lib_idx = self.tab.emby_library_index().unwrap();
             let lib = &self.libs[lib_idx];
             let (items, cur, scroll, total) = if let Some(s) = &lib.search {
                 let items: Vec<mbv_core::api::EmbyItem> = s
@@ -463,7 +463,7 @@ impl App {
         // indexes the unfiltered nav-level item vector -- `items` here is the
         // filtered search-result vector, so the catalog's positions would no longer
         // refer to the same albums.
-        let show_grouped = self.tab.library_index().is_some_and(|lib_idx| {
+        let show_grouped = self.tab.emby_library_index().is_some_and(|lib_idx| {
             self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none()
         });
 
@@ -476,21 +476,24 @@ impl App {
         // vs. individual letters) doesn't change out from under the user as
         // more pages lazily load in, and a small filtered slice (< 50 items)
         // still shows headers.
-        let active_letter_filter = self.tab.library_index().and_then(|lib_idx| {
+        let active_letter_filter = self.tab.emby_library_index().and_then(|lib_idx| {
             self.libs[lib_idx]
                 .nav_stack
                 .last()
                 .and_then(|l| l.letter_filter.as_ref())
                 .cloned()
         });
-        let ungrouped_total = self.tab.library_index().map_or(total_count, |lib_idx| {
-            self.libs[lib_idx].library_total.unwrap_or(total_count)
-        });
+        let ungrouped_total = self
+            .tab
+            .emby_library_index()
+            .map_or(total_count, |lib_idx| {
+                self.libs[lib_idx].library_total.unwrap_or(total_count)
+            });
         let use_letter_groups = !show_grouped
-            && self.tab.library_index().is_some()
+            && self.tab.emby_library_index().is_some()
             && (ungrouped_total >= 50 || active_letter_filter.is_some())
             && {
-                let lib_idx = self.tab.library_index().unwrap();
+                let lib_idx = self.tab.emby_library_index().unwrap();
                 self.libs[lib_idx].library.collection_type != "music"
                     && self.libs[lib_idx].search.is_none()
             };
@@ -499,8 +502,8 @@ impl App {
 
         if n == 0 {
             layout.hero_area = hero_area;
-            let msg = if self.tab.library_index().is_some() {
-                let lib_idx = self.tab.library_index().unwrap();
+            let msg = if self.tab.emby_library_index().is_some() {
+                let lib_idx = self.tab.emby_library_index().unwrap();
                 if self.is_music_group_view(lib_idx) {
                     // Music-group view messages (moved from the deleted
                     // `render_power_music_group_view`): while the first
@@ -561,7 +564,7 @@ impl App {
         let final_offset: usize;
 
         if show_grouped {
-            let lib_idx = self.tab.library_index().unwrap();
+            let lib_idx = self.tab.emby_library_index().unwrap();
             final_offset = self.render_grouped_album_rows(
                 f,
                 list_area,
@@ -623,7 +626,7 @@ impl App {
                     .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
                 height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
             };
-            let lib_idx = self.tab.library_index().unwrap();
+            let lib_idx = self.tab.emby_library_index().unwrap();
             // Same movie/Series branch as the row spacing above: a selected
             // Series renders its season pills + episode table instead of the
             // generic compact banner. When neither is selected (e.g. a
@@ -757,7 +760,7 @@ impl App {
 
         // Persist the scroll offset so the viewport is remembered across frames.
         // tab is always a Library here (tab == Home uses render_home_list).
-        if let Some(lib_idx) = self.tab.library_index() {
+        if let Some(lib_idx) = self.tab.emby_library_index() {
             if let Some(s) = &mut self.libs[lib_idx].search {
                 s.scroll = final_offset;
             } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {

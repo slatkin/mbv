@@ -1,20 +1,20 @@
 use super::{
     notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
-    PanelFocus, PendingQueueAction,
+    PanelFocus, PendingQueueAction, TabSelection,
 };
 use mbv_core::api::EmbyItem;
 use std::collections::HashMap;
 
 impl App {
-    pub(super) fn refresh_lib(&mut self) {
-        let lib_idx = if matches!(self.panel_focus, PanelFocus::Library) {
-            let Some(idx) = self.tab.library_index() else {
-                return;
-            };
-            idx
-        } else {
+    pub(super) fn refresh_lib(&mut self, lib_idx: usize) {
+        // Defensive bounds check: the dispatch front door normalizes a stale
+        // destination first, but async Service removal can invalidate the
+        // matched index between normalization and this call. No-op (never
+        // substitute library zero) on a miss. Callers own the panel-focus
+        // gate that the pre-parameterization body enforced here.
+        if lib_idx >= self.libs.len() {
             return;
-        };
+        }
         self.start_album_index(lib_idx, true);
         self.clear_saved_library_position(lib_idx);
         if self.is_feed_home_video_group_view(lib_idx) {
@@ -70,16 +70,25 @@ impl App {
 
     pub(super) fn refresh_current_view(&mut self) {
         self.force_clear = true;
-        if matches!(self.panel_focus, PanelFocus::Queue) {
-            self.refresh_queue();
-        } else if self.tab.is_audiobookshelf() {
-            self.audiobookshelf_refresh();
-        } else if self.tab.is_home() {
-            if let Err(e) = self.fetch_home() {
-                self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
+        match self.panel_focus {
+            // Queue refresh is a refresh of the visible queue only and never
+            // indexes the selected browse destination.
+            PanelFocus::Queue => self.refresh_queue(),
+            PanelFocus::Library => {
+                if self.normalize_stale_browse_destination() {
+                    return;
+                }
+                match self.tab {
+                    TabSelection::Home => {
+                        if let Err(e) = self.fetch_home() {
+                            self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
+                        }
+                    }
+                    TabSelection::EmbyLibrary(lib_idx) => self.refresh_lib(lib_idx),
+                    TabSelection::AudiobookshelfLibrary(_) => self.audiobookshelf_refresh(),
+                    TabSelection::Feeds => self.refresh_feeds(),
+                }
             }
-        } else {
-            self.refresh_lib();
         }
     }
 

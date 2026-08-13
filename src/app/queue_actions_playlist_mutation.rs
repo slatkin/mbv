@@ -387,7 +387,7 @@ impl App {
         });
     }
 
-    pub(in crate::app) fn enqueue_selected(&mut self) {
+    pub(in crate::app) fn enqueue_selected(&mut self, lib_idx: Option<usize>) {
         if self.tab.is_home() {
             let Some(item) = self.current_home_item() else {
                 return;
@@ -406,7 +406,13 @@ impl App {
             }
             self.append_item_to_queue_and_sync(item);
         } else {
-            let Some(item) = self.current_lib_item() else {
+            // The Emby branch receives the explicitly matched library index
+            // from the dispatch (Some) or no index at all (None) -- never a
+            // library-zero default.
+            let Some(lib_idx) = lib_idx else {
+                return;
+            };
+            let Some(item) = self.current_lib_item(lib_idx) else {
                 return;
             };
             if item.is_folder {
@@ -416,7 +422,6 @@ impl App {
             if !is_playable(&item) {
                 return;
             }
-            let lib_idx = self.tab.library_index().unwrap();
             log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=library-view", item.id, item.name);
             let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
             if self.enqueue_route_conflict(resolved) {

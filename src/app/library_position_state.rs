@@ -75,7 +75,7 @@ impl App {
     /// panel -- used to decide whether a manual refresh/rescan should clear
     /// its saved position (see `refresh_lib`/`trigger_lib_rescan`).
     pub(super) fn active_library_position_scope_for(&self, lib_idx: usize) -> Option<()> {
-        (self.tab.library_index() == Some(lib_idx)).then_some(())
+        (self.tab.emby_library_index() == Some(lib_idx)).then_some(())
     }
 
     pub(super) fn saved_library_position(

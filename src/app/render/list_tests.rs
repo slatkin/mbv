@@ -31,7 +31,7 @@ fn render_list_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
 
 fn make_movie_list_app(titles: Vec<&str>) -> App {
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -213,40 +213,40 @@ fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
     let cur = cursor_of;
 
     // Left/right: ±1.
-    app.move_lib_cursor(1);
+    app.move_lib_cursor(0, 1);
     assert_eq!(cur(&app), 1);
-    app.move_lib_cursor(-1);
+    app.move_lib_cursor(0, -1);
     assert_eq!(cur(&app), 0);
     // Row-boundary wrap: right from the last cell of a row wraps to the
     // next row's first item, left wraps back.
-    app.move_lib_cursor(1);
-    app.move_lib_cursor(1);
+    app.move_lib_cursor(0, 1);
+    app.move_lib_cursor(0, 1);
     assert_eq!(cur(&app), 2, "right from cell 1 wraps to the next row");
-    app.move_lib_cursor(-1);
+    app.move_lib_cursor(0, -1);
     assert_eq!(cur(&app), 1, "left from cell 0 wraps to the previous row");
     // Up/down: ±cols.
-    app.move_lib_cursor_rows(-1);
+    app.move_lib_cursor_rows(0, -1);
     assert_eq!(cur(&app), 0);
-    app.move_lib_cursor_rows(1);
+    app.move_lib_cursor_rows(0, 1);
     assert_eq!(cur(&app), 2);
     // Down from the second-to-last row with no item directly below clamps
     // to the last item (5 -> 6).
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 5;
-    app.move_lib_cursor_rows(1);
+    app.move_lib_cursor_rows(0, 1);
     assert_eq!(
         cur(&app),
         6,
         "down past the ragged end clamps to the last item"
     );
     // End-of-list clamp on right.
-    app.move_lib_cursor(1);
+    app.move_lib_cursor(0, 1);
     assert_eq!(cur(&app), 6);
     // Paging: one viewport of item rows, clamped at both ends.
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 0;
     let page = app.lib_page_size();
-    app.move_lib_cursor_rows(-(page as i64));
+    app.move_lib_cursor_rows(0, -(page as i64));
     assert_eq!(cur(&app), 0, "page up from the top stays");
-    app.move_lib_cursor_rows(page as i64);
+    app.move_lib_cursor_rows(0, page as i64);
     assert_eq!(
         cur(&app),
         6,
@@ -525,7 +525,7 @@ fn two_column_mouse_click_selects_the_clicked_cell_not_the_row_first_item() {
 #[test]
 fn show_grouped_guard_is_false_while_search_is_active_on_album_folders() {
     let mut app = crate::app::render::test_helpers::make_music_group_app();
-    let lib_idx = app.tab.library_index().unwrap();
+    let lib_idx = app.tab.emby_library_index().unwrap();
 
     assert!(
         app.is_viewing_album_folders(lib_idx),

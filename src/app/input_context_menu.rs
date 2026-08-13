@@ -1,4 +1,4 @@
-use crate::app::{App, ContextAction, ContextMenu, ContextMenuEntry, PanelFocus};
+use crate::app::{App, ContextAction, ContextMenu, ContextMenuEntry, PanelFocus, TabSelection};
 
 impl App {
     fn push_context_action(
@@ -36,18 +36,27 @@ impl App {
                 None
             }
         });
-        let current_item = if cw_focused {
-            self.home
+        // Exhaustive dispatch by panel and destination (design §5): a context
+        // menu opens only for Home (library focus), an explicitly selected
+        // Emby library, or an Emby queue item. Audiobookshelf and Feeds browse
+        // rows, non-Emby queue items, and absent or stale targets produce no
+        // Emby menu. `cw_focused` / `lib_idx` above drive the Emby-menu content
+        // that follows; this match only resolves which target (if any) exists.
+        let current_item = match (self.panel_focus, self.tab) {
+            (PanelFocus::Library, TabSelection::Home) => self
+                .home
                 .continue_items
                 .get(self.home.continue_cursor)
-                .cloned()
-        } else if lib_idx.is_some() {
-            self.current_lib_item()
-        } else if matches!(self.panel_focus, PanelFocus::Queue) {
-            let queue = self.displayed_queue();
-            queue.clone_emby_item_at(queue.queue_cursor)
-        } else {
-            None
+                .cloned(),
+            (PanelFocus::Library, TabSelection::EmbyLibrary(lib_idx)) => {
+                self.current_lib_item(lib_idx)
+            }
+            (PanelFocus::Library, TabSelection::AudiobookshelfLibrary(_))
+            | (PanelFocus::Library, TabSelection::Feeds) => return,
+            (PanelFocus::Queue, _) => {
+                let queue = self.displayed_queue();
+                queue.clone_emby_item_at(queue.queue_cursor)
+            }
         };
 
         if let Some(ref item) = current_item {

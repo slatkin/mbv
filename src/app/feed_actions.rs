@@ -174,7 +174,7 @@ impl App {
         lib_idx: usize,
         extra_ok: impl FnOnce(&BrowseLevel) -> bool,
     ) -> bool {
-        self.tab.library_index() == Some(lib_idx)
+        self.tab.emby_library_index() == Some(lib_idx)
             && (self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx))
             && self
                 .libs
@@ -393,7 +393,7 @@ impl App {
 
     /// Whether the currently focused library tab is a podcast channel.
     pub(super) fn is_in_podcast_library(&self) -> bool {
-        let Some(lib_idx) = self.tab.library_index() else {
+        let Some(lib_idx) = self.tab.emby_library_index() else {
             return false;
         };
         lib_idx < self.libs.len() && self.is_podcast_library(lib_idx)
@@ -569,7 +569,7 @@ impl App {
             .libs
             .get(lib_idx)
             .map(|lib| {
-                self.tab.library_index() == Some(lib_idx)
+                self.tab.emby_library_index() == Some(lib_idx)
                     && (self.is_feed_home_video_library(lib_idx)
                         || self.is_podcast_library(lib_idx))
                     && lib

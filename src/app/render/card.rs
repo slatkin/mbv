@@ -236,7 +236,7 @@ mod tests {
     fn make_drilled_library_app() -> App {
         let mut app = make_app_stub();
         app.panel_focus = PanelFocus::Library;
-        app.tab = TabSelection::Library(0);
+        app.tab = TabSelection::EmbyLibrary(0);
 
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();

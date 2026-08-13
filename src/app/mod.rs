@@ -20,6 +20,7 @@ mod feeds_manage_actions;
 mod home_actions;
 pub(crate) mod images;
 mod input;
+mod input_browse_dispatch;
 mod input_confirm_keys;
 mod input_context_menu;
 mod input_daemon_lost_keys;
@@ -147,8 +148,6 @@ type DirectConnectFn = fn(
 
 #[cfg(test)]
 static DIRECT_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> = Mutex::new(None);
-#[cfg(test)]
-static DIRECT_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 // Separate from DIRECT_CONNECT_OVERRIDE above (Sessions-panel "Direct
 // Remote" upgrade, keyed off a discovered SessionInfo): this is issue
@@ -674,6 +673,10 @@ mod tests_library_position_activation;
 #[cfg(test)]
 #[path = "tests_library_position_restore.rs"]
 mod tests_library_position_restore;
+
+#[cfg(test)]
+#[path = "tests_mouse_browse_dispatch.rs"]
+mod tests_mouse_browse_dispatch;
 
 #[cfg(test)]
 #[path = "tests_panel_focus.rs"]

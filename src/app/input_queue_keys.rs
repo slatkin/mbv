@@ -54,98 +54,11 @@ impl App {
     }
 
     pub(super) fn handle_queue_key(&mut self, key: KeyEvent) -> bool {
-        if self.tab.is_audiobookshelf() && matches!(self.panel_focus, PanelFocus::Library) {
-            if key.modifiers.contains(KeyModifiers::ALT)
-                && key.code == KeyCode::Left
-                && self.panel_mode == PanelMode::Both
-            {
-                self.set_panel_focus(PanelFocus::Queue);
-                return false;
-            }
-            if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Up {
-                self.library_tab_prev();
-                return false;
-            }
-            if key.modifiers.contains(KeyModifiers::ALT) && key.code == KeyCode::Down {
-                self.library_tab_next();
-                return false;
-            }
-            if key.modifiers.contains(KeyModifiers::ALT) {
-                return false;
-            }
-            if key.code == KeyCode::Char('.') && key.modifiers.is_empty() {
-                return false;
-            }
-            if let Some(quit) = self.handle_global_view_key(key) {
-                return quit;
-            }
-            let episode_selection = self
-                .tab
-                .audiobookshelf_index()
-                .and_then(|index| self.audiobookshelf_browse.get(index))
-                .is_some_and(|state| state.episode_selection.is_some());
-            match key.code {
-                KeyCode::Up | KeyCode::Char('k') if episode_selection => {
-                    self.move_audiobookshelf_episode_cursor(-1)
-                }
-                KeyCode::Down | KeyCode::Char('j') if episode_selection => {
-                    self.move_audiobookshelf_episode_cursor(1)
-                }
-                KeyCode::Up | KeyCode::Char('k') => self.move_audiobookshelf_show_rows(-1),
-                KeyCode::Down | KeyCode::Char('j') => self.move_audiobookshelf_show_rows(1),
-                KeyCode::Left | KeyCode::Char('h') if !episode_selection => {
-                    self.move_audiobookshelf_show_cursor(-1)
-                }
-                KeyCode::Right | KeyCode::Char('l') if !episode_selection => {
-                    self.move_audiobookshelf_show_cursor(1)
-                }
-                KeyCode::PageUp if !episode_selection => {
-                    self.move_audiobookshelf_show_rows(-(self.lib_page_size() as i64))
-                }
-                KeyCode::PageDown if !episode_selection => {
-                    self.move_audiobookshelf_show_rows(self.lib_page_size() as i64)
-                }
-                KeyCode::Home if !episode_selection => self.jump_audiobookshelf_show_cursor(false),
-                KeyCode::End if !episode_selection => self.jump_audiobookshelf_show_cursor(true),
-                KeyCode::Char('[') if episode_selection => self.cycle_audiobookshelf_filter(-1),
-                KeyCode::Char(']') if episode_selection => self.cycle_audiobookshelf_filter(1),
-                KeyCode::Esc | KeyCode::Backspace if episode_selection => {
-                    self.leave_audiobookshelf_episode_selection()
-                }
-                KeyCode::Enter | KeyCode::Char(' ') if !episode_selection => {
-                    self.enter_audiobookshelf_episode_selection()
-                }
-                KeyCode::Enter | KeyCode::Char(' ') => {}
-                _ => {}
-            }
-            return false;
-        }
-        // Alt+Left/Right switch focus between the two panels. Queue is on the
-        // left; library is on the right. (Bare Left/Right now navigate columns
-        // inside the library list, and Alt+Up/Alt+Down cycle tabs -- see
-        // below -- so the old Alt+arrow tab bindings are gone.) Tab/BackTab
-        // remain the tab webhook via `handle_global_view_key`.
-        if key.modifiers.contains(KeyModifiers::ALT) {
-            if key.code == KeyCode::Right && matches!(self.panel_focus, PanelFocus::Queue) {
-                self.set_panel_focus(PanelFocus::Library);
-                self.last_card_height = 0; // reset stale image height for new view
-                self.last_card_width = 0;
-                return false;
-            }
-            if key.code == KeyCode::Left
-                && matches!(self.panel_focus, PanelFocus::Library)
-                && self.panel_mode == PanelMode::Both
-            {
-                self.set_panel_focus(PanelFocus::Queue);
-                self.last_card_height = 0;
-                self.last_card_width = 0;
-                return false;
-            }
-        }
-
-        // Bracket keys are panel-scoped; the queue panel owns Local/Remote
-        // scope switching, while the left panel keeps its section/season/
-        // group bracket actions.
+        // Queue-focused keys. `handle_key_view_dispatch` routes here only
+        // when `panel_focus == Queue`; global, Alt, and browse-destination
+        // keys are handled above it. Bracket keys own the queue panel's
+        // Local/Remote scope switching, and PageUp/PageDown use the actual
+        // queue panel height.
         if matches!(self.panel_focus, PanelFocus::Queue) {
             match key.code {
                 KeyCode::Char('[')
@@ -168,188 +81,6 @@ impl App {
             }
         }
 
-        // Route nav keys to the focused library panel.
-        if matches!(self.panel_focus, PanelFocus::Library) {
-            if self.tab.is_home() && self.handle_cw_key(key) {
-                return false;
-            }
-            if self.tab.is_feeds() {
-                if let Some(quit) = self.handle_feed_tab_key(key) {
-                    return quit;
-                }
-                // Fall through to global view keys for Tab/BackTab etc.
-            }
-            if let Some(lib_idx) = self.tab.library_index() {
-                // Season switching: [ = previous season, ] = next season.
-                if !key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT)
-                {
-                    if key.code == KeyCode::Char('[') && self.is_music_group_view(lib_idx) {
-                        self.switch_music_group(lib_idx, -1);
-                        return false;
-                    }
-                    if key.code == KeyCode::Char(']') && self.is_music_group_view(lib_idx) {
-                        self.switch_music_group(lib_idx, 1);
-                        return false;
-                    }
-                    if key.code == KeyCode::Char('[') && self.is_feed_home_video_group_view(lib_idx)
-                    {
-                        self.switch_feed_folder_group(lib_idx, -1);
-                        return false;
-                    }
-                    if key.code == KeyCode::Char(']') && self.is_feed_home_video_group_view(lib_idx)
-                    {
-                        self.switch_feed_folder_group(lib_idx, 1);
-                        return false;
-                    }
-                    // Letter-range pill cycling for large non-music libraries
-                    // (`[`/`]` are otherwise free at the top browse level).
-                    if key.code == KeyCode::Char('[') && self.should_show_letter_pills(lib_idx) {
-                        self.cycle_letter_pill(lib_idx, -1);
-                        return false;
-                    }
-                    if key.code == KeyCode::Char(']') && self.should_show_letter_pills(lib_idx) {
-                        self.cycle_letter_pill(lib_idx, 1);
-                        return false;
-                    }
-                }
-
-                let is_nav = matches!(
-                    key.code,
-                    KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
-                ) && key.modifiers.contains(KeyModifiers::ALT);
-                // Route non-nav keys to the library handler for this
-                // panel. `handle_lib_key`'s own `Some`/`None` is now the
-                // single source of truth for "did the library view claim
-                // this key" — no more hand-maintained mirror of its key set.
-                //
-                // The `library_tab` derivation stays: many action methods
-                // `handle_lib_key` calls into (`current_lib_item`, `select`,
-                // `move_lib_cursor`, `refresh_lib`, `shuffle_play`,
-                // `play_folder`, `go_back`, ...) derive their own lib index
-                // from `self.library_tab` rather than taking it as a parameter.
-                // Impact analysis on `current_lib_item` alone showed 6
-                // affected symbols across `execute_context_action`,
-                // `enqueue_selected`, `select`, and `toggle_watched`
-                // (HIGH risk) — parameterizing all of them is a separate,
-                // larger follow-up, not in scope for #132.
-                // Track-selection mode (#145 task 3): while the left
-                // panel is sitting on the album-folder-listing nav level
-                // (the level `render_library` shows inline album
-                // detail for, per task 2), Enter/Escape/Up/Down are
-                // reinterpreted for moving a track focus within the
-                // currently-displayed album instead of drilling into
-                // `nav_stack` (`select`) or moving the album cursor
-                // (`move_lib_cursor`). Scoped strictly to `!is_nav`
-                // (so the Alt+arrow panel-switch / tab-cycling bindings above
-                // are untouched) and to
-                // `is_viewing_album_folders` (so movies/series/home-video
-                // panels and other tabs are completely unaffected; the
-                // legacy `is_album_level` drilldown this used to also
-                // exclude was removed entirely -- Enter now always routes
-                // here via `activate_album_folder_row`).
-                if !is_nav && self.is_viewing_album_folders(lib_idx) {
-                    match key.code {
-                        KeyCode::Enter => {
-                            self.activate_album_folder_row(lib_idx);
-                            return false;
-                        }
-                        KeyCode::Esc | KeyCode::Backspace => {
-                            if self.libs[lib_idx].album_track_focus.is_some() {
-                                self.libs[lib_idx].album_track_focus = None;
-                                return false;
-                            }
-                        }
-                        KeyCode::Up | KeyCode::Down => {
-                            if let Some(idx) = self.libs[lib_idx].album_track_focus {
-                                let track_count = self
-                                    .selected_album_item(lib_idx)
-                                    .and_then(|item| self.album_tracks_cache.get(&item.id))
-                                    .map(|tracks| tracks.len())
-                                    .unwrap_or(0);
-                                if track_count > 0 {
-                                    let delta: i64 = if key.code == KeyCode::Up { -1 } else { 1 };
-                                    let new_idx = (idx as i64 + delta)
-                                        .clamp(0, track_count as i64 - 1)
-                                        as usize;
-                                    self.libs[lib_idx].album_track_focus = Some(new_idx);
-                                }
-                                return false;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                // Series-selection mode: while the left panel has a
-                // Series item selected and selection mode is active, Enter/
-                // Escape/Up/Down/[/] are intercepted for navigating within
-                // the inline series detail (season pills + episode list)
-                // instead of drilling into `nav_stack` (`select`) or
-                // moving the list cursor (`move_lib_cursor`).
-                if !is_nav && self.libs[lib_idx].series_selection.is_some() {
-                    match key.code {
-                        KeyCode::Enter => {
-                            // Play the focused episode in selection mode.
-                            if let Some(episodes) = self.series_selection_episodes(lib_idx) {
-                                let ep_idx = self.libs[lib_idx].series_selection.unwrap_or(0);
-                                if let Some(ep) = episodes.get(ep_idx) {
-                                    let ep = ep.clone();
-                                    self.libs[lib_idx].series_selection = None;
-                                    self.play_item(ep);
-                                }
-                            }
-                            return false;
-                        }
-                        KeyCode::Esc | KeyCode::Backspace => {
-                            self.libs[lib_idx].series_selection = None;
-                            return false;
-                        }
-                        KeyCode::Up | KeyCode::Down => {
-                            let delta: i64 = if key.code == KeyCode::Up { -1 } else { 1 };
-                            if let Some(episodes) = self.series_selection_episodes(lib_idx) {
-                                let count = episodes.len();
-                                if count > 0 {
-                                    let cur = self.libs[lib_idx].series_selection.unwrap_or(0);
-                                    let new_idx =
-                                        (cur as i64 + delta).clamp(0, count as i64 - 1) as usize;
-                                    self.libs[lib_idx].series_selection = Some(new_idx);
-                                }
-                            }
-                            return false;
-                        }
-                        KeyCode::Char('[') => {
-                            self.switch_series_selection_season(lib_idx, -1);
-                            return false;
-                        }
-                        KeyCode::Char(']') => {
-                            self.switch_series_selection_season(lib_idx, 1);
-                            return false;
-                        }
-                        _ => {}
-                    }
-                }
-                // Activate series-selection mode on Enter when the cursor is
-                // on a Series item (instead of drilling down via `select`).
-                if !is_nav
-                    && key.code == KeyCode::Enter
-                    && self.libs[lib_idx].series_selection.is_none()
-                {
-                    if let Some(item) = self.selected_series_item(lib_idx) {
-                        self.enter_series_selection(lib_idx, &item);
-                        return false;
-                    }
-                }
-
-                // Let the shared Tab/BackTab cycling path run after this block.
-                if !is_nav && !matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
-                    if let Some(quit) = self.handle_lib_key(lib_idx, key) {
-                        return quit;
-                    }
-                }
-            }
-        }
-
         // Queue focus: PageUp/PageDown use the actual queue panel height.
         if matches!(self.panel_focus, PanelFocus::Queue) {
             let page = self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize;
@@ -369,10 +100,6 @@ impl App {
                 }
                 _ => {}
             }
-        }
-
-        if let Some(quit) = self.handle_global_view_key(key) {
-            return quit;
         }
 
         match key.code {
@@ -494,12 +221,6 @@ impl App {
                         stage: SavePlaylistStage::EnterName,
                     });
                 }
-            }
-            KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
-                self.library_tab_prev();
-            }
-            KeyCode::Down if key.modifiers.contains(KeyModifiers::ALT) => {
-                self.library_tab_next();
             }
             _ => {}
         }

@@ -355,7 +355,7 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
 #[test]
 fn ensure_feed_library_preserves_saved_feed_position() {
     let mut app = crate::app::tests::make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = crate::app::tests::make_item("YouTube", "CollectionFolder");
@@ -391,7 +391,7 @@ fn ensure_feed_library_preserves_saved_feed_position() {
 #[test]
 fn ensure_podcast_library_preserves_saved_feed_position() {
     let mut app = crate::app::tests::make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     let mut library = crate::app::tests::make_item("Podcasts", "CollectionFolder");
     library.id = "lib-podcasts".into();

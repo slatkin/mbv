@@ -382,7 +382,7 @@ fn select_feed_folder_group_uses_client_side_all_items_cache() {
     assert_eq!(app.feed_home_video_selected_items(0).len(), 1);
     assert_eq!(app.feed_home_video_selected_items(0)[0].id, "video-b1");
 
-    app.go_back();
+    app.go_back(0);
     app.select_feed_folder_group(0, 0);
     assert_eq!(app.feed_home_video_selected_items(0).len(), 2);
 }
@@ -464,7 +464,7 @@ fn select_feed_folder_group_updates_feed_state_when_detail_level_exists() {
 #[test]
 fn go_back_keeps_feed_home_video_group_view_intact() {
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
@@ -513,7 +513,7 @@ fn go_back_keeps_feed_home_video_group_view_intact() {
         library_total: None,
     });
 
-    app.go_back();
+    app.go_back(0);
     assert_eq!(app.libs[0].nav_stack.len(), 1);
     assert_eq!(
         app.libs[0]
@@ -529,7 +529,7 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
     // A stale selected group from a prior aggregation run with more groups
     // must clamp to the groups that actually exist now.
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
     let mut library = make_item("YouTube", "CollectionFolder");
@@ -593,7 +593,7 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
 #[test]
 fn refresh_lib_targets_feed_selection() {
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Library;
     app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
 
@@ -643,7 +643,7 @@ fn refresh_lib_targets_feed_selection() {
         library_total: None,
     });
 
-    app.refresh_lib();
+    app.refresh_lib(0);
 
     assert!(app.libs[0].nav_stack[0].loading);
     assert!(app.libs[0]

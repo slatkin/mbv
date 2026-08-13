@@ -1,12 +1,10 @@
-use super::{App, PanelFocus};
+use super::{App, PanelFocus, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::api::EmbyItem;
 // The following are unused by input.rs's own code (the code that used them
 // moved to input_mouse.rs / input_context_menu.rs in #365 step 2 lane B, and
 // the input_*_keys.rs siblings in #367 lane L2), but input's `#[cfg(test)]`
 // submodules (declared below) rely on `use super::*;` to reach them.
-#[cfg(test)]
-use super::layout::LibraryRowTarget;
 #[cfg(test)]
 use super::ContextAction;
 #[cfg(test)]
@@ -36,7 +34,13 @@ impl App {
 
     pub(super) fn context_menu_lib_idx(&self) -> Option<usize> {
         if matches!(self.panel_focus, PanelFocus::Library) {
-            self.tab.library_index()
+            // Positive match: the browse dispatch front door has already
+            // normalized the destination, so a library-focused context menu
+            // can only belong to the explicitly selected Emby library.
+            match self.tab {
+                TabSelection::EmbyLibrary(lib_idx) => Some(lib_idx),
+                _ => None,
+            }
         } else {
             None
         }
@@ -152,12 +156,22 @@ impl App {
     }
 
     pub(super) fn handle_key_view_dispatch(&mut self, key: KeyEvent) -> Option<bool> {
-        // `handle_queue_key` (despite its name -- a holdover from when this
-        // was Standard's Queue-tab handler) is the view's single left-column
-        // dispatch: it branches internally on `panel_focus`/`library_tab`
-        // to route to Home (`handle_cw_key`), a library
-        // (`handle_lib_key`), or genuine queue-cursor movement.
-        Some(self.handle_queue_key(key))
+        // Shared globals (q, Tab/BackTab, 1-9, `.`) precede every panel and
+        // destination. Historically each browse branch reached these by
+        // falling through to the bottom of `handle_queue_key`; hoisting them
+        // ahead preserves the same precedence because no earlier library or
+        // queue routing arm claims these keys.
+        if let Some(quit) = self.handle_global_view_key(key) {
+            return Some(quit);
+        }
+        if key.modifiers.contains(KeyModifiers::ALT) {
+            self.handle_key_alt(key);
+            return Some(false);
+        }
+        match self.panel_focus {
+            PanelFocus::Queue => Some(self.handle_queue_key(key)),
+            PanelFocus::Library => self.handle_key_browse_dispatch(key),
+        }
     }
 
     pub(super) fn visible_tab_range(&self, avail_w: u16) -> (usize, usize) {
