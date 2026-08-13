@@ -116,6 +116,41 @@ fn browse_mouse_proceeds_when_installed_layout_describes_selected_destination() 
     );
 }
 
+/// 5.2b: the tag gate (design §4) governs only Service browse geometry. A
+/// queue click is not a browse surface, so it stays live during the one-frame
+/// window in which the installed completed-frame layout still describes a
+/// previous destination -- queue focus works the instant a tab switch lands.
+#[test]
+fn queue_click_stays_live_when_installed_browse_layout_is_stale() {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Library;
+    app.tab = TabSelection::Home;
+    // The installed frame was rendered for the Emby library, but the user has
+    // switched to Home before a redraw (the stale one-frame window).
+    app.layout.main.browse_destination = Some(TabSelection::EmbyLibrary(0));
+    app.layout.main.queue_area = Rect::new(0, 0, 20, 11);
+    for i in 0..5 {
+        let mut item = make_item(&format!("Queued {i}"), "Movie");
+        item.id = format!("queued-{i}");
+        app.player_tab.append_item(item);
+    }
+    app.player_tab.queue_cursor = 0;
+    // Row 3 of the queue pane maps to queue item index 2.
+    app.layout.main.queue_row_map = vec![None, None, None, Some(2)];
+
+    app.handle_mouse(mouse(MouseEventKind::Down(MouseButton::Left), 5, 3));
+
+    assert_eq!(
+        app.panel_focus,
+        PanelFocus::Queue,
+        "queue click must focus the queue even while a stale browse layout is installed"
+    );
+    assert_eq!(
+        app.player_tab.queue_cursor, 2,
+        "queue click must move the queue cursor despite the stale browse layout"
+    );
+}
+
 /// 5.4: an Audiobookshelf-visited layout (_show-mode_ `left_item_rows` plus
 /// the tag) cannot drive an Emby mouse gesture after a destination switch:
 /// the Emby cursor and ABS selection must both stay untouched, proving no

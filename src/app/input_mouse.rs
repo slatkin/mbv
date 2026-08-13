@@ -12,6 +12,22 @@ use mbv_core::remote_reconciliation::RemoteIntent;
 use ratatui::layout::Rect;
 use std::time::{Duration, Instant};
 impl App {
+    /// Whether the installed completed-frame layout was rendered for the
+    /// currently selected destination (design §4). This is the *tag* check
+    /// alone: browse surfaces may be interpreted only when the tag matches.
+    /// Callers responsible for queue-scope / queue-area clicks run
+    /// `normalize_stale_browse_destination` first and must NOT consult this
+    /// for those non-browse surfaces, which stay live during the one-frame
+    /// stale window. `browse_destination` is `None` only on the
+    /// pre-first-render default (zero-area) layout, which carries no browse
+    /// surface, so there is nothing stale to guard (treated as current).
+    pub(super) fn is_browse_layout_current(&self) -> bool {
+        match self.layout.main.browse_destination {
+            Some(tag) => tag == self.tab,
+            None => true,
+        }
+    }
+
     /// Whether browse mouse handling for the currently selected destination
     /// may proceed.
     ///
@@ -21,17 +37,14 @@ impl App {
     /// Otherwise the gesture is a no-op unless the installed completed-frame
     /// layout was rendered for that destination: before a frame for the
     /// selected tab redraws, the layout's hit targets describe the previous
-    /// destination and must not be interpreted (design §4). `browse_destination`
-    /// is `None` only on the pre-first-render default (zero-area) layout,
-    /// which carries no browse surface, so there is nothing stale to guard.
+    /// destination and must not be interpreted (design §4). See
+    /// `is_browse_layout_current` for the tag-only check used when some
+    /// surfaces (the queue) must stay live through that window.
     pub(super) fn browse_mouse_ready(&mut self) -> bool {
         if self.normalize_stale_browse_destination() {
             return false;
         }
-        match self.layout.main.browse_destination {
-            Some(tag) => tag == self.tab,
-            None => true,
-        }
+        self.is_browse_layout_current()
     }
 
     /// Map a column click to a left-panel tab index (0 = Home, 1+ = library),
@@ -119,11 +132,55 @@ impl App {
     }
 
     pub(super) fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
-        // A browse mouse gesture is a no-op until the installed completed
-        // layout was rendered for the selected destination (design §4); the
-        // shared queue-scope / queue-area targets below are harmless to
-        // reach through the same gate during the one-frame stale window.
-        if !self.browse_mouse_ready() {
+        // A selected Service library index that no longer exists normalizes
+        // to Home and aborts the triggering gesture.
+        if self.normalize_stale_browse_destination() {
+            return false;
+        }
+        // Queue-scope and queue-area clicks are NOT browse surfaces: they
+        // stay live even during the one-frame window in which the installed
+        // completed-frame layout still describes the previous destination
+        // (design §4 governs only Service browse geometry, so these are
+        // handled before the tag check below).
+        if self.has_direct_remote_queue() {
+            if self
+                .layout
+                .main
+                .queue_scope_local_area
+                .contains((col, row).into())
+            {
+                self.set_queue_scope(QueueScope::Local);
+                return true;
+            }
+            if self
+                .layout
+                .main
+                .queue_scope_remote_area
+                .contains((col, row).into())
+            {
+                self.set_queue_scope(QueueScope::Remote);
+                return true;
+            }
+        }
+        // Click in queue area: focus queue and move cursor.
+        let qa = self.layout.main.queue_area;
+        if qa.contains((col, row).into()) {
+            if !matches!(self.panel_focus, PanelFocus::Queue) {
+                self.last_card_height = 0;
+                self.last_card_width = 0;
+            }
+            self.set_panel_focus(PanelFocus::Queue);
+            let content_y = (row - qa.y) as usize;
+            if let Some(&Some(item_idx)) = self.layout.main.queue_row_map.get(content_y) {
+                self.displayed_queue_mut().queue_cursor = item_idx;
+            }
+            return true;
+        }
+        // Everything below is a browse surface and is a no-op until the
+        // installed completed-frame layout was rendered for the selected
+        // destination (design §4): a stale frame describes the previous
+        // destination's geometry and must not be interpreted.
+        if !self.is_browse_layout_current() {
             return false;
         }
         {
@@ -169,40 +226,6 @@ impl App {
                     }
                     TabSelection::Home | TabSelection::Feeds => {}
                 }
-            }
-            if self.has_direct_remote_queue() {
-                if self
-                    .layout
-                    .main
-                    .queue_scope_local_area
-                    .contains((col, row).into())
-                {
-                    self.set_queue_scope(QueueScope::Local);
-                    return true;
-                }
-                if self
-                    .layout
-                    .main
-                    .queue_scope_remote_area
-                    .contains((col, row).into())
-                {
-                    self.set_queue_scope(QueueScope::Remote);
-                    return true;
-                }
-            }
-            // Click in queue area: focus queue and move cursor.
-            let qa = self.layout.main.queue_area;
-            if qa.contains((col, row).into()) {
-                if !matches!(self.panel_focus, PanelFocus::Queue) {
-                    self.last_card_height = 0;
-                    self.last_card_width = 0;
-                }
-                self.set_panel_focus(PanelFocus::Queue);
-                let content_y = (row - qa.y) as usize;
-                if let Some(&Some(item_idx)) = self.layout.main.queue_row_map.get(content_y) {
-                    self.displayed_queue_mut().queue_cursor = item_idx;
-                }
-                return true;
             }
             // Wide Music: right-pane clicks (pills + album browser) bypass
             // the left_area gate because the right pane is a physically

@@ -222,7 +222,11 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
         help_line(key_w, "Enter / Space", "Enter episode selection"),
         help_line(key_w, "Esc / Backspace", "Return to show selection"),
         help_line(key_w, "[ / ]", "Cycle played-state filter"),
-        help_line(key_w, "Enter / Space", "Play episode (inert until #518)"),
+        help_line(
+            key_w,
+            "Enter / Space (in episode)",
+            "Play episode (inert until #518)",
+        ),
         help_blank(),
     ];
     let sec_feeds = vec![

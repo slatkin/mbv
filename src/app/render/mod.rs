@@ -283,11 +283,11 @@ impl App {
             self.library_tab_pending = 0;
         }
         // A selected Service library index that no longer exists (async
-        // Service removal/replacement) becomes Home; the pending-tab
-        // operation stops before any destination-specific rendering.
-        if self.normalize_stale_browse_destination() {
-            return;
-        }
+        // Service removal/replacement) becomes Home. Home needs no
+        // Service-specific library state, so we keep rendering the (now)
+        // Home view instead of aborting to a blank, mostly-default frame:
+        // the completed frame installs a full Home layout tagged Home below.
+        self.normalize_stale_browse_destination();
 
         // Left panel (card + queue) | Right panel (library, remaining).
         let left_w = match self.panel_mode {
