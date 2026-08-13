@@ -14,6 +14,10 @@ struct PlaybackRun {
     server_url: String,
     token: String,
     queue: PlaybackQueue,
+    audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
+    projection: QueueProjection,
+    prepared_source: Option<PreparedSource>,
+    active_file_starting: bool,
     ext_sub_urls: Vec<String>,
     // loop state
     current_idx: usize,

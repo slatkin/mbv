@@ -132,3 +132,46 @@ fn test_success_reports_server_and_user_without_secret_details() {
     assert!(!app.status.contains("Authorization"));
     assert!(!app.status.contains("book-secret"));
 }
+
+#[test]
+fn context_updates_reach_suspended_local_owner_not_remote_proxy() {
+    let _guard = TestStateDirGuard::new();
+    let mut app = tests::make_app_stub();
+    app.config.lock().unwrap().audiobookshelf_setup =
+        Some(AudiobookshelfSetup::new("https://books.example"));
+    mbv_core::config::save_service_secret(
+        mbv_core::config::ServiceKind::Audiobookshelf,
+        "book-secret",
+    )
+    .unwrap();
+    let generation = app.audiobookshelf_runtime.begin_validation();
+    app.install_audiobookshelf_player_context(generation);
+    assert_eq!(app.player.audiobookshelf_generation(), Some(generation));
+
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+    app.switch_to_library_route(
+        "podcasts",
+        remote,
+        remote_rx,
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:9".parse().unwrap()),
+    );
+    assert_eq!(app.player.audiobookshelf_generation(), None);
+    assert_eq!(
+        app.suspended_local
+            .as_ref()
+            .unwrap()
+            .player
+            .audiobookshelf_generation(),
+        Some(generation)
+    );
+
+    app.clear_audiobookshelf_authentication().unwrap();
+    assert_eq!(
+        app.suspended_local
+            .as_ref()
+            .unwrap()
+            .player
+            .audiobookshelf_generation(),
+        None
+    );
+}

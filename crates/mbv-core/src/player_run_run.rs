@@ -237,8 +237,12 @@ impl PlaybackRun {
                             text,
                             ..
                         }) => {
-                            let t = text.trim_end();
-                            if !t.is_empty() {
+                            if let Some(t) = mpv_log_text(
+                                self.prepared_source
+                                    .as_ref()
+                                    .is_some_and(PreparedSource::has_sensitive_lifecycle),
+                                text,
+                            ) {
                                 log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
                             }
                         }
@@ -308,5 +312,23 @@ impl PlaybackRun {
                 error: Some(msg),
             });
         }
+    }
+}
+
+fn mpv_log_text(sensitive_source_active: bool, text: &str) -> Option<&str> {
+    let text = text.trim_end();
+    (!sensitive_source_active && !text.is_empty()).then_some(text)
+}
+
+#[cfg(test)]
+mod mpv_log_tests {
+    use super::mpv_log_text;
+
+    #[test]
+    fn suppresses_only_logs_while_sensitive_source_is_active() {
+        let diagnostic = "https://books.test/hls/session-id Authorization: Bearer secret";
+        assert_eq!(mpv_log_text(true, diagnostic), None);
+        assert_eq!(mpv_log_text(false, diagnostic), Some(diagnostic));
+        assert_eq!(mpv_log_text(false, "\n"), None);
     }
 }

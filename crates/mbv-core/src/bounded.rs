@@ -35,6 +35,59 @@ where
     }
 }
 
+/// Like [`run_with_hard_bound`], but keeps successful result ownership on the
+/// worker until the receiver explicitly accepts it. If the bound wins the race
+/// with result delivery, dropping the unaccepted guard runs `cleanup` on the
+/// worker (or while the disconnected channel is being destroyed).
+pub(crate) fn run_with_hard_bound_or_cleanup<T, F, E, C>(
+    f: F,
+    cleanup: C,
+    hard_bound: Duration,
+) -> Result<T, E>
+where
+    T: Send + 'static,
+    E: From<String> + Send + 'static,
+    F: FnOnce() -> Result<T, E> + Send + 'static,
+    C: FnOnce(T) + Send + 'static,
+{
+    struct Pending<T, C: FnOnce(T)> {
+        value: Option<T>,
+        cleanup: Option<C>,
+    }
+
+    impl<T, C: FnOnce(T)> Pending<T, C> {
+        fn accept(mut self) -> T {
+            self.cleanup = None;
+            self.value.take().unwrap()
+        }
+    }
+
+    impl<T, C: FnOnce(T)> Drop for Pending<T, C> {
+        fn drop(&mut self) {
+            if let (Some(value), Some(cleanup)) = (self.value.take(), self.cleanup.take()) {
+                cleanup(value);
+            }
+        }
+    }
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let result = f().map(|value| Pending {
+            value: Some(value),
+            cleanup: Some(cleanup),
+        });
+        let _ = tx.send(result);
+    });
+    match rx.recv_timeout(hard_bound) {
+        Ok(Ok(pending)) => Ok(pending.accept()),
+        Ok(Err(error)) => Err(error),
+        Err(_) => Err(E::from(format!(
+            "timed out after {}s",
+            hard_bound.as_secs()
+        ))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,5 +117,22 @@ mod tests {
             Duration::from_millis(50),
         );
         assert_eq!(result, Err("timed out after 0s".to_string()));
+    }
+
+    #[test]
+    fn late_success_is_cleaned_up_when_receiver_times_out() {
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let (cleaned_tx, cleaned_rx) = std::sync::mpsc::channel();
+        let result = run_with_hard_bound_or_cleanup(
+            move || {
+                release_rx.recv().unwrap();
+                Ok::<_, String>(42)
+            },
+            move |value| cleaned_tx.send(value).unwrap(),
+            Duration::from_millis(10),
+        );
+        assert_eq!(result, Err("timed out after 0s".to_string()));
+        release_tx.send(()).unwrap();
+        assert_eq!(cleaned_rx.recv_timeout(Duration::from_secs(1)), Ok(42));
     }
 }

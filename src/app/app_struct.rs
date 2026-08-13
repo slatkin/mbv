@@ -455,6 +455,7 @@ impl App {
                 };
                 self.audiobookshelf_runtime
                     .commit_ready(completion.generation, user.clone());
+                self.install_audiobookshelf_player_context(completion.generation);
                 self.audiobookshelf_catalog_rx =
                     Some(super::service_startup::start_audiobookshelf_catalog(
                         self.config.lock().unwrap().clone(),
@@ -478,11 +479,7 @@ impl App {
                 self.audiobookshelf_runtime
                     .complete(completion.generation, state);
                 if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
-                    self.clear_audiobookshelf_catalog();
-                    self.audiobookshelf_runtime.user = None;
-                    let deletion = mbv_core::config::clear_service_secret_result(
-                        mbv_core::config::ServiceKind::Audiobookshelf,
-                    );
+                    let deletion = self.clear_audiobookshelf_authentication();
                     self.flash(
                         match deletion {
                             Ok(()) => "Audiobookshelf rejected its saved credential; set it up again".into(),
@@ -521,8 +518,6 @@ impl App {
         self.audiobookshelf_runtime.complete(generation, state);
     }
 
-    /// Clone the concrete Emby runtime handle when Emby is available. Callers
-    /// must treat `None` as a normal service-independent state.
     pub(super) fn emby_client(&self) -> Option<Arc<Mutex<EmbyClient>>> {
         self.emby_runtime.client.clone()
     }

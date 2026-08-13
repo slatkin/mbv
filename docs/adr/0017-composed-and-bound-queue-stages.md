@@ -96,8 +96,16 @@ is where the user is and where the strip decision is made anyway.
 
 ## Consequences
 
-- The owner's queue and mpv's playlist stay the same list. No index mapping is
-  introduced.
+- The owner's queue remains canonical. Ordinary eager projection keeps mpv's
+  playlist as the same list with no index mapping. A lifecycle-backed source
+  may instead use owner-driven active-file projection, where mpv contains only
+  the active canonical slot; mpv position/count are then projection-local and
+  never become queue authority.
+- The Player owner resolves completion and consume against runtime
+  `QueueSlotId` before emitting existing index-based local UI events. Those
+  indices are snapshots for presentation, not prepared-source or ctrl state;
+  transporting slot identity across that serialized boundary is outside this
+  projection change and is unnecessary for owner-side occurrence correctness.
 - The ctrl handshake gains an audio-only capability string. Additive, so no
   `CTRL_PROTOCOL_VERSION` bump, per the rule above that constant.
 - Binary `is_remote()` answers are replaced at the application boundary by

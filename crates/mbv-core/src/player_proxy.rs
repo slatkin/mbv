@@ -102,6 +102,20 @@ impl PlayerProxy {
         }
     }
 
+    pub fn update_audiobookshelf_context(&self, context: Option<AudiobookshelfPlayerContext>) {
+        if let PlayerProxyInner::Local(player) = &self.inner {
+            player.update_audiobookshelf_context(context);
+        }
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn audiobookshelf_generation(&self) -> Option<crate::service_runtime::SetupGeneration> {
+        match &self.inner {
+            PlayerProxyInner::Local(player) => player.audiobookshelf_generation(),
+            PlayerProxyInner::Remote(_) => None,
+        }
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub fn emby_credentials(&self) -> Option<(String, String)> {
         match &self.inner {

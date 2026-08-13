@@ -63,7 +63,8 @@ pub fn device_name() -> String {
         .unwrap_or_else(|| "mbv".to_string())
 }
 
-fn device_id() -> String {
+/// Return mbv's stable, non-secret device identifier.
+pub fn device_id() -> String {
     let data_home = std::env::var("XDG_DATA_HOME")
         .ok()
         .filter(|s| !s.is_empty())

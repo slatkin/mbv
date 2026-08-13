@@ -248,6 +248,8 @@ fn make_queue_session_for_pos_tests(start_idx: usize) -> (PlaybackRun, Arc<Mutex
         Arc::new(Mutex::new(None)),
         "http://example.test".into(),
         "token".into(),
+        None,
+        None,
     );
     (session, status)
 }

@@ -59,6 +59,7 @@ impl QuitHandle {
 
 pub struct Player {
     credentials: Arc<Mutex<Option<(String, String)>>>,
+    audiobookshelf_context: Arc<Mutex<Option<AudiobookshelfPlayerContext>>>,
     show_audio_window: bool,
     use_mpv_config: bool,
     no_scripts: bool,
@@ -96,6 +97,7 @@ impl Player {
             credentials: Arc::new(Mutex::new(
                 (!server_url.is_empty() || !token.is_empty()).then_some((server_url, token)),
             )),
+            audiobookshelf_context: Arc::new(Mutex::new(None)),
             show_audio_window,
             use_mpv_config,
             no_scripts,
@@ -151,6 +153,21 @@ impl Player {
         } else {
             *credentials = Some((server_url, token));
         }
+    }
+
+    /// Replace or clear runtime-only Audiobookshelf access. This seam is
+    /// deliberately in-process and is not represented by PlayerCommand/ctrl.
+    pub fn update_audiobookshelf_context(&self, context: Option<AudiobookshelfPlayerContext>) {
+        *self.audiobookshelf_context.lock().unwrap() = context;
+    }
+
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn audiobookshelf_generation(&self) -> Option<crate::service_runtime::SetupGeneration> {
+        self.audiobookshelf_context
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(AudiobookshelfPlayerContext::generation)
     }
 
     #[cfg(any(test, feature = "test-support"))]
@@ -392,6 +409,7 @@ impl Player {
         let subtitle_prefs = self.subtitle_prefs.clone();
         let shutdown_report_timeout = self.shutdown_report_timeout.clone();
         let (server_url, token) = self.credentials.lock().unwrap().clone().unwrap_or_default();
+        let audiobookshelf_context = self.audiobookshelf_context.lock().unwrap().clone();
         let origin = if items.len() == 1 {
             PlaybackOrigin::Standalone
         } else {
@@ -456,18 +474,43 @@ impl Player {
             };
             init_volume(&mpv, &status, initial_volume);
 
-            // Load the full playlist into mpv so every index matches
-            // items[i] directly.  Source URL resolution branches on
-            // QueueItem variant; everything else is shared.
-            for i in queue_load_indices(items.len(), start_idx) {
+            let active_file_projection = items.iter().any(QueueItem::is_audiobookshelf);
+            let load_indices: Vec<_> = if active_file_projection {
+                vec![start_idx]
+            } else {
+                queue_load_indices(items.len(), start_idx).collect()
+            };
+            let mut active_prepared_source = None;
+            for i in load_indices {
                 let item = &items[i];
-                let url = mpv_url_for_queue_item(item, &server_url, &token);
+                let prepared = match prepare_source(
+                    item,
+                    &server_url,
+                    &token,
+                    audiobookshelf_context.as_ref(),
+                ) {
+                    Ok(source) => source,
+                    Err(error) => {
+                        status.lock().unwrap().active = false;
+                        let _ = event_tx.send(PlayerEvent::Stopped {
+                            idx: start_idx,
+                            position_ticks: 0,
+                            played: false,
+                            consume: false,
+                            progress_report_accepted: false,
+                            error: Some(format!("failed to prepare media: {error}")),
+                        });
+                        return;
+                    }
+                };
                 let (mode, index) = queue_load_location(i, start_idx);
-                let opts = mpv_load_opts(item);
-                if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, &index, &opts]) {
+                let opts = prepared.mpv_load_options(item);
+                if let Err(e) =
+                    mpv.command("loadfile", &[prepared.url.as_str(), mode, &index, &opts])
+                {
                     log::warn!(
                         target: "player",
-                        "submit_queue loadfile error: {e} | mode={mode} opts={opts:?}",
+                        "submit_queue loadfile error: {e} | mode={mode}",
                     );
                     if i == start_idx {
                         status.lock().unwrap().active = false;
@@ -481,6 +524,9 @@ impl Player {
                         });
                         return;
                     }
+                }
+                if i == start_idx {
+                    active_prepared_source = Some(prepared);
                 }
             }
             // send_ep_info only for Emby items.
@@ -574,6 +620,8 @@ impl Player {
                 shutdown_report_timeout,
                 server_url,
                 token,
+                audiobookshelf_context,
+                active_prepared_source,
             );
             session.run(
                 mpv,
