@@ -5,6 +5,23 @@ use mbv_core::playback_queue::QueueItem;
 use mbv_core::service_runtime::ServiceState;
 
 impl App {
+    fn update_local_audiobookshelf_context(
+        &self,
+        context: Option<mbv_core::player::AudiobookshelfPlayerContext>,
+    ) {
+        self.player.update_audiobookshelf_context(context.clone());
+        if let Some(suspended) = &self.suspended_local {
+            suspended.player.update_audiobookshelf_context(context);
+        }
+    }
+
+    pub(super) fn clear_audiobookshelf_authentication(&mut self) -> Result<(), String> {
+        self.clear_audiobookshelf_catalog();
+        self.update_local_audiobookshelf_context(None);
+        self.audiobookshelf_runtime.user = None;
+        mbv_core::config::clear_service_secret_result(mbv_core::config::ServiceKind::Audiobookshelf)
+    }
+
     pub(super) fn apply_audiobookshelf_setup_completion(
         &mut self,
         completion: super::service_startup::AudiobookshelfSetupCompletion,
@@ -54,6 +71,7 @@ impl App {
                         self.config.lock().unwrap().audiobookshelf_setup = Some(setup.clone());
                         self.audiobookshelf_runtime
                             .commit_ready(completion.generation, user.clone());
+                        self.install_audiobookshelf_player_context(completion.generation);
                         self.audiobookshelf_setup_form = None;
                         self.flash(
                             format!(
@@ -166,6 +184,7 @@ impl App {
         }
 
         self.clear_audiobookshelf_catalog();
+        self.update_local_audiobookshelf_context(None);
         self.clear_audiobookshelf_queue_memory();
         self.config.lock().unwrap().audiobookshelf_setup = None;
         self.audiobookshelf_runtime.remove_setup();
@@ -230,6 +249,7 @@ impl App {
                 self.config.lock().unwrap().audiobookshelf_setup = Some(setup.clone());
                 self.audiobookshelf_runtime
                     .commit_ready(generation, user.clone());
+                self.install_audiobookshelf_player_context(generation);
                 self.flash(
                     format!(
                         "Audiobookshelf {} is ready for {}",
@@ -246,5 +266,23 @@ impl App {
                 );
             }
         }
+    }
+
+    pub(super) fn install_audiobookshelf_player_context(
+        &self,
+        generation: mbv_core::service_runtime::SetupGeneration,
+    ) {
+        let setup = self.config.lock().unwrap().audiobookshelf_setup.clone();
+        let credential =
+            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf);
+        let context = setup.zip(credential).and_then(|(setup, credential)| {
+            mbv_core::player::AudiobookshelfPlayerContext::new(
+                generation,
+                setup,
+                credential,
+                mbv_core::api::device_id(),
+            )
+        });
+        self.update_local_audiobookshelf_context(context);
     }
 }

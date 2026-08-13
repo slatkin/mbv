@@ -198,6 +198,17 @@ fn make_media_item(id: &str) -> crate::api::EmbyItem {
 }
 
 fn make_queue_session_for_pos_tests(start_idx: usize) -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
+    let (session, status, _) = make_queue_session_for_pos_tests_with_events(start_idx);
+    (session, status)
+}
+
+fn make_queue_session_for_pos_tests_with_events(
+    start_idx: usize,
+) -> (
+    PlaybackRun,
+    Arc<Mutex<PlayerStatus>>,
+    mpsc::Receiver<PlayerEvent>,
+) {
     let emby_items = [
         make_media_item("ep1"),
         make_media_item("ep2"),
@@ -226,7 +237,7 @@ fn make_queue_session_for_pos_tests(start_idx: usize) -> (PlaybackRun, Arc<Mutex
         false,
         status.clone(),
     );
-    let (event_tx, _event_rx) = mpsc::channel();
+    let (event_tx, event_rx) = mpsc::channel();
     let session = PlaybackRun::new_from_queue_items(
         items,
         start_idx,
@@ -248,6 +259,8 @@ fn make_queue_session_for_pos_tests(start_idx: usize) -> (PlaybackRun, Arc<Mutex
         Arc::new(Mutex::new(None)),
         "http://example.test".into(),
         "token".into(),
+        None,
+        None,
     );
-    (session, status)
+    (session, status, event_rx)
 }

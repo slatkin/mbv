@@ -14,6 +14,10 @@ struct PlaybackRun {
     server_url: String,
     token: String,
     queue: PlaybackQueue,
+    audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
+    projection: QueueProjection,
+    prepared_source: Option<PreparedSource>,
+    active_file_starting: bool,
     ext_sub_urls: Vec<String>,
     // loop state
     current_idx: usize,
@@ -42,4 +46,13 @@ struct PlaybackRun {
     intro_start: i64,
     intro_end: i64,
     intro_state: IntroState,
+}
+
+impl Drop for PlaybackRun {
+    fn drop(&mut self) {
+        // This is the last-resort path for delayed quit, FIFO shutdown, and
+        // panic unwinding. Keep the owner-known position for the lifecycle's
+        // own Drop instead of falling back to zero.
+        self.close_prepared_source();
+    }
 }

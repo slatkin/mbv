@@ -155,6 +155,72 @@ impl PlaybackRun {
         true
     }
 
+    fn prepare_item(&self, item: &QueueItem) -> Result<PreparedSource, AudiobookshelfError> {
+        prepare_source(
+            item,
+            &self.server_url,
+            &self.token,
+            self.audiobookshelf_context.as_ref(),
+        )
+    }
+
+    fn install_active_projection(
+        &mut self,
+        mpv: &Mpv,
+        prepared: PreparedSource,
+        item: &QueueItem,
+    ) -> Result<(), AudiobookshelfError> {
+        let options = prepared.mpv_load_options(item);
+        let _ = mpv.command("playlist-clear", &[]);
+        if mpv
+            .command(
+                "loadfile",
+                &[prepared.url.as_str(), "replace", "-1", options.as_str()],
+            )
+            .is_err()
+        {
+            self.close_prepared_source();
+            self.status.lock().unwrap().active = false;
+            return Err(AudiobookshelfError::from_class(
+                AudiobookshelfFailureClass::Unavailable,
+            ));
+        }
+        self.close_prepared_source();
+        self.prepared_source = Some(prepared);
+        self.active_file_starting = true;
+        self.load_state = LoadState::begin_single();
+        self.pending_initial_playlist_layout = false;
+        Ok(())
+    }
+
+    fn select_active_slot(
+        &mut self,
+        slot_id: QueueSlotId,
+        mpv: &Mpv,
+    ) -> Result<(), AudiobookshelfError> {
+        let item = self
+            .queue
+            .slot(slot_id)
+            .map(|slot| slot.item.clone())
+            .ok_or_else(|| AudiobookshelfError::from_class(AudiobookshelfFailureClass::Protocol))?;
+        let prepared = self.prepare_item(&item)?;
+        self.install_active_projection(mpv, prepared, &item)?;
+        let _ = self.queue.set_active_slot(slot_id);
+        self.refresh_current_idx_from_queue();
+        self.load_active_item_state();
+        Ok(())
+    }
+
+    fn close_prepared_source(&mut self) {
+        self.close_prepared_source_at(self.last_valid_pos);
+    }
+
+    fn close_prepared_source_at(&mut self, position_ticks: i64) {
+        if let Some(mut prepared) = self.prepared_source.take() {
+            prepared.close(position_ticks as f64 / TICKS_PER_SECOND as f64);
+        }
+    }
+
     fn reset_next_up_state(&mut self) {
         self.next_up.reset();
         self.queue_next_up.reset();
@@ -255,6 +321,8 @@ impl PlaybackRun {
         shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
         server_url: String,
         token: String,
+        audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
+        prepared_source: Option<PreparedSource>,
     ) -> Self {
         let queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
         Self::init_from_queue(
@@ -270,6 +338,8 @@ impl PlaybackRun {
             shutdown_report_timeout,
             server_url,
             token,
+            audiobookshelf_context,
+            prepared_source,
             Vec::new(), // no external subtitles for feed items
         )
     }
@@ -288,6 +358,8 @@ impl PlaybackRun {
         shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
         server_url: String,
         token: String,
+        audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
+        prepared_source: Option<PreparedSource>,
         ext_sub_urls: Vec<String>,
     ) -> Self {
         let start_idx = start_idx.min(queue.slots().len().saturating_sub(1));
@@ -347,6 +419,9 @@ impl PlaybackRun {
             "playback init origin={origin:?} idx={start_idx} item_pos={}s",
             initial_pos / crate::api::TICKS_PER_SECOND
         );
+        let mut projection = QueueProjection::eager();
+        projection.activate_for(&queue);
+        let active_file_starting = projection.is_active_file() && prepared_source.is_some();
         PlaybackRun {
             origin,
             config,
@@ -357,6 +432,10 @@ impl PlaybackRun {
             server_url,
             token,
             queue,
+            audiobookshelf_context,
+            projection,
+            prepared_source,
+            active_file_starting,
             ext_sub_urls,
             current_idx: start_idx,
             forced_slot_id: None,

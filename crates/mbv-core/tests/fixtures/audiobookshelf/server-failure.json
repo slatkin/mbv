@@ -1,0 +1,6 @@
+{
+  "provenance": "controlled loopback HTTP response",
+  "status": 500,
+  "body": {"error": "<MESSAGE>"},
+  "observedClass": "Server"
+}

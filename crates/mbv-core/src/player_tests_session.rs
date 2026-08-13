@@ -225,6 +225,28 @@ fn ordinary_stop_marks_stop_report_accepted_not_sent() {
 
 // ── queue_completed_pos / is_near_end ─────────────────────────────────
 
+#[test]
+fn abs_natural_eof_uses_runtime_without_changing_generic_audio_reporting() {
+    let abs = abs_item();
+    let emby_audio = QueueItem::Emby(Box::new(make_media_item("audio")));
+    let runtime = 90_000;
+    let actual = 12_000;
+
+    assert_eq!(
+        provider_lifecycle_close_pos(&abs, true, runtime, actual),
+        runtime
+    );
+    assert_eq!(
+        provider_lifecycle_close_pos(&abs, false, runtime, actual),
+        actual
+    );
+    assert_eq!(
+        provider_lifecycle_close_pos(&emby_audio, true, runtime, actual),
+        actual
+    );
+    assert_eq!(queue_completed_pos(true, true, false, actual), 0);
+}
+
 const RUNTIME: i64 = 600 * TICKS_PER_SECOND; // 10-minute episode
 
 #[test]

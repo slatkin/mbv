@@ -1,0 +1,20 @@
+{
+  "id": "<SESSION_ID>",
+  "userId": "<USER_ID>",
+  "libraryId": "<LIBRARY_ID>",
+  "libraryItemId": "<LIBRARY_ITEM_ID>",
+  "episodeId": "<EPISODE_ID>",
+  "mediaType": "podcast",
+  "duration": 3054.336,
+  "playMethod": 2,
+  "mediaPlayer": "<MEDIA_PLAYER>",
+  "currentTime": 1,
+  "audioTracks": [{
+    "index": 1,
+    "startOffset": 0,
+    "duration": 3054.336,
+    "contentUrl": "<HLS_PATH>",
+    "mimeType": "application/vnd.apple.mpegurl"
+  }],
+  "serverVersion": "2.36.0"
+}

@@ -81,7 +81,13 @@ impl App {
                                  );
                              }
                          },
-                        Err(error) if matches!(error.class, mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected) => self.clear_audiobookshelf_catalog(),
+                        Err(error) if matches!(error.class, mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected) => {
+                            self.audiobookshelf_runtime.complete(
+                                completion.generation,
+                                mbv_core::service_runtime::ServiceState::NeedsAuthentication,
+                            );
+                            let _ = self.clear_audiobookshelf_authentication();
+                        },
                         Err(_) => {}
                     }
                 }

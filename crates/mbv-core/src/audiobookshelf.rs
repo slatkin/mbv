@@ -4,6 +4,13 @@ use std::time::Duration;
 #[path = "audiobookshelf_catalog.rs"]
 mod audiobookshelf_catalog;
 pub use audiobookshelf_catalog::*;
+#[path = "audiobookshelf_playback.rs"]
+mod audiobookshelf_playback;
+pub use audiobookshelf_playback::*;
+
+#[cfg(test)]
+#[path = "audiobookshelf_playback_tests.rs"]
+mod audiobookshelf_playback_tests;
 
 /// The identity returned by Audiobookshelf's authenticated `/api/me` request.
 /// Profile and permission data deliberately stay at the HTTP boundary.
@@ -94,6 +101,10 @@ impl From<String> for AudiobookshelfError {
 }
 
 impl AudiobookshelfError {
+    pub(crate) const fn from_class(class: AudiobookshelfFailureClass) -> Self {
+        Self::new(class)
+    }
+
     const fn new(class: AudiobookshelfFailureClass) -> Self {
         Self { class }
     }

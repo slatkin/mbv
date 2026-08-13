@@ -58,6 +58,8 @@ fn make_feed_session() -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
         Arc::new(Mutex::new(None)),
         String::new(),
         String::new(),
+        None,
+        None,
     );
     (session, status)
 }

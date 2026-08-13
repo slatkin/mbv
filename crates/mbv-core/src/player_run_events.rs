@@ -84,6 +84,10 @@ impl PlaybackRun {
     }
 
     fn on_playlist_pos_changed(&mut self, pos: i64) {
+        if self.projection.is_active_file() {
+            self.projection.observe_playlist_pos(&mut self.queue, pos);
+            return;
+        }
         if pos < 0 {
             return;
         }
@@ -110,6 +114,11 @@ impl PlaybackRun {
     }
 
     fn on_playlist_count_changed(&mut self, count: usize) {
+        if self.projection.is_active_file() {
+            self.projection
+                .observe_playlist_count(&mut self.queue, count);
+            return;
+        }
         if count == self.queue_len() {
             return;
         }
@@ -152,6 +161,7 @@ impl PlaybackRun {
     }
 
     fn on_playback_restart(&mut self, mpv: &Mpv) {
+        self.active_file_starting = false;
         // `PlaybackRestart` is the concrete mpv-owned event used by mbvd as
         // its output-started boundary. It says nothing about downstream pipe
         // buffers or actual audibility.
@@ -237,6 +247,24 @@ impl PlaybackRun {
             }
             return true;
         }
+        if self.projection.is_active_file()
+            && self.active_file_starting
+            && reason == mpv_end_file_reason::Error
+        {
+            self.active_file_starting = false;
+            self.close_prepared_source();
+            progress.stop_and_join(self.progress_join_budget());
+            self.status.lock().unwrap().active = false;
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                idx: self.current_idx,
+                position_ticks: 0,
+                played: false,
+                consume: false,
+                progress_report_accepted: false,
+                error: Some("failed to start media".into()),
+            });
+            return false;
+        }
 
         if reason == mpv_end_file_reason::Error {
             log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");
@@ -281,6 +309,13 @@ impl PlaybackRun {
                 self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
             }
 
+            if natural_end {
+                let lifecycle_pos = self.active_item().map_or(self.last_valid_pos, |item| {
+                    provider_lifecycle_close_pos(item, natural_end, runtime, self.last_valid_pos)
+                });
+                self.close_prepared_source_at(lifecycle_pos);
+            }
+
             if natural_end && self.reporter.has_session() {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
                 if !completed_is_audio {
@@ -307,12 +342,22 @@ impl PlaybackRun {
             return false;
         }
 
-        let completed_idx = self.current_idx;
+        // QueueSlotId is authoritative inside the Player owner. PlayerEvent
+        // indices remain local UI snapshots: carrying slot identity farther
+        // would change the serializable event/ctrl boundary, while the owner
+        // can resolve the completed occurrence before emitting that snapshot.
+        let completed_slot_id = self.active_slot_id();
+        let completed_idx = completed_slot_id
+            .and_then(|slot_id| self.queue.slot_index(slot_id))
+            .unwrap_or(self.current_idx);
         log::warn!(target: "player", "advance path: reason={reason:?} last_valid_pos={} runtime={}",
             self.last_valid_pos, self.status.lock().unwrap().runtime_ticks);
         // H11: bounds-check completed_idx — QueueRemove can shrink the list
         // while the current track is finishing.
-        let Some(completed_item) = self.item_at(completed_idx).cloned() else {
+        let Some(completed_item) = completed_slot_id
+            .and_then(|slot_id| self.queue.slot(slot_id))
+            .map(|slot| slot.item.clone())
+        else {
             log::warn!(target: "player", "on_end_file: completed_idx={completed_idx} out of bounds (len={}), stopping",
                 self.queue_len());
             progress.stop_and_join(self.progress_join_budget());
@@ -362,6 +407,12 @@ impl PlaybackRun {
             progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
             self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(completed_pos));
+            self.close_prepared_source_at(provider_lifecycle_close_pos(
+                &completed_item,
+                natural,
+                completed_runtime,
+                self.last_valid_pos,
+            ));
             if played_out {
                 if let Some(emby) = completed_item.as_emby() {
                     let id = emby.id.clone();
@@ -385,7 +436,18 @@ impl PlaybackRun {
         // Update UI to the next track immediately, before slow network calls.
         // next_idx < queue_len() was already checked above, so set_active_index
         // (which only fails when the index is out of bounds) cannot fail here.
-        let advanced = self.set_active_index(next_idx);
+        let next_slot_id = self.slot_id_at(next_idx);
+        let advanced = if self.projection.is_active_file() {
+            self.close_prepared_source_at(provider_lifecycle_close_pos(
+                &completed_item,
+                natural,
+                completed_runtime,
+                self.last_valid_pos,
+            ));
+            next_slot_id.is_some_and(|slot_id| self.select_active_slot(slot_id, mpv).is_ok())
+        } else {
+            self.set_active_index(next_idx)
+        };
         debug_assert!(
             advanced,
             "set_active_index({next_idx}) must succeed: already bounds-checked against queue_len={}",
@@ -396,6 +458,20 @@ impl PlaybackRun {
             .cloned()
             .expect("active item must exist after successful set_active_index");
         self.load_active_item_state();
+        if self.projection.is_active_file() && !advanced {
+            let error = AudiobookshelfError::from_class(AudiobookshelfFailureClass::Unavailable);
+            progress.stop_and_join(self.progress_join_budget());
+            self.status.lock().unwrap().active = false;
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                idx: self.current_idx,
+                position_ticks: 0,
+                played: false,
+                consume: false,
+                progress_report_accepted: false,
+                error: Some(format!("failed to prepare media: {error}")),
+            });
+            return false;
+        }
         self.tracks_initialized = false;
         {
             let mut s = self.status.lock().unwrap();
@@ -462,6 +538,7 @@ impl PlaybackRun {
     }
 
     fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
+        self.close_prepared_source();
         log::warn!(target: "player", "shutdown: last_valid_pos={} stop_report={:?}",
             self.last_valid_pos, self.stop_report);
         if self.stop_report == StopReport::NotSent {
@@ -520,5 +597,18 @@ impl PlaybackRun {
         if self.quit_at.is_none() {
             let _ = self.event_tx.send(PlayerEvent::MpvQuit);
         }
+    }
+}
+
+fn provider_lifecycle_close_pos(
+    item: &QueueItem,
+    natural_end: bool,
+    runtime: i64,
+    last_valid_pos: i64,
+) -> i64 {
+    if item.is_audiobookshelf() && natural_end {
+        runtime.max(0)
+    } else {
+        last_valid_pos
     }
 }

@@ -97,6 +97,8 @@ fn send_ep_info(mpv: &Mpv, item: &crate::api::EmbyItem) {
 }
 
 include!("player_types.rs");
+include!("player_sources.rs");
+include!("player_projection.rs");
 include!("player_runtime.rs");
 include!("player_run_state.rs");
 include!("player_run_types.rs");
@@ -114,5 +116,6 @@ mod tests {
     include!("player_tests_session_feed.rs");
     include!("player_tests_status.rs");
     include!("player_tests_submit.rs");
+    include!("player_tests_active_file.rs");
     include!("player_proxy_tests.rs");
 }
