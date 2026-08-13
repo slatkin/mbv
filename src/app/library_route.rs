@@ -200,7 +200,7 @@ impl App {
             log::info!(target: "library_route", "resolution path=ancestor item_id={:?}", item.id);
             self.route_for_item_via_ancestors(&item.id)
         } else {
-            let lib_idx = self.tab.library_index().unwrap();
+            let lib_idx = self.tab.emby_library_index().unwrap();
             log::info!(target: "library_route", "resolution path=power-library item_id={:?} lib_idx={lib_idx}", item.id);
             self.route_for_active_library_view(lib_idx)
         }
@@ -334,7 +334,7 @@ mod tests {
             library_total: None,
         });
         app.panel_focus = PanelFocus::Library;
-        app.tab = TabSelection::Library(0);
+        app.tab = TabSelection::EmbyLibrary(0);
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 
@@ -361,7 +361,7 @@ mod tests {
             library_total: None,
         });
         app.panel_focus = PanelFocus::Queue;
-        app.tab = TabSelection::Library(0);
+        app.tab = TabSelection::EmbyLibrary(0);
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 

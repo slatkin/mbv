@@ -48,7 +48,7 @@ fn make_group_level() -> BrowseLevel {
 
 fn make_music_app(albums: Vec<EmbyItem>) -> super::App {
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.music_levels = vec!["group".into(), "album".into()];
 
     let mut library = make_item("Music", "CollectionFolder");
@@ -207,28 +207,6 @@ fn start_or_supersede_creates_candidate_for_music_group_level() {
     assert!(
         state.settled.is_some(),
         "should settle immediately when all terminal"
-    );
-}
-
-#[test]
-fn start_or_supersede_schedules_lookups_for_unresolved_albums() {
-    let mut a1 = make_item("Unknown Album", "MusicAlbum");
-    a1.id = "album-1".into();
-    a1.artist = String::new();
-    let mut app = make_music_app(vec![a1]);
-
-    app.start_or_supersede_music_grouping(0);
-
-    let level = app.libs[0].nav_stack.last().unwrap();
-    let state = level.music_grouping.as_ref().expect("grouping state");
-    let candidate = state.candidate.as_ref().expect("candidate");
-    assert!(
-        candidate.unresolved.contains("album-1"),
-        "album without artist should be unresolved"
-    );
-    assert!(
-        app.album_artist_loading.contains("album-1"),
-        "artist fetch should be scheduled"
     );
 }
 

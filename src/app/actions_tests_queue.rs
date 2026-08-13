@@ -107,7 +107,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
 
     let mut app = crate::app::tests::make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.player_tab
         .set_items(vec![make_item("Queued First", "Movie")], 0);
     {
@@ -152,7 +152,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     });
 
     assert_eq!(
-        app.current_lib_item().as_ref().map(|i| i.id.as_str()),
+        app.current_lib_item(0).as_ref().map(|i| i.id.as_str()),
         Some("movie-2")
     );
 

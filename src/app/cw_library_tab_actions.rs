@@ -1,6 +1,32 @@
 use super::{App, PanelFocus, TabSelection};
 
 impl App {
+    /// Normalizes a selected Service library index that no longer exists.
+    ///
+    /// A `TabSelection::EmbyLibrary(index)` with `index >= self.libs.len()`,
+    /// or a `TabSelection::AudiobookshelfLibrary(index)` with `index >=
+    /// self.audiobookshelf_libraries.len()`, selects Home and returns
+    /// `true`: the caller must stop the triggering destination-specific
+    /// operation (no further destination mutation). Any other tab is left
+    /// unchanged and returns `false`. This owns asynchronous Service
+    /// removal/replacement invalidation; downstream Service helpers may
+    /// still bounds-check defensively, but never choose another destination.
+    pub(super) fn normalize_stale_browse_destination(&mut self) -> bool {
+        if let Some(index) = self.tab.emby_library_index() {
+            if index >= self.libs.len() {
+                self.tab = TabSelection::Home;
+                return true;
+            }
+        }
+        if let Some(index) = self.tab.audiobookshelf_index() {
+            if index >= self.audiobookshelf_libraries.len() {
+                self.tab = TabSelection::Home;
+                return true;
+            }
+        }
+        false
+    }
+
     /// Move to left-panel tab `pos` and settle all state that follows from a
     /// tab change (panel focus, stale image dims, library activation).
     fn apply_tab_position(&mut self, pos: usize) {
@@ -10,18 +36,27 @@ impl App {
             self.audiobookshelf_libraries.len(),
             self.has_feeds_subscriptions(),
         );
+        // A stale Service library index (libraries removed or replaced since
+        // `pos` was computed) becomes Home; the pending selection stops
+        // without focus, activation, or preference changes.
+        if self.normalize_stale_browse_destination() {
+            return;
+        }
         self.last_card_height = 0; // reset stale image height for new view
         self.last_card_width = 0;
-        if self.tab.is_feeds() {
-            self.set_panel_focus(PanelFocus::Library);
-        } else if self.tab.is_audiobookshelf() {
-            self.set_panel_focus(PanelFocus::Library);
-            if let Some(index) = self.tab.audiobookshelf_index() {
+        match self.tab {
+            TabSelection::Home => {}
+            TabSelection::EmbyLibrary(lib_idx) => {
+                self.set_panel_focus(PanelFocus::Library);
+                self.activate_library_position(lib_idx);
+            }
+            TabSelection::AudiobookshelfLibrary(index) => {
+                self.set_panel_focus(PanelFocus::Library);
                 self.activate_audiobookshelf_position(index);
             }
-        } else if let Some(lib_idx) = self.tab.library_index() {
-            self.set_panel_focus(PanelFocus::Library);
-            self.activate_library_position(lib_idx);
+            TabSelection::Feeds => {
+                self.set_panel_focus(PanelFocus::Library);
+            }
         }
         self.ensure_tab_visible();
         self.save_prefs();
@@ -90,7 +125,7 @@ impl App {
     pub(super) fn cw_enqueue(&mut self) {
         let saved_sec = self.home.section;
         self.home.section = 0;
-        self.enqueue_selected();
+        self.enqueue_selected(None);
         self.home.section = saved_sec;
     }
 

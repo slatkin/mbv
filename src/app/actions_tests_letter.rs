@@ -68,37 +68,33 @@ fn lib_tab(collection_type: &str) -> LibraryTab {
 fn active_lib_is_tvshows_true_only_on_a_tvshows_library_tab() {
     // `shuffle_folder` (issue: TV libraries should shuffle from a
     // video-only fetch, everything else from the broader playable-items
-    // fetch) branches on this. Covers both view modes indirectly, since
-    // `lib_tab_offset()` is view-mode-independent -- the tab_idx math is
-    // identical whether the active library tab was reached through the
-    // standard tab bar or the library panel.
+    // fetch) branches on this. The matched Emby library index arrives as a
+    // parameter (from `shuffle_play` / `execute_context_action`); the index
+    // is the library under test, not the selected tab.
     let mut app = make_app_stub();
     app.libs.push(lib_tab("tvshows"));
     app.libs.push(lib_tab("music"));
 
-    app.tab = TabSelection::Library(0);
     assert!(
-        app.active_lib_is_tvshows(),
-        "library_tab on the tvshows library tab"
+        app.active_lib_is_tvshows(0),
+        "library 0 is a tvshows library"
     );
 
-    app.tab = TabSelection::Library(1);
     assert!(
-        !app.active_lib_is_tvshows(),
-        "library_tab on the music library tab"
+        !app.active_lib_is_tvshows(1),
+        "library 1 is a music library"
     );
 }
 
 #[test]
-fn active_lib_is_tvshows_false_outside_any_library_tab() {
+fn active_lib_is_tvshows_bounds_miss_returns_false() {
+    // The explicit-index contract: a bounds-miss index (async Service
+    // removal between dispatch normalization and use) must return false --
+    // never panic and never default to another library.
     let mut app = make_app_stub();
     app.libs.push(lib_tab("tvshows"));
 
-    app.tab = TabSelection::Home; // Home
-    assert!(!app.active_lib_is_tvshows());
-
-    app.panel_focus = PanelFocus::Queue;
-    assert!(!app.active_lib_is_tvshows());
+    assert!(!app.active_lib_is_tvshows(1), "index past the last library");
 }
 
 /// Pushes a top-level, non-loading, non-searching `BrowseLevel` onto

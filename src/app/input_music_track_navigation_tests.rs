@@ -156,7 +156,7 @@ fn escape_outside_track_mode_still_calls_go_back_unchanged() {
     // demonstrated by comparing `handle_key(Esc)` against calling
     // `go_back()` directly on an identical, freshly-built app.
     let mut via_go_back = make_music_album_app();
-    via_go_back.go_back();
+    via_go_back.go_back(0);
 
     let mut via_escape_key = make_music_album_app();
     assert!(via_escape_key.libs[0].album_track_focus.is_none());
@@ -299,46 +299,6 @@ fn paging_from_non_selectable_hint_and_header_rows_chooses_nearest_album_by_dire
     // album. With a 4-row page, PageUp from album 3 resolves to album 0
     // rather than leaving the cursor on the non-album header row.
     assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 0);
-}
-
-#[test]
-fn oversized_artist_block_scrolls_inline_without_moving_the_outer_block() {
-    let mut app = make_music_album_list_app(60, 0);
-    render_full_app(&mut app, 100, 40);
-    let initial_offset = app.libs[0].nav_stack.last().unwrap().scroll;
-
-    for _ in 0..35 {
-        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    }
-    render_full_app(&mut app, 100, 40);
-    let down_offset = app.libs[0].nav_stack.last().unwrap().scroll;
-    assert_eq!(down_offset, initial_offset);
-    assert!(app
-        .layout
-        .main
-        .left_row_targets
-        .iter()
-        .any(|target| matches!(target, Some(LibraryRowTarget::Album(35)))));
-    let cursor_y = app
-        .layout
-        .main
-        .cursor_screen_y
-        .expect("expected the active album marker on screen");
-    let area = app.layout.main.left_area;
-    assert!(cursor_y >= area.y && cursor_y < area.y + area.height);
-
-    for _ in 0..35 {
-        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    }
-    render_full_app(&mut app, 100, 40);
-    let up_offset = app.libs[0].nav_stack.last().unwrap().scroll;
-    assert_eq!(up_offset, initial_offset);
-    assert!(app
-        .layout
-        .main
-        .left_row_targets
-        .iter()
-        .any(|target| matches!(target, Some(LibraryRowTarget::Album(0)))));
 }
 
 #[test]

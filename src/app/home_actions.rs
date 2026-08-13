@@ -182,7 +182,7 @@ impl App {
             let (saved_sec, saved_cursor) = (self.home.section, self.home.continue_cursor);
             self.home.section = 0;
             self.home.continue_cursor = cursor;
-            self.enqueue_selected();
+            self.enqueue_selected(None);
             self.home.section = saved_sec;
             self.home.continue_cursor = saved_cursor;
         } else {

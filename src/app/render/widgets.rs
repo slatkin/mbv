@@ -1,6 +1,6 @@
 use super::chrome::thin_vertical_thumb;
 use crate::app::layout::LayoutMain;
-use crate::app::{palette, App};
+use crate::app::{palette, App, TabSelection};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -540,35 +540,36 @@ impl App {
     ) {
         // If a music-group library's nav_stack was truncated to just the group
         // level (e.g., stale breadcrumb click), immediately re-push the album level.
-        if let Some(lib_idx) = self.tab.library_index() {
-            self.ensure_music_group_album_level(lib_idx);
-            self.ensure_feed_home_video_group_level(lib_idx);
-        }
-
-        if self.tab.is_home() {
-            self.render_home_list(f, area, focused, layout);
-            return;
-        }
-        if self.tab.is_feeds() {
-            self.render_feeds(f, area, focused, layout);
-            return;
-        }
-        if self.tab.is_audiobookshelf() {
-            self.render_audiobookshelf_library(f, area, focused, layout);
-            return;
-        }
-        let lib_idx = self.tab.library_index().unwrap();
-        let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
-        let is_album_folders = self.is_viewing_album_folders(lib_idx);
-        let is_home_video = self.is_home_video_view(lib_idx);
-        if is_feed_group {
-            self.render_feed_home_video_group_view(f, area, lib_idx, focused, layout);
-        } else if is_album_folders {
-            self.render_list(f, area, focused, layout);
-        } else if is_home_video {
-            self.render_home_video_list(f, area, lib_idx, focused, layout);
-        } else {
-            self.render_list(f, area, focused, layout);
+        // (Emby-only; done inside the Emby match arm below.)
+        // Exhaustive destination dispatch: each Service renders only its own
+        // view; there is no default-to-Emby branch. The selected destination
+        // was already normalized to a live index by `render_main`.
+        match self.tab {
+            TabSelection::Home => {
+                self.render_home_list(f, area, focused, layout);
+            }
+            TabSelection::Feeds => {
+                self.render_feeds(f, area, focused, layout);
+            }
+            TabSelection::AudiobookshelfLibrary(_) => {
+                self.render_audiobookshelf_library(f, area, focused, layout);
+            }
+            TabSelection::EmbyLibrary(lib_idx) => {
+                self.ensure_music_group_album_level(lib_idx);
+                self.ensure_feed_home_video_group_level(lib_idx);
+                let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
+                let is_album_folders = self.is_viewing_album_folders(lib_idx);
+                let is_home_video = self.is_home_video_view(lib_idx);
+                if is_feed_group {
+                    self.render_feed_home_video_group_view(f, area, lib_idx, focused, layout);
+                } else if is_album_folders {
+                    self.render_list(f, area, focused, layout);
+                } else if is_home_video {
+                    self.render_home_video_list(f, area, lib_idx, focused, layout);
+                } else {
+                    self.render_list(f, area, focused, layout);
+                }
+            }
         }
     }
 

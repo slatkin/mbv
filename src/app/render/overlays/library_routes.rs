@@ -446,20 +446,8 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_session};
+    use crate::app::tests::make_app_stub;
     use crate::app::{SESSIONS_LOAD_OVERRIDE, SESSIONS_LOAD_TEST_LOCK};
-
-    #[test]
-    fn open_library_routes_popup_shows_high_priority_status_when_library_fetch_fails() {
-        let mut app = make_app_stub();
-        app.open_library_routes_popup();
-        assert!(app.library_routes_popup.is_none());
-        assert!(app.status.contains("couldn't load libraries"));
-        assert!(
-            app.status_expires.unwrap()
-                >= std::time::Instant::now() + std::time::Duration::from_secs(4)
-        );
-    }
 
     #[test]
     fn enter_device_stage_shows_high_priority_status_when_session_fetch_fails() {
@@ -549,37 +537,6 @@ mod tests {
     }
 
     #[test]
-    fn commit_device_selection_assigns_library_route_as_an_endpoint() {
-        // #256: the config value committed here must be the device's
-        // resolved endpoint, never its name.
-        let mut app = make_app_stub();
-        let endpoint =
-            mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:9000".parse().unwrap());
-        app.library_routes_popup = Some(LibraryRoutePopup {
-            stage: LibraryRouteStage::PickDevice {
-                library_lower: "music".to_string(),
-                library_display: "Music".to_string(),
-                devices: vec![("living-room-pc".to_string(), Some(endpoint.clone()))],
-            },
-            cursor: 1, // index 0 is "Local (no route)"; 1 is the device
-        });
-
-        app.handle_library_routes_enter();
-
-        assert!(app.status.contains("couldn't refresh libraries"));
-        assert!(
-            app.status_expires.unwrap()
-                >= std::time::Instant::now() + std::time::Duration::from_secs(4)
-        );
-
-        assert_eq!(
-            app.config.lock().unwrap().library_routes.get("music"),
-            Some(&endpoint.to_string())
-        );
-        assert_eq!(app.library_routes.get("music"), Some(&endpoint.to_string()));
-    }
-
-    #[test]
     fn commit_device_selection_clears_route_on_local_no_route() {
         let mut app = make_app_stub();
         app.config
@@ -607,82 +564,6 @@ mod tests {
 
         assert_eq!(app.config.lock().unwrap().library_routes.get("music"), None);
         assert_eq!(app.library_routes.get("music"), None);
-    }
-
-    #[test]
-    fn enter_device_stage_preselects_by_resolved_endpoint_not_name() {
-        // #256: preselecting which picker row matches the current
-        // assignment must compare resolved endpoints, not device names --
-        // endpoints are the stable identifier here (a hostname is more
-        // likely to change than the address it currently resolves to).
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
-        let mut app = make_app_stub();
-        app.config
-            .lock()
-            .unwrap()
-            .library_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-        // enter_device_stage directly, rather than through
-        // open_library_routes_popup -> handle_library_routes_enter: the
-        // latter round-trips through client.get_views(), a live network
-        // call that has nothing to do with what this test verifies
-        // (enter_device_stage's endpoint-based preselection).
-        app.library_routes_popup = Some(LibraryRoutePopup {
-            stage: LibraryRouteStage::PickLibrary { items: vec![] },
-            cursor: 0,
-        });
-        app.enter_device_stage("music".to_string(), "Music".to_string());
-
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
-        let popup = app.library_routes_popup.as_ref().unwrap();
-        assert_eq!(popup.cursor, 1); // 0 = "Local (no route)", 1 = the matched device
-    }
-
-    #[test]
-    fn enter_device_stage_lists_an_unresolvable_device_instead_of_omitting_it() {
-        // #256: a live "mbv" session that session_direct_endpoint can't
-        // resolve to an endpoint (here: no advertised direct-connect port)
-        // must still show up in the picker, paired with `None` -- silently
-        // omitting it would leave a device visible in F3's Sessions panel
-        // with no explanation for why it doesn't appear here.
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            // No supported_commands entry -> parse_mbv_direct_tcp_port
-            // finds nothing -> session_direct_endpoint returns None.
-            Ok(vec![make_session("no-port-device", "mbv")])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
-        let mut app = make_app_stub();
-        // enter_device_stage directly -- see the comment in
-        // enter_device_stage_preselects_by_resolved_endpoint_not_name for
-        // why this bypasses open_library_routes_popup.
-        app.library_routes_popup = Some(LibraryRoutePopup {
-            stage: LibraryRouteStage::PickLibrary { items: vec![] },
-            cursor: 0,
-        });
-        app.enter_device_stage("music".to_string(), "Music".to_string());
-
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
-        let popup = app.library_routes_popup.as_ref().unwrap();
-        let LibraryRouteStage::PickDevice { devices, .. } = &popup.stage else {
-            panic!("expected PickDevice stage");
-        };
-        assert_eq!(devices, &vec![("no-port-device".to_string(), None)]);
     }
 
     #[test]

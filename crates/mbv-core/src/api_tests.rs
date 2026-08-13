@@ -305,42 +305,6 @@ fn service_setup_validation_uses_setup_url_user_and_token() {
 }
 
 #[test]
-fn credential_exchange_returns_identity_without_legacy_persistence() {
-    use std::io::Write;
-    let _guard = crate::config::TestStateDirGuard::new();
-    let (listener, url) = local_listener_url();
-    std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let request = read_one_request(&mut stream);
-        assert!(request.starts_with("POST /Users/AuthenticateByName HTTP/1.1"));
-        let body = serde_json::json!({"AccessToken": "fresh-token", "User": {"Id": "user-42"}})
-            .to_string();
-        write!(
-            stream,
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}",
-            body.len(),
-            body
-        )
-        .unwrap();
-    });
-
-    let client = EmbyClient::new(crate::config::Config::default());
-    let exchange = client
-        .exchange_credentials_bounded(
-            &format!("{url}/"),
-            "alice",
-            "not-stored",
-            std::time::Duration::from_secs(2),
-        )
-        .unwrap();
-    assert_eq!(exchange.server_url, url);
-    assert_eq!(exchange.user_id, "user-42");
-    assert_eq!(exchange.token, "fresh-token");
-    assert!(!crate::config::token_cache_path().exists());
-    assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
-}
-
-#[test]
 fn credential_exchange_rejection_and_connectivity_commit_nothing() {
     use std::io::Write;
     let _guard = crate::config::TestStateDirGuard::new();

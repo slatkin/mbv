@@ -169,7 +169,7 @@ pub fn render_view(app: &mut App, width: u16, height: u16) -> LayoutMain {
 
 pub fn make_movie_app() -> App {
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -238,7 +238,7 @@ pub fn make_remote_queue_app() -> App {
         player_rx,
         mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Queue;
     app.queue_scope = QueueScope::Remote;
     app.player_tab.set_items(local_items, 0);
@@ -247,7 +247,7 @@ pub fn make_remote_queue_app() -> App {
 
 pub fn make_music_group_app() -> App {
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.music_levels = vec!["group".into(), "album".into()];
 
     let mut library = make_item("Music", "CollectionFolder");
@@ -400,7 +400,7 @@ pub fn assert_inline_detail_frames_between_albums(
 
 pub fn make_home_video_app() -> App {
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     let mut library = make_item("Home Videos", "CollectionFolder");
     library.id = "lib-homevideos".into();
@@ -444,7 +444,7 @@ pub fn make_home_video_app() -> App {
 
 pub fn make_large_movie_library_app(library_total: usize) -> App {
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();

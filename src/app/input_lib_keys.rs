@@ -1,12 +1,12 @@
 use super::action::{album_track_command_for_key, Command};
 use super::input_resolver::KeyChord;
-use super::{App, ConfirmAction, ConfirmModal, LibSearch, PanelFocus};
+use super::{App, ConfirmAction, ConfirmModal, LibSearch, PanelFocus, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::{Duration, Instant};
 
 impl App {
     pub(super) fn active_album_track_lib_idx(&self) -> Option<usize> {
-        let lib_idx = self.tab.library_index()?;
+        let lib_idx = self.tab.emby_library_index()?;
         let lib = self.libs.get(lib_idx)?;
         if lib.album_track_focus.is_some() && self.is_viewing_album_folders(lib_idx) {
             Some(lib_idx)
@@ -29,9 +29,6 @@ impl App {
             || key.modifiers.contains(KeyModifiers::CONTROL)
             || self.context_menu_open()
             || !matches!(self.panel_focus, PanelFocus::Library)
-            || self.tab.is_home()
-            || self.tab.is_feeds()
-            || self.tab.is_audiobookshelf()
         {
             return None;
         }
@@ -39,11 +36,22 @@ impl App {
         if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
             return None;
         }
-        let lib_idx = self.tab.library_index().unwrap();
+        // This handler is pinned to the CONTEXT_STACK fn-pointer table
+        // (`input_resolver.rs`), so it cannot receive an explicit index
+        // parameter. The browse dispatch front door has already normalized
+        // the destination, so bind the Emby library index by positive match
+        // instead of defaulting a missing index to library zero.
+        let TabSelection::EmbyLibrary(lib_idx) = self.tab else {
+            return None;
+        };
         if key.code == KeyCode::Enter && self.selected_series_item(lib_idx).is_some() {
             return None;
         }
-        if self.libs[lib_idx].search.is_some() {
+        if self
+            .libs
+            .get(lib_idx)
+            .is_some_and(|lib| lib.search.is_some())
+        {
             self.handle_lib_search_key(lib_idx, key);
             Some(false)
         } else {
@@ -68,19 +76,19 @@ impl App {
                     self.update_lib_search(lib_idx);
                 }
             }
-            KeyCode::Up => self.move_lib_cursor(-1),
-            KeyCode::Down => self.move_lib_cursor(1),
+            KeyCode::Up => self.move_lib_cursor(lib_idx, -1),
+            KeyCode::Down => self.move_lib_cursor(lib_idx, 1),
             KeyCode::PageUp => {
                 let p = self.lib_page_size();
-                self.move_lib_cursor(-(p as i64));
+                self.move_lib_cursor(lib_idx, -(p as i64));
             }
             KeyCode::PageDown => {
                 let p = self.lib_page_size();
-                self.move_lib_cursor(p as i64);
+                self.move_lib_cursor(lib_idx, p as i64);
             }
-            KeyCode::Home => self.jump_lib_cursor(false),
-            KeyCode::End => self.jump_lib_cursor(true),
-            KeyCode::Enter => self.select(),
+            KeyCode::Home => self.jump_lib_cursor(lib_idx, false),
+            KeyCode::End => self.jump_lib_cursor(lib_idx, true),
+            KeyCode::Enter => self.select(lib_idx),
             KeyCode::Char(c) => {
                 self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
                 self.update_lib_search(lib_idx);
@@ -152,10 +160,10 @@ impl App {
     /// the actual fix: Ctrl+a now means "enqueue" here, before the playback
     /// context even sees the key. Replaces the old `Ctrl+q`/`Alt+q`
     /// bindings, which no longer enqueue.
-    fn handle_enqueue_selected_key(&mut self, key: KeyEvent) -> Option<bool> {
+    fn handle_enqueue_selected_key(&mut self, lib_idx: usize, key: KeyEvent) -> Option<bool> {
         match key.code {
             KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.enqueue_selected();
+                self.enqueue_selected(Some(lib_idx));
                 Some(false)
             }
             _ => None,
@@ -171,7 +179,7 @@ impl App {
     /// To navigate results, close the search (Esc) and use the flat-list
     /// bindings, which include h/j/k/l in 2-col mode.
     pub(super) fn handle_lib_key(&mut self, lib_idx: usize, key: KeyEvent) -> Option<bool> {
-        if let Some(quit) = self.handle_enqueue_selected_key(key) {
+        if let Some(quit) = self.handle_enqueue_selected_key(lib_idx, key) {
             return Some(quit);
         }
         if let Some(quit) = self.handle_global_view_key(key) {
@@ -179,29 +187,37 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Esc | KeyCode::Backspace => self.go_back(),
+            KeyCode::Esc | KeyCode::Backspace => self.go_back(lib_idx),
             KeyCode::Up => {
                 if self.is_viewing_season_grid(lib_idx) {
-                    self.move_lib_cursor(-4);
+                    self.move_lib_cursor(lib_idx, -4);
                 } else {
-                    self.move_lib_cursor_rows(-1);
+                    self.move_lib_cursor_rows(lib_idx, -1);
                 }
             }
             KeyCode::Down => {
                 if self.is_viewing_season_grid(lib_idx) {
-                    self.move_lib_cursor(4);
+                    self.move_lib_cursor(lib_idx, 4);
                 } else {
-                    self.move_lib_cursor_rows(1);
+                    self.move_lib_cursor_rows(lib_idx, 1);
                 }
             }
-            KeyCode::Left if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(-1),
-            KeyCode::Right if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(1),
+            KeyCode::Left if self.is_viewing_season_grid(lib_idx) => {
+                self.move_lib_cursor(lib_idx, -1)
+            }
+            KeyCode::Right if self.is_viewing_season_grid(lib_idx) => {
+                self.move_lib_cursor(lib_idx, 1)
+            }
             // Arrow-key column navigation: in 2-col lists (flat,
             // letter-grouped, and grouped-album views) Left/Right mirror h/l
             // (Up/Down already mirror j/k). Season-grid Left/Right are
             // covered above.
-            KeyCode::Left if self.current_library_columns(lib_idx) > 1 => self.move_lib_cursor(-1),
-            KeyCode::Right if self.current_library_columns(lib_idx) > 1 => self.move_lib_cursor(1),
+            KeyCode::Left if self.current_library_columns(lib_idx) > 1 => {
+                self.move_lib_cursor(lib_idx, -1)
+            }
+            KeyCode::Right if self.current_library_columns(lib_idx) > 1 => {
+                self.move_lib_cursor(lib_idx, 1)
+            }
             // Vim-style navigation. Complements the arrow keys (Left/Right
             // and Up/Down above carry the same movements):
             //   j/k mirror Up/Down (any column count) -- `j` is down, `k` is up.
@@ -210,40 +226,40 @@ impl App {
             //   not a global key now that the panel-mode cycle moved to `x`).
             KeyCode::Char('j') => {
                 if self.is_viewing_season_grid(lib_idx) {
-                    self.move_lib_cursor(4);
+                    self.move_lib_cursor(lib_idx, 4);
                 } else {
-                    self.move_lib_cursor_rows(1);
+                    self.move_lib_cursor_rows(lib_idx, 1);
                 }
             }
             KeyCode::Char('k') => {
                 if self.is_viewing_season_grid(lib_idx) {
-                    self.move_lib_cursor(-4);
+                    self.move_lib_cursor(lib_idx, -4);
                 } else {
-                    self.move_lib_cursor_rows(-1);
+                    self.move_lib_cursor_rows(lib_idx, -1);
                 }
             }
             KeyCode::Char('l') if self.current_library_columns(lib_idx) > 1 => {
-                self.move_lib_cursor(1)
+                self.move_lib_cursor(lib_idx, 1)
             }
             KeyCode::Char('h') if self.current_library_columns(lib_idx) > 1 => {
-                self.move_lib_cursor(-1)
+                self.move_lib_cursor(lib_idx, -1)
             }
             KeyCode::PageUp => {
                 if !self.page_grouped_album_cursor(lib_idx, false) {
                     let p = self.lib_page_size();
-                    self.move_lib_cursor_rows(-(p as i64));
+                    self.move_lib_cursor_rows(lib_idx, -(p as i64));
                 }
             }
             KeyCode::PageDown => {
                 if !self.page_grouped_album_cursor(lib_idx, true) {
                     let p = self.lib_page_size();
-                    self.move_lib_cursor_rows(p as i64);
+                    self.move_lib_cursor_rows(lib_idx, p as i64);
                 }
             }
-            KeyCode::Home => self.jump_lib_cursor(false),
-            KeyCode::End => self.jump_lib_cursor(true),
+            KeyCode::Home => self.jump_lib_cursor(lib_idx, false),
+            KeyCode::End => self.jump_lib_cursor(lib_idx, true),
             KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let item = self.current_lib_item();
+                let item = self.current_lib_item(lib_idx);
                 if let Some(item) = item {
                     if item.is_folder {
                         let ct = self.libs[lib_idx].library.collection_type.clone();
@@ -253,16 +269,16 @@ impl App {
                         self.play_folder(&item.id.clone());
                         self.save_queue_state();
                     } else {
-                        self.select();
+                        self.select(lib_idx);
                     }
                 }
             }
-            KeyCode::Enter => self.select(),
+            KeyCode::Enter => self.select(lib_idx),
             KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.toggle_watched()
+                self.toggle_watched(lib_idx)
             }
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.shuffle_play()
+                self.shuffle_play(lib_idx)
             }
             KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let name = self.libs[lib_idx].library.name.clone();
@@ -273,7 +289,7 @@ impl App {
                     on_confirm: ConfirmAction::RescanLibrary(lib_idx),
                 });
             }
-            KeyCode::Char('r') => self.refresh_lib(),
+            KeyCode::Char('r') => self.refresh_lib(lib_idx),
             KeyCode::Char('/') => {
                 if self.open_recursive_album_search(lib_idx) {
                     return Some(false);

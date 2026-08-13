@@ -3,7 +3,7 @@
 use crate::app::action::Command;
 use crate::app::layout::LibraryRowTarget;
 use crate::app::{
-    App, PanelFocus, PendingQueueAction, QueueScope, HELP_PANEL_W, PLAYLISTS_PANEL_W,
+    App, PanelFocus, PendingQueueAction, QueueScope, TabSelection, HELP_PANEL_W, PLAYLISTS_PANEL_W,
     SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
@@ -106,24 +106,7 @@ impl App {
                             (queue.queue_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
                     }
                 } else if left_area.contains((col, row).into()) {
-                    if self.tab.is_home() {
-                        self.cw_move_cursor(delta);
-                    } else if self.tab.is_feeds() {
-                        self.feed_tab_move_cursor(delta);
-                    } else if self.tab.is_audiobookshelf() {
-                        let in_episodes = self
-                            .tab
-                            .audiobookshelf_index()
-                            .and_then(|index| self.audiobookshelf_browse.get(index))
-                            .is_some_and(|state| state.episode_selection.is_some());
-                        if in_episodes {
-                            self.move_audiobookshelf_episode_cursor(delta * 3);
-                        } else {
-                            self.move_audiobookshelf_show_rows(delta * 3);
-                        }
-                    } else {
-                        self.move_lib_cursor(delta);
-                    }
+                    self.handle_mouse_scroll_browse(delta);
                 }
             }
             MouseEventKind::Down(MouseButton::Left) => {
@@ -172,20 +155,27 @@ impl App {
                 {
                     for (rect, target) in self.layout.main.selector_tabs.clone() {
                         if rect.contains((col, row).into()) {
-                            if self.tab.is_home() {
-                                self.home_select_section(target);
-                            } else if self.tab.is_feeds() {
-                                self.feed_tab_select_group(target);
-                            } else if self.tab.is_audiobookshelf() {
-                                self.select_audiobookshelf_filter(target);
-                            } else {
-                                let lib_idx = self.tab.library_index().unwrap();
-                                if self.is_music_group_view(lib_idx) {
-                                    self.select_music_group(lib_idx, target);
-                                } else if self.is_feed_home_video_group_view(lib_idx) {
-                                    self.select_feed_folder_group(lib_idx, target);
-                                } else if self.should_show_letter_pills(lib_idx) {
-                                    self.select_letter_pill(lib_idx, target);
+                            // Selector tabs are shared geometry, but which
+                            // Service's group/pill/filter action they invoke
+                            // is destination-specific: dispatch exhaustively
+                            // and no-op on a stale completed-frame layout.
+                            if !self.browse_mouse_ready() {
+                                return;
+                            }
+                            match self.tab {
+                                TabSelection::Home => self.home_select_section(target),
+                                TabSelection::Feeds => self.feed_tab_select_group(target),
+                                TabSelection::AudiobookshelfLibrary(_) => {
+                                    self.select_audiobookshelf_filter(target);
+                                }
+                                TabSelection::EmbyLibrary(lib_idx) => {
+                                    if self.is_music_group_view(lib_idx) {
+                                        self.select_music_group(lib_idx, target);
+                                    } else if self.is_feed_home_video_group_view(lib_idx) {
+                                        self.select_feed_folder_group(lib_idx, target);
+                                    } else if self.should_show_letter_pills(lib_idx) {
+                                        self.select_letter_pill(lib_idx, target);
+                                    }
                                 }
                             }
                             return;
@@ -216,69 +206,91 @@ impl App {
                         {
                             self.dispatch(Command::QueuePlayCursor);
                         }
-                    } else if self.tab.is_home() {
-                        self.home_play();
-                    } else if self.tab.is_feeds() {
-                        // Double-click on Feeds: no-op (playback wiring pending).
-                    } else if self.tab.is_audiobookshelf()
-                        && (self.layout.main.left_area.contains((col, row).into())
-                            || self.layout.main.hero_area.contains((col, row).into()))
-                    {
-                        let in_episodes = self
-                            .tab
-                            .audiobookshelf_index()
-                            .and_then(|index| self.audiobookshelf_browse.get(index))
-                            .is_some_and(|state| state.episode_selection.is_some());
-                        if !in_episodes {
-                            self.enter_audiobookshelf_episode_selection();
-                        }
-                    } else if self.layout.main.left_area.contains((col, row).into())
-                        || self.layout.main.hero_area.contains((col, row).into())
-                    {
-                        // Double-click activates the row under the cursor
-                        // (the first click of the pair already focused it).
-                        // Mirrors the Enter key's activation for the same
-                        // row so the two gestures can't drift: recursive
-                        // album search jump, album-folder track mode,
-                        // series selection, then `select()` (plays media
-                        // items and drills into folders). The inline hero is
-                        // just another surface over the selected item, so a
-                        // double-click there activates it the same way --
-                        // including entering a Series' season/episode
-                        // selection, which a single click never did.
-                        let lib_idx = self.tab.library_index().unwrap();
-                        // Wide Music: double-click on a track plays it.
-                        if self.layout.main.is_wide_music_active() {
-                            let pos = (col, row).into();
-                            if let Some(track_idx) = self.layout.main.wide_music_track_at(pos) {
-                                self.libs[lib_idx].album_track_focus = Some(track_idx);
-                                self.select();
+                    } else if self.browse_mouse_ready() {
+                        // Browse-located double-click: dispatch by the
+                        // selected destination before interpreting any
+                        // Service-local geometry (design §4). Each Service
+                        // reads only its own hit targets / index space; there
+                        // is no default-to-Emby branch.
+                        let in_left = self.layout.main.left_area.contains((col, row).into())
+                            || self.layout.main.hero_area.contains((col, row).into());
+                        match self.tab {
+                            TabSelection::Home => self.home_play(),
+                            TabSelection::Feeds => {
+                                // Double-click on Feeds: no-op (playback wiring pending).
                             }
-                            // Double-click on artwork or blank space: no-op.
-                            return;
-                        }
-                        if self.activate_recursive_album(lib_idx) {
-                            // active-search jump; unchanged
-                        } else if self.is_viewing_album_folders(lib_idx) {
-                            self.activate_album_folder_row(lib_idx);
-                        } else if self.libs[lib_idx].series_selection.is_some() {
-                            // Play the focused episode in selection mode.
-                            if let Some(episodes) = self.series_selection_episodes(lib_idx) {
-                                let ep_idx = self.libs[lib_idx].series_selection.unwrap_or(0);
-                                if let Some(ep) = episodes.get(ep_idx) {
-                                    let ep = ep.clone();
-                                    self.libs[lib_idx].series_selection = None;
-                                    self.play_item(ep);
+                            TabSelection::AudiobookshelfLibrary(index) => {
+                                if in_left {
+                                    let in_episodes = self
+                                        .tab
+                                        .audiobookshelf_index()
+                                        .and_then(|index| self.audiobookshelf_browse.get(index))
+                                        .is_some_and(|state| state.episode_selection.is_some());
+                                    if !in_episodes {
+                                        self.enter_audiobookshelf_episode_selection();
+                                    } else {
+                                        // Episode activation: inert seam for
+                                        // #518 (double-click on a selected
+                                        // episode).
+                                        self.activate_audiobookshelf_episode(index);
+                                    }
                                 }
                             }
-                        } else if let Some(item) = self.selected_series_item(lib_idx) {
-                            self.enter_series_selection(lib_idx, &item);
-                        } else {
-                            self.select();
+                            TabSelection::EmbyLibrary(lib_idx) => {
+                                if in_left {
+                                    // Double-click activates the row under the cursor
+                                    // (the first click of the pair already focused it).
+                                    // Mirrors the Enter key's activation for the same
+                                    // row so the two gestures can't drift: recursive
+                                    // album search jump, album-folder track mode,
+                                    // series selection, then `select()` (plays media
+                                    // items and drills into folders). The inline hero is
+                                    // just another surface over the selected item, so a
+                                    // double-click there activates it the same way --
+                                    // including entering a Series' season/episode
+                                    // selection, which a single click never did.
+                                    // Wide Music: double-click on a track plays it.
+                                    if self.layout.main.is_wide_music_active() {
+                                        let pos = (col, row).into();
+                                        if let Some(track_idx) =
+                                            self.layout.main.wide_music_track_at(pos)
+                                        {
+                                            self.libs[lib_idx].album_track_focus = Some(track_idx);
+                                            self.select(lib_idx);
+                                        }
+                                        // Double-click on artwork or blank space: no-op.
+                                        return;
+                                    }
+                                    if self.activate_recursive_album(lib_idx) {
+                                        // active-search jump; unchanged
+                                    } else if self.is_viewing_album_folders(lib_idx) {
+                                        self.activate_album_folder_row(lib_idx);
+                                    } else if self.libs[lib_idx].series_selection.is_some() {
+                                        // Play the focused episode in selection mode.
+                                        if let Some(episodes) =
+                                            self.series_selection_episodes(lib_idx)
+                                        {
+                                            let ep_idx =
+                                                self.libs[lib_idx].series_selection.unwrap_or(0);
+                                            if let Some(ep) = episodes.get(ep_idx) {
+                                                let ep = ep.clone();
+                                                self.libs[lib_idx].series_selection = None;
+                                                self.play_item(ep);
+                                            }
+                                        }
+                                    } else if let Some(item) = self.selected_series_item(lib_idx) {
+                                        self.enter_series_selection(lib_idx, &item);
+                                    } else {
+                                        self.select(lib_idx);
+                                    }
+                                }
+                            }
                         }
                     }
                     // Wide Music: double-click on right pane album enters
-                    // track selection (same as Enter).
+                    // track selection (same as Enter). Wide Music is an Emby
+                    // surface, so the right pane is only interpreted for an
+                    // explicitly selected Emby library.
                     if self.layout.main.is_wide_music_active()
                         && self
                             .layout
@@ -286,8 +298,9 @@ impl App {
                             .wide_music_right_area
                             .contains((col, row).into())
                     {
-                        let lib_idx = self.tab.library_index().unwrap();
-                        self.activate_album_folder_row(lib_idx);
+                        if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
+                            self.activate_album_folder_row(lib_idx);
+                        }
                     }
                     return;
                 }
@@ -348,10 +361,14 @@ impl App {
                     self.dispatch(Command::OpenIdleFeedLink);
                     return;
                 }
-                // Header breadcrumb clicks.
-                if self.tab.library_index().is_some() {
+                // Header breadcrumb clicks (an Emby-only surface: the
+                // crumb trail is published by the Emby renderer, so it is
+                // only interpreted for an explicitly selected Emby library).
+                if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
+                    if !self.browse_mouse_ready() {
+                        return;
+                    }
                     let crumbs = self.layout.main.breadcrumbs.clone();
-                    let lib_idx = self.tab.library_index().unwrap();
                     for (x_start, x_end, crumb_row, target_depth) in crumbs {
                         if row == crumb_row && col >= x_start && col < x_end {
                             self.libs[lib_idx].nav_stack.truncate(target_depth);
@@ -368,8 +385,24 @@ impl App {
                 self.click_set_cursor(col, row);
             }
             MouseEventKind::Down(MouseButton::Right) => {
-                if self.click_set_cursor(col, row) && !self.tab.is_audiobookshelf() {
-                    self.open_context_menu_at(col, row);
+                // Right-click dispatches by destination: Home and Emby open
+                // their existing menu after focusing the clicked row;
+                // Audiobookshelf and Feeds right-clicks focus the row but
+                // never open an Emby menu (menu construction refinement is
+                // Section 6.2). A stale completed-frame layout no-ops the
+                // whole gesture.
+                if !self.browse_mouse_ready() {
+                    return;
+                }
+                match self.tab {
+                    TabSelection::Home | TabSelection::EmbyLibrary(_) => {
+                        if self.click_set_cursor(col, row) {
+                            self.open_context_menu_at(col, row);
+                        }
+                    }
+                    TabSelection::AudiobookshelfLibrary(_) | TabSelection::Feeds => {
+                        self.click_set_cursor(col, row);
+                    }
                 }
             }
             MouseEventKind::Drag(MouseButton::Left)
@@ -397,6 +430,32 @@ impl App {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Wheel-scroll in the library panel dispatches by destination (design
+    /// §4). Each Service reads only its own cursor state / episode mode; no
+    /// default-to-Emby branch. A stale completed-frame layout no-ops.
+    fn handle_mouse_scroll_browse(&mut self, delta: i64) {
+        if !self.browse_mouse_ready() {
+            return;
+        }
+        match self.tab {
+            TabSelection::Home => self.cw_move_cursor(delta),
+            TabSelection::EmbyLibrary(lib_idx) => self.move_lib_cursor(lib_idx, delta),
+            TabSelection::AudiobookshelfLibrary(_) => {
+                let in_episodes = self
+                    .tab
+                    .audiobookshelf_index()
+                    .and_then(|index| self.audiobookshelf_browse.get(index))
+                    .is_some_and(|state| state.episode_selection.is_some());
+                if in_episodes {
+                    self.move_audiobookshelf_episode_cursor(delta * 3);
+                } else {
+                    self.move_audiobookshelf_show_rows(delta * 3);
+                }
+            }
+            TabSelection::Feeds => self.feed_tab_move_cursor(delta),
         }
     }
 }

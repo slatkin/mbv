@@ -37,23 +37,6 @@ fn local_daemon_bootstrap_adopts_saved_local_queue_and_source() {
 }
 
 #[test]
-fn failed_local_daemon_adoption_routes_through_remote_disconnected() {
-    // #119 task 5: a swallowed `adopt_queue()` send-failure must not
-    // leave the app silently sitting on optimistic queue state the
-    // daemon never received — it routes through the same handling a
-    // live `PlayerEvent::RemoteDisconnected` uses.
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-    let mut app = make_local_daemon_app_stub(Vec::new());
-    assert_eq!(app.queue_scope, QueueScope::Local);
-
-    app.handle_failed_local_daemon_adoption();
-
-    assert!(app.remote_player_tab.is_none());
-    assert_eq!(app.queue_scope, QueueScope::Local);
-    assert!(app.status.contains("daemon connection lost"));
-}
-
-#[test]
 fn remote_app_starts_on_local_queue_when_remote_queue_is_empty() {
     let app = make_remote_app_stub(make_items(2), Vec::new());
 

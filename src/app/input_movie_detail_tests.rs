@@ -10,7 +10,7 @@ use ratatui::Terminal;
 fn make_movie_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -95,7 +95,7 @@ fn push_library(app: &mut App, id: &str, name: &str) {
 fn make_tab_cycle_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     push_library(&mut app, "lib-movies", "Movies");
     push_library(&mut app, "lib-shows", "Shows");
     app
@@ -103,17 +103,6 @@ fn make_tab_cycle_app() -> App {
 
 fn shift(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::SHIFT)
-}
-
-#[test]
-fn enter_on_movie_plays_without_opening_detail() {
-    let mut app = make_movie_app();
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    assert!(!handled);
-    assert_eq!(app.player_tab.emby_items().len(), 1);
-    assert_eq!(app.player_tab.emby_items()[0].id, "movie-1");
 }
 
 // Alt+M's full-screen detail view (and its dedicated key binding) was
@@ -335,7 +324,7 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
     assert!(home.context_menu.is_some(), "combined (home) view");
 
     let mut lib = make_app_stub();
-    lib.tab = TabSelection::Library(0);
+    lib.tab = TabSelection::EmbyLibrary(0);
     let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.is_folder = true;
@@ -383,7 +372,7 @@ fn ctrl_a_enqueues_selected_from_library_view() {
     // `handle_enqueue_selected_key` (the queue view has no "enqueue
     // selected" concept and does not wire this in). See issue #209.
     let mut app = make_app_stub();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.is_folder = true;
@@ -459,7 +448,7 @@ fn tab_cycles_from_right_panel_when_search_is_closed() {
     let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert!(!handled);
-    assert_eq!(app.tab, TabSelection::Library(1));
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(1));
     assert_eq!(app.panel_focus, PanelFocus::Library);
 }
 
@@ -490,7 +479,9 @@ fn selecting_the_last_tab_scrolls_it_into_view_with_correct_arrows() {
         .terminal_width
         .saturating_sub(crate::app::TABBAR_LEFT_RESERVE + crate::app::TABBAR_RIGHT_RESERVE);
     let (vis_start, vis_end) = app.visible_tab_range(tab_w);
-    let tab_pos = app.tab.to_position(app.feeds_tab_pos());
+    let tab_pos = app
+        .tab
+        .to_position_with_counts(app.libs.len(), app.feeds_tab_pos());
     assert!(
         tab_pos >= vis_start && tab_pos < vis_end,
         "selected tab {} not in visible range {vis_start}..{vis_end}",

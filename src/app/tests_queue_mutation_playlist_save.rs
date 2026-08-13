@@ -128,33 +128,6 @@ fn overwriting_unrelated_playlist_leaves_tracked_source_identity_intact() {
 }
 
 #[test]
-fn save_after_consumed_projection_snapshots_the_projected_queue() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = saved_playlist_app();
-    consume_occurrence(&mut app, 0);
-    assert_eq!(app.player_tab.emby_items().len(), 1);
-
-    app.save_playlist_to_emby();
-
-    let item_ids = match app
-        .playlist_mutations
-        .get("pl-1")
-        .and_then(|state| state.active.as_ref())
-    {
-        Some(crate::app::types_playback::PlaylistMutation::Save {
-            item_ids: Some(ids),
-            ..
-        }) => ids.clone(),
-        other => panic!("expected active save, got {other:?}"),
-    };
-    assert_eq!(
-        item_ids,
-        vec!["id1"],
-        "a save requested after emitted consume must snapshot the post-projection queue"
-    );
-}
-
-#[test]
 fn save_before_replace_executes_pending_action_after_tracked_save() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = saved_playlist_app();

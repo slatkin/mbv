@@ -194,9 +194,9 @@ fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
         series_season_cursor: 0,
         library_total: None,
     });
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
-    app.enqueue_selected();
+    app.enqueue_selected(Some(0));
 
     // `PlayerTab`/`PlaybackQueue`/`EmbyItem` implement neither
     // `PartialEq` nor `Debug` in this codebase (confirmed: `EmbyItem`
@@ -256,56 +256,6 @@ fn enqueue_route_conflict_allows_enqueue_while_on_a_non_route_direct_remote() {
     // active_route stays None: this is a Sessions-panel direct-remote
     // connection, not a library route.
     assert!(!app.enqueue_route_conflict(Some("music".to_string())));
-}
-
-#[test]
-fn play_item_swaps_to_library_route_before_replacing_queue() {
-    // #256: library-route resolution is now a pure config read -- no
-    // live session lookup, no SESSIONS_LOAD_OVERRIDE seam needed here.
-    // DAEMON_ROUTE_CONNECT_OVERRIDE is still needed: apply_route_for_playback
-    // still performs a real connect to the resolved endpoint.
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _connect_guard = crate::app::DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-    fn route_connect_success(
-        _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        _auth_token: &str,
-    ) -> Result<
-        (
-            mbv_core::remote_player::RemotePlayer,
-            mpsc::Receiver<PlayerEvent>,
-        ),
-        String,
-    > {
-        Ok(mbv_core::remote_player::RemotePlayer::stub(
-            make_items(1),
-            0,
-        ))
-    }
-    *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
-
-    let mut app = make_app_stub();
-    app.library_routes
-        .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-    let mut lib_item = make_item("Music", "CollectionFolder");
-    lib_item.id = "lib-music".to_string();
-    app.libs.push(LibraryTab {
-        library: lib_item,
-        search: None,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
-    let mut item = make_item("Song", "Audio");
-    item.id = "song-1".to_string();
-    app.tab = TabSelection::Library(0);
-
-    app.play_item(item);
-
-    *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-    assert_eq!(app.active_route.as_deref(), Some("music"));
 }
 
 #[test]

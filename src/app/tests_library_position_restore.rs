@@ -17,7 +17,7 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
     let mut app = make_app_stub();
     app.config.lock().unwrap().server_url = base_url;
     app.panel_focus = PanelFocus::Queue;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
@@ -102,7 +102,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
     };
     app.replace_saved_library_position(0, pre_feature_position.clone());
     app.panel_focus = PanelFocus::Queue;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
@@ -140,7 +140,7 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {

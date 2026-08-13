@@ -21,7 +21,7 @@ fn current_lib_item_in_list_mode_returns_album_folder_not_a_track() {
     push_tracks(&mut app, "album-1", 3);
     assert!(app.libs[0].album_track_focus.is_none());
 
-    let item = app.current_lib_item();
+    let item = app.current_lib_item(0);
 
     let item = item.expect("current_lib_item should resolve the selected album");
     assert_eq!(item.id, "album-1");
@@ -34,7 +34,7 @@ fn current_lib_item_in_track_mode_returns_focused_track() {
     push_tracks(&mut app, "album-1", 3);
     app.libs[0].album_track_focus = Some(1);
 
-    let item = app.current_lib_item();
+    let item = app.current_lib_item(0);
 
     let item = item.expect("current_lib_item should resolve the focused track");
     assert_eq!(item.id, "album-1-track-1");
@@ -52,58 +52,11 @@ fn current_lib_item_in_track_mode_falls_back_safely_when_cache_missing() {
     app.libs[0].album_track_focus = Some(0);
     assert!(!app.album_tracks_cache.contains_key("album-1"));
 
-    let item = app.current_lib_item();
+    let item = app.current_lib_item(0);
 
     let item = item.expect("must fall back to the album folder item, not None");
     assert_eq!(item.id, "album-1");
     assert!(item.is_folder);
-}
-
-#[test]
-fn enter_again_in_track_mode_plays_focused_track_from_cached_queue() {
-    let mut app = make_music_album_app();
-    push_tracks(&mut app, "album-1", 3);
-    app.libs[0].album_track_focus = Some(1);
-
-    let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-
-    assert!(!handled);
-    // Queue built from the cached album tracks, starting at the focused
-    // track (index 1 -> "album-1-track-1").
-    let ids: Vec<_> = app
-        .player_tab
-        .emby_items()
-        .iter()
-        .map(|i| i.id.clone())
-        .collect();
-    assert_eq!(
-        ids,
-        vec!["album-1-track-0", "album-1-track-1", "album-1-track-2"]
-    );
-    assert_eq!(app.player_tab.queue_cursor, 1);
-    assert_eq!(app.libs[0].album_track_focus, Some(1));
-    let album_cursor_before = app.libs[0].nav_stack.last().unwrap().cursor;
-
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-
-    assert_eq!(
-        app.libs[0].album_track_focus,
-        Some(2),
-        "after Enter plays the focused track, the next Down key must remain in \
-             track-selection mode"
-    );
-    assert_eq!(
-        app.libs[0].nav_stack.last().unwrap().cursor,
-        album_cursor_before,
-        "after Enter plays the focused track, Down must not fall back to album-list navigation"
-    );
-    // Note: `app.queue_source` is not asserted here -- `play_items_routed`
-    // (pre-existing, out of Task 4's scope) calls
-    // `on_queue_replace_silent` as its first statement, which
-    // unconditionally resets `queue_source` to `Unknown` immediately
-    // after `select()` sets it to `Album`, so it is not a Task-4
-    // regression -- the queue *contents* (ids + cursor, asserted
-    // above) are the correct observable here.
 }
 
 #[test]

@@ -6,7 +6,10 @@ impl App {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
+        let (library_id, generation) = {
+            let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
+                return;
+            };
             state.shows.clear();
             state.total = 0;
             state.next_page = 0;
@@ -15,7 +18,24 @@ impl App {
             state.episodes = None;
             state.episode_selection = None;
             state.scroll = 0;
-        }
+            state.loading_pages.clear();
+            // Mark page 0 pending before re-issuing it so the catalog reloads
+            // from the first page (the renderer shows a Loading placeholder
+            // until the response lands).
+            state.loading_pages.insert(0);
+            (
+                state.library.id.clone(),
+                self.audiobookshelf_runtime.generation(),
+            )
+        };
+        // Restart the catalog request from page 0 after clearing state.
+        super::service_startup::start_audiobookshelf_shows(
+            self.config.lock().unwrap().clone(),
+            generation,
+            library_id,
+            0,
+            self.lib_tx.clone(),
+        );
     }
 
     pub(super) fn select_audiobookshelf_show(&mut self, cursor: usize) {
@@ -136,6 +156,41 @@ impl App {
             if state.episode_selection.is_some() {
                 state.set_episode_filter(filter);
             }
+        }
+    }
+
+    /// Inert until #518 (`activate-audiobookshelf-podcast-playback`) is
+    /// applied. Resolves only Audiobookshelf browse state, consumes the
+    /// request, and preserves selection and all queue/playback/Service state.
+    /// #518 replaces the no-op body with native episode extraction and an
+    /// explicit play submission (design §6).
+    pub(super) fn activate_audiobookshelf_episode(&mut self, audiobookshelf_library_index: usize) {
+        // Bound-check the resolved browse state; an absent or stale index is
+        // a silent no-op. The selected episode is preserved untouched.
+        if self
+            .audiobookshelf_browse
+            .get(audiobookshelf_library_index)
+            .is_none()
+        {
+            return;
+        }
+    }
+
+    /// Inert until #518 (`activate-audiobookshelf-podcast-playback`) is
+    /// applied. Resolves only Audiobookshelf browse state, consumes the
+    /// request, and preserves selection and all queue/playback/Service state.
+    /// #518 replaces the no-op body with native episode extraction and an
+    /// explicit enqueue submission (design §6).
+    pub(super) fn enqueue_audiobookshelf_episode(&mut self, audiobookshelf_library_index: usize) {
+        // Bound-check the resolved browse state; an absent or stale index is
+        // a silent no-op. No queue item is created merely because this seam
+        // exists.
+        if self
+            .audiobookshelf_browse
+            .get(audiobookshelf_library_index)
+            .is_none()
+        {
+            return;
         }
     }
 }

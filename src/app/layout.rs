@@ -18,6 +18,7 @@
 //! (e.g. the zero-area guard) -- it can never hold a mix of fields from two
 //! different frames.
 
+use super::types_tab_selection::TabSelection;
 use ratatui::layout::Rect;
 
 /// Seekbar rect, the two divider status indicators that still have a click
@@ -103,6 +104,16 @@ pub(crate) struct LayoutMain {
     /// Bounding rect of the wide Music right pane (album browser).
     /// Populated only when the wide Music layout is active.
     pub wide_music_right_area: Rect,
+    /// The destination (`self.tab`) the last completed render frame was drawn
+    /// for. Set by `App::render` only on the layout that completes and is
+    /// installed, never on intermediate drafts; the fresh-frame replacement
+    /// (a new `AppLayout::default()` per frame) resets every other field.
+    /// Browse mouse handling compares this tag with the normalized selected
+    /// destination and refuses to interpret the layout's hit targets when
+    /// they describe a different destination (design §4). `None` only before
+    /// the first completed render, when the default zero-area layout carries
+    /// no browse surface to misread.
+    pub(super) browse_destination: Option<TabSelection>,
 }
 
 impl LayoutMain {

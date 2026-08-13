@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 fn make_library_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -111,7 +111,7 @@ fn ctrl_r_confirmation_targets_active_library() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Library(1);
+    app.tab = TabSelection::EmbyLibrary(1);
 
     for (lib_id, title) in [("lib-shows", "Shows"), ("lib-movies", "Movies")] {
         let mut library = make_item(title, "CollectionFolder");
@@ -437,7 +437,7 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
         0,
     ));
 
-    assert_eq!(app.tab, TabSelection::Library(0));
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
     assert_eq!(app.panel_focus, PanelFocus::Library);
     assert_eq!(app.libs[0].nav_stack.len(), 1);
     assert!(app.libs[0].nav_stack[0].loading);

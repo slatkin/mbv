@@ -263,7 +263,7 @@ fn refresh_while_album_index_loads_coalesces_one_replacement() {
 fn recursive_activation_keeps_panel_focus_and_enters_inline_tracks() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = recursive_music_app();
-    app.tab = TabSelection::Library(0);
+    app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Library;
     app.libs[0].nav_stack.push(BrowseLevel {
         parent_id: "group-a".into(),

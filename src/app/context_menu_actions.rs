@@ -3,6 +3,11 @@ use super::{App, ContextAction, PanelFocus};
 
 impl App {
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
+        // The menu can only have opened on a matched Emby library, Home, or
+        // the queue; `context_menu_lib_idx()` resolves the explicitly matched
+        // Emby library (positive match, `None` on Home/queue) that every
+        // Emby-only callee below must receive.
+        let lib_idx = self.context_menu_lib_idx();
         match action {
             Some(ContextAction::Play) => {
                 if matches!(self.panel_focus, PanelFocus::Library) && self.tab.is_home() {
@@ -14,12 +19,12 @@ impl App {
                     // item) -- now the same seam as Enter on the queue tab
                     // and a queue-row double-click (see #134's follow-up).
                     self.dispatch(super::action::Command::QueuePlayCursor);
-                } else {
-                    self.select();
+                } else if let Some(lib_idx) = lib_idx {
+                    self.select(lib_idx);
                 }
             }
             Some(ContextAction::PlayFolder(id)) => {
-                let ct = if let Some(lib_idx) = self.tab.library_index() {
+                let ct = if let Some(lib_idx) = lib_idx {
                     self.libs[lib_idx].library.collection_type.clone()
                 } else {
                     String::new()
@@ -31,20 +36,26 @@ impl App {
                 self.save_queue_state();
             }
             Some(ContextAction::ShuffleFolder(id)) => {
-                self.shuffle_folder(&id);
+                if let Some(lib_idx) = lib_idx {
+                    self.shuffle_folder(lib_idx, &id);
+                }
             }
             Some(ContextAction::Enqueue) => {
                 if matches!(self.panel_focus, PanelFocus::Library) && self.tab.is_home() {
                     self.cw_enqueue();
                 } else {
-                    self.enqueue_selected();
+                    self.enqueue_selected(lib_idx);
                 }
             }
             Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder((*item).clone()),
-            Some(ContextAction::MarkPlayed(id)) => self.context_set_played(&id, true),
-            Some(ContextAction::MarkItemsPlayed(ids)) => self.context_set_many_played(&ids),
-            Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false),
-            Some(ContextAction::MarkItemsUnplayed(ids)) => self.context_set_many_unplayed(&ids),
+            Some(ContextAction::MarkPlayed(id)) => self.context_set_played(&id, true, lib_idx),
+            Some(ContextAction::MarkItemsPlayed(ids)) => {
+                self.context_set_many_played(&ids, lib_idx)
+            }
+            Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false, lib_idx),
+            Some(ContextAction::MarkItemsUnplayed(ids)) => {
+                self.context_set_many_unplayed(&ids, lib_idx)
+            }
             Some(ContextAction::RemoveFromContinueWatching) => self.remove_from_continue_watching(),
             Some(ContextAction::RemoveFromQueue(pos)) => self.remove_from_queue(pos),
             Some(ContextAction::GoToLibrary(item_id, item_type)) => {
@@ -66,7 +77,7 @@ impl App {
         }
     }
 
-    fn context_set_many_played(&mut self, item_ids: &[String]) {
+    fn context_set_many_played(&mut self, item_ids: &[String], lib_idx: Option<usize>) {
         let Some(client) = self.emby_client() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return;
@@ -77,7 +88,11 @@ impl App {
             .try_for_each(|item_id| client.mark_played(item_id));
         drop(client);
         match result {
-            Ok(()) => self.refresh_lib(),
+            Ok(()) => {
+                if let Some(lib_idx) = lib_idx {
+                    self.refresh_lib(lib_idx);
+                }
+            }
             Err(e) => self.flash(
                 format!("Couldn't mark items as played: {e}"),
                 ToastSeverity::Error,
@@ -85,7 +100,7 @@ impl App {
         }
     }
 
-    fn context_set_many_unplayed(&mut self, item_ids: &[String]) {
+    fn context_set_many_unplayed(&mut self, item_ids: &[String], lib_idx: Option<usize>) {
         let Some(client) = self.emby_client() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return;
@@ -96,7 +111,11 @@ impl App {
             .try_for_each(|item_id| client.mark_unplayed(item_id));
         drop(client);
         match result {
-            Ok(()) => self.refresh_lib(),
+            Ok(()) => {
+                if let Some(lib_idx) = lib_idx {
+                    self.refresh_lib(lib_idx);
+                }
+            }
             Err(e) => self.flash(
                 format!("Couldn't mark items as unplayed: {e}"),
                 ToastSeverity::Error,
@@ -104,7 +123,7 @@ impl App {
         }
     }
 
-    fn context_set_played(&mut self, item_id: &str, played: bool) {
+    fn context_set_played(&mut self, item_id: &str, played: bool, lib_idx: Option<usize>) {
         let Some(client) = self.emby_client() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return;
@@ -119,12 +138,10 @@ impl App {
         match result {
             Ok(()) => {
                 if played {
-                    let lib_idx_opt = if matches!(self.panel_focus, PanelFocus::Library) {
-                        self.tab.library_index()
-                    } else {
-                        None
-                    };
-                    if let Some(lib_idx) = lib_idx_opt {
+                    // `lib_idx` is the explicitly matched Emby library from
+                    // the action dispatch (`None` on Home/queue). If guard:
+                    // no feed/video cleanup when there is no Emby library.
+                    if let Some(lib_idx) = lib_idx {
                         if self.is_feed_home_video_group_view(lib_idx) {
                             if let Some(state) = self
                                 .libs
@@ -151,8 +168,8 @@ impl App {
                 }
                 if self.tab.is_home() {
                     let _ = self.fetch_home();
-                } else {
-                    self.refresh_lib();
+                } else if let Some(lib_idx) = lib_idx {
+                    self.refresh_lib(lib_idx);
                 }
             }
             Err(e) => self.flash(
@@ -218,8 +235,8 @@ impl App {
         }
     }
 
-    pub(super) fn toggle_watched(&mut self) {
-        let Some(item) = self.current_lib_item() else {
+    pub(super) fn toggle_watched(&mut self, lib_idx: usize) {
+        let Some(item) = self.current_lib_item(lib_idx) else {
             return;
         };
         if item.is_folder || item.is_audio() {
@@ -239,7 +256,6 @@ impl App {
         match result {
             Ok(()) => {
                 if !item.played {
-                    let lib_idx = self.tab.library_index().unwrap_or(0);
                     if self.is_feed_home_video_group_view(lib_idx) {
                         if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                             state.loading = true;
@@ -254,7 +270,7 @@ impl App {
                         }
                     }
                 }
-                self.refresh_lib();
+                self.refresh_lib(lib_idx);
             }
             Err(e) => self.flash(
                 format!("Couldn't update play status: {e}"),
