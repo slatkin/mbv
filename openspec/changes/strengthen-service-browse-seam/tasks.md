@@ -43,5 +43,5 @@
 
 - [x] 7.1 Run focused tab-selection, input-dispatch, mouse, refresh, help, context-menu, Feeds, and Audiobookshelf nextest suites.
 - [x] 7.2 Run `cargo check -p mbv`, `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets`, `make check-code-file-lines`, strict OpenSpec validation, and diff checks.
-- [ ] 7.3 Manually verify keyboard and mouse behavior across Home, multiple Emby libraries, multiple Audiobookshelf libraries, Feeds, queue focus, stale Service removal, Home startup, and Audiobookshelf show-position restoration.
+- [x] 7.3 Manually verify keyboard and mouse behavior across Home, multiple Emby libraries, multiple Audiobookshelf libraries, Feeds, queue focus, stale Service removal, Home startup, and Audiobookshelf show-position restoration.
 - [x] 7.4 Audit the completed change to confirm it adds no common browse-item model, `mbv-core` browse abstraction, QueueItem variant, Audiobookshelf playback, credential flow, persistence migration, or ctrl change.
