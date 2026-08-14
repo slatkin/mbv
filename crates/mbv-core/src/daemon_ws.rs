@@ -1,6 +1,6 @@
 fn handle_ws(
     ev: WsEvent,
-    client: &Arc<Mutex<EmbyClient>>,
+    client: Option<&Arc<Mutex<EmbyClient>>>,
     player: &Player,
     audio_only: bool,
     queue: &mut PlaybackQueue,
@@ -8,6 +8,9 @@ fn handle_ws(
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
 ) {
+    let Some(client) = client else {
+        return;
+    };
     match ev {
         WsEvent::Play {
             item_ids,

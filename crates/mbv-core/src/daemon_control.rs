@@ -137,16 +137,17 @@ fn admit_queue_items(
     original: Vec<QueueItem>,
     requested_cursor: Option<usize>,
     audio_only: bool,
+    has_emby: bool,
 ) -> (Vec<QueueItem>, usize) {
     let requested = requested_cursor.unwrap_or(0);
     let rebased = original
         .iter()
         .take(requested)
-        .filter(|item| item.admissible_for_owner(audio_only, |_| false))
+        .filter(|item| daemon_admits(item, audio_only, has_emby))
         .count();
     let items: Vec<_> = original
         .into_iter()
-        .filter(|item| item.admissible_for_owner(audio_only, |_| false))
+        .filter(|item| daemon_admits(item, audio_only, has_emby))
         .collect();
     let cursor = if items.is_empty() {
         0
@@ -154,6 +155,15 @@ fn admit_queue_items(
         rebased.min(items.len() - 1)
     };
     (items, cursor)
+}
+
+fn daemon_admits(item: &QueueItem, audio_only: bool, has_emby: bool) -> bool {
+    if item.is_emby() && !has_emby {
+        return false;
+    }
+    item.admissible_for_owner(audio_only, |kind| {
+        kind != crate::config::ServiceKind::Emby || has_emby
+    })
 }
 
 /// Rejects a queue command with `reason` and echoes the daemon's
@@ -227,7 +237,7 @@ fn handle_ctrl(
     mut resolved_items: Option<Result<Vec<EmbyItem>, String>>,
     merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
-    // Handle lifecycle requests before the authority transition.
+    let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {
         let is_local = ctrl_clients.lock().unwrap().is_local_client(client_id);
         if !is_local {
@@ -265,13 +275,6 @@ fn handle_ctrl(
             return;
         }
 
-        send_to(request.reply_tx, &CtrlEvent::ShutdownAccepted);
-        let _ = merged_tx.send(DaemonEvent::Shutdown);
-        return;
-    }
-
-    // Authority returns to Ctrl on the next ctrl command.
-    {
         let mut clients = ctrl_clients.lock().unwrap();
         if clients.authority == AuthorityHolder::EmbyRemote {
             clients.authority = AuthorityHolder::Ctrl;
@@ -342,7 +345,7 @@ fn handle_ctrl(
                 );
                 return;
             }
-            let (items, next_cursor) = admit_queue_items(items, Some(cursor), audio_only);
+            let (items, next_cursor) = admit_queue_items(items, Some(cursor), audio_only, has_emby);
             player.set_initial_queue(&items, next_cursor);
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
@@ -368,9 +371,6 @@ fn handle_ctrl(
                     items: new_items,
                     start_idx,
                 } => {
-                    // Legacy safety: a peer without unified-queue cannot see
-                    // Feed slots, so replacing the queue would silently
-                    // overwrite hidden canonical slots.
                     if !ctrl_clients
                         .lock()
                         .unwrap()
@@ -465,6 +465,9 @@ fn handle_ctrl(
             start_ticks,
             source: new_source,
         } => {
+            if !has_emby {
+                return;
+            }
             let fetched = match resolved_items.take() {
                 Some(Ok(v)) => v,
                 Some(Err(e)) => {
@@ -502,9 +505,6 @@ fn handle_ctrl(
                 send_to(request.reply_tx, &CtrlEvent::CommandRejected(reason));
                 return;
             }
-            // Legacy safety: a legacy PlayItems replaces the whole queue.
-            // If the canonical queue has Feed entries a legacy peer cannot
-            // see, the replacement would silently overwrite them.
             if !ctrl_clients
                 .lock()
                 .unwrap()
@@ -577,6 +577,9 @@ fn handle_ctrl(
                     start_ticks,
                     source: intent_source,
                 } => {
+                    if !has_emby {
+                        return;
+                    }
                     playback_intents.mark_resolving(intent.request_id);
                     if let Some(status) = playback_intents.pipe_status() {
                         log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
@@ -625,12 +628,11 @@ fn handle_ctrl(
                 }
             }
         }
-        CtrlCmd::RequestShutdown => {
-            log::warn!(target: "daemon", "RequestShutdown reached the command match; handled earlier")
-        }
+        CtrlCmd::RequestShutdown => {}
+        CtrlCmd::ApplyServiceSetup { .. } => {}
         // ── Unified queue commands ──────────────────────────────────────
         CtrlCmd::UnifiedQueueReplace { items, start_idx } => {
-            let (items, next_cursor) = admit_queue_items(items, start_idx, audio_only);
+            let (items, next_cursor) = admit_queue_items(items, start_idx, audio_only, has_emby);
             if items.is_empty() {
                 reject_command(
                     request.reply_tx,
@@ -675,7 +677,7 @@ fn handle_ctrl(
                 return;
             }
             let mut items = items;
-            items.retain(|item| item.admissible_for_owner(audio_only, |_| false));
+            items.retain(|item| daemon_admits(item, audio_only, has_emby));
             if items.is_empty() {
                 reject_command(
                     request.reply_tx,
@@ -787,7 +789,6 @@ fn handle_ctrl(
         }
         CtrlCmd::UnifiedQueueClear => {
             queue.clear();
-            // Clear the player's queue and stop.
             player.send_command(PlayerCommand::SubmitQueue {
                 items: Vec::new(),
                 start_idx: 0,

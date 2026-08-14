@@ -32,15 +32,19 @@ fn control_stream_shutdown_unblocks_a_concurrent_blocking_read() {
     let _server_stream = accept_thread.join().unwrap();
 
     let reader_clone = client_stream.try_clone().unwrap();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
     let read_thread = std::thread::spawn(move || {
         let mut reader_clone = reader_clone;
         let mut buf = [0u8; 8];
+        ready_tx.send(()).unwrap();
         reader_clone.read(&mut buf)
     });
 
-    // Give the read thread a moment to actually block in read() before
-    // we shut down the OTHER clone.
-    std::thread::sleep(Duration::from_millis(50));
+    // Synchronize with the reader immediately before its blocking read
+    // instead of racing an arbitrary sleep against thread scheduling.
+    ready_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("read thread must start before the socket is shut down");
     client_stream.shutdown().unwrap();
 
     let result = read_thread
@@ -68,6 +72,7 @@ fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
 
     let daemon = std::thread::spawn(move || {
         let (stream, _) = listener.accept().unwrap();
@@ -89,11 +94,12 @@ fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
-        // Keep the daemon-side handle open well past the point the
-        // client calls disconnect(), so the test can distinguish "the
-        // client's shutdown() itself caused the reader to exit" from
-        // "the daemon happened to hang up around the same time."
-        std::thread::sleep(Duration::from_secs(2));
+        // Keep the daemon-side handle open until the client has observed
+        // the shutdown. This is deterministic and does not leak a sleeping
+        // test thread past the assertion.
+        release_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("test must release the daemon after observing shutdown");
     });
 
     let (remote, _event_rx) =
@@ -102,7 +108,7 @@ fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
 
     remote.disconnect();
 
-    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + Duration::from_secs(1);
     while !remote.is_disconnected() && std::time::Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(10));
     }
@@ -111,7 +117,8 @@ fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
         "reader thread must observe the shutdown and exit, flipping is_disconnected()"
     );
 
-    drop(daemon); // let the daemon thread's sleep finish in the background
+    release_tx.send(()).unwrap();
+    daemon.join().unwrap();
 }
 
 #[test]
@@ -281,6 +288,7 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
 
     let daemon = std::thread::spawn(move || {
         let (stream, _) = listener.accept().unwrap();
@@ -319,8 +327,11 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
         .unwrap();
         writeln!(writer, "{active_status}").unwrap();
 
-        // Keep the connection open until the test thread is done with it.
-        std::thread::sleep(Duration::from_millis(500));
+        // Keep the connection open until the test has finished checking the
+        // status, without relying on a timing sleep.
+        release_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("test must release the daemon after checking status");
     });
 
     let (remote, _event_rx) =
@@ -343,6 +354,7 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
     assert!(!status.paused);
     assert_eq!(status.title, "Song");
 
+    release_tx.send(()).unwrap();
     daemon.join().unwrap();
 }
 
@@ -360,17 +372,25 @@ fn perform_handshake_times_out_when_daemon_never_sends_hello() {
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
+    let (accepted_tx, accepted_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
 
     let daemon = std::thread::spawn(move || {
         // Accept the connection and then say nothing -- long enough to
         // outlive the test's much shorter hard bound below.
         let (_stream, _) = listener.accept().unwrap();
-        std::thread::sleep(Duration::from_secs(2));
+        accepted_tx.send(()).unwrap();
+        release_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("test must release the stalled daemon");
     });
 
     let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
+    accepted_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("daemon must accept the test connection");
     let result = crate::bounded::run_with_hard_bound(
-        move || perform_handshake(stream, "token", || Ok("control".to_string())),
+        move || perform_handshake(stream, || Ok("control".to_string())),
         Duration::from_millis(50),
     );
 
@@ -379,6 +399,7 @@ fn perform_handshake_times_out_when_daemon_never_sends_hello() {
         Ok(_) => panic!("expected perform_handshake to time out, got Ok"),
     }
 
+    release_tx.send(()).unwrap();
     daemon.join().unwrap();
 }
 
@@ -386,7 +407,7 @@ fn perform_handshake_times_out_when_daemon_never_sends_hello() {
 fn perform_handshake_succeeds_promptly_when_daemon_responds() {
     // Companion to the timeout test above: the fast/success path must still
     // work end-to-end through the same bounded wrapper used in
-    // `connect_endpoint`, including a new client's legacy Emby-auth fallback.
+    // `connect_endpoint`, without transmitting a Service credential.
     use std::io::BufRead;
     use std::net::TcpListener;
 
@@ -410,10 +431,6 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
         let CtrlCmd::Hello(client_hello) = serde_json::from_str(&client_hello).unwrap() else {
             panic!("expected client hello");
         };
-        assert_eq!(
-            client_hello.auth_token.as_deref(),
-            Some("legacy-emby-token")
-        );
         assert_eq!(client_hello.control_token, None);
 
         let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
@@ -430,8 +447,8 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
     let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
     let result = crate::bounded::run_with_hard_bound(
         move || {
-            perform_handshake(stream, "legacy-emby-token", || {
-                panic!("legacy peer must not request a Control credential")
+            perform_handshake(stream, || {
+                panic!("packaged peer must not request a credential")
             })
         },
         Duration::from_secs(5),
@@ -451,6 +468,44 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
 }
 
 #[test]
+fn perform_handshake_rejects_old_version_before_sending_client_hello() {
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let daemon = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        let mut reader = BufReader::new(stream);
+        let mut old_hello = CtrlHello::current();
+        old_hello.protocol_version -= 1;
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(old_hello)).unwrap()
+        )
+        .unwrap();
+        reader
+            .get_mut()
+            .set_read_timeout(Some(Duration::from_millis(250)))
+            .unwrap();
+        let mut client_hello = String::new();
+        assert_eq!(reader.read_line(&mut client_hello).unwrap(), 0);
+    });
+
+    let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
+    let result = perform_handshake(stream, || {
+        panic!("version mismatch must not request a Control credential")
+    });
+    let error = match result {
+        Ok(_) => panic!("old protocol version must be rejected"),
+        Err(error) => error,
+    };
+    assert!(error.contains("incompatible daemon protocol version"));
+    daemon.join().unwrap();
+}
+
+#[test]
 fn request_shutdown_sends_command_and_receives_via_shared_channel() {
     // Proves the shutdown request/response path works through the shared
     // command channel: request_shutdown sends CtrlCmd::RequestShutdown and
@@ -460,7 +515,7 @@ fn request_shutdown_sends_command_and_receives_via_shared_channel() {
     let (mut remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
     remote.ctrl_compatibility.supports_lifecycle_shutdown = true;
 
-    let handle = std::thread::spawn(move || remote.request_shutdown(Duration::from_secs(2)));
+    let handle = std::thread::spawn(move || remote.request_shutdown(Duration::from_millis(100)));
 
     // Read the command the background thread sent.
     let cmd = cmd_rx
@@ -483,32 +538,6 @@ fn request_shutdown_sends_command_and_receives_via_shared_channel() {
         matches!(response, crate::remote_player::ShutdownResponse::TimedOut),
         "stub has no reader thread to inject a reply, so TimedOut is correct"
     );
-}
-
-#[test]
-fn feed_only_attach_to_legacy_peer_returns_compatibility_diagnostic() {
-    let (client, mut peer) = UnixStream::pair().unwrap();
-    let daemon = std::thread::spawn(move || {
-        let mut hello = CtrlHello::current();
-        hello
-            .capabilities
-            .retain(|cap| cap != crate::ctrl::CTRL_CAP_CONTROL_AUTH);
-        writeln!(
-            peer,
-            "{}",
-            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
-        )
-        .unwrap();
-    });
-
-    let result = perform_handshake(ControlStream::Unix(client), "", || {
-        Ok("unused-control-credential".to_string())
-    });
-    match result {
-        Err(error) => assert_eq!(error, LEGACY_DAEMON_COMPATIBILITY_ERROR),
-        Ok(_) => panic!("legacy feed-only attachment unexpectedly succeeded"),
-    }
-    daemon.join().unwrap();
 }
 
 #[test]

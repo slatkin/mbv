@@ -122,6 +122,12 @@ pub struct Config {
 pub struct EmbySetup {
     pub server_url: String,
     pub user_id: String,
+    #[serde(default = "default_emby_setup_revision")]
+    pub revision: u64,
+}
+
+const fn default_emby_setup_revision() -> u64 {
+    1
 }
 
 impl EmbySetup {
@@ -129,6 +135,7 @@ impl EmbySetup {
         Self {
             server_url: server_url.into().trim().trim_end_matches('/').to_string(),
             user_id: user_id.into().trim().to_string(),
+            revision: default_emby_setup_revision(),
         }
     }
 }
@@ -150,7 +157,7 @@ impl AudiobookshelfSetup {
 
 /// Singleton Service kind identifier. Each variant represents exactly one
 /// configured instance of that Service within mbv.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ServiceKind {
     Emby,
     /// Reserved; not yet implemented. Added now to establish the pattern
@@ -787,10 +794,7 @@ pub struct LibraryPositionLevel {
     /// for the top level of a large library. `None` = unfiltered / not applicable.
     #[serde(default)]
     pub letter_filter_index: Option<usize>,
-    /// The library's TRUE unfiltered item count, captured for the top level
-    /// of a library so a restored session doesn't need an extra unfiltered
-    /// fetch just to re-derive whether the letter pill row applies.
-    /// `None` for non-root levels (or when never captured).
+    /// The library's unfiltered item count for restoring the letter pill row.
     #[serde(default)]
     pub library_total: Option<usize>,
 }

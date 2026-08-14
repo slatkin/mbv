@@ -14,6 +14,7 @@ use tungstenite::Message;
 pub enum OutboundMessage {
     Text(String),
     Flush(mpsc::Sender<()>),
+    Shutdown,
 }
 
 #[derive(Clone)]
@@ -37,6 +38,10 @@ impl WsSender {
             return false;
         }
         rx.recv_timeout(timeout).is_ok()
+    }
+
+    pub fn shutdown(&self) {
+        let _ = self.tx.send(OutboundMessage::Shutdown);
     }
 }
 
@@ -232,6 +237,7 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
                                 OutboundMessage::Flush(tx) => {
                                     let _ = tx.send(());
                                 }
+                                OutboundMessage::Shutdown => break 'conn,
                             }
                         }
 

@@ -77,7 +77,7 @@ pub struct Player {
     pre_warmed_mpv: Arc<Mutex<Option<(Mpv, bool)>>>,
     pub status: Arc<Mutex<PlayerStatus>>,
     thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
-    ws_tx: Option<crate::ws::WsSender>,
+    ws_tx: Arc<Mutex<Option<crate::ws::WsSender>>>,
 }
 
 impl Player {
@@ -114,7 +114,7 @@ impl Player {
             pre_warmed_mpv: Arc::new(Mutex::new(None)),
             status: Arc::new(Mutex::new(PlayerStatus::default())),
             thread_handle: Mutex::new(None),
-            ws_tx,
+            ws_tx: Arc::new(Mutex::new(ws_tx)),
         }
     }
 
@@ -153,6 +153,16 @@ impl Player {
         } else {
             *credentials = Some((server_url, token));
         }
+    }
+
+    pub fn update_emby_runtime(
+        &self,
+        server_url: String,
+        token: String,
+        ws_tx: crate::ws::WsSender,
+    ) {
+        self.update_emby_credentials(server_url, token);
+        *self.ws_tx.lock().unwrap() = Some(ws_tx);
     }
 
     /// Replace or clear runtime-only Audiobookshelf access. This seam is
@@ -413,7 +423,7 @@ impl Player {
         let status = self.status.clone();
         let event_tx = self.event_tx.clone();
         let ws_tx = if client.is_some() {
-            self.ws_tx.clone()
+            self.ws_tx.lock().unwrap().clone()
         } else {
             None
         };

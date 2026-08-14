@@ -1,7 +1,8 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
@@ -44,7 +45,10 @@ fn bind_ctrl_listener() -> Option<UnixListener> {
 
 enum DaemonEvent {
     Player(PlayerEvent),
-    Ws(WsEvent),
+    Ws {
+        generation: crate::service_runtime::SetupGeneration,
+        event: WsEvent,
+    },
     /// Carries the requesting client's own event sender alongside the
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.
@@ -511,6 +515,13 @@ impl CtrlClients {
             .any(|c| c.id == id && c.transport == CtrlTransport::Local)
     }
 
+    fn transport(&self, id: CtrlClientId) -> Option<CtrlTransport> {
+        self.connection
+            .iter()
+            .find(|client| client.id == id)
+            .map(|client| client.transport)
+    }
+
     /// Whether the client `id` advertised `feed-playback` support at Hello.
     /// Used to gate per-client rejection echoes that would otherwise leak
     /// the Feed tail to a legacy peer.
@@ -642,7 +653,6 @@ fn spawn_ctrl_client<S>(
     transport: CtrlTransport,
     merged_tx: mpsc::Sender<DaemonEvent>,
     ctrl_clients: ClientRegistry,
-    client: Arc<Mutex<EmbyClient>>,
     control_credential: Option<String>,
     player_status: Arc<Mutex<crate::player::PlayerStatus>>,
     shared_queue: SharedQueueState,
@@ -702,16 +712,6 @@ fn spawn_ctrl_client<S>(
                     }
                     if let Err(e) = info.validate_control_credential(&control_credential) {
                         log::warn!(target: "daemon", "rejecting ctrl client: {e}");
-                        return;
-                    }
-                } else {
-                    let Some(auth_token) = info.auth_token.as_deref() else {
-                        log::warn!(target: "daemon", "rejecting ctrl client: missing Emby auth token");
-                        return;
-                    };
-                    let validate_client = client.lock().unwrap().clone();
-                    if let Err(e) = validate_client.validate_presented_token(auth_token) {
-                        log::warn!(target: "daemon", "rejecting ctrl client: presented Emby token validation failed: {e}");
                         return;
                     }
                 }

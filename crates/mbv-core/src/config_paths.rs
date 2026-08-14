@@ -554,6 +554,10 @@ fn save_emby_setup_at(setup: &EmbySetup, path: &std::path::Path) -> Result<(), S
         "user_id".to_string(),
         toml::Value::String(setup.user_id.clone()),
     );
+    server.insert(
+        "revision".to_string(),
+        toml::Value::Integer(setup.revision as i64),
+    );
     for key in ["username", "password", "api_key"] {
         server.remove(key);
     }

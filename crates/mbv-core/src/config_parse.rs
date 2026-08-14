@@ -301,8 +301,16 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .trim_end_matches('/')
         .to_string();
     let user_id = server.map(|s| get_str(s, "user_id")).unwrap_or_default();
-    let emby_setup = (!server_url.is_empty() && !user_id.is_empty())
-        .then(|| EmbySetup::new(&server_url, user_id));
+    let emby_setup = (!server_url.is_empty() && !user_id.is_empty()).then(|| {
+        let mut setup = EmbySetup::new(&server_url, user_id);
+        setup.revision = server
+            .and_then(|s| s.get("revision"))
+            .and_then(|v| v.as_integer())
+            .and_then(|v| u64::try_from(v).ok())
+            .filter(|revision| *revision > 0)
+            .unwrap_or(setup.revision);
+        setup
+    });
     let audiobookshelf_url = audiobookshelf
         .map(|section| get_str(section, "url"))
         .unwrap_or_default();

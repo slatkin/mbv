@@ -273,8 +273,7 @@ fn main() {
         let client = cached_emby_client(&config);
         log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
         println!("Connecting to daemon at {endpoint}...");
-        let auth_token = client.as_ref().map_or("", |client| client.token.as_str());
-        match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
+        match remote_player::RemotePlayer::connect_endpoint(&endpoint, "") {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon endpoint connected");
                 run_remote_app(client, remote, player_rx, endpoint, config.clone());
@@ -299,10 +298,9 @@ fn main() {
             // permits any number of them.
             log::info!(target: "startup", "local daemon detected; attaching");
             let client = cached_emby_client(&config);
-            let auth_token = client.as_ref().map_or("", |c| c.token.as_str());
             match remote_player::RemotePlayer::connect_endpoint(
                 &remote_player::DaemonEndpoint::Local,
-                &auth_token,
+                "",
             ) {
                 Ok((remote, player_rx)) => {
                     run_remote_app(
@@ -347,10 +345,9 @@ fn main() {
                     eprintln!("mbv: failed to start local daemon: {e}");
                     std::process::exit(1);
                 }
-                let auth_token = client.as_ref().map_or("", |c| c.token.as_str());
                 match remote_player::RemotePlayer::connect_endpoint(
                     &remote_player::DaemonEndpoint::Local,
-                    &auth_token,
+                    "",
                 ) {
                     Ok((remote, player_rx)) => {
                         run_remote_app(

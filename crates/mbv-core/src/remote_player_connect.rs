@@ -84,9 +84,6 @@ const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 // tighter than `EmbyClient::AUTHENTICATE_HARD_BOUND`.
 const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
 
-pub const LEGACY_DAEMON_COMPATIBILITY_ERROR: &str =
-    "daemon does not support control-auth; configure and authenticate Emby to attach to this legacy peer";
-
 // A local daemon that was *just* launched (via `stay_alive` or auto-detect)
 // may have written its PID file (which is what makes it "detected") slightly
 // before its ctrl socket is bound. Retry briefly rather than immediately
@@ -207,7 +204,6 @@ impl std::fmt::Display for DaemonEndpoint {
 /// `connect_endpoint`'s full setup.
 pub(crate) fn perform_handshake<F>(
     stream: ControlStream,
-    auth_token: &str,
     load_control_token: F,
 ) -> Result<(BufReader<ControlStream>, CtrlEvent, CtrlCompatibility), String>
 where
@@ -247,10 +243,7 @@ where
     let mut client_hello = if ctrl_compatibility.supports_control_auth {
         CtrlHello::current_control_client(load_control_token()?)
     } else {
-        if auth_token.is_empty() {
-            return Err(LEGACY_DAEMON_COMPATIBILITY_ERROR.to_string());
-        }
-        CtrlHello::current_client(auth_token.to_string())
+        CtrlHello::current()
     };
     client_hello.protocol_version = ctrl_compatibility.client_protocol_version;
     let client_hello =
@@ -357,6 +350,9 @@ fn apply_ctrl_event(
             // Handled by the request-completion path in RemotePlayer
             //, not by the general event loop.
         }
+        CtrlEvent::ServiceSetupApplied { .. } | CtrlEvent::ServiceSetupRejected { .. } => {
+            log::debug!(target: "remote", "ignoring owner-service reconciliation event");
+        }
         CtrlEvent::Disconnected { reason } => {
             if notify {
                 let msg = disconnect_reason_message(&reason).to_string();
@@ -450,7 +446,7 @@ fn apply_unified_queue_state(
 
 pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
-    auth_token: &str,
+    _auth_token: &str,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
     let stream = endpoint.connect_stream()?;
     log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
@@ -482,10 +478,9 @@ pub(crate) fn connect_endpoint(
     // `stream` itself is kept untouched on this thread for the writer
     // thread spawned below; a clone goes to the worker thread instead.
     let handshake_stream = stream.try_clone().map_err(|e| e.to_string())?;
-    let auth_token_owned = auth_token.to_string();
     let (reader, state_event, ctrl_compatibility) = crate::bounded::run_with_hard_bound(
         move || {
-            perform_handshake(handshake_stream, &auth_token_owned, || {
+            perform_handshake(handshake_stream, || {
                 crate::config::load_or_create_control_credential()
             })
         },

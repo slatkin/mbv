@@ -70,7 +70,6 @@ fn video_feed_qi(guid: &str) -> QueueItem {
         played: false,
     })
 }
-
 #[test]
 fn all_audio_accepts_audio_items() {
     assert!(all_audio(&[
@@ -391,7 +390,9 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
 fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
     let player = cold_player();
     let player_cmd_rx = player.spy_on_commands();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let mut client = crate::api::EmbyClient::new(Config::default());
+    client.token = "test-token".to_string();
+    let client = Arc::new(Mutex::new(client));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
     let (reply_tx, _reply_rx) = mpsc::channel();
     let mut queue = PlaybackQueue::default();
@@ -772,7 +773,7 @@ fn cold_websocket_noop_does_not_evict_ctrl_driver() {
 
     handle_ws(
         WsEvent::TogglePause,
-        &client,
+        Some(&client),
         &player,
         false,
         &mut queue,
