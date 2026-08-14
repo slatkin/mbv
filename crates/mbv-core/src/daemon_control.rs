@@ -13,6 +13,7 @@ fn handle_ctrl(
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
     playback_intents: &mut PlaybackIntentState,
+    has_audiobookshelf: bool,
     mut resolved_items: Option<Result<Vec<EmbyItem>, String>>,
     merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
@@ -137,7 +138,13 @@ fn handle_ctrl(
                 );
                 return;
             }
-            let (items, next_cursor) = admit_queue_items(items, Some(cursor), audio_only, has_emby);
+            let (items, next_cursor) = admit_queue_items(
+                items,
+                Some(cursor),
+                audio_only,
+                has_emby,
+                has_audiobookshelf,
+            );
             player.set_initial_queue(&items, next_cursor);
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
@@ -440,7 +447,8 @@ fn handle_ctrl(
                 );
                 return;
             }
-            let (items, next_cursor) = admit_queue_items(items, start_idx, audio_only, has_emby);
+            let (items, next_cursor) =
+                admit_queue_items(items, start_idx, audio_only, has_emby, has_audiobookshelf);
             if items.is_empty() {
                 reject_command(
                     request.reply_tx,
@@ -498,7 +506,7 @@ fn handle_ctrl(
                 return;
             }
             let mut items = items;
-            items.retain(|item| daemon_admits(item, audio_only, has_emby));
+            items.retain(|item| daemon_admits(item, audio_only, has_emby, has_audiobookshelf));
             if items.is_empty() {
                 reject_command(
                     request.reply_tx,

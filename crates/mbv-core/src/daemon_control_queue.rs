@@ -161,16 +161,17 @@ fn admit_queue_items(
     requested_cursor: Option<usize>,
     audio_only: bool,
     has_emby: bool,
+    has_audiobookshelf: bool,
 ) -> (Vec<QueueItem>, usize) {
     let requested = requested_cursor.unwrap_or(0);
     let rebased = original
         .iter()
         .take(requested)
-        .filter(|item| daemon_admits(item, audio_only, has_emby))
+        .filter(|item| daemon_admits(item, audio_only, has_emby, has_audiobookshelf))
         .count();
     let items: Vec<_> = original
         .into_iter()
-        .filter(|item| daemon_admits(item, audio_only, has_emby))
+        .filter(|item| daemon_admits(item, audio_only, has_emby, has_audiobookshelf))
         .collect();
     let cursor = if items.is_empty() {
         0
@@ -180,13 +181,20 @@ fn admit_queue_items(
     (items, cursor)
 }
 
-fn daemon_admits(item: &QueueItem, audio_only: bool, has_emby: bool) -> bool {
+fn daemon_admits(
+    item: &QueueItem,
+    audio_only: bool,
+    has_emby: bool,
+    has_audiobookshelf: bool,
+) -> bool {
     if item.is_emby() && !has_emby {
         return false;
     }
-    item.admissible_for_owner(audio_only, |kind| {
-        kind != crate::config::ServiceKind::Emby || has_emby
-    })
+    item.admissible_for_owner_with_audiobookshelf(
+        audio_only,
+        |kind| kind != crate::config::ServiceKind::Emby || has_emby,
+        has_audiobookshelf,
+    )
 }
 
 /// Returns a rejection reason when `items` contains an Audiobookshelf item

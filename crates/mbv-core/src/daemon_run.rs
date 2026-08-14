@@ -118,6 +118,11 @@ pub fn run_with_options(
         }
     });
 
+    // Install the owner's Audiobookshelf context on the daemon player so
+    // admitted ABS slots reach `prepare_source`, and wire the player's
+    // acknowledged-progress sender into the daemon event loop.
+    install_daemon_audiobookshelf_context(&player, &audiobookshelf_runtime, &merged_tx);
+
     // Shared state for ctrl socket initial-state snapshots — stores the
     // canonical queue so both legacy and unified-queue peers are seeded
     // from one source.
@@ -560,6 +565,16 @@ pub fn run_with_options(
                     );
                 }
             }
+            DaemonEvent::AudiobookshelfProgress(update) => {
+                apply_audiobookshelf_progress(
+                    update,
+                    audiobookshelf_runtime
+                        .as_ref()
+                        .map(|runtime| runtime.generation),
+                    &mut queue,
+                    &ctrl_clients,
+                );
+            }
             DaemonEvent::Ctrl(cmd, client_id, reply_tx) => {
                 if !ctrl_clients.lock().unwrap().has_client(client_id) {
                     continue;
@@ -589,6 +604,12 @@ pub fn run_with_options(
                                 reconcile_packaged_audiobookshelf(
                                     revision,
                                     &mut audiobookshelf_runtime,
+                                    &player,
+                                    &mut queue,
+                                    &mut source,
+                                    &shared_queue,
+                                    &ctrl_clients,
+                                    &client,
                                 )
                             }
                         }
@@ -607,6 +628,13 @@ pub fn run_with_options(
                             },
                         ),
                     }
+                    if result.is_ok() && kind == crate::config::ServiceKind::Audiobookshelf {
+                        install_daemon_audiobookshelf_context(
+                            &player,
+                            &audiobookshelf_runtime,
+                            &merged_tx,
+                        );
+                    }
                     continue;
                 }
                 handle_ctrl(
@@ -623,6 +651,7 @@ pub fn run_with_options(
                     &shared_queue,
                     &ctrl_clients,
                     &mut playback_intents,
+                    audiobookshelf_runtime.is_some(),
                     None,
                     &merged_tx,
                 );
@@ -708,6 +737,7 @@ pub fn run_with_options(
                     &shared_queue,
                     &ctrl_clients,
                     &mut playback_intents,
+                    audiobookshelf_runtime.is_some(),
                     Some(fetched),
                     &merged_tx,
                 );

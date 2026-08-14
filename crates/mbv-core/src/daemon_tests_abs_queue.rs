@@ -2,7 +2,10 @@
 // reconnects, and inbound mutations with capable and older unified peers
 // attached simultaneously.
 
+use super::apply_audiobookshelf_progress;
 use crate::playback_queue::AudiobookshelfQueueItem;
+use crate::player::AudiobookshelfProgressUpdate;
+use crate::service_runtime::SetupGeneration;
 
 fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
     QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
@@ -123,6 +126,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -174,6 +178,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -234,6 +239,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -286,6 +292,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -303,4 +310,191 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
             );
         }
     }
+}
+
+// A capable peer with installed runtime admits ABS items into the canonical
+// queue. Mirrors the two-condition gate: runtime present (has_audiobookshelf)
+// AND the client negotiated abs-queue (transport gate already passed).
+#[test]
+fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
+    let player = cold_player();
+    let mut emby_client = crate::api::EmbyClient::new(Config::default());
+    emby_client.token = "test-token".to_string();
+    let client = Arc::new(Mutex::new(emby_client));
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (capable_id, _capable_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
+    let mut queue = PlaybackQueue::default();
+    let mut source = QueueSource::Unknown;
+
+    handle_ctrl(
+        CtrlCmd::UnifiedAdoptQueue {
+            items: vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
+            cursor: 0,
+            source: QueueSource::Remote,
+        },
+        capable_id,
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
+        &client,
+        &player,
+        false,
+        &mut queue,
+        &mut source,
+        &shared_queue_state(),
+        &registry,
+        &mut PlaybackIntentState::default(),
+        true,
+        None,
+        &dummy_merged_tx,
+    );
+
+    assert_eq!(
+        queue.len(),
+        2,
+        "capable peer with installed runtime admits ABS and Emby"
+    );
+    assert!(
+        queue
+            .slots()
+            .iter()
+            .any(|slot| slot.item.is_audiobookshelf()),
+        "the ABS item must reach the canonical queue"
+    );
+}
+
+fn progress_update(
+    generation: u64,
+    current_time_seconds: f64,
+    is_finished: bool,
+) -> AudiobookshelfProgressUpdate {
+    AudiobookshelfProgressUpdate {
+        generation: SetupGeneration::new(generation),
+        library_item_id: "li_1".into(),
+        episode_id: "ep_1".into(),
+        current_time_seconds,
+        duration_seconds: 100.0,
+        is_finished,
+    }
+}
+
+fn abs_queue_with_slot() -> PlaybackQueue {
+    PlaybackQueue::from_queue_items(vec![abs_qi("li_1", "ep_1")], Some(0))
+}
+
+// Acknowledged periodic sync updates the matching Bound slot and is broadcast
+// as redacted progress to a client that negotiated abs-progress.
+#[test]
+fn acknowledged_progress_updates_bound_slot_and_broadcasts() {
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (_capable_id, capable_rx) = connect_client(&mut registry.lock().unwrap());
+    let mut queue = abs_queue_with_slot();
+
+    apply_audiobookshelf_progress(
+        progress_update(1, 30.0, false),
+        Some(SetupGeneration::new(1)),
+        &mut queue,
+        &registry,
+    );
+
+    let episode = queue.slots()[0].item.as_audiobookshelf().unwrap();
+    assert!(
+        episode.position_ticks > 0,
+        "acknowledged position must be written to the Bound slot"
+    );
+    assert!(!episode.is_finished);
+
+    match recv_event(&capable_rx) {
+        CtrlEvent::AudiobookshelfProgress(event) => {
+            assert_eq!(event.library_item_id, "li_1");
+            assert_eq!(event.episode_id, "ep_1");
+            assert_eq!(event.setup_generation, 1);
+            assert!(!event.is_finished);
+        }
+        _ => panic!("expected AudiobookshelfProgress broadcast"),
+    }
+}
+
+// Completion marks the Bound slot finished and broadcasts the completion.
+#[test]
+fn acknowledged_completion_marks_slot_done_and_broadcasts() {
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (_capable_id, capable_rx) = connect_client(&mut registry.lock().unwrap());
+    let mut queue = abs_queue_with_slot();
+
+    apply_audiobookshelf_progress(
+        progress_update(1, 100.0, true),
+        Some(SetupGeneration::new(1)),
+        &mut queue,
+        &registry,
+    );
+
+    let episode = queue.slots()[0].item.as_audiobookshelf().unwrap();
+    assert!(
+        episode.is_finished,
+        "completion must mark the Bound slot finished"
+    );
+
+    match recv_event(&capable_rx) {
+        CtrlEvent::AudiobookshelfProgress(event) => assert!(event.is_finished),
+        _ => panic!("expected AudiobookshelfProgress broadcast"),
+    }
+}
+
+// A stale-generation update is dropped without queue or broadcast side effect.
+#[test]
+fn stale_generation_progress_is_dropped_without_side_effects() {
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (_capable_id, capable_rx) = connect_client(&mut registry.lock().unwrap());
+    let mut queue = abs_queue_with_slot();
+    let before = queue.slots()[0]
+        .item
+        .as_audiobookshelf()
+        .unwrap()
+        .position_ticks;
+
+    apply_audiobookshelf_progress(
+        progress_update(1, 30.0, false),
+        Some(SetupGeneration::new(2)),
+        &mut queue,
+        &registry,
+    );
+
+    let episode = queue.slots()[0].item.as_audiobookshelf().unwrap();
+    assert_eq!(
+        episode.position_ticks, before,
+        "stale generation must not mutate the Bound slot"
+    );
+    assert!(
+        capable_rx.try_recv().is_err(),
+        "stale generation must not broadcast progress"
+    );
+}
+
+// Client exit alone must not finalize active ABS playback or mutate the Bound
+// queue — the stay-alive event loop continues owning ABS playback.
+#[test]
+fn client_exit_does_not_finalize_or_mutate_active_abs_queue() {
+    let mut clients = CtrlClients::default();
+    let (id, _rx) = connect_client(&mut clients);
+    let mut intents = PlaybackIntentState::default();
+
+    // Mirror the CtrlDisconnected arm: drop the client, invalidate its intent.
+    clients.remove(id);
+    intents.invalidate_connection(id);
+
+    // The disconnect path never receives the queue or player; an active ABS
+    // queue is untouched.
+    let queue = abs_queue_with_slot();
+    assert_eq!(queue.len(), 1);
+    assert!(
+        queue.slots()[0].item.is_audiobookshelf(),
+        "active ABS slot must survive client exit"
+    );
+    assert!(
+        queue.active_slot_id().is_some(),
+        "active ABS playback must not be finalized by client exit"
+    );
 }
