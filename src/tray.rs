@@ -3,7 +3,7 @@ use mbv_core::player::{PlayerCommand, PlayerStatus};
 use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::{Arc, Mutex};
 
-const TRAY_ICON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tray_icon.bin"));
+const TRAY_ICON: &[u8] = include_bytes!("../assets/tray_icon.bin");
 
 /// Whether the now-playing rows (`Playing` / `<Title>`) should be shown.
 ///

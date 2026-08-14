@@ -34,19 +34,7 @@ fn decode_html_entities(s: &str) -> String {
 }
 
 pub fn gen_session_id() -> EmbySessionId {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let t = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let pid = std::process::id();
-    let r: u32 = rand::random();
-    EmbySessionId::new(format!(
-        "{:x}{:x}{:x}{:x}",
-        t.as_secs(),
-        t.subsec_nanos(),
-        pid,
-        r
-    ))
+    EmbySessionId::new(uuid::Uuid::new_v4().simple().to_string())
 }
 
 pub fn device_name() -> String {

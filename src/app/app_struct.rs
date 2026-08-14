@@ -308,7 +308,7 @@ pub struct App {
     pub(super) visualizer_failed: bool,
     pub(super) visualizer: Option<CavaWorker>,
     pub(super) visualizer_frame: Vec<f32>,
-    pub(super) now_playing_throbber: throbber_widgets_tui::ThrobberState,
+    pub(super) now_playing_throbber_index: usize,
     pub(super) last_throbber_advance: std::time::Instant,
     pub(super) last_scroll_at: Instant,
     pub(super) last_nav_at: Instant,

@@ -144,7 +144,7 @@ impl App {
             visualizer_failed: false,
             visualizer: None,
             visualizer_frame: Vec::new(),
-            now_playing_throbber: throbber_widgets_tui::ThrobberState::default(),
+            now_playing_throbber_index: 0,
             last_throbber_advance: std::time::Instant::now(),
             last_played_item_id: None,
             last_played_completed: false,

@@ -59,11 +59,7 @@ log.workspace = true
 libc.workspace = true
 nix.workspace = true
 tui-scrollbar = "0.2.7"
-tui-big-text = "0.8.8"
-throbber-widgets-tui = "0.11.1"
-
-[build-dependencies]
-resvg = "0.48"
+time = { version = "0.3", features = ["parsing"] }
 
 [package.metadata.deb]
 maintainer = "slatkin <slatkin@gmail.com>"

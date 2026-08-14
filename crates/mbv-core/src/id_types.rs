@@ -8,89 +8,52 @@ use std::fmt;
 // logging; serde derives keep the ctrl wire format unchanged (a newtype struct
 // serializes as its inner value).
 
-/// Emby item identifier (movies, episodes, albums, tracks).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct ItemId(String);
+/// String-backed identifier newtype: `new`, `empty`/`clear` (reusing the
+/// heap allocation), `as_str`, and `Display`.
+macro_rules! string_id {
+    ($(#[$doc:meta])* $name:ident) => {
+        $(#[$doc])*
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        pub struct $name(String);
 
-impl ItemId {
-    pub fn new(s: impl Into<String>) -> Self {
-        Self(s.into())
-    }
+        impl $name {
+            pub fn new(s: impl Into<String>) -> Self {
+                Self(s.into())
+            }
 
-    /// Create an empty identifier, reusing the existing heap allocation when used
-    /// via [`clear`](Self::clear) on an already-initialized value.
-    pub fn empty() -> Self {
-        Self(String::new())
-    }
+            /// Create an empty identifier, reusing the existing heap allocation when used
+            /// via [`clear`](Self::clear) on an already-initialized value.
+            pub fn empty() -> Self {
+                Self(String::new())
+            }
 
-    /// Clear the identifier in place, reusing the internal buffer.
-    pub fn clear(&mut self) {
-        self.0.clear();
-    }
+            /// Clear the identifier in place, reusing the internal buffer.
+            pub fn clear(&mut self) {
+                self.0.clear();
+            }
 
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+        }
+
+        impl fmt::Display for $name {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                fmt::Display::fmt(&self.0, f)
+            }
+        }
+    };
 }
 
-impl fmt::Display for ItemId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
+string_id! {
+    /// Emby item identifier (movies, episodes, albums, tracks).
+    ItemId
 }
-
-/// A specific media source within an item.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct MediaSourceId(String);
-
-impl MediaSourceId {
-    pub fn new(s: impl Into<String>) -> Self {
-        Self(s.into())
-    }
-
-    pub fn empty() -> Self {
-        Self(String::new())
-    }
-
-    pub fn clear(&mut self) {
-        self.0.clear();
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+string_id! {
+    /// A specific media source within an item.
+    MediaSourceId
 }
-
-impl fmt::Display for MediaSourceId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-/// The Emby playback session.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct EmbySessionId(String);
-
-impl EmbySessionId {
-    pub fn new(s: impl Into<String>) -> Self {
-        Self(s.into())
-    }
-
-    pub fn empty() -> Self {
-        Self(String::new())
-    }
-
-    pub fn clear(&mut self) {
-        self.0.clear();
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for EmbySessionId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
+string_id! {
+    /// The Emby playback session.
+    EmbySessionId
 }
