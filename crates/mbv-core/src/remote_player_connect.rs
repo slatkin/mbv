@@ -381,6 +381,13 @@ fn apply_ctrl_event(
                 notify,
             );
         }
+        CtrlEvent::AudiobookshelfProgress(event) => {
+            // Dormant: forwarded for a future browse-reconciliation consumer.
+            // Does not touch `status`, `items`, or `unified_queue`.
+            if notify {
+                let _ = event_tx.send(PlayerEvent::AudiobookshelfProgress(event));
+            }
+        }
     }
 }
 

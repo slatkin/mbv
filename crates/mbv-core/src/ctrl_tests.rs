@@ -473,6 +473,8 @@ fn old_peer_without_feed_playback_capability_rejects_load_feed() {
         supports_feed_playback: false,
         supports_unified_queue: false,
         supports_control_auth: false,
+        supports_abs_queue: false,
+        supports_abs_progress: false,
     };
     assert!(!compat.supports_feed_playback);
 }
@@ -681,4 +683,102 @@ fn unified_queue_state_event_round_trips() {
 fn ctrl_compatibility_current_supports_unified_queue() {
     let compat = CtrlCompatibility::current();
     assert!(compat.supports_unified_queue);
+}
+
+// Guards for task 4.2: capability advertisement is static protocol support —
+// it says a peer can decode the wire shapes, not that a daemon owner is
+// eligible to bind or play an Audiobookshelf item (see daemon_admits in
+// daemon_control_queue.rs, tested separately in daemon_tests_abs_queue.rs).
+
+#[test]
+fn hello_current_advertises_abs_capabilities() {
+    let hello = CtrlHello::current();
+    assert!(hello.supports_abs_queue(), "hello must advertise abs-queue");
+    assert!(
+        hello.supports_abs_progress(),
+        "hello must advertise abs-progress"
+    );
+    assert!(hello.capabilities.iter().any(|c| c == CTRL_CAP_ABS_QUEUE));
+    assert!(hello
+        .capabilities
+        .iter()
+        .any(|c| c == CTRL_CAP_ABS_PROGRESS));
+}
+
+#[test]
+fn ctrl_compatibility_current_supports_abs_capabilities() {
+    let compat = CtrlCompatibility::current();
+    assert!(compat.supports_abs_queue);
+    assert!(compat.supports_abs_progress);
+}
+
+// Guards for task 3.3: prove that the Audiobookshelf ctrl wire types contain
+// exactly their expected fields — no api key, authorization header, resolved
+// URL, or playback sessionId can be added without breaking these tests.
+
+#[test]
+fn audiobookshelf_progress_event_wire_fields_exact() {
+    let event = AudiobookshelfProgressEvent {
+        library_item_id: "li_abc".to_string(),
+        episode_id: "ep_123".to_string(),
+        position_ticks: 5_000_000,
+        is_finished: false,
+        setup_generation: 1,
+    };
+    let json = serde_json::to_value(&event).unwrap();
+    let obj = json.as_object().unwrap();
+    let mut keys: Vec<&str> = obj.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "episode_id",
+            "is_finished",
+            "library_item_id",
+            "position_ticks",
+            "setup_generation"
+        ],
+        "AudiobookshelfProgressEvent must contain exactly these wire fields — \
+         adding any credential, session id, or resolved url will break this guard"
+    );
+}
+
+#[test]
+fn audiobookshelf_queue_item_wire_fields_exact() {
+    use crate::playback_queue::AudiobookshelfQueueItem;
+    let item = AudiobookshelfQueueItem {
+        library_item_id: "li_abc".to_string(),
+        episode_id: "ep_123".to_string(),
+        title: "Episode 1".to_string(),
+        show_title: Some("My Podcast".to_string()),
+        author: Some("Author".to_string()),
+        duration_ticks: Some(600_000_000),
+        position_ticks: 0,
+        played: false,
+        pub_date_secs: None,
+        is_finished: false,
+        cover_path: None,
+    };
+    let json = serde_json::to_value(&item).unwrap();
+    let obj = json.as_object().unwrap();
+    let mut keys: Vec<&str> = obj.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "author",
+            "cover_path",
+            "duration_ticks",
+            "episodeId",
+            "is_finished",
+            "libraryItemId",
+            "played",
+            "position_ticks",
+            "pub_date_secs",
+            "show_title",
+            "title"
+        ],
+        "AudiobookshelfQueueItem must contain exactly these wire fields — \
+         adding any credential, session id, or resolved url will break this guard"
+    );
 }
