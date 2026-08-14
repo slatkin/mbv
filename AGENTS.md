@@ -51,12 +51,5 @@ bypass filtering. `rtk grep` format flags (`-c/-l/-L/-o/-Z`) run raw.
 - Use ast-grep only for a concrete AST predicate, preferably scoped to known
   files. It does not replace reference or impact analysis. Exclude duplicate
   `.worktrees/` and `.opencode/` trees from manual/structural scans.
-- Use Serena for code edits only when the OpenCode session began in the target
-  worktree. Never create/switch worktrees mid-session or edit a child worktree
-  from a parent session. Before its first edit, call
-  `serena_initial_instructions` and `serena_get_current_config`; proceed only
-  when the active project is that worktree.
-- Prefer Serena symbol edits/renames/deletes; use normal edits for non-code,
-  unresolved symbols, or a Serena worktree mismatch.
 - After source edits, call JCodeMunch `register_edit` unless a hook reindexed
   the files.
