@@ -1434,6 +1434,7 @@ dependencies = [
  "redb",
  "serde",
  "serde_json",
+ "static_assertions",
  "toml",
  "tungstenite",
  "ureq",

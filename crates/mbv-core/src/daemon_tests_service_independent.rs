@@ -3,6 +3,40 @@ fn packaged_startup_context_is_service_independent() {
     let startup = DaemonStartupContext::new(Config::default(), DaemonRole::Packaged);
     assert_eq!(startup.role, DaemonRole::Packaged);
     assert!(startup.emby.is_none());
+    assert!(startup.audiobookshelf.is_none());
+}
+
+#[test]
+fn audiobookshelf_owner_context_credential_is_never_serializable() {
+    static_assertions::assert_not_impl_any!(
+        AudiobookshelfOwnerContext: serde::Serialize,
+        std::fmt::Debug
+    );
+}
+
+#[test]
+fn audiobookshelf_reconciliation_installs_context_but_keeps_admission_disabled() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    crate::config::persist_audiobookshelf_setup_and_secret(
+        &crate::config::AudiobookshelfSetup::new("https://books.example"),
+        "owner-secret",
+    )
+    .unwrap();
+
+    let item = abs_qi("library-a", "episode-1");
+    assert!(!daemon_admits(&item, false, false));
+
+    let mut current = None;
+    reconcile_packaged_audiobookshelf(1, &mut current).unwrap();
+    assert!(
+        current.is_some(),
+        "matching revision installs the Audiobookshelf owner context"
+    );
+
+    assert!(
+        !daemon_admits(&item, false, false),
+        "reconciliation must not enable Audiobookshelf admission"
+    );
 }
 
 #[test]
@@ -73,9 +107,13 @@ fn absent_emby_websocket_is_a_noop_for_ctrl_and_queue_state() {
 }
 
 #[test]
-fn owner_administration_is_packaged_local_only() {
+fn owner_administration_is_local_transport_only() {
     assert!(owner_admin_transport_allowed(
         DaemonRole::Packaged,
+        Some(CtrlTransport::Local)
+    ));
+    assert!(owner_admin_transport_allowed(
+        DaemonRole::Local,
         Some(CtrlTransport::Local)
     ));
     assert!(!owner_admin_transport_allowed(
@@ -84,9 +122,89 @@ fn owner_administration_is_packaged_local_only() {
     ));
     assert!(!owner_admin_transport_allowed(
         DaemonRole::Local,
-        Some(CtrlTransport::Local)
+        Some(CtrlTransport::Tcp)
     ));
     assert!(!owner_admin_transport_allowed(DaemonRole::Packaged, None));
+    assert!(!owner_admin_transport_allowed(DaemonRole::Local, None));
+}
+
+#[test]
+fn audiobookshelf_reconciliation_rejects_revision_mismatch_without_state_change() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    crate::config::persist_audiobookshelf_setup_and_secret(
+        &crate::config::AudiobookshelfSetup::new("https://books.example"),
+        "owner-secret",
+    )
+    .unwrap();
+
+    let mut current = None;
+    reconcile_packaged_audiobookshelf(1, &mut current).unwrap();
+    assert!(current.is_some(), "matching revision must install context");
+    let pre = current.as_ref().unwrap().generation;
+
+    let result = reconcile_packaged_audiobookshelf(2, &mut current);
+    assert!(
+        matches!(result, Err(ServiceSetupRejection::RevisionMismatch)),
+        "mismatched revision must be rejected, got {result:?}"
+    );
+    assert_eq!(
+        current.as_ref().unwrap().generation,
+        pre,
+        "a rejected reconciliation must not change the installed runtime"
+    );
+}
+
+#[test]
+fn audiobookshelf_reconciliation_reports_storage_unavailable_without_state_change() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    crate::config::persist_audiobookshelf_setup_and_secret(
+        &crate::config::AudiobookshelfSetup::new("https://books.example"),
+        "owner-secret",
+    )
+    .unwrap();
+
+    let mut current = None;
+    reconcile_packaged_audiobookshelf(1, &mut current).unwrap();
+    assert!(current.is_some());
+    let pre = current.as_ref().unwrap().generation;
+
+    // Drop the Service secret so the owner context can no longer be loaded.
+    crate::config::clear_service_secret(crate::config::ServiceKind::Audiobookshelf);
+
+    let result = reconcile_packaged_audiobookshelf(1, &mut current);
+    assert!(
+        matches!(result, Err(ServiceSetupRejection::StorageUnavailable)),
+        "unreadable storage must be rejected, got {result:?}"
+    );
+    assert_eq!(
+        current.as_ref().unwrap().generation,
+        pre,
+        "a rejected reconciliation must not change the installed runtime"
+    );
+}
+
+#[test]
+fn audiobookshelf_reconciliation_drops_context_when_setup_is_absent() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    crate::config::persist_audiobookshelf_setup_and_secret(
+        &crate::config::AudiobookshelfSetup::new("https://books.example"),
+        "owner-secret",
+    )
+    .unwrap();
+
+    let mut current = None;
+    reconcile_packaged_audiobookshelf(1, &mut current).unwrap();
+    assert!(
+        current.is_some(),
+        "setup must install context before removal"
+    );
+
+    crate::config::remove_audiobookshelf_setup_and_secret().unwrap();
+    reconcile_packaged_audiobookshelf(1, &mut current).unwrap();
+    assert!(
+        current.is_none(),
+        "removal signal must drop the Audiobookshelf owner context"
+    );
 }
 
 #[test]
@@ -110,7 +228,7 @@ fn every_setup_rejection_reason_is_wire_representable() {
     }
 }
 use super::{
-    daemon_admits, owner_admin_transport_allowed, DaemonRole, DaemonStartupContext,
-    EmbyOwnerContext,
+    daemon_admits, owner_admin_transport_allowed, reconcile_packaged_audiobookshelf,
+    AudiobookshelfOwnerContext, DaemonRole, DaemonStartupContext, EmbyOwnerContext,
 };
 use crate::ctrl::ServiceSetupRejection;

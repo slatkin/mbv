@@ -15,6 +15,15 @@ impl App {
         }
     }
 
+    fn signal_running_local_daemon(&mut self, revision: u64) {
+        if let Err(error) = mbv_core::remote_player::signal_local_daemon_service_setup(
+            mbv_core::config::ServiceKind::Audiobookshelf,
+            revision,
+        ) {
+            self.flash(error, ToastSeverity::Warning);
+        }
+    }
+
     pub(super) fn clear_audiobookshelf_authentication(&mut self) -> Result<(), String> {
         let current_generation = self.audiobookshelf_runtime.generation();
         self.audiobookshelf_runtime
@@ -82,12 +91,15 @@ impl App {
                     ),
                 );
                 match result {
-                    Ok(_) => {
-                        self.config.lock().unwrap().audiobookshelf_setup = Some(setup.clone());
+                    Ok((_, revision)) => {
+                        let mut committed = setup.clone();
+                        committed.revision = revision;
+                        self.config.lock().unwrap().audiobookshelf_setup = Some(committed);
                         self.audiobookshelf_runtime
                             .commit_ready(completion.generation, user.clone());
                         self.install_audiobookshelf_player_context(completion.generation);
                         self.audiobookshelf_setup_form = None;
+                        self.signal_running_local_daemon(revision);
                         self.flash(
                             format!(
                                 "Audiobookshelf {} is ready for {}",
@@ -204,6 +216,7 @@ impl App {
         self.clear_audiobookshelf_queue_memory();
         self.config.lock().unwrap().audiobookshelf_setup = None;
         self.audiobookshelf_runtime.remove_setup();
+        self.signal_running_local_daemon(0);
         self.flash(
             "Audiobookshelf removed; Emby and Feeds remain available".into(),
             ToastSeverity::Success,
@@ -265,16 +278,19 @@ impl App {
             },
         );
         match result {
-            Ok(_) => {
+            Ok((_, revision)) => {
                 self.audiobookshelf_runtime
                     .cancel_setup(generation, previous_state);
                 let replacement_generation = self.audiobookshelf_runtime.generation();
                 self.clear_audiobookshelf_catalog();
                 self.clear_audiobookshelf_queue_memory();
-                self.config.lock().unwrap().audiobookshelf_setup = Some(setup.clone());
+                let mut committed = setup.clone();
+                committed.revision = revision;
+                self.config.lock().unwrap().audiobookshelf_setup = Some(committed);
                 self.audiobookshelf_runtime
                     .commit_ready(replacement_generation, user.clone());
                 self.install_audiobookshelf_player_context(replacement_generation);
+                self.signal_running_local_daemon(revision);
                 self.flash(
                     format!(
                         "Audiobookshelf {} is ready for {}",

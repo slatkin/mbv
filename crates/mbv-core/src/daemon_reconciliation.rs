@@ -141,3 +141,33 @@ fn reconcile_packaged_emby(
     let _ = ws_sender.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
     Ok(())
 }
+
+/// Reconcile owner-local Audiobookshelf state by rereading owner storage.
+/// A removal (no persisted setup) drops the context; a matching revision
+/// installs a fresh context with an advanced generation; a mismatched
+/// revision or unreadable storage rejects without changing the runtime.
+/// Audiobookshelf admission and playback stay disabled regardless.
+fn reconcile_packaged_audiobookshelf(
+    requested_revision: u64,
+    current: &mut Option<AudiobookshelfOwnerContext>,
+) -> Result<(), ServiceSetupRejection> {
+    let owner_config =
+        crate::config::load_config().map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
+    let Some(setup) = owner_config.audiobookshelf_setup.as_ref() else {
+        *current = None;
+        return Ok(());
+    };
+    if setup.revision != requested_revision {
+        return Err(ServiceSetupRejection::RevisionMismatch);
+    }
+    let next = AudiobookshelfOwnerContext::from_packaged_storage_result(&owner_config)
+        .map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
+    let generation = current
+        .as_ref()
+        .map(|old| crate::service_runtime::SetupGeneration::new(old.generation.value() + 1))
+        .unwrap_or_default();
+    let mut next = next;
+    next.generation = generation;
+    *current = Some(next);
+    Ok(())
+}

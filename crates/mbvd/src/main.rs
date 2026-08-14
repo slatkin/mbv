@@ -4,7 +4,7 @@ use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
 fn print_usage() {
-    eprintln!("Usage: mbvd [--audio-only] [-q|--quit] [--export-shared-data] [--connect emby] [--version]");
+    eprintln!("Usage: mbvd [--audio-only] [-q|--quit] [--export-shared-data] [--connect emby] [--connect abs] [--disconnect abs] [--version]");
 }
 
 fn daemon_running() -> bool {
@@ -40,6 +40,8 @@ fn stop_daemon() -> Result<String, String> {
 enum Action {
     Serve { audio_only: bool },
     ConnectEmby,
+    ConnectAbs,
+    DisconnectAbs,
     Quit,
     Export,
     Help,
@@ -60,19 +62,39 @@ fn parse_action(args: &[String]) -> Result<Action, String> {
             "--connect" => {
                 i += 1;
                 let Some(service) = args.get(i) else {
-                    return Err("mbvd: --connect requires a Service (supported: emby)".into());
+                    return Err("mbvd: --connect requires a Service (supported: emby, abs)".into());
                 };
-                if service != "emby" {
-                    return Err("mbvd: unsupported Service; supported Services: emby".into());
+                match service.as_str() {
+                    "emby" => select_action(&mut action, Action::ConnectEmby)?,
+                    "abs" => select_action(&mut action, Action::ConnectAbs)?,
+                    _ => {
+                        return Err(
+                            "mbvd: unsupported Service; supported Services: emby, abs".into()
+                        )
+                    }
                 }
-                select_action(&mut action, Action::ConnectEmby)?;
+            }
+            "--disconnect" => {
+                i += 1;
+                let Some(service) = args.get(i) else {
+                    return Err("mbvd: --disconnect requires a Service (supported: abs)".into());
+                };
+                if service != "abs" {
+                    return Err("mbvd: unsupported Service; supported Services: abs".into());
+                }
+                select_action(&mut action, Action::DisconnectAbs)?;
             }
             arg => return Err(format!("mbvd: unknown argument {arg:?}")),
         }
         i += 1;
     }
-    if audio_only && matches!(action, Some(Action::ConnectEmby)) {
-        return Err("mbvd: --connect emby cannot be combined with daemon selectors".into());
+    if audio_only
+        && matches!(
+            action,
+            Some(Action::ConnectEmby | Action::ConnectAbs | Action::DisconnectAbs)
+        )
+    {
+        return Err("mbvd: service administration cannot be combined with daemon selectors".into());
     }
     Ok(action.unwrap_or(Action::Serve { audio_only }))
 }
@@ -117,8 +139,8 @@ fn prompt_password() -> Result<String, String> {
     result
 }
 
-fn administration_lock() -> Result<nix::fcntl::Flock<std::fs::File>, String> {
-    let path = config::data_dir_system_or_local().join("emby-connect.lock");
+fn administration_lock(stem: &str) -> Result<nix::fcntl::Flock<std::fs::File>, String> {
+    let path = config::data_dir_system_or_local().join(format!("{stem}-connect.lock"));
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|_| "mbvd: cannot create administration lock".to_string())?;
@@ -130,7 +152,7 @@ fn administration_lock() -> Result<nix::fcntl::Flock<std::fs::File>, String> {
         .open(path)
         .map_err(|_| "mbvd: cannot open administration lock".to_string())?;
     nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock)
-        .map_err(|_| "mbvd: another Emby administration command is running".to_string())
+        .map_err(|_| format!("mbvd: another {stem} administration command is running"))
 }
 
 fn classified_auth_error(error: &str) -> String {
@@ -148,7 +170,7 @@ fn connect_emby() -> Result<(), String> {
     }
     // The packaged command always uses the daemon's system-instance paths.
     std::env::set_var("MBV_SYSTEM", "1");
-    let _lock = administration_lock()?;
+    let _lock = administration_lock("emby")?;
     let server_url = prompt("Emby server URL")?;
     let username = prompt("Username")?;
     let password = prompt_password()?;
@@ -178,7 +200,7 @@ fn connect_emby() -> Result<(), String> {
             .map_err(|_| "mbvd: could not replace Emby setup".to_string())?;
     }
     if daemon_running() {
-        reconcile_running_owner(setup.revision)?;
+        reconcile_running_owner(config::ServiceKind::Emby, setup.revision)?;
         println!(
             "mbvd: Emby setup committed and active for {}",
             setup.server_url
@@ -192,7 +214,109 @@ fn connect_emby() -> Result<(), String> {
     Ok(())
 }
 
-fn reconcile_running_owner(revision: u64) -> Result<(), String> {
+fn classified_abs_error(error: &mbv_core::audiobookshelf::AudiobookshelfError) -> String {
+    use mbv_core::audiobookshelf::AudiobookshelfFailureClass;
+    match error.class {
+        AudiobookshelfFailureClass::AuthenticationRejected => {
+            "mbvd: Audiobookshelf authentication rejected".into()
+        }
+        _ => "mbvd: Audiobookshelf server unavailable or returned an invalid response".into(),
+    }
+}
+
+fn clear_audiobookshelf_owned_state() -> Result<(), String> {
+    match config::load_queue_state() {
+        Some(state) if !state.items.is_empty() => {
+            config::save_queue_state(&state.without_audiobookshelf())
+        }
+        _ => config::clear_queue_state(),
+    }
+}
+
+fn connect_abs() -> Result<(), String> {
+    if !interactive_terminal() {
+        return Err("mbvd: --connect abs requires an interactive terminal".into());
+    }
+    // The packaged command always uses the daemon's system-instance paths.
+    std::env::set_var("MBV_SYSTEM", "1");
+    let _lock = administration_lock("abs")?;
+    let server_url = prompt("Audiobookshelf server URL")?;
+    let api_key = prompt_password()?;
+    let config = config::load_config()
+        .map_err(|_| "mbvd: could not load owner configuration".to_string())?;
+    let existing = config.audiobookshelf_setup.clone();
+    let validated = mbv_core::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
+        &server_url,
+        &api_key,
+        Duration::from_secs(10),
+    )
+    .map_err(|error| classified_abs_error(&error))?;
+    let (setup, _user, api_key) = validated.into_parts();
+    let same_server = existing
+        .as_ref()
+        .is_some_and(|old| old.server_url == setup.server_url);
+    let revision = if existing.is_none() || same_server {
+        config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)
+            .map_err(|_| "mbvd: could not persist Audiobookshelf setup".to_string())?
+    } else {
+        config::replace_audiobookshelf_setup_and_secret(
+            &setup,
+            &api_key,
+            clear_audiobookshelf_owned_state,
+            || {},
+        )
+        .map_err(|_| "mbvd: could not replace Audiobookshelf setup".to_string())?
+    };
+    if daemon_running() {
+        reconcile_running_owner(config::ServiceKind::Audiobookshelf, revision)?;
+        println!(
+            "mbvd: Audiobookshelf setup committed and active for {}",
+            setup.server_url
+        );
+    } else {
+        println!(
+            "mbvd: Audiobookshelf setup committed for {}; loaded on next startup",
+            setup.server_url
+        );
+    }
+    Ok(())
+}
+
+fn disconnect_abs() -> Result<(), String> {
+    if !interactive_terminal() {
+        return Err("mbvd: --disconnect abs requires an interactive terminal".into());
+    }
+    std::env::set_var("MBV_SYSTEM", "1");
+    let _lock = administration_lock("abs")?;
+    let config = config::load_config()
+        .map_err(|_| "mbvd: could not load owner configuration".to_string())?;
+    let was_installed = config.audiobookshelf_setup.is_some();
+    config::remove_audiobookshelf_setup_and_secret_with_owned_state(
+        clear_audiobookshelf_owned_state,
+        || {},
+    )
+    .map_err(|_| "mbvd: could not remove Audiobookshelf setup".to_string())?;
+    if was_installed {
+        println!("mbvd: Audiobookshelf credential removed");
+    } else {
+        println!("mbvd: no Audiobookshelf setup was installed");
+    }
+    if daemon_running() {
+        // A revision of 0 signals removal: the running owner rereads its own
+        // storage, sees no setup, and drops its context.
+        if let Err(error) = reconcile_running_owner(config::ServiceKind::Audiobookshelf, 0) {
+            return Err(format!(
+                "{error}; the running process may retain the deleted key in memory"
+            ));
+        }
+        println!("mbvd: Audiobookshelf setup removed and active");
+    } else {
+        println!("mbvd: Audiobookshelf setup removed; cleared on next startup");
+    }
+    Ok(())
+}
+
+fn reconcile_running_owner(kind: config::ServiceKind, revision: u64) -> Result<(), String> {
     let stream = UnixStream::connect(config::control_socket_path())
         .map_err(|_| "mbvd: restart required (packaged daemon ctrl unavailable)".to_string())?;
     stream
@@ -218,12 +342,9 @@ fn reconcile_running_owner(revision: u64) -> Result<(), String> {
     .map_err(|_| "mbvd: restart required (cannot serialize ctrl hello)".to_string())?;
     writeln!(writer, "{hello}")
         .and_then(|_| {
-            serde_json::to_string(&mbv_core::ctrl::CtrlCmd::ApplyServiceSetup {
-                kind: config::ServiceKind::Emby,
-                revision,
-            })
-            .map_err(|_| io::Error::other("cannot serialize setup request"))
-            .and_then(|request| writeln!(writer, "{request}"))
+            serde_json::to_string(&mbv_core::ctrl::CtrlCmd::ApplyServiceSetup { kind, revision })
+                .map_err(|_| io::Error::other("cannot serialize setup request"))
+                .and_then(|request| writeln!(writer, "{request}"))
         })
         .map_err(|_| "mbvd: restart required (cannot send setup request)".to_string())?;
     writer
@@ -307,6 +428,8 @@ fn run() -> Result<(), String> {
             return Ok(());
         }
         Action::ConnectEmby => return connect_emby(),
+        Action::ConnectAbs => return connect_abs(),
+        Action::DisconnectAbs => return disconnect_abs(),
         Action::Quit => {
             println!("{}", stop_daemon()?);
             return Ok(());

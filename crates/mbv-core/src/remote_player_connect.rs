@@ -269,6 +269,53 @@ where
     Ok((reader, state_event, ctrl_compatibility))
 }
 
+/// Best-effort signal to a running same-user Local daemon to reread its own
+/// owner-local Service storage. A single non-blocking connect attempt is made;
+/// when no Local daemon is reachable the call returns `Ok(())` so a bare-mode
+/// commit proceeds without a daemon. When a daemon is reachable, the
+/// control-auth handshake runs, `ApplyServiceSetup` is sent, and the
+/// applied/rejected acknowledgement is awaited. Any failure after the connect
+/// reports a restart requirement; the caller's durable commit is untouched.
+pub fn signal_local_daemon_service_setup(
+    kind: crate::config::ServiceKind,
+    revision: u64,
+) -> Result<(), String> {
+    let path = PathBuf::from(crate::config::control_socket_path());
+    let stream = match UnixStream::connect(&path) {
+        Ok(stream) => stream,
+        Err(_) => return Ok(()),
+    };
+    stream
+        .set_read_timeout(Some(Duration::from_secs(6)))
+        .map_err(|_| "restart required (cannot read local daemon ctrl)".to_string())?;
+    let (mut reader, _state, _compatibility) =
+        perform_handshake(ControlStream::Unix(stream), || {
+            crate::config::load_or_create_control_credential()
+        })
+        .map_err(|_| "restart required (local daemon handshake failed)".to_string())?;
+    let request = serde_json::to_string(&CtrlCmd::ApplyServiceSetup { kind, revision })
+        .map_err(|_| "restart required (cannot serialize setup request)".to_string())?;
+    writeln!(reader.get_mut(), "{request}")
+        .and_then(|_| reader.get_mut().flush())
+        .map_err(|_| "restart required (cannot send setup request)".to_string())?;
+    for next in reader.lines() {
+        let line =
+            next.map_err(|_| "restart required (setup acknowledgement unavailable)".to_string())?;
+        let event = serde_json::from_str::<CtrlEvent>(&line)
+            .map_err(|_| "restart required (invalid setup acknowledgement)".to_string())?;
+        match event {
+            CtrlEvent::ServiceSetupApplied { .. } => return Ok(()),
+            CtrlEvent::ServiceSetupRejected { reason, .. } => {
+                return Err(format!(
+                    "restart required (live setup rejected: {reason:?})"
+                ))
+            }
+            _ => {}
+        }
+    }
+    Err("restart required (setup acknowledgement unavailable)".into())
+}
+
 fn apply_ctrl_event(
     ev: CtrlEvent,
     status: &Arc<Mutex<PlayerStatus>>,

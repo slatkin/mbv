@@ -51,6 +51,10 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
             "url".to_string(),
             toml::Value::String(setup.server_url.clone()),
         );
+        section.insert(
+            "revision".to_string(),
+            toml::Value::Integer(setup.revision as i64),
+        );
     } else {
         table.remove("audiobookshelf");
     }

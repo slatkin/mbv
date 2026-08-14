@@ -23,6 +23,10 @@ fn save_audiobookshelf_setup_at(
         .as_table_mut()
         .ok_or_else(|| format!("update {}: audiobookshelf is not a table", path.display()))?;
     section.insert("url".into(), toml::Value::String(setup.server_url.clone()));
+    section.insert(
+        "revision".into(),
+        toml::Value::Integer(setup.revision as i64),
+    );
     section.remove("api_key");
     section.remove("user_id");
     let text =
@@ -99,34 +103,55 @@ where
     Ok(())
 }
 
+/// Compute the next persisted revision for a committed Audiobookshelf setup:
+/// `1` for a first setup, otherwise one more than the currently persisted
+/// revision. Distinct from the in-memory `SetupGeneration`.
+fn next_audiobookshelf_revision() -> Result<u64, String> {
+    let existing = load_config()
+        .ok()
+        .and_then(|config| config.audiobookshelf_setup)
+        .map(|setup| setup.revision);
+    match existing {
+        None => Ok(1),
+        Some(revision) => revision
+            .checked_add(1)
+            .ok_or_else(|| "Audiobookshelf setup revision exhausted".to_string()),
+    }
+}
+
 /// Commit a validated Audiobookshelf candidate. The candidate validator must
 /// run before this boundary; this function only owns durable setup/secret IO.
+/// Returns the committed revision so callers can reconcile a running owner.
 pub fn persist_audiobookshelf_setup_and_secret(
     setup: &AudiobookshelfSetup,
     api_key: &str,
-) -> Result<(), String> {
+) -> Result<u64, String> {
     if api_key.trim().is_empty() {
         return Err("Audiobookshelf setup requires an API key".into());
     }
+    let revision = next_audiobookshelf_revision()?;
+    let mut setup = setup.clone();
+    setup.revision = revision;
     audiobookshelf_transaction(|config, secret| {
-        save_audiobookshelf_setup_at(setup, config)?;
+        save_audiobookshelf_setup_at(&setup, config)?;
         save_service_secret_at(api_key, secret)
-    })
+    })?;
+    Ok(revision)
 }
 
 /// Consume a validator result only after validation has succeeded. The
 /// returned identity is runtime-only and is never serialized by this seam.
 pub fn commit_audiobookshelf_candidate(
     candidate: crate::audiobookshelf::AudiobookshelfValidatedSetup,
-) -> Result<crate::audiobookshelf::AudiobookshelfUser, String> {
+) -> Result<(crate::audiobookshelf::AudiobookshelfUser, u64), String> {
     let (setup, user, api_key) = candidate.into_parts();
-    persist_audiobookshelf_setup_and_secret(&setup, &api_key)?;
-    Ok(user)
+    let revision = persist_audiobookshelf_setup_and_secret(&setup, &api_key)?;
+    Ok((user, revision))
 }
 
 pub fn repair_audiobookshelf_candidate(
     candidate: crate::audiobookshelf::AudiobookshelfValidatedSetup,
-) -> Result<crate::audiobookshelf::AudiobookshelfUser, String> {
+) -> Result<(crate::audiobookshelf::AudiobookshelfUser, u64), String> {
     commit_audiobookshelf_candidate(candidate)
 }
 
@@ -163,23 +188,26 @@ pub fn replace_audiobookshelf_setup_and_secret<C, R>(
     api_key: &str,
     clear_owned_state: C,
     restore_owned_state: R,
-) -> Result<(), String>
+) -> Result<u64, String>
 where
     C: FnOnce() -> Result<(), String>,
     R: FnOnce(),
 {
+    let revision = next_audiobookshelf_revision()?;
+    let mut setup = setup.clone();
+    setup.revision = revision;
     let result = audiobookshelf_transaction(|config, secret| {
         clear_audiobookshelf_setup_at(config)?;
         clear_service_secret_result(ServiceKind::Audiobookshelf)
             .map_err(|error| format!("remove Audiobookshelf secret: {error}"))?;
         clear_owned_state()?;
-        save_audiobookshelf_setup_at(setup, config)?;
+        save_audiobookshelf_setup_at(&setup, config)?;
         save_service_secret_at(api_key, secret)
     });
     if result.is_err() {
         restore_owned_state();
     }
-    result
+    result.map(|()| revision)
 }
 
 /// Confirmed different-server replacement. Validation is represented by the
@@ -189,17 +217,17 @@ pub fn replace_audiobookshelf_candidate<C, R>(
     candidate: crate::audiobookshelf::AudiobookshelfValidatedSetup,
     clear_owned_state: C,
     restore_owned_state: R,
-) -> Result<crate::audiobookshelf::AudiobookshelfUser, String>
+) -> Result<(crate::audiobookshelf::AudiobookshelfUser, u64), String>
 where
     C: FnOnce() -> Result<(), String>,
     R: FnOnce(),
 {
     let (setup, user, api_key) = candidate.into_parts();
-    replace_audiobookshelf_setup_and_secret(
+    let revision = replace_audiobookshelf_setup_and_secret(
         &setup,
         &api_key,
         clear_owned_state,
         restore_owned_state,
     )?;
-    Ok(user)
+    Ok((user, revision))
 }
