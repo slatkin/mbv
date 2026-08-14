@@ -7,6 +7,7 @@ playback belongs to the terminal, Local daemon, or packaged `mbvd`.
 
 - `CONTEXT.md`: domain vocabulary; *Avoid* means incorrect terminology.
 - Current (not superseded) ADRs in `docs/adr/` before architecture changes.
+- `openspec` contains current and archived specs for major implementations.
 
 ## Boundaries
 

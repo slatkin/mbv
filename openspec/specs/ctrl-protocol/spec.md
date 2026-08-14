@@ -3,27 +3,26 @@
 ## Purpose
 TBD - created by archiving change daemon-multi-connection. Update Purpose after archive.
 ## Requirements
-### Requirement: Protocol version 8
+### Requirement: Protocol version 9
 
-The ctrl protocol version SHALL be 8. Clients and daemons SHALL negotiate protocol version
-8 during the hello handshake and SHALL reject a peer reporting any other version.
+The ctrl protocol version SHALL be 9. Clients and daemons SHALL negotiate protocol version 9 during the hello handshake and SHALL reject a peer reporting any other version before the client sends credential-bearing or command messages. Version 9 SHALL remove the legacy packaged-`mbvd` Emby-token authentication field and behavior. This non-additive version bump is required by the ctrl wire rule because it removes a hello field and changes handshake semantics; the capability rule continues to apply to additive changes.
 
-#### Scenario: v8 client connects to v8 daemon
+#### Scenario: v9 client connects to v9 daemon
 
-- **WHEN** a client and daemon both report protocol version 8
-- **THEN** the connection SHALL proceed with v8 semantics
+- **WHEN** a client and daemon both report protocol version 9
+- **THEN** the connection SHALL proceed with v9 semantics
 
-#### Scenario: v7 client connects to v8 daemon
+#### Scenario: older client connects to v9 daemon
 
-- **WHEN** a client reports protocol version 7 to a daemon requiring version 8
-- **THEN** the daemon SHALL reject the connection with a protocol-version mismatch
+- **WHEN** a client reporting any version other than 9 connects to a daemon requiring version 9
+- **THEN** the daemon SHALL reject the protocol mismatch
+- **THEN** the client SHALL NOT send an Emby authentication token
 
-#### Scenario: v8 client connects to a leftover v7 local daemon
+#### Scenario: v9 client connects to an older daemon
 
-- **WHEN** an upgraded client uses any Local connection path to a daemon reporting version 7
-- **THEN** the client SHALL refuse the connection
-- **THEN** the failure message SHALL identify a protocol-version mismatch and name `mbv -q`
-  as the way to stop the leftover daemon
+- **WHEN** a v9 client receives a daemon hello reporting any version other than 9
+- **THEN** the client SHALL refuse the connection without sending a Remote Service credential
+- **THEN** the failure message SHALL identify a protocol-version mismatch
 
 ### Requirement: Acknowledged local-daemon shutdown request
 
@@ -159,23 +158,57 @@ The Local daemon SHALL authenticate ctrl clients with a stable mbv-owned Control
 - **WHEN** a client has no configured Remote Service but presents the valid Local daemon Control credential
 - **THEN** the Local daemon SHALL accept the ctrl connection
 
-### Requirement: Control authentication migration is capability-gated
-Control-credential authentication SHALL be advertised and selected through an additive ctrl capability. A new client SHALL use Control authentication with a capable Local daemon and SHALL preserve legacy Emby-token authentication only when connecting to a peer that does not advertise the capability, including deferred `mbvd` implementations.
+### Requirement: Control authentication is role-specific
+The Local daemon SHALL authenticate ctrl clients with its stable same-user Control credential. Packaged `mbvd` SHALL perform no application-level ctrl authentication: Unix-socket filesystem permissions and reachability of its configured TCP listener on the trusted LAN SHALL be the access boundaries. Neither role SHALL use, validate, or receive a Remote Service credential as ctrl authentication. This replaces the former capability-gated legacy Emby-token fallback; v9 has no `auth_token` field or legacy authentication path.
 
-#### Scenario: New client connects to capable Local daemon
-- **WHEN** the daemon hello advertises Control-credential authentication
-- **THEN** the client SHALL respond with its Control credential
-- **THEN** it SHALL send no Service credential in the Control-credential field
+#### Scenario: Client presents the Local daemon Control credential
+- **WHEN** a client presents the valid Control credential to a Local daemon during the ctrl handshake
+- **THEN** the Local daemon SHALL authenticate it independently of all Remote Service states
 
-#### Scenario: New client connects to deferred mbvd
-- **WHEN** a daemon hello does not advertise Control-credential authentication
-- **WHEN** the client has a Ready Emby Service and a legacy Emby credential
-- **THEN** the client MAY use the existing Emby-authenticated handshake for that peer
+#### Scenario: Client attaches to packaged mbvd over Unix
+- **WHEN** a client reaches packaged `mbvd` through its configured Unix ctrl socket
+- **THEN** packaged `mbvd` SHALL accept protocol-compatible ctrl without requesting application credentials
+- **THEN** operating-system socket permissions SHALL remain the access boundary
 
-#### Scenario: Feed-only client reaches a legacy peer
-- **WHEN** a daemon hello does not advertise Control-credential authentication
-- **WHEN** the client has no Emby credential for the legacy handshake
-- **THEN** the client SHALL reject the attachment with a compatibility diagnostic
+#### Scenario: Client attaches to packaged mbvd over TCP
+- **WHEN** a client reaches packaged `mbvd` through its configured TCP listener
+- **THEN** packaged `mbvd` SHALL accept protocol-compatible ctrl without requesting application credentials
+- **THEN** trusted-LAN reachability SHALL remain the access boundary
+
+#### Scenario: Client has a legacy Service credential configured
+- **WHEN** a v9 client connects to a v9 packaged daemon while it has a legacy Emby credential locally
+- **THEN** the client SHALL NOT transmit that credential during ctrl admission
+- **THEN** the daemon hello and client hello SHALL contain no Service-credential field
+
+### Requirement: Packaged owner-service reconciliation is local-only
+The v9 ctrl protocol SHALL carry `CtrlCmd::ApplyServiceSetup { kind, revision }` and the matching `CtrlEvent::ServiceSetupApplied { kind, revision }` or `CtrlEvent::ServiceSetupRejected { kind, revision, reason }`. It SHALL carry no setup values, identity hash, or Service credential. `reason` SHALL be one of `UnsupportedService`, `RevisionMismatch`, `StorageUnavailable`, or `TransitionRejected`.
+
+#### Scenario: Packaged Unix ctrl applies a persisted setup
+- **WHEN** a packaged-daemon local Unix client sends `ApplyServiceSetup` for a committed Service revision
+- **THEN** the daemon SHALL return an applied or explicitly rejected response for that request
+
+#### Scenario: TCP or Local-daemon client sends owner administration
+- **WHEN** a TCP client or Local-daemon client sends `ApplyServiceSetup`
+- **THEN** the daemon SHALL reject the request without changing Service runtime state
+
+### Requirement: Transport-scoped lifecycle authority remains enforced
+Removing packaged ctrl application authentication SHALL NOT broaden local-only lifecycle privileges. Requests restricted to this machine's Local daemon or a local Unix transport SHALL remain rejected over packaged TCP ctrl.
+
+#### Scenario: TCP client requests daemon shutdown
+- **WHEN** a protocol-compatible TCP ctrl client requests coordinated daemon shutdown
+- **THEN** the daemon SHALL reject the lifecycle request without stopping playback or the daemon
+
+#### Scenario: Allowed local Unix client requests lifecycle control
+- **WHEN** an allowed local Unix ctrl client submits a lifecycle request permitted for that daemon role
+- **THEN** the request SHALL be evaluated under its existing transport and role restrictions
+
+### Requirement: Audio-only capability remains additive within a protocol version
+Adding or removing the audio-only capability alone SHALL NOT change a ctrl protocol version, and an otherwise compatible peer that does not recognize it SHALL ignore it as specified by the base requirement. This SHALL NOT prohibit a deliberate protocol-version bump required by a non-additive hello-field removal or handshake-framing change.
+
+#### Scenario: v9 daemon advertises audio-only
+- **WHEN** otherwise v9-compatible peers negotiate and the daemon is audio-only
+- **THEN** the daemon SHALL advertise the audio-only capability
+- **THEN** a v9 peer that does not recognize that capability SHALL retain the base capability fallback behavior
 
 ### Requirement: Disconnect reason for deliberate daemon shutdown
 The `DisconnectReason` enum SHALL carry a variant meaning "the daemon is shutting down

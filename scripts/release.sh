@@ -39,7 +39,7 @@ echo "==> Releasing ${TAG}: ${SUMMARY}"
 
 echo
 echo "==> cargo test..."
-cargo test
+cargo nextest run 
 
 echo
 echo "==> cargo clippy..."
