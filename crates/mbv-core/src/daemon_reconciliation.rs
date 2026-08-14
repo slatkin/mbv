@@ -145,11 +145,12 @@ fn reconcile_packaged_emby(
 
 /// Reconcile owner-local Audiobookshelf state by rereading owner storage.
 /// A removal (no persisted setup) finalizes any live active Audiobookshelf
-/// session, stops the queue, and purges Audiobookshelf Bound slots before
-/// dropping the context. A replacement with a different server finalizes and
-/// purges before installing the new context. A matching revision installs a
-/// fresh context with an advanced generation; a mismatched revision or
-/// unreadable storage rejects without changing the runtime.
+/// session, purges Audiobookshelf Bound slots, and resumes the retained
+/// queue before dropping the context. A replacement with a different server
+/// finalizes and purges before installing the new context. A matching
+/// revision installs a fresh context with an advanced generation; a
+/// mismatched revision or unreadable storage rejects without changing the
+/// runtime.
 #[allow(clippy::too_many_arguments)]
 fn reconcile_packaged_audiobookshelf(
     requested_revision: u64,
@@ -164,13 +165,20 @@ fn reconcile_packaged_audiobookshelf(
     let owner_config =
         crate::config::load_config().map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
     let Some(setup) = owner_config.audiobookshelf_setup.as_ref() else {
-        finalize_active_audiobookshelf(player, queue);
-        purge_audiobookshelf_queue(queue);
-        player.stop();
-        *source = QueueSource::Unknown;
+        if !finalize_active_audiobookshelf(player, queue) {
+            return Err(ServiceSetupRejection::TransitionRejected);
+        }
+        let items = purge_audiobookshelf_queue(queue);
+        let active_index = queue.active_index();
+        *source = if items.is_empty() {
+            QueueSource::Unknown
+        } else {
+            source.clone()
+        };
         *shared_queue.queue.lock().unwrap() = queue.clone();
         *shared_queue.source.lock().unwrap() = source.clone();
         broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+        update_player_queue(player, items, active_index, client);
         *current = None;
         return Ok(());
     };

@@ -68,7 +68,13 @@ fn apply_audiobookshelf_progress(
             })
         })
         .collect();
-    for slot_id in matching_slot_ids {
+    let active_id = queue.active_slot_id();
+    let target = matching_slot_ids
+        .iter()
+        .copied()
+        .find(|id| Some(*id) == active_id)
+        .or_else(|| matching_slot_ids.first().copied());
+    if let Some(slot_id) = target {
         let _ = queue.apply_progress(slot_id, position_ticks, update.is_finished);
     }
     broadcast_audiobookshelf_progress(
