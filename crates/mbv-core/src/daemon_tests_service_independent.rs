@@ -376,20 +376,7 @@ fn reconcile_abs(
     revision: u64,
     current: &mut Option<super::AudiobookshelfOwnerContext>,
 ) -> Result<(), ServiceSetupRejection> {
-    let player = cold_player();
     let mut queue = PlaybackQueue::default();
     let mut source = QueueSource::Unknown;
-    let shared = shared_queue_state();
-    let clients = Arc::new(Mutex::new(CtrlClients::default()));
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    reconcile_packaged_audiobookshelf(
-        revision,
-        current,
-        &player,
-        &mut queue,
-        &mut source,
-        &shared,
-        &clients,
-        &client,
-    )
+    reconcile_abs_with_queue(revision, current, &mut queue, &mut source)
 }
