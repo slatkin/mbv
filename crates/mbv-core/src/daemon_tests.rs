@@ -70,53 +70,6 @@ fn video_feed_qi(guid: &str) -> QueueItem {
         played: false,
     })
 }
-#[test]
-fn all_audio_accepts_audio_items() {
-    assert!(all_audio(&[
-        emby_qi("song1", "Audio", "Audio"),
-        emby_qi("song2", "Audio", "Audio"),
-    ]));
-}
-
-#[test]
-fn all_audio_rejects_video_items() {
-    assert!(!all_audio(&[
-        emby_qi("song", "Audio", "Audio"),
-        emby_qi("movie", "Video", "Movie"),
-    ]));
-}
-
-#[test]
-fn all_audio_rejects_video_feed_items() {
-    assert!(!all_audio(&[video_feed_qi("feed-1")]));
-}
-
-#[test]
-fn audio_only_daemon_rejects_video_feed_play_request() {
-    let fetched = [video_feed_qi("feed-1")];
-    let rejection = audio_only_rejection(true, &fetched);
-    assert!(rejection.is_some_and(|r| !r.is_empty()));
-}
-
-#[test]
-fn audio_only_daemon_rejects_non_audio_play_request() {
-    let fetched = [emby_qi("movie", "Video", "Movie")];
-    let rejection = audio_only_rejection(true, &fetched);
-    assert!(rejection.is_some_and(|r| !r.is_empty()));
-}
-
-#[test]
-fn audio_only_daemon_accepts_audio_play_request() {
-    let fetched = [emby_qi("song", "Audio", "Audio")];
-    assert!(audio_only_rejection(true, &fetched).is_none());
-}
-
-#[test]
-fn non_audio_only_daemon_never_rejects() {
-    let fetched = [emby_qi("movie", "Video", "Movie")];
-    assert!(audio_only_rejection(false, &fetched).is_none());
-}
-
 /// Connects a client the same way the accept thread does.
 fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
@@ -318,6 +271,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -358,6 +312,7 @@ fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -417,6 +372,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -459,6 +415,7 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -524,6 +481,7 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -598,6 +556,7 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -659,6 +618,7 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -723,6 +683,7 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );

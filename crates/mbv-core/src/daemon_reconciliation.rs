@@ -2,6 +2,7 @@ use crate::config::{EmbySetup, QueueSource};
 use crate::ctrl::ServiceSetupRejection;
 
 pub const EMBY_REPLACEMENT_FINALIZE_HARD_BOUND: Duration = Duration::from_secs(5);
+pub const ABS_REPLACEMENT_FINALIZE_HARD_BOUND: Duration = Duration::from_secs(5);
 
 fn normalized_server_url(url: &str) -> String {
     url.trim().trim_end_matches('/').to_string()
@@ -143,17 +144,41 @@ fn reconcile_packaged_emby(
 }
 
 /// Reconcile owner-local Audiobookshelf state by rereading owner storage.
-/// A removal (no persisted setup) drops the context; a matching revision
-/// installs a fresh context with an advanced generation; a mismatched
-/// revision or unreadable storage rejects without changing the runtime.
-/// Audiobookshelf admission and playback stay disabled regardless.
+/// A removal (no persisted setup) finalizes any live active Audiobookshelf
+/// session, purges Audiobookshelf Bound slots, and resumes the retained
+/// queue before dropping the context. A replacement with a different server
+/// finalizes and purges before installing the new context. A matching
+/// revision installs a fresh context with an advanced generation; a
+/// mismatched revision or unreadable storage rejects without changing the
+/// runtime.
+#[allow(clippy::too_many_arguments)]
 fn reconcile_packaged_audiobookshelf(
     requested_revision: u64,
     current: &mut Option<AudiobookshelfOwnerContext>,
+    player: &Player,
+    queue: &mut PlaybackQueue,
+    source: &mut QueueSource,
+    shared_queue: &SharedQueueState,
+    ctrl_clients: &ClientRegistry,
+    client: &Arc<Mutex<crate::api::EmbyClient>>,
 ) -> Result<(), ServiceSetupRejection> {
     let owner_config =
         crate::config::load_config().map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
     let Some(setup) = owner_config.audiobookshelf_setup.as_ref() else {
+        if !finalize_active_audiobookshelf(player, queue) {
+            return Err(ServiceSetupRejection::TransitionRejected);
+        }
+        let items = purge_audiobookshelf_queue(queue);
+        let active_index = queue.active_index();
+        *source = if items.is_empty() {
+            QueueSource::Unknown
+        } else {
+            source.clone()
+        };
+        *shared_queue.queue.lock().unwrap() = queue.clone();
+        *shared_queue.source.lock().unwrap() = source.clone();
+        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+        update_player_queue(player, items, active_index, client);
         *current = None;
         return Ok(());
     };
@@ -162,6 +187,25 @@ fn reconcile_packaged_audiobookshelf(
     }
     let next = AudiobookshelfOwnerContext::from_packaged_storage_result(&owner_config)
         .map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
+    let is_replacement = current
+        .as_ref()
+        .is_some_and(|old| !same_audiobookshelf_server(old, setup));
+    if is_replacement {
+        if !finalize_active_audiobookshelf(player, queue) {
+            return Err(ServiceSetupRejection::TransitionRejected);
+        }
+        let items = purge_audiobookshelf_queue(queue);
+        let active_index = queue.active_index();
+        *source = if items.is_empty() {
+            QueueSource::Unknown
+        } else {
+            source.clone()
+        };
+        *shared_queue.queue.lock().unwrap() = queue.clone();
+        *shared_queue.source.lock().unwrap() = source.clone();
+        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+        update_player_queue(player, items, active_index, client);
+    }
     let generation = current
         .as_ref()
         .map(|old| crate::service_runtime::SetupGeneration::new(old.generation.value() + 1))
@@ -170,4 +214,43 @@ fn reconcile_packaged_audiobookshelf(
     next.generation = generation;
     *current = Some(next);
     Ok(())
+}
+
+fn same_audiobookshelf_server(
+    old: &AudiobookshelfOwnerContext,
+    new_setup: &crate::config::AudiobookshelfSetup,
+) -> bool {
+    normalized_server_url(&old.setup.server_url) == normalized_server_url(&new_setup.server_url)
+}
+
+/// Finalize any live active Audiobookshelf session within the teardown budget
+/// before its owner context is dropped or replaced. Reuses the player's
+/// existing shutdown coordination point, mirroring Emby replacement.
+fn finalize_active_audiobookshelf(player: &Player, queue: &PlaybackQueue) -> bool {
+    let active_is_audiobookshelf = queue
+        .active_slot()
+        .is_some_and(|slot| matches!(slot.item, QueueItem::Audiobookshelf(_)));
+    if !active_is_audiobookshelf {
+        return true;
+    }
+    let deadline = Instant::now() + ABS_REPLACEMENT_FINALIZE_HARD_BOUND;
+    player.stop_for_shutdown(remaining(deadline));
+    player.join_or_timeout(remaining(deadline));
+    !player.status.lock().unwrap().active
+}
+
+/// Drop Audiobookshelf slots from the canonical queue, retaining the active
+/// slot only if it survived. Returns the retained items.
+fn purge_audiobookshelf_queue(queue: &mut PlaybackQueue) -> Vec<QueueItem> {
+    let active = queue.active_slot_id();
+    let retained: Vec<_> = queue
+        .slots()
+        .iter()
+        .filter(|slot| !matches!(slot.item, QueueItem::Audiobookshelf(_)))
+        .map(|slot| (slot.slot_id, slot.item.clone()))
+        .collect();
+    let active = active.filter(|id| retained.iter().any(|(slot_id, _)| slot_id == id));
+    let revision = queue.revision();
+    *queue = PlaybackQueue::from_slot_items(retained.clone(), active, revision);
+    retained.into_iter().map(|(_, item)| item).collect()
 }

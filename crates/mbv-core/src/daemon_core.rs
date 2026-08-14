@@ -49,6 +49,10 @@ enum DaemonEvent {
         generation: crate::service_runtime::SetupGeneration,
         event: WsEvent,
     },
+    /// Acknowledged Audiobookshelf progress from the daemon player's
+    /// progress sender, routed here so the event loop can update the Bound
+    /// queue and broadcast redacted progress to capable clients.
+    AudiobookshelfProgress(crate::player::AudiobookshelfProgressUpdate),
     /// Carries the requesting client's own event sender alongside the
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.
@@ -479,10 +483,8 @@ fn serialize_ctrl_event(event: &CtrlEvent) -> Option<String> {
 }
 
 /// Fans out redacted Audiobookshelf progress to peers that negotiated
-/// `abs-progress`. Dormant: no daemon playback path emits this yet, since
-/// daemon Audiobookshelf admission remains rejected; this is the delivery
-/// plumbing later playback activation will call.
-#[allow(dead_code)]
+/// `abs-progress`. Called from the daemon event loop after the acknowledged
+/// update has been applied to the canonical Bound queue.
 fn broadcast_audiobookshelf_progress(clients: &ClientRegistry, event: AudiobookshelfProgressEvent) {
     let Some(json) = serialize_ctrl_event(&CtrlEvent::AudiobookshelfProgress(event)) else {
         return;

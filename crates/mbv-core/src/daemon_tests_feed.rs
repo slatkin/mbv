@@ -119,6 +119,7 @@ fn ctrl_load_feed_adds_to_canonical_queue_and_starts_playback() {
         &shared_queue,
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -219,6 +220,7 @@ fn adopt_queue_succeeds_when_queue_empty() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -262,6 +264,7 @@ fn replace_queue_succeeds_unconditionally() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -305,6 +308,7 @@ fn queue_append_succeeds_unconditionally() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );
@@ -349,6 +353,7 @@ fn queue_move_succeeds_unconditionally() {
         &shared_queue_state(),
         &registry,
         &mut PlaybackIntentState::default(),
+        false,
         None,
         &dummy_merged_tx,
     );

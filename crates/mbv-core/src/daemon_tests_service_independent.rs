@@ -7,7 +7,7 @@ fn packaged_startup_context_is_service_independent() {
 }
 
 #[test]
-fn audiobookshelf_reconciliation_installs_context_but_keeps_admission_disabled() {
+fn audiobookshelf_reconciliation_installs_context_and_enables_admission() {
     let _guard = crate::config::TestStateDirGuard::new();
     crate::config::persist_audiobookshelf_setup_and_secret(
         &crate::config::AudiobookshelfSetup::new("https://books.example"),
@@ -16,18 +16,21 @@ fn audiobookshelf_reconciliation_installs_context_but_keeps_admission_disabled()
     .unwrap();
 
     let item = abs_qi("library-a", "episode-1");
-    assert!(!daemon_admits(&item, false, false));
+    assert!(
+        !daemon_admits(&item, false, false, false),
+        "without installed runtime the item is ineligible"
+    );
 
     let mut current = None;
-    reconcile_packaged_audiobookshelf(1, &mut current).unwrap();
+    reconcile_abs(1, &mut current).unwrap();
     assert!(
         current.is_some(),
         "matching revision installs the Audiobookshelf owner context"
     );
 
     assert!(
-        !daemon_admits(&item, false, false),
-        "reconciliation must not enable Audiobookshelf admission"
+        daemon_admits(&item, false, false, true),
+        "installed runtime enables Audiobookshelf admission"
     );
 }
 
@@ -65,9 +68,10 @@ fn emby_absence_keeps_feed_admission_and_rejects_emby_admission() {
         position_ticks: 0,
         played: false,
     });
-    assert!(daemon_admits(&feed, false, false));
+    assert!(daemon_admits(&feed, false, false, false));
     assert!(!daemon_admits(
         &emby_qi("old", "Video", "Movie"),
+        false,
         false,
         false
     ));
@@ -138,11 +142,11 @@ fn audiobookshelf_reconciliation_rejects_revision_mismatch_without_state_change(
     .unwrap();
 
     let mut current = None;
-    reconcile_packaged_audiobookshelf(1, &mut current).unwrap();
+    reconcile_abs(1, &mut current).unwrap();
     assert!(current.is_some(), "matching revision must install context");
     let pre = current.as_ref().unwrap().generation;
 
-    let result = reconcile_packaged_audiobookshelf(2, &mut current);
+    let result = reconcile_abs(2, &mut current);
     assert!(
         matches!(result, Err(ServiceSetupRejection::RevisionMismatch)),
         "mismatched revision must be rejected, got {result:?}"
@@ -164,14 +168,14 @@ fn audiobookshelf_reconciliation_reports_storage_unavailable_without_state_chang
     .unwrap();
 
     let mut current = None;
-    reconcile_packaged_audiobookshelf(1, &mut current).unwrap();
+    reconcile_abs(1, &mut current).unwrap();
     assert!(current.is_some());
     let pre = current.as_ref().unwrap().generation;
 
     // Drop the Service secret so the owner context can no longer be loaded.
     crate::config::clear_service_secret(crate::config::ServiceKind::Audiobookshelf);
 
-    let result = reconcile_packaged_audiobookshelf(1, &mut current);
+    let result = reconcile_abs(1, &mut current);
     assert!(
         matches!(result, Err(ServiceSetupRejection::StorageUnavailable)),
         "unreadable storage must be rejected, got {result:?}"
@@ -193,17 +197,119 @@ fn audiobookshelf_reconciliation_drops_context_when_setup_is_absent() {
     .unwrap();
 
     let mut current = None;
-    reconcile_packaged_audiobookshelf(1, &mut current).unwrap();
+    reconcile_abs(1, &mut current).unwrap();
     assert!(
         current.is_some(),
         "setup must install context before removal"
     );
 
     crate::config::remove_audiobookshelf_setup_and_secret().unwrap();
-    reconcile_packaged_audiobookshelf(1, &mut current).unwrap();
+    reconcile_abs(1, &mut current).unwrap();
     assert!(
         current.is_none(),
         "removal signal must drop the Audiobookshelf owner context"
+    );
+}
+
+// A reconcile fixture with a specific canonical queue so the replacement and
+// removal paths can assert Bound-slot purge alongside context changes.
+fn reconcile_abs_with_queue(
+    revision: u64,
+    current: &mut Option<super::AudiobookshelfOwnerContext>,
+    queue: &mut PlaybackQueue,
+    source: &mut QueueSource,
+) -> Result<(), ServiceSetupRejection> {
+    let player = cold_player();
+    let shared = shared_queue_state();
+    let clients = Arc::new(Mutex::new(CtrlClients::default()));
+    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    reconcile_packaged_audiobookshelf(
+        revision, current, &player, queue, source, &shared, &clients, &client,
+    )
+}
+
+#[test]
+fn audiobookshelf_replacement_finalizes_and_purges_abs_slots() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    crate::config::persist_audiobookshelf_setup_and_secret(
+        &crate::config::AudiobookshelfSetup::new("https://a.example"),
+        "secret-a",
+    )
+    .unwrap();
+
+    let mut queue = PlaybackQueue::from_queue_items(
+        vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
+        Some(0),
+    );
+    let mut source = QueueSource::Remote;
+
+    let mut current = None;
+    reconcile_abs_with_queue(1, &mut current, &mut queue, &mut source).unwrap();
+    assert!(current.is_some(), "initial setup installs context");
+
+    // Replace with a different server.
+    crate::config::replace_audiobookshelf_setup_and_secret(
+        &crate::config::AudiobookshelfSetup::new("https://b.example"),
+        "secret-b",
+        || Ok(()),
+        || {},
+    )
+    .unwrap();
+
+    reconcile_abs_with_queue(2, &mut current, &mut queue, &mut source).unwrap();
+
+    assert_eq!(
+        queue.len(),
+        1,
+        "replacement purges the ABS slot and keeps the Emby slot"
+    );
+    assert!(queue.slots()[0].item.is_emby());
+    assert!(
+        queue
+            .slots()
+            .iter()
+            .all(|slot| !slot.item.is_audiobookshelf()),
+        "no Audiobookshelf slot may survive a different-server replacement"
+    );
+    assert_eq!(
+        current.as_ref().unwrap().setup.server_url,
+        "https://b.example",
+        "replacement installs the new server context"
+    );
+}
+
+#[test]
+fn audiobookshelf_disconnect_stops_queue_and_purges_abs_slots() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    crate::config::persist_audiobookshelf_setup_and_secret(
+        &crate::config::AudiobookshelfSetup::new("https://a.example"),
+        "secret-a",
+    )
+    .unwrap();
+
+    let mut queue = PlaybackQueue::from_queue_items(
+        vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
+        Some(0),
+    );
+    let mut source = QueueSource::Remote;
+
+    let mut current = None;
+    reconcile_abs_with_queue(1, &mut current, &mut queue, &mut source).unwrap();
+    assert!(current.is_some());
+
+    // Removal (the daemon-side effect of `mbvd --disconnect abs`).
+    crate::config::remove_audiobookshelf_setup_and_secret().unwrap();
+    reconcile_abs_with_queue(0, &mut current, &mut queue, &mut source).unwrap();
+
+    assert!(current.is_none(), "removal drops the owner context");
+    assert_eq!(queue.len(), 1, "ABS slot purged, Emby slot retained");
+    assert!(queue.slots()[0].item.is_emby());
+    assert!(
+        queue
+            .slots()
+            .iter()
+            .all(|slot| !slot.item.is_audiobookshelf()),
+        "no Audiobookshelf slot may survive a disconnect"
     );
 }
 
@@ -228,7 +334,49 @@ fn every_setup_rejection_reason_is_wire_representable() {
     }
 }
 use super::{
-    daemon_admits, owner_admin_transport_allowed, reconcile_packaged_audiobookshelf, DaemonRole,
-    DaemonStartupContext, EmbyOwnerContext,
+    daemon_admits, install_daemon_audiobookshelf_context, owner_admin_transport_allowed,
+    reconcile_packaged_audiobookshelf, DaemonRole, DaemonStartupContext, EmbyOwnerContext,
 };
 use crate::ctrl::ServiceSetupRejection;
+
+#[test]
+fn daemon_install_audiobookshelf_context_enables_player_admission() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    crate::config::persist_audiobookshelf_setup_and_secret(
+        &crate::config::AudiobookshelfSetup::new("https://books.example"),
+        "owner-secret",
+    )
+    .unwrap();
+    let runtime = super::AudiobookshelfOwnerContext::from_packaged_storage_result(
+        &crate::config::load_config().unwrap(),
+    )
+    .unwrap();
+
+    let player = cold_player();
+    let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
+
+    assert!(!player.can_admit_audiobookshelf());
+    install_daemon_audiobookshelf_context(&player, &Some(runtime), &merged_tx);
+    assert!(
+        player.can_admit_audiobookshelf(),
+        "installed runtime enables Audiobookshelf admission on the daemon player"
+    );
+
+    install_daemon_audiobookshelf_context(&player, &None, &merged_tx);
+    assert!(
+        !player.can_admit_audiobookshelf(),
+        "clearing the runtime clears Audiobookshelf admission"
+    );
+}
+
+/// Reconcile the Audiobookshelf owner with a fresh, empty player and queue.
+/// Isolates the reconcile/context-install path from active playback so the
+/// setup-transition tests stay focused on runtime state.
+fn reconcile_abs(
+    revision: u64,
+    current: &mut Option<super::AudiobookshelfOwnerContext>,
+) -> Result<(), ServiceSetupRejection> {
+    let mut queue = PlaybackQueue::default();
+    let mut source = QueueSource::Unknown;
+    reconcile_abs_with_queue(revision, current, &mut queue, &mut source)
+}
