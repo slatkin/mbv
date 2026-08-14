@@ -142,7 +142,7 @@ impl EmbySetup {
 
 /// Audiobookshelf-specific setup persisted in config.toml. The API key is a
 /// Service secret and is deliberately not part of this record.
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AudiobookshelfSetup {
     pub server_url: String,
     #[serde(default = "default_audiobookshelf_setup_revision")]
@@ -151,6 +151,15 @@ pub struct AudiobookshelfSetup {
 
 const fn default_audiobookshelf_setup_revision() -> u64 {
     1
+}
+
+impl Default for AudiobookshelfSetup {
+    fn default() -> Self {
+        Self {
+            server_url: String::new(),
+            revision: default_audiobookshelf_setup_revision(),
+        }
+    }
 }
 
 impl AudiobookshelfSetup {
@@ -422,7 +431,6 @@ pub fn validate_shared_data_endpoint(endpoint: &str) -> Result<(), String> {
          expected tcp://, tls://, or a Unix socket path"
     ))
 }
-
 
 pub(crate) fn config_dir() -> PathBuf {
     // See `TEST_CONFIG_DIR_OVERRIDE` / `TestStateDirGuard`: without this,

@@ -100,9 +100,32 @@ fn absent_emby_websocket_is_a_noop_for_ctrl_and_queue_state() {
 
 #[test]
 fn owner_administration_is_local_transport_only() {
-    assert!(owner_admin_transport_allowed(Some(CtrlTransport::Local)));
-    assert!(!owner_admin_transport_allowed(Some(CtrlTransport::Tcp)));
-    assert!(!owner_admin_transport_allowed(None));
+    assert!(owner_admin_transport_allowed(
+        DaemonRole::Packaged,
+        crate::config::ServiceKind::Emby,
+        Some(CtrlTransport::Local)
+    ));
+    assert!(!owner_admin_transport_allowed(
+        DaemonRole::Packaged,
+        crate::config::ServiceKind::Emby,
+        Some(CtrlTransport::Tcp)
+    ));
+    assert!(!owner_admin_transport_allowed(
+        DaemonRole::Packaged,
+        crate::config::ServiceKind::Emby,
+        None
+    ));
+    // The user-owned Local daemon may reconcile Audiobookshelf but not Emby.
+    assert!(owner_admin_transport_allowed(
+        DaemonRole::Local,
+        crate::config::ServiceKind::Audiobookshelf,
+        Some(CtrlTransport::Local)
+    ));
+    assert!(!owner_admin_transport_allowed(
+        DaemonRole::Local,
+        crate::config::ServiceKind::Emby,
+        Some(CtrlTransport::Local)
+    ));
 }
 
 #[test]

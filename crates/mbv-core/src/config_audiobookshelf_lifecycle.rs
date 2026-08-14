@@ -106,6 +106,11 @@ where
 /// Compute the next persisted revision for a committed Audiobookshelf setup:
 /// `1` for a first setup, otherwise one more than the currently persisted
 /// revision. Distinct from the in-memory `SetupGeneration`.
+///
+/// ponytail: read-modify-write is not atomic across processes. Safe in practice
+/// because mbvd serializes via `administration_lock("abs")` and the bare-mode
+/// TUI writes a disjoint (non-system) config file; add a cross-process lock if
+/// concurrent same-file writers ever appear.
 fn next_audiobookshelf_revision() -> Result<u64, String> {
     let existing = load_config()
         .ok()

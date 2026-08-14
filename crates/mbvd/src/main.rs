@@ -245,6 +245,7 @@ fn connect_abs() -> Result<(), String> {
     let config = config::load_config()
         .map_err(|_| "mbvd: could not load owner configuration".to_string())?;
     let existing = config.audiobookshelf_setup.clone();
+    let old_queue = config::load_queue_state();
     let validated = mbv_core::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
         &server_url,
         &api_key,
@@ -263,7 +264,11 @@ fn connect_abs() -> Result<(), String> {
             &setup,
             &api_key,
             clear_audiobookshelf_owned_state,
-            || {},
+            move || {
+                if let Some(old) = old_queue.as_ref() {
+                    let _ = config::save_queue_state(old);
+                }
+            },
         )
         .map_err(|_| "mbvd: could not replace Audiobookshelf setup".to_string())?
     };
