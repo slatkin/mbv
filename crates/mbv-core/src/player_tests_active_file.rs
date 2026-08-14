@@ -1,5 +1,6 @@
 fn test_mpv() -> Mpv {
-    init_mpv(&MpvRunConfig {
+    let env_lock = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
+    let result = init_mpv(&MpvRunConfig {
         headless: true,
         use_mpv_config: false,
         no_scripts: true,
@@ -7,9 +8,9 @@ fn test_mpv() -> Mpv {
         audio_pipe_path: None,
         audio_pipe_samplerate: 0,
         audio_pipe_bitdepth: 0,
-    })
-    .unwrap()
-    .0
+    });
+    drop(env_lock);
+    result.unwrap().0
 }
 
 fn noop_progress() -> ProgressGuard {

@@ -330,24 +330,28 @@ pub fn control_credential_path() -> PathBuf {
     state_dir().join("control_credential.json")
 }
 
-/// Atomically write the Control credential (mode 0600), using the same
-/// tmp+rename pattern as `save_service_secret`.
-pub fn save_control_credential(secret: &str) -> Result<(), String> {
-    let path = control_credential_path();
+fn write_control_credential_temp(secret: &str, path: &std::path::Path) -> Result<PathBuf, String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("create directory {}: {e}", dir.display()))?;
     }
-    let json = serde_json::json!({"credential": secret});
-    let text = json.to_string();
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, &text).map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    let text = serde_json::json!({"credential": secret}).to_string();
+    let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("control_credential.json");
+    let tmp = path.with_file_name(format!("{name}.{}.tmp", uuid::Uuid::new_v4()));
+    std::fs::write(&tmp, text).map_err(|e| format!("write {}: {e}", tmp.display()))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
             .map_err(|e| format!("chmod 0600 {}: {e}", tmp.display()))?;
     }
+    Ok(tmp)
+}
+
+/// Atomically write the Control credential (mode 0600) using a unique temp file.
+pub fn save_control_credential(secret: &str) -> Result<(), String> {
+    let path = control_credential_path();
+    let tmp = write_control_credential_temp(secret, &path)?;
     std::fs::rename(&tmp, &path)
         .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
 }
@@ -359,9 +363,25 @@ pub fn load_or_create_control_credential() -> Result<String, String> {
         return Ok(credential);
     }
 
+    let path = control_credential_path();
     let credential = uuid::Uuid::new_v4().to_string();
-    save_control_credential(&credential)?;
-    Ok(credential)
+    let tmp = write_control_credential_temp(&credential, &path)?;
+    match std::fs::hard_link(&tmp, &path) {
+        Ok(()) => {
+            let _ = std::fs::remove_file(&tmp);
+            Ok(credential)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let _ = std::fs::remove_file(&tmp);
+            load_control_credential().ok_or_else(|| {
+                format!("load concurrently created Control credential {}", path.display())
+            })
+        }
+        Err(error) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(format!("publish {} as {}: {error}", tmp.display(), path.display()))
+        }
+    }
 }
 
 /// Load the Control credential. Returns `None` when the file does not
