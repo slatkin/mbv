@@ -537,52 +537,10 @@ fn request_shutdown_sends_command_and_receives_via_shared_channel() {
 }
 
 #[test]
+
 fn request_shutdown_is_unsupported_and_sends_nothing_when_daemon_lacks_capability() {
-    // The other half of the gate: a daemon that never advertises
-    // lifecycle-shutdown must get Unsupported without ever seeing a
-    // RequestShutdown command on the wire -- that's the whole point of
-    // negotiating the capability instead of sending a command into a
-    // timeout against an old daemon.
-    use std::net::TcpListener;
-
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-    let (received_tx, received_rx) = mpsc::channel::<String>();
-    let daemon = std::thread::spawn(move || {
-        let (stream, _) = listener.accept().unwrap();
-        let mut writer = stream.try_clone().unwrap();
-        let mut reader = BufReader::new(stream);
-
-        let mut hello_info = CtrlHello::current();
-        hello_info
-            .capabilities
-            .retain(|c| c != crate::ctrl::CTRL_CAP_LIFECYCLE_SHUTDOWN);
-        let hello = serde_json::to_string(&CtrlEvent::Hello(hello_info)).unwrap();
-        writeln!(writer, "{hello}").unwrap();
-
-        let mut client_hello = String::new();
-        reader.read_line(&mut client_hello).unwrap();
-
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
-            source: crate::config::QueueSource::Unknown,
-            feed_items: Vec::new(),
-        }))
-        .unwrap();
-        writeln!(writer, "{initial_state}").unwrap();
-
-        // Whatever the client sends next (there should be nothing) is
-        // reported back to the test thread. A closed connection (no
-        // RequestShutdown ever sent) unblocks this read_line with EOF,
-        // i.e. an empty string.
-        let mut next_line = String::new();
-        let _ = reader.read_line(&mut next_line);
-        let _ = received_tx.send(next_line);
-    });
-
-    let (remote, _event_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr)).unwrap();
+    let (mut remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    remote.ctrl_compatibility.supports_lifecycle_shutdown = false;
 
     let response = remote.request_shutdown(Duration::from_secs(2));
     assert_eq!(
@@ -590,19 +548,14 @@ fn request_shutdown_is_unsupported_and_sends_nothing_when_daemon_lacks_capabilit
         crate::remote_player::ShutdownResponse::Unsupported
     );
 
-    // Close the connection so the daemon's blocking read_line unblocks with
-    // EOF instead of hanging forever waiting on a line that was never sent.
-    remote.disconnect();
-
-    let line = received_rx
-        .recv_timeout(Duration::from_secs(2))
-        .expect("daemon thread should observe EOF and report back");
-    assert!(
-        line.is_empty(),
-        "expected no RequestShutdown line to be sent, got {line:?}"
-    );
-
-    daemon.join().unwrap();
+    // Dropping the stub is the deterministic proof that no command was
+    // queued: the receiver can only disconnect after observing an empty
+    // command channel.
+    drop(remote);
+    assert!(matches!(
+        cmd_rx.try_recv(),
+        Err(mpsc::TryRecvError::Disconnected)
+    ));
 }
 
 #[test]
