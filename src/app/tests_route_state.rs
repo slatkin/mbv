@@ -138,12 +138,12 @@ fn switch_to_direct_remote_disconnects_the_previous_remote_on_a_remote_to_remote
     let mut app = make_app_stub();
     let sess_a = make_session("daemon-a", "mbv");
     let (remote_a, remote_a_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_a), "token").unwrap();
+        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_a)).unwrap();
     app.switch_to_direct_remote(&sess_a, remote_a, remote_a_rx, &stub_endpoint());
 
     let sess_b = make_session("daemon-b", "mbv");
     let (remote_b, remote_b_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_b), "token").unwrap();
+        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_b)).unwrap();
     app.switch_to_direct_remote(&sess_b, remote_b, remote_b_rx, &stub_endpoint());
 
     let mut daemon_a_stream = daemon_a.join().unwrap();
@@ -212,12 +212,12 @@ fn switch_to_library_route_disconnects_the_previous_remote_on_a_route_to_route_s
 
     let mut app = make_app_stub();
     let (remote_a, remote_a_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_a), "token").unwrap();
+        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_a)).unwrap();
     app.switch_to_library_route("music", remote_a, remote_a_rx, &stub_endpoint());
     assert!(!app.player.is_remote_disconnected());
 
     let (remote_b, remote_b_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_b), "token").unwrap();
+        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_b)).unwrap();
     app.switch_to_library_route("movies", remote_b, remote_b_rx, &stub_endpoint());
 
     let mut daemon_a_stream = daemon_a.join().unwrap();
@@ -283,8 +283,7 @@ fn restore_local_mode_disconnects_the_remote_before_restoring_local() {
     let (addr, daemon) = spawn_stub_daemon();
 
     let mut app = make_app_stub();
-    let (remote, remote_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+    let (remote, remote_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr)).unwrap();
     app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
     assert!(!app.player.is_remote_disconnected());
 
@@ -387,7 +386,6 @@ fn announced_shutdown_of_current_remote_target_does_not_quit_local_daemon_home()
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn reconnect_local(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        _auth_token: &str,
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,
@@ -649,7 +647,6 @@ fn restore_local_mode_reconnects_local_daemon_when_no_suspended_local_player_exi
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn route_connect_success(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        _auth_token: &str,
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,
@@ -692,7 +689,6 @@ fn restore_local_mode_clears_remote_queue_presentation_for_local_daemon_home() {
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn route_connect_success(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        _auth_token: &str,
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,
@@ -736,7 +732,6 @@ fn restore_local_mode_flashes_combined_status_when_local_daemon_reconnect_fails(
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn route_connect_failure(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        _auth_token: &str,
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,

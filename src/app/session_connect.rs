@@ -63,7 +63,6 @@ impl App {
     fn connect_direct_endpoint(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        auth_token: &str,
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,
@@ -73,10 +72,10 @@ impl App {
     > {
         #[cfg(test)]
         if let Some(connect) = *super::DIRECT_CONNECT_OVERRIDE.lock().unwrap() {
-            return connect(endpoint, auth_token);
+            return connect(endpoint);
         }
 
-        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint, auth_token)
+        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint)
     }
 
     /// Lazy, on-demand connect to a daemon route endpoint (issue #222's
@@ -104,7 +103,6 @@ impl App {
     fn connect_daemon_route_endpoint(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        auth_token: &str,
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,
@@ -114,14 +112,14 @@ impl App {
     > {
         #[cfg(test)]
         if let Some(connect) = *super::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
-            return connect(endpoint, auth_token);
+            return connect(endpoint);
         }
 
         log::info!(
             target: "daemon_route",
             "connecting to daemon route endpoint {endpoint}; under multi-connection (v4) this does not evict other ctrl clients (see ADR 0014)"
         );
-        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint, auth_token)
+        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint)
     }
 
     /// Attempts a lazy connect to `endpoint` for the route named
@@ -158,11 +156,7 @@ impl App {
         String,
     > {
         log::info!(target: "daemon_route", "daemon route attempt start route={route_label:?} endpoint={endpoint}");
-        let Some(client) = self.emby_client() else {
-            return Err("Emby is unavailable".into());
-        };
-        let auth_token = client.lock().unwrap().token.clone();
-        self.connect_daemon_route_endpoint(endpoint, &auth_token)
+        self.connect_daemon_route_endpoint(endpoint)
             .inspect(|_| {
                 log::info!(target: "daemon_route", "daemon route attempt succeeded route={route_label:?} endpoint={endpoint}");
             })
@@ -636,11 +630,7 @@ impl App {
         // should skip this.
         if self.player_owner_is_on_this_machine() {
             if let Some(endpoint) = self.session_direct_endpoint(sess) {
-                let Some(client) = self.emby_client() else {
-                    return;
-                };
-                let auth_token = client.lock().unwrap().token.clone();
-                match self.connect_direct_endpoint(&endpoint, &auth_token) {
+                match self.connect_direct_endpoint(&endpoint) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);
                         return;

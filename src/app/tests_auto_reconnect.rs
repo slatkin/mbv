@@ -87,7 +87,6 @@ fn new_remote_restores_a_persisted_route_when_attached_to_the_local_daemon() {
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn route_connect_success(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        _auth_token: &str,
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,

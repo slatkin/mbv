@@ -30,6 +30,7 @@ fn play_items_command_preserves_start_index() {
 #[test]
 fn current_hello_validates() {
     CtrlHello::current().validate_peer().unwrap();
+    assert_eq!(CtrlHello::current().protocol_version, 9);
 }
 
 #[test]
@@ -47,10 +48,50 @@ fn hello_rejects_missing_capability() {
 }
 
 #[test]
-fn current_client_hello_carries_auth_token() {
-    let hello = CtrlHello::current_client("token-123".into());
-    assert_eq!(hello.auth_token.as_deref(), Some("token-123"));
-    assert_eq!(hello.control_token, None);
+fn current_hello_has_no_service_credential_field() {
+    let json = serde_json::to_string(&CtrlHello::current()).unwrap();
+    assert!(!json.contains("auth_token"));
+    assert!(!json.contains("token-123"));
+}
+
+#[test]
+fn service_setup_reconciliation_wire_has_only_kind_and_revision() {
+    let json = serde_json::to_string(&CtrlCmd::ApplyServiceSetup {
+        kind: crate::config::ServiceKind::Emby,
+        revision: 42,
+    })
+    .unwrap();
+    assert_eq!(
+        json,
+        r#"{"ApplyServiceSetup":{"kind":"Emby","revision":42}}"#
+    );
+    assert!(!json.contains("setup"));
+    assert!(!json.contains("token"));
+    assert!(!json.contains("credential"));
+}
+
+#[test]
+fn service_setup_reconciliation_responses_round_trip() {
+    let applied = CtrlEvent::ServiceSetupApplied {
+        kind: crate::config::ServiceKind::Emby,
+        revision: 7,
+    };
+    let rejected = CtrlEvent::ServiceSetupRejected {
+        kind: crate::config::ServiceKind::Emby,
+        revision: 7,
+        reason: ServiceSetupRejection::RevisionMismatch,
+    };
+    assert!(matches!(
+        serde_json::from_str::<CtrlEvent>(&serde_json::to_string(&applied).unwrap()).unwrap(),
+        CtrlEvent::ServiceSetupApplied { .. }
+    ));
+    assert!(matches!(
+        serde_json::from_str::<CtrlEvent>(&serde_json::to_string(&rejected).unwrap()).unwrap(),
+        CtrlEvent::ServiceSetupRejected {
+            reason: ServiceSetupRejection::RevisionMismatch,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -58,26 +99,12 @@ fn capable_client_hello_uses_control_credential_field() {
     let hello = CtrlHello::current_control_client("control-123".into());
     assert!(hello.supports_control_auth());
     assert_eq!(hello.control_token.as_deref(), Some("control-123"));
-    assert_eq!(hello.auth_token, None);
 }
 
 #[test]
 fn invalid_control_credential_is_rejected_without_emby_validation() {
-    let mut hello = CtrlHello::current_control_client("not-the-control-secret".into());
-    hello.auth_token = Some("service-token-that-must-not-be-validated".into());
+    let hello = CtrlHello::current_control_client("not-the-control-secret".into());
     assert!(hello.validate_control_credential("control-secret").is_err());
-}
-
-#[test]
-fn legacy_hello_keeps_emby_auth_token_semantics() {
-    let mut hello = CtrlHello::current();
-    hello
-        .capabilities
-        .retain(|cap| cap != CTRL_CAP_CONTROL_AUTH);
-    hello.auth_token = Some("emby-token".into());
-    assert!(!hello.supports_control_auth());
-    assert_eq!(hello.auth_token.as_deref(), Some("emby-token"));
-    assert_eq!(hello.control_token, None);
 }
 
 // The wire tags below are pinned via `#[serde(rename = "...")]` on

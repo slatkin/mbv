@@ -17,9 +17,6 @@ fn start_ctrl_auth_test_peer(
         CtrlTransport::Local,
         merged_tx,
         clients,
-        std::sync::Arc::new(std::sync::Mutex::new(crate::api::EmbyClient::new(
-            Config::default(),
-        ))),
         control_credential.map(str::to_owned),
         player.status,
         shared_queue_state(),
@@ -36,6 +33,9 @@ fn read_ctrl_event(reader: &mut BufReader<UnixStream>) -> CtrlEvent {
 #[test]
 fn local_ctrl_socket_accepts_valid_control_credential_without_emby() {
     let (client, _events) = start_ctrl_auth_test_peer(Some("owner-control"));
+    client
+        .set_read_timeout(Some(std::time::Duration::from_secs(1)))
+        .unwrap();
     let mut reader = BufReader::new(client.try_clone().unwrap());
     let hello = read_ctrl_event(&mut reader);
     let CtrlEvent::Hello(hello) = hello else {
@@ -65,8 +65,7 @@ fn local_ctrl_socket_rejects_wrong_control_credential_without_emby_fallback() {
     assert!(matches!(read_ctrl_event(&mut reader), CtrlEvent::Hello(_)));
 
     let mut writer = reader.get_mut().try_clone().unwrap();
-    let mut client_hello = CtrlHello::current_control_client("wrong-control".to_string());
-    client_hello.auth_token = Some("must-not-fall-through-to-Emby".to_string());
+    let client_hello = CtrlHello::current_control_client("wrong-control".to_string());
     writeln!(
         writer,
         "{}",
@@ -76,4 +75,30 @@ fn local_ctrl_socket_rejects_wrong_control_credential_without_emby_fallback() {
 
     let mut line = String::new();
     assert_eq!(reader.read_line(&mut line).unwrap(), 0);
+}
+
+#[test]
+fn packaged_ctrl_socket_accepts_compatible_client_without_credentials() {
+    let (client, _events) = start_ctrl_auth_test_peer(None);
+    client
+        .set_read_timeout(Some(std::time::Duration::from_secs(1)))
+        .unwrap();
+    let mut reader = BufReader::new(client.try_clone().unwrap());
+    let hello = read_ctrl_event(&mut reader);
+    let CtrlEvent::Hello(hello) = hello else {
+        panic!("expected daemon hello");
+    };
+    assert!(!hello.supports_control_auth());
+
+    let mut writer = reader.get_mut().try_clone().unwrap();
+    writeln!(
+        writer,
+        "{}",
+        serde_json::to_string(&CtrlCmd::Hello(CtrlHello::current())).unwrap()
+    )
+    .unwrap();
+    assert!(matches!(
+        read_ctrl_event(&mut reader),
+        CtrlEvent::UnifiedQueueState(_)
+    ));
 }

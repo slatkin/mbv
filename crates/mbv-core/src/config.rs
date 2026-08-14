@@ -4,6 +4,7 @@ include!("config_paths.rs");
 include!("config_parse.rs");
 include!("config_save.rs");
 include!("config_audiobookshelf_lifecycle.rs");
+include!("config_emby_lifecycle.rs");
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod tests {
@@ -14,4 +15,5 @@ pub mod tests {
     include!("config_tests_parse.rs");
     include!("config_tests_paths.rs");
     include!("config_tests_paths_migration.rs");
+    include!("config_tests_emby_admin.rs");
 }

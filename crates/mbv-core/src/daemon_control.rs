@@ -1,215 +1,4 @@
-/// Builds a `QueueState` from the daemon's canonical queue and player status.
-/// Used for coordinated shutdown persistence.
-fn project_queue_state(
-    queue: &PlaybackQueue,
-    source: &crate::config::QueueSource,
-    player_status: &crate::player::PlayerStatus,
-) -> crate::config::QueueState {
-    use std::collections::HashMap;
-
-    let slots = queue.slots();
-    let active_idx = queue.active_index().unwrap_or(0);
-
-    // Collect positions for non-audio items that have progress.
-    let mut positions: HashMap<String, i64> = HashMap::new();
-    for slot in slots {
-        if slot.item.is_video() {
-            let pos = slot.progress_state.local.position_ticks;
-            if pos > 0 {
-                positions.insert(slot.item.id().to_string(), pos);
-            }
-        }
-    }
-
-    // Incorporate the latest valid position for the active video item.
-    if player_status.active && player_status.video_height > 0 && active_idx < slots.len() {
-        if let Some(slot) = slots.get(active_idx) {
-            if slot.item.is_video() {
-                let position = if player_status.last_valid_pos > 0 {
-                    player_status.last_valid_pos
-                } else {
-                    player_status.position_ticks
-                };
-                positions.insert(slot.item.id().to_string(), position);
-            }
-        }
-    }
-
-    let last_played_item_id = if player_status.active && active_idx < slots.len() {
-        Some(slots[active_idx].item.id().to_string())
-    } else {
-        None
-    };
-
-    let queue_items: Vec<QueueItem> = slots.iter().map(|s| s.item.clone()).collect();
-
-    crate::config::QueueState {
-        source: source.clone(),
-        items: queue_items,
-        cursor: active_idx,
-        last_played_content_id: if player_status.active && active_idx < slots.len() {
-            Some(slots[active_idx].item.content_id())
-        } else {
-            None
-        },
-        last_played_item_id,
-        last_played_completed: false,
-        positions,
-    }
-}
-
-/// Broadcasts a queue snapshot to clients and shared state.
-fn broadcast_queue_state(
-    ctrl_clients: &ClientRegistry,
-    player: &Player,
-    shared_queue: &SharedQueueState,
-    queue: &PlaybackQueue,
-    source: &crate::config::QueueSource,
-) {
-    let status = player.status.lock().unwrap().clone();
-
-    // ── Unified-queue capable peers ────────────────────────────────────
-    let unified_json = serialize_ctrl_event(&CtrlEvent::UnifiedQueueState(
-        crate::ctrl::UnifiedQueueStateData {
-            status: status.clone(),
-            slots: queue
-                .slots()
-                .iter()
-                .map(|s| crate::ctrl::UnifiedQueueSlot {
-                    slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
-                    item: s.item.clone(),
-                })
-                .collect(),
-            active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
-            revision: queue.revision().raw(),
-            source: source.clone(),
-        },
-    ));
-
-    // ── Legacy peers: derive split items from canonical queue ──
-    let (emby_items, feed_items) = split_queue_for_legacy(queue);
-    let capable_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
-        status: status.clone(),
-        items: emby_items.clone(),
-        cursor: queue.legacy_cursor(true),
-        source: source.clone(),
-        feed_items: feed_items.clone(),
-    }));
-    let legacy_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
-        status,
-        items: emby_items,
-        cursor: queue.legacy_cursor(false),
-        source: source.clone(),
-        feed_items: Vec::new(),
-    }));
-
-    if let (Some(unified_json), Some(capable_json), Some(legacy_json)) =
-        (unified_json, capable_json, legacy_json)
-    {
-        ctrl_clients
-            .lock()
-            .unwrap()
-            .broadcast_state_gated(unified_json, capable_json, legacy_json);
-    }
-
-    // Update the reconnect snapshot.
-    *shared_queue.queue.lock().unwrap() = queue.clone();
-    *shared_queue.source.lock().unwrap() = source.clone();
-}
-
-/// Splits a canonical queue into the legacy `(Vec<EmbyItem>, Vec<FeedEntry>)`
-/// shape for `CtrlState` construction.  Feed entries appear at the tail
-/// matching the legacy split contract.
-fn split_queue_for_legacy(queue: &PlaybackQueue) -> (Vec<EmbyItem>, Vec<FeedEntry>) {
-    let mut emby = Vec::new();
-    let mut feed = Vec::new();
-    for slot in queue.slots() {
-        match &slot.item {
-            QueueItem::Emby(e) => emby.push((**e).clone()),
-            QueueItem::Feed(f) => feed.push(f.clone()),
-            QueueItem::Audiobookshelf(_) => {}
-        }
-    }
-    (emby, feed)
-}
-
-fn admit_queue_items(
-    original: Vec<QueueItem>,
-    requested_cursor: Option<usize>,
-    audio_only: bool,
-) -> (Vec<QueueItem>, usize) {
-    let requested = requested_cursor.unwrap_or(0);
-    let rebased = original
-        .iter()
-        .take(requested)
-        .filter(|item| item.admissible_for_owner(audio_only, |_| false))
-        .count();
-    let items: Vec<_> = original
-        .into_iter()
-        .filter(|item| item.admissible_for_owner(audio_only, |_| false))
-        .collect();
-    let cursor = if items.is_empty() {
-        0
-    } else {
-        rebased.min(items.len() - 1)
-    };
-    (items, cursor)
-}
-
-/// Rejects a queue command with `reason` and echoes the daemon's
-/// authoritative state back to the requester.
-fn reject_command(
-    reply_tx: &CtrlSender,
-    ctrl_clients: &ClientRegistry,
-    client_id: CtrlClientId,
-    player: &Player,
-    queue: &PlaybackQueue,
-    source: &crate::config::QueueSource,
-    reason: String,
-) {
-    send_to(reply_tx, &CtrlEvent::CommandRejected(reason));
-    let status = player.status.lock().unwrap().clone();
-    if ctrl_clients
-        .lock()
-        .unwrap()
-        .supports_unified_queue(client_id)
-    {
-        send_to(
-            reply_tx,
-            &CtrlEvent::UnifiedQueueState(crate::ctrl::UnifiedQueueStateData {
-                status,
-                slots: queue
-                    .slots()
-                    .iter()
-                    .map(|s| crate::ctrl::UnifiedQueueSlot {
-                        slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
-                        item: s.item.clone(),
-                    })
-                    .collect(),
-                active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
-                revision: queue.revision().raw(),
-                source: source.clone(),
-            }),
-        );
-    } else {
-        let (emby_items, feed_items) = split_queue_for_legacy(queue);
-        let include_feed = ctrl_clients
-            .lock()
-            .unwrap()
-            .supports_feed_playback(client_id);
-        let feed = if include_feed { feed_items } else { Vec::new() };
-        send_to(
-            reply_tx,
-            &CtrlEvent::State(CtrlState {
-                status,
-                items: emby_items,
-                cursor: queue.legacy_cursor(include_feed),
-                source: source.clone(),
-                feed_items: feed,
-            }),
-        );
-    }
-}
+include!("daemon_control_queue.rs");
 
 #[allow(clippy::too_many_arguments)]
 fn handle_ctrl(
@@ -227,7 +16,7 @@ fn handle_ctrl(
     mut resolved_items: Option<Result<Vec<EmbyItem>, String>>,
     merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
-    // Handle lifecycle requests before the authority transition.
+    let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {
         let is_local = ctrl_clients.lock().unwrap().is_local_client(client_id);
         if !is_local {
@@ -265,13 +54,6 @@ fn handle_ctrl(
             return;
         }
 
-        send_to(request.reply_tx, &CtrlEvent::ShutdownAccepted);
-        let _ = merged_tx.send(DaemonEvent::Shutdown);
-        return;
-    }
-
-    // Authority returns to Ctrl on the next ctrl command.
-    {
         let mut clients = ctrl_clients.lock().unwrap();
         if clients.authority == AuthorityHolder::EmbyRemote {
             clients.authority = AuthorityHolder::Ctrl;
@@ -342,7 +124,7 @@ fn handle_ctrl(
                 );
                 return;
             }
-            let (items, next_cursor) = admit_queue_items(items, Some(cursor), audio_only);
+            let (items, next_cursor) = admit_queue_items(items, Some(cursor), audio_only, has_emby);
             player.set_initial_queue(&items, next_cursor);
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
@@ -368,9 +150,6 @@ fn handle_ctrl(
                     items: new_items,
                     start_idx,
                 } => {
-                    // Legacy safety: a peer without unified-queue cannot see
-                    // Feed slots, so replacing the queue would silently
-                    // overwrite hidden canonical slots.
                     if !ctrl_clients
                         .lock()
                         .unwrap()
@@ -465,6 +244,9 @@ fn handle_ctrl(
             start_ticks,
             source: new_source,
         } => {
+            if !has_emby {
+                return;
+            }
             let fetched = match resolved_items.take() {
                 Some(Ok(v)) => v,
                 Some(Err(e)) => {
@@ -502,9 +284,6 @@ fn handle_ctrl(
                 send_to(request.reply_tx, &CtrlEvent::CommandRejected(reason));
                 return;
             }
-            // Legacy safety: a legacy PlayItems replaces the whole queue.
-            // If the canonical queue has Feed entries a legacy peer cannot
-            // see, the replacement would silently overwrite them.
             if !ctrl_clients
                 .lock()
                 .unwrap()
@@ -577,6 +356,9 @@ fn handle_ctrl(
                     start_ticks,
                     source: intent_source,
                 } => {
+                    if !has_emby {
+                        return;
+                    }
                     playback_intents.mark_resolving(intent.request_id);
                     if let Some(status) = playback_intents.pipe_status() {
                         log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
@@ -626,11 +408,13 @@ fn handle_ctrl(
             }
         }
         CtrlCmd::RequestShutdown => {
-            log::warn!(target: "daemon", "RequestShutdown reached the command match; handled earlier")
+            send_to(request.reply_tx, &CtrlEvent::ShutdownAccepted);
+            let _ = merged_tx.send(DaemonEvent::Shutdown);
         }
+        CtrlCmd::ApplyServiceSetup { .. } => {}
         // ── Unified queue commands ──────────────────────────────────────
         CtrlCmd::UnifiedQueueReplace { items, start_idx } => {
-            let (items, next_cursor) = admit_queue_items(items, start_idx, audio_only);
+            let (items, next_cursor) = admit_queue_items(items, start_idx, audio_only, has_emby);
             if items.is_empty() {
                 reject_command(
                     request.reply_tx,
@@ -675,7 +459,7 @@ fn handle_ctrl(
                 return;
             }
             let mut items = items;
-            items.retain(|item| item.admissible_for_owner(audio_only, |_| false));
+            items.retain(|item| daemon_admits(item, audio_only, has_emby));
             if items.is_empty() {
                 reject_command(
                     request.reply_tx,
@@ -787,7 +571,6 @@ fn handle_ctrl(
         }
         CtrlCmd::UnifiedQueueClear => {
             queue.clear();
-            // Clear the player's queue and stop.
             player.send_command(PlayerCommand::SubmitQueue {
                 items: Vec::new(),
                 start_idx: 0,

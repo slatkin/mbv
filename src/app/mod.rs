@@ -137,7 +137,6 @@ static TERMINAL_GONE: AtomicBool = AtomicBool::new(false);
 #[cfg(test)]
 type DirectConnectFn = fn(
     &mbv_core::remote_player::DaemonEndpoint,
-    &str,
 ) -> Result<
     (
         mbv_core::remote_player::RemotePlayer,

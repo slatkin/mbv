@@ -12,6 +12,8 @@ path = "src/main.rs"
 mbv-core = { path = "../mbv-core" }
 libc.workspace = true
 log.workspace = true
+nix.workspace = true
+serde_json.workspace = true
 
 [package.metadata.deb]
 maintainer = "slatkin <slatkin@gmail.com>"

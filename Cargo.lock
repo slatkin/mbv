@@ -1621,6 +1621,8 @@ dependencies = [
  "libc",
  "log",
  "mbv-core",
+ "nix 0.31.3",
+ "serde_json",
 ]
 
 [[package]]

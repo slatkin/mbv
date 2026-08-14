@@ -1,4 +1,11 @@
-pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRuntimeHooks) -> ! {
+pub fn run_with_options(
+    startup: DaemonStartupContext,
+    audio_only: bool,
+    hooks: DaemonRuntimeHooks,
+) -> ! {
+    let mut emby_runtime = startup.emby;
+    let config = startup.config;
+    let role = startup.role;
     std::fs::write(pid_file(), std::process::id().to_string())
         .expect("mbv daemon: failed to write PID file");
 
@@ -28,8 +35,11 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         });
     }
 
-    let client = Arc::new(Mutex::new(client));
-    let control_credential = if crate::config::is_system_instance() {
+    let client = emby_runtime
+        .as_ref()
+        .map(|runtime| runtime.client.clone())
+        .unwrap_or_else(|| Arc::new(Mutex::new(EmbyClient::new(config.clone()))));
+    let control_credential = if role == DaemonRole::Packaged {
         None
     } else {
         Some(
@@ -43,7 +53,9 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     // ws::start() only spawns a background reconnect-loop thread and returns
     // immediately — it does not block on the connection actually completing
     // — so it's cheap enough to keep here, ahead of Player/mpris/tray.
-    let ws_send_tx = crate::ws::start(client.lock().unwrap().ws_url(), ws_tx_chan);
+    let mut ws_send_tx = emby_runtime
+        .as_ref()
+        .map(|_| crate::ws::start(client.lock().unwrap().ws_url(), ws_tx_chan));
 
     let mut client_locked = client.lock().unwrap().clone();
     // Daemon always runs headless — ignore user's show_audio_window setting.
@@ -61,7 +73,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         false,
         crate::player::SubtitlePrefs::default(),
         player_tx,
-        Some(ws_send_tx.clone()),
+        ws_send_tx.clone(),
     );
 
     player.pre_warm(
@@ -86,12 +98,18 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
             let _ = tx.send(DaemonEvent::Player(ev));
         }
     });
-    let tx = merged_tx.clone();
-    std::thread::spawn(move || {
-        for ev in ws_rx {
-            let _ = tx.send(DaemonEvent::Ws(ev));
-        }
-    });
+    if let Some(runtime) = &emby_runtime {
+        let generation = runtime.generation;
+        let tx = merged_tx.clone();
+        std::thread::spawn(move || {
+            for ev in ws_rx {
+                let _ = tx.send(DaemonEvent::Ws {
+                    generation,
+                    event: ev,
+                });
+            }
+        });
+    }
     let tx = merged_tx.clone();
     std::thread::spawn(move || {
         if shutdown_signal_rx.recv().is_ok() {
@@ -114,7 +132,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     if let Some(listener) = bind_ctrl_listener() {
         let ctrl_clients = ctrl_clients.clone();
         let merged_tx2 = merged_tx.clone();
-        let client2 = client.clone();
         let player_status = player.status.clone();
         let shared_queue = shared_queue.clone();
         let control_credential = control_credential.clone();
@@ -127,7 +144,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     CtrlTransport::Local,
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
-                    client2.clone(),
                     control_credential.clone(),
                     player_status.clone(),
                     shared_queue.clone(),
@@ -142,8 +158,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     // local ctrl listener are operational. A database failure disables this
     // feature without affecting daemon playback.
     {
-        let shared_config = client.lock().unwrap().config.clone();
-        if shared_config.shared_data_enabled {
+        let shared_config = config.clone();
+        if emby_runtime.is_some() && shared_config.shared_data_enabled {
             match crate::shared_store::open_shared_db() {
                 Ok(db) => {
                     let store =
@@ -177,12 +193,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     // negotiation metadata, capability registration). Local control is
     // already up and serving connections above. ---
 
-    let daemon_tcp_listen = client
-        .lock()
-        .unwrap()
-        .config
-        .daemon_server_tcp_listen
-        .clone();
+    let daemon_tcp_listen = config.daemon_server_tcp_listen.clone();
     let tcp_listener = if daemon_tcp_listen.trim().is_empty() {
         None
     } else {
@@ -215,7 +226,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
 
     // Register capabilities off the startup path so it doesn't block on the
     // Emby HTTP round trip.
-    {
+    if emby_runtime.is_some() {
         let client = client.lock().unwrap().clone();
         let direct_commands = direct_commands.clone();
         std::thread::spawn(move || {
@@ -226,7 +237,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     if let Some(listener) = tcp_listener {
         let ctrl_clients = ctrl_clients.clone();
         let merged_tx2 = merged_tx.clone();
-        let client2 = client.clone();
         let player_status = player.status.clone();
         let shared_queue = shared_queue.clone();
         let control_credential = control_credential.clone();
@@ -238,7 +248,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     CtrlTransport::Tcp,
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
-                    client2.clone(),
                     control_credential.clone(),
                     player_status.clone(),
                     shared_queue.clone(),
@@ -272,11 +281,13 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     let mut last_capabilities = Instant::now();
 
     loop {
-        if last_keepalive.elapsed() >= Duration::from_secs(30) {
-            let _ = ws_send_tx.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
+        if emby_runtime.is_some() && last_keepalive.elapsed() >= Duration::from_secs(30) {
+            if let Some(ws_send_tx) = &ws_send_tx {
+                let _ = ws_send_tx.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
+            }
             last_keepalive = Instant::now();
         }
-        if last_capabilities.elapsed() >= Duration::from_secs(600) {
+        if emby_runtime.is_some() && last_capabilities.elapsed() >= Duration::from_secs(600) {
             let client = client.lock().unwrap().clone();
             let direct_commands = direct_commands.clone();
             std::thread::spawn(move || {
@@ -536,20 +547,64 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                 }
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
             }
-            DaemonEvent::Ws(ws_ev) => {
-                handle_ws(
-                    ws_ev,
-                    &client,
-                    &player,
-                    audio_only,
-                    &mut queue,
-                    &mut source,
-                    &shared_queue,
-                    &ctrl_clients,
-                );
+            DaemonEvent::Ws { generation, event } => {
+                if emby_runtime
+                    .as_ref()
+                    .is_some_and(|runtime| runtime.generation == generation)
+                {
+                    handle_ws(
+                        event,
+                        Some(&client),
+                        &player,
+                        audio_only,
+                        &mut queue,
+                        &mut source,
+                        &shared_queue,
+                        &ctrl_clients,
+                    );
+                }
             }
             DaemonEvent::Ctrl(cmd, client_id, reply_tx) => {
                 if !ctrl_clients.lock().unwrap().has_client(client_id) {
+                    continue;
+                }
+                if let CtrlCmd::ApplyServiceSetup { kind, revision } = cmd {
+                    let transport = ctrl_clients.lock().unwrap().transport(client_id);
+                    let allowed = owner_admin_transport_allowed(role, transport);
+                    let result = if !allowed {
+                        Err(crate::ctrl::ServiceSetupRejection::TransitionRejected)
+                    } else if kind != crate::config::ServiceKind::Emby {
+                        Err(crate::ctrl::ServiceSetupRejection::UnsupportedService)
+                    } else {
+                        reconcile_packaged_emby(
+                            revision,
+                            &mut emby_runtime,
+                            &mut ws_send_tx,
+                            &client,
+                            &player,
+                            &mut queue,
+                            &mut source,
+                            &shared_queue,
+                            &ctrl_clients,
+                            &merged_tx,
+                            &direct_commands,
+                            audio_only,
+                        )
+                    };
+                    match result {
+                        Ok(()) => send_to(
+                            &reply_tx,
+                            &CtrlEvent::ServiceSetupApplied { kind, revision },
+                        ),
+                        Err(reason) => send_to(
+                            &reply_tx,
+                            &CtrlEvent::ServiceSetupRejected {
+                                kind,
+                                revision,
+                                reason,
+                            },
+                        ),
+                    }
                     continue;
                 }
                 handle_ctrl(
@@ -679,4 +734,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
             }
         }
     }
+}
+
+fn owner_admin_transport_allowed(role: DaemonRole, transport: Option<CtrlTransport>) -> bool {
+    role == DaemonRole::Packaged && transport == Some(CtrlTransport::Local)
 }

@@ -14,6 +14,7 @@ use tungstenite::Message;
 pub enum OutboundMessage {
     Text(String),
     Flush(mpsc::Sender<()>),
+    Shutdown,
 }
 
 #[derive(Clone)]
@@ -37,6 +38,10 @@ impl WsSender {
             return false;
         }
         rx.recv_timeout(timeout).is_ok()
+    }
+
+    pub fn shutdown(&self) {
+        let _ = self.tx.send(OutboundMessage::Shutdown);
     }
 }
 
@@ -188,7 +193,8 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
     let connected_bg = connected.clone();
     thread::spawn(move || {
         let mut backoff_secs: u64 = 1;
-        loop {
+        let mut shutdown_requested = false;
+        'reconnect: loop {
             connected_bg.store(false, Ordering::Relaxed);
             log::info!(target: "ws", "connecting…");
             match tungstenite::connect(&ws_url) {
@@ -231,6 +237,10 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
                                 }
                                 OutboundMessage::Flush(tx) => {
                                     let _ = tx.send(());
+                                }
+                                OutboundMessage::Shutdown => {
+                                    shutdown_requested = true;
+                                    break 'conn;
                                 }
                             }
                         }
@@ -286,6 +296,11 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
                 Err(e) => {
                     log::warn!(target: "ws", "connect failed: {e}");
                 }
+            }
+            // Exit reconnect loop if shutdown was requested.
+            if shutdown_requested {
+                log::info!(target: "ws", "shutdown requested, exiting reconnect loop");
+                break 'reconnect;
             }
             // M3: Exponential backoff with jitter, max 60s.
             let jitter: f64 = rand::rng().random_range(0.0..1.0);

@@ -46,13 +46,8 @@ impl App {
             Err(e) => return Err(format!("single-instance check failed: {e}")),
         }
 
-        let auth_token = self
-            .emby_client()
-            .map(|client| client.lock().unwrap().token.clone())
-            .unwrap_or_default();
-        let (remote, remote_rx) =
-            RemotePlayer::connect_endpoint(&DaemonEndpoint::Local, &auth_token)
-                .map_err(|e| format!("failed to attach to local daemon: {e}"))?;
+        let (remote, remote_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Local)
+            .map_err(|e| format!("failed to attach to local daemon: {e}"))?;
 
         let remote_items = remote.items.lock().unwrap().clone();
         let remote_cursor = remote.status.lock().unwrap().current_idx;

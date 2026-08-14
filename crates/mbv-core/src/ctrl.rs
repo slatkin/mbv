@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::api::EmbyItem;
-use crate::config::QueueSource;
+use crate::config::{QueueSource, ServiceKind};
 use crate::playback_queue::{FeedEntry, QueueItem, QueueSlotId};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
@@ -18,7 +18,13 @@ use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 ///   - renaming or removing a field or variant
 ///   - changing the meaning, units, or nullability of an existing field
 ///   - changing handshake order or framing
-pub const CTRL_PROTOCOL_VERSION: u32 = 7;
+///
+/// Version 9 intentionally bumps for the removed legacy `auth_token` hello
+/// field and the resulting credential-free packaged-daemon handshake. The
+/// source previously declared v7 while the archived v8 contract described v8;
+/// that pre-existing drift is reconciled here by shipping v9 and rejecting
+/// every other version.
+pub const CTRL_PROTOCOL_VERSION: u32 = 9;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
@@ -43,9 +49,7 @@ pub struct CtrlHello {
     pub protocol_version: u32,
     pub app_version: String,
     pub capabilities: Vec<String>,
-    pub auth_token: Option<String>,
     /// Control credential used only when the peer advertises `control-auth`.
-    /// Defaulting this field keeps deferred legacy peers wire-compatible.
     #[serde(default)]
     pub control_token: Option<String>,
 }
@@ -64,26 +68,13 @@ impl CtrlHello {
                 CTRL_CAP_UNIFIED_QUEUE.to_string(),
                 CTRL_CAP_CONTROL_AUTH.to_string(),
             ],
-            auth_token: None,
             control_token: None,
         }
-    }
-
-    pub fn current_client(auth_token: String) -> Self {
-        let mut hello = Self::current();
-        hello.auth_token = Some(auth_token);
-        hello
     }
 
     pub fn current_control_client(control_token: String) -> Self {
         let mut hello = Self::current();
         hello.control_token = Some(control_token);
-        hello
-    }
-
-    pub fn compatible_client(auth_token: String, compatibility: CtrlCompatibility) -> Self {
-        let mut hello = Self::current_client(auth_token);
-        hello.protocol_version = compatibility.client_protocol_version;
         hello
     }
 
@@ -255,6 +246,13 @@ pub enum CtrlCmd {
     /// persistence. Distinct from the player `Stop` command. Only accepted
     /// from local Unix ctrl connections.
     RequestShutdown,
+
+    /// Reread a committed owner-local Service setup. Only packaged Unix ctrl
+    /// accepts this command; setup values and credentials never cross ctrl.
+    ApplyServiceSetup {
+        kind: ServiceKind,
+        revision: u64,
+    },
 
     // ── Unified queue commands (require `unified-queue` capability) ─────
     /// Replace the entire queue with item-generic slots and optionally
@@ -536,12 +534,29 @@ pub enum CtrlEvent {
     ShutdownRejected {
         reason: String,
     },
+    ServiceSetupApplied {
+        kind: ServiceKind,
+        revision: u64,
+    },
+    ServiceSetupRejected {
+        kind: ServiceKind,
+        revision: u64,
+        reason: ServiceSetupRejection,
+    },
 
     // ── Unified queue events (require `unified-queue` capability) ───────
     /// Full item-generic queue state.  Sent on initial connection and
     /// after every queue mutation to peers advertising `unified-queue`.
     /// Legacy peers receive `CtrlState` instead.
     UnifiedQueueState(UnifiedQueueStateData),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServiceSetupRejection {
+    UnsupportedService,
+    RevisionMismatch,
+    StorageUnavailable,
+    TransitionRejected,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
