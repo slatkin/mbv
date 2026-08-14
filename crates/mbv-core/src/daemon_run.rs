@@ -4,6 +4,7 @@ pub fn run_with_options(
     hooks: DaemonRuntimeHooks,
 ) -> ! {
     let mut emby_runtime = startup.emby;
+    let mut audiobookshelf_runtime = startup.audiobookshelf;
     let config = startup.config;
     let role = startup.role;
     std::fs::write(pid_file(), std::process::id().to_string())
@@ -565,26 +566,32 @@ pub fn run_with_options(
                 }
                 if let CtrlCmd::ApplyServiceSetup { kind, revision } = cmd {
                     let transport = ctrl_clients.lock().unwrap().transport(client_id);
-                    let allowed = owner_admin_transport_allowed(role, transport);
+                    let allowed = owner_admin_transport_allowed(role, kind, transport);
                     let result = if !allowed {
                         Err(crate::ctrl::ServiceSetupRejection::TransitionRejected)
-                    } else if kind != crate::config::ServiceKind::Emby {
-                        Err(crate::ctrl::ServiceSetupRejection::UnsupportedService)
                     } else {
-                        reconcile_packaged_emby(
-                            revision,
-                            &mut emby_runtime,
-                            &mut ws_send_tx,
-                            &client,
-                            &player,
-                            &mut queue,
-                            &mut source,
-                            &shared_queue,
-                            &ctrl_clients,
-                            &merged_tx,
-                            &direct_commands,
-                            audio_only,
-                        )
+                        match kind {
+                            crate::config::ServiceKind::Emby => reconcile_packaged_emby(
+                                revision,
+                                &mut emby_runtime,
+                                &mut ws_send_tx,
+                                &client,
+                                &player,
+                                &mut queue,
+                                &mut source,
+                                &shared_queue,
+                                &ctrl_clients,
+                                &merged_tx,
+                                &direct_commands,
+                                audio_only,
+                            ),
+                            crate::config::ServiceKind::Audiobookshelf => {
+                                reconcile_packaged_audiobookshelf(
+                                    revision,
+                                    &mut audiobookshelf_runtime,
+                                )
+                            }
+                        }
                     };
                     match result {
                         Ok(()) => send_to(
@@ -731,6 +738,12 @@ pub fn run_with_options(
     }
 }
 
-fn owner_admin_transport_allowed(role: DaemonRole, transport: Option<CtrlTransport>) -> bool {
-    role == DaemonRole::Packaged && transport == Some(CtrlTransport::Local)
+fn owner_admin_transport_allowed(
+    role: DaemonRole,
+    kind: crate::config::ServiceKind,
+    transport: Option<CtrlTransport>,
+) -> bool {
+    let role_allowed =
+        role == DaemonRole::Packaged || kind == crate::config::ServiceKind::Audiobookshelf;
+    role_allowed && transport == Some(CtrlTransport::Local)
 }

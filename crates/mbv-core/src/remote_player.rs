@@ -51,6 +51,7 @@ pub struct RemotePlayer {
     pub(crate) shutdown_request_tx: Arc<Mutex<Option<mpsc::Sender<ShutdownResponse>>>>,
 }
 
+pub use crate::remote_player_connect::signal_local_daemon_service_setup;
 pub(crate) use crate::remote_player_connect::ControlStream;
 pub use crate::remote_player_connect::DaemonEndpoint;
 

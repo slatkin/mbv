@@ -314,8 +314,16 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     let audiobookshelf_url = audiobookshelf
         .map(|section| get_str(section, "url"))
         .unwrap_or_default();
-    let audiobookshelf_setup = (!audiobookshelf_url.trim().is_empty())
-        .then(|| AudiobookshelfSetup::new(audiobookshelf_url));
+    let audiobookshelf_setup = (!audiobookshelf_url.trim().is_empty()).then(|| {
+        let mut setup = AudiobookshelfSetup::new(audiobookshelf_url);
+        setup.revision = audiobookshelf
+            .and_then(|s| s.get("revision"))
+            .and_then(|v| v.as_integer())
+            .and_then(|v| u64::try_from(v).ok())
+            .filter(|revision| *revision > 0)
+            .unwrap_or(setup.revision);
+        setup
+    });
 
     Ok(Config {
         emby_setup,

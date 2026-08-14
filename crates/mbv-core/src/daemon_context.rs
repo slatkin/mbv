@@ -41,17 +41,54 @@ impl EmbyOwnerContext {
     }
 }
 
+/// Owner-local Audiobookshelf state. Constructing this value never
+/// authenticates; the daemon may start even when the configured server is
+/// unavailable.
+#[derive(Clone)]
+pub struct AudiobookshelfOwnerContext {
+    pub setup: crate::config::AudiobookshelfSetup,
+    pub device_id: String,
+    pub generation: crate::service_runtime::SetupGeneration,
+}
+
+impl AudiobookshelfOwnerContext {
+    pub fn from_packaged_storage_result(config: &crate::config::Config) -> Result<Self, String> {
+        let setup = config
+            .audiobookshelf_setup
+            .clone()
+            .ok_or_else(|| "Audiobookshelf setup is missing from owner storage".to_string())?;
+        let api_key =
+            crate::config::load_service_secret(crate::config::ServiceKind::Audiobookshelf)
+                .ok_or_else(|| "Audiobookshelf Service secret is unavailable".to_string())?;
+        if setup.server_url.trim().is_empty() || api_key.trim().is_empty() {
+            return Err("Audiobookshelf setup is incomplete in owner storage".to_string());
+        }
+        Ok(Self {
+            setup,
+            device_id: crate::api::device_id(),
+            generation: crate::service_runtime::SetupGeneration::default(),
+        })
+    }
+}
+
 /// Common startup input for Local and packaged daemons.
 #[derive(Clone)]
 pub struct DaemonStartupContext {
     pub role: DaemonRole,
     pub config: crate::config::Config,
     pub emby: Option<EmbyOwnerContext>,
+    pub audiobookshelf: Option<AudiobookshelfOwnerContext>,
 }
 
 impl DaemonStartupContext {
     pub fn new(config: crate::config::Config, role: DaemonRole) -> Self {
         let emby = EmbyOwnerContext::from_packaged_storage_result(&config).ok();
-        Self { role, config, emby }
+        let audiobookshelf = AudiobookshelfOwnerContext::from_packaged_storage_result(&config).ok();
+        Self {
+            role,
+            config,
+            emby,
+            audiobookshelf,
+        }
     }
 }
