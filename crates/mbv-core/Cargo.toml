@@ -20,6 +20,3 @@ uuid.workspace = true
 tungstenite.workspace = true
 log.workspace = true
 libc.workspace = true
-
-[dev-dependencies]
-static_assertions = "1"

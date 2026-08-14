@@ -43,15 +43,10 @@ impl EmbyOwnerContext {
 
 /// Owner-local Audiobookshelf state. Constructing this value never
 /// authenticates; the daemon may start even when the configured server is
-/// unavailable. The API key is runtime-only and never appears on a ctrl or
-/// serializable boundary.
+/// unavailable.
 #[derive(Clone)]
 pub struct AudiobookshelfOwnerContext {
     pub setup: crate::config::AudiobookshelfSetup,
-    /// Held in memory for the later Audiobookshelf playback child; never
-    /// serialized and never sent over ctrl.
-    #[allow(dead_code)]
-    api_key: String,
     pub device_id: String,
     pub generation: crate::service_runtime::SetupGeneration,
 }
@@ -70,7 +65,6 @@ impl AudiobookshelfOwnerContext {
         }
         Ok(Self {
             setup,
-            api_key,
             device_id: crate::api::device_id(),
             generation: crate::service_runtime::SetupGeneration::default(),
         })

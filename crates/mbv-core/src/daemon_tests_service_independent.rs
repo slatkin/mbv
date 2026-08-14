@@ -7,14 +7,6 @@ fn packaged_startup_context_is_service_independent() {
 }
 
 #[test]
-fn audiobookshelf_owner_context_credential_is_never_serializable() {
-    static_assertions::assert_not_impl_any!(
-        AudiobookshelfOwnerContext: serde::Serialize,
-        std::fmt::Debug
-    );
-}
-
-#[test]
 fn audiobookshelf_reconciliation_installs_context_but_keeps_admission_disabled() {
     let _guard = crate::config::TestStateDirGuard::new();
     crate::config::persist_audiobookshelf_setup_and_secret(
@@ -108,24 +100,9 @@ fn absent_emby_websocket_is_a_noop_for_ctrl_and_queue_state() {
 
 #[test]
 fn owner_administration_is_local_transport_only() {
-    assert!(owner_admin_transport_allowed(
-        DaemonRole::Packaged,
-        Some(CtrlTransport::Local)
-    ));
-    assert!(owner_admin_transport_allowed(
-        DaemonRole::Local,
-        Some(CtrlTransport::Local)
-    ));
-    assert!(!owner_admin_transport_allowed(
-        DaemonRole::Packaged,
-        Some(CtrlTransport::Tcp)
-    ));
-    assert!(!owner_admin_transport_allowed(
-        DaemonRole::Local,
-        Some(CtrlTransport::Tcp)
-    ));
-    assert!(!owner_admin_transport_allowed(DaemonRole::Packaged, None));
-    assert!(!owner_admin_transport_allowed(DaemonRole::Local, None));
+    assert!(owner_admin_transport_allowed(Some(CtrlTransport::Local)));
+    assert!(!owner_admin_transport_allowed(Some(CtrlTransport::Tcp)));
+    assert!(!owner_admin_transport_allowed(None));
 }
 
 #[test]
@@ -228,7 +205,7 @@ fn every_setup_rejection_reason_is_wire_representable() {
     }
 }
 use super::{
-    daemon_admits, owner_admin_transport_allowed, reconcile_packaged_audiobookshelf,
-    AudiobookshelfOwnerContext, DaemonRole, DaemonStartupContext, EmbyOwnerContext,
+    daemon_admits, owner_admin_transport_allowed, reconcile_packaged_audiobookshelf, DaemonRole,
+    DaemonStartupContext, EmbyOwnerContext,
 };
 use crate::ctrl::ServiceSetupRejection;

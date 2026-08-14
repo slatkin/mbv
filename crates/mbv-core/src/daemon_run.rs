@@ -566,7 +566,7 @@ pub fn run_with_options(
                 }
                 if let CtrlCmd::ApplyServiceSetup { kind, revision } = cmd {
                     let transport = ctrl_clients.lock().unwrap().transport(client_id);
-                    let allowed = owner_admin_transport_allowed(role, transport);
+                    let allowed = owner_admin_transport_allowed(transport);
                     let result = if !allowed {
                         Err(crate::ctrl::ServiceSetupRejection::TransitionRejected)
                     } else {
@@ -738,6 +738,6 @@ pub fn run_with_options(
     }
 }
 
-fn owner_admin_transport_allowed(_role: DaemonRole, transport: Option<CtrlTransport>) -> bool {
+fn owner_admin_transport_allowed(transport: Option<CtrlTransport>) -> bool {
     transport == Some(CtrlTransport::Local)
 }
