@@ -7,7 +7,6 @@ fn try_daemon_route_connect_returns_remote_player_on_successful_connect() {
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn route_connect_success(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        _auth_token: &str,
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,
@@ -50,7 +49,6 @@ fn app_construction_never_attempts_a_daemon_route_connect() {
     CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
     fn counting_connect(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        _auth_token: &str,
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,
@@ -147,7 +145,6 @@ fn apply_route_for_playback_double_failure_strips_using_local_playback() {
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn always_fail(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-        _auth_token: &str,
     ) -> Result<
         (
             mbv_core::remote_player::RemotePlayer,

@@ -273,7 +273,7 @@ fn main() {
         let client = cached_emby_client(&config);
         log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
         println!("Connecting to daemon at {endpoint}...");
-        match remote_player::RemotePlayer::connect_endpoint(&endpoint, "") {
+        match remote_player::RemotePlayer::connect_endpoint(&endpoint) {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon endpoint connected");
                 run_remote_app(client, remote, player_rx, endpoint, config.clone());
@@ -300,7 +300,6 @@ fn main() {
             let client = cached_emby_client(&config);
             match remote_player::RemotePlayer::connect_endpoint(
                 &remote_player::DaemonEndpoint::Local,
-                "",
             ) {
                 Ok((remote, player_rx)) => {
                     run_remote_app(
@@ -347,7 +346,6 @@ fn main() {
                 }
                 match remote_player::RemotePlayer::connect_endpoint(
                     &remote_player::DaemonEndpoint::Local,
-                    "",
                 ) {
                     Ok((remote, player_rx)) => {
                         run_remote_app(

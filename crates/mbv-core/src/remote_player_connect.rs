@@ -446,7 +446,6 @@ fn apply_unified_queue_state(
 
 pub(crate) fn connect_endpoint(
     endpoint: &DaemonEndpoint,
-    _auth_token: &str,
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
     let stream = endpoint.connect_stream()?;
     log::info!(target: "remote", "connected to daemon endpoint {endpoint}");

@@ -72,10 +72,10 @@ impl App {
     > {
         #[cfg(test)]
         if let Some(connect) = *super::DIRECT_CONNECT_OVERRIDE.lock().unwrap() {
-            return connect(endpoint, "");
+            return connect(endpoint);
         }
 
-        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint, "")
+        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint)
     }
 
     /// Lazy, on-demand connect to a daemon route endpoint (issue #222's
@@ -112,14 +112,14 @@ impl App {
     > {
         #[cfg(test)]
         if let Some(connect) = *super::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
-            return connect(endpoint, "");
+            return connect(endpoint);
         }
 
         log::info!(
             target: "daemon_route",
             "connecting to daemon route endpoint {endpoint}; under multi-connection (v4) this does not evict other ctrl clients (see ADR 0014)"
         );
-        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint, "")
+        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint)
     }
 
     /// Attempts a lazy connect to `endpoint` for the route named

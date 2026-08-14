@@ -102,8 +102,7 @@ fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
             .expect("test must release the daemon after observing shutdown");
     });
 
-    let (remote, _event_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+    let (remote, _event_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr)).unwrap();
     assert!(!remote.is_disconnected());
 
     remote.disconnect();
@@ -178,8 +177,7 @@ fn announced_daemon_shutdown_sets_is_shutdown_announced_and_emits_no_stopped_eve
         // Stream closes as `writer` (and the accepted `stream`) drop here.
     });
 
-    let (remote, event_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+    let (remote, event_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr)).unwrap();
 
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
     while !remote.is_disconnected() && std::time::Instant::now() < deadline {
@@ -226,8 +224,7 @@ fn unannounced_disconnect_leaves_is_shutdown_announced_false_and_emits_stopped()
         // a deliberate shutdown.
     });
 
-    let (remote, event_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+    let (remote, event_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr)).unwrap();
 
     // Wait for the synthetic Stopped event with a hard deadline, instead
     // of racing a sleep against the reader thread's
@@ -334,8 +331,7 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
             .expect("test must release the daemon after checking status");
     });
 
-    let (remote, _event_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+    let (remote, _event_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr)).unwrap();
 
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
     loop {
@@ -586,8 +582,7 @@ fn request_shutdown_is_unsupported_and_sends_nothing_when_daemon_lacks_capabilit
         let _ = received_tx.send(next_line);
     });
 
-    let (remote, _event_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+    let (remote, _event_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr)).unwrap();
 
     let response = remote.request_shutdown(Duration::from_secs(2));
     assert_eq!(

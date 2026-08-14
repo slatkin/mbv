@@ -57,9 +57,8 @@ pub use crate::remote_player_connect::DaemonEndpoint;
 impl RemotePlayer {
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
-        _auth_token: &str,
     ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
-        super::remote_player_connect::connect_endpoint(endpoint, _auth_token)
+        super::remote_player_connect::connect_endpoint(endpoint)
     }
 
     pub fn is_disconnected(&self) -> bool {

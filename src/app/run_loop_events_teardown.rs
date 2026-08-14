@@ -276,7 +276,7 @@ impl App {
         quit_timeout: Duration,
     ) -> Option<mbv_core::remote_player::ShutdownResponse> {
         use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
-        match RemotePlayer::connect_endpoint(&DaemonEndpoint::Local, "") {
+        match RemotePlayer::connect_endpoint(&DaemonEndpoint::Local) {
             Ok((remote, _event_rx)) => {
                 log::info!(target: "daemon_shutdown", "short-lived Local connection established");
                 let response = remote.request_shutdown(quit_timeout);

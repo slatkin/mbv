@@ -65,10 +65,6 @@ pub fn restore_emby_owned_state(snapshot: &EmbyOwnedStateSnapshot) -> Result<(),
 /// Clear only state whose identity belongs to Emby. Feed and other Service
 /// queue entries remain in the persisted queue snapshot.
 pub fn clear_emby_owned_state() -> Result<(), String> {
-    clear_emby_owned_state_inner()
-}
-
-fn clear_emby_owned_state_inner() -> Result<(), String> {
     if let Some(bytes) = snapshot_file(&queue_state_path())? {
         let state: QueueState = serde_json::from_slice(&bytes)
             .map_err(|error| format!("parse Emby queue state: {error}"))?;
@@ -96,11 +92,11 @@ fn clear_emby_owned_state_inner() -> Result<(), String> {
             .map_err(|error| format!("serialize owner configuration: {error}"))?;
         write_config_text_at(&config, &text)?;
     }
-    clear_emby_image_cache();
+    remove_emby_image_cache();
     Ok(())
 }
 
-fn clear_emby_image_cache() {
+fn remove_emby_image_cache() {
     let cache = image_cache_dir();
     let Ok(entries) = std::fs::read_dir(cache) else {
         return;
@@ -142,14 +138,7 @@ fn snapshot_emby_image_cache() -> Result<Vec<(String, Vec<u8>)>, String> {
 fn restore_emby_image_cache(snapshot: &[(String, Vec<u8>)]) -> Result<(), String> {
     let dir = image_cache_dir();
     std::fs::create_dir_all(&dir).map_err(|error| format!("restore Emby image cache: {error}"))?;
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Ok(());
-    };
-    for entry in entries.flatten() {
-        if is_emby_cache(&entry.file_name().to_string_lossy()) {
-            let _ = std::fs::remove_file(entry.path());
-        }
-    }
+    remove_emby_image_cache();
     for (name, bytes) in snapshot {
         std::fs::write(dir.join(name), bytes)
             .map_err(|error| format!("restore Emby image cache: {error}"))?;
@@ -162,7 +151,7 @@ fn restore_emby_image_cache(snapshot: &[(String, Vec<u8>)]) -> Result<(), String
 /// adds the owner-state snapshot and rollback required for replacement.
 pub fn replace_emby_setup_and_secret(setup: &EmbySetup, token: &str) -> Result<(), String> {
     let snapshot = snapshot_emby_owned_state()?;
-    if let Err(error) = clear_emby_owned_state_inner() {
+    if let Err(error) = clear_emby_owned_state() {
         return restore_after_failure(error, &snapshot);
     }
     match persist_emby_setup_and_secret(setup, token) {
