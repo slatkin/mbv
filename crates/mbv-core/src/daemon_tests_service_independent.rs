@@ -1,6 +1,6 @@
 #[test]
 fn packaged_startup_context_is_service_independent() {
-    let startup = DaemonStartupContext::packaged(Config::default());
+    let startup = DaemonStartupContext::new(Config::default(), DaemonRole::Packaged);
     assert_eq!(startup.role, DaemonRole::Packaged);
     assert!(startup.emby.is_none());
 }
@@ -15,7 +15,8 @@ fn packaged_context_loads_unreachable_emby_without_authenticating() {
     ));
     crate::config::save_service_secret(crate::config::ServiceKind::Emby, "unreachable-token")
         .unwrap();
-    let owner = EmbyOwnerContext::from_packaged_storage(&config).expect("owner context loads");
+    let owner =
+        EmbyOwnerContext::from_packaged_storage_result(&config).expect("owner context loads");
     assert_eq!(owner.revision, 1);
     assert_eq!(
         owner.client.lock().unwrap().config.server_url,

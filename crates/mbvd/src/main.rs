@@ -1,6 +1,5 @@
 use mbv_core::{applog, config, daemon};
 use std::io::{self, BufRead, BufReader, IsTerminal, Write};
-use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
@@ -118,7 +117,7 @@ fn prompt_password() -> Result<String, String> {
     result
 }
 
-fn administration_lock() -> Result<std::fs::File, String> {
+fn administration_lock() -> Result<nix::fcntl::Flock<std::fs::File>, String> {
     let path = config::data_dir_system_or_local().join("emby-connect.lock");
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -130,12 +129,8 @@ fn administration_lock() -> Result<std::fs::File, String> {
         .write(true)
         .open(path)
         .map_err(|_| "mbvd: cannot open administration lock".to_string())?;
-    let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
-    if result == 0 {
-        Ok(file)
-    } else {
-        Err("mbvd: another Emby administration command is running".into())
-    }
+    nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock)
+        .map_err(|_| "mbvd: another Emby administration command is running".to_string())
 }
 
 fn classified_auth_error(error: &str) -> String {
@@ -302,7 +297,7 @@ fn run() -> Result<(), String> {
             return Err(error);
         }
     };
-    match action {
+    let audio_only = match action {
         Action::Help => {
             print_usage();
             return Ok(());
@@ -324,10 +319,7 @@ fn run() -> Result<(), String> {
             println!("{}", mbv_core::shared_worker::export_json_pretty(&db)?);
             return Ok(());
         }
-        Action::Serve { .. } => {}
-    }
-    let Action::Serve { audio_only } = action else {
-        unreachable!()
+        Action::Serve { audio_only } => audio_only,
     };
     if daemon_running() {
         return Err("mbvd: a daemon is already running".to_string());
@@ -338,7 +330,7 @@ fn run() -> Result<(), String> {
     log::info!(target: "startup", "mbvd starting");
 
     daemon::run_with_options(
-        daemon::DaemonStartupContext::packaged(config),
+        daemon::DaemonStartupContext::new(config, daemon::DaemonRole::Packaged),
         audio_only,
         daemon::DaemonRuntimeHooks {
             on_player_ready: Box::new(|_| {}),

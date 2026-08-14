@@ -23,21 +23,6 @@ impl EmbyOwnerContext {
         }
     }
 
-    /// Load the packaged owner's setup and secret without making a network
-    /// request. A partially configured Service is deliberately absent.
-    pub fn from_packaged_storage(config: &crate::config::Config) -> Option<Self> {
-        let setup = config.emby_setup.as_ref()?;
-        let token = crate::config::load_service_secret(crate::config::ServiceKind::Emby)?;
-        if setup.server_url.trim().is_empty() || setup.user_id.trim().is_empty() {
-            return None;
-        }
-        let mut client = crate::api::EmbyClient::new(config.clone());
-        client.config.server_url = setup.server_url.clone();
-        client.user_id = setup.user_id.clone();
-        client.token = token;
-        Some(Self::from_client(client, setup.revision))
-    }
-
     pub fn from_packaged_storage_result(config: &crate::config::Config) -> Result<Self, String> {
         let setup = config
             .emby_setup
@@ -65,23 +50,8 @@ pub struct DaemonStartupContext {
 }
 
 impl DaemonStartupContext {
-    pub fn local(config: crate::config::Config) -> Self {
-        // Local daemon loads Emby setup from storage if available, same as packaged.
-        // This ensures queue admission allows Emby items when credentials are present.
-        let emby = EmbyOwnerContext::from_packaged_storage(&config);
-        Self {
-            role: DaemonRole::Local,
-            config,
-            emby,
-        }
-    }
-
-    pub fn packaged(config: crate::config::Config) -> Self {
-        let emby = EmbyOwnerContext::from_packaged_storage(&config);
-        Self {
-            role: DaemonRole::Packaged,
-            config,
-            emby,
-        }
+    pub fn new(config: crate::config::Config, role: DaemonRole) -> Self {
+        let emby = EmbyOwnerContext::from_packaged_storage_result(&config).ok();
+        Self { role, config, emby }
     }
 }

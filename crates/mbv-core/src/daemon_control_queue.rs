@@ -58,6 +58,27 @@ fn project_queue_state(
     }
 }
 
+fn unified_queue_state(
+    status: &crate::player::PlayerStatus,
+    queue: &PlaybackQueue,
+    source: &crate::config::QueueSource,
+) -> CtrlEvent {
+    CtrlEvent::UnifiedQueueState(crate::ctrl::UnifiedQueueStateData {
+        status: status.clone(),
+        slots: queue
+            .slots()
+            .iter()
+            .map(|s| crate::ctrl::UnifiedQueueSlot {
+                slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
+                item: s.item.clone(),
+            })
+            .collect(),
+        active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
+        revision: queue.revision().raw(),
+        source: source.clone(),
+    })
+}
+
 /// Broadcasts a queue snapshot to clients and shared state.
 fn broadcast_queue_state(
     ctrl_clients: &ClientRegistry,
@@ -69,22 +90,7 @@ fn broadcast_queue_state(
     let status = player.status.lock().unwrap().clone();
 
     // ── Unified-queue capable peers ────────────────────────────────────
-    let unified_json = serialize_ctrl_event(&CtrlEvent::UnifiedQueueState(
-        crate::ctrl::UnifiedQueueStateData {
-            status: status.clone(),
-            slots: queue
-                .slots()
-                .iter()
-                .map(|s| crate::ctrl::UnifiedQueueSlot {
-                    slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
-                    item: s.item.clone(),
-                })
-                .collect(),
-            active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
-            revision: queue.revision().raw(),
-            source: source.clone(),
-        },
-    ));
+    let unified_json = serialize_ctrl_event(&unified_queue_state(&status, queue, source));
 
     // ── Legacy peers: derive split items from canonical queue ──
     let (emby_items, feed_items) = split_queue_for_legacy(queue);
@@ -184,23 +190,7 @@ fn reject_command(
         .unwrap()
         .supports_unified_queue(client_id)
     {
-        send_to(
-            reply_tx,
-            &CtrlEvent::UnifiedQueueState(crate::ctrl::UnifiedQueueStateData {
-                status,
-                slots: queue
-                    .slots()
-                    .iter()
-                    .map(|s| crate::ctrl::UnifiedQueueSlot {
-                        slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
-                        item: s.item.clone(),
-                    })
-                    .collect(),
-                active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
-                revision: queue.revision().raw(),
-                source: source.clone(),
-            }),
-        );
+        send_to(reply_tx, &unified_queue_state(&status, queue, source));
     } else {
         let (emby_items, feed_items) = split_queue_for_legacy(queue);
         let include_feed = ctrl_clients

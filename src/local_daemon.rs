@@ -134,7 +134,7 @@ pub fn run_local_daemon_main() -> ! {
     let player_handle_for_tray = player_handle.clone();
 
     daemon::run_with_options(
-        daemon::DaemonStartupContext::local(config),
+        daemon::DaemonStartupContext::new(config, daemon::DaemonRole::Local),
         false,
         daemon::DaemonRuntimeHooks {
             on_player_ready: Box::new(move |handle| {
