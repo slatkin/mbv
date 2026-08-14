@@ -240,6 +240,10 @@ pub enum PlayerEvent {
     /// mirror to become stale. The detail describes what was detected. The UI
     /// shows this as a warning toast.
     QueueDesynced(String),
+    /// Emitted by RemotePlayer when the daemon sends redacted Audiobookshelf
+    /// progress. Dormant: delivered for a future browse-reconciliation
+    /// consumer, but nothing applies it to queue or browse state yet.
+    AudiobookshelfProgress(crate::ctrl::AudiobookshelfProgressEvent),
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

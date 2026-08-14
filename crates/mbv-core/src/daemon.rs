@@ -12,4 +12,5 @@ mod tests {
     include!("daemon_tests_playback_intent.rs");
     include!("daemon_tests_feed.rs");
     include!("daemon_tests_service_independent.rs");
+    include!("daemon_tests_abs_queue.rs");
 }

@@ -124,6 +124,19 @@ fn handle_ctrl(
                 );
                 return;
             }
+            let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
+            if let Some(reason) = abs_queue_transport_rejection(&items, supports_abs_queue) {
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    reason,
+                );
+                return;
+            }
             let (items, next_cursor) = admit_queue_items(items, Some(cursor), audio_only, has_emby);
             player.set_initial_queue(&items, next_cursor);
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
@@ -414,6 +427,19 @@ fn handle_ctrl(
         CtrlCmd::ApplyServiceSetup { .. } => {}
         // ── Unified queue commands ──────────────────────────────────────
         CtrlCmd::UnifiedQueueReplace { items, start_idx } => {
+            let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
+            if let Some(reason) = abs_queue_transport_rejection(&items, supports_abs_queue) {
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    reason,
+                );
+                return;
+            }
             let (items, next_cursor) = admit_queue_items(items, start_idx, audio_only, has_emby);
             if items.is_empty() {
                 reject_command(
@@ -456,6 +482,19 @@ fn handle_ctrl(
         }
         CtrlCmd::UnifiedQueueAppend { items } => {
             if items.is_empty() {
+                return;
+            }
+            let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
+            if let Some(reason) = abs_queue_transport_rejection(&items, supports_abs_queue) {
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    reason,
+                );
                 return;
             }
             let mut items = items;

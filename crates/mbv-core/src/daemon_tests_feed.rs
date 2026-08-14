@@ -26,6 +26,8 @@ fn connect_client_with_capability(
         CtrlTransport::Local,
         supports_feed_playback,
         supports_unified_queue,
+        true,
+        true,
     );
     (id, rx)
 }

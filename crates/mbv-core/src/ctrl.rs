@@ -40,6 +40,14 @@ pub const CTRL_CAP_UNIFIED_QUEUE: &str = "unified-queue";
 /// Capable Local daemons authenticate ctrl clients with their mbv-owned
 /// Control credential rather than an Emby Service credential.
 pub const CTRL_CAP_CONTROL_AUTH: &str = "control-auth";
+/// Peer can decode `QueueItem::Audiobookshelf` in unified queue commands,
+/// snapshots, and broadcasts. Static protocol support only — does not imply
+/// a daemon owner is eligible to bind or play the item. Additive — no
+/// protocol-version bump.
+pub const CTRL_CAP_ABS_QUEUE: &str = "abs-queue";
+/// Peer can receive the redacted provider-qualified Audiobookshelf progress
+/// event. Additive — no protocol-version bump.
+pub const CTRL_CAP_ABS_PROGRESS: &str = "abs-progress";
 
 pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;
@@ -67,6 +75,8 @@ impl CtrlHello {
                 CTRL_CAP_FEED_PLAYBACK.to_string(),
                 CTRL_CAP_UNIFIED_QUEUE.to_string(),
                 CTRL_CAP_CONTROL_AUTH.to_string(),
+                CTRL_CAP_ABS_QUEUE.to_string(),
+                CTRL_CAP_ABS_PROGRESS.to_string(),
             ],
             control_token: None,
         }
@@ -126,6 +136,18 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_CONTROL_AUTH)
     }
 
+    pub fn supports_abs_queue(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_ABS_QUEUE)
+    }
+
+    pub fn supports_abs_progress(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_ABS_PROGRESS)
+    }
+
     pub fn validate_control_credential(&self, expected: &str) -> Result<(), String> {
         let Some(presented) = self.control_token.as_deref() else {
             return Err("invalid Control credential".to_string());
@@ -156,6 +178,8 @@ pub struct CtrlCompatibility {
     pub supports_feed_playback: bool,
     pub supports_unified_queue: bool,
     pub supports_control_auth: bool,
+    pub supports_abs_queue: bool,
+    pub supports_abs_progress: bool,
 }
 
 impl CtrlCompatibility {
@@ -169,6 +193,8 @@ impl CtrlCompatibility {
                 supports_feed_playback: true,
                 supports_unified_queue: true,
                 supports_control_auth: true,
+                supports_abs_queue: true,
+                supports_abs_progress: true,
             }),
             _ => Err(format!(
                 "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
@@ -549,6 +575,28 @@ pub enum CtrlEvent {
     /// after every queue mutation to peers advertising `unified-queue`.
     /// Legacy peers receive `CtrlState` instead.
     UnifiedQueueState(UnifiedQueueStateData),
+
+    /// Redacted, provider-qualified Audiobookshelf progress. Sent only to
+    /// peers advertising `abs-progress`. See `AudiobookshelfProgressEvent`
+    /// for the field-level redaction contract this event upholds.
+    AudiobookshelfProgress(AudiobookshelfProgressEvent),
+}
+
+/// Redacted, provider-qualified Audiobookshelf progress: identity,
+/// acknowledged position/completion, and setup generation only. Excludes
+/// API key, Authorization header, resolved source URL, and playback
+/// `sessionId` — those never cross the ctrl wire.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudiobookshelfProgressEvent {
+    pub library_item_id: String,
+    pub episode_id: String,
+    /// Acknowledged playback position in ticks.
+    pub position_ticks: i64,
+    /// Mirrors Audiobookshelf `is_finished` completion state.
+    pub is_finished: bool,
+    /// Setup generation the acknowledged progress was produced under;
+    /// receivers discard progress from a stale generation.
+    pub setup_generation: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -337,21 +337,11 @@ pub fn run_with_options(
                 // Broadcast full state so both legacy and capable peers see
                 // the authoritative playback position.
                 let status = player.status.lock().unwrap().clone();
-                let unified_json = serialize_ctrl_event(&CtrlEvent::UnifiedQueueState(
-                    crate::ctrl::UnifiedQueueStateData {
-                        status: status.clone(),
-                        slots: queue
-                            .slots()
-                            .iter()
-                            .map(|s| crate::ctrl::UnifiedQueueSlot {
-                                slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
-                                item: s.item.clone(),
-                            })
-                            .collect(),
-                        active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
-                        revision: queue.revision().raw(),
-                        source: source.clone(),
-                    },
+                let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
+                    &status, &queue, &source, true,
+                ));
+                let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
+                    &status, &queue, &source, false,
                 ));
                 let (emby_items, feed_items) = split_queue_for_legacy(&queue);
                 let capable_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
@@ -368,10 +358,15 @@ pub fn run_with_options(
                     source: source.clone(),
                     feed_items: Vec::new(),
                 }));
-                if let (Some(unified_json), Some(capable_json), Some(legacy_json)) =
-                    (unified_json, capable_json, legacy_json)
+                if let (
+                    Some(unified_abs_json),
+                    Some(unified_json),
+                    Some(capable_json),
+                    Some(legacy_json),
+                ) = (unified_abs_json, unified_json, capable_json, legacy_json)
                 {
                     ctrl_clients.lock().unwrap().broadcast_state_gated(
+                        unified_abs_json,
                         unified_json,
                         capable_json,
                         legacy_json,

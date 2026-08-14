@@ -526,6 +526,9 @@ impl App {
                     self.refresh_after_stop();
                 }
             }
+            PlayerEvent::AudiobookshelfProgress(_) => {
+                // Dormant: no browse-reconciliation consumer exists yet.
+            }
         }
         false
     }

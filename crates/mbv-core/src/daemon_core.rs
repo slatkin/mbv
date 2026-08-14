@@ -7,9 +7,9 @@ use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
 use crate::ctrl::{
-    slot_id_to_u64, CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason, PlaybackGeneration,
-    PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent, PlaybackIntentOutcome,
-    PlaybackRequestId, UnifiedQueueSlot, UnifiedQueueStateData, WireCommand,
+    AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason,
+    PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
+    PlaybackIntentOutcome, PlaybackRequestId, WireCommand,
 };
 use crate::playback_queue::{FeedEntry, PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
@@ -135,6 +135,13 @@ struct CtrlClient {
     /// Whether this peer advertised `unified-queue` in its Hello. Gates
     /// whether it receives `UnifiedQueueState` or legacy `CtrlState`.
     supports_unified_queue: bool,
+    /// Whether this peer advertised `abs-queue` in its Hello. Gates whether
+    /// it receives or may submit `QueueItem::Audiobookshelf` values.
+    #[allow(dead_code)]
+    supports_abs_queue: bool,
+    /// Whether this peer advertised `abs-progress` in its Hello. Gates
+    /// whether it receives the redacted Audiobookshelf progress event.
+    supports_abs_progress: bool,
 }
 
 type ClientRegistry = Arc<Mutex<CtrlClients>>;
@@ -471,6 +478,18 @@ fn serialize_ctrl_event(event: &CtrlEvent) -> Option<String> {
     serde_json::to_string(event).ok()
 }
 
+/// Fans out redacted Audiobookshelf progress to peers that negotiated
+/// `abs-progress`. Dormant: no daemon playback path emits this yet, since
+/// daemon Audiobookshelf admission remains rejected; this is the delivery
+/// plumbing later playback activation will call.
+#[allow(dead_code)]
+fn broadcast_audiobookshelf_progress(clients: &ClientRegistry, event: AudiobookshelfProgressEvent) {
+    let Some(json) = serialize_ctrl_event(&CtrlEvent::AudiobookshelfProgress(event)) else {
+        return;
+    };
+    clients.lock().unwrap().broadcast_progress_gated(json);
+}
+
 impl CtrlClients {
     /// Append `tx` as a new ctrl connection. Multiple clients may coexist.
     /// Does NOT override authority if it is currently `EmbyRemote` — the new
@@ -482,6 +501,8 @@ impl CtrlClients {
         transport: CtrlTransport,
         supports_feed_playback: bool,
         supports_unified_queue: bool,
+        supports_abs_queue: bool,
+        supports_abs_progress: bool,
     ) -> CtrlClientId {
         let id = self.next_id;
         self.next_id += 1;
@@ -491,6 +512,8 @@ impl CtrlClients {
             transport,
             supports_feed_playback,
             supports_unified_queue,
+            supports_abs_queue,
+            supports_abs_progress,
         });
         if self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
@@ -542,6 +565,25 @@ impl CtrlClients {
             .is_some_and(|c| c.supports_unified_queue)
     }
 
+    /// Whether the client `id` advertised `abs-queue` support at Hello.
+    /// Used to gate Audiobookshelf `QueueItem` transport in both directions.
+    fn supports_abs_queue(&self, id: CtrlClientId) -> bool {
+        self.connection
+            .iter()
+            .find(|c| c.id == id)
+            .is_some_and(|c| c.supports_abs_queue)
+    }
+
+    /// Whether the client `id` advertised `abs-progress` support at Hello.
+    /// Used to gate delivery of the redacted Audiobookshelf progress event.
+    #[allow(dead_code)]
+    fn supports_abs_progress(&self, id: CtrlClientId) -> bool {
+        self.connection
+            .iter()
+            .find(|c| c.id == id)
+            .is_some_and(|c| c.supports_abs_progress)
+    }
+
     fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
         if let Some(client) = self.connection.iter().find(|client| client.id == id) {
             send_to(&client.tx, event);
@@ -560,25 +602,42 @@ impl CtrlClients {
     }
 
     /// Broadcasts a state event gated per client:
-    /// - `unified_json` → peers advertising `unified-queue`
+    /// - `unified_abs_json` → peers advertising `unified-queue` and `abs-queue`
+    /// - `unified_json` → peers advertising `unified-queue` but not `abs-queue`
     /// - `capable_json` → peers advertising `feed-playback` but not `unified-queue`
     /// - `legacy_json` → all others
     ///
     /// Mirrors `broadcast_to_all`'s drop-on-failed-send behavior.
     fn broadcast_state_gated(
         &mut self,
+        unified_abs_json: String,
         unified_json: String,
         capable_json: String,
         legacy_json: String,
     ) {
         self.connection.retain(|c| {
-            let json = if c.supports_unified_queue {
+            let json = if c.supports_unified_queue && c.supports_abs_queue {
+                &unified_abs_json
+            } else if c.supports_unified_queue {
                 &unified_json
             } else if c.supports_feed_playback {
                 &capable_json
             } else {
                 &legacy_json
             };
+            c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
+        });
+    }
+
+    /// Sends redacted Audiobookshelf progress `json` only to clients that
+    /// advertised `abs-progress` at Hello. Peers lacking the capability are
+    /// silently skipped (not dropped) — mirrors `broadcast_state_gated`'s
+    /// drop-on-failed-send semantics for the peers that do receive it.
+    fn broadcast_progress_gated(&mut self, json: String) {
+        self.connection.retain(|c| {
+            if !c.supports_abs_progress {
+                return true;
+            }
             c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
         });
     }
@@ -648,150 +707,4 @@ fn audio_only_rejection(audio_only: bool, fetched: &[QueueItem]) -> Option<Strin
     }
 }
 
-fn spawn_ctrl_client<S>(
-    stream: S,
-    transport: CtrlTransport,
-    merged_tx: mpsc::Sender<DaemonEvent>,
-    ctrl_clients: ClientRegistry,
-    control_credential: Option<String>,
-    player_status: Arc<Mutex<crate::player::PlayerStatus>>,
-    shared_queue: SharedQueueState,
-) where
-    S: CtrlStream,
-{
-    let Ok(writer_stream) = stream.try_clone_stream() else {
-        return;
-    };
-    let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
-
-    let mut daemon_hello = CtrlHello::current();
-    if control_credential.is_none() {
-        daemon_hello
-            .capabilities
-            .retain(|cap| cap != crate::ctrl::CTRL_CAP_CONTROL_AUTH);
-    }
-    if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(daemon_hello)) {
-        ev_tx.send(CtrlOutbound::Event(hello_json)).ok();
-    }
-
-    std::thread::spawn(move || {
-        let mut w = writer_stream;
-        for outbound in ev_rx {
-            match outbound {
-                CtrlOutbound::Event(line) => {
-                    if writeln!(w, "{line}").is_err() {
-                        break;
-                    }
-                }
-                CtrlOutbound::Flush(ack) => {
-                    let _ = w.flush();
-                    let _ = ack.send(());
-                }
-            }
-        }
-        w.shutdown_stream();
-    });
-    std::thread::spawn(move || {
-        let reader = BufReader::new(stream);
-        let mut lines = reader.lines();
-        let Some(Ok(line)) = lines.next() else {
-            return;
-        };
-        let (supports_feed_playback, supports_unified_queue) = match serde_json::from_str::<CtrlCmd>(
-            &line,
-        ) {
-            Ok(CtrlCmd::Hello(info)) => {
-                if let Err(e) = info.validate_peer() {
-                    log::warn!(target: "daemon", "rejecting ctrl client: {e}");
-                    return;
-                }
-                if let Some(control_credential) = control_credential.as_deref() {
-                    if info.control_token.is_none() {
-                        log::warn!(target: "daemon", "rejecting ctrl client: missing Control credential");
-                        return;
-                    }
-                    if let Err(e) = info.validate_control_credential(control_credential) {
-                        log::warn!(target: "daemon", "rejecting ctrl client: {e}");
-                        return;
-                    }
-                }
-                (info.supports_feed_playback(), info.supports_unified_queue())
-            }
-            Ok(_) => {
-                log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
-                return;
-            }
-            Err(e) => {
-                log::warn!(target: "daemon", "rejecting ctrl client: invalid protocol hello: {e}");
-                return;
-            }
-        };
-
-        let status = player_status.lock().unwrap().clone();
-        let init_event = if supports_unified_queue {
-            let q = shared_queue.queue.lock().unwrap();
-            CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
-                status,
-                slots: q
-                    .slots()
-                    .iter()
-                    .filter(|s| !s.item.is_audiobookshelf())
-                    .map(|s| UnifiedQueueSlot {
-                        slot_id: slot_id_to_u64(s.slot_id),
-                        item: s.item.clone(),
-                    })
-                    .collect(),
-                active_slot: q.active_slot_id().map(slot_id_to_u64),
-                revision: q.revision().raw(),
-                source: shared_queue.source.lock().unwrap().clone(),
-            })
-        } else {
-            let q = shared_queue.queue.lock().unwrap();
-            let feed_items: Vec<FeedEntry> = if supports_feed_playback {
-                q.slots()
-                    .iter()
-                    .filter_map(|s| match &s.item {
-                        QueueItem::Feed(e) => Some(e.clone()),
-                        _ => None,
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
-            let emby_items: Vec<EmbyItem> = q
-                .slots()
-                .iter()
-                .filter_map(|s| s.item.as_emby().cloned())
-                .collect();
-            let cursor = q.active_index().unwrap_or(0);
-            CtrlEvent::State(CtrlState {
-                status,
-                items: emby_items,
-                cursor,
-                source: shared_queue.source.lock().unwrap().clone(),
-                feed_items,
-            })
-        };
-        if let Ok(init_json) = serde_json::to_string(&init_event) {
-            ev_tx.send(CtrlOutbound::Event(init_json)).ok();
-        }
-        let reply_tx = ev_tx.clone();
-        let client_id = ctrl_clients.lock().unwrap().connect(
-            ev_tx,
-            transport,
-            supports_feed_playback,
-            supports_unified_queue,
-        );
-
-        for line in lines {
-            let Ok(line) = line else { break };
-            if line.is_empty() {
-                continue;
-            }
-            if let Ok(cmd) = serde_json::from_str::<CtrlCmd>(&line) {
-                let _ = merged_tx.send(DaemonEvent::Ctrl(cmd, client_id, reply_tx.clone()));
-            }
-        }
-        let _ = merged_tx.send(DaemonEvent::CtrlDisconnected(client_id));
-    });
-}
+include!("daemon_core_ctrl_spawn.rs");

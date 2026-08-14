@@ -58,22 +58,34 @@ fn project_queue_state(
     }
 }
 
-fn unified_queue_state(
+/// Projects the canonical queue into `UnifiedQueueStateData` for one
+/// connection. Audiobookshelf slots are included only when the peer
+/// negotiated `abs-queue`; when they are dropped, `active_slot` is cleared
+/// too if the active slot was itself an Audiobookshelf item, so a peer never
+/// receives an `active_slot` pointing at a slot missing from `slots`.
+fn unified_queue_state_for_peer(
     status: &crate::player::PlayerStatus,
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
+    supports_abs_queue: bool,
 ) -> CtrlEvent {
+    let slots: Vec<crate::ctrl::UnifiedQueueSlot> = queue
+        .slots()
+        .iter()
+        .filter(|s| supports_abs_queue || !s.item.is_audiobookshelf())
+        .map(|s| crate::ctrl::UnifiedQueueSlot {
+            slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
+            item: s.item.clone(),
+        })
+        .collect();
+    let active_slot = queue
+        .active_slot_id()
+        .map(crate::ctrl::slot_id_to_u64)
+        .filter(|active_id| slots.iter().any(|s| s.slot_id == *active_id));
     CtrlEvent::UnifiedQueueState(crate::ctrl::UnifiedQueueStateData {
         status: status.clone(),
-        slots: queue
-            .slots()
-            .iter()
-            .map(|s| crate::ctrl::UnifiedQueueSlot {
-                slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
-                item: s.item.clone(),
-            })
-            .collect(),
-        active_slot: queue.active_slot_id().map(crate::ctrl::slot_id_to_u64),
+        slots,
+        active_slot,
         revision: queue.revision().raw(),
         source: source.clone(),
     })
@@ -90,7 +102,10 @@ fn broadcast_queue_state(
     let status = player.status.lock().unwrap().clone();
 
     // ── Unified-queue capable peers ────────────────────────────────────
-    let unified_json = serialize_ctrl_event(&unified_queue_state(&status, queue, source));
+    let unified_abs_json =
+        serialize_ctrl_event(&unified_queue_state_for_peer(&status, queue, source, true));
+    let unified_json =
+        serialize_ctrl_event(&unified_queue_state_for_peer(&status, queue, source, false));
 
     // ── Legacy peers: derive split items from canonical queue ──
     let (emby_items, feed_items) = split_queue_for_legacy(queue);
@@ -109,13 +124,15 @@ fn broadcast_queue_state(
         feed_items: Vec::new(),
     }));
 
-    if let (Some(unified_json), Some(capable_json), Some(legacy_json)) =
-        (unified_json, capable_json, legacy_json)
+    if let (Some(unified_abs_json), Some(unified_json), Some(capable_json), Some(legacy_json)) =
+        (unified_abs_json, unified_json, capable_json, legacy_json)
     {
-        ctrl_clients
-            .lock()
-            .unwrap()
-            .broadcast_state_gated(unified_json, capable_json, legacy_json);
+        ctrl_clients.lock().unwrap().broadcast_state_gated(
+            unified_abs_json,
+            unified_json,
+            capable_json,
+            legacy_json,
+        );
     }
 
     // Update the reconnect snapshot.
@@ -172,6 +189,18 @@ fn daemon_admits(item: &QueueItem, audio_only: bool, has_emby: bool) -> bool {
     })
 }
 
+/// Returns a rejection reason when `items` contains an Audiobookshelf item
+/// submitted by a peer that did not negotiate `abs-queue` transport. Checked
+/// ahead of queue mutation so an incapable peer's operation is refused
+/// outright rather than silently dropping the unsupported item.
+fn abs_queue_transport_rejection(items: &[QueueItem], supports_abs_queue: bool) -> Option<String> {
+    if !supports_abs_queue && items.iter().any(QueueItem::is_audiobookshelf) {
+        Some("peer did not negotiate Audiobookshelf queue transport".to_string())
+    } else {
+        None
+    }
+}
+
 /// Rejects a queue command with `reason` and echoes the daemon's
 /// authoritative state back to the requester.
 fn reject_command(
@@ -190,7 +219,11 @@ fn reject_command(
         .unwrap()
         .supports_unified_queue(client_id)
     {
-        send_to(reply_tx, &unified_queue_state(&status, queue, source));
+        let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
+        send_to(
+            reply_tx,
+            &unified_queue_state_for_peer(&status, queue, source, supports_abs_queue),
+        );
     } else {
         let (emby_items, feed_items) = split_queue_for_legacy(queue);
         let include_feed = ctrl_clients
