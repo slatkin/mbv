@@ -1,21 +1,26 @@
 ## Purpose
 
-Defines owner-local administration for installing or replacing the Emby setup used by packaged `mbvd`.
+Defines owner-local administration for installing or replacing singleton Remote Services used by packaged `mbvd`, beginning with Emby setup.
 
 ## ADDED Requirements
 
-### Requirement: mbvd connect installs Emby locally
-`mbvd --connect emby` SHALL run on the packaged-daemon host under the daemon runtime identity and SHALL install or replace that owner's Emby setup. It SHALL NOT act as an `mbv` client login or send Service credentials through ctrl.
+### Requirement: mbvd connect installs a Service locally
+`mbvd --connect <service>` SHALL run on the packaged-daemon host under the daemon runtime identity and SHALL install or replace that owner's singleton Remote Service. It SHALL NOT act as an `mbv` client login or send Service credentials through ctrl.
 
 #### Scenario: Administrator starts Emby setup
 - **WHEN** the administrator runs `mbvd --connect emby`
 - **THEN** the command SHALL prompt locally for Emby server URL, username, and password
 - **THEN** it SHALL NOT require interactive `mbv` to run under the packaged-daemon identity
 
+#### Scenario: Unsupported Service is requested
+- **WHEN** `mbvd --connect` receives a Service name not implemented by that binary
+- **THEN** it SHALL exit without changing any persisted or active Service state
+- **THEN** it SHALL identify the supported Service names
+
 ### Requirement: mbvd connect is an interactive exclusive action
 The supported invocation SHALL be exactly `mbvd --connect emby`. It SHALL require an interactive terminal for local prompts and SHALL reject unknown, missing, or additional action selectors rather than combining connection administration with daemon serving, export, or quit behavior. It SHALL not read credentials from environment variables, command-line arguments, or files in this change.
 
-The command SHALL exit `0` for a committed setup that is active live or will load on next startup, `1` for validation, persistence, cleanup, or local-lock failure, `2` for usage or non-interactive-terminal failure, and `3` when commit succeeded but live reconciliation requires restart.
+The command SHALL exit `0` for a committed setup that is active live or will load on next startup, `1` for validation, persistence, cleanup, or local-lock failure, `2` for usage, unsupported Service, or non-interactive-terminal failure, and `3` when commit succeeded but live reconciliation requires restart.
 
 #### Scenario: Standard interactive invocation
 - **WHEN** an administrator runs exactly `mbvd --connect emby` from an interactive terminal

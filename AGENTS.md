@@ -1,175 +1,61 @@
-# Project: mbv
+# mbv
 
-Terminal media client in Rust with singleton Emby, Audiobookshelf, and Feeds
-Services. Embeds mpv; playback is owned by the terminal process, a user-owned
-Local daemon, or the separately packaged mbvd.
-
-Paths move often. Verify before trusting one. Where this file and the code
-disagree, the code wins — fix this file in the same PR.
+Rust terminal media client for Emby, Audiobookshelf, and Feeds. It embeds mpv;
+playback belongs to the terminal, Local daemon, or packaged `mbvd`.
 
 ## Read first
-- `CONTEXT.md` — domain vocabulary. Its *Avoid* lists are wrong terms, not style.
-- `docs/adr/` — decisions already made; check before changing architecture.
-  Superseded ADRs carry a clear banner. No banner means current.
 
-## Shape
-- `src/` — interactive binary. Process-role selection, Service-independent TUI
-  startup, tray, mpris, single-instance handling, and Local-daemon supervision.
-- `src/local_daemon.rs` — user-owned Local-daemon bootstrap and Control
-  credential. It starts without authenticating a Remote Service.
-- `src/app/` — TUI state. Prefixes are the index: `input_*` keys and mouse,
-  `*_actions.rs` state transitions, `render/` drawing, `*_tests.rs` its sibling.
-  Service setup/runtime orchestration and provider-specific Emby,
-  Audiobookshelf, and Feeds browse state also live here. Selected browse
-  destinations dispatch exhaustively; provider browse models meet at QueueItem
-  construction, not through a generic catalog model. Feed fetching is
-  client-side.
-- `crates/mbv-core/` — Service setup/runtime types, Emby and Audiobookshelf API
-  boundaries, feed subscription config, ctrl/shared-data protocols, daemon,
-  Player, canonical Emby/Feed/Audiobookshelf queue, source preparation, and mpv
-  projection. No UI or feed fetching. Audiobookshelf queue/source machinery is
-  present, but current owner admission and ctrl transport remain disabled.
-- `crates/mbvd/` — separately packaged daemon with system configuration, state,
-  and socket. It is currently still Emby-gated and uses legacy Emby-token ctrl
-  authentication; do not describe planned Service-independent behavior as
-  implemented.
+- `CONTEXT.md`: domain vocabulary; *Avoid* means incorrect terminology.
+- Current (not superseded) ADRs in `docs/adr/` before architecture changes.
 
-Source of truth, all in `mbv-core/src/`:
-- `ctrl.rs` — ctrl protocol and capabilities.
-- `api_types.rs` — Emby wire types.
-- `config_types_paths.rs` — Service setup, Service kinds, and config/path types.
-- `service_runtime.rs` — Service state and setup generations.
-- `config_types_feed.rs` — feed subscriptions.
-- `audiobookshelf.rs`, `audiobookshelf_catalog.rs`, and
-  `audiobookshelf_playback.rs` — Audiobookshelf API contracts.
-- `playback_queue_items.rs` — QueueItem variants and provider-qualified content
-  identity; `playback_queue.rs` — canonical queue slots and authority.
-- `player_sources.rs` — owner-local source/lifecycle preparation;
-  `player_projection.rs` — eager and active-file mpv projection.
+## Boundaries
 
-Change source-of-truth types before their callers.
+- `src/`: interactive binary and TUI; `src/local_daemon.rs` bootstraps the
+  user-owned Local daemon without Remote Service authentication (ADR 0018).
+- `crates/mbv-core/`: Service/runtime, provider APIs, config, ctrl/shared
+  protocols, queue, source preparation, and mpv projection. No UI/feed fetch.
+- `crates/mbvd/`: separately packaged daemon, persistent state, and sockets.
+- Change source-of-truth types before callers.
 
 ## Commands
-Prefer cargo nextest over cargo test.
 
-Additional cargo tools are available and should be preferred: cargo watch, cargo expand,
+Prefix every command in a chain with `rtk`; use `rtk proxy <cmd>` only to
+bypass filtering. `rtk grep` format flags (`-c/-l/-L/-o/-Z`) run raw.
 
-- `cargo edit` - manage cargo dependencies
-- `cargo expand` - show the result of macro expansion
-- `cargo watch` - compiles projects when sources change
-
-Tests:
-- `cargo check -p <affected-package>` — prefer the narrowest affected package
-- `cargo nextest run -p <affected-package>`
-- `cargo clippy --workspace --all-targets`
-- `make check-code-file-lines`
-
-Use difftastic (difft) is also available and can be used with git.
-
-You run in an environment where ast-grep is available; whenever a search requires syntax-aware or structural matching, default to ast-grep --lang rust -p '<pattern>' (or set --lang appropriately) and avoid falling back to text-only tools like rg or grep unless I explicitly request a plain-text search.
-
-Prefix every command with `rtk`. It filters when it has a filter and passes
-through unchanged when it doesn't, so it is always safe. Prefix each command in
-a chain, not just the first. `rtk grep` with a format flag (`-c`, `-l`, `-L`,
-`-o`, `-Z`) runs raw; `rtk proxy <cmd>` bypasses filtering.
+- Check: `rtk cargo check -p <package>`
+- Test: `rtk cargo nextest run -p <package>` (prefer nextest over `cargo test`)
+- Lint: `rtk cargo clippy --workspace --all-targets`
+- File-size check: `rtk make check-code-file-lines`
 
 ## Constraints
-- 800-line cap per source file, pre-commit enforced. Over the line means split
-  it in the same PR.
-- Ctrl protocol: additive changes get a capability string, not a version bump.
-  Rule sits above `CTRL_PROTOCOL_VERSION` in `mbv-core/src/ctrl.rs`.
-- Flaky test: delete it, write a new one. Don't troubleshoot.
-- Symbol-specific rules go above the symbol, not here. Rules at the edit site
-  can't rot unnoticed.
 
-## Planning
-- Design work: `openspec/changes/<name>/`. The one local exception to
-  GitHub-first.
-- Issues and discussion: GitHub Issues (slatkin/mbv), via `gh`. Ad-hoc notes:
-  gists, not loose markdown.
-- Specs, plans and docs commit with their code. Applied OpenSpec deltas merge
-  into `openspec/specs/`, then the change is archived; completed changes must
-  not remain under active changes as current intent.
+- Source files cap at 800 lines; split over-limit files in the same PR.
+- Ctrl changes add capability strings, never bump protocol version; see the
+  rule above `CTRL_PROTOCOL_VERSION`.
+- Replace flaky tests; do not troubleshoot them.
+- Put symbol-specific rules above the symbol.
 
-## Workflow
-- Gather → plan → execute. Past ~3 files, plan first and execute in fresh context.
-- Delegate context-heavy exploration to a subagent; ingest only the summary.
-- Search `src/ crates/ docs/ openspec/`. `.worktrees/` and `.opencode/` hold
-  duplicates and give false hits.
-- After a PR from a worktree, switch back to main.
+## Project process
 
-## Code Exploration Policy
+- Design changes live in `openspec/changes/<name>/`; otherwise use GitHub
+  Issues/discussions (`slatkin/mbv`) and gists for ad-hoc notes.
+- Commit specs/plans/docs with code; merge applied deltas into `openspec/specs/`
+  and archive completed changes.
 
-Always use jCodemunch-MCP tools for code navigation. Never fall back to Read, Grep, Glob, or Bash for code exploration.
-**Exception:** Use `Read` when you need to edit a file — the agent harness requires a `Read` before `Edit`/`Write` will succeed. Use jCodemunch tools to *find and understand* code, then `Read` only the specific file you're about to modify.
+## Tool routing
 
-**Start any session:**
-1. `resolve_repo { "path": "." }` — confirm the project is indexed. If not: `index_folder { "path": "." }`
-2. `suggest_queries` — when the repo is unfamiliar
-
-**Finding code:**
-- symbol by name → `search_symbols` (add `kind=`, `language=`, `file_pattern=`, `decorator=` to narrow)
-- decorator-aware queries → `search_symbols(decorator="X")` to find symbols with a specific decorator (e.g. `@property`, `@route`); combine with set-difference to find symbols *lacking* a decorator (e.g. "which endpoints lack CSRF protection?")
-- string, comment, config value → `search_text` (supports regex, `context_lines`)
-- database columns (dbt/SQLMesh) → `search_columns`
-
-**Reading code:**
-- before opening any file → `get_file_outline` first
-- one or more symbols → `get_symbol_source` (single ID → flat object; array → batch)
-- symbol + its imports → `get_context_bundle`
-- specific line range only → `get_file_content` (last resort)
-
-**Repo structure:**
-- `get_repo_outline` → dirs, languages, symbol counts
-- `get_file_tree` → file layout, filter with `path_prefix`
-
-**Relationships & impact:**
-- what imports this file → `find_importers`
-- where is this name used → `find_references`
-- is this identifier used anywhere → `check_references`
-- file dependency graph → `get_dependency_graph`
-- what breaks if I change X → `get_blast_radius`
-- what symbols actually changed since last commit → `get_changed_symbols`
-- find unreachable/dead code → `find_dead_code`
-- class hierarchy → `get_class_hierarchy`
-
-## Session-Aware Routing
-
-**Opening move for any task:**
-1. `plan_turn { "repo": "...", "query": "your task description", "model": "<your-model-id>" }` — get confidence + recommended files; the `model` parameter narrows the exposed tool list to match your capabilities at zero extra requests.
-2. Obey the confidence level:
-   - `high` → go directly to recommended symbols, max 2 supplementary reads
-   - `medium` → explore recommended files, max 5 supplementary reads
-   - `low` → the feature likely doesn't exist. Report the gap to the user. Do NOT search further hoping to find it.
-3. **One-call shortcut for a concrete task** — `assemble_task_context { "repo": "...", "task": "..." }` returns a single token-budgeted, source-attributed context capsule. It auto-classifies the task (explore / debug / refactor / extend / audit / review), auto-extracts anchor symbols, and runs the intent-appropriate sequence of the tools below end-to-end — so you get the whole context in one request instead of chaining the primitives by hand. Prefer it over a manual chain when the task is well-defined; fall back to step 1's routing when you need to decide *whether* the feature exists first.
-
-**Interpreting search results:**
-- If `search_symbols` returns `negative_evidence` with `verdict: "no_implementation_found"`:
-  - Do NOT re-search with different terms hoping to find it
-  - Do NOT assume a related file (e.g. auth middleware) implements the missing feature (e.g. CSRF)
-  - DO report: "No existing implementation found for X. This would need to be created."
-  - DO check `related_existing` files — they show what's nearby, not what exists
-- If `verdict: "low_confidence_matches"`: examine the matches critically before assuming they implement the feature
-
-**After editing files:**
-- If PostToolUse hooks are installed (Claude Code only), edited files are auto-reindexed
-- Otherwise, call `register_edit` with edited file paths to invalidate caches and keep the index fresh
-- For bulk edits (5+ files), always use `register_edit` with all paths to batch-invalidate
-
-**Token efficiency:**
-- If `_meta` contains `budget_warning`: stop exploring and work with what you have
-- If `auto_compacted: true` appears: results were automatically compressed due to turn budget
-- Use `get_session_context` to check what you've already read — avoid re-reading the same files
-
-## Model-Driven Tool Tiering
-
-Your jcodemunch-mcp server narrows the exposed tool list based on the model you are running as. To avoid wasting requests on primitives when a composite would do, always include `model="<your-model-id>"` in your opening `plan_turn` call.
-
-Replace `<your-model-id>` with your active model:
-- Claude Opus variants → `claude-opus-4-7` (or any `claude-opus-*`)
-- Claude Sonnet variants → `claude-sonnet-4-6`
-- Claude Haiku variants → `claude-haiku-4-5`
-- GPT-4o / GPT-5 / o1 / Llama → use the model id as printed by your runner
-
-The `model=` parameter rides on the existing `plan_turn` call — it does **not** add a separate tool invocation. If `plan_turn` is not appropriate for a non-code task, call `announce_model(model="...")` once instead.
-
+- For code discovery or impact, use JCodeMunch `plan_turn`; use JCodeMunch for
+  source retrieval, references, and impact. Honor negative evidence and
+  `budget_warning`; do not use native Read/Grep/Glob/Bash for exploration.
+- Use ast-grep only for a concrete AST predicate, preferably scoped to known
+  files. It does not replace reference or impact analysis. Exclude duplicate
+  `.worktrees/` and `.opencode/` trees from manual/structural scans.
+- Use Serena for code edits only when the OpenCode session began in the target
+  worktree. Never create/switch worktrees mid-session or edit a child worktree
+  from a parent session. Before its first edit, call
+  `serena_initial_instructions` and `serena_get_current_config`; proceed only
+  when the active project is that worktree.
+- Prefer Serena symbol edits/renames/deletes; use normal edits for non-code,
+  unresolved symbols, or a Serena worktree mismatch.
+- After source edits, call JCodeMunch `register_edit` unless a hook reindexed
+  the files.

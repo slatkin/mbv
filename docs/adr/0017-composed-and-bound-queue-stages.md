@@ -1,9 +1,6 @@
 # Composed and Bound Queue Stages
 
-> **Accepted core model; proposed audio-only application.** The Composed/Bound
-> distinction and owner-side unplayable-item admission are current. The
-> audio-only mixed-submission and Client fall-through behavior below belongs to
-> open issue #431 and is not implemented on `main`.
+> **Accepted core model; mixed admission implemented, fall-through proposed.** The Composed/Bound distinction and owner-side unplayable-item admission are current. Audio-only mixed-submission admission (audio-only owner accepts audio items minus non-audio, remapped start index, wholly non-audio still `AudioOnly` rejected, discards logged not reported) is now implemented on `main` for unified-queue peers via `admit_queue_items` in `crates/mbv-core/src/daemon_control.rs:136` (`UnifiedQueueReplace`/`UnifiedQueueAppend`/`UnifiedAdoptQueue`). Client fall-through for explicitly requested non-audio items while directly controlling an audio-only owner remains proposed in `openspec/changes/audio-only-mixed-queue-admission` and `audio-only-owner-fall-through` / `openspec/specs/non-audio-fall-through/spec.md` (issue #431) and is not implemented on `main`. Bare-mode Audiobookshelf queue admission and active-file projection are active (milestone #515, PRs #520-522).
 
 ## Decision
 

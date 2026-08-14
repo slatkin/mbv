@@ -2,6 +2,8 @@
 
 **Supersedes ADR 0005** (Owned pty relay for stay-alive mode).
 
+> **Amended (2026-08-14, Control credential):** Local daemon ctrl authentication now uses the mbv-owned Control credential (`control-auth` capability, `crates/mbv-core/src/ctrl.rs:35`) rather than an Emby Service token. `src/local_daemon.rs:125` `load_or_create_control_credential`, `spawn_detached` waits for socket connectable within bounded poll. `mbvd` on `main` still uses legacy Emby-token auth (`crates/mbvd/src/main.rs:117-120`) until PR #529 tracking #523 migrates it to filesystem/trusted-LAN authorization.
+
 ## Decision
 
 Stay-alive is **ensure the local daemon exists, then attach**, not a relay.
