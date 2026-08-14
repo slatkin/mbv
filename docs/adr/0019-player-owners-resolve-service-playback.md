@@ -1,5 +1,7 @@
 # Player Owners Resolve Service-Backed Playback
 
+> **Amended (2026-08-14):** Bare-mode Audiobookshelf playback is now active — source resolution (direct/HLS, Bearer scoped to direct file, bounded HLS readiness), active-file projection (canonical queue retains all slots, mpv contains only active materialized file), and progress sync/finalization with monotonic wall-clock listening time landed in milestone #515 (PRs #520-522). "Dormant in-process Audiobookshelf source machinery" no longer holds for bare mode. Local daemon on `main` now admits Emby and Feed (audio-only subset for audio-only owners) per `CONTEXT.md` Owner admission; it still does NOT admit Audiobookshelf — tracked in milestone #524 (issues #525-528: transport `audiobookshelf-queue` + progress, setup reconciliation, daemon-owner playback, stay-alive continuity). Audiobookshelf ctrl transport still absent on `main`; additive capabilities planned in `openspec/changes/transport-audiobookshelf-daemon-state/`. Initial daemon init filtered Audiobookshelf for unified peers (`crates/mbv-core/src/daemon_core.rs:738`). Packaged `mbvd` remains Emby-gated on `main` (`crates/mbvd/src/main.rs:117`) pending PR #529 tracking #523.
+
 ## Decision
 
 An eligible Player owner resolves Service-backed media using Service setup and a

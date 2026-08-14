@@ -16,36 +16,56 @@ disagree, the code wins — fix this file in the same PR.
 - `src/` — interactive binary. Process-role selection, Service-independent TUI
   startup, tray, mpris, single-instance handling, and Local-daemon supervision.
 - `src/local_daemon.rs` — user-owned Local-daemon bootstrap and Control
-  credential. It starts without authenticating a Remote Service.
+  credential. It starts without authenticating a Remote Service (ADR 0018).
 - `src/app/` — TUI state. Prefixes are the index: `input_*` keys and mouse,
   `*_actions.rs` state transitions, `render/` drawing, `*_tests.rs` its sibling.
   Service setup/runtime orchestration and provider-specific Emby,
   Audiobookshelf, and Feeds browse state also live here. Selected browse
-  destinations dispatch exhaustively; provider browse models meet at QueueItem
-  construction, not through a generic catalog model. Feed fetching is
-  client-side.
+  destinations dispatch exhaustively via Tab selection (Home, EmbyLibrary,
+  AudiobookshelfLibrary, Feeds) — count-aware position mapping prevents Emby and
+  Audiobookshelf sharing a numeric position. Provider browse models remain
+  separate and meet only at QueueItem construction and owner admission, not
+  through a generic catalog model. Feed fetching is client-side.
 - `crates/mbv-core/` — Service setup/runtime types, Emby and Audiobookshelf API
-  boundaries, feed subscription config, ctrl/shared-data protocols, daemon,
-  Player, canonical Emby/Feed/Audiobookshelf queue, source preparation, and mpv
-  projection. No UI or feed fetching. Audiobookshelf queue/source machinery is
-  present, but current owner admission and ctrl transport remain disabled.
-- `crates/mbvd/` — separately packaged daemon with system configuration, state,
-  and socket. It is currently still Emby-gated and uses legacy Emby-token ctrl
-  authentication; do not describe planned Service-independent behavior as
-  implemented.
+  boundaries, feed subscription config, ctrl/shared-data protocols, daemon
+  (multi-connection, ADR 0014), Player, canonical Emby/Feed/Audiobookshelf
+  queue, source preparation, and mpv projection. No UI or feed fetching.
+  Audiobookshelf bare-mode queue, source resolution (direct/HLS), active-file
+  projection, and progress sync/finalization are now active (milestone #515,
+  PRs #520-522). Local daemon and mbvd Audiobookshelf admission and ctrl
+  transport are milestone #524 (issues #525-528: transport, setup reconciliation,
+  daemon-owner playback, stay-alive continuity).
+- `crates/mbvd/` — separately packaged daemon with system configuration, state
+  (`redb` `shared.mbvd`), and sockets. On `main` it is still Emby-gated: it
+  constructs `EmbyClient` unconditionally, requires cached credentials to start,
+  and uses legacy Emby-token ctrl authentication. Feed playback and owner-local
+  queue/control without Emby, Service-independent startup (optional Emby
+  runtime), filesystem/trusted-LAN ctrl auth, and `mbvd --connect emby` admin
+  are implemented in open PR #529 tracking issue #523 — do not describe them
+  as landed on `main`.
 
 Source of truth, all in `mbv-core/src/`:
-- `ctrl.rs` — ctrl protocol and capabilities.
+- `ctrl.rs` — ctrl protocol and capabilities (v7, additive via strings).
+- `shared_protocol.rs` / `shared_state.rs` / `shared_store.rs` — shared-data
+  protocol (v1), roaming documents (Queue, Library position, Last remote
+  connection, Roaming settings), and keyed Feed entry state table
+  `(user_id, feed_id, entry_guid)` with last-write-wins + prefix scan.
 - `api_types.rs` — Emby wire types.
-- `config_types_paths.rs` — Service setup, Service kinds, and config/path types.
-- `service_runtime.rs` — Service state and setup generations.
-- `config_types_feed.rs` — feed subscriptions.
+- `config_types_paths.rs` — Service setup (`EmbySetup`, `AudiobookshelfSetup`),
+  ServiceKind, Config, and path types; `config_types_feed.rs` — feed subscriptions.
+- `service_runtime.rs` — ServiceState (NotConfigured/Connecting/Ready/
+  NeedsAuthentication/Unavailable) and SetupGeneration monotonic guard.
 - `audiobookshelf.rs`, `audiobookshelf_catalog.rs`, and
-  `audiobookshelf_playback.rs` — Audiobookshelf API contracts.
-- `playback_queue_items.rs` — QueueItem variants and provider-qualified content
-  identity; `playback_queue.rs` — canonical queue slots and authority.
-- `player_sources.rs` — owner-local source/lifecycle preparation;
-  `player_projection.rs` — eager and active-file mpv projection.
+  `audiobookshelf_playback.rs` — Audiobookshelf API contracts, paged podcast
+  show listing, and playback session lifecycle (direct/HLS, Bearer isolation,
+  bounded HLS readiness, finalization).
+- `playback_queue_items.rs` — QueueItem enum (Emby/Feed/Audiobookshelf), typed
+  QueueItemContentId, and owner admission rules (media kind, Service
+  eligibility, audiobookshelf capability); `playback_queue.rs` — canonical
+  queue slots, stable slot identity, revision, refresh/consume/protection.
+- `player_sources.rs` — owner-local just-in-time source/lifecycle preparation;
+  `player_projection.rs` — eager (full queue mirrored) and active-file (only
+  active slot materialized) mpv projection.
 
 Change source-of-truth types before their callers.
 
@@ -98,10 +118,31 @@ a chain, not just the first. `rtk grep` with a format flag (`-c`, `-l`, `-L`,
   duplicates and give false hits.
 - After a PR from a worktree, switch back to main.
 
-## Code Exploration Policy
+## Code Exploration and Editing Policy
 
-Always use jCodemunch-MCP tools for code navigation. Never fall back to Read, Grep, Glob, or Bash for code exploration.
-**Exception:** Use `Read` when you need to edit a file — the agent harness requires a `Read` before `Edit`/`Write` will succeed. Use jCodemunch tools to *find and understand* code, then `Read` only the specific file you're about to modify.
+Use JCodeMunch for code discovery, retrieval, and impact analysis. Do not use
+native Read, Grep, Glob, or Bash to explore code. Use JCodeMunch to find and
+understand code before deciding to edit it.
+
+Use Serena for code edits, not routine reads:
+- Once per coding session, call `serena_initial_instructions` before using
+  Serena. The OpenCode MCP server starts Serena in `ide` mode for the current
+  repository.
+- Replacing an entire function, method, impl, type, or class →
+  `serena_replace_symbol_body`.
+- Adding a declaration adjacent to an existing symbol →
+  `serena_insert_before_symbol` or `serena_insert_after_symbol`.
+- Renaming or deleting a code symbol → `serena_rename_symbol` or
+  `serena_safe_delete_symbol`; these are reference-aware.
+- Changing only a few lines inside a larger symbol → targeted
+  `serena_replace_content` (use a precise literal or regex and let ambiguity
+  fail safely), rather than a broad text patch.
+- Use normal edit tools for non-code files (including `AGENTS.md`, docs,
+  YAML/TOML/JSON, lockfiles) or only when Serena cannot resolve the code
+  target. This is the fallback, not the default for Rust code.
+
+After Serena changes code, call `register_edit` for the changed paths unless a
+hook has already reindexed them; this keeps JCodeMunch's retrieval index fresh.
 
 **Start any session:**
 1. `resolve_repo { "path": "." }` — confirm the project is indexed. If not: `index_folder { "path": "." }`
@@ -172,4 +213,3 @@ Replace `<your-model-id>` with your active model:
 - GPT-4o / GPT-5 / o1 / Llama → use the model id as printed by your runner
 
 The `model=` parameter rides on the existing `plan_turn` call — it does **not** add a separate tool invocation. If `plan_turn` is not appropriate for a non-code task, call `announce_model(model="...")` once instead.
-

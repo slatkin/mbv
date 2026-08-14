@@ -48,3 +48,5 @@ disambiguate the two "a lock is held" cases.
   regardless of which invocation spawned it. The only thing that stays
   explicit is spawning a daemon that isn't there yet, which stay-alive (`-d`)
   now does as its own bootstrap step, ahead of this same flock probe.
+
+> **Amended (2026-08-14, Control credential / `-d` removal):** Local daemon ctrl now authenticates with the mbv-owned Control credential (`control-auth` capability, `crates/mbv-core/src/ctrl.rs:35`) rather than an Emby Service token; `src/local_daemon.rs:125` loads/creates `control_credential.json`. The `-d` flag is removed per ADR 0015 amendment — a legacy `mbv -d` invocation fails with guidance to enable `stay_alive` in config or Settings.

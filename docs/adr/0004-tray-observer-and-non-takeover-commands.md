@@ -1,5 +1,7 @@
 # Tray Observer And Non-Takeover Commands
 
+> **Note (2026-08-14):** References ADR 0003 exclusive "connection == driver" model which is superseded by [ADR 0014](0014-multi-connection-model.md) multi-connection model. Tray semantics remain current: tray is not a ctrl client (via `DaemonRuntimeHooks::on_tray_ready` in `src/local_daemon.rs` → `src/tray.rs`), commands are non-takeover, and tray stays outside `AuthorityHolder` per ADR 0007. No eviction occurs under ADR 0014, but tray still never takes authority.
+
 ## Decision
 
 The system tray is a special local integration point owned by the daemon process.

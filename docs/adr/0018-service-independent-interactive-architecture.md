@@ -1,5 +1,7 @@
 # Service-Independent Interactive Architecture
 
+> **Note (2026-08-14):** Packaged `mbvd` Service-independent startup (zero Services, Feed without Emby, filesystem/trusted-LAN ctrl auth, `mbvd --connect emby` admin) is implemented in open PR #529 tracking issue #523, not landed on `main`. On `main`, `crates/mbvd/src/main.rs:117-120` still constructs `EmbyClient` unconditionally and requires cached credentials. Local daemon Service-independence is landed.
+
 ## Decision
 
 Interactive `mbv` enters the TUI and establishes its local playback arrangement
