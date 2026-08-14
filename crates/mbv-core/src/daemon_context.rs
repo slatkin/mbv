@@ -66,13 +66,13 @@ pub struct DaemonStartupContext {
 
 impl DaemonStartupContext {
     pub fn local(config: crate::config::Config) -> Self {
-        // Preserve the Local daemon's historical startup: it creates the
-        // client but does not authenticate before the Player owner is live.
-        let client = crate::api::EmbyClient::new(config.clone());
+        // Local daemon loads Emby setup from storage if available, same as packaged.
+        // This ensures queue admission allows Emby items when credentials are present.
+        let emby = EmbyOwnerContext::from_packaged_storage(&config);
         Self {
             role: DaemonRole::Local,
             config,
-            emby: Some(EmbyOwnerContext::from_client(client, 0)),
+            emby,
         }
     }
 

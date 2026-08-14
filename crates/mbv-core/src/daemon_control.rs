@@ -628,7 +628,10 @@ fn handle_ctrl(
                 }
             }
         }
-        CtrlCmd::RequestShutdown => {}
+        CtrlCmd::RequestShutdown => {
+            send_to(request.reply_tx, &CtrlEvent::ShutdownAccepted);
+            let _ = merged_tx.send(DaemonEvent::Shutdown);
+        }
         CtrlCmd::ApplyServiceSetup { .. } => {}
         // ── Unified queue commands ──────────────────────────────────────
         CtrlCmd::UnifiedQueueReplace { items, start_idx } => {
