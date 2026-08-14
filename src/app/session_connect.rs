@@ -28,9 +28,7 @@ impl App {
                 sess.host
             );
         }
-        let Some(client) = self.emby_client() else {
-            return None;
-        };
+        let client = self.emby_client()?;
         let client = client.lock().unwrap();
         sess.device_name
             .eq_ignore_ascii_case(&client.device_name)

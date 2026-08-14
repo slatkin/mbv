@@ -104,30 +104,6 @@ fn episode_title_without_number(title: &str) -> &str {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::episode_title_without_number;
-
-    #[test]
-    fn episode_title_without_number_removes_common_prefixes() {
-        for (input, expected) in [
-            ("1. First episode", "First episode"),
-            ("01 - First episode", "First episode"),
-            ("#12: First episode", "First episode"),
-            ("3) First episode", "First episode"),
-        ] {
-            assert_eq!(episode_title_without_number(input), expected);
-        }
-    }
-
-    #[test]
-    fn episode_title_without_number_preserves_non_prefix_numbers() {
-        for title in ["Episode 12", "2026 election", "The 1.5 hour episode"] {
-            assert_eq!(episode_title_without_number(title), title);
-        }
-    }
-}
-
 impl App {
     pub(super) fn render_audiobookshelf_podcasts(
         &mut self,
@@ -632,5 +608,29 @@ impl App {
             );
         }
         draw_column_selection_markers(f, area, cursor, cols, &layout.left_item_rows, scroll);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::episode_title_without_number;
+
+    #[test]
+    fn episode_title_without_number_removes_common_prefixes() {
+        for (input, expected) in [
+            ("1. First episode", "First episode"),
+            ("01 - First episode", "First episode"),
+            ("#12: First episode", "First episode"),
+            ("3) First episode", "First episode"),
+        ] {
+            assert_eq!(episode_title_without_number(input), expected);
+        }
+    }
+
+    #[test]
+    fn episode_title_without_number_preserves_non_prefix_numbers() {
+        for title in ["Episode 12", "2026 election", "The 1.5 hour episode"] {
+            assert_eq!(episode_title_without_number(title), title);
+        }
     }
 }

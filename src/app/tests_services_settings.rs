@@ -1,3 +1,4 @@
+#![allow(clippy::field_reassign_with_default)]
 use super::*;
 use crate::config::TestStateDirGuard;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};

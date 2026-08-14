@@ -28,8 +28,10 @@ fn completion(
 #[test]
 fn configured_startup_is_independent_and_reaches_ready() {
     let _guard = TestStateDirGuard::new();
-    let mut config = crate::config::Config::default();
-    config.audiobookshelf_setup = Some(AudiobookshelfSetup::new("https://books.example"));
+    let config = crate::config::Config {
+        audiobookshelf_setup: Some(AudiobookshelfSetup::new("https://books.example")),
+        ..Default::default()
+    };
     mbv_core::config::save_service_secret(
         mbv_core::config::ServiceKind::Audiobookshelf,
         "book-secret",

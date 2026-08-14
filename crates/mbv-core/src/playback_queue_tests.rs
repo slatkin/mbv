@@ -44,7 +44,7 @@ fn audiobookshelf_episode(library_item_id: &str, episode_id: &str) -> Audiobooks
         show_title: Some("Show".into()),
         author: Some("Author".into()),
         duration_ticks: Some(120 * TICKS_PER_SECOND as u64),
-        position_ticks: 30 * TICKS_PER_SECOND as i64,
+        position_ticks: 30 * TICKS_PER_SECOND,
         played: false,
         pub_date_secs: Some(1_700_000_000),
         is_finished: false,

@@ -281,7 +281,7 @@ fn save_service_secret_at(secret: &str, path: &std::path::Path) -> Result<(), St
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
             .map_err(|e| format!("chmod 0600 {}: {e}", tmp.display()))?;
     }
-    std::fs::rename(&tmp, &path)
+    std::fs::rename(&tmp, path)
         .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
 }
 
@@ -336,7 +336,10 @@ fn write_control_credential_temp(secret: &str, path: &std::path::Path) -> Result
             .map_err(|e| format!("create directory {}: {e}", dir.display()))?;
     }
     let text = serde_json::json!({"credential": secret}).to_string();
-    let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("control_credential.json");
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("control_credential.json");
     let tmp = path.with_file_name(format!("{name}.{}.tmp", uuid::Uuid::new_v4()));
     std::fs::write(&tmp, text).map_err(|e| format!("write {}: {e}", tmp.display()))?;
     #[cfg(unix)]
@@ -374,12 +377,19 @@ pub fn load_or_create_control_credential() -> Result<String, String> {
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             let _ = std::fs::remove_file(&tmp);
             load_control_credential().ok_or_else(|| {
-                format!("load concurrently created Control credential {}", path.display())
+                format!(
+                    "load concurrently created Control credential {}",
+                    path.display()
+                )
             })
         }
         Err(error) => {
             let _ = std::fs::remove_file(&tmp);
-            Err(format!("publish {} as {}: {error}", tmp.display(), path.display()))
+            Err(format!(
+                "publish {} as {}: {error}",
+                tmp.display(),
+                path.display()
+            ))
         }
     }
 }
@@ -551,7 +561,7 @@ fn save_emby_setup_at(setup: &EmbySetup, path: &std::path::Path) -> Result<(), S
     if setup.server_url.trim().is_empty() || setup.user_id.trim().is_empty() {
         return Err("Emby setup requires a server URL and user ID".to_string());
     }
-    let mut doc: toml::Value = match std::fs::read_to_string(&path) {
+    let mut doc: toml::Value = match std::fs::read_to_string(path) {
         Ok(text) => toml::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             toml::Value::Table(toml::map::Map::new())
@@ -588,7 +598,7 @@ fn save_emby_setup_at(setup: &EmbySetup, path: &std::path::Path) -> Result<(), S
     }
     let tmp = path.with_extension("toml.tmp");
     std::fs::write(&tmp, text).map_err(|e| format!("write {}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, &path)
+    std::fs::rename(&tmp, path)
         .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
 }
 
@@ -602,8 +612,8 @@ pub fn persist_emby_setup_and_secret(setup: &EmbySetup, token: &str) -> Result<(
         token,
         &config_path(),
         &service_secret_path(ServiceKind::Emby),
-        |setup, path| save_emby_setup_at(setup, path),
-        |token, path| save_service_secret_at(token, path),
+        save_emby_setup_at,
+        save_service_secret_at,
     )
 }
 

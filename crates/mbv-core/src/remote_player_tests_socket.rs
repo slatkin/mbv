@@ -179,24 +179,39 @@ fn announced_daemon_shutdown_sets_is_shutdown_announced_and_emits_no_stopped_eve
 
     let (remote, event_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr)).unwrap();
 
+    // Wait for the DaemonShutdownAnnounced event with a hard deadline,
+    // instead of racing a sleep against the reader thread's
+    // `disconnected.store(true)` -> `shutdown_announced.store(true)` ->
+    // `event_tx.send(DaemonShutdownAnnounced)` sequence. Receiving the
+    // event proves the shutdown was announced, so the post-conditions
+    // are stable to read.
     let deadline = std::time::Instant::now() + Duration::from_secs(2);
-    while !remote.is_disconnected() && std::time::Instant::now() < deadline {
-        std::thread::sleep(Duration::from_millis(10));
+    let mut saw_shutdown = false;
+    while std::time::Instant::now() < deadline {
+        match event_rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(PlayerEvent::DaemonShutdownAnnounced) => {
+                saw_shutdown = true;
+                break;
+            }
+            Ok(_) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        }
     }
+    assert!(
+        saw_shutdown,
+        "expected a DaemonShutdownAnnounced event before the 2s deadline"
+    );
     assert!(remote.is_disconnected());
     assert!(
         remote.is_shutdown_announced(),
         "an announced DaemonShutdown must mark is_shutdown_announced()"
     );
 
+    // Drain anything that arrived after DaemonShutdownAnnounced and
+    // assert the negative: an announced shutdown never emits a
+    // synthetic Stopped event.
     let events: Vec<_> = event_rx.try_iter().collect();
-    assert!(
-        events
-            .iter()
-            .any(|e| matches!(e, PlayerEvent::DaemonShutdownAnnounced)),
-        "expected a DaemonShutdownAnnounced event, got {} events",
-        events.len()
-    );
     assert!(
         !events
             .iter()

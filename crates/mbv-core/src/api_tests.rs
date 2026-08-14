@@ -285,8 +285,10 @@ fn service_setup_validation_uses_setup_url_user_and_token() {
         request
     });
 
-    let mut config = crate::config::Config::default();
-    config.server_url = "http://stale.example".into();
+    let config = crate::config::Config {
+        server_url: "http://stale.example".into(),
+        ..Default::default()
+    };
     let client = EmbyClient::new(config);
     let setup = crate::config::EmbySetup::new(&setup_url, "user-42");
     let authenticated = client

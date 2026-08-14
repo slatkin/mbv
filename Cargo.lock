@@ -1563,7 +1563,7 @@ dependencies = [
 
 [[package]]
 name = "mbv"
-version = "0.16.7"
+version = "0.16.8"
 dependencies = [
  "crossterm",
  "fuzzy-matcher",
@@ -1597,7 +1597,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-core"
-version = "0.16.7"
+version = "0.16.8"
 dependencies = [
  "libc",
  "libmpv2",
@@ -1616,7 +1616,7 @@ dependencies = [
 
 [[package]]
 name = "mbvd"
-version = "0.16.7"
+version = "0.16.8"
 dependencies = [
  "libc",
  "log",

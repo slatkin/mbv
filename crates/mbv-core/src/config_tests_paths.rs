@@ -112,7 +112,7 @@ fn emby_setup_transaction_restores_exact_files_on_either_write_failure() {
         "new-token",
         &config,
         &secret,
-        |setup, path| save_emby_setup_at(setup, path),
+        save_emby_setup_at,
         |_token, _path| Err("secret write rejected".into()),
     );
     assert!(result.unwrap_err().contains("secret write rejected"));
@@ -701,7 +701,10 @@ fn concurrent_control_credential_creation_converges_on_persisted_winner() {
     let path = control_credential_path();
     assert_eq!(credentials[0], credentials[1]);
     assert!(path.is_file());
-    assert_eq!(load_control_credential().as_deref(), Some(credentials[0].as_str()));
+    assert_eq!(
+        load_control_credential().as_deref(),
+        Some(credentials[0].as_str())
+    );
 
     clear_control_credential_result().unwrap();
     let _ = std::fs::remove_dir_all(&temp);

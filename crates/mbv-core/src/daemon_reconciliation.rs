@@ -56,6 +56,7 @@ fn update_player_queue(
     let _ = player.submit_queue(items, active_index, Some(client), headless, 100);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn reconcile_packaged_emby(
     requested_revision: u64,
     current: &mut Option<EmbyOwnerContext>,

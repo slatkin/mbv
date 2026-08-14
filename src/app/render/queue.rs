@@ -435,7 +435,7 @@ impl App {
                                     (entry.title.as_str(), entry.duration_ticks.unwrap_or(0))
                                 }
                                 QueueItem::Audiobookshelf(ep) => {
-                                    (ep.title.as_str(), ep.duration_ticks.unwrap_or(0) as u64)
+                                    (ep.title.as_str(), ep.duration_ticks.unwrap_or(0))
                                 }
                                 QueueItem::Emby(_) => unreachable!(),
                             };

@@ -194,7 +194,6 @@ impl AudiobookshelfClient {
         let key = key.to_owned();
         let library_id = library_id.to_owned();
         let limit = limit.clamp(1, 100);
-        let page = page;
         self.bounded(bound, move |client| {
             client.podcast_shows(&key, &library_id, page, limit)
         })

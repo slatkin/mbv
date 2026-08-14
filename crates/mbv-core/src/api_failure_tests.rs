@@ -94,12 +94,14 @@ fn persisted_token_http_401_and_403_are_authentication_rejections() {
             .unwrap();
         });
 
-        let mut config = crate::config::Config::default();
-        config.server_url = format!("http://{address}");
+        let config = crate::config::Config {
+            server_url: format!("http://{address}"),
+            ..Default::default()
+        };
         let client = super::EmbyClient::new(config);
         let failure = match client.authenticate_service_setup_bounded(
             "persisted-token".into(),
-            &crate::config::EmbySetup::new(&format!("http://{address}"), "user-id"),
+            &crate::config::EmbySetup::new(format!("http://{address}"), "user-id"),
             std::time::Duration::from_secs(1),
         ) {
             Ok(_) => panic!("rejected token unexpectedly authenticated"),
@@ -128,8 +130,10 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
             )
             .unwrap();
         });
-        let mut config = crate::config::Config::default();
-        config.server_url = format!("http://{address}");
+        let config = crate::config::Config {
+            server_url: format!("http://{address}"),
+            ..Default::default()
+        };
         let client = super::EmbyClient::new(config);
         let failure = if status == 200 {
             match client.get_views_classified() {
@@ -139,7 +143,7 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
         } else {
             match client.authenticate_service_setup_bounded(
                 "persisted-token".into(),
-                &crate::config::EmbySetup::new(&format!("http://{address}"), "user-id"),
+                &crate::config::EmbySetup::new(format!("http://{address}"), "user-id"),
                 std::time::Duration::from_secs(1),
             ) {
                 Ok(_) => panic!("availability failure unexpectedly succeeded"),
@@ -155,12 +159,14 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     drop(listener);
-    let mut config = crate::config::Config::default();
-    config.server_url = format!("http://{address}");
+    let config = crate::config::Config {
+        server_url: format!("http://{address}"),
+        ..Default::default()
+    };
     let client = super::EmbyClient::new(config);
     let failure = match client.authenticate_service_setup_bounded(
         "persisted-token".into(),
-        &crate::config::EmbySetup::new(&format!("http://{address}"), "user-id"),
+        &crate::config::EmbySetup::new(format!("http://{address}"), "user-id"),
         std::time::Duration::from_secs(1),
     ) {
         Ok(_) => panic!("dead endpoint unexpectedly authenticated"),

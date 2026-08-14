@@ -710,7 +710,7 @@ fn spawn_ctrl_client<S>(
                         log::warn!(target: "daemon", "rejecting ctrl client: missing Control credential");
                         return;
                     }
-                    if let Err(e) = info.validate_control_credential(&control_credential) {
+                    if let Err(e) = info.validate_control_credential(control_credential) {
                         log::warn!(target: "daemon", "rejecting ctrl client: {e}");
                         return;
                     }
