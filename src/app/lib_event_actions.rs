@@ -252,7 +252,11 @@ impl App {
                     .iter()
                     .any(|book| book.library_item_id == library_item_id)
             }) {
-                state.detail_loading = false;
+                state.detail_loading_ids.remove(&library_item_id);
+                state.detail_loading = state
+                    .selected_id
+                    .as_ref()
+                    .is_some_and(|id| state.detail_loading_ids.contains(id));
                 if let Ok(detail) = result {
                     state.detail_cache.insert(library_item_id.clone(), detail);
                 }

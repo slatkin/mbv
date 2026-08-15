@@ -296,6 +296,12 @@ criteria, optional letter-range pill, and optional music grouping. Levels are
 stacked when drilling into folders, seasons, or shows.
 _Avoid_: library level, folder level, nav level
 
+**Surname bucket**:
+One fixed alphabetical range of author surnames used as a selectable pill in
+an Audiobookshelf book browser, such as A-C or V-Z. Empty ranges are omitted
+from the pill row.
+_Avoid_: author group (the bucket is a range, not one author)
+
 **Home view**:
 The Home tab content: Continue Watching across libraries and per-library Latest
 additions. Each section maintains its own cursor and scroll.

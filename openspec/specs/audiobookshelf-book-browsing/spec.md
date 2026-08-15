@@ -19,7 +19,7 @@ Each accessible Audiobookshelf book library SHALL appear as a peer tab alongside
 - **THEN** podcast played-state filtering, playlist, watched-state, shuffle, route, search, and Emby context-menu actions SHALL NOT operate on the book selection
 
 ### Requirement: Books load incrementally, grouped and sorted by author surname
-mbv SHALL list books from the selected Audiobookshelf book library using bounded pagination, grouped and sorted by author surname only. Book identity SHALL be the Audiobookshelf Service kind plus `libraryItemId`, and refresh or page loading SHALL preserve the selected book when that identity remains present.
+mbv SHALL list books from the selected Audiobookshelf book library using bounded pagination, grouped and sorted by author surname only, and bucketed into fixed alphabetical surname ranges for pill-filtered browsing. Book identity SHALL be the Audiobookshelf Service kind plus `libraryItemId`, and refresh or page loading SHALL preserve the selected book when that identity remains present.
 
 #### Scenario: Author surname determines sort position
 - **WHEN** a book has one or more listed authors
@@ -35,8 +35,13 @@ mbv SHALL list books from the selected Audiobookshelf book library using bounded
 - **WHEN** the book list refreshes and the selected `libraryItemId` remains in the result
 - **THEN** mbv SHALL restore selection to that book regardless of its new positional index or group
 
+#### Scenario: Surname buckets omit empty ranges
+- **WHEN** the sorted book list is grouped for browsing
+- **THEN** mbv SHALL partition it into fixed contiguous alphabetical surname ranges
+- **THEN** a range with no books in the current library SHALL NOT produce an empty selectable pill
+
 ### Requirement: Book libraries use the Music tab composition
-An Audiobookshelf book library SHALL use the same outer composition as the Music tab at the same terminal dimensions and image setting: a hero-on-left, list-on-right two-column layout above `TWO_COLUMN_THRESHOLD`, falling back to hero-on-top below it. This SHALL NOT be the always-vertical hero the TV Shows and Audiobookshelf podcast tabs use.
+An Audiobookshelf book library SHALL use the same outer composition as the Music tab at the same terminal dimensions and image setting: a persistent hero-on-left with chapters below, beside a persistent single-column book browser with surname-bucket pills on the right above `TWO_COLUMN_THRESHOLD`, falling back to the same hero-on-top composition below it. Both panes SHALL remain visible at all times. This SHALL NOT be the always-vertical hero the TV Shows and Audiobookshelf podcast tabs use.
 
 The following substitutions SHALL be the only domain changes to that composition:
 
@@ -44,14 +49,30 @@ The following substitutions SHALL be the only domain changes to that composition
 |---|---|
 | Album | Book |
 | Album cover | Audiobookshelf book cover |
-| Track list | Chapter list |
-| Artist grouping | Author-surname grouping |
+| Track list (persistent left pane) | Chapter list (persistent left pane) |
+| Artist grouping pills and filter drill | Author-surname bucket pills and filter drill |
+| Album list within artist filter | Book list within surname-bucket filter |
+| Left/right arrow toggles pane focus | Left/right arrow toggles pane focus |
 
 All other observable layout behavior SHALL match the Music tab, including hero placement, content padding, image slot, row budgeting, selected-cell treatment, focus styling, scrolling, and narrow-terminal fallback.
 
 #### Scenario: Terminal width crosses the two-column threshold
 - **WHEN** the book tab crosses `TWO_COLUMN_THRESHOLD`
 - **THEN** the layout SHALL switch between hero-on-left and hero-on-top at the same width the Music tab does
+
+#### Scenario: Hero follows the browser cursor
+- **WHEN** the book browser cursor moves to another book
+- **THEN** the hero SHALL update to that book without an Enter/open action
+- **THEN** the right-pane browser SHALL remain visible
+
+#### Scenario: A surname pill filters the browser
+- **WHEN** the user selects an author-surname bucket pill
+- **THEN** the right-pane book list SHALL contain only books in that bucket until another bucket is selected
+
+#### Scenario: Arrow focus leaves both panes visible
+- **WHEN** the user presses left or right while the book tab is focused
+- **THEN** focus SHALL toggle between the chapter list and right-pane browser
+- **THEN** neither pane SHALL be hidden or replaced
 
 ### Requirement: The selected book hero shows an inline progress percentage
 The selected book hero SHALL place the selected book's Audiobookshelf cover in the same image slot as the Music hero's album cover, and SHALL show the book's listening progress as an inline `%` or `Finished` span in the hero meta, in the same style the podcast tab uses for episode progress. A resume-emphasizing hero treatment is out of scope for this capability.
@@ -66,7 +87,7 @@ The selected book hero SHALL place the selected book's Audiobookshelf cover in t
 - **THEN** the hero SHALL display it as unstarted rather than borrowing progress from another book
 
 ### Requirement: Chapters render as first-class rows in the persistent list
-The book tab's persistent list (the Music track list's analog) SHALL render one row per chapter from the selected book's Audiobookshelf `chapters[]`, using the book-relative chapter title and duration. Chapter rows SHALL use provider-native identity and SHALL NOT be converted to an Emby or podcast episode row shape.
+The book tab's persistent list (the Music track list's analog) SHALL render one row per chapter from the selected book's Audiobookshelf `chapters[]`, using the book-relative chapter title and duration. Chapter rows SHALL use provider-native identity and SHALL NOT be converted to an Emby or podcast episode row shape. Chapter or audio-file detail SHALL be fetched as soon as the browser cursor moves onto a book, gated by the existing cache and in-flight request state.
 
 #### Scenario: Selected book has chapters
 - **WHEN** the selected book has one or more chapters
@@ -75,6 +96,11 @@ The book tab's persistent list (the Music track list's analog) SHALL render one 
 #### Scenario: Selected book has no chapter metadata
 - **WHEN** the selected book has no `chapters[]` entries
 - **THEN** mbv SHALL render its `audioFiles` as the persistent list rows instead, without an empty or broken list state
+
+#### Scenario: Cursor moves onto an uncached book
+- **WHEN** the browser cursor moves onto a book without cached detail
+- **THEN** mbv SHALL fetch its chapter/audio-file detail immediately
+- **THEN** cached or already-loading detail SHALL NOT be requested again
 
 ### Requirement: Book progress is read-only and identity-qualified
 mbv SHALL display the authenticated user's Audiobookshelf progress for a book using only `libraryItemId` — books have no episode identity. Catalog browsing SHALL NOT write, infer, or periodically report progress.

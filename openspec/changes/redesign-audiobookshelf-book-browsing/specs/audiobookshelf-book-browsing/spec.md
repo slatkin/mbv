@@ -17,7 +17,7 @@ mbv SHALL list books from the selected Audiobookshelf book library using bounded
 - **WHEN** the book list refreshes and the selected `libraryItemId` remains in the result
 - **THEN** mbv SHALL restore selection to that book regardless of its new positional index or bucket
 
-#### Scenario: Books are bucketed into alphabetical surname ranges
+#### Scenario: Surname buckets omit empty ranges
 - **WHEN** the sorted book list is grouped for browsing
 - **THEN** mbv SHALL partition it into contiguous alphabetical author-surname ranges
 - **THEN** a range with no books in the current library SHALL NOT produce an empty, selectable bucket
@@ -42,17 +42,17 @@ All other observable layout behavior SHALL match the Music tab, including hero p
 - **WHEN** the book tab crosses `TWO_COLUMN_THRESHOLD`
 - **THEN** the layout SHALL switch between hero-on-left and hero-on-top at the same width the Music tab does
 
-#### Scenario: Hero tracks the browser cursor without an explicit open action
+#### Scenario: Hero follows the browser cursor
 - **WHEN** the book browser's cursor moves to a different book
 - **THEN** the hero SHALL update to that book's cover, title, author, and progress without requiring an Enter or open action
 - **THEN** the right-pane browser SHALL remain visible and rendered beside the hero
 
-#### Scenario: Selecting an alphabetical-bucket pill filters the browser
+#### Scenario: A surname pill filters the browser
 - **WHEN** the user selects a different author-surname-bucket pill
 - **THEN** the right-pane book list SHALL show only books whose surname falls in that bucket
 - **THEN** books outside the selected bucket SHALL NOT be reachable by scrolling until a different bucket is selected
 
-#### Scenario: Left/right arrow toggles pane focus without hiding either pane
+#### Scenario: Arrow focus leaves both panes visible
 - **WHEN** the user presses left or right arrow while the book tab is focused
 - **THEN** input focus SHALL toggle between the hero's chapter list and the right-pane book browser
 - **THEN** neither pane SHALL be hidden, replaced, or resized as a result of the focus toggle
@@ -68,7 +68,7 @@ The book tab's persistent list (the Music track list's analog) SHALL render one 
 - **WHEN** the selected book has no `chapters[]` entries
 - **THEN** mbv SHALL render its `audioFiles` as the persistent list rows instead, without an empty or broken list state
 
-#### Scenario: Cursor moves onto a book without a cached detail fetch
+#### Scenario: Cursor moves onto an uncached book
 - **WHEN** the browser cursor moves onto a book whose chapter/audio-file detail is not yet cached
 - **THEN** mbv SHALL fetch that detail immediately, without requiring an explicit book-open action
 - **THEN** a fetch already in flight or cached for that book SHALL NOT be re-requested

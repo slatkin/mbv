@@ -76,9 +76,16 @@ impl App {
         let Some(state) = self.audiobookshelf_book_browse.get_mut(index) else {
             return;
         };
-        if state.detail_cache.contains_key(&library_item_id) || state.detail_loading {
+        if state.detail_cache.contains_key(&library_item_id)
+            || state.detail_loading_ids.contains(&library_item_id)
+        {
+            state.detail_loading = state
+                .selected_id
+                .as_ref()
+                .is_some_and(|id| state.detail_loading_ids.contains(id));
             return;
         }
+        state.detail_loading_ids.insert(library_item_id.clone());
         state.detail_loading = true;
         let config_snapshot = self.config.lock().unwrap().clone();
         let Some((setup, key)) =
@@ -424,6 +431,7 @@ impl App {
             state.next_page = 0;
             state.error = None;
             state.detail_cache.clear();
+            state.detail_loading_ids.clear();
             state.chapter_selection = None;
             state.scroll = 0;
             state.loading_pages.clear();
@@ -462,6 +470,9 @@ impl App {
         }
     }
 
+    /// Moves the right-pane browser cursor within the selected surname
+    /// bucket only -- books outside it are not reachable by scrolling
+    /// (book-browsing spec) until a different bucket is selected.
     pub(super) fn move_audiobookshelf_book_cursor(&mut self, delta: i64) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
@@ -469,18 +480,16 @@ impl App {
         let Some(state) = self.audiobookshelf_book_browse.get(index) else {
             return;
         };
-        if state.books.is_empty() || state.chapter_selection.is_some() {
+        let Some(bucket) = state.buckets.get(state.selected_bucket) else {
+            return;
+        };
+        if bucket.end <= bucket.start {
             return;
         }
-        let cursor = (state.cursor() as i64 + delta).clamp(0, state.books.len() as i64 - 1);
-        self.select_audiobookshelf_book(cursor as usize);
-    }
-
-    pub(super) fn move_audiobookshelf_book_rows(&mut self, rows: i64) {
-        let columns = crate::app::library_column_width::library_column_count(
-            self.layout.main.left_area.width,
-        );
-        self.move_audiobookshelf_book_cursor(rows * columns as i64);
+        let (start, end) = (bucket.start as i64, bucket.end as i64 - 1);
+        let cursor = (state.cursor() as i64).clamp(start, end);
+        let new_cursor = (cursor + delta).clamp(start, end) as usize;
+        self.select_audiobookshelf_book(new_cursor);
     }
 
     pub(super) fn jump_audiobookshelf_book_cursor(&mut self, end: bool) {
@@ -490,29 +499,90 @@ impl App {
         let Some(state) = self.audiobookshelf_book_browse.get(index) else {
             return;
         };
-        if state.books.is_empty() || state.chapter_selection.is_some() {
+        let Some(bucket) = state.buckets.get(state.selected_bucket) else {
+            return;
+        };
+        if bucket.end <= bucket.start {
             return;
         }
-        self.select_audiobookshelf_book(if end { state.books.len() - 1 } else { 0 });
+        self.select_audiobookshelf_book(if end { bucket.end - 1 } else { bucket.start });
     }
 
-    pub(super) fn enter_audiobookshelf_book_selection(&mut self) {
+    /// Left/right pane-focus toggle (book-browsing spec: "Left/right arrow
+    /// toggles pane focus without hiding either pane"), replacing the old
+    /// Enter-to-enter/Esc-to-leave modal transition. `chapter_selection`
+    /// doubles as the focus flag -- `Some` focuses the hero's chapter list,
+    /// `None` focuses the right-pane browser -- analogous to Music's
+    /// `album_track_focus`.
+    pub(super) fn focus_audiobookshelf_book_chapters(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
         if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
-            if state.selected_id.is_some() {
+            if state.selected_id.is_some() && state.chapter_selection.is_none() {
                 state.chapter_selection = Some(0);
             }
         }
     }
 
-    pub(super) fn leave_audiobookshelf_book_selection(&mut self) {
+    pub(super) fn focus_audiobookshelf_book_browser(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
         if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
             state.chapter_selection = None;
+        }
+    }
+
+    /// Cycles the selected alphabetical-bucket pill by `delta`, wrapping
+    /// around -- the established pattern from `switch_music_group`/
+    /// `cycle_letter_pill`.
+    pub(super) fn cycle_audiobookshelf_book_bucket(&mut self, delta: i64) {
+        let Some(index) = self.tab.audiobookshelf_index() else {
+            return;
+        };
+        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
+            return;
+        };
+        let n = state.buckets.len();
+        if n == 0 {
+            return;
+        }
+        let next = (state.selected_bucket as i64 + delta).rem_euclid(n as i64) as usize;
+        self.select_audiobookshelf_book_bucket(next);
+    }
+
+    /// Selects bucket `bucket_pos` (a position in `state.buckets`, matching
+    /// the pill's click target -- the established pattern from
+    /// `select_music_group`), narrowing the right-pane list to it and
+    /// re-anchoring the cursor into the new bucket when it falls outside.
+    pub(super) fn select_audiobookshelf_book_bucket(&mut self, bucket_pos: usize) {
+        let Some(index) = self.tab.audiobookshelf_index() else {
+            return;
+        };
+        let Some(bucket) = self
+            .audiobookshelf_book_browse
+            .get(index)
+            .and_then(|state| state.buckets.get(bucket_pos).copied())
+        else {
+            return;
+        };
+        let target = {
+            let Some(state) = self.audiobookshelf_book_browse.get_mut(index) else {
+                return;
+            };
+            state.selected_bucket = bucket_pos;
+            let cursor = state.cursor();
+            if cursor >= bucket.start && cursor < bucket.end {
+                cursor
+            } else {
+                bucket.start
+            }
+        };
+        if bucket.end > bucket.start {
+            self.select_audiobookshelf_book(target);
+        } else {
+            self.save_audiobookshelf_book_position(index);
         }
     }
 

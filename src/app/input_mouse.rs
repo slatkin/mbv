@@ -266,6 +266,44 @@ impl App {
                     }
                 }
             }
+            // Audiobookshelf book tab: right-pane clicks (bucket pills +
+            // book browser) bypass the left_area gate because the right
+            // pane is a physically separate rect, mirroring wide Music
+            // above -- except the book right pane is always populated (both
+            // panes render at every width per the book-browsing spec), so
+            // this isn't gated on a "wide" flag.
+            if let TabSelection::AudiobookshelfLibrary(index) = self.tab {
+                if matches!(
+                    self.audiobookshelf_kind_at(index),
+                    Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book)
+                ) {
+                    let pos = (col, row).into();
+                    for (rect, target) in self.layout.main.selector_tabs.clone() {
+                        if rect.contains(pos) {
+                            self.set_panel_focus(PanelFocus::Library);
+                            self.select_audiobookshelf_book_bucket(target);
+                            return true;
+                        }
+                    }
+                    let ra = self.layout.main.audiobookshelf_book_right_area;
+                    if ra.contains(pos) {
+                        self.set_panel_focus(PanelFocus::Library);
+                        let click_y = (row - ra.y) as usize;
+                        let row_target = self
+                            .layout
+                            .main
+                            .left_row_targets
+                            .get(click_y)
+                            .cloned()
+                            .flatten();
+                        if let Some(LibraryRowTarget::Book(book_idx)) = row_target {
+                            self.focus_audiobookshelf_book_browser();
+                            self.select_audiobookshelf_book(book_idx);
+                        }
+                        return true;
+                    }
+                }
+            }
             // Click in the left panel: focus it and set its cursor.
             let la = self.layout.main.left_area;
             if la.contains((col, row).into()) {
@@ -484,7 +522,7 @@ impl App {
                                             }
                                         }
                                     }
-                                    None => {}
+                                    Some(LibraryRowTarget::Book(_)) | None => {}
                                 }
                             }
                         }

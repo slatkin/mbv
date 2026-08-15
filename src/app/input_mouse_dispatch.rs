@@ -105,6 +105,19 @@ impl App {
                         queue.queue_cursor =
                             super::ui_util::move_cursor(queue.queue_cursor, delta, n);
                     }
+                } else if let TabSelection::AudiobookshelfLibrary(index) = self.tab {
+                    let is_book = matches!(
+                        self.audiobookshelf_kind_at(index),
+                        Some(
+                            crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book
+                        )
+                    );
+                    let right_area = self.layout.main.audiobookshelf_book_right_area;
+                    if is_book && right_area.contains((col, row).into()) {
+                        self.move_audiobookshelf_book_cursor(delta * 3);
+                    } else if left_area.contains((col, row).into()) {
+                        self.handle_mouse_scroll_browse(delta);
+                    }
                 } else if left_area.contains((col, row).into()) {
                     self.handle_mouse_scroll_browse(delta);
                 }
@@ -165,8 +178,13 @@ impl App {
                             match self.tab {
                                 TabSelection::Home => self.home_select_section(target),
                                 TabSelection::Feeds => self.feed_tab_select_group(target),
-                                TabSelection::AudiobookshelfLibrary(_) => {
-                                    self.select_audiobookshelf_filter(target);
+                                TabSelection::AudiobookshelfLibrary(index) => {
+                                    match self.audiobookshelf_kind_at(index) {
+                                        Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
+                                            self.select_audiobookshelf_book_bucket(target);
+                                        }
+                                        _ => self.select_audiobookshelf_filter(target),
+                                    }
                                 }
                                 TabSelection::EmbyLibrary(lib_idx) => {
                                     if self.is_music_group_view(lib_idx) {
@@ -241,16 +259,19 @@ impl App {
                                         }
                                     }
                                     crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
-                                        if in_left {
-                                            let in_chapters = self
-                                                .audiobookshelf_book_browse
-                                                .get(index)
-                                                .is_some_and(|state| state.chapter_selection.is_some());
-                                            if !in_chapters {
-                                                self.enter_audiobookshelf_book_selection();
-                                            } else {
-                                                self.activate_audiobookshelf_book_row();
-                                            }
+                                        // Both panes are always visible now
+                                        // (no Enter-to-enter modal), so a
+                                        // double-click in the hero/chapters
+                                        // pane only activates a focused
+                                        // chapter row; it has nothing to
+                                        // activate when the browser pane is
+                                        // focused instead.
+                                        let in_chapters = self
+                                            .audiobookshelf_book_browse
+                                            .get(index)
+                                            .is_some_and(|state| state.chapter_selection.is_some());
+                                        if in_left && in_chapters {
+                                            self.activate_audiobookshelf_book_row();
                                         }
                                     }
                                 }
