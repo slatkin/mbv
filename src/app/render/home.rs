@@ -4,17 +4,19 @@ use super::home_video::home_panel_scroll;
 
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
-use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
-use unicode_width::UnicodeWidthStr;
 
 const HOME_HERO_PAD_X: u16 = 2;
 const HOME_HERO_PAD_Y: u16 = 1;
+/// The two-column (wide) hero's original 2-col horizontal padding around
+/// the overview text block. The single-column hero has none (flush with
+/// the title above it).
+const WIDE_OVERVIEW_PAD: usize = 2;
 
 impl App {
     pub(super) fn render_home_list(
@@ -70,9 +72,16 @@ impl App {
             .iter()
             .find(|section| section.section_idx == self.home.section);
 
+        // Same threshold the library list uses to switch to two columns, so
+        // Home's hero/list split and the library list cross over together.
+        let two_column = area.width >= TWO_COLUMN_THRESHOLD;
+        // The wide layout keeps two blank rows below the pill bar (panel
+        // surface transition); the single-column layout only needs one.
+        let pill_gap_rows: u16 = if two_column { 2 } else { 1 };
+        let content_offset = 1 + pill_gap_rows;
         let content_area = Rect {
-            y: area.y.saturating_add(3),
-            height: area.height.saturating_sub(3),
+            y: area.y.saturating_add(content_offset),
+            height: area.height.saturating_sub(content_offset),
             ..area
         };
 
@@ -124,15 +133,14 @@ impl App {
         let emby_item = current_item
             .as_ref()
             .and_then(|item| item.as_emby().cloned());
-        // Same threshold the library list uses to switch to two columns, so
-        // Home's hero/list split and the library list cross over together.
-        let two_column = area.width >= TWO_COLUMN_THRESHOLD;
-
-        // Hero data: Emby keeps (item, meta_area, img_area, meta_layout); the
-        // generic detail block renders into a single content area.
+        // Hero data: Emby keeps (item, meta_area, wide_area, img_area,
+        // meta_layout) — `wide_area` is where overview lines past the
+        // image's bottom edge render at full width; the generic detail
+        // block renders into a single content area.
         enum HeroData {
             Emby(
                 Box<mbv_core::api::EmbyItem>,
+                Rect,
                 Rect,
                 Rect,
                 KeepWatchingHeroLayout,
@@ -164,7 +172,16 @@ impl App {
             hero_data = match emby_item {
                 Some(item) => {
                     let meta_w = hero_content.width as usize;
-                    let meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
+                    // Image sits above metadata in this layout (not beside
+                    // it), so the overview always wraps at the full meta
+                    // width — no wrap-around split needed.
+                    let meta_layout = Self::keep_watching_hero_layout(
+                        &item,
+                        meta_w,
+                        meta_w,
+                        0,
+                        WIDE_OVERVIEW_PAD,
+                    );
                     // Terminal cells are roughly twice as tall as they are wide, so a
                     // 16:9 image needs 9 rows for every 32 columns. Keep the artwork
                     // at its natural display height, then leave one row before metadata.
@@ -188,6 +205,7 @@ impl App {
                         };
                         Some(HeroData::Emby(
                             Box::new(item),
+                            meta_area,
                             meta_area,
                             img_area,
                             meta_layout,
@@ -228,9 +246,21 @@ impl App {
                     Some(item) => {
                         let img_w = area.width / 2;
                         let meta_w = area.width.saturating_sub(img_w + 1) as usize;
-                        let meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
+                        // Image sits beside the metadata column, top-aligned.
+                        // Compute its row extent before laying out the
+                        // overview, so overview text wraps around it: at
+                        // the narrower meta width for rows beside the
+                        // image, then at the full hero width for any rows
+                        // once past the image's bottom edge.
                         let image_rows =
                             (img_w.saturating_mul(9).saturating_add(31) / 32).min(max_allowed);
+                        let meta_layout = Self::keep_watching_hero_layout(
+                            &item,
+                            meta_w,
+                            area.width as usize,
+                            image_rows,
+                            0,
+                        );
                         let hero_height = image_rows.max(meta_layout.height);
                         if meta_layout.height < 4 {
                             None
@@ -256,6 +286,7 @@ impl App {
                             Some(HeroData::Emby(
                                 Box::new(item),
                                 meta_area,
+                                hero_area,
                                 img_area,
                                 meta_layout,
                             ))
@@ -278,7 +309,7 @@ impl App {
             };
 
             let hero_h = match &hero_data {
-                Some(HeroData::Emby(_, meta_area, _, _)) => meta_area.height,
+                Some(HeroData::Emby(_, meta_area, _, _, _)) => meta_area.height,
                 Some(HeroData::Generic(_, area)) => area.height,
                 None => 0,
             };
@@ -347,6 +378,26 @@ impl App {
             green_panel_full = None;
             list_area
         };
+        // The selected row's full-width background fill uses this rect in
+        // both layouts — the wide layout's dedicated green panel, or (with
+        // no separate panel) `list_area` itself in the single-column
+        // layout — so the selected row always gets the same full-row
+        // highlight style. `green_panel_full` alone stays `None` in the
+        // single-column layout since it also drives the wide panel's
+        // top/bottom border rule, which the single-column layout doesn't
+        // have.
+        let selection_bg_full = green_panel_full.unwrap_or(list_area);
+        // The wide layout's row highlight (`LIBRARY_SIDE_BG`) reads as a
+        // contrasting dark bar against its own green panel surface. The
+        // single-column layout has no such panel — its ambient background
+        // *is* `LIBRARY_SIDE_BG` — so it needs a genuinely different,
+        // lighter fill (`BG_GREEN`, the app's other established
+        // selected/focused surface color) to actually show up.
+        let selection_bg = if green_panel_full.is_some() {
+            palette::LIBRARY_SIDE_BG
+        } else {
+            palette::BG_GREEN
+        };
 
         // Keep the row immediately below the Home pill bar free of list text.
         // The wide layout uses the list panel surface; other layouts inherit
@@ -372,16 +423,18 @@ impl App {
                     .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
                 pill_gap,
             );
-            let second_pill_gap = Rect {
-                y: pill_gap.y.saturating_add(1),
-                ..pill_gap
-            };
-            if second_pill_gap.y < area.bottom() {
-                f.render_widget(
-                    Paragraph::new(" ".repeat(second_pill_gap.width as usize))
-                        .style(Style::default().bg(panel_bg)),
-                    second_pill_gap,
-                );
+            if pill_gap_rows > 1 {
+                let second_pill_gap = Rect {
+                    y: pill_gap.y.saturating_add(1),
+                    ..pill_gap
+                };
+                if second_pill_gap.y < area.bottom() {
+                    f.render_widget(
+                        Paragraph::new(" ".repeat(second_pill_gap.width as usize))
+                            .style(Style::default().bg(panel_bg)),
+                        second_pill_gap,
+                    );
+                }
             }
         }
 
@@ -389,7 +442,7 @@ impl App {
 
         // Render hero (shared between both layout modes)
         match &hero_data {
-            Some(HeroData::Emby(item, meta_area, img_area, meta_layout)) => {
+            Some(HeroData::Emby(item, meta_area, wide_area, img_area, meta_layout)) => {
                 let cache_key = format!("{}:pwr_kw", item.id);
                 if self.images_enabled() {
                     let img_types = Self::keep_watching_hero_image_types(item);
@@ -401,10 +454,20 @@ impl App {
                     );
                 }
                 self.render_keep_watching_hero_image(f, *img_area, &cache_key, two_column);
-                self.render_keep_watching_hero_meta(f, *meta_area, item, meta_layout, focused);
+                let overview_pad = if two_column { WIDE_OVERVIEW_PAD } else { 0 };
+                self.render_keep_watching_hero_meta(
+                    f,
+                    *meta_area,
+                    *wide_area,
+                    item,
+                    meta_layout,
+                    focused,
+                    overview_pad as u16,
+                );
             }
             Some(HeroData::Generic(item, area)) => {
-                self.render_home_latest_detail(f, *area, item);
+                let overview_pad = if two_column { WIDE_OVERVIEW_PAD } else { 0 };
+                self.render_home_latest_detail(f, *area, item, overview_pad);
             }
             None => {}
         }
@@ -431,7 +494,7 @@ impl App {
         for k in 0..visible {
             let row_idx = scroll_y as usize + k as usize;
             let sy = list_area.y + k;
-            let row_x = green_panel_full.map(|panel| panel.x).unwrap_or(list_area.x);
+            let row_x = selection_bg_full.x;
             let row_rect = Rect {
                 x: row_x,
                 y: sy,
@@ -457,6 +520,61 @@ impl App {
                         layout.cursor_screen_y = Some(sy);
                     }
 
+                    // Selected row's full-width background fill, shared by
+                    // every row kind (Emby and the generic ABS/Feed
+                    // renderer) so the highlight always spans the whole
+                    // panel, matching the wide layout's selected-row style.
+                    if selected_row && focused {
+                        f.render_widget(
+                            Block::default().style(Style::default().bg(selection_bg)),
+                            Rect {
+                                x: selection_bg_full.x,
+                                y: sy,
+                                width: selection_bg_full.width,
+                                height: 1,
+                            },
+                        );
+                        // Single-column layout: the marker lives in the
+                        // panel's own left padding gutter (the same 2-col
+                        // margin `draw_column_selection_markers` uses for
+                        // multi-column lists), so row text never reserves a
+                        // column and stays flush with the hero title above
+                        // it. The wide layout keeps its inline marker
+                        // (unaffected — it has no shared left edge to align
+                        // with, and this block only runs when there's no
+                        // green panel).
+                        if green_panel_full.is_none() {
+                            let gutter_x = row_x.saturating_sub(2);
+                            f.render_widget(
+                                Block::default().style(Style::default().bg(selection_bg)),
+                                Rect {
+                                    x: gutter_x,
+                                    y: sy,
+                                    width: 2,
+                                    height: 1,
+                                },
+                            );
+                            f.render_widget(
+                                Paragraph::new(Span::styled(
+                                    "\u{258e}",
+                                    Style::default().fg(palette::AQUA),
+                                )),
+                                Rect {
+                                    x: gutter_x,
+                                    y: sy,
+                                    width: 1,
+                                    height: 1,
+                                },
+                            );
+                        }
+                    }
+
+                    // Single-column layout: the marker draws in the left
+                    // gutter (see above), so no column is reserved for it
+                    // and text stays flush with the hero title. The wide
+                    // layout keeps its inline 1-char marker column.
+                    let is_narrow = green_panel_full.is_none();
+
                     // Non-Emby rows (Audiobookshelf today, Feeds in Part 3) use
                     // the generic single-line renderer.
                     let Some(emby) = item.as_emby() else {
@@ -467,162 +585,20 @@ impl App {
                             selected_row,
                             focused,
                             wide_home_panel_unfocused,
+                            is_narrow,
                         );
                         hitmap.push((row_rect, *flat_idx));
                         continue;
                     };
-                    let item = emby;
-
-                    let avail = (row_rect.width as usize).saturating_sub(2);
-
-                    let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
-                        fmt_duration_short(item.runtime_ticks / TICKS_PER_SECOND)
-                    } else {
-                        String::new()
-                    };
-
-                    let pct_str = if item.playback_position_ticks > 0
-                        && !item.played
-                        && item.runtime_ticks > 0
-                    {
-                        let pct =
-                            (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-                        if pct > 0 {
-                            Some(format!("{}%", pct))
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-
-                    let meta_text = dur_str;
-                    let meta_w = meta_text.width();
-                    // pad + 8-char "HH:MM:SS" + pad
-                    const META_COL_W: usize = 10;
-                    const META_RIGHT_MARGIN: usize = 0;
-                    const META_INNER_PAD: usize = 1;
-                    // " 100%" - space + up to 4 chars, reserved next to the title.
-                    const PCT_COL_W: usize = 5;
-                    let title_col_w = avail.saturating_sub(
-                        META_COL_W + META_RIGHT_MARGIN + META_INNER_PAD * 2 + PCT_COL_W,
+                    super::home_latest_row::render_home_emby_row(
+                        f,
+                        row_rect,
+                        emby,
+                        selected_row,
+                        focused,
+                        wide_home_panel_unfocused,
+                        is_narrow,
                     );
-
-                    // Render selection background
-                    if selected_row && focused {
-                        if let Some(full) = green_panel_full {
-                            f.render_widget(
-                                Block::default()
-                                    .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
-                                Rect {
-                                    x: full.x,
-                                    y: sy,
-                                    width: full.width,
-                                    height: 1,
-                                },
-                            );
-                        }
-                    }
-
-                    // Build left column (title)
-                    let is_episode = item.item_type == "Episode" && !item.series_name.is_empty();
-                    let mut title_spans: Vec<Span> = if is_episode {
-                        let show_w = title_col_w * 2 / 5;
-                        let show = trunc_str(&item.series_name, show_w);
-                        let show_actual_w = show.width();
-                        let ep_title =
-                            trunc_str(&item.name, title_col_w.saturating_sub(show_actual_w + 1));
-                        let bold = if selected_row && focused {
-                            Modifier::BOLD
-                        } else {
-                            Modifier::empty()
-                        };
-                        vec![
-                            if selected_row && focused {
-                                Span::styled("▍", Style::default().fg(palette::AQUA))
-                            } else {
-                                Span::raw(" ")
-                            },
-                            Span::raw(" "),
-                            Span::styled(
-                                show,
-                                Style::default().fg(palette::YELLOW).add_modifier(bold),
-                            ),
-                            Span::raw(" "),
-                            Span::styled(
-                                ep_title,
-                                Style::default()
-                                    .fg(if wide_home_panel_unfocused {
-                                        palette::MUTED
-                                    } else {
-                                        palette::WHITE
-                                    })
-                                    .add_modifier(bold),
-                            ),
-                        ]
-                    } else {
-                        let title = trunc_str(&item.display_name(), title_col_w);
-                        vec![
-                            if selected_row && focused {
-                                Span::styled("▍", Style::default().fg(palette::AQUA))
-                            } else {
-                                Span::raw(" ")
-                            },
-                            Span::raw(" "),
-                            Span::styled(
-                                title,
-                                Style::default()
-                                    .fg(if wide_home_panel_unfocused {
-                                        palette::MUTED
-                                    } else {
-                                        palette::WHITE
-                                    })
-                                    .add_modifier(if selected_row && focused {
-                                        Modifier::BOLD
-                                    } else {
-                                        Modifier::empty()
-                                    }),
-                            ),
-                        ]
-                    };
-
-                    // Add playback progress percentage to the right of the title
-                    if let Some(pct) = &pct_str {
-                        title_spans.push(Span::raw(" "));
-                        title_spans.push(Span::styled(
-                            pct.clone(),
-                            Style::default().fg(palette::FOAM),
-                        ));
-                    }
-
-                    // Calculate actual title width for right-alignment
-                    let actual_title_w: usize = title_spans.iter().map(|s| s.content.width()).sum();
-
-                    // Build right column (metadata) - flush with right edge.
-                    // Use the row's full width here, not `avail`: `avail` already
-                    // subtracts the 2-column left prefix, and `actual_title_w`
-                    // includes that same prefix, so reusing `avail` would
-                    // double-subtract it and push the metadata box too far left.
-                    let mut meta_spans: Vec<Span> = Vec::new();
-                    let pad_to_right =
-                        (row_rect.width as usize).saturating_sub(actual_title_w + META_COL_W);
-                    if pad_to_right > 0 {
-                        meta_spans.push(Span::raw(" ".repeat(pad_to_right)));
-                    }
-                    // Create fixed-width metadata column, text right-aligned inside.
-                    // No explicit background: the row's own background (panel or
-                    // focused-selection fill) already shows through underneath.
-                    let content_w = META_COL_W - META_INNER_PAD * 2;
-                    let inner_pad = content_w.saturating_sub(meta_w);
-                    let left_pad_str = " ".repeat(META_INNER_PAD + inner_pad);
-                    let full_meta = format!("{}{}", left_pad_str, meta_text);
-                    let full_meta = format!("{:width$}", full_meta, width = META_COL_W);
-                    meta_spans.push(Span::styled(full_meta, Style::default().fg(palette::GREEN)));
-
-                    // Combine and render
-                    let mut all_spans = title_spans;
-                    all_spans.extend(meta_spans);
-                    f.render_widget(Paragraph::new(Line::from(all_spans)), row_rect);
                     hitmap.push((row_rect, *flat_idx));
                 }
             }
@@ -669,7 +645,7 @@ impl App {
             return;
         }
 
-        let mut labels: Vec<(usize, String)> = vec![(0, "Continue Watching".to_string())];
+        let mut labels: Vec<(usize, String)> = vec![(0, "Continue".to_string())];
         for (idx, (title, _lib, _items, _cur)) in self.home.latest.iter().enumerate() {
             // Every section in `home.latest` is a real pill (an ABS library,
             // an Emby view, or Feeds). Match the Continue Watching convention:

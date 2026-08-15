@@ -19,7 +19,11 @@ use textwrap::wrap;
 pub(super) struct KeepWatchingHeroLayout {
     title_lines: Vec<String>,
     show_name: String,
-    overview_lines: Vec<String>,
+    /// Overview text lines with a per-line flag: `true` once the line has
+    /// wrapped past the image's row extent and reclaims the full hero
+    /// width (the image no longer occupies that row), `false` while beside
+    /// the image at the narrower meta-column width.
+    overview_lines: Vec<(String, bool)>,
     pub(super) height: u16,
 }
 
@@ -35,13 +39,22 @@ impl App {
         }
     }
 
-    /// Builds the Keep Watching hero panel's metadata layout for `item` at
-    /// the meta column's width: title wrap lines, then one row each for the
-    /// show-name line, the duration/progress line, and the blank separator,
-    /// then the wrapped overview.
+    /// Builds the Keep Watching hero panel's metadata layout for `item`:
+    /// title wrap lines, then one row each for the show-name line, the
+    /// duration/progress line, and the blank separator, then the wrapped
+    /// overview. The overview wraps around the image: it wraps at `text_w`
+    /// (the meta column, beside the image) for however many of its rows
+    /// still fall within `image_rows`, then reclaims the full `wide_w` for
+    /// any remaining rows once past the image's bottom edge. `overview_pad`
+    /// is the two-column (wide) hero's original 2-col horizontal padding
+    /// around the overview block; the single-column hero passes 0 so its
+    /// overview stays flush with the title above it.
     pub(super) fn keep_watching_hero_layout(
         item: &mbv_core::api::EmbyItem,
         text_w: usize,
+        wide_w: usize,
+        image_rows: u16,
+        overview_pad: usize,
     ) -> KeepWatchingHeroLayout {
         if text_w == 0 {
             return KeepWatchingHeroLayout {
@@ -60,19 +73,54 @@ impl App {
         } else {
             String::new()
         };
-        let overview_lines: Vec<String> = if item.overview.is_empty() {
-            Vec::new()
-        } else {
-            let ov_w = text_w.saturating_sub(4); // 2-col padding each side
-            wrap(&clean_overview(&item.overview), ov_w)
-                .into_iter()
-                .map(|s| s.into_owned())
-                .collect()
-        };
-        let height = title_lines.len() as u16 // title
+        let header_rows = title_lines.len() as u16
             + if show_name.is_empty() { 0 } else { 1 } // show name row (only for episodes)
             + 1 // duration / progress row
-            + 1 // blank separator row
+            + 1; // blank separator row
+        let ov_text_w = text_w.saturating_sub(overview_pad * 2);
+        let ov_wide_w = wide_w.saturating_sub(overview_pad * 2);
+        let overview_lines: Vec<(String, bool)> = if item.overview.is_empty() {
+            Vec::new()
+        } else {
+            let cleaned = clean_overview(&item.overview);
+            let narrow_capacity = image_rows.saturating_sub(header_rows) as usize;
+            if narrow_capacity == 0 {
+                wrap(&cleaned, ov_wide_w.max(1))
+                    .into_iter()
+                    .map(|s| (s.into_owned(), true))
+                    .collect()
+            } else {
+                let narrow_all: Vec<String> = wrap(&cleaned, ov_text_w)
+                    .into_iter()
+                    .map(|s| s.into_owned())
+                    .collect();
+                if narrow_all.len() <= narrow_capacity {
+                    narrow_all.into_iter().map(|l| (l, false)).collect()
+                } else {
+                    let consumed_words: usize = narrow_all[..narrow_capacity]
+                        .iter()
+                        .map(|l| l.split_whitespace().count())
+                        .sum();
+                    let remainder: String = cleaned
+                        .split_whitespace()
+                        .skip(consumed_words)
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let mut lines: Vec<(String, bool)> = narrow_all[..narrow_capacity]
+                        .iter()
+                        .cloned()
+                        .map(|l| (l, false))
+                        .collect();
+                    lines.extend(
+                        wrap(&remainder, ov_wide_w.max(1))
+                            .into_iter()
+                            .map(|s| (s.into_owned(), true)),
+                    );
+                    lines
+                }
+            }
+        };
+        let height = header_rows
             + if overview_lines.is_empty() {
                 0
             } else {
@@ -139,13 +187,21 @@ impl App {
     /// duration/percent-watched line, a blank separator row, then the full
     /// overview (the caller sizes the panel via
     /// `keep_watching_hero_meta_height` so nothing here gets clipped).
+    /// Overview rows past the image's bottom edge (`layout`'s wide lines)
+    /// render across `wide_area` instead of the narrower `area`, so the
+    /// text wraps around the image rather than staying squeezed beside it
+    /// for its full height. `overview_pad` insets the overview text within
+    /// its background row (the two-column hero's original 2-col padding);
+    /// the single-column hero passes 0 to stay flush with the title.
     pub(super) fn render_keep_watching_hero_meta(
         &self,
         f: &mut Frame,
         area: Rect,
+        wide_area: Rect,
         item: &mbv_core::api::EmbyItem,
         layout: &KeepWatchingHeroLayout,
         focused: bool,
+        overview_pad: u16,
     ) {
         if area.width == 0 || area.height == 0 {
             return;
@@ -263,28 +319,59 @@ impl App {
             } else {
                 palette::MUTED
             };
-            let block = Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG));
-            // 2-col horizontal padding, 1-row top padding
-            let block_h = 1 + layout.overview_lines.len() as u16 + 1; // top pad + lines + bottom pad
-            let block_area = Rect {
-                x: area.x,
-                y: row,
-                width: area.width,
-                height: block_h,
+            let bg_row = |wide: bool, y: u16| -> Rect {
+                if wide {
+                    Rect {
+                        x: wide_area.x,
+                        y,
+                        width: wide_area.width,
+                        height: 1,
+                    }
+                } else {
+                    Rect {
+                        x: area.x,
+                        y,
+                        width: area.width,
+                        height: 1,
+                    }
+                }
             };
-            f.render_widget(block, block_area);
-            let inner = Rect {
-                x: block_area.x + 2,
-                y: block_area.y + 1,
-                width: block_area.width.saturating_sub(4),
-                height: block_area.height.saturating_sub(2),
-            };
-            let overview_text: Vec<Line> = layout
-                .overview_lines
-                .iter()
-                .map(|line| Line::from(Span::styled(line.clone(), Style::default().fg(ov_color))))
-                .collect();
-            f.render_widget(Paragraph::new(overview_text), inner);
+            let first_wide = layout.overview_lines[0].1;
+            let last_wide = layout.overview_lines[layout.overview_lines.len() - 1].1;
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                bg_row(first_wide, row),
+            );
+            row += 1;
+            for (line, wide) in &layout.overview_lines {
+                if row >= max_y {
+                    break;
+                }
+                let r = bg_row(*wide, row);
+                f.render_widget(
+                    Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                    r,
+                );
+                let text_r = Rect {
+                    x: r.x + overview_pad,
+                    width: r.width.saturating_sub(overview_pad * 2),
+                    ..r
+                };
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        line.clone(),
+                        Style::default().fg(ov_color),
+                    ))),
+                    text_r,
+                );
+                row += 1;
+            }
+            if row < max_y {
+                f.render_widget(
+                    Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                    bg_row(last_wide, row),
+                );
+            }
         }
     }
 }
