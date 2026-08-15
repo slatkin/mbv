@@ -44,7 +44,7 @@ pub struct RemotePlayer {
     /// shares one handle and `disconnect()` is safe to call from any of
     /// them; `Option` so a second call is a no-op instead of a double
     /// shutdown.
-    pub(crate) control_stream: Arc<Mutex<Option<ControlStream>>>,
+    pub(crate) control_stream: Arc<Mutex<Option<SocketStream>>>,
     pub(crate) next_playback_id: Arc<std::sync::atomic::AtomicU64>,
     pub(crate) pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
     /// Completer for a pending shutdown request.
@@ -52,8 +52,8 @@ pub struct RemotePlayer {
 }
 
 pub use crate::remote_player_connect::signal_local_daemon_service_setup;
-pub(crate) use crate::remote_player_connect::ControlStream;
 pub use crate::remote_player_connect::DaemonEndpoint;
+pub(crate) use crate::stream::SocketStream;
 
 impl RemotePlayer {
     pub fn connect_endpoint(

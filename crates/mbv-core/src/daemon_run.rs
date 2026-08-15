@@ -144,7 +144,7 @@ pub fn run_with_options(
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 spawn_ctrl_client(
-                    stream,
+                    SocketStream::Unix(stream),
                     CtrlTransport::Local,
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
@@ -248,7 +248,7 @@ pub fn run_with_options(
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 spawn_ctrl_client(
-                    stream,
+                    SocketStream::Tcp(stream),
                     CtrlTransport::Tcp,
                     merged_tx2.clone(),
                     ctrl_clients.clone(),

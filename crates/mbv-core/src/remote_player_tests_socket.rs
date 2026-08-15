@@ -21,7 +21,7 @@ fn adopt_queue_returns_false_when_ctrl_socket_is_dead() {
 #[test]
 fn control_stream_shutdown_unblocks_a_concurrent_blocking_read() {
     // #233: shutdown() must affect the *shared underlying socket*, not
-    // just the fd this particular ControlStream clone holds -- that's
+    // just the fd this particular SocketStream clone holds -- that's
     // the whole point of using shutdown() instead of Drop. Prove it by
     // shutting down one clone and confirming a DIFFERENT clone's
     // blocking read unblocks (returns Ok(0), i.e. EOF) as a result.
@@ -31,7 +31,7 @@ fn control_stream_shutdown_unblocks_a_concurrent_blocking_read() {
     let addr = listener.local_addr().unwrap();
     let accept_thread = std::thread::spawn(move || listener.accept().unwrap().0);
 
-    let client_stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
+    let client_stream = SocketStream::Tcp(TcpStream::connect(addr).unwrap());
     let _server_stream = accept_thread.join().unwrap();
 
     let reader_clone = client_stream.try_clone().unwrap();
@@ -405,7 +405,7 @@ fn perform_handshake_times_out_when_daemon_never_sends_hello() {
             .expect("test must release the stalled daemon");
     });
 
-    let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
+    let stream = SocketStream::Tcp(TcpStream::connect(addr).unwrap());
     accepted_rx
         .recv_timeout(Duration::from_secs(1))
         .expect("daemon must accept the test connection");
@@ -466,7 +466,7 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
         writeln!(writer, "{initial_state}").unwrap();
     });
 
-    let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
+    let stream = SocketStream::Tcp(TcpStream::connect(addr).unwrap());
     let result = crate::bounded::run_with_hard_bound(
         move || {
             perform_handshake(stream, || {
@@ -515,7 +515,7 @@ fn perform_handshake_rejects_old_version_before_sending_client_hello() {
         assert_eq!(reader.read_line(&mut client_hello).unwrap(), 0);
     });
 
-    let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
+    let stream = SocketStream::Tcp(TcpStream::connect(addr).unwrap());
     let result = perform_handshake(stream, || {
         panic!("version mismatch must not request a Control credential")
     });

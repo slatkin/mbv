@@ -10,6 +10,7 @@ use crate::config::Config;
 use crate::shared_protocol::{SharedDataCmd, SharedDataEvent};
 use crate::shared_state::{SharedDocumentKind, SharedRecord, SharedSnapshotResponse};
 use crate::shared_store::FeedEntryState;
+use crate::stream::SocketStream;
 
 /// State machine for the shared-data client connection.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -114,10 +115,10 @@ impl SharedClient {
         self.last_attempt = Some(Instant::now());
 
         let stream = if let Some(addr) = endpoint.strip_prefix("tcp://") {
-            MaybeTls::Plain(connect_tcp(addr)?)
+            SocketStream::Tcp(connect_tcp(addr)?)
         } else if endpoint.starts_with("unix://") || endpoint.starts_with('/') {
             let path = endpoint.strip_prefix("unix://").unwrap_or(endpoint);
-            MaybeTls::Unix(
+            SocketStream::Unix(
                 UnixStream::connect(path)
                     .map_err(|e| format!("connect to shared-data socket {path}: {e}"))?,
             )
@@ -130,7 +131,7 @@ impl SharedClient {
                 .map(|(host, _)| host.trim_matches(['[', ']']))
                 .filter(|host| !host.is_empty())
                 .unwrap_or(addr);
-            MaybeTls::Tls(
+            SocketStream::Tls(
                 connector
                     .connect(server_name, tcp)
                     .map_err(|e| format!("TLS handshake with {addr}: {e}"))?,

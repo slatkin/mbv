@@ -3,6 +3,7 @@ use std::os::unix::net::UnixStream;
 
 use super::spawn_ctrl_client;
 use crate::ctrl::CtrlHello;
+use crate::stream::SocketStream;
 
 fn start_ctrl_auth_test_peer(
     control_credential: Option<&str>,
@@ -13,7 +14,7 @@ fn start_ctrl_auth_test_peer(
     let player = cold_player();
 
     spawn_ctrl_client(
-        peer,
+        SocketStream::Unix(peer),
         CtrlTransport::Local,
         merged_tx,
         clients,
