@@ -37,6 +37,7 @@ impl App {
             audiobookshelf_startup_request: init.audiobookshelf_startup_request,
             audiobookshelf_catalog_rx: None,
             audiobookshelf_libraries: Vec::new(),
+            audiobookshelf_shelf_cache: std::collections::HashMap::new(),
             audiobookshelf_browse: Vec::new(),
             audiobookshelf_book_browse: Vec::new(),
             audiobookshelf_test_rx: init.audiobookshelf_test_rx,

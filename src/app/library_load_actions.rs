@@ -1,8 +1,9 @@
 use super::{
-    notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
-    PanelFocus, PendingQueueAction, TabSelection,
+    notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState,
+    HomeLatestSource, LibEvent, PanelFocus, PendingQueueAction, TabSelection,
 };
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::QueueItem;
 use std::collections::HashMap;
 
 impl App {
@@ -314,10 +315,13 @@ impl App {
     }
 
     pub(super) fn fetch_home(&mut self) -> Result<(), String> {
-        let (continue_items, all_views, user_views) = {
-            let Some(client) = self.emby_client() else {
-                return Err("Emby is unavailable".into());
-            };
+        // The Emby-derived portion (Continue Watching, library tabs, Emby
+        // `latest` pills) is built only when an Emby Service is configured
+        // and connected. Without one it is skipped -- not an error -- so Home
+        // still populates from whatever local Sources exist (#543 Part 1).
+        let mut emby_fetched = false;
+        let (continue_items, all_views, user_views) = if let Some(client) = self.emby_client() {
+            emby_fetched = true;
             let client = client.lock().unwrap();
             let views = match client.get_views_classified() {
                 Ok(views) => views,
@@ -332,53 +336,171 @@ impl App {
                 views,
                 client.get_user_views().unwrap_or_default(),
             )
+        } else {
+            (Vec::new(), Vec::new(), Vec::new())
         };
 
         self.home.continue_items = continue_items;
-        self.rebuild_library_tabs_from_views(&all_views);
-        for lib_idx in 0..self.libs.len() {
-            self.start_album_index(lib_idx, false);
+        // Library tabs are Emby-modeled state; only rebuild them from the
+        // freshly fetched views when Emby was actually reachable, so a broken
+        // or absent Emby does not clear existing library tabs.
+        if emby_fetched {
+            self.rebuild_library_tabs_from_views(&all_views);
+            for lib_idx in 0..self.libs.len() {
+                self.start_album_index(lib_idx, false);
+            }
         }
 
-        let old_cursors: HashMap<String, usize> = self
-            .home
-            .latest
-            .iter()
-            .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
-            .collect();
-
-        let mut latest: Vec<(String, String, Vec<EmbyItem>, usize)> = Vec::new();
-        let Some(client) = self.emby_client() else {
-            return Err("Emby is unavailable".into());
-        };
-        let client = client.lock().unwrap();
-        for v in user_views.iter().filter(|v| {
-            let lower = v.name.to_lowercase();
-            v.collection_type != "playlists"
-                && !self.hidden_latest.contains(&lower)
-                && !self.hidden_libraries.contains(&lower)
-        }) {
-            let title = v.name.clone();
-            let items = if v.collection_type == "tvshows" {
-                client.get_latest_episodes(&v.id, 30).unwrap_or_default()
-            } else {
-                client.get_latest(&v.id, 30).unwrap_or_default()
-            };
-            let cursor = old_cursors
-                .get(&v.id)
-                .copied()
-                .unwrap_or(0)
-                .min(items.len().saturating_sub(1));
-            latest.push((title, v.id.clone(), items, cursor));
+        // Merge, not replace: the Emby `latest` pills are removed and
+        // reinserted at their previous positions, leaving any entries from
+        // other providers untouched. This is what lets `fetch_home()` run
+        // unconditionally (even before Emby connects) without clearing other
+        // providers' Home data whenever Emby is the writer.
+        let mut emby_sections: Vec<(String, HomeLatestSource, Vec<QueueItem>)> = Vec::new();
+        if let Some(client) = self.emby_client() {
+            let client = client.lock().unwrap();
+            for v in user_views.iter().filter(|v| {
+                let lower = v.name.to_lowercase();
+                v.collection_type != "playlists"
+                    && !self.hidden_latest.contains(&lower)
+                    && !self.hidden_libraries.contains(&lower)
+            }) {
+                let items = if v.collection_type == "tvshows" {
+                    client.get_latest_episodes(&v.id, 30).unwrap_or_default()
+                } else {
+                    client.get_latest(&v.id, 30).unwrap_or_default()
+                };
+                emby_sections.push((
+                    v.name.clone(),
+                    HomeLatestSource::Emby(v.id.clone()),
+                    items
+                        .into_iter()
+                        .map(|item| QueueItem::Emby(Box::new(item)))
+                        .collect(),
+                ));
+            }
         }
-        drop(client);
-        self.home.latest = latest;
+        merge_home_sections(&mut self.home.latest, emby_sections, |source| {
+            matches!(source, HomeLatestSource::Emby(_))
+        });
+        // The Audiobookshelf portion is rebuilt from the async shelf cache
+        // (never a network fetch here), re-applying `hidden_latest`.
+        self.rebuild_audiobookshelf_latest();
+        // The Feeds portion is rebuilt from the Feeds tab's combined entries
+        // (never a network fetch here), re-applying `hidden_latest`.
+        self.rebuild_feeds_latest();
 
         let n = 1 + self.home.latest.len();
         if self.home.section >= n {
             self.home.section = n.saturating_sub(1);
         }
         Ok(())
+    }
+
+    /// The Audiobookshelf Latest-pill sections rebuildable from
+    /// `audiobookshelf_shelf_cache`, one per cached **podcast** library in
+    /// `audiobookshelf_libraries` order (book libraries get no pill in this
+    /// change, per the spec), honoring `hidden_latest`/`hidden_libraries` by
+    /// library name. A library with no cached entries still yields a pill
+    /// (empty pills are not selectable and render nothing), matching an empty
+    /// Emby Latest section.
+    pub(super) fn audiobookshelf_latest_sections(
+        &self,
+    ) -> Vec<(String, HomeLatestSource, Vec<QueueItem>)> {
+        self.audiobookshelf_libraries
+            .iter()
+            .filter(|library| library.media_type != "book")
+            .filter(|library| {
+                let lower = library.name.to_lowercase();
+                !self.hidden_latest.contains(&lower) && !self.hidden_libraries.contains(&lower)
+            })
+            .map(|library| {
+                (
+                    library.name.clone(),
+                    HomeLatestSource::Audiobookshelf(library.id.clone()),
+                    self.audiobookshelf_shelf_cache
+                        .get(&library.id)
+                        .cloned()
+                        .unwrap_or_default(),
+                )
+            })
+            .collect()
+    }
+
+    /// Rebuilds the Audiobookshelf portion of `home.latest` from
+    /// `audiobookshelf_shelf_cache` without issuing a network fetch. Shared by
+    /// the shelf-fetch handler (Task 6.3) and `fetch_home()` (Task 7.1);
+    /// removing every `Audiobookshelf` section first means a library that was
+    /// hidden or stopped being cached also disappears on refresh.
+    pub(super) fn rebuild_audiobookshelf_latest(&mut self) {
+        let sections = self.audiobookshelf_latest_sections();
+        merge_home_sections(&mut self.home.latest, sections, |source| {
+            matches!(source, HomeLatestSource::Audiobookshelf(_))
+        });
+    }
+
+    /// The single Feeds Latest-pill section, built from the Feeds tab's
+    /// combined `all_entries` (newest-first "All" group), honoring
+    /// `hidden_latest` via the literal `"feeds"` pseudo-name. When hidden
+    /// the entry is absent entirely, matching the Audiobookshelf/Emby pills.
+    /// The single Feeds Latest-pill section, built from the Feeds tab's
+    /// combined `all_entries` (newest-first "All" group). The pill exists
+    /// only when feed subscriptions are configured (mirroring the
+    /// Audiobookshelf pill, which exists only per library), and honors
+    /// `hidden_latest` via the literal `"feeds"` pseudo-name.
+    fn feeds_latest_section(&self) -> Option<(String, HomeLatestSource, Vec<QueueItem>)> {
+        if !self.has_feeds_subscriptions() {
+            return None;
+        }
+        if self
+            .hidden_latest
+            .iter()
+            .any(|hidden| hidden.eq_ignore_ascii_case("feeds"))
+        {
+            return None;
+        }
+        let items = self
+            .feed_tab
+            .all_entries
+            .iter()
+            .cloned()
+            .map(QueueItem::Feed)
+            .collect();
+        Some(("Latest Feeds".into(), HomeLatestSource::Feeds, items))
+    }
+
+    /// Rebuilds the Feeds portion of `home.latest` from the Feeds tab's
+    /// combined entries without issuing a network fetch. Shared by
+    /// `fetch_home()` (Task 11.1); removing the existing `Feeds` section
+    /// first means the pill also disappears when hidden.
+    pub(super) fn rebuild_feeds_latest(&mut self) {
+        let sections = self.feeds_latest_section().into_iter().collect::<Vec<_>>();
+        merge_home_sections(&mut self.home.latest, sections, |source| {
+            matches!(source, HomeLatestSource::Feeds)
+        });
+    }
+
+    /// The `Newest Episodes` shelf's entries as queue-able items, or an empty
+    /// list when the shelf is absent (only that shelf feeds Home).
+    pub(super) fn newest_episodes_items(
+        shelves: Vec<mbv_core::audiobookshelf::AudiobookshelfShelf>,
+    ) -> Vec<QueueItem> {
+        shelves
+            .into_iter()
+            .find(|shelf| shelf.label.eq_ignore_ascii_case("Newest episodes"))
+            .map(|shelf| {
+                shelf
+                    .entries
+                    .into_iter()
+                    .filter_map(|entry| match entry {
+                        mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Episode(item) => {
+                            Some(QueueItem::Audiobookshelf(item))
+                        }
+                        mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Show(_) => None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     pub(super) fn settings_scroll_follow(&mut self) {
@@ -449,4 +571,51 @@ impl App {
             s.cursor = 0;
         }
     }
+}
+
+/// Position- and cursor-preserving splice for `HomePane.latest`: drops every
+/// section whose source matches `kind`, then reinserts `sections` at the
+/// previous positions, restoring each section's prior cursor clamped to its
+/// item count. Each Home writer (Emby in `fetch_home`, the Audiobookshelf
+/// shelf cache) calls this with its own kind, so it only ever touches its own
+/// entries and leaves other providers' pills untouched.
+fn merge_home_sections(
+    latest: &mut Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)>,
+    sections: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
+    kind: impl Fn(&HomeLatestSource) -> bool,
+) {
+    let old_positions: Vec<usize> = latest
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, source, _, _))| kind(source))
+        .map(|(index, _)| index)
+        .collect();
+    let old_cursors: HashMap<HomeLatestSource, usize> = latest
+        .iter()
+        .filter_map(|(_, source, _, cursor)| {
+            if kind(source) {
+                Some((source.clone(), *cursor))
+            } else {
+                None
+            }
+        })
+        .collect();
+    let mut merged: Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)> = std::mem::take(latest)
+        .into_iter()
+        .filter(|(_, source, _, _)| !kind(source))
+        .collect();
+    for (inserted, (title, source, items)) in sections.into_iter().enumerate() {
+        let cursor = old_cursors
+            .get(&source)
+            .copied()
+            .unwrap_or(0)
+            .min(items.len().saturating_sub(1));
+        let insert_at = old_positions
+            .get(inserted)
+            .copied()
+            .unwrap_or(merged.len())
+            .min(merged.len());
+        merged.insert(insert_at, (title, source, items, cursor));
+    }
+    *latest = merged;
 }

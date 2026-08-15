@@ -5,6 +5,7 @@ use super::home_video::home_panel_scroll;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
 use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -30,11 +31,14 @@ impl App {
         struct Section {
             section_idx: usize,
             flat_start: usize,
-            items: Vec<mbv_core::api::EmbyItem>,
+            items: Vec<QueueItem>,
         }
+        // Cross-provider home row. Emby rows keep the full two-column/hero
+        // treatment; non-Emby rows (Audiobookshelf today, Feeds in Part 3) use
+        // the generic `render_home_latest_row`/`render_home_latest_detail`.
         enum DisplayRow {
             Empty,
-            Item(usize, Box<mbv_core::api::EmbyItem>),
+            Item(usize, Box<QueueItem>),
         }
 
         let continue_items = self.home.continue_items.clone();
@@ -79,11 +83,17 @@ impl App {
         let mut rows: Vec<DisplayRow> = Vec::new();
         if self.home.section == 0 {
             for (idx, item) in continue_items.into_iter().enumerate() {
-                rows.push(DisplayRow::Item(idx, Box::new(item)));
+                rows.push(DisplayRow::Item(
+                    idx,
+                    Box::new(QueueItem::Emby(Box::new(item))),
+                ));
             }
         } else if let Some(section) = selected_new {
-            for (idx, item) in section.items.iter().cloned().enumerate() {
-                rows.push(DisplayRow::Item(section.flat_start + idx, Box::new(item)));
+            for (idx, item) in section.items.iter().enumerate() {
+                rows.push(DisplayRow::Item(
+                    section.flat_start + idx,
+                    Box::new(item.clone()),
+                ));
             }
         }
         if rows.is_empty() {
@@ -111,14 +121,29 @@ impl App {
         // --- Home hero panel ----------------------------------------------
         // Shared hero above the selected Home list. It reflects the current
         // flat cursor item whether the active pill is Continue Watching or one
-        // of the Newest sections.
-        let hero_item = self.home_current_item();
+        // of the Newest sections. Emby rows keep the full two-column/hero
+        // treatment; non-Emby rows (Audiobookshelf today, Feeds in Part 3) get
+        // the generic detail block added in Part 2 (#543).
+        let current_item = self.home_current_item();
+        let emby_item = current_item
+            .as_ref()
+            .and_then(|item| item.as_emby().cloned());
         // Same threshold the library list uses to switch to two columns, so
         // Home's hero/list split and the library list cross over together.
         let two_column = area.width >= TWO_COLUMN_THRESHOLD;
 
-        // Hero data: (item, meta_area, img_area, meta_layout)
-        let hero_data: Option<(mbv_core::api::EmbyItem, Rect, Rect, KeepWatchingHeroLayout)>;
+        // Hero data: Emby keeps (item, meta_area, img_area, meta_layout); the
+        // generic detail block renders into a single content area.
+        enum HeroData {
+            Emby(
+                Box<mbv_core::api::EmbyItem>,
+                Rect,
+                Rect,
+                KeepWatchingHeroLayout,
+            ),
+            Generic(QueueItem, Rect),
+        }
+        let hero_data: Option<HeroData>;
         let list_area: Rect;
 
         if two_column {
@@ -140,33 +165,43 @@ impl App {
             };
             let hero_col_height = hero_content.height;
 
-            hero_data = hero_item.and_then(|item| {
-                let meta_w = hero_content.width as usize;
-                let meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
-                // Terminal cells are roughly twice as tall as they are wide, so a
-                // 16:9 image needs 9 rows for every 32 columns. Keep the artwork
-                // at its natural display height, then leave one row before metadata.
-                let image_height = (hero_col_width.saturating_mul(9).saturating_add(31) / 32)
-                    .max(1)
-                    .min(hero_col_height.saturating_sub(meta_layout.height + 1));
-                if meta_layout.height < 4 || image_height == 0 {
-                    None
-                } else {
-                    let img_area = Rect {
-                        x: hero_content.x,
-                        y: hero_content.y,
-                        width: hero_content.width,
-                        height: image_height,
-                    };
-                    let meta_area = Rect {
-                        x: hero_content.x,
-                        y: hero_content.y + img_area.height + 1,
-                        width: hero_content.width,
-                        height: meta_layout.height,
-                    };
-                    Some((item, meta_area, img_area, meta_layout))
+            hero_data = match emby_item {
+                Some(item) => {
+                    let meta_w = hero_content.width as usize;
+                    let meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
+                    // Terminal cells are roughly twice as tall as they are wide, so a
+                    // 16:9 image needs 9 rows for every 32 columns. Keep the artwork
+                    // at its natural display height, then leave one row before metadata.
+                    let image_height = (hero_col_width.saturating_mul(9).saturating_add(31) / 32)
+                        .max(1)
+                        .min(hero_col_height.saturating_sub(meta_layout.height + 1));
+                    if meta_layout.height < 4 || image_height == 0 {
+                        None
+                    } else {
+                        let img_area = Rect {
+                            x: hero_content.x,
+                            y: hero_content.y,
+                            width: hero_content.width,
+                            height: image_height,
+                        };
+                        let meta_area = Rect {
+                            x: hero_content.x,
+                            y: hero_content.y + img_area.height + 1,
+                            width: hero_content.width,
+                            height: meta_layout.height,
+                        };
+                        Some(HeroData::Emby(
+                            Box::new(item),
+                            meta_area,
+                            img_area,
+                            meta_layout,
+                        ))
+                    }
                 }
-            });
+                None => current_item
+                    .filter(|item| item.as_emby().is_none())
+                    .map(|item| HeroData::Generic(item, hero_content)),
+            };
 
             if hero_data.is_some() {
                 f.render_widget(
@@ -193,43 +228,64 @@ impl App {
             hero_data = if area.width < 24 {
                 None
             } else {
-                hero_item.and_then(|item| {
-                    let img_w = area.width / 2;
-                    let meta_w = area.width.saturating_sub(img_w + 1) as usize;
-                    let meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
-                    let image_rows =
-                        (img_w.saturating_mul(9).saturating_add(31) / 32).min(max_allowed);
-                    let hero_height = image_rows.max(meta_layout.height);
-                    if meta_layout.height < 4 {
-                        None
-                    } else {
-                        let hero_area = Rect {
-                            x: content_area.x,
-                            y: content_area.y,
-                            width: content_area.width,
-                            height: hero_height,
-                        };
-                        let meta_area = Rect {
-                            x: hero_area.x,
-                            y: hero_area.y,
-                            width: hero_area.width.saturating_sub(img_w + 1),
-                            height: hero_height,
-                        };
-                        let img_area = Rect {
-                            x: hero_area.x + hero_area.width.saturating_sub(img_w),
-                            y: hero_area.y,
-                            width: img_w,
-                            height: hero_height,
-                        };
-                        Some((item, meta_area, img_area, meta_layout))
+                match emby_item {
+                    Some(item) => {
+                        let img_w = area.width / 2;
+                        let meta_w = area.width.saturating_sub(img_w + 1) as usize;
+                        let meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
+                        let image_rows =
+                            (img_w.saturating_mul(9).saturating_add(31) / 32).min(max_allowed);
+                        let hero_height = image_rows.max(meta_layout.height);
+                        if meta_layout.height < 4 {
+                            None
+                        } else {
+                            let hero_area = Rect {
+                                x: content_area.x,
+                                y: content_area.y,
+                                width: content_area.width,
+                                height: hero_height,
+                            };
+                            let meta_area = Rect {
+                                x: hero_area.x,
+                                y: hero_area.y,
+                                width: hero_area.width.saturating_sub(img_w + 1),
+                                height: hero_height,
+                            };
+                            let img_area = Rect {
+                                x: hero_area.x + hero_area.width.saturating_sub(img_w),
+                                y: hero_area.y,
+                                width: img_w,
+                                height: hero_height,
+                            };
+                            Some(HeroData::Emby(
+                                Box::new(item),
+                                meta_area,
+                                img_area,
+                                meta_layout,
+                            ))
+                        }
                     }
-                })
+                    None => current_item
+                        .filter(|item| item.as_emby().is_none())
+                        .map(|item| {
+                            HeroData::Generic(
+                                item,
+                                Rect {
+                                    x: content_area.x,
+                                    y: content_area.y,
+                                    width: content_area.width,
+                                    height: max_allowed,
+                                },
+                            )
+                        }),
+                }
             };
 
-            let hero_h = hero_data
-                .as_ref()
-                .map(|(_, meta_area, _, _)| meta_area.height)
-                .unwrap_or(0);
+            let hero_h = match &hero_data {
+                Some(HeroData::Emby(_, meta_area, _, _)) => meta_area.height,
+                Some(HeroData::Generic(_, area)) => area.height,
+                None => 0,
+            };
             let list_gap = if hero_data.is_some() { 1 } else { 2 };
             list_area = Rect {
                 y: content_area.y + hero_h + list_gap,
@@ -336,19 +392,25 @@ impl App {
         layout.left_area = list_area;
 
         // Render hero (shared between both layout modes)
-        if let Some((item, meta_area, img_area, meta_layout)) = &hero_data {
-            let cache_key = format!("{}:pwr_kw", item.id);
-            if self.images_enabled() {
-                let img_types = Self::keep_watching_hero_image_types(item);
-                self.fetch_card_image(
-                    cache_key.clone(),
-                    item.id.clone(),
-                    item.series_id.clone(),
-                    img_types,
-                );
+        match &hero_data {
+            Some(HeroData::Emby(item, meta_area, img_area, meta_layout)) => {
+                let cache_key = format!("{}:pwr_kw", item.id);
+                if self.images_enabled() {
+                    let img_types = Self::keep_watching_hero_image_types(item);
+                    self.fetch_card_image(
+                        cache_key.clone(),
+                        item.id.clone(),
+                        item.series_id.clone(),
+                        img_types,
+                    );
+                }
+                self.render_keep_watching_hero_image(f, *img_area, &cache_key, two_column);
+                self.render_keep_watching_hero_meta(f, *meta_area, item, meta_layout, focused);
             }
-            self.render_keep_watching_hero_image(f, *img_area, &cache_key, two_column);
-            self.render_keep_watching_hero_meta(f, *meta_area, item, meta_layout, focused);
+            Some(HeroData::Generic(item, area)) => {
+                self.render_home_latest_detail(f, *area, item);
+            }
+            None => {}
         }
 
         let wide_home_panel_unfocused = two_column && hero_data.is_some() && !focused;
@@ -398,6 +460,22 @@ impl App {
                     if selected_row {
                         layout.cursor_screen_y = Some(sy);
                     }
+
+                    // Non-Emby rows (Audiobookshelf today, Feeds in Part 3) use
+                    // the generic single-line renderer.
+                    let Some(emby) = item.as_emby() else {
+                        super::home_latest_row::render_home_latest_row(
+                            f,
+                            row_rect,
+                            item,
+                            selected_row,
+                            focused,
+                            wide_home_panel_unfocused,
+                        );
+                        hitmap.push((row_rect, *flat_idx));
+                        continue;
+                    };
+                    let item = emby;
 
                     let avail = (row_rect.width as usize).saturating_sub(2);
 

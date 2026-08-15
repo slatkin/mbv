@@ -1,7 +1,8 @@
 use super::notify_actions::ToastSeverity;
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 use super::{
-    App, BrowseLevel, LocalPlaybackTarget, PanelFocus, PlaybackTarget, RemotePlaybackTarget,
+    App, BrowseLevel, HomeLatestSource, LocalPlaybackTarget, PanelFocus, PlaybackTarget,
+    RemotePlaybackTarget,
 };
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueItemContentId};
@@ -122,13 +123,14 @@ impl App {
         self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize
     }
 
-    pub(super) fn current_home_item(&self) -> Option<EmbyItem> {
+    pub(super) fn current_home_item(&self) -> Option<QueueItem> {
         let sec = self.home.section;
         if sec == 0 {
             self.home
                 .continue_items
                 .get(self.home.continue_cursor)
                 .cloned()
+                .map(|item| QueueItem::Emby(Box::new(item)))
         } else {
             let col = self.home.latest.get(sec - 1)?;
             col.2.get(col.3).cloned()
@@ -362,9 +364,85 @@ impl App {
         }
     }
 
+    /// Shared tail for submitting a single `QueueItem` to the canonical queue
+    /// (Task 8.1): play looks up an existing slot by `content_id()`, appends
+    /// if absent, sets cursor/active slot, and submits the full queue to the
+    /// player, rolling the queue back and flashing on rejection; enqueue
+    /// appends without starting playback and syncs/persists like the library
+    /// enqueue path. Callers resolve their own provider-specific
+    /// selection/admission ahead of the call. Returns whether the submit
+    /// succeeded.
+    pub(super) fn submit_queue_item(&mut self, item: QueueItem, start_playback: bool) -> bool {
+        let scope = if start_playback {
+            self.playback_target_queue_scope()
+        } else {
+            self.visible_queue_scope()
+        };
+        if !start_playback {
+            let previous_dirty = self.queue_dirty;
+            let previous_queue = self.queue_for_scope(scope).clone();
+            self.queue_for_scope_mut(scope).queue.append(item.clone());
+            if self.local_queue_metadata_applies(scope) {
+                self.queue_dirty = true;
+            }
+            if self.sync_playback_queue_items_after_append(scope, vec![item]) {
+                self.persist_local_queue_state_if_needed(scope);
+                self.retire_remote_tracking(true);
+                return true;
+            }
+            self.queue_dirty = previous_dirty;
+            *self.queue_for_scope_mut(scope) = previous_queue;
+            return false;
+        }
+        let previous_queue = self.queue_for_scope(scope).clone();
+        let existing_index = self
+            .queue_for_scope(scope)
+            .slots()
+            .iter()
+            .position(|slot| slot.item.content_id() == item.content_id());
+        let selected_index = existing_index.unwrap_or_else(|| {
+            self.queue_for_scope_mut(scope).queue.append(item.clone());
+            self.queue_for_scope(scope).total_queue_len() - 1
+        });
+        let selected_slot = self
+            .queue_for_scope(scope)
+            .slot_id_at(selected_index)
+            .expect("selected queue slot disappeared");
+        {
+            let queue = self.queue_for_scope_mut(scope);
+            queue.queue_cursor = selected_index;
+            let _ = queue.queue.set_active_slot(selected_slot);
+        }
+        let all_items = self.queue_for_scope(scope).all_queue_items();
+        let audio_only = all_items.iter().all(QueueItem::is_audio);
+        let submitted =
+            self.player
+                .submit_queue(all_items, selected_index, None, audio_only, self.ui_volume);
+        if !submitted {
+            *self.queue_for_scope_mut(scope) = previous_queue;
+            self.flash(
+                "Playback owner rejected this item".into(),
+                ToastSeverity::Error,
+            );
+            return false;
+        }
+        self.set_queue_scope(scope);
+        if !matches!(self.panel_focus, PanelFocus::Library) {
+            self.set_panel_focus(PanelFocus::Queue);
+        }
+        true
+    }
+
     pub(super) fn select_home(&mut self) {
         let Some(item) = self.current_home_item() else {
             return;
+        };
+        let item = match item {
+            QueueItem::Emby(item) => *item,
+            // Only Emby items host the folder-browse/Library route Home
+            // supports; other providers select through their own tabs
+            // (#543 Part 2).
+            _ => return,
         };
         if item.is_folder {
             if let Some(i) = self.libs.iter().position(|l| l.library.id == item.id) {
@@ -373,7 +451,15 @@ impl App {
             }
             let sec = self.home.section;
             if sec > 0 {
-                if let Some(lib_id) = self.home.latest.get(sec - 1).map(|c| c.1.clone()) {
+                let lib_id =
+                    self.home
+                        .latest
+                        .get(sec - 1)
+                        .and_then(|(_, source, _, _)| match source {
+                            HomeLatestSource::Emby(lib_id) => Some(lib_id.clone()),
+                            _ => None,
+                        });
+                if let Some(lib_id) = lib_id {
                     if let Some(lib_idx) = self.libs.iter().position(|l| l.library.id == lib_id) {
                         let lib = &mut self.libs[lib_idx];
                         lib.search = None;

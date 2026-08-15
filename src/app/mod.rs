@@ -116,8 +116,8 @@ use self::types_library_tab::LibraryTab;
 #[cfg(test)]
 use self::types_playback::HomePane;
 use self::types_playback::{
-    LocalPlaybackTarget, PendingQueueAction, PlaybackState, PlaybackTarget, QueueScope,
-    QueueScopeResolution, RemotePlaybackTarget, RemoteReanchorPopup, RemoteSlotState,
+    HomeLatestSource, LocalPlaybackTarget, PendingQueueAction, PlaybackState, PlaybackTarget,
+    QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteReanchorPopup, RemoteSlotState,
     SuspendedLocalSession, UndoEntry,
 };
 use self::types_player_tab::PlayerTab;
@@ -314,21 +314,18 @@ impl App {
             client.lock().unwrap().register_capabilities();
         }
 
-        if self.emby_client().is_some() {
-            match self.fetch_home() {
-                Ok(()) => {
-                    let has_live_flash = self.status_expires.is_some_and(|t| t > Instant::now());
-                    if !has_live_flash {
-                        self.status.clear();
-                    }
+        // Home populates from whatever Services are available at this moment;
+        // Emby's independent startup connection merges its portion in when it
+        // completes (apply_emby_bootstrap), so no Emby gate is needed here
+        // (#543 Part 1).
+        match self.fetch_home() {
+            Ok(()) => {
+                let has_live_flash = self.status_expires.is_some_and(|t| t > Instant::now());
+                if !has_live_flash {
+                    self.status.clear();
                 }
-                Err(e) => self.flash(format!("Couldn't load home: {e}"), ToastSeverity::Warning),
             }
-        } else {
-            self.flash(
-                service_startup::startup_status(self.emby_runtime.state).into(),
-                ToastSeverity::Warning,
-            );
+            Err(e) => self.flash(format!("Couldn't load home: {e}"), ToastSeverity::Warning),
         }
         self.home_loading = false;
         self.maybe_restore_queue_state();
@@ -692,6 +689,10 @@ mod tests_panel_focus;
 #[cfg(test)]
 #[path = "tests_audiobook.rs"]
 mod tests_audiobook;
+
+#[cfg(test)]
+#[path = "tests_home_latest.rs"]
+mod tests_home_latest;
 
 #[cfg(test)]
 #[path = "tests_lifecycle.rs"]

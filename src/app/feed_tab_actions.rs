@@ -2,7 +2,7 @@ use super::feed_parse::fetch_and_parse_entries;
 use super::notify_actions::ToastSeverity;
 use super::types_feed_tab::FeedTabRefreshResult;
 use super::App;
-use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
+use mbv_core::playback_queue::QueueItem;
 
 impl App {
     /// Whether feed subscriptions are configured and the Feeds tab should
@@ -182,17 +182,11 @@ impl App {
         }
     }
 
-    /// Play the entry at the current cursor (§5.5/§5.6). A no-op for an
-    /// empty list, an out-of-range cursor, or an entry with no playable
-    /// enclosure/link -- the source validation below avoids spawning mpv
-    /// for a doomed play and gives the user an explanatory toast instead.
-    ///
-    /// Routes through the same `PlayerProxy::submit_queue` boundary as
-    /// library-item Play: the entry is appended to the canonical
-    /// `PlaybackQueue`, the cursor is set, and the full queue is submitted
-    /// to the player.  For remote players this sends `UnifiedQueueReplace`
-    /// when the daemon supports the capability; for local players it
-    /// replaces the mpv playlist in place or cold-starts a fresh process.
+    /// Resolve the entry at the current cursor, applying the active watched
+    /// filter and subscription group, then submit it through the shared
+    /// queue-submission primitive (Task 12.1). The filtered-selection
+    /// resolution (`visible_entries()`/`cursor`) is unchanged from the
+    /// direct-tail version; admission guards stay ahead of the call.
     pub(super) fn feed_tab_play_selected(&mut self) {
         let Some(entry) = self
             .feed_tab
@@ -211,66 +205,7 @@ impl App {
         }
         // Hydrate stored position/played before appending to the queue.
         let entry = self.hydrate_feed_entry_state(entry);
-        // Append to the canonical queue (local or remote mirror) so the
-        // queue panel, cursor, and now-playing title all resolve the Feed
-        // entry correctly.  On a cold (inactive) local player the player
-        // will spawn a fresh thread with only this Feed entry, so clear
-        // any stale items first.
-        let active = self.player.status.lock().unwrap().active;
-        let is_remote = self.player.is_remote();
-        let scope = self.playback_target_queue_scope();
-        let previous_queue = self.queue_for_scope(scope).clone();
-        if !active && !is_remote {
-            self.playback_queue_mut().queue = PlaybackQueue::from_items(Vec::new(), None);
-        }
-        let queue = self.playback_queue_mut();
-        let existing_idx = queue.queue.slots().iter().position(
-            |slot| matches!(&slot.item, QueueItem::Feed(existing) if existing.guid == entry.guid),
-        );
-        let unified_idx = match existing_idx {
-            Some(index) => index,
-            None => {
-                queue.queue.append(QueueItem::Feed(entry.clone()));
-                queue.queue.slots().len() - 1
-            }
-        };
-        queue.queue_cursor = unified_idx;
-        let _ = queue
-            .queue
-            .set_active_slot(queue.queue.slots()[unified_idx].slot_id);
-        // Submit through the same unified path as library Play: the full
-        // canonical queue (including any pre-existing items) is handed to
-        // the player so its internal playlist matches the PlayerTab.
-        let all_items = self.playback_queue().all_queue_items();
-        let start_idx = self.playback_queue().queue_cursor;
-        let headless = all_items.iter().all(QueueItem::is_audio);
-        if existing_idx.is_some() && self.player.is_remote() {
-            let slot_id = self
-                .playback_queue()
-                .slot_id_at(unified_idx)
-                .expect("existing playback queue slot disappeared");
-            if !self
-                .player
-                .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(slot_id))
-            {
-                *self.queue_for_scope_mut(scope) = previous_queue;
-                self.flash(
-                    "Playback owner rejected the Feed selection".into(),
-                    ToastSeverity::Error,
-                );
-            }
-            return;
-        }
-        if !self
-            .player
-            .submit_queue(all_items, start_idx, None, headless, self.ui_volume)
-        {
-            *self.queue_for_scope_mut(scope) = previous_queue;
-            self.flash(
-                "Playback owner rejected the Feed entry".into(),
-                ToastSeverity::Error,
-            );
-        }
+        self.submit_queue_item(QueueItem::Feed(entry), true);
     }
 
     /// Enqueue the entry at the current cursor into the canonical queue
@@ -292,21 +227,6 @@ impl App {
             );
             return;
         }
-        let scope = self.visible_queue_scope();
-        let previous_dirty = self.queue_dirty;
-        let previous_queue = self.queue_for_scope(scope).clone();
-        self.queue_for_scope_mut(scope)
-            .queue
-            .append(QueueItem::Feed(entry.clone()));
-        if self.local_queue_metadata_applies(scope) {
-            self.queue_dirty = true;
-        }
-        if self.sync_playback_queue_items_after_append(scope, vec![QueueItem::Feed(entry)]) {
-            self.persist_local_queue_state_if_needed(scope);
-            self.retire_remote_tracking(true);
-        } else {
-            self.queue_dirty = previous_dirty;
-            *self.queue_for_scope_mut(scope) = previous_queue;
-        }
+        self.submit_queue_item(QueueItem::Feed(entry), false);
     }
 }

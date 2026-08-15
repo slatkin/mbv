@@ -1,16 +1,16 @@
 use super::App;
-use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::QueueItem;
 
 impl App {
     // ── Home flat list ───────────────────────────────────────────────────────
 
-    /// The EmbyItem at the current flat `home_cursor`, or None.
-    pub(super) fn home_current_item(&self) -> Option<EmbyItem> {
+    /// The QueueItem at the current flat `home_cursor`, or None.
+    pub(super) fn home_current_item(&self) -> Option<QueueItem> {
         let cursor = self.home.home_cursor;
         let mut pos = 0usize;
         for item in &self.home.continue_items {
             if pos == cursor {
-                return Some(item.clone());
+                return Some(QueueItem::Emby(Box::new(item.clone())));
             }
             pos += 1;
         }
@@ -156,7 +156,7 @@ impl App {
         let Some(item) = self.home_current_item() else {
             return;
         };
-        if item.is_folder {
+        if matches!(&item, QueueItem::Emby(inner) if inner.is_folder) {
             return;
         }
         let cursor = self.home.home_cursor;
@@ -170,7 +170,15 @@ impl App {
             self.home.section = saved_sec;
             self.home.continue_cursor = saved_cursor;
         } else {
-            self.play_item(item);
+            match item {
+                QueueItem::Emby(item) => self.play_item(*item),
+                // Non-Emby `latest` items (Audiobookshelf today, Feeds in
+                // Part 3) submit through the shared helper, which neither
+                // reads nor mutates the owning tab's cursor/filter.
+                other => {
+                    self.submit_queue_item(other, true);
+                }
+            }
         }
     }
 
@@ -189,7 +197,12 @@ impl App {
             let Some(item) = self.home_current_item() else {
                 return;
             };
-            self.do_enqueue_folder(item);
+            match item {
+                QueueItem::Emby(item) => self.do_enqueue_folder(*item),
+                other => {
+                    self.submit_queue_item(other, false);
+                }
+            }
         }
     }
 }

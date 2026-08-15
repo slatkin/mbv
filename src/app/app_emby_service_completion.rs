@@ -1,6 +1,8 @@
 use mbv_core::api::EmbyClient;
+use mbv_core::playback_queue::QueueItem;
 use std::sync::{mpsc, Arc, Mutex};
 
+use super::types_playback::HomeLatestSource;
 use super::App;
 
 impl App {
@@ -252,28 +254,63 @@ impl App {
             self.start_album_index(lib_idx, false);
         }
 
+        // Merge, not replace: drop only the Emby entries, splice the fresh
+        // Emby entries back at their previous positions, and leave entries
+        // from other providers (Audiobookshelf/Feeds) untouched (#543 Part 1).
+        let old_emby_positions: Vec<usize> = self
+            .home
+            .latest
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, source, _, _))| matches!(source, HomeLatestSource::Emby(_)))
+            .map(|(index, _)| index)
+            .collect();
         let old_cursors: HashMap<String, usize> = self
             .home
             .latest
             .iter()
-            .map(|(_, lib_id, _, cursor)| (lib_id.clone(), *cursor))
+            .filter_map(|(_, source, _, cursor)| match source {
+                HomeLatestSource::Emby(lib_id) => Some((lib_id.clone(), *cursor)),
+                _ => None,
+            })
             .collect();
-        self.home.latest = bootstrap
+        let mut merged: Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)> =
+            std::mem::take(&mut self.home.latest)
+                .into_iter()
+                .filter(|(_, source, _, _)| !matches!(source, HomeLatestSource::Emby(_)))
+                .collect();
+        for (inserted_emby, section) in bootstrap
             .latest
             .into_iter()
-            .filter(|(title, _, _)| {
-                let lower = title.to_lowercase();
+            .filter(|section| {
+                let lower = section.title.to_lowercase();
                 !self.hidden_latest.contains(&lower) && !self.hidden_libraries.contains(&lower)
             })
-            .map(|(title, lib_id, items)| {
-                let cursor = old_cursors
-                    .get(&lib_id)
-                    .copied()
-                    .unwrap_or(0)
-                    .min(items.len().saturating_sub(1));
-                (title, lib_id, items, cursor)
-            })
-            .collect();
+            .enumerate()
+        {
+            let cursor = old_cursors
+                .get(&section.view_id)
+                .copied()
+                .unwrap_or(0)
+                .min(section.items.len().saturating_sub(1));
+            let entry = (
+                section.title,
+                HomeLatestSource::Emby(section.view_id),
+                section
+                    .items
+                    .into_iter()
+                    .map(|item| QueueItem::Emby(Box::new(item)))
+                    .collect(),
+                cursor,
+            );
+            let insert_at = old_emby_positions
+                .get(inserted_emby)
+                .copied()
+                .unwrap_or(merged.len())
+                .min(merged.len());
+            merged.insert(insert_at, entry);
+        }
+        self.home.latest = merged;
         let sections = 1 + self.home.latest.len();
         self.home.section = self.home.section.min(sections.saturating_sub(1));
         self.home_loading = false;

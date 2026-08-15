@@ -31,7 +31,7 @@ pub enum QueueItemKind {
 // server URL, playback sessionId, resolved source URL, and headers.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AudiobookshelfQueueItem {
     #[serde(rename = "libraryItemId")]
     pub library_item_id: String,

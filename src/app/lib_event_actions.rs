@@ -327,6 +327,22 @@ impl App {
             }
             return;
         }
+        if let LibEvent::AudiobookshelfShelfFetched {
+            generation,
+            library_id,
+            result,
+        } = ev
+        {
+            if !self.audiobookshelf_runtime.accepts(generation) {
+                return;
+            }
+            if let Ok(shelves) = result {
+                let items = App::newest_episodes_items(shelves);
+                self.audiobookshelf_shelf_cache.insert(library_id, items);
+                self.rebuild_audiobookshelf_latest();
+            }
+            return;
+        }
         match ev {
             LibEvent::Loaded {
                 lib_idx,
@@ -517,6 +533,7 @@ impl App {
             | LibEvent::AudiobookshelfShowsFetched { .. }
             | LibEvent::AudiobookshelfBooksFetched { .. }
             | LibEvent::AudiobookshelfBookDetailFetched { .. }
+            | LibEvent::AudiobookshelfShelfFetched { .. }
             | LibEvent::AudiobookshelfProgressAcknowledged(_)
             | LibEvent::AudiobookshelfBookProgressAcknowledged(_) => unreachable!(),
             LibEvent::AlbumArtistFetched { album_id, artist } => {
