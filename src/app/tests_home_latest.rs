@@ -117,6 +117,8 @@ fn apply_emby_bootstrap_merges_only_emby_entries() {
 
     // Pre-existing mixed Home: an Audiobookshelf and a Feeds entry alongside
     // an Emby entry (view id "movies") that the bootstrap will replace.
+    // Canonical pill order (Emby, Audiobookshelf, Feeds) is applied by the
+    // merge regardless of this arrival order.
     app.home.latest = vec![
         (
             "Podcasts".into(),
@@ -153,20 +155,20 @@ fn apply_emby_bootstrap_merges_only_emby_entries() {
         3,
         "Emby entry replaced, no duplicates"
     );
-    // Non-Emby entries untouched, in their original positions.
+    // Canonical pill order is Emby, then Audiobookshelf, then Feeds —
+    // regardless of arrival order.
     assert!(matches!(
         &app.home.latest[0].1,
-        HomeLatestSource::Audiobookshelf(lib) if lib == "abs-lib"
-    ));
-    assert!(matches!(&app.home.latest[1].1, HomeLatestSource::Feeds));
-    assert_eq!(app.home.latest[1].2.len(), 1);
-    // The Emby entry carries the fresh bootstrap data.
-    assert!(matches!(
-        &app.home.latest[2].1,
         HomeLatestSource::Emby(id) if id == "movies"
     ));
+    assert_eq!(app.home.latest[0].2.len(), 1);
+    assert_eq!(app.home.latest[0].2[0].display_name(), "New");
+    assert!(matches!(
+        &app.home.latest[1].1,
+        HomeLatestSource::Audiobookshelf(lib) if lib == "abs-lib"
+    ));
+    assert!(matches!(&app.home.latest[2].1, HomeLatestSource::Feeds));
     assert_eq!(app.home.latest[2].2.len(), 1);
-    assert_eq!(app.home.latest[2].2[0].display_name(), "New");
 }
 
 #[test]
@@ -619,4 +621,50 @@ fn empty_abs_library_section_is_still_a_selectable_pill() {
         app.home.section, 1,
         "selecting the empty pill keeps section 1"
     );
+}
+
+#[test]
+fn later_arrivals_do_not_reorder_provider_pills() {
+    // Canonical pill order is Emby (0), Audiobookshelf (1), Feeds (2),
+    // regardless of async completion order. A Feeds pill that lands before an
+    // Audiobookshelf shelf cache, or an Emby bootstrap that lands last, must
+    // not reorder the sections.
+    let mut app = make_app_stub();
+    app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: mbv_core::config::FeedKind::Audio,
+    }];
+
+    // Feeds populate first.
+    app.rebuild_feeds_latest();
+    // Audiobookshelf shelf arrives after: its pill lands after the Feeds one
+    // in arrival order, but the merge ranks Audiobookshelf before Feeds.
+    app.audiobookshelf_libraries = vec![abs_library("abs-pod", "podcast")];
+    app.rebuild_audiobookshelf_latest();
+    assert!(matches!(
+        &app.home.latest[0].1,
+        HomeLatestSource::Audiobookshelf(id) if id == "abs-pod"
+    ));
+    assert!(matches!(&app.home.latest[1].1, HomeLatestSource::Feeds));
+
+    // Emby bootstrap arriving last sorts before both.
+    app.apply_emby_bootstrap(EmbyBootstrap {
+        continue_items: Vec::new(),
+        views: Vec::new(),
+        latest: vec![EmbyLatestSection {
+            title: "Movies".into(),
+            view_id: "movies".into(),
+            items: vec![make_item("New", "Movie")],
+        }],
+    });
+    assert!(matches!(
+        &app.home.latest[0].1,
+        HomeLatestSource::Emby(id) if id == "movies"
+    ));
+    assert!(matches!(
+        &app.home.latest[1].1,
+        HomeLatestSource::Audiobookshelf(id) if id == "abs-pod"
+    ));
+    assert!(matches!(&app.home.latest[2].1, HomeLatestSource::Feeds));
 }

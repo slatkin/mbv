@@ -108,8 +108,12 @@ impl App {
         let overview_lines: Vec<String> = if overview.as_deref().is_none_or(str::is_empty) {
             Vec::new()
         } else {
+            // Cap long descriptions, with an ellipsis, so the hero doesn't
+            // grow unboundedly. The 200-char limit is on display width and
+            // includes the ellipsis itself.
+            let capped = trunc_str(&overview.unwrap_or_default(), 200);
             let ov_w = text_w.saturating_sub(4); // 2-col padding each side
-            wrap(&overview.unwrap_or_default(), ov_w)
+            wrap(&capped, ov_w)
                 .into_iter()
                 .map(|s| s.into_owned())
                 .collect()
@@ -407,6 +411,56 @@ mod tests {
         assert!(
             lines[2..].iter().all(|l| !l.contains("0:00")),
             "no fabricated duration: {out:?}"
+        );
+    }
+
+    /// Long ABS descriptions are capped at 200 display columns with an
+    /// ellipsis so the hero doesn't grow unboundedly.
+    #[test]
+    fn detail_truncates_long_description_with_ellipsis() {
+        let mut app = make_app_stub();
+        // The truncation limit is on the description width; build a much wider
+        // buffer item by item so the assertion below is about the ellipsis,
+        // not about a coincidental line-wrap boundary.
+        let long = "word ".repeat(80);
+        let item = QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+            library_item_id: "show-t".into(),
+            episode_id: "episode-t".into(),
+            title: "Episode t".into(),
+            show_title: Some("Podcast".into()),
+            author: None,
+            description: Some(long),
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        });
+        let backend = TestBackend::new(200, 40);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_home_latest_detail(f, Rect::new(0, 0, 200, 40), &item);
+        })
+        .unwrap();
+        let out = buffer_to_string(&term);
+        // Reassemble the description block's visible lines (title, show name,
+        // subtitle, blank separator precede it) joining trimmed rows.
+        let desc_region: String = out
+            .split('\n')
+            .skip(3)
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            desc_region.ends_with('\u{2026}'),
+            "long description ends with an ellipsis: ...{desc_region:?}"
+        );
+        assert!(
+            desc_region.chars().count() <= 201,
+            "description column budget is 200 + ellipsis, got {} chars",
+            desc_region.chars().count()
         );
     }
 

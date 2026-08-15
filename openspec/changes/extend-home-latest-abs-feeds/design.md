@@ -94,6 +94,14 @@ Home's pill bar and section list follow the Continue Watching convention: the pi
 
 Note this subsumes the pre-fix design's "reduced Latest pill count if a server exposes no `Newest Episodes` shelf" risk: the pill still renders (empty) rather than vanishing, so a library with no recency shelf remains discoverable on Home.
 
+### 13. Pills keep a canonical Emby → Audiobookshelf → Feeds ordering
+
+Sections arrive in async completion order — Feeds can populate before an Audiobookshelf shelf fetch lands, and Emby's bootstrap connection is deliberately last — so arrival order must not become display order. `merge_home_sections` ends by stably sorting `home.latest` by a canonical `home_latest_source_rank` (Emby=0, Audiobookshelf=1, Feeds=2), so the pill row always reads Emby libraries, then Audiobookshelf podcast libraries, then Feeds, regardless of which provider finished first. Same-source sections keep their existing relative order (e.g. two Emby views stay stable).
+
+### 14. Long descriptions truncate at 200 display columns with an ellipsis
+
+The generic Home hero caps an Audiobookshelf/Feed description with `trunc_str` at 200 display columns (including the ellipsis) before wrapping, so a long episode description never expands the hero unboundedly.
+
 ## Risks / Trade-offs
 
 - **Part 1 changes shared, load-bearing code**: the merge semantics of an existing async Emby-completion handler, and a startup gate every Home population path relies on. Mitigated by keying every writer's changes to `home.latest` by `HomeLatestSource` (Decision 2) so each writer only ever touches its own entries, and by reusing the existing `SetupGeneration` staleness guard each provider's completion handler already checks.

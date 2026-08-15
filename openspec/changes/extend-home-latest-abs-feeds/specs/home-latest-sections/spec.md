@@ -24,6 +24,16 @@ Home SHALL show one Latest pill per visible Emby library (existing behavior), on
 - **WHEN** a section in `home.latest` (an Emby view, an Audiobookshelf podcast library, or the Feeds pill) has zero items
 - **THEN** Home SHALL still display its pill and render an `(empty)` section rather than hiding the pill
 
+#### Scenario: Latest pills keep a canonical provider ordering
+
+- **WHEN** Emby libraries, Audiobookshelf podcast libraries, and the Feeds pill are all present, regardless of which provider populated first
+- **THEN** Home SHALL display the Emby library pills, then the Audiobookshelf podcast library pills, then the "Latest Feeds" pill, in that canonical order
+
+#### Scenario: A long Audiobookshelf description is truncated
+
+- **WHEN** a selected Audiobookshelf episode's description exceeds 200 display columns
+- **THEN** Home SHALL display it truncated to 200 columns ending in an ellipsis rather than growing the hero unboundedly
+
 ### Requirement: Latest pills populate and refresh independently of Emby's connection state
 
 Home's Audiobookshelf and Feeds Latest pills SHALL populate, refresh, and remain hideable via `hidden_latest` whether or not an Emby Service is configured, connecting, or reachable. A refresh of Home SHALL NOT fail, and SHALL NOT skip updating the Audiobookshelf or Feeds pills, solely because no Emby Service is configured or connected. Continue Watching MAY remain empty when no Emby Service is configured, since it stays Emby-only.

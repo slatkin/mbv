@@ -59,6 +59,8 @@
 - [x] 9.3 Wire cover-art loading for Audiobookshelf Home rows through the existing `images.rs` `ImageSource::Audiobookshelf` path.
 - [x] 9.4 Update `render/home.rs`'s pill-row and item-list dispatch to call the new generic renderer for non-Emby pills, keeping the existing Emby two-column/hero code path unchanged.
 - [x] 9.5 Remove the `!items.is_empty()` gate from `render_home_section_pills_row`, `render_home_list`, `home_new_sections`, and `home_section_is_valid` so every section in `home.latest` (Emby view, Audiobookshelf podcast library, Feeds) always renders its pill and an `(empty)` section when bare, matching the Continue Watching convention (Decision 12).
+- [x] 9.7 Sort `home.latest` by a canonical provider rank (Emby, Audiobookshelf, Feeds) at the end of `merge_home_sections`, so async completion order never reorders the pill row (Decision 13).
+- [x] 9.8 Truncate the generic Home hero's description to 200 display columns with an ellipsis before wrapping (Decision 14).
 
 ### 10. Verify Part 2
 

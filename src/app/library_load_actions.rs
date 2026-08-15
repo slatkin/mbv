@@ -613,5 +613,21 @@ pub(super) fn merge_home_sections(
             .min(merged.len());
         merged.insert(insert_at, (title, source, items, cursor));
     }
+    // Canonical pill order across providers regardless of arrival order:
+    // Emby views, then Audiobookshelf podcast libraries, then Feeds. The
+    // merge above preserves cursor positions, but async completion order
+    // (Feeds loading before an ABS shelf fetch, Emby bootstrapping last)
+    // would otherwise let sections observe arrival order instead. Stable so
+    // same-source sections keep their existing relative order.
+    merged.sort_by_key(|(_, source, _, _)| home_latest_source_rank(source));
     *latest = merged;
+}
+
+/// Pill ordering rank: Emby (0) before Audiobookshelf (1) before Feeds (2).
+pub(super) fn home_latest_source_rank(source: &HomeLatestSource) -> u8 {
+    match source {
+        HomeLatestSource::Emby(_) => 0,
+        HomeLatestSource::Audiobookshelf(_) => 1,
+        HomeLatestSource::Feeds => 2,
+    }
 }
