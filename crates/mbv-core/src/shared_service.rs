@@ -1,6 +1,6 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixListener;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -8,6 +8,7 @@ use crate::api::EmbyClient;
 use crate::shared_protocol::{SharedDataCmd, SharedDataEvent, SharedDataHello};
 use crate::shared_state::SharedDocumentKind;
 use crate::shared_worker::SharedStoreHandle;
+use crate::stream::SocketStream;
 
 /// Registry of active shared-data sessions, used for post-commit fan-out.
 struct SharedSession {
@@ -94,64 +95,6 @@ fn bind_shared_tls_acceptor(cert_path: &str, key_path: &str) -> Option<native_tl
     Some(acceptor)
 }
 
-trait SharedStream: std::io::Read + Write + Send + Sized + 'static {
-    fn set_read_timeout_stream(&self, timeout: Option<std::time::Duration>) -> std::io::Result<()>;
-    fn set_write_timeout_stream(&self, timeout: Option<std::time::Duration>)
-        -> std::io::Result<()>;
-    fn set_nonblocking_stream(&self) -> std::io::Result<()>;
-}
-
-impl SharedStream for UnixStream {
-    fn set_read_timeout_stream(&self, timeout: Option<std::time::Duration>) -> std::io::Result<()> {
-        self.set_read_timeout(timeout)
-    }
-
-    fn set_write_timeout_stream(
-        &self,
-        timeout: Option<std::time::Duration>,
-    ) -> std::io::Result<()> {
-        self.set_write_timeout(timeout)
-    }
-
-    fn set_nonblocking_stream(&self) -> std::io::Result<()> {
-        self.set_nonblocking(true)
-    }
-}
-
-impl SharedStream for std::net::TcpStream {
-    fn set_read_timeout_stream(&self, timeout: Option<std::time::Duration>) -> std::io::Result<()> {
-        self.set_read_timeout(timeout)
-    }
-
-    fn set_write_timeout_stream(
-        &self,
-        timeout: Option<std::time::Duration>,
-    ) -> std::io::Result<()> {
-        self.set_write_timeout(timeout)
-    }
-
-    fn set_nonblocking_stream(&self) -> std::io::Result<()> {
-        self.set_nonblocking(true)
-    }
-}
-
-impl SharedStream for native_tls::TlsStream<std::net::TcpStream> {
-    fn set_read_timeout_stream(&self, timeout: Option<std::time::Duration>) -> std::io::Result<()> {
-        self.get_ref().set_read_timeout(timeout)
-    }
-
-    fn set_write_timeout_stream(
-        &self,
-        timeout: Option<std::time::Duration>,
-    ) -> std::io::Result<()> {
-        self.get_ref().set_write_timeout(timeout)
-    }
-
-    fn set_nonblocking_stream(&self) -> std::io::Result<()> {
-        self.get_ref().set_nonblocking(true)
-    }
-}
-
 /// Start the shared-data service. Returns the advertised TCP port (zero for a
 /// Unix socket), or `None` if hosting is disabled or the listener cannot bind.
 pub fn start_shared_service(
@@ -206,7 +149,7 @@ pub fn start_shared_service(
                 if let Some(acceptor) = &acceptor {
                     match acceptor.accept(stream) {
                         Ok(tls_stream) => spawn_shared_client_handler(
-                            tls_stream,
+                            SocketStream::Tls(tls_stream),
                             registry.clone(),
                             client.clone(),
                             store.clone(),
@@ -218,7 +161,7 @@ pub fn start_shared_service(
                     }
                 } else {
                     spawn_shared_client_handler(
-                        stream,
+                        SocketStream::Tcp(stream),
                         registry.clone(),
                         client.clone(),
                         store.clone(),
@@ -244,7 +187,7 @@ pub fn start_shared_service(
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 spawn_shared_client_handler(
-                    stream,
+                    SocketStream::Unix(stream),
                     registry.clone(),
                     client.clone(),
                     store.clone(),
@@ -257,24 +200,22 @@ pub fn start_shared_service(
     Some(advertised_port)
 }
 
-fn spawn_shared_client_handler<S>(
-    stream: S,
+fn spawn_shared_client_handler(
+    stream: SocketStream,
     registry: SharedSessionRegistry,
     client: Arc<Mutex<EmbyClient>>,
     store: SharedStoreHandle,
-) where
-    S: SharedStream,
-{
+) {
     std::thread::spawn(move || {
         let reader = Arc::new(Mutex::new(BufReader::new(stream)));
         let stream_ref = reader.lock().unwrap();
         if stream_ref
             .get_ref()
-            .set_read_timeout_stream(Some(std::time::Duration::from_secs(10)))
+            .set_read_timeout(Some(std::time::Duration::from_secs(10)))
             .is_err()
             || stream_ref
                 .get_ref()
-                .set_write_timeout_stream(Some(std::time::Duration::from_secs(5)))
+                .set_write_timeout(Some(std::time::Duration::from_secs(5)))
                 .is_err()
         {
             return;
@@ -365,13 +306,7 @@ fn spawn_shared_client_handler<S>(
             .unwrap_or_default(),
         );
 
-        if reader
-            .lock()
-            .unwrap()
-            .get_ref()
-            .set_nonblocking_stream()
-            .is_err()
-        {
+        if reader.lock().unwrap().get_ref().set_nonblocking().is_err() {
             return;
         }
 
@@ -618,8 +553,8 @@ fn spawn_shared_client_handler<S>(
     });
 }
 
-fn read_shared_line<S: SharedStream>(
-    reader: &Arc<Mutex<BufReader<S>>>,
+fn read_shared_line(
+    reader: &Arc<Mutex<BufReader<SocketStream>>>,
     line: &mut String,
 ) -> Option<std::io::Result<String>> {
     let result = reader.lock().unwrap().read_line(line);
@@ -637,8 +572,8 @@ fn read_shared_line<S: SharedStream>(
 /// `write_all`/`writeln!` cannot be retried after `WouldBlock` because they may
 /// have already written part of the line. Keep the offset explicitly so a
 /// large snapshot is resumed rather than dropped or duplicated.
-fn write_shared_line<S: SharedStream>(
-    writer: &Arc<Mutex<BufReader<S>>>,
+fn write_shared_line(
+    writer: &Arc<Mutex<BufReader<SocketStream>>>,
     line: &str,
 ) -> std::io::Result<()> {
     let mut message = line.as_bytes().to_vec();
@@ -699,6 +634,7 @@ fn fan_out_notification(
 #[cfg(test)]
 mod tests {
     use super::read_shared_line;
+    use crate::stream::SocketStream;
     use std::io::Write;
     use std::os::unix::net::UnixListener;
     use std::sync::{Arc, Mutex};
@@ -711,7 +647,9 @@ mod tests {
         let client = std::os::unix::net::UnixStream::connect(&path).unwrap();
         let (server, _) = listener.accept().unwrap();
         server.set_nonblocking(true).unwrap();
-        let reader = Arc::new(Mutex::new(std::io::BufReader::new(server)));
+        let reader = Arc::new(Mutex::new(std::io::BufReader::new(SocketStream::Unix(
+            server,
+        ))));
         let mut pending = String::new();
 
         let mut client = client;

@@ -1,66 +1,6 @@
-enum MaybeTls {
-    Plain(TcpStream),
-    Unix(UnixStream),
-    Tls(native_tls::TlsStream<TcpStream>),
-}
-
 const SHARED_DATA_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 const SHARED_DATA_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const SHARED_DATA_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(15);
-
-impl std::io::Read for MaybeTls {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        match self {
-            Self::Plain(s) => s.read(buf),
-            Self::Unix(s) => s.read(buf),
-            Self::Tls(s) => s.read(buf),
-        }
-    }
-}
-
-impl std::io::Write for MaybeTls {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        match self {
-            Self::Plain(s) => s.write(buf),
-            Self::Unix(s) => s.write(buf),
-            Self::Tls(s) => s.write(buf),
-        }
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        match self {
-            Self::Plain(s) => s.flush(),
-            Self::Unix(s) => s.flush(),
-            Self::Tls(s) => s.flush(),
-        }
-    }
-}
-
-impl MaybeTls {
-    fn set_read_timeout(&self, dur: Option<Duration>) -> std::io::Result<()> {
-        match self {
-            Self::Plain(s) => s.set_read_timeout(dur),
-            Self::Unix(s) => s.set_read_timeout(dur),
-            Self::Tls(s) => s.get_ref().set_read_timeout(dur),
-        }
-    }
-
-    fn set_write_timeout(&self, dur: Option<Duration>) -> std::io::Result<()> {
-        match self {
-            Self::Plain(s) => s.set_write_timeout(dur),
-            Self::Unix(s) => s.set_write_timeout(dur),
-            Self::Tls(s) => s.get_ref().set_write_timeout(dur),
-        }
-    }
-
-    fn set_nonblocking(&self) -> std::io::Result<()> {
-        match self {
-            Self::Plain(s) => s.set_nonblocking(true),
-            Self::Unix(s) => s.set_nonblocking(true),
-            Self::Tls(s) => s.get_ref().set_nonblocking(true),
-        }
-    }
-}
 
 fn run_client_worker<S>(
     mut reader: BufReader<S>,

@@ -1,6 +1,6 @@
 use std::io::{BufRead, BufReader, Write};
-use std::net::{Shutdown, TcpListener, TcpStream};
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::net::TcpListener;
+use std::os::unix::net::UnixListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -13,6 +13,7 @@ use crate::ctrl::{
 };
 use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
+use crate::stream::SocketStream;
 use crate::ws::WsEvent;
 
 fn bind_ctrl_listener() -> Option<UnixListener> {
@@ -76,31 +77,6 @@ enum CtrlOutbound {
     /// only after all earlier events have been written and flushed to the
     /// socket, so process exit cannot discard a queued shutdown notice.
     Flush(mpsc::Sender<()>),
-}
-
-trait CtrlStream: std::io::Read + Write + Send + Sized + 'static {
-    fn try_clone_stream(&self) -> std::io::Result<Self>;
-    fn shutdown_stream(&self);
-}
-
-impl CtrlStream for UnixStream {
-    fn try_clone_stream(&self) -> std::io::Result<Self> {
-        self.try_clone()
-    }
-
-    fn shutdown_stream(&self) {
-        let _ = self.shutdown(Shutdown::Both);
-    }
-}
-
-impl CtrlStream for TcpStream {
-    fn try_clone_stream(&self) -> std::io::Result<Self> {
-        self.try_clone()
-    }
-
-    fn shutdown_stream(&self) {
-        let _ = self.shutdown(Shutdown::Both);
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

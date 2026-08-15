@@ -1,11 +1,12 @@
 #[cfg(test)]
 mod tests {
+    use std::io::Read;
     include!("remote_player_tests.rs");
     include!("remote_player_tests_socket.rs");
 }
 
 use std::collections::HashMap;
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
@@ -19,59 +20,9 @@ use crate::ctrl::{
     UnifiedQueueStateData,
 };
 use crate::player::{PlayerEvent, PlayerStatus};
+use crate::stream::SocketStream;
 
 use crate::remote_player::RemotePlayer;
-
-pub(crate) enum ControlStream {
-    Unix(UnixStream),
-    Tcp(TcpStream),
-}
-
-impl ControlStream {
-    pub(crate) fn try_clone(&self) -> io::Result<Self> {
-        match self {
-            Self::Unix(stream) => stream.try_clone().map(Self::Unix),
-            Self::Tcp(stream) => stream.try_clone().map(Self::Tcp),
-        }
-    }
-
-    /// Shuts down the underlying socket for both reads and writes (#233).
-    /// Unlike dropping a `ControlStream` clone -- which only closes *that*
-    /// clone's fd duplicate -- `shutdown` acts on the shared underlying
-    /// socket in the kernel, so it unblocks a concurrent blocking `read()`
-    /// on any other clone of the same connection immediately.
-    pub(crate) fn shutdown(&self) -> io::Result<()> {
-        match self {
-            Self::Unix(stream) => stream.shutdown(std::net::Shutdown::Both),
-            Self::Tcp(stream) => stream.shutdown(std::net::Shutdown::Both),
-        }
-    }
-}
-
-impl Read for ControlStream {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        match self {
-            Self::Unix(stream) => stream.read(buf),
-            Self::Tcp(stream) => stream.read(buf),
-        }
-    }
-}
-
-impl Write for ControlStream {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        match self {
-            Self::Unix(stream) => stream.write(buf),
-            Self::Tcp(stream) => stream.write(buf),
-        }
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        match self {
-            Self::Unix(stream) => stream.flush(),
-            Self::Tcp(stream) => stream.flush(),
-        }
-    }
-}
 
 const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 
@@ -148,14 +99,14 @@ impl DaemonEndpoint {
         Ok(Self::Tcp(SocketAddr::from((ip, port))))
     }
 
-    pub(crate) fn connect_stream(&self) -> Result<ControlStream, String> {
+    pub(crate) fn connect_stream(&self) -> Result<SocketStream, String> {
         match self {
             Self::Local => {
                 let path = PathBuf::from(crate::config::control_socket_path());
                 let start = std::time::Instant::now();
                 loop {
                     match UnixStream::connect(&path) {
-                        Ok(stream) => return Ok(ControlStream::Unix(stream)),
+                        Ok(stream) => return Ok(SocketStream::Unix(stream)),
                         Err(e) => {
                             if start.elapsed() >= LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT {
                                 return Err(format!(
@@ -168,10 +119,10 @@ impl DaemonEndpoint {
                 }
             }
             Self::Unix(path) => UnixStream::connect(path)
-                .map(ControlStream::Unix)
+                .map(SocketStream::Unix)
                 .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}")),
             Self::Tcp(addr) => TcpStream::connect_timeout(addr, DAEMON_TCP_CONNECT_TIMEOUT)
-                .map(ControlStream::Tcp)
+                .map(SocketStream::Tcp)
                 .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}")),
         }
     }
@@ -203,9 +154,9 @@ impl std::fmt::Display for DaemonEndpoint {
 /// directly against a real stalled `TcpListener` without going through
 /// `connect_endpoint`'s full setup.
 pub(crate) fn perform_handshake<F>(
-    stream: ControlStream,
+    stream: SocketStream,
     load_control_token: F,
-) -> Result<(BufReader<ControlStream>, CtrlEvent, CtrlCompatibility), String>
+) -> Result<(BufReader<SocketStream>, CtrlEvent, CtrlCompatibility), String>
 where
     F: FnOnce() -> Result<String, String>,
 {
@@ -287,7 +238,7 @@ pub fn signal_local_daemon_service_setup(
         .set_read_timeout(Some(Duration::from_secs(6)))
         .map_err(|_| "restart required (cannot read local daemon ctrl)".to_string())?;
     let (mut reader, _state, _compatibility) =
-        perform_handshake(ControlStream::Unix(stream), || {
+        perform_handshake(SocketStream::Unix(stream), || {
             crate::config::load_or_create_control_credential()
         })
         .map_err(|_| "restart required (local daemon handshake failed)".to_string())?;

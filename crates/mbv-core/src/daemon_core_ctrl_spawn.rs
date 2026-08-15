@@ -1,15 +1,13 @@
-fn spawn_ctrl_client<S>(
-    stream: S,
+fn spawn_ctrl_client(
+    stream: SocketStream,
     transport: CtrlTransport,
     merged_tx: mpsc::Sender<DaemonEvent>,
     ctrl_clients: ClientRegistry,
     control_credential: Option<String>,
     player_status: Arc<Mutex<crate::player::PlayerStatus>>,
     shared_queue: SharedQueueState,
-) where
-    S: CtrlStream,
-{
-    let Ok(writer_stream) = stream.try_clone_stream() else {
+) {
+    let Ok(writer_stream) = stream.try_clone() else {
         return;
     };
     let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
@@ -39,7 +37,7 @@ fn spawn_ctrl_client<S>(
                 }
             }
         }
-        w.shutdown_stream();
+        let _ = w.shutdown();
     });
     std::thread::spawn(move || {
         let reader = BufReader::new(stream);
