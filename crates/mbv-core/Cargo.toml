@@ -20,4 +20,3 @@ uuid.workspace = true
 tungstenite.workspace = true
 log.workspace = true
 libc.workspace = true
-human_name.workspace = true

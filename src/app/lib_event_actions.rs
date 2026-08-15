@@ -213,7 +213,7 @@ impl App {
                 if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
                     match result {
                         Ok(page) => {
-                            state.append_page_books(page.page, page.limit, page.total, page.items);
+                            state.append_page_books(page.page, page.total, page.items);
                             next_page = state.needs_page();
                             if !state.detail_loading {
                                 selected_detail = state.selected_id.clone();

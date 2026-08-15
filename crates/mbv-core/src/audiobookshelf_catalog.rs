@@ -104,12 +104,14 @@ pub struct AudiobookshelfBookProgress {
     pub is_finished: bool,
 }
 
-/// Surname of the first-listed author, falling back to the raw credit when
-/// `human_name` cannot extract one.
+/// Surname of the first-listed author: the final title-cased whitespace token,
+/// falling back to the raw credit when nothing can be extracted.
 pub fn audiobook_author_sort_key(name: &str) -> String {
-    human_name::Name::parse(name)
-        .map(|n| n.surname().to_owned())
-        .unwrap_or_else(|| name.to_string())
+    let Some(token) = name.split_whitespace().next_back() else {
+        return name.to_string();
+    };
+    let first = token.chars().next().unwrap_or(' ');
+    first.to_uppercase().collect::<String>() + &token[first.len_utf8()..]
 }
 
 /// The full raw author credit for display: the `authors` list joined, else the

@@ -300,13 +300,7 @@ impl AudiobookshelfBookBrowseState {
         }
     }
 
-    pub fn append_page_books(
-        &mut self,
-        page: usize,
-        limit: usize,
-        total: usize,
-        books: Vec<AudiobookshelfBook>,
-    ) {
+    pub fn append_page_books(&mut self, page: usize, total: usize, books: Vec<AudiobookshelfBook>) {
         self.loading_pages.remove(&page);
         self.total = total;
         self.next_page = self.next_page.max(page + 1);
@@ -329,7 +323,6 @@ impl AudiobookshelfBookBrowseState {
         if self.selected_id.is_none() && !self.books.is_empty() {
             self.select(0);
         }
-        let _ = limit;
     }
 
     pub fn needs_page(&self) -> Option<usize> {
@@ -514,7 +507,6 @@ mod tests {
         let mut state = AudiobookshelfBookBrowseState::new(library());
         state.append_page_books(
             0,
-            20,
             3,
             vec![
                 book("c", "Title C", "Zelda Author"),

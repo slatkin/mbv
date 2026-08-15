@@ -519,9 +519,6 @@ impl App {
                 );
             }
             PlayerEvent::AudiobookshelfBookProgress(ev) => {
-                // Queue-slot reconciliation only until the book browse-state
-                // progress map lands (book tab, task 3.x); the same
-                // generation-gate reasoning as the episode arm applies.
                 self.reconcile_audiobookshelf_book_progress(
                     &ev.library_item_id,
                     ev.position_ticks,

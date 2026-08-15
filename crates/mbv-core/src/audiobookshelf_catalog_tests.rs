@@ -109,9 +109,13 @@ fn auth_failures_are_classified_and_errors_redact_credentials() {
 }
 
 #[test]
-fn surname_extraction_uses_human_name_and_falls_back_to_raw_credit() {
+fn surname_extraction_takes_last_token_and_falls_back_to_raw_credit() {
     assert_eq!(audiobook_author_sort_key("Tamora Pierce"), "Pierce");
-    assert_eq!(audiobook_author_sort_key("Ursula K. Le Guin"), "Le Guin");
+    assert_eq!(
+        audiobook_author_sort_key("Ursula K. Le Guin"),
+        "Guin",
+        "the final title-cased whitespace token is the sort surname"
+    );
     assert_eq!(
         audiobook_author_sort_key(""),
         "",
@@ -128,7 +132,7 @@ fn multi_author_sort_uses_first_listed_surname_only() {
     assert_eq!(
         first_listed_author_sort_key("lee child"),
         "Child",
-        "case-insensitive human_name surname extraction"
+        "the surname is title-cased regardless of the credit's cashing"
     );
 }
 
