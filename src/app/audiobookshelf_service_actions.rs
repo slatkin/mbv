@@ -344,6 +344,24 @@ impl App {
                         }
                         }
                     });
+                let (book_sender, book_receiver) = std::sync::mpsc::channel();
+                let context = context.with_book_progress_updates(book_sender);
+                let lib_tx = self.lib_tx.clone();
+                let _ =
+                    std::thread::spawn(move || {
+                        for update in book_receiver {
+                            if lib_tx
+                            .send(
+                                super::types_events::LibEvent::AudiobookshelfBookProgressAcknowledged(
+                                    update,
+                                ),
+                            )
+                            .is_err()
+                        {
+                            break;
+                        }
+                        }
+                    });
                 context
             })
         });

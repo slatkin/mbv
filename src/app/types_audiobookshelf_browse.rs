@@ -1,8 +1,31 @@
 use mbv_core::audiobookshelf::{
+    AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookProgress, AudiobookshelfChapter,
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
     AudiobookshelfShow,
 };
 use std::collections::{HashMap, HashSet};
+
+/// The resolved browse kind for an Audiobookshelf library tab, derived once
+/// from the library's `media_type` at the browse-dispatch seam. Downstream
+/// renderers/input handlers branch on this value and never re-read
+/// `media_type` per action (service-browse-dispatch capability).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AudiobookshelfBrowseKind {
+    Podcast,
+    Book,
+}
+
+impl AudiobookshelfBrowseKind {
+    /// `media_type` values other than `"book"` resolve to Podcast, matching
+    /// the pre-book behavior for the only two media types ABS exposes.
+    pub(super) fn from_media_type(media_type: &str) -> Self {
+        if media_type == "book" {
+            Self::Book
+        } else {
+            Self::Podcast
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum AudiobookshelfEpisodeFilter {
@@ -183,6 +206,144 @@ impl AudiobookshelfBrowseState {
     pub fn needs_page(&self) -> Option<usize> {
         (self.shows.len() < self.total && self.loading_pages.is_empty()).then_some(self.next_page)
     }
+}
+
+/// Book-shaped browse state: the author-surname-grouped book list, the
+/// selected book's chapter/audio-file detail, and book progress keyed by
+/// `library_item_id` only. Parallel to `AudiobookshelfBrowseState`; which one
+/// a library tab uses is decided once by `AudiobookshelfBrowseKind`.
+#[derive(Debug, Clone)]
+pub(super) struct AudiobookshelfBookBrowseState {
+    pub library: AudiobookshelfLibrary,
+    pub books: Vec<AudiobookshelfBook>,
+    pub total: usize,
+    pub next_page: usize,
+    pub loading_pages: HashSet<usize>,
+    pub selected_id: Option<String>,
+    pub error: Option<String>,
+    pub detail_cache: HashMap<String, (Vec<AudiobookshelfChapter>, Vec<AudiobookshelfAudioFile>)>,
+    pub detail_loading: bool,
+    pub progress: HashMap<String, AudiobookshelfBookProgress>,
+    pub chapter_selection: Option<usize>,
+    pub scroll: usize,
+}
+
+impl AudiobookshelfBookBrowseState {
+    pub fn new(library: AudiobookshelfLibrary) -> Self {
+        Self {
+            library,
+            books: Vec::new(),
+            total: 0,
+            next_page: 0,
+            loading_pages: HashSet::new(),
+            selected_id: None,
+            error: None,
+            detail_cache: HashMap::new(),
+            detail_loading: false,
+            progress: HashMap::new(),
+            chapter_selection: None,
+            scroll: 0,
+        }
+    }
+
+    pub fn cursor(&self) -> usize {
+        self.selected_id
+            .as_ref()
+            .and_then(|id| {
+                self.books
+                    .iter()
+                    .position(|book| &book.library_item_id == id)
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn select(&mut self, cursor: usize) {
+        self.selected_id = self
+            .books
+            .get(cursor)
+            .map(|book| book.library_item_id.clone());
+        self.chapter_selection = None;
+    }
+
+    pub fn selected_book(&self) -> Option<&AudiobookshelfBook> {
+        let id = self.selected_id.as_deref()?;
+        self.books.iter().find(|book| book.library_item_id == id)
+    }
+
+    /// The selected book's chapter rows, falling back to its `audioFiles`
+    /// rows when `chapters[]` is empty (book-browsing spec: never an empty
+    /// or broken list state).
+    pub fn visible_rows(&self, id: &str) -> Vec<BookRow> {
+        let Some(detail) = self.detail_cache.get(id) else {
+            return Vec::new();
+        };
+        let (chapters, audio_files) = detail;
+        if !chapters.is_empty() {
+            chapters
+                .iter()
+                .map(|chapter| BookRow::Chapter {
+                    start: chapter.start,
+                    end: chapter.end,
+                    title: chapter.title.clone(),
+                })
+                .collect()
+        } else if !audio_files.is_empty() {
+            audio_files
+                .iter()
+                .map(|file| BookRow::AudioFile {
+                    index: file.index,
+                    duration: file.duration,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    pub fn append_page_books(
+        &mut self,
+        page: usize,
+        limit: usize,
+        total: usize,
+        books: Vec<AudiobookshelfBook>,
+    ) {
+        self.loading_pages.remove(&page);
+        self.total = total;
+        self.next_page = self.next_page.max(page + 1);
+        for book in books {
+            if !self
+                .books
+                .iter()
+                .any(|existing| existing.library_item_id == book.library_item_id)
+            {
+                self.books.push(book);
+            }
+        }
+        // Author-surname grouping: stable by surname, then title.
+        self.books.sort_by(|left, right| {
+            left.author_sort_key
+                .to_lowercase()
+                .cmp(&right.author_sort_key.to_lowercase())
+                .then_with(|| left.title.to_lowercase().cmp(&right.title.to_lowercase()))
+        });
+        if self.selected_id.is_none() && !self.books.is_empty() {
+            self.select(0);
+        }
+        let _ = limit;
+    }
+
+    pub fn needs_page(&self) -> Option<usize> {
+        (self.books.len() < self.total && self.loading_pages.is_empty()).then_some(self.next_page)
+    }
+}
+
+/// One renderable row beneath the book hero: a chapter (absolute seekable
+/// range on the merged timeline) or an audio file (used when chapters are
+/// absent). Both carry provider-native identity; neither is an episode shape.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) enum BookRow {
+    Chapter { start: f64, end: f64, title: String },
+    AudioFile { index: usize, duration: f64 },
 }
 
 fn compare_publication_dates(left: Option<&str>, right: Option<&str>) -> std::cmp::Ordering {

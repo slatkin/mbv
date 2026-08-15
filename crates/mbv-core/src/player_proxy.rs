@@ -226,6 +226,7 @@ impl PlayerProxy {
                         }
                         QueueItem::Feed(entry) => r.play_feed(entry.clone()),
                         QueueItem::Audiobookshelf(_) => false,
+                        QueueItem::AudiobookshelfBook(_) => false,
                     }
                 } else if items.iter().any(|item| !matches!(item, QueueItem::Emby(_))) {
                     // A legacy peer cannot represent a mixed canonical queue

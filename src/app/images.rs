@@ -19,6 +19,13 @@ pub(super) fn audiobookshelf_cover_cache_key(server: &str, id: &str, suffix: &st
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:cover:{id}:{suffix}")
 }
 
+/// Cache key for an Audiobookshelf book cover. Distinct from the podcast
+/// cover key (`:book:`, not `:cover:`) so a book and a podcast sharing an
+/// id never share artwork state (book-browsing spec).
+pub(super) fn audiobookshelf_book_cover_cache_key(server: &str, id: &str, suffix: &str) -> String {
+    format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:bookcover:{id}:{suffix}")
+}
+
 const MAX_IMAGE_FETCHES: usize = 6;
 const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 
@@ -304,11 +311,31 @@ impl App {
     }
 
     pub(super) fn fetch_audiobookshelf_cover(&mut self, server_url: String, item_id: String) {
+        let cache_key =
+            audiobookshelf_cover_cache_key(&server_url, &item_id, self.current_protocol_suffix());
+        self.fetch_audiobookshelf_image(cache_key, server_url, item_id);
+    }
+
+    /// Book-shaped sibling of `fetch_audiobookshelf_cover` using the isolated
+    /// `:bookcover:` cache key.
+    pub(super) fn fetch_audiobookshelf_book_cover(&mut self, server_url: String, item_id: String) {
+        let cache_key = audiobookshelf_book_cover_cache_key(
+            &server_url,
+            &item_id,
+            self.current_protocol_suffix(),
+        );
+        self.fetch_audiobookshelf_image(cache_key, server_url, item_id);
+    }
+
+    fn fetch_audiobookshelf_image(
+        &mut self,
+        cache_key: String,
+        server_url: String,
+        item_id: String,
+    ) {
         if !self.image_protocol_enabled {
             return;
         }
-        let cache_key =
-            audiobookshelf_cover_cache_key(&server_url, &item_id, self.current_protocol_suffix());
         if self.card_image_loading.contains(&cache_key)
             || self.card_image_states.contains_key(&cache_key)
         {

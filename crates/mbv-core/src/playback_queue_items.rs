@@ -12,6 +12,9 @@ pub enum QueueItemContentId {
         library_item_id: String,
         episode_id: String,
     },
+    AudiobookshelfBook {
+        library_item_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -19,6 +22,7 @@ pub enum QueueItemKind {
     Emby,
     Feed,
     Audiobookshelf,
+    AudiobookshelfBook,
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +66,51 @@ impl AudiobookshelfQueueItem {
         QueueItemContentId::Audiobookshelf {
             library_item_id: self.library_item_id.clone(),
             episode_id: self.episode_id.clone(),
+        }
+    }
+
+    pub fn resume_seconds(&self) -> f64 {
+        if crate::api::should_resume(self.position_ticks, self.duration_ticks.unwrap_or(0) as i64) {
+            self.position_ticks as f64 / crate::api::TICKS_PER_SECOND as f64
+        } else {
+            0.0
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AudiobookshelfBookQueueItem — the book-shaped queue snapshot: content
+// identity, presentation, progress, and completion keyed by `library_item_id`
+// only. No episode identity. Excludes credentials, server URL, playback
+// sessionId, resolved source URLs, and headers.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AudiobookshelfBookQueueItem {
+    #[serde(rename = "libraryItemId")]
+    pub library_item_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default)]
+    pub duration_ticks: Option<u64>,
+    /// Playback position in ticks. Zero means start from the beginning.
+    #[serde(default)]
+    pub position_ticks: i64,
+    #[serde(default)]
+    pub played: bool,
+    /// Mirrors Audiobookshelf `is_finished` (distinct from played state).
+    #[serde(default)]
+    pub is_finished: bool,
+    /// Service-scoped artwork identity (cover path, not server URL).
+    #[serde(default)]
+    pub cover_path: Option<String>,
+}
+
+impl AudiobookshelfBookQueueItem {
+    pub fn content_id(&self) -> QueueItemContentId {
+        QueueItemContentId::AudiobookshelfBook {
+            library_item_id: self.library_item_id.clone(),
         }
     }
 
@@ -136,6 +185,8 @@ pub enum QueueItem {
     Feed(FeedEntry),
     #[serde(rename = "Audiobookshelf")]
     Audiobookshelf(AudiobookshelfQueueItem),
+    #[serde(rename = "AudiobookshelfBook")]
+    AudiobookshelfBook(AudiobookshelfBookQueueItem),
 }
 
 /// Custom deserializer for `QueueItem` that accepts both the tagged form
@@ -168,9 +219,14 @@ impl<'de> serde::Deserialize<'de> for QueueItem {
                         AudiobookshelfQueueItem::deserialize(value).map_err(de::Error::custom)?;
                     Ok(QueueItem::Audiobookshelf(ep))
                 }
+                "AudiobookshelfBook" => {
+                    let book = AudiobookshelfBookQueueItem::deserialize(value)
+                        .map_err(de::Error::custom)?;
+                    Ok(QueueItem::AudiobookshelfBook(book))
+                }
                 other => Err(de::Error::unknown_variant(
                     other,
-                    &["Emby", "Feed", "Audiobookshelf"],
+                    &["Emby", "Feed", "Audiobookshelf", "AudiobookshelfBook"],
                 )),
             };
         }
@@ -187,6 +243,7 @@ impl QueueItem {
             QueueItem::Emby(item) => &item.name,
             QueueItem::Feed(entry) => &entry.title,
             QueueItem::Audiobookshelf(ep) => &ep.title,
+            QueueItem::AudiobookshelfBook(book) => &book.title,
         }
     }
 
@@ -201,6 +258,7 @@ impl QueueItem {
             }
             QueueItem::Feed(entry) => entry.duration_ticks,
             QueueItem::Audiobookshelf(ep) => ep.duration_ticks,
+            QueueItem::AudiobookshelfBook(book) => book.duration_ticks,
         }
     }
 
@@ -212,7 +270,7 @@ impl QueueItem {
                 Some(m) if m.starts_with("video/") => "Video",
                 _ => entry.feed_kind.map(|k| k.as_str()).unwrap_or("Video"),
             },
-            QueueItem::Audiobookshelf(_) => "Audio",
+            QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => "Audio",
         }
     }
 
@@ -224,7 +282,7 @@ impl QueueItem {
                 Some(m) if m.starts_with("video/") => false,
                 _ => entry.feed_kind == Some(crate::config::FeedKind::Audio),
             },
-            QueueItem::Audiobookshelf(_) => true,
+            QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => true,
         }
     }
 
@@ -236,7 +294,7 @@ impl QueueItem {
                 Some(m) if m.starts_with("audio/") => false,
                 _ => entry.feed_kind == Some(crate::config::FeedKind::Video),
             },
-            QueueItem::Audiobookshelf(_) => false,
+            QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => false,
         }
     }
 
@@ -251,6 +309,7 @@ impl QueueItem {
             QueueItem::Emby(_item) => None,
             QueueItem::Feed(_entry) => None,
             QueueItem::Audiobookshelf(ep) => ep.cover_path.as_deref(),
+            QueueItem::AudiobookshelfBook(book) => book.cover_path.as_deref(),
         }
     }
 
@@ -262,6 +321,7 @@ impl QueueItem {
             QueueItem::Emby(item) => &item.id,
             QueueItem::Feed(entry) => &entry.guid,
             QueueItem::Audiobookshelf(ep) => &ep.episode_id,
+            QueueItem::AudiobookshelfBook(book) => &book.library_item_id,
         }
     }
 
@@ -276,6 +336,7 @@ impl QueueItem {
                     ep.title.clone()
                 }
             }
+            QueueItem::AudiobookshelfBook(book) => book.title.clone(),
         }
     }
 
@@ -284,6 +345,7 @@ impl QueueItem {
             QueueItem::Emby(item) => item.runtime_ticks,
             QueueItem::Feed(entry) => entry.duration_ticks.unwrap_or(0) as i64,
             QueueItem::Audiobookshelf(ep) => ep.duration_ticks.unwrap_or(0) as i64,
+            QueueItem::AudiobookshelfBook(book) => book.duration_ticks.unwrap_or(0) as i64,
         }
     }
 
@@ -292,6 +354,7 @@ impl QueueItem {
             QueueItem::Emby(item) => item.playback_position_ticks,
             QueueItem::Feed(entry) => entry.position_ticks,
             QueueItem::Audiobookshelf(ep) => ep.position_ticks,
+            QueueItem::AudiobookshelfBook(book) => book.position_ticks,
         }
     }
 
@@ -300,6 +363,7 @@ impl QueueItem {
             QueueItem::Emby(item) => item.played,
             QueueItem::Feed(entry) => entry.played,
             QueueItem::Audiobookshelf(ep) => ep.played || ep.is_finished,
+            QueueItem::AudiobookshelfBook(book) => book.played || book.is_finished,
         }
     }
 
@@ -327,6 +391,13 @@ impl QueueItem {
         }
     }
 
+    pub fn as_audiobookshelf_book(&self) -> Option<&AudiobookshelfBookQueueItem> {
+        match self {
+            QueueItem::AudiobookshelfBook(book) => Some(book),
+            _ => None,
+        }
+    }
+
     pub fn is_emby(&self) -> bool {
         matches!(self, QueueItem::Emby(_))
     }
@@ -339,11 +410,21 @@ impl QueueItem {
         matches!(self, QueueItem::Audiobookshelf(_))
     }
 
+    pub fn is_audiobookshelf_book(&self) -> bool {
+        matches!(self, QueueItem::AudiobookshelfBook(_))
+    }
+
+    /// `true` for either Audiobookshelf queue-item shape (episode or book).
+    pub fn is_audiobookshelf_any(&self) -> bool {
+        self.is_audiobookshelf() || self.is_audiobookshelf_book()
+    }
+
     pub fn kind(&self) -> QueueItemKind {
         match self {
             QueueItem::Emby(_) => QueueItemKind::Emby,
             QueueItem::Feed(_) => QueueItemKind::Feed,
             QueueItem::Audiobookshelf(_) => QueueItemKind::Audiobookshelf,
+            QueueItem::AudiobookshelfBook(_) => QueueItemKind::AudiobookshelfBook,
         }
     }
 
@@ -354,6 +435,7 @@ impl QueueItem {
             QueueItem::Emby(item) => QueueItemContentId::Emby(item.id.clone()),
             QueueItem::Feed(entry) => QueueItemContentId::Feed(entry.guid.clone()),
             QueueItem::Audiobookshelf(ep) => ep.content_id(),
+            QueueItem::AudiobookshelfBook(book) => book.content_id(),
         }
     }
 
@@ -368,7 +450,9 @@ impl QueueItem {
     /// `admissible_for_owner`.
     pub fn required_service(&self) -> Option<crate::config::ServiceKind> {
         match self {
-            QueueItem::Audiobookshelf(_) => Some(crate::config::ServiceKind::Audiobookshelf),
+            QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => {
+                Some(crate::config::ServiceKind::Audiobookshelf)
+            }
             QueueItem::Emby(_) | QueueItem::Feed(_) => None,
         }
     }
@@ -387,7 +471,7 @@ impl QueueItem {
         has_service: impl Fn(crate::config::ServiceKind) -> bool,
         can_admit_audiobookshelf: bool,
     ) -> bool {
-        if self.is_audiobookshelf() && !can_admit_audiobookshelf {
+        if self.is_audiobookshelf_any() && !can_admit_audiobookshelf {
             return false;
         }
         (!audio_only || self.is_audio()) && self.required_service().is_none_or(has_service)
@@ -397,7 +481,7 @@ impl QueueItem {
         match self {
             QueueItem::Emby(item) => &item.playlist_item_id,
             QueueItem::Feed(_) => "",
-            QueueItem::Audiobookshelf(_) => "",
+            QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => "",
         }
     }
 }

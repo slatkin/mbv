@@ -27,6 +27,20 @@ pub struct AudiobookshelfPlaybackSession {
     pub source: AudiobookshelfAudioSource,
 }
 
+/// A book playback session opens over the whole library item (no episode
+/// segment) and carries one `AudiobookshelfAudioSource` per audio file, in
+/// playback order. The merged timeline is built from `sources`; the summed
+/// source durations and the authoritative `duration_seconds` both describe
+/// the same continuous book.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AudiobookshelfBookPlaybackSession {
+    pub id: String,
+    pub library_item_id: String,
+    pub duration_seconds: f64,
+    pub current_time_seconds: f64,
+    pub sources: Vec<AudiobookshelfAudioSource>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AudiobookshelfPlaybackProgress {
@@ -76,6 +90,18 @@ struct AudioTrackWire {
     mime_type: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BookPlaybackSessionWire {
+    id: String,
+    library_item_id: String,
+    media_type: String,
+    duration: f64,
+    play_method: u8,
+    current_time: f64,
+    audio_tracks: Vec<AudioTrackWire>,
+}
+
 impl AudiobookshelfClient {
     pub const HLS_READY_BOUND: Duration = Duration::from_secs(20);
     pub const HLS_POLL_INTERVAL: Duration = Duration::from_millis(250);
@@ -110,6 +136,51 @@ impl AudiobookshelfClient {
                     &device_id,
                     &library_item_id,
                     &episode_id,
+                    force_transcode,
+                )
+            },
+            move |session| {
+                let _ = cleanup_client.close_playback_session_bounded(
+                    &cleanup_key,
+                    &session.id,
+                    AudiobookshelfPlaybackProgress {
+                        current_time: 0.0,
+                        time_listened: 0.0,
+                        duration: session.duration_seconds,
+                    },
+                    AudiobookshelfClient::REQUEST_HARD_BOUND,
+                );
+            },
+            hard_bound,
+        )
+    }
+
+    pub fn create_book_playback_session_bounded(
+        &self,
+        api_key: &str,
+        device_id: &str,
+        library_item_id: &str,
+        force_transcode: bool,
+        hard_bound: Duration,
+    ) -> Result<AudiobookshelfBookPlaybackSession, AudiobookshelfError> {
+        if api_key.trim().is_empty()
+            || device_id.trim().is_empty()
+            || library_item_id.trim().is_empty()
+        {
+            return Err(AudiobookshelfError::protocol());
+        }
+        let client = self.clone();
+        let api_key = api_key.to_owned();
+        let device_id = device_id.to_owned();
+        let library_item_id = library_item_id.to_owned();
+        let cleanup_client = client.clone();
+        let cleanup_key = api_key.clone();
+        crate::bounded::run_with_hard_bound_or_cleanup(
+            move || {
+                client.create_book_playback_session(
+                    &api_key,
+                    &device_id,
+                    &library_item_id,
                     force_transcode,
                 )
             },
@@ -218,6 +289,109 @@ impl AudiobookshelfClient {
             }
         }
         decoded
+    }
+
+    fn create_book_playback_session(
+        &self,
+        api_key: &str,
+        device_id: &str,
+        library_item_id: &str,
+        force_transcode: bool,
+    ) -> Result<AudiobookshelfBookPlaybackSession, AudiobookshelfError> {
+        let body = PlayRequest {
+            device_info: DeviceInfo {
+                device_id,
+                client_name: "mbv",
+                client_version: env!("CARGO_PKG_VERSION"),
+                manufacturer: "mbv",
+                model: "mbv",
+            },
+            force_direct_play: !force_transcode,
+            force_transcode,
+            supported_mime_types: ["audio/mpeg", "audio/mp4", "audio/flac", "audio/ogg"],
+            media_player: "mpv",
+        };
+        let response = self
+            .post_json(
+                api_key,
+                &format!("/api/items/{library_item_id}/play"),
+                &body,
+            )?
+            .into_json::<serde_json::Value>()
+            .map_err(|_| AudiobookshelfError::malformed())?;
+        let opened_id = response
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned);
+        let opened_duration = response
+            .get("duration")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
+        let decoded = serde_json::from_value::<BookPlaybackSessionWire>(response)
+            .map_err(|_| AudiobookshelfError::malformed())
+            .and_then(|response| self.decode_book_playback_session(response, library_item_id));
+        if decoded.is_err() {
+            if let Some(session_id) = opened_id {
+                let _ = self.post_json(
+                    api_key,
+                    &format!("/api/session/{session_id}/close"),
+                    &AudiobookshelfPlaybackProgress {
+                        current_time: 0.0,
+                        time_listened: 0.0,
+                        duration: opened_duration,
+                    },
+                );
+            }
+        }
+        decoded
+    }
+
+    fn decode_book_playback_session(
+        &self,
+        response: BookPlaybackSessionWire,
+        requested_library_item_id: &str,
+    ) -> Result<AudiobookshelfBookPlaybackSession, AudiobookshelfError> {
+        if response.id.trim().is_empty()
+            || response.media_type != "book"
+            || response.library_item_id != requested_library_item_id
+            || response.audio_tracks.is_empty()
+            || !response.duration.is_finite()
+            || response.duration < 0.0
+            || !response.current_time.is_finite()
+            || response.current_time < 0.0
+        {
+            return Err(AudiobookshelfError::protocol());
+        }
+        let method = match response.play_method {
+            0 => AudiobookshelfSourceMethod::Direct,
+            2 => AudiobookshelfSourceMethod::Hls,
+            _ => return Err(AudiobookshelfError::protocol()),
+        };
+        let mut sources = Vec::with_capacity(response.audio_tracks.len());
+        for track in response.audio_tracks {
+            match (method, track.mime_type.as_str()) {
+                (AudiobookshelfSourceMethod::Direct, mime) if mime.starts_with("audio/") => {}
+                (AudiobookshelfSourceMethod::Hls, "application/vnd.apple.mpegurl") => {}
+                _ => return Err(AudiobookshelfError::protocol()),
+            }
+            if !track.duration.is_finite() || track.duration < 0.0 {
+                return Err(AudiobookshelfError::protocol());
+            }
+            let url = self.join_source_path(&track.content_url)?;
+            sources.push(AudiobookshelfAudioSource {
+                method,
+                url,
+                mime_type: track.mime_type,
+                duration_seconds: track.duration,
+            });
+        }
+        Ok(AudiobookshelfBookPlaybackSession {
+            id: response.id,
+            library_item_id: response.library_item_id,
+            duration_seconds: response.duration,
+            current_time_seconds: response.current_time,
+            sources,
+        })
     }
 
     fn decode_playback_session(

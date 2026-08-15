@@ -48,6 +48,14 @@ pub const CTRL_CAP_ABS_QUEUE: &str = "abs-queue";
 /// Peer can receive the redacted provider-qualified Audiobookshelf progress
 /// event. Additive — no protocol-version bump.
 pub const CTRL_CAP_ABS_PROGRESS: &str = "abs-progress";
+/// Peer can decode `QueueItem::AudiobookshelfBook` in unified queue commands,
+/// snapshots, and broadcasts. Static protocol support only — does not imply
+/// a daemon owner is eligible to bind or play the item. Additive — no
+/// protocol-version bump.
+pub const CTRL_CAP_ABS_BOOK_QUEUE: &str = "abs-book-queue";
+/// Peer can receive the redacted provider-qualified Audiobookshelf book
+/// progress event. Additive — no protocol-version bump.
+pub const CTRL_CAP_ABS_BOOK_PROGRESS: &str = "abs-book-progress";
 
 pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;
@@ -77,6 +85,8 @@ impl CtrlHello {
                 CTRL_CAP_CONTROL_AUTH.to_string(),
                 CTRL_CAP_ABS_QUEUE.to_string(),
                 CTRL_CAP_ABS_PROGRESS.to_string(),
+                CTRL_CAP_ABS_BOOK_QUEUE.to_string(),
+                CTRL_CAP_ABS_BOOK_PROGRESS.to_string(),
             ],
             control_token: None,
         }
@@ -148,6 +158,18 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_ABS_PROGRESS)
     }
 
+    pub fn supports_abs_book_queue(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_ABS_BOOK_QUEUE)
+    }
+
+    pub fn supports_abs_book_progress(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_ABS_BOOK_PROGRESS)
+    }
+
     pub fn validate_control_credential(&self, expected: &str) -> Result<(), String> {
         let Some(presented) = self.control_token.as_deref() else {
             return Err("invalid Control credential".to_string());
@@ -180,6 +202,8 @@ pub struct CtrlCompatibility {
     pub supports_control_auth: bool,
     pub supports_abs_queue: bool,
     pub supports_abs_progress: bool,
+    pub supports_abs_book_queue: bool,
+    pub supports_abs_book_progress: bool,
 }
 
 impl CtrlCompatibility {
@@ -195,6 +219,8 @@ impl CtrlCompatibility {
                 supports_control_auth: true,
                 supports_abs_queue: true,
                 supports_abs_progress: true,
+                supports_abs_book_queue: true,
+                supports_abs_book_progress: true,
             }),
             _ => Err(format!(
                 "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
@@ -580,6 +606,11 @@ pub enum CtrlEvent {
     /// peers advertising `abs-progress`. See `AudiobookshelfProgressEvent`
     /// for the field-level redaction contract this event upholds.
     AudiobookshelfProgress(AudiobookshelfProgressEvent),
+
+    /// Redacted, provider-qualified Audiobookshelf book progress. Sent only to
+    /// peers advertising `abs-book-progress`. Keyed by `library_item_id` only,
+    /// so it can never be matched against an episode-shaped event.
+    AudiobookshelfBookProgress(AudiobookshelfBookProgressEvent),
 }
 
 /// Redacted, provider-qualified Audiobookshelf progress: identity,
@@ -590,6 +621,21 @@ pub enum CtrlEvent {
 pub struct AudiobookshelfProgressEvent {
     pub library_item_id: String,
     pub episode_id: String,
+    /// Acknowledged playback position in ticks.
+    pub position_ticks: i64,
+    /// Mirrors Audiobookshelf `is_finished` completion state.
+    pub is_finished: bool,
+    /// Setup generation the acknowledged progress was produced under;
+    /// receivers discard progress from a stale generation.
+    pub setup_generation: u64,
+}
+
+/// Book-shaped counterpart to `AudiobookshelfProgressEvent`: identity,
+/// acknowledged position/completion, and setup generation only, keyed by
+/// `library_item_id` with no `episode_id`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudiobookshelfBookProgressEvent {
+    pub library_item_id: String,
     /// Acknowledged playback position in ticks.
     pub position_ticks: i64,
     /// Mirrors Audiobookshelf `is_finished` completion state.

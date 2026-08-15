@@ -54,6 +54,14 @@ fn resume_start_pos(item: &QueueItem) -> f64 {
                 0.0
             }
         }
+        QueueItem::AudiobookshelfBook(book) => {
+            let runtime = book.duration_ticks.unwrap_or(0) as i64;
+            if crate::api::should_resume(book.position_ticks, runtime) {
+                book.position_ticks as f64 / crate::api::TICKS_PER_SECOND as f64
+            } else {
+                0.0
+            }
+        }
     }
 }
 

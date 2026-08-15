@@ -475,6 +475,8 @@ fn old_peer_without_feed_playback_capability_rejects_load_feed() {
         supports_control_auth: false,
         supports_abs_queue: false,
         supports_abs_progress: false,
+        supports_abs_book_queue: false,
+        supports_abs_book_progress: false,
     };
     assert!(!compat.supports_feed_playback);
 }

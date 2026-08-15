@@ -220,18 +220,38 @@ impl App {
                                 // Double-click on Feeds: no-op (playback wiring pending).
                             }
                             TabSelection::AudiobookshelfLibrary(index) => {
-                                if in_left {
-                                    let in_episodes = self
-                                        .audiobookshelf_browse
-                                        .get(index)
-                                        .is_some_and(|state| state.episode_selection.is_some());
-                                    if !in_episodes {
-                                        self.enter_audiobookshelf_episode_selection();
-                                    } else {
-                                        // Episode activation: inert seam for
-                                        // #518 (double-click on a selected
-                                        // episode).
-                                        self.activate_audiobookshelf_episode(index);
+                                let Some(kind) = self.audiobookshelf_kind_at(index) else {
+                                    return;
+                                };
+                                match kind {
+                                    crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
+                                        if in_left {
+                                            let in_episodes = self
+                                                .audiobookshelf_browse
+                                                .get(index)
+                                                .is_some_and(|state| state.episode_selection.is_some());
+                                            if !in_episodes {
+                                                self.enter_audiobookshelf_episode_selection();
+                                            } else {
+                                                // Episode activation: inert seam for
+                                                // #518 (double-click on a selected
+                                                // episode).
+                                                self.activate_audiobookshelf_episode(index);
+                                            }
+                                        }
+                                    }
+                                    crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
+                                        if in_left {
+                                            let in_chapters = self
+                                                .audiobookshelf_book_browse
+                                                .get(index)
+                                                .is_some_and(|state| state.chapter_selection.is_some());
+                                            if !in_chapters {
+                                                self.enter_audiobookshelf_book_selection();
+                                            } else {
+                                                self.activate_audiobookshelf_book_row();
+                                            }
+                                        }
                                     }
                                 }
                             }

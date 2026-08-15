@@ -659,6 +659,7 @@ impl QueueState {
                 crate::playback_queue::QueueItem::Emby(e) => Some((**e).clone()),
                 crate::playback_queue::QueueItem::Feed(_) => None,
                 crate::playback_queue::QueueItem::Audiobookshelf(_) => None,
+                crate::playback_queue::QueueItem::AudiobookshelfBook(_) => None,
             })
             .collect()
     }

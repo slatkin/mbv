@@ -292,6 +292,10 @@ impl Player {
                 st.title = ep.title.clone();
                 st.art_item_id = ep.episode_id.clone();
             }
+            QueueItem::AudiobookshelfBook(book) => {
+                st.title = book.title.clone();
+                st.art_item_id = book.library_item_id.clone();
+            }
         }
     }
 
@@ -390,6 +394,10 @@ impl Player {
                         st.title = ep.title.clone();
                         st.art_item_id = ep.episode_id.clone();
                     }
+                    QueueItem::AudiobookshelfBook(book) => {
+                        st.title = book.title.clone();
+                        st.art_item_id = book.library_item_id.clone();
+                    }
                 }
             }
             return self.send_command(PlayerCommand::SubmitQueue { items, start_idx });
@@ -458,6 +466,10 @@ impl Player {
                 QueueItem::Audiobookshelf(ep) => {
                     st.title = ep.title.clone();
                     st.art_item_id = ep.episode_id.clone();
+                }
+                QueueItem::AudiobookshelfBook(book) => {
+                    st.title = book.title.clone();
+                    st.art_item_id = book.library_item_id.clone();
                 }
             }
         }

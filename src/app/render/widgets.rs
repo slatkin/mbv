@@ -577,6 +577,15 @@ impl App {
         focused: bool,
         layout: &mut LayoutMain,
     ) {
+        if let Some(index) = self.tab.audiobookshelf_index() {
+            if matches!(
+                self.audiobookshelf_kind_at(index),
+                Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book)
+            ) {
+                self.render_audiobookshelf_books(f, area, focused, layout);
+                return;
+            }
+        }
         self.render_audiobookshelf_podcasts(f, area, focused, layout);
     }
 

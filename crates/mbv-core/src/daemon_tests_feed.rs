@@ -28,6 +28,8 @@ fn connect_client_with_capability(
         supports_unified_queue,
         true,
         true,
+        true,
+        true,
     );
     (id, rx)
 }

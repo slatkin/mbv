@@ -52,6 +52,8 @@ fn spawn_ctrl_client<S>(
             supports_unified_queue,
             supports_abs_queue,
             supports_abs_progress,
+            supports_abs_book_queue,
+            supports_abs_book_progress,
         ) = match serde_json::from_str::<CtrlCmd>(&line) {
             Ok(CtrlCmd::Hello(info)) => {
                 if let Err(e) = info.validate_peer() {
@@ -73,6 +75,8 @@ fn spawn_ctrl_client<S>(
                     info.supports_unified_queue(),
                     info.supports_abs_queue(),
                     info.supports_abs_progress(),
+                    info.supports_abs_book_queue(),
+                    info.supports_abs_book_progress(),
                 )
             }
             Ok(_) => {
@@ -89,7 +93,13 @@ fn spawn_ctrl_client<S>(
         let init_event = if supports_unified_queue {
             let q = shared_queue.queue.lock().unwrap();
             let source = shared_queue.source.lock().unwrap().clone();
-            unified_queue_state_for_peer(&status, &q, &source, supports_abs_queue)
+            unified_queue_state_for_peer(
+                &status,
+                &q,
+                &source,
+                supports_abs_queue,
+                supports_abs_book_queue,
+            )
         } else {
             let q = shared_queue.queue.lock().unwrap();
             let feed_items: Vec<FeedEntry> = if supports_feed_playback {
@@ -128,6 +138,8 @@ fn spawn_ctrl_client<S>(
             supports_unified_queue,
             supports_abs_queue,
             supports_abs_progress,
+            supports_abs_book_queue,
+            supports_abs_book_progress,
         );
 
         for line in lines {

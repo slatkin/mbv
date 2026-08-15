@@ -151,39 +151,202 @@ impl AudiobookshelfPlaybackLifecycle {
     }
 }
 
+/// Book-shaped counterpart to `AudiobookshelfPlaybackLifecycle`: identical
+/// session sync/close mechanics, but it reports `AudiobookshelfBookProgressUpdate`
+/// keyed by `library_item_id` only. Kept separate so a book session can never
+/// be matched against (or emit progress for) an episode.
+pub(crate) struct AudiobookshelfBookPlaybackLifecycle {
+    pub(crate) generation: crate::service_runtime::SetupGeneration,
+    client: crate::audiobookshelf::AudiobookshelfClient,
+    credential: String,
+    pub(crate) session_id: String,
+    library_item_id: String,
+    progress_sender: Option<std::sync::mpsc::Sender<AudiobookshelfBookProgressUpdate>>,
+    pub(crate) current_position: f64,
+    pub(crate) duration: f64,
+    pub(crate) last_acknowledgement: Option<crate::audiobookshelf::AudiobookshelfPlaybackProgress>,
+    listening_time: ListeningTime,
+    in_flight: bool,
+    last_sync: std::time::Instant,
+    closed: bool,
+}
+
+impl AudiobookshelfBookPlaybackLifecycle {
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        generation: crate::service_runtime::SetupGeneration,
+        client: crate::audiobookshelf::AudiobookshelfClient,
+        credential: String,
+        session_id: String,
+        library_item_id: String,
+        current_position: f64,
+        duration: f64,
+        progress_sender: Option<std::sync::mpsc::Sender<AudiobookshelfBookProgressUpdate>>,
+    ) -> Self {
+        Self {
+            generation,
+            client,
+            credential,
+            session_id,
+            library_item_id,
+            progress_sender,
+            current_position,
+            duration,
+            last_acknowledgement: None,
+            listening_time: ListeningTime::default(),
+            in_flight: false,
+            last_sync: std::time::Instant::now(),
+            closed: false,
+        }
+    }
+
+    fn observe(&mut self, now: std::time::Instant, playing: bool) {
+        self.listening_time.observe(now, playing);
+    }
+
+    fn should_sync(&self, now: std::time::Instant, force: bool) -> bool {
+        force || now.saturating_duration_since(self.last_sync) >= AUDIOBOOKSHELF_REPORT_INTERVAL
+    }
+
+    fn sync(&mut self, position_ticks: i64, now: std::time::Instant, force: bool) {
+        if self.closed || self.in_flight || !self.should_sync(now, force) {
+            return;
+        }
+        self.sync_final(position_ticks, now);
+    }
+
+    fn sync_final(&mut self, position_ticks: i64, now: std::time::Instant) {
+        if self.in_flight {
+            return;
+        }
+        self.current_position = seconds_from_ticks(position_ticks);
+        let progress = crate::audiobookshelf::AudiobookshelfPlaybackProgress {
+            current_time: self.current_position,
+            time_listened: self.listening_time.take(),
+            duration: self.duration,
+        };
+        // Clear the interval before dispatch. A timeout or lost response is
+        // deliberately not replayed, because the server may have accepted it.
+        self.in_flight = true;
+        let result = self.client.sync_playback_session_bounded(
+            &self.credential,
+            &self.session_id,
+            progress,
+            crate::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+        );
+        self.in_flight = false;
+        self.last_sync = now;
+        if result.is_ok() {
+            self.last_acknowledgement = Some(progress);
+            if let Some(sender) = &self.progress_sender {
+                let _ = sender.send(AudiobookshelfBookProgressUpdate {
+                    generation: self.generation,
+                    library_item_id: self.library_item_id.clone(),
+                    current_time_seconds: self.current_position,
+                    duration_seconds: self.duration,
+                    is_finished: self.duration > 0.0 && self.current_position >= self.duration,
+                });
+            }
+        } else {
+            log::warn!(target: "player", "Audiobookshelf book progress synchronization failed");
+        }
+    }
+
+    fn close(&mut self, position_ticks: i64) {
+        if self.closed {
+            return;
+        }
+        self.closed = true;
+        log::debug!(target: "player", "closing Audiobookshelf book lifecycle generation={}", self.generation.value());
+        let now = std::time::Instant::now();
+        self.observe(now, false);
+        self.sync_final(position_ticks, now);
+        let progress = crate::audiobookshelf::AudiobookshelfPlaybackProgress {
+            current_time: seconds_from_ticks(position_ticks),
+            time_listened: 0.0,
+            duration: self.duration,
+        };
+        let _ = self.client.close_playback_session_bounded(
+            &self.credential,
+            &self.session_id,
+            progress,
+            crate::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+        );
+    }
+}
+
+impl Drop for AudiobookshelfBookPlaybackLifecycle {
+    fn drop(&mut self) {
+        self.close((self.current_position * crate::api::TICKS_PER_SECOND as f64).round() as i64);
+    }
+}
+
 pub(crate) enum ActiveItemLifecycle {
     Emby,
     Audiobookshelf(Box<AudiobookshelfPlaybackLifecycle>),
+    AudiobookshelfBook(Box<AudiobookshelfBookPlaybackLifecycle>),
     None,
 }
 
+/// Bounded ABS session owned by a prepared source, before it is promoted to
+/// the active slot. Kept separate from `ActiveItemLifecycle` because a
+/// prepared source can be discarded before its projection is installed.
+pub(crate) enum PreparedLifecycle {
+    Episode(AudiobookshelfPlaybackLifecycle),
+    Book(AudiobookshelfBookPlaybackLifecycle),
+}
+
+impl PreparedLifecycle {
+    fn close(&mut self, position_ticks: i64) {
+        match self {
+            PreparedLifecycle::Episode(lifecycle) => lifecycle.close(position_ticks),
+            PreparedLifecycle::Book(lifecycle) => lifecycle.close(position_ticks),
+        }
+    }
+}
+
 impl ActiveItemLifecycle {
-    fn for_item(item: &QueueItem, audiobookshelf: Option<AudiobookshelfPlaybackLifecycle>) -> Self {
+    fn for_item(item: &QueueItem, lifecycle: Option<PreparedLifecycle>) -> Self {
         match item {
             QueueItem::Emby(_) => Self::Emby,
-            QueueItem::Audiobookshelf(_) => audiobookshelf
-                .map(|lifecycle| Self::Audiobookshelf(Box::new(lifecycle)))
-                .unwrap_or(Self::None),
+            QueueItem::Audiobookshelf(_) => match lifecycle {
+                Some(PreparedLifecycle::Episode(lifecycle)) => {
+                    Self::Audiobookshelf(Box::new(lifecycle))
+                }
+                _ => Self::None,
+            },
+            QueueItem::AudiobookshelfBook(_) => match lifecycle {
+                Some(PreparedLifecycle::Book(lifecycle)) => {
+                    Self::AudiobookshelfBook(Box::new(lifecycle))
+                }
+                _ => Self::None,
+            },
             QueueItem::Feed(_) => Self::None,
         }
     }
 
     pub(crate) fn observe(&mut self, now: std::time::Instant, playing: bool) {
-        if let Self::Audiobookshelf(lifecycle) = self {
-            lifecycle.observe(now, playing);
+        match self {
+            Self::Audiobookshelf(lifecycle) => lifecycle.observe(now, playing),
+            Self::AudiobookshelfBook(lifecycle) => lifecycle.observe(now, playing),
+            Self::Emby | Self::None => {}
         }
     }
 
     pub(crate) fn sync(&mut self, position_ticks: i64, now: std::time::Instant, force: bool) {
-        if let Self::Audiobookshelf(lifecycle) = self {
-            lifecycle.sync(position_ticks, now, force);
+        match self {
+            Self::Audiobookshelf(lifecycle) => lifecycle.sync(position_ticks, now, force),
+            Self::AudiobookshelfBook(lifecycle) => lifecycle.sync(position_ticks, now, force),
+            Self::Emby | Self::None => {}
         }
     }
 
     fn close(&mut self, position_ticks: i64) {
         let lifecycle = std::mem::replace(self, Self::None);
-        if let Self::Audiobookshelf(mut lifecycle) = lifecycle {
-            lifecycle.close(position_ticks);
+        match lifecycle {
+            Self::Audiobookshelf(mut lifecycle) => lifecycle.close(position_ticks),
+            Self::AudiobookshelfBook(mut lifecycle) => lifecycle.close(position_ticks),
+            Self::Emby | Self::None => {}
         }
     }
 }
@@ -302,7 +465,10 @@ mod reporting_tests {
         let mut lifecycle = lifecycle;
         lifecycle.closed = true;
         assert!(matches!(
-            ActiveItemLifecycle::for_item(&audiobook(), Some(lifecycle)),
+            ActiveItemLifecycle::for_item(
+                &audiobook(),
+                Some(super::PreparedLifecycle::Episode(lifecycle))
+            ),
             ActiveItemLifecycle::Audiobookshelf(_)
         ));
     }

@@ -184,8 +184,16 @@ impl PlaybackRun {
         mut prepared: PreparedSource,
         item: &QueueItem,
     ) -> Result<(), AudiobookshelfError> {
-        let options = prepared.mpv_load_options(item);
         let _ = mpv.command("playlist-clear", &[]);
+        if prepared.merged_timeline {
+            // One continuous timeline across the book's audio files, so
+            // chapter rows can issue absolute seeks against the whole book.
+            // ponytail: merge-files=yes projects the playlist as one file; if
+            // a real multi-file book misbehaves, fall back to per-entry
+            // offsets (design.md Open Questions) before widening this path.
+            let _ = mpv.set_property("merge-files", "yes".to_string());
+        }
+        let options = prepared.mpv_load_options(item);
         if mpv
             .command(
                 "loadfile",
@@ -199,6 +207,35 @@ impl PlaybackRun {
             return Err(AudiobookshelfError::from_class(
                 AudiobookshelfFailureClass::Unavailable,
             ));
+        }
+        if prepared.merged_timeline {
+            let extra_options = prepared.extra_source_options();
+            for source in &prepared.book_extra_sources {
+                if mpv
+                    .command(
+                        "loadfile",
+                        &[
+                            source.url.as_str(),
+                            "append-play",
+                            "-1",
+                            extra_options.as_str(),
+                        ],
+                    )
+                    .is_err()
+                {
+                    self.close_prepared_source();
+                    prepared.close(0.0);
+                    self.status.lock().unwrap().active = false;
+                    return Err(AudiobookshelfError::from_class(
+                        AudiobookshelfFailureClass::Unavailable,
+                    ));
+                }
+            }
+            // Resume position is an absolute seek on the merged timeline, so
+            // it is unambiguous across file boundaries.
+            if prepared.start_seconds > 0.0 {
+                let _ = mpv.command("seek", &[&prepared.start_seconds.to_string(), "absolute"]);
+            }
         }
         self.close_prepared_source();
         let prepared_lifecycle = prepared.take_lifecycle();
@@ -322,6 +359,21 @@ impl PlaybackRun {
                 self.intro_end = 0;
                 self.intro_state = IntroState::Pending;
             }
+            QueueItem::AudiobookshelfBook(book) => {
+                self.osd_title = book.title.clone();
+                let runtime = book.duration_ticks.unwrap_or(0) as i64;
+                self.last_valid_pos = if crate::api::should_resume(book.position_ticks, runtime) {
+                    book.position_ticks
+                } else {
+                    0
+                };
+                self.series_id.clear();
+                self.season = 0;
+                self.episode = 0;
+                self.intro_start = 0;
+                self.intro_end = 0;
+                self.intro_state = IntroState::Pending;
+            }
         }
     }
 
@@ -430,6 +482,15 @@ impl PlaybackRun {
                         0
                     };
                     (pos, ep.title.clone(), ItemId::empty(), 0, 0, 0, 0, false)
+                }
+                QueueItem::AudiobookshelfBook(book) => {
+                    let runtime = book.duration_ticks.unwrap_or(0) as i64;
+                    let pos = if crate::api::should_resume(book.position_ticks, runtime) {
+                        book.position_ticks
+                    } else {
+                        0
+                    };
+                    (pos, book.title.clone(), ItemId::empty(), 0, 0, 0, 0, false)
                 }
             };
 

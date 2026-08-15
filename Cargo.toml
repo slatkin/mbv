@@ -20,6 +20,7 @@ tungstenite = { version = "0.30", features = ["native-tls"] }
 redb = "2"
 log = "0.4"
 libc = "0.2"
+human_name = "2"
 nix = { version = "0.31", features = ["fs", "process", "signal", "term", "socket"] }
 
 [package]

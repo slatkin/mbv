@@ -26,7 +26,16 @@ fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
 fn connect_old_unified_peer(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
     // supports_feed=true, supports_unified=true, abs_queue=false, abs_progress=false
-    let id = clients.connect(tx, CtrlTransport::Local, true, true, false, false);
+    let id = clients.connect(
+        tx,
+        CtrlTransport::Local,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+    );
     (id, rx)
 }
 
@@ -48,11 +57,11 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
 
-    let capable_data = match super::unified_queue_state_for_peer(&status, &queue, &source, true) {
+    let capable_data = match super::unified_queue_state_for_peer(&status, &queue, &source, true, false) {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
     };
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, false) {
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, false, false) {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
     };
@@ -76,7 +85,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
 
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, false) {
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, false, false) {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
     };

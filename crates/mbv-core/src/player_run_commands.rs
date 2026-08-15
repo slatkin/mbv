@@ -705,5 +705,8 @@ fn mpv_url_for_queue_item(item: &QueueItem, server_url: &str, token: &str) -> St
         QueueItem::Audiobookshelf(_) => {
             unreachable!("Audiobookshelf admission must precede URL resolution")
         }
+        QueueItem::AudiobookshelfBook(_) => {
+            unreachable!("Audiobookshelf book admission must precede URL resolution")
+        }
     }
 }

@@ -1,16 +1,16 @@
 ## 1. Lift the library filter and add book catalog fetching
 
-- [ ] 1.1 Remove the `media_type == "podcast"` filter at `src/app/run_loop_drains.rs:60`; route `book` libraries to a new book-discovery path instead of dropping them.
-- [ ] 1.2 Add book catalog types and fetch to `crates/mbv-core/src/audiobookshelf_catalog.rs`: `AudiobookshelfBook` (library_item_id, title, author credit, cover_path, chapters, audio_files), a paginated book-list fetch, and a chapters/audio-files detail fetch, following the existing `AudiobookshelfShow`/`podcast_shows`/`podcast_detail` pattern.
-- [ ] 1.3 Add `human_name` to `crates/mbv-core/Cargo.toml`; implement surname extraction (`Name::parse(name).map(|n| n.surname().to_owned()).unwrap_or(name)`), first-listed author only for multi-author credits.
-- [ ] 1.4 Compute `author_display` and `author_sort_key` once at catalog-build time, mirroring `music_group.rs::build_grouped_album_catalog`.
-- [ ] 1.5 Add a book progress fetch keyed by `library_item_id` only (ABS `episodeId: null` case), distinct from the existing episode-keyed `AudiobookshelfProgress` map.
+- [x] 1.1 Remove the `media_type == "podcast"` filter at `src/app/run_loop_drains.rs:60`; route `book` libraries to a new book-discovery path instead of dropping them.
+- [x] 1.2 Add book catalog types and fetch to `crates/mbv-core/src/audiobookshelf_catalog.rs`: `AudiobookshelfBook` (library_item_id, title, author credit, cover_path, chapters, audio_files), a paginated book-list fetch, and a chapters/audio-files detail fetch, following the existing `AudiobookshelfShow`/`podcast_shows`/`podcast_detail` pattern.
+- [x] 1.3 Add `human_name` to `crates/mbv-core/Cargo.toml`; implement surname extraction (`Name::parse(name).map(|n| n.surname().to_owned()).unwrap_or(name)`), first-listed author only for multi-author credits.
+- [x] 1.4 Compute `author_display` and `author_sort_key` once at catalog-build time, mirroring `music_group.rs::build_grouped_album_catalog`.
+- [x] 1.5 Add a book progress fetch keyed by `library_item_id` only (ABS `episodeId: null` case), distinct from the existing episode-keyed `AudiobookshelfProgress` map.
 
 ## 2. Fork browse dispatch by media_type
 
-- [ ] 2.1 Resolve `media_type` once at `TabSelection::AudiobookshelfLibrary(usize)` resolution (`src/app/types_tab_selection.rs`); add a book/podcast kind alongside it.
-- [ ] 2.2 Route book-tab input, rendering, help, refresh, and context-menu dispatch through the resolved kind in `src/app/input_browse_dispatch.rs` and `src/app/audiobookshelf_browse_actions.rs`, without re-reading `media_type` per action.
-- [ ] 2.3 Update the `service-browse-dispatch` help text and context-menu suppression to include the book kind alongside podcast, Emby, and Feeds.
+- [x] 2.1 Resolve `media_type` once at `TabSelection::AudiobookshelfLibrary(usize)` resolution (`src/app/types_tab_selection.rs`); add a book/podcast kind alongside it.
+- [x] 2.2 Route book-tab input, rendering, help, refresh, and context-menu dispatch through the resolved kind in `src/app/input_browse_dispatch.rs` and `src/app/audiobookshelf_browse_actions.rs`, without re-reading `media_type` per action.
+- [x] 2.3 Update the `service-browse-dispatch` help text and context-menu suppression to include the book kind alongside podcast, Emby, and Feeds.
 
 ## 3. Book tab layout
 
