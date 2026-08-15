@@ -56,6 +56,97 @@ fn progress_and_shelf_fixtures_preserve_user_and_server_order() {
 }
 
 #[test]
+fn newest_episodes_shelf_wire_carries_the_embedded_payload() {
+    let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
+    let newest = shelves
+        .iter()
+        .find(|shelf| shelf.label == "Newest episodes")
+        .expect("fixture keeps the live server's recency shelf");
+    let mapped: Vec<AudiobookshelfShelfEntry> = newest
+        .entries
+        .iter()
+        .cloned()
+        .map(shelf_entry_from_wire)
+        .collect();
+    let AudiobookshelfShelfEntry::Episode(first) = &mapped[0] else {
+        panic!("first Newest episodes entry is an episode");
+    };
+    assert_eq!(first.library_item_id, "show-2");
+    assert_eq!(first.episode_id, "episode-3");
+    assert_eq!(
+        first.title, "Episode Three",
+        "episode title comes from recentEpisode"
+    );
+    assert_eq!(
+        first.show_title.as_deref(),
+        Some("Second Show"),
+        "show title comes from media.metadata"
+    );
+    assert_eq!(first.author.as_deref(), Some("Jane Doe"));
+    assert_eq!(
+        first.duration_ticks,
+        Some((1800.0 * crate::api::TICKS_PER_SECOND as f64) as u64),
+        "audioFile.duration is carried as duration ticks"
+    );
+    assert_eq!(first.cover_path.as_deref(), Some("/api/items/show-2/cover"));
+    assert_eq!(first.pub_date_secs, Some(1_700_000_000));
+    let AudiobookshelfShelfEntry::Episode(second) = &mapped[1] else {
+        panic!("second episode entry is an episode");
+    };
+    assert_eq!(second.title, "Episode Four");
+    assert_eq!(
+        second.pub_date_secs,
+        Some(1_700_000_100),
+        "string epoch publishedAt parses"
+    );
+    assert_eq!(second.duration_ticks, None, "missing audioFile stays None");
+    assert_eq!(second.cover_path, None, "missing coverPath stays None");
+    assert!(matches!(
+        shelves[0]
+            .entries
+            .clone()
+            .into_iter()
+            .map(shelf_entry_from_wire)
+            .next(),
+        Some(AudiobookshelfShelfEntry::Show(_))
+    ));
+}
+
+#[test]
+fn non_newest_episodes_shelves_parse_and_stay_unused() {
+    // Home's Latest pill reads only the `Newest Episodes` shelf (Task 6.3);
+    // every other shelf the live server returns must still parse cleanly and
+    // simply never feed Home. The fixture's `Continue listening` shelf pins
+    // both the show shape and the bare (no embedded media) episode shape.
+    let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
+    let continue_listening = shelves
+        .iter()
+        .find(|shelf| shelf.label == "Continue listening")
+        .expect("fixture keeps a non-recency shelf");
+    let mapped: Vec<AudiobookshelfShelfEntry> = continue_listening
+        .entries
+        .iter()
+        .cloned()
+        .map(shelf_entry_from_wire)
+        .collect();
+    assert!(
+        matches!(&mapped[0], AudiobookshelfShelfEntry::Show(id) if id == "show-2"),
+        "show entries survive the widen unchanged"
+    );
+    let AudiobookshelfShelfEntry::Episode(bare) = &mapped[1] else {
+        panic!("bare episode entries map to Episode");
+    };
+    assert_eq!(bare.episode_id, "episode-1");
+    assert!(
+        bare.title.is_empty(),
+        "no embedded media means no payload fields"
+    );
+    assert_eq!(bare.show_title, None);
+    assert_eq!(bare.duration_ticks, None);
+    assert_eq!(bare.cover_path, None);
+}
+
+#[test]
 fn null_episode_id_progress_is_skipped() {
     let json = r#"{"mediaProgress":[{"libraryItemId":"lib-1","episodeId":null,"currentTime":10.0,"isFinished":false}]}"#;
     let response: ProgressResponse = serde_json::from_str(json).unwrap();

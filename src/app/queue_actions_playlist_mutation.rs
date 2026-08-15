@@ -3,6 +3,7 @@
 //! within the repository's file-size limit.
 
 use super::*;
+use mbv_core::playback_queue::QueueItem;
 
 impl App {
     pub(super) fn start_playlist_mutation(&mut self, playlist_id: &str) {
@@ -396,7 +397,12 @@ impl App {
 
     pub(in crate::app) fn enqueue_selected(&mut self, lib_idx: Option<usize>) {
         if self.tab.is_home() {
-            let Some(item) = self.current_home_item() else {
+            let Some(item) = self.current_home_item().and_then(|item| match item {
+                QueueItem::Emby(item) => Some(*item),
+                // Non-Emby Home items are enqueued through their own
+                // providers' actions (#543 Part 2).
+                _ => None,
+            }) else {
                 return;
             };
             if item.is_folder {

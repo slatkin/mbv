@@ -294,7 +294,11 @@ impl EmbyClient {
                         } else {
                             client.get_latest(&view.id, 30).unwrap_or_default()
                         };
-                        (view.name, view.id, items)
+                        crate::service_runtime::EmbyLatestSection {
+                            title: view.name,
+                            view_id: view.id,
+                            items,
+                        }
                     })
                     .collect();
                 Ok(crate::service_runtime::EmbyBootstrap {

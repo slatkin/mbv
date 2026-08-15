@@ -20,6 +20,7 @@ mod feeds;
 mod home;
 mod home_feed;
 mod home_hero;
+mod home_latest_row;
 mod home_video;
 pub mod indicators;
 mod list;

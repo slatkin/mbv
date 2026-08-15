@@ -303,45 +303,7 @@ impl App {
             );
             return;
         }
-
-        let scope = self.playback_target_queue_scope();
-        let previous_queue = self.queue_for_scope(scope).clone();
-        let existing_index = self
-            .queue_for_scope(scope)
-            .slots()
-            .iter()
-            .position(|slot| slot.item.content_id() == item.content_id());
-        let selected_index = existing_index.unwrap_or_else(|| {
-            self.queue_for_scope_mut(scope).queue.append(item.clone());
-            self.queue_for_scope(scope).total_queue_len() - 1
-        });
-        let selected_slot = self
-            .queue_for_scope(scope)
-            .slot_id_at(selected_index)
-            .expect("selected Audiobookshelf queue slot disappeared");
-        {
-            let queue = self.queue_for_scope_mut(scope);
-            queue.queue_cursor = selected_index;
-            let _ = queue.queue.set_active_slot(selected_slot);
-        }
-
-        let all_items = self.queue_for_scope(scope).all_queue_items();
-        let audio_only = all_items.iter().all(QueueItem::is_audio);
-        let submitted =
-            self.player
-                .submit_queue(all_items, selected_index, None, audio_only, self.ui_volume);
-        if !submitted {
-            *self.queue_for_scope_mut(scope) = previous_queue;
-            self.flash(
-                "Playback owner rejected this Audiobookshelf item".into(),
-                ToastSeverity::Error,
-            );
-            return;
-        }
-        self.set_queue_scope(scope);
-        if !matches!(self.panel_focus, super::PanelFocus::Library) {
-            self.set_panel_focus(super::PanelFocus::Queue);
-        }
+        self.submit_queue_item(item, true);
     }
 
     /// Ordinary enqueue for a downloaded episode. A cold local queue is the
@@ -361,20 +323,7 @@ impl App {
             );
             return;
         }
-
-        let previous_dirty = self.queue_dirty;
-        let previous_queue = self.queue_for_scope(scope).clone();
-        self.queue_for_scope_mut(scope).queue.append(item.clone());
-        if self.local_queue_metadata_applies(scope) {
-            self.queue_dirty = true;
-        }
-        if self.sync_playback_queue_items_after_append(scope, vec![item]) {
-            self.persist_local_queue_state_if_needed(scope);
-            self.retire_remote_tracking(true);
-        } else {
-            self.queue_dirty = previous_dirty;
-            *self.queue_for_scope_mut(scope) = previous_queue;
-        }
+        self.submit_queue_item(item, false);
     }
 
     fn selected_audiobookshelf_queue_item(

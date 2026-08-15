@@ -1,4 +1,5 @@
 use super::{AudiobookshelfClient, AudiobookshelfError};
+use crate::playback_queue::AudiobookshelfQueueItem;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::Read;
@@ -40,10 +41,11 @@ pub struct AudiobookshelfProgress {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AudiobookshelfShelfEntry {
     Show(String),
-    Episode {
-        library_item_id: String,
-        episode_id: String,
-    },
+    /// A fully-populated episode entry: the fields needed to build an
+    /// `AudiobookshelfQueueItem` (for Home's per-library Latest pill) without
+    /// a follow-up fetch. Entries whose `media` payload is absent or partial
+    /// map to defaulted fields.
+    Episode(AudiobookshelfQueueItem),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -213,12 +215,12 @@ struct ProgressWire {
     #[serde(rename = "isFinished")]
     is_finished: Option<bool>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct ShelfWire {
     label: String,
     entries: Vec<ShelfEntryWire>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 enum ShelfEntryWire {
     #[serde(rename = "show")]
@@ -232,7 +234,82 @@ enum ShelfEntryWire {
         library_item_id: String,
         #[serde(rename = "episodeId")]
         episode_id: String,
+        #[serde(default)]
+        media: Option<ShelfMediaWire>,
     },
+}
+#[derive(Debug, Clone, Deserialize)]
+struct ShelfMediaWire {
+    #[serde(default)]
+    metadata: Option<ShelfEntryMetadataWire>,
+    #[serde(rename = "recentEpisode", default)]
+    recent_episode: Option<RecentEpisodeWire>,
+}
+#[derive(Debug, Clone, Deserialize)]
+struct ShelfEntryMetadataWire {
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    author: Option<String>,
+    #[serde(rename = "coverPath", default)]
+    cover_path: Option<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+struct RecentEpisodeWire {
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(rename = "publishedAt", default)]
+    published_at: Option<serde_json::Value>,
+    #[serde(rename = "audioFile", default)]
+    audio_file: Option<AudioFileDurationWire>,
+}
+#[derive(Debug, Clone, Deserialize)]
+struct AudioFileDurationWire {
+    #[serde(default)]
+    duration: Option<f64>,
+}
+
+/// Maps a widened shelf wire entry to the public shape. Episode entries keep
+/// the embedded show metadata and latest-episode fields so callers (Home's
+/// per-library Latest pill) can build a `QueueItem` without a follow-up fetch.
+fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShelfEntry {
+    match entry {
+        ShelfEntryWire::Show { library_item_id } => AudiobookshelfShelfEntry::Show(library_item_id),
+        ShelfEntryWire::Episode {
+            library_item_id,
+            episode_id,
+            media,
+        } => {
+            let metadata = media.as_ref().and_then(|m| m.metadata.as_ref());
+            let recent_episode = media.as_ref().and_then(|m| m.recent_episode.as_ref());
+            let duration_seconds = recent_episode
+                .and_then(|r| r.audio_file.as_ref())
+                .and_then(|a| a.duration);
+            AudiobookshelfShelfEntry::Episode(AudiobookshelfQueueItem {
+                library_item_id,
+                episode_id,
+                title: recent_episode
+                    .and_then(|r| r.title.clone())
+                    .or_else(|| metadata.and_then(|m| m.title.clone()))
+                    .unwrap_or_default(),
+                show_title: metadata.and_then(|m| m.title.clone()),
+                author: metadata.and_then(|m| m.author.clone()),
+                duration_ticks: duration_seconds
+                    .map(|seconds| (seconds * crate::api::TICKS_PER_SECOND as f64) as u64),
+                position_ticks: 0,
+                played: false,
+                pub_date_secs: recent_episode
+                    .and_then(|r| r.published_at.clone())
+                    .and_then(|value| match value {
+                        serde_json::Value::Number(number) => number.as_u64(),
+                        serde_json::Value::String(parsed) => parsed.parse().ok(),
+                        _ => None,
+                    }),
+                is_finished: false,
+                cover_path: metadata.and_then(|m| m.cover_path.clone()),
+            })
+        }
+    }
 }
 #[derive(Debug, Deserialize)]
 struct BooksResponse {
@@ -641,22 +718,7 @@ impl AudiobookshelfClient {
             .into_iter()
             .map(|x| AudiobookshelfShelf {
                 label: x.label,
-                entries: x
-                    .entries
-                    .into_iter()
-                    .map(|entry| match entry {
-                        ShelfEntryWire::Show { library_item_id } => {
-                            AudiobookshelfShelfEntry::Show(library_item_id)
-                        }
-                        ShelfEntryWire::Episode {
-                            library_item_id,
-                            episode_id,
-                        } => AudiobookshelfShelfEntry::Episode {
-                            library_item_id,
-                            episode_id,
-                        },
-                    })
-                    .collect(),
+                entries: x.entries.into_iter().map(shelf_entry_from_wire).collect(),
             })
             .collect())
     }

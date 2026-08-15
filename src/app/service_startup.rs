@@ -170,6 +170,27 @@ pub(super) fn start_audiobookshelf_books(
     });
 }
 
+/// Fetches one podcast library's `/personalized` shelves and reports
+/// `LibEvent::AudiobookshelfShelfFetched`. Home's Latest pill for the library
+/// is built from the `Newest Episodes` shelf in the result.
+pub(super) fn start_audiobookshelf_shelves(
+    config: crate::config::Config,
+    generation: SetupGeneration,
+    library_id: String,
+    tx: mpsc::Sender<super::types_events::LibEvent>,
+) {
+    std::thread::spawn(move || {
+        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
+            client.shelves_bounded(&key, &library_id, AudiobookshelfClient::REQUEST_HARD_BOUND)
+        });
+        let _ = tx.send(super::types_events::LibEvent::AudiobookshelfShelfFetched {
+            generation,
+            library_id,
+            result,
+        });
+    });
+}
+
 pub(super) fn start_audiobookshelf(
     config: crate::config::Config,
     generation: SetupGeneration,

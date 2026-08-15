@@ -1,6 +1,8 @@
 use mbv_core::api::EmbyClient;
+use mbv_core::playback_queue::QueueItem;
 use std::sync::{mpsc, Arc, Mutex};
 
+use super::types_playback::HomeLatestSource;
 use super::App;
 
 impl App {
@@ -244,36 +246,39 @@ impl App {
         &mut self,
         bootstrap: mbv_core::service_runtime::EmbyBootstrap,
     ) {
-        use std::collections::HashMap;
-
         self.home.continue_items = bootstrap.continue_items;
         self.rebuild_library_tabs_from_views(&bootstrap.views);
         for lib_idx in 0..self.libs.len() {
             self.start_album_index(lib_idx, false);
         }
 
-        let old_cursors: HashMap<String, usize> = self
-            .home
-            .latest
-            .iter()
-            .map(|(_, lib_id, _, cursor)| (lib_id.clone(), *cursor))
-            .collect();
-        self.home.latest = bootstrap
+        // Merge, not replace: drop only the Emby entries and splice the fresh
+        // Emby entries back at their previous positions, leaving entries from
+        // other providers (Audiobookshelf/Feeds) untouched (#543 Part 1).
+        let emby_sections: Vec<(String, HomeLatestSource, Vec<QueueItem>)> = bootstrap
             .latest
             .into_iter()
-            .filter(|(title, _, _)| {
-                let lower = title.to_lowercase();
+            .filter(|section| {
+                let lower = section.title.to_lowercase();
                 !self.hidden_latest.contains(&lower) && !self.hidden_libraries.contains(&lower)
             })
-            .map(|(title, lib_id, items)| {
-                let cursor = old_cursors
-                    .get(&lib_id)
-                    .copied()
-                    .unwrap_or(0)
-                    .min(items.len().saturating_sub(1));
-                (title, lib_id, items, cursor)
+            .map(|section| {
+                (
+                    section.title,
+                    HomeLatestSource::Emby(section.view_id),
+                    section
+                        .items
+                        .into_iter()
+                        .map(|item| QueueItem::Emby(Box::new(item)))
+                        .collect(),
+                )
             })
             .collect();
+        super::library_load_actions::merge_home_sections(
+            &mut self.home.latest,
+            emby_sections,
+            |source| matches!(source, HomeLatestSource::Emby(_)),
+        );
         let sections = 1 + self.home.latest.len();
         self.home.section = self.home.section.min(sections.saturating_sub(1));
         self.home_loading = false;

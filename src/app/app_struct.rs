@@ -50,6 +50,12 @@ pub struct App {
     pub(super) audiobookshelf_catalog_rx:
         Option<super::service_startup::AudiobookshelfCatalogReceiver>,
     pub(super) audiobookshelf_libraries: Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
+    /// Most-recent `Newest Episodes` shelf per podcast library (async shelf
+    /// fetch, Task 6.2), keyed by library id. `fetch_home()` rebuilds Home's
+    /// Audiobookshelf Latest pills from this cache — never a blocking network
+    /// call — and the shelf-fetch handler refreshes it (Task 6.3).
+    pub(super) audiobookshelf_shelf_cache:
+        std::collections::HashMap<String, Vec<mbv_core::playback_queue::QueueItem>>,
     pub(super) audiobookshelf_browse:
         Vec<super::types_audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(super) audiobookshelf_book_browse:

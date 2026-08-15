@@ -46,13 +46,23 @@ pub enum ServiceState {
     Unavailable,
 }
 
+/// One Home "Latest" section carried in the bootstrap: the display title, the
+/// per-view identity used to key the merge into `HomePane.latest` (the view
+/// id maps to `HomeLatestSource::Emby(view_id)`), and the view's items.
+#[derive(Debug, Clone)]
+pub struct EmbyLatestSection {
+    pub title: String,
+    pub view_id: String,
+    pub items: Vec<EmbyItem>,
+}
+
 /// Network results needed to populate the existing Emby Home/library model.
 /// The UI applies this value only after the bounded startup worker completes.
 #[derive(Debug, Clone, Default)]
 pub struct EmbyBootstrap {
     pub continue_items: Vec<EmbyItem>,
     pub views: Vec<EmbyItem>,
-    pub latest: Vec<(String, String, Vec<EmbyItem>)>,
+    pub latest: Vec<EmbyLatestSection>,
 }
 
 /// A monotonically increasing identity for one Remote Service setup.

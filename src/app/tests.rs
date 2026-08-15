@@ -2,6 +2,7 @@ use super::types_settings::SettingsDestination;
 use super::*;
 
 use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use mbv_core::playback_queue::QueueItem;
 
 use ratatui::backend::TestBackend;
 
@@ -170,6 +171,7 @@ pub(crate) fn make_app_stub() -> App {
         audiobookshelf_setup_rx: None,
         audiobookshelf_catalog_rx: None,
         audiobookshelf_libraries: Vec::new(),
+        audiobookshelf_shelf_cache: std::collections::HashMap::new(),
         audiobookshelf_browse: Vec::new(),
         audiobookshelf_book_browse: Vec::new(),
         emby_setup_form: None,
@@ -636,8 +638,18 @@ pub(crate) fn emby_unified_state(
     }
 }
 
-pub(crate) fn sections(n: usize) -> Vec<(String, String, Vec<EmbyItem>, usize)> {
+pub(in crate::app) fn sections(n: usize) -> Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)> {
     (0..n)
-        .map(|i| (format!("Sec {i}"), format!("lib{i}"), make_items(3), 0))
+        .map(|i| {
+            (
+                format!("Sec {i}"),
+                HomeLatestSource::Emby(format!("lib{i}")),
+                make_items(3)
+                    .into_iter()
+                    .map(|item| QueueItem::Emby(Box::new(item)))
+                    .collect(),
+                0,
+            )
+        })
         .collect()
 }

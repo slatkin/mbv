@@ -98,6 +98,12 @@ impl App {
                                              0,
                                              self.lib_tx.clone(),
                                          );
+                                         super::service_startup::start_audiobookshelf_shelves(
+                                             self.config.lock().unwrap().clone(),
+                                             completion.generation,
+                                             library.id.clone(),
+                                             self.lib_tx.clone(),
+                                         );
                                      }
                                      super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
                                          super::service_startup::start_audiobookshelf_books(
