@@ -123,8 +123,7 @@ pub fn run_with_options(
     install_daemon_audiobookshelf_context(&player, &audiobookshelf_runtime, &merged_tx);
 
     // Shared state for ctrl socket initial-state snapshots — stores the
-    // canonical queue so both legacy and unified-queue peers are seeded
-    // from one source.
+    // canonical queue so all ctrl peers are seeded from one source.
     let shared_queue = SharedQueueState {
         queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
@@ -339,8 +338,7 @@ pub fn run_with_options(
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::TrackChanged(clamped_idx)),
                 );
-                // Broadcast full state so both legacy and capable peers see
-                // the authoritative playback position.
+                // Broadcast full state so peers see the authoritative playback position.
                 let status = player.status.lock().unwrap().clone();
                 let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
                     &status, &queue, &source, true,
@@ -348,34 +346,13 @@ pub fn run_with_options(
                 let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
                     &status, &queue, &source, false,
                 ));
-                let (emby_items, feed_items) = split_queue_for_legacy(&queue);
-                let capable_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
-                    status: status.clone(),
-                    items: emby_items.clone(),
-                    cursor: clamped_idx,
-                    source: source.clone(),
-                    feed_items: feed_items.clone(),
-                }));
-                let legacy_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
-                    status,
-                    items: emby_items,
-                    cursor: clamped_idx,
-                    source: source.clone(),
-                    feed_items: Vec::new(),
-                }));
-                if let (
-                    Some(unified_abs_json),
-                    Some(unified_json),
-                    Some(capable_json),
-                    Some(legacy_json),
-                ) = (unified_abs_json, unified_json, capable_json, legacy_json)
+                if let (Some(unified_abs_json), Some(unified_json)) =
+                    (unified_abs_json, unified_json)
                 {
-                    ctrl_clients.lock().unwrap().broadcast_state_gated(
-                        unified_abs_json,
-                        unified_json,
-                        capable_json,
-                        legacy_json,
-                    );
+                    ctrl_clients
+                        .lock()
+                        .unwrap()
+                        .broadcast_state_gated(unified_abs_json, unified_json);
                 }
                 // Update reconnect snapshot.
                 *shared_queue.queue.lock().unwrap() = queue.clone();
@@ -651,14 +628,14 @@ pub fn run_with_options(
                     &ctrl_clients,
                     &mut playback_intents,
                     audiobookshelf_runtime.is_some(),
-                    None,
                     &merged_tx,
                 );
             }
             DaemonEvent::PlaybackResolved {
-                command,
+                start_idx,
+                start_ticks,
+                source: new_source,
                 client_id,
-                reply_tx,
                 request_id,
                 generation,
                 fetched,
@@ -722,24 +699,20 @@ pub fn run_with_options(
                         .unwrap()
                         .send_to_client(client_id, &CtrlEvent::PipePlaybackStatus(status));
                 }
-                handle_ctrl(
-                    command,
-                    client_id,
-                    CtrlRequest {
-                        reply_tx: &reply_tx,
-                    },
-                    &client,
-                    &player,
-                    audio_only,
-                    &mut queue,
-                    &mut source,
-                    &shared_queue,
-                    &ctrl_clients,
-                    &mut playback_intents,
-                    audiobookshelf_runtime.is_some(),
-                    Some(fetched),
-                    &merged_tx,
-                );
+                if let Ok(fetched_items) = fetched {
+                    play_resolved_items(
+                        fetched_items,
+                        start_idx,
+                        start_ticks,
+                        new_source,
+                        &client,
+                        &player,
+                        &mut queue,
+                        &mut source,
+                        &shared_queue,
+                        &ctrl_clients,
+                    );
+                }
             }
             DaemonEvent::CtrlDisconnected(client_id) => {
                 ctrl_clients.lock().unwrap().remove(client_id);

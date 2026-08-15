@@ -1,5 +1,48 @@
 include!("daemon_control_queue.rs");
 
+/// Plays a resolved-by-id playback intent. Replaces the legacy `PlayItems`
+/// wire command, which carried both the wire shape and this internal
+/// control-flow re-entry; the wire variant is gone (ADR 0020), so the
+/// resolved-play path now lives here as a plain function.
+#[allow(clippy::too_many_arguments)]
+fn play_resolved_items(
+    fetched: Vec<EmbyItem>,
+    start_idx: usize,
+    start_ticks: i64,
+    new_source: crate::config::QueueSource,
+    client: &Arc<Mutex<EmbyClient>>,
+    player: &Player,
+    queue: &mut PlaybackQueue,
+    source: &mut crate::config::QueueSource,
+    shared_queue: &SharedQueueState,
+    ctrl_clients: &ClientRegistry,
+) {
+    let queue_items: Vec<QueueItem> = fetched
+        .iter()
+        .cloned()
+        .map(|item| QueueItem::Emby(Box::new(item)))
+        .collect();
+    let start_idx = start_idx.min(queue_items.len().saturating_sub(1));
+    *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
+    *source = new_source;
+    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+    if fetched.len() == 1 {
+        let mut play_item = fetched[0].clone();
+        if start_ticks > 0 {
+            play_item.playback_position_ticks = start_ticks;
+        }
+        let c = Arc::new(client.lock().unwrap().clone());
+        player.play(&play_item, c, 100);
+    } else {
+        let mut play_items = fetched;
+        if start_ticks > 0 {
+            play_items[start_idx].playback_position_ticks = start_ticks;
+        }
+        let c = Arc::new(client.lock().unwrap().clone());
+        player.play_queue(play_items, start_idx, c, 100);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_ctrl(
     cmd: CtrlCmd,
@@ -14,7 +57,6 @@ fn handle_ctrl(
     ctrl_clients: &ClientRegistry,
     playback_intents: &mut PlaybackIntentState,
     has_audiobookshelf: bool,
-    mut resolved_items: Option<Result<Vec<EmbyItem>, String>>,
     merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
     let has_emby = !client.lock().unwrap().token.is_empty();
@@ -65,43 +107,6 @@ fn handle_ctrl(
         CtrlCmd::Hello(_) => {
             log::warn!(target: "daemon", "unexpected ctrl protocol hello after negotiation");
         }
-        CtrlCmd::AdoptQueue {
-            items: new_items,
-            cursor: new_cursor,
-            source: new_source,
-        } => {
-            // Adoption only applies to a Cold daemon — one with no queue yet.
-            if !queue.is_empty() {
-                log::warn!(
-                    target: "daemon",
-                    "ignoring AdoptQueue: daemon already has a queue ({} slot(s))",
-                    queue.len()
-                );
-                reject_command(
-                    request.reply_tx,
-                    ctrl_clients,
-                    client_id,
-                    player,
-                    queue,
-                    source,
-                    "daemon already has a queue; adoption skipped".to_string(),
-                );
-                return;
-            }
-            let queue_items: Vec<QueueItem> = new_items
-                .into_iter()
-                .map(|item| QueueItem::Emby(Box::new(item)))
-                .collect();
-            let next_cursor = if queue_items.is_empty() {
-                0
-            } else {
-                new_cursor.min(queue_items.len().saturating_sub(1))
-            };
-            player.set_initial_queue(&queue_items, next_cursor);
-            *queue = PlaybackQueue::from_queue_items(queue_items, Some(next_cursor));
-            *source = new_source;
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-        }
         CtrlCmd::UnifiedAdoptQueue {
             items,
             cursor,
@@ -150,203 +155,80 @@ fn handle_ctrl(
             *source = new_source;
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
         }
-        CtrlCmd::PlayerCmd(pc) => {
-            // Legacy wire-compat adapter: intercept LoadFeed before
-            // converting to PlayerCommand so it routes through the
-            // unified queue path.  Old peers send WireCommand::LoadFeed;
-            // current peers never emit it.
-            if let WireCommand::LoadFeed { entry } = &pc {
-                let slot_id = queue.append(QueueItem::Feed(entry.clone()));
-                let _ = queue.set_active_slot(slot_id);
+        CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
+            PlayerCommand::ReplaceQueue {
+                items: new_items,
+                start_idx,
+            } => {
+                let queue_items: Vec<QueueItem> = new_items
+                    .iter()
+                    .cloned()
+                    .map(|item| QueueItem::Emby(Box::new(item)))
+                    .collect();
+                let next_cursor = if queue_items.is_empty() {
+                    0
+                } else {
+                    start_idx.min(queue_items.len().saturating_sub(1))
+                };
+                *queue = PlaybackQueue::from_queue_items(queue_items, Some(next_cursor));
                 broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
                 player.send_command(PlayerCommand::SubmitQueue {
                     items: queue.slots().iter().map(|s| s.item.clone()).collect(),
-                    start_idx: queue.active_index().unwrap_or(0),
+                    start_idx: next_cursor,
                 });
-                return;
             }
-            match PlayerCommand::from(pc) {
-                PlayerCommand::ReplaceQueue {
-                    items: new_items,
-                    start_idx,
-                } => {
-                    if !ctrl_clients
-                        .lock()
-                        .unwrap()
-                        .supports_unified_queue(client_id)
-                        && queue.has_feed_entries()
-                    {
-                        reject_command(
-                            request.reply_tx,
-                            ctrl_clients,
-                            client_id,
-                            player,
-                            queue,
-                            source,
-                            "queue contains Feed entries invisible to legacy peer; replace skipped"
-                                .to_string(),
-                        );
-                        return;
+            PlayerCommand::QueueAppend { items: new_items } => {
+                if !new_items.is_empty() {
+                    for item in new_items {
+                        queue.append(item);
                     }
-                    let queue_items: Vec<QueueItem> = new_items
-                        .iter()
-                        .cloned()
-                        .map(|item| QueueItem::Emby(Box::new(item)))
-                        .collect();
-                    let next_cursor = if queue_items.is_empty() {
-                        0
-                    } else {
-                        start_idx.min(queue_items.len().saturating_sub(1))
-                    };
-                    *queue = PlaybackQueue::from_queue_items(queue_items, Some(next_cursor));
                     broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
                     player.send_command(PlayerCommand::SubmitQueue {
                         items: queue.slots().iter().map(|s| s.item.clone()).collect(),
-                        start_idx: next_cursor,
+                        start_idx: queue.active_index().unwrap_or(0),
                     });
                 }
-                PlayerCommand::QueueAppend { items: new_items } => {
-                    if !new_items.is_empty() {
-                        for item in new_items {
-                            queue.append(item);
-                        }
-                        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                        player.send_command(PlayerCommand::SubmitQueue {
-                            items: queue.slots().iter().map(|s| s.item.clone()).collect(),
-                            start_idx: queue.active_index().unwrap_or(0),
-                        });
-                    }
-                }
-                PlayerCommand::QueueMove(from, to) => {
-                    if from >= queue.len() || to >= queue.len() {
-                        reject_command(
-                            request.reply_tx,
-                            ctrl_clients,
-                            client_id,
-                            player,
-                            queue,
-                            source,
-                            "remote queue changed; move skipped".to_string(),
-                        );
-                    } else if from != to {
-                        let slot_id = queue.slots()[from].slot_id;
-                        queue.move_slot(slot_id, to);
-                        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                        player.send_command(PlayerCommand::QueueMove(from, to));
-                    }
-                }
-                PlayerCommand::QueueRemove(index) => {
-                    if index >= queue.len() {
-                        reject_command(
-                            request.reply_tx,
-                            ctrl_clients,
-                            client_id,
-                            player,
-                            queue,
-                            source,
-                            "remote queue changed; remove skipped".to_string(),
-                        );
-                    } else {
-                        let slot_id = queue.slots()[index].slot_id;
-                        queue.consume_slot(slot_id);
-                        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-                        player.send_command(PlayerCommand::QueueRemove(index));
-                    }
-                }
-                other => {
-                    player.send_command(other);
+            }
+            PlayerCommand::QueueMove(from, to) => {
+                if from >= queue.len() || to >= queue.len() {
+                    reject_command(
+                        request.reply_tx,
+                        ctrl_clients,
+                        client_id,
+                        player,
+                        queue,
+                        source,
+                        "remote queue changed; move skipped".to_string(),
+                    );
+                } else if from != to {
+                    let slot_id = queue.slots()[from].slot_id;
+                    queue.move_slot(slot_id, to);
+                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+                    player.send_command(PlayerCommand::QueueMove(from, to));
                 }
             }
-        }
-        CtrlCmd::PlayItems {
-            item_ids,
-            start_idx,
-            start_ticks,
-            source: new_source,
-        } => {
-            if !has_emby {
-                return;
-            }
-            let fetched = match resolved_items.take() {
-                Some(Ok(v)) => v,
-                Some(Err(e)) => {
-                    log::warn!(target: "daemon", "ctrl play error: {e}");
-                    send_to(request.reply_tx, &CtrlEvent::CommandRejected(e));
-                    return;
+            PlayerCommand::QueueRemove(index) => {
+                if index >= queue.len() {
+                    reject_command(
+                        request.reply_tx,
+                        ctrl_clients,
+                        client_id,
+                        player,
+                        queue,
+                        source,
+                        "remote queue changed; remove skipped".to_string(),
+                    );
+                } else {
+                    let slot_id = queue.slots()[index].slot_id;
+                    queue.consume_slot(slot_id);
+                    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
+                    player.send_command(PlayerCommand::QueueRemove(index));
                 }
-                None => {
-                    let c = client.lock().unwrap();
-                    match c.get_items_by_ids(&item_ids) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            log::warn!(target: "daemon", "ctrl play error: {e}");
-                            return;
-                        }
-                    }
-                }
-            };
-            if fetched.is_empty() {
-                log::warn!(
-                    target: "daemon",
-                    "ctrl play: fetched items are empty, discarding request"
-                );
-                return;
             }
-            if let Some(reason) = audio_only_rejection(
-                audio_only,
-                &fetched
-                    .iter()
-                    .cloned()
-                    .map(|e| QueueItem::Emby(Box::new(e)))
-                    .collect::<Vec<_>>(),
-            ) {
-                log::warn!(target: "daemon", "rejecting ctrl play request: {reason}");
-                send_to(request.reply_tx, &CtrlEvent::CommandRejected(reason));
-                return;
+            other => {
+                player.send_command(other);
             }
-            if !ctrl_clients
-                .lock()
-                .unwrap()
-                .supports_unified_queue(client_id)
-                && queue.has_feed_entries()
-            {
-                reject_command(
-                    request.reply_tx,
-                    ctrl_clients,
-                    client_id,
-                    player,
-                    queue,
-                    source,
-                    "queue contains Feed entries invisible to legacy peer; play skipped"
-                        .to_string(),
-                );
-                return;
-            }
-            let queue_items: Vec<QueueItem> = fetched
-                .iter()
-                .cloned()
-                .map(|item| QueueItem::Emby(Box::new(item)))
-                .collect();
-            let start_idx = start_idx.min(queue_items.len().saturating_sub(1));
-            *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
-            *source = new_source;
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
-            if fetched.len() == 1 {
-                let mut play_item = fetched[0].clone();
-                if start_ticks > 0 {
-                    play_item.playback_position_ticks = start_ticks;
-                }
-                let c = Arc::new(client.lock().unwrap().clone());
-                player.play(&play_item, c, 100);
-            } else {
-                let mut play_items = fetched;
-                if start_ticks > 0 {
-                    play_items[start_idx].playback_position_ticks = start_ticks;
-                }
-                let c = Arc::new(client.lock().unwrap().clone());
-                player.play_queue(play_items, start_idx, c, 100);
-            }
-        }
+        },
         CtrlCmd::Stop => {
             player.stop();
         }
@@ -384,23 +266,17 @@ fn handle_ctrl(
                         log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
                         send_to(request.reply_tx, &CtrlEvent::PipePlaybackStatus(status));
                     }
-                    let command = CtrlCmd::PlayItems {
-                        item_ids: item_ids.clone(),
-                        start_idx,
-                        start_ticks,
-                        source: intent_source,
-                    };
                     let tx = merged_tx.clone();
                     let lookup_client = client.lock().unwrap().clone();
                     let request_id = intent.request_id;
                     let generation = intent.generation;
-                    let reply_tx = (*request.reply_tx).clone();
                     std::thread::spawn(move || {
                         let fetched = lookup_client.get_items_by_ids(&item_ids);
                         let _ = tx.send(DaemonEvent::PlaybackResolved {
-                            command,
+                            start_idx,
+                            start_ticks,
+                            source: intent_source,
                             client_id,
-                            reply_tx,
                             request_id,
                             generation,
                             fetched,
@@ -480,7 +356,7 @@ fn handle_ctrl(
             // `send_command` alone only reaches an already-running mpv
             // thread; on a freshly started daemon no thread exists yet, so
             // route through `submit_queue`, which cold-starts one when
-            // needed (matches the legacy PlayItems path via play/play_queue).
+            // needed (as `play_resolved_items` does).
             let queue_items: Vec<QueueItem> =
                 queue.slots().iter().map(|s| s.item.clone()).collect();
             let all_audio = queue_items.iter().all(|item| item.is_audio());

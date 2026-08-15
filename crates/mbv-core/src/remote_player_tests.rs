@@ -1,9 +1,6 @@
 use super::*;
 use crate::config::QueueSource;
-use crate::ctrl::CtrlState;
-use crate::ctrl::WireCommand;
 use crate::playback_queue::QueueItem;
-use crate::player::PlayerCommand;
 
 fn make_media_item(id: &str) -> EmbyItem {
     EmbyItem {
@@ -112,38 +109,6 @@ fn status_only_preserves_event_confirmed_current_index() {
 }
 
 #[test]
-fn state_uses_cursor_as_current_index() {
-    let status = Arc::new(Mutex::new(status_with_idx(0)));
-    let items = Arc::new(Mutex::new(Vec::new()));
-    let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
-    let (tx, rx) = mpsc::channel();
-
-    apply_ctrl_event(
-        CtrlEvent::State(CtrlState {
-            status: status_with_idx(5),
-            items: Vec::new(),
-            cursor: 3,
-            source: QueueSource::Unknown,
-            feed_items: Vec::new(),
-        }),
-        &status,
-        &items,
-        &unified_queue,
-        &queue_source,
-        &tx,
-        &Arc::new(Mutex::new(std::collections::HashMap::new())),
-        true,
-    );
-
-    assert_eq!(status.lock().unwrap().current_idx, 3);
-    assert!(matches!(
-        rx.recv().unwrap(),
-        PlayerEvent::QueueUpdated { cursor: 3, .. }
-    ));
-}
-
-#[test]
 fn status_only_preserves_current_idx_and_queue_len() {
     let status = Arc::new(Mutex::new(status_with_idx_and_len(3, 7)));
     let items = Arc::new(Mutex::new(Vec::new()));
@@ -165,37 +130,6 @@ fn status_only_preserves_current_idx_and_queue_len() {
     let s = status.lock().unwrap();
     assert_eq!(s.current_idx, 3);
     assert_eq!(s.queue_len, 7);
-}
-
-#[test]
-fn state_derives_queue_len_from_items_not_status() {
-    let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 0)));
-    let items = Arc::new(Mutex::new(Vec::new()));
-    let unified_queue = Arc::new(Mutex::new(None));
-    let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
-    let (tx, _rx) = mpsc::channel();
-
-    // s.status.queue_len (99) is stale relative to s.items.len() (2) — the
-    // daemon broadcasts CtrlState before calling play_queue(...), so
-    // items/cursor are authoritative over status at broadcast time.
-    apply_ctrl_event(
-        CtrlEvent::State(CtrlState {
-            status: status_with_idx_and_len(5, 99),
-            items: vec![make_media_item("a"), make_media_item("b")],
-            cursor: 1,
-            source: QueueSource::Unknown,
-            feed_items: Vec::new(),
-        }),
-        &status,
-        &items,
-        &unified_queue,
-        &queue_source,
-        &tx,
-        &Arc::new(Mutex::new(std::collections::HashMap::new())),
-        true,
-    );
-
-    assert_eq!(status.lock().unwrap().queue_len, 2);
 }
 
 #[test]

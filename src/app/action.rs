@@ -584,7 +584,7 @@ impl App {
                         self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
                     } else if t != current_idx {
                         self.pending_active_idx = Some(t);
-                        if self.player.supports_unified_queue() {
+                        if self.player.is_remote() {
                             let Some(slot_id) = slot_id else {
                                 return false;
                             };

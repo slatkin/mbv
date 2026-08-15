@@ -73,7 +73,7 @@ fn video_feed_qi(guid: &str) -> QueueItem {
 /// Connects a client the same way the accept thread does.
 fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(tx, CtrlTransport::Local, true, true, true, true);
+    let id = clients.connect(tx, CtrlTransport::Local, true, true);
     (id, rx)
 }
 
@@ -271,73 +271,11 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
     assert!(registry.lock().unwrap().has_driver());
     assert!(sender_rx.try_recv().is_err());
-}
-
-#[test]
-fn adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
-    let player = cold_player();
-    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (_sender_id, _sender_rx) = {
-        let mut clients = registry.lock().unwrap();
-        connect_client(&mut clients)
-    };
-    let (reply_tx, reply_rx) = mpsc::channel();
-    let mut queue = queue_from_items(&[item("existing", "Video", "Movie")], 0);
-    let mut source = QueueSource::Remote;
-    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
-
-    handle_ctrl(
-        CtrlCmd::AdoptQueue {
-            items: vec![item("stale", "Video", "Movie")],
-            cursor: 0,
-            source: QueueSource::Unknown,
-        },
-        1,
-        CtrlRequest {
-            reply_tx: &reply_tx,
-        },
-        &client,
-        &player,
-        false,
-        &mut queue,
-        &mut source,
-        &shared_queue_state(),
-        &registry,
-        &mut PlaybackIntentState::default(),
-        false,
-        None,
-        &dummy_merged_tx,
-    );
-
-    assert_eq!(queue.len(), 1);
-    assert_eq!(queue.slots()[0].item.id(), "existing");
-    match recv_event(&reply_rx) {
-        CtrlEvent::CommandRejected(reason) => {
-            assert_eq!(reason, "daemon already has a queue; adoption skipped");
-        }
-        _ => panic!("expected command rejection"),
-    }
-    match recv_event(&reply_rx) {
-        CtrlEvent::State(state) => {
-            assert_eq!(
-                state
-                    .items
-                    .iter()
-                    .map(|i| i.id.as_str())
-                    .collect::<Vec<_>>(),
-                vec!["existing"]
-            );
-            assert_eq!(state.cursor, 0);
-        }
-        _ => panic!("expected authoritative state resync"),
-    }
 }
 
 #[test]
@@ -372,7 +310,6 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
@@ -415,7 +352,6 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
@@ -428,16 +364,12 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         _ => panic!("expected command rejection"),
     }
     match recv_event(&reply_rx) {
-        CtrlEvent::State(state) => {
+        CtrlEvent::UnifiedQueueState(state) => {
             assert_eq!(
-                state
-                    .items
-                    .iter()
-                    .map(|i| i.id.as_str())
-                    .collect::<Vec<_>>(),
+                state.slots.iter().map(|s| s.item.id()).collect::<Vec<_>>(),
                 vec!["existing"]
             );
-            assert_eq!(state.cursor, 0);
+            assert_eq!(state.active_slot, Some(state.slots[0].slot_id));
         }
         _ => panic!("expected authoritative state resync"),
     }
@@ -481,7 +413,6 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
@@ -556,7 +487,6 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
@@ -618,7 +548,6 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
@@ -683,7 +612,6 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
@@ -704,16 +632,12 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
         _ => panic!("expected command rejection"),
     }
     match recv_event(&reply_rx) {
-        CtrlEvent::State(state) => {
+        CtrlEvent::UnifiedQueueState(state) => {
             assert_eq!(
-                state
-                    .items
-                    .iter()
-                    .map(|i| i.id.as_str())
-                    .collect::<Vec<_>>(),
+                state.slots.iter().map(|s| s.item.id()).collect::<Vec<_>>(),
                 vec!["item-0", "item-1"]
             );
-            assert_eq!(state.cursor, 1);
+            assert_eq!(state.active_slot, Some(state.slots[1].slot_id));
         }
         _ => panic!("expected queue state resync"),
     }

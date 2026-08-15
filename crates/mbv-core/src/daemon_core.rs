@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
 use crate::ctrl::{
-    AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason,
+    AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello, DisconnectReason,
     PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
-    PlaybackIntentOutcome, PlaybackRequestId, WireCommand,
+    PlaybackIntentOutcome, PlaybackRequestId,
 };
-use crate::playback_queue::{FeedEntry, PlaybackQueue, QueueItem, QueueSlotId};
+use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 
@@ -52,9 +52,10 @@ enum DaemonEvent {
     /// instead of broadcast to every connected TUI.
     Ctrl(CtrlCmd, CtrlClientId, CtrlSender),
     PlaybackResolved {
-        command: CtrlCmd,
+        start_idx: usize,
+        start_ticks: i64,
+        source: crate::config::QueueSource,
         client_id: CtrlClientId,
-        reply_tx: CtrlSender,
         request_id: PlaybackRequestId,
         generation: PlaybackGeneration,
         fetched: Result<Vec<EmbyItem>, String>,
@@ -127,15 +128,8 @@ struct CtrlClient {
     id: CtrlClientId,
     tx: CtrlSender,
     transport: CtrlTransport,
-    /// Whether this peer advertised `feed-playback` in its Hello. Gates
-    /// whether it receives the Feed tail in legacy CtrlState or an empty one.
-    supports_feed_playback: bool,
-    /// Whether this peer advertised `unified-queue` in its Hello. Gates
-    /// whether it receives `UnifiedQueueState` or legacy `CtrlState`.
-    supports_unified_queue: bool,
     /// Whether this peer advertised `abs-queue` in its Hello. Gates whether
     /// it receives or may submit `QueueItem::Audiobookshelf` values.
-    #[allow(dead_code)]
     supports_abs_queue: bool,
     /// Whether this peer advertised `abs-progress` in its Hello. Gates
     /// whether it receives the redacted Audiobookshelf progress event.
@@ -428,8 +422,7 @@ impl PlaybackIntentState {
 
 /// Snapshot of the daemon's canonical queue used to seed newly-connecting
 /// ctrl-socket clients.  The queue itself is the single source of truth;
-/// legacy `CtrlState` and capable `UnifiedQueueState` are both derived from
-/// it at the broadcast boundary.
+/// `UnifiedQueueState` is derived from it at the broadcast boundary.
 #[derive(Clone)]
 struct SharedQueueState {
     queue: Arc<Mutex<PlaybackQueue>>,
@@ -495,8 +488,6 @@ impl CtrlClients {
         &mut self,
         tx: CtrlSender,
         transport: CtrlTransport,
-        supports_feed_playback: bool,
-        supports_unified_queue: bool,
         supports_abs_queue: bool,
         supports_abs_progress: bool,
     ) -> CtrlClientId {
@@ -506,8 +497,6 @@ impl CtrlClients {
             id,
             tx,
             transport,
-            supports_feed_playback,
-            supports_unified_queue,
             supports_abs_queue,
             supports_abs_progress,
         });
@@ -539,26 +528,6 @@ impl CtrlClients {
             .iter()
             .find(|client| client.id == id)
             .map(|client| client.transport)
-    }
-
-    /// Whether the client `id` advertised `feed-playback` support at Hello.
-    /// Used to gate per-client rejection echoes that would otherwise leak
-    /// the Feed tail to a legacy peer.
-    fn supports_feed_playback(&self, id: CtrlClientId) -> bool {
-        self.connection
-            .iter()
-            .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_feed_playback)
-    }
-
-    /// Whether the client `id` advertised `unified-queue` support at Hello.
-    /// Used to gate per-client state events: capable peers receive
-    /// `UnifiedQueueState`, legacy peers receive `CtrlState`.
-    fn supports_unified_queue(&self, id: CtrlClientId) -> bool {
-        self.connection
-            .iter()
-            .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_unified_queue)
     }
 
     /// Whether the client `id` advertised `abs-queue` support at Hello.
@@ -598,28 +567,16 @@ impl CtrlClients {
     }
 
     /// Broadcasts a state event gated per client:
-    /// - `unified_abs_json` → peers advertising `unified-queue` and `abs-queue`
-    /// - `unified_json` → peers advertising `unified-queue` but not `abs-queue`
-    /// - `capable_json` → peers advertising `feed-playback` but not `unified-queue`
-    /// - `legacy_json` → all others
+    /// - `unified_abs_json` → peers advertising `abs-queue`
+    /// - `unified_json` → all others
     ///
     /// Mirrors `broadcast_to_all`'s drop-on-failed-send behavior.
-    fn broadcast_state_gated(
-        &mut self,
-        unified_abs_json: String,
-        unified_json: String,
-        capable_json: String,
-        legacy_json: String,
-    ) {
+    fn broadcast_state_gated(&mut self, unified_abs_json: String, unified_json: String) {
         self.connection.retain(|c| {
-            let json = if c.supports_unified_queue && c.supports_abs_queue {
+            let json = if c.supports_abs_queue {
                 &unified_abs_json
-            } else if c.supports_unified_queue {
-                &unified_json
-            } else if c.supports_feed_playback {
-                &capable_json
             } else {
-                &legacy_json
+                &unified_json
             };
             c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
         });
@@ -643,12 +600,7 @@ impl CtrlClients {
     /// transitions — clients observe the authority change but stay connected.
     fn notify_disconnected_all(&self, reason: DisconnectReason) {
         for client in &self.connection {
-            send_to(
-                &client.tx,
-                &CtrlEvent::Disconnected {
-                    reason: reason.clone(),
-                },
-            );
+            send_to(&client.tx, &CtrlEvent::Disconnected { reason });
         }
     }
 

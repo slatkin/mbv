@@ -47,12 +47,9 @@ fn spawn_ctrl_client<S>(
         let Some(Ok(line)) = lines.next() else {
             return;
         };
-        let (
-            supports_feed_playback,
-            supports_unified_queue,
-            supports_abs_queue,
-            supports_abs_progress,
-        ) = match serde_json::from_str::<CtrlCmd>(&line) {
+        let (supports_abs_queue, supports_abs_progress) = match serde_json::from_str::<CtrlCmd>(
+            &line,
+        ) {
             Ok(CtrlCmd::Hello(info)) => {
                 if let Err(e) = info.validate_peer() {
                     log::warn!(target: "daemon", "rejecting ctrl client: {e}");
@@ -68,12 +65,7 @@ fn spawn_ctrl_client<S>(
                         return;
                     }
                 }
-                (
-                    info.supports_feed_playback(),
-                    info.supports_unified_queue(),
-                    info.supports_abs_queue(),
-                    info.supports_abs_progress(),
-                )
+                (info.supports_abs_queue(), info.supports_abs_progress())
             }
             Ok(_) => {
                 log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
@@ -86,37 +78,9 @@ fn spawn_ctrl_client<S>(
         };
 
         let status = player_status.lock().unwrap().clone();
-        let init_event = if supports_unified_queue {
-            let q = shared_queue.queue.lock().unwrap();
-            let source = shared_queue.source.lock().unwrap().clone();
-            unified_queue_state_for_peer(&status, &q, &source, supports_abs_queue)
-        } else {
-            let q = shared_queue.queue.lock().unwrap();
-            let feed_items: Vec<FeedEntry> = if supports_feed_playback {
-                q.slots()
-                    .iter()
-                    .filter_map(|s| match &s.item {
-                        QueueItem::Feed(e) => Some(e.clone()),
-                        _ => None,
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
-            let emby_items: Vec<EmbyItem> = q
-                .slots()
-                .iter()
-                .filter_map(|s| s.item.as_emby().cloned())
-                .collect();
-            let cursor = q.active_index().unwrap_or(0);
-            CtrlEvent::State(CtrlState {
-                status,
-                items: emby_items,
-                cursor,
-                source: shared_queue.source.lock().unwrap().clone(),
-                feed_items,
-            })
-        };
+        let q = shared_queue.queue.lock().unwrap();
+        let source = shared_queue.source.lock().unwrap().clone();
+        let init_event = unified_queue_state_for_peer(&status, &q, &source, supports_abs_queue);
         if let Ok(init_json) = serde_json::to_string(&init_event) {
             ev_tx.send(CtrlOutbound::Event(init_json)).ok();
         }
@@ -124,8 +88,6 @@ fn spawn_ctrl_client<S>(
         let client_id = ctrl_clients.lock().unwrap().connect(
             ev_tx,
             transport,
-            supports_feed_playback,
-            supports_unified_queue,
             supports_abs_queue,
             supports_abs_progress,
         );
