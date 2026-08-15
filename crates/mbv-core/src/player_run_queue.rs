@@ -185,14 +185,19 @@ impl PlaybackRun {
         item: &QueueItem,
     ) -> Result<(), AudiobookshelfError> {
         let _ = mpv.command("playlist-clear", &[]);
-        if prepared.merged_timeline {
-            // One continuous timeline across the book's audio files, so
-            // chapter rows can issue absolute seeks against the whole book.
-            // ponytail: merge-files=yes projects the playlist as one file; if
-            // a real multi-file book misbehaves, fall back to per-entry
-            // offsets (design.md Open Questions) before widening this path.
-            let _ = mpv.set_property("merge-files", "yes".to_string());
-        }
+        // One continuous timeline across the book's audio files, so chapter
+        // rows can issue absolute seeks against the whole book. mpv merges the
+        // playlisted files into a single edl:// entry only while this property
+        // is set, so it is reset to no for every non-book load below.
+        let _ = mpv.set_property(
+            "merge-files",
+            if prepared.merged_timeline {
+                "yes"
+            } else {
+                "no"
+            }
+            .to_string(),
+        );
         let options = prepared.mpv_load_options(item);
         if mpv
             .command(
