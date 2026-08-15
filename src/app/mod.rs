@@ -309,8 +309,7 @@ impl App {
         }
 
         if let Some(client) = self.emby_client() {
-            let client = client.lock().unwrap();
-            client.register_capabilities_with_options(&[], client.config.audio_pipe_enabled);
+            client.lock().unwrap().register_capabilities();
         }
 
         if self.emby_client().is_some() {
@@ -510,10 +509,7 @@ impl App {
                 && self.last_capabilities.elapsed() >= Duration::from_secs(600)
             {
                 if let Some(client) = self.emby_snapshot() {
-                    let audio_pipe_enabled = client.config.audio_pipe_enabled;
-                    std::thread::spawn(move || {
-                        client.register_capabilities_with_options(&[], audio_pipe_enabled)
-                    });
+                    std::thread::spawn(move || client.register_capabilities());
                 }
                 self.last_capabilities = Instant::now();
             }

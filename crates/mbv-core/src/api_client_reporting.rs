@@ -243,6 +243,11 @@ impl EmbyClient {
         }
     }
 
+    /// Register with the client's configured audio-pipe setting.
+    pub fn register_capabilities(&self) {
+        self.register_capabilities_with_options(&[], self.config.audio_pipe_enabled);
+    }
+
     pub fn register_capabilities_with_options(&self, extra_commands: &[String], audio_only: bool) {
         let media_types: &[&str] = if audio_only {
             &["Audio"]

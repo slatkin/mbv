@@ -565,12 +565,7 @@ impl App {
                 // successful authentication, but never make Ready
                 // application wait on the Emby agent timeout.
                 let capability_client = startup.client.clone();
-                std::thread::spawn(move || {
-                    capability_client.register_capabilities_with_options(
-                        &[],
-                        capability_client.config.audio_pipe_enabled,
-                    )
-                });
+                std::thread::spawn(move || capability_client.register_capabilities());
                 let client = Arc::new(Mutex::new(startup.client));
                 let (ws_tx, ws_rx) = mpsc::channel();
                 self.ws_send_tx = Some(mbv_core::ws::start(ws_url, ws_tx));
@@ -718,12 +713,7 @@ impl App {
                 let ws_url = startup.client.ws_url();
                 if start_network {
                     let capability_client = startup.client.clone();
-                    std::thread::spawn(move || {
-                        capability_client.register_capabilities_with_options(
-                            &[],
-                            capability_client.config.audio_pipe_enabled,
-                        )
-                    });
+                    std::thread::spawn(move || capability_client.register_capabilities());
                 }
                 let setup = startup.setup.clone();
                 let client = Arc::new(Mutex::new(startup.client));
