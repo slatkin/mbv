@@ -340,19 +340,35 @@ pub fn run_with_options(
                 );
                 // Broadcast full state so peers see the authoritative playback position.
                 let status = player.status.lock().unwrap().clone();
+                let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
+                    &status, &queue, &source, true, true,
+                ));
                 let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &queue, &source, true,
+                    &status, &queue, &source, true, false,
+                ));
+                let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
+                    &status, &queue, &source, false, true,
                 ));
                 let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-                    &status, &queue, &source, false,
+                    &status, &queue, &source, false, false,
                 ));
-                if let (Some(unified_abs_json), Some(unified_json)) =
-                    (unified_abs_json, unified_json)
-                {
-                    ctrl_clients
-                        .lock()
-                        .unwrap()
-                        .broadcast_state_gated(unified_abs_json, unified_json);
+                if let (
+                    Some(unified_full_json),
+                    Some(unified_abs_json),
+                    Some(unified_book_json),
+                    Some(unified_json),
+                ) = (
+                    unified_full_json,
+                    unified_abs_json,
+                    unified_book_json,
+                    unified_json,
+                ) {
+                    ctrl_clients.lock().unwrap().broadcast_state_gated(
+                        unified_full_json,
+                        unified_abs_json,
+                        unified_book_json,
+                        unified_json,
+                    );
                 }
                 // Update reconnect snapshot.
                 *shared_queue.queue.lock().unwrap() = queue.clone();
@@ -551,6 +567,16 @@ pub fn run_with_options(
                     &ctrl_clients,
                 );
             }
+            DaemonEvent::AudiobookshelfBookProgress(update) => {
+                apply_audiobookshelf_book_progress(
+                    update,
+                    audiobookshelf_runtime
+                        .as_ref()
+                        .map(|runtime| runtime.generation),
+                    &mut queue,
+                    &ctrl_clients,
+                );
+            }
             DaemonEvent::Ctrl(cmd, client_id, reply_tx) => {
                 if !ctrl_clients.lock().unwrap().has_client(client_id) {
                     continue;
@@ -738,14 +764,4 @@ pub fn run_with_options(
             }
         }
     }
-}
-
-fn owner_admin_transport_allowed(
-    role: DaemonRole,
-    kind: crate::config::ServiceKind,
-    transport: Option<CtrlTransport>,
-) -> bool {
-    let role_allowed =
-        role == DaemonRole::Packaged || kind == crate::config::ServiceKind::Audiobookshelf;
-    role_allowed && transport == Some(CtrlTransport::Local)
 }

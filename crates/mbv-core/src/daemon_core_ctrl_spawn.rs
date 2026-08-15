@@ -45,9 +45,12 @@ fn spawn_ctrl_client(
         let Some(Ok(line)) = lines.next() else {
             return;
         };
-        let (supports_abs_queue, supports_abs_progress) = match serde_json::from_str::<CtrlCmd>(
-            &line,
-        ) {
+        let (
+            supports_abs_queue,
+            supports_abs_progress,
+            supports_abs_book_queue,
+            supports_abs_book_progress,
+        ) = match serde_json::from_str::<CtrlCmd>(&line) {
             Ok(CtrlCmd::Hello(info)) => {
                 if let Err(e) = info.validate_peer() {
                     log::warn!(target: "daemon", "rejecting ctrl client: {e}");
@@ -63,7 +66,12 @@ fn spawn_ctrl_client(
                         return;
                     }
                 }
-                (info.supports_abs_queue(), info.supports_abs_progress())
+                (
+                    info.supports_abs_queue(),
+                    info.supports_abs_progress(),
+                    info.supports_abs_book_queue(),
+                    info.supports_abs_book_progress(),
+                )
             }
             Ok(_) => {
                 log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
@@ -78,7 +86,13 @@ fn spawn_ctrl_client(
         let status = player_status.lock().unwrap().clone();
         let q = shared_queue.queue.lock().unwrap();
         let source = shared_queue.source.lock().unwrap().clone();
-        let init_event = unified_queue_state_for_peer(&status, &q, &source, supports_abs_queue);
+        let init_event = unified_queue_state_for_peer(
+            &status,
+            &q,
+            &source,
+            supports_abs_queue,
+            supports_abs_book_queue,
+        );
         if let Ok(init_json) = serde_json::to_string(&init_event) {
             ev_tx.send(CtrlOutbound::Event(init_json)).ok();
         }
@@ -88,6 +102,8 @@ fn spawn_ctrl_client(
             transport,
             supports_abs_queue,
             supports_abs_progress,
+            supports_abs_book_queue,
+            supports_abs_book_progress,
         );
 
         for line in lines {

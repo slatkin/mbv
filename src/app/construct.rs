@@ -38,6 +38,7 @@ impl App {
             audiobookshelf_catalog_rx: None,
             audiobookshelf_libraries: Vec::new(),
             audiobookshelf_browse: Vec::new(),
+            audiobookshelf_book_browse: Vec::new(),
             audiobookshelf_test_rx: init.audiobookshelf_test_rx,
             audiobookshelf_setup_rx: init.audiobookshelf_setup_rx,
             emby_setup_form: init.emby_setup_form,

@@ -44,7 +44,17 @@ impl App {
             TabSelection::Home => self.handle_key_home(key),
             TabSelection::EmbyLibrary(index) => self.handle_key_emby_library(index, key),
             TabSelection::AudiobookshelfLibrary(index) => {
-                self.handle_key_audiobookshelf_library(index, key)
+                let Some(kind) = self.audiobookshelf_kind_at(index) else {
+                    return Some(false);
+                };
+                match kind {
+                    super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
+                        self.handle_key_audiobookshelf_library(index, key)
+                    }
+                    super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
+                        self.handle_key_audiobookshelf_book_library(index, key)
+                    }
+                }
             }
             TabSelection::Feeds => self.handle_key_feeds(key),
         }
@@ -234,6 +244,68 @@ impl App {
                 if episode_selection && key.modifiers.contains(KeyModifiers::CONTROL) =>
             {
                 self.enqueue_selected_audiobookshelf_episode(index);
+            }
+            _ => {}
+        }
+        Some(false)
+    }
+
+    /// The Audiobookshelf book-library keyboard handler for the exhaustively
+    /// matched `AudiobookshelfLibrary(index)` when its resolved kind is
+    /// `Book`. Navigates the book list (rows/cursor/paging), enters / exits
+    /// chapter selection, and plays or enqueues the selected book. Every key
+    /// is consumed: podcast/Emby actions and queue-item handling are
+    /// unreachable from here.
+    fn handle_key_audiobookshelf_book_library(
+        &mut self,
+        index: usize,
+        key: KeyEvent,
+    ) -> Option<bool> {
+        let chapter_selection = self
+            .audiobookshelf_book_browse
+            .get(index)
+            .is_some_and(|state| state.chapter_selection.is_some());
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') if chapter_selection => {
+                self.move_audiobookshelf_book_row(-1)
+            }
+            KeyCode::Down | KeyCode::Char('j') if chapter_selection => {
+                self.move_audiobookshelf_book_row(1)
+            }
+            KeyCode::Esc | KeyCode::Backspace if chapter_selection => {
+                self.leave_audiobookshelf_book_selection()
+            }
+            KeyCode::Enter | KeyCode::Char(' ') if chapter_selection => {
+                self.activate_audiobookshelf_book_row();
+            }
+            KeyCode::Up | KeyCode::Char('k') => self.move_audiobookshelf_book_rows(-1),
+            KeyCode::Down | KeyCode::Char('j') => self.move_audiobookshelf_book_rows(1),
+            KeyCode::Left | KeyCode::Char('h') if !chapter_selection => {
+                self.move_audiobookshelf_book_cursor(-1)
+            }
+            KeyCode::Right | KeyCode::Char('l') if !chapter_selection => {
+                self.move_audiobookshelf_book_cursor(1)
+            }
+            KeyCode::PageUp if !chapter_selection => {
+                self.move_audiobookshelf_book_rows(-(self.lib_page_size() as i64))
+            }
+            KeyCode::PageDown if !chapter_selection => {
+                self.move_audiobookshelf_book_rows(self.lib_page_size() as i64)
+            }
+            KeyCode::Home if !chapter_selection => self.jump_audiobookshelf_book_cursor(false),
+            KeyCode::End if !chapter_selection => self.jump_audiobookshelf_book_cursor(true),
+            // Space plays the selected book (book-playback spec: ordinary play);
+            // Enter enters chapter selection.
+            KeyCode::Char(' ') if !chapter_selection => {
+                self.play_selected_audiobookshelf_book(index);
+            }
+            KeyCode::Enter if !chapter_selection => {
+                self.enter_audiobookshelf_book_selection();
+            }
+            KeyCode::Char('a')
+                if !chapter_selection && key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                self.enqueue_selected_audiobookshelf_book(index);
             }
             _ => {}
         }

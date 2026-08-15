@@ -45,12 +45,16 @@ pub(super) struct AudiobookshelfStartupReceiver {
 type AudiobookshelfProgressMap =
     std::collections::HashMap<(String, String), mbv_core::audiobookshelf::AudiobookshelfProgress>;
 
+type AudiobookshelfBookProgressMap =
+    std::collections::HashMap<String, mbv_core::audiobookshelf::AudiobookshelfBookProgress>;
+
 pub(super) struct AudiobookshelfCatalogCompletion {
     pub(super) generation: SetupGeneration,
     pub(super) result: Result<
         (
             Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
             AudiobookshelfProgressMap,
+            AudiobookshelfBookProgressMap,
         ),
         mbv_core::audiobookshelf::AudiobookshelfError,
     >,
@@ -103,7 +107,9 @@ pub(super) fn start_audiobookshelf_catalog(
                 client.libraries_bounded(&key, AudiobookshelfClient::REQUEST_HARD_BOUND)?;
             let progress =
                 client.progress_bounded(&key, AudiobookshelfClient::REQUEST_HARD_BOUND)?;
-            Ok((libraries, progress))
+            let book_progress =
+                client.book_progress_bounded(&key, AudiobookshelfClient::REQUEST_HARD_BOUND)?;
+            Ok((libraries, progress, book_progress))
         });
         let _ = tx.send(AudiobookshelfCatalogCompletion { generation, result });
     });
@@ -129,6 +135,34 @@ pub(super) fn start_audiobookshelf_shows(
             )
         });
         let _ = tx.send(super::types_events::LibEvent::AudiobookshelfShowsFetched {
+            generation,
+            library_id,
+            result,
+        });
+    });
+}
+
+/// Book-shaped sibling of `start_audiobookshelf_shows`: pages a book library's
+/// catalog through `books_bounded` and reports `LibEvent::AudiobookshelfBooksFetched`.
+pub(super) fn start_audiobookshelf_books(
+    config: crate::config::Config,
+    generation: SetupGeneration,
+    library_id: String,
+    page: usize,
+    tx: mpsc::Sender<super::types_events::LibEvent>,
+) {
+    const PAGE_LIMIT: usize = 20;
+    std::thread::spawn(move || {
+        let result = audiobookshelf_client(&config).and_then(|(client, key)| {
+            client.books_bounded(
+                &key,
+                &library_id,
+                page,
+                PAGE_LIMIT,
+                AudiobookshelfClient::REQUEST_HARD_BOUND,
+            )
+        });
+        let _ = tx.send(super::types_events::LibEvent::AudiobookshelfBooksFetched {
             generation,
             library_id,
             result,

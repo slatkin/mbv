@@ -171,6 +171,7 @@ pub(crate) fn make_app_stub() -> App {
         audiobookshelf_catalog_rx: None,
         audiobookshelf_libraries: Vec::new(),
         audiobookshelf_browse: Vec::new(),
+        audiobookshelf_book_browse: Vec::new(),
         emby_setup_form: None,
         audiobookshelf_setup_form: None,
         emby_setup_rx: None,

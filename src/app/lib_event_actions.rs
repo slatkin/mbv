@@ -181,6 +181,84 @@ impl App {
             );
             return;
         }
+        if let LibEvent::AudiobookshelfBookProgressAcknowledged(update) = ev {
+            if !self.audiobookshelf_runtime.accepts(update.generation) {
+                return;
+            }
+            let position_ticks =
+                super::audiobookshelf_browse_actions::seconds_to_ticks(update.current_time_seconds);
+            self.reconcile_audiobookshelf_book_progress(
+                &update.library_item_id,
+                position_ticks,
+                update.is_finished,
+            );
+            return;
+        }
+        if let LibEvent::AudiobookshelfBooksFetched {
+            generation,
+            library_id,
+            result,
+        } = ev
+        {
+            if !self.audiobookshelf_runtime.accepts(generation) {
+                return;
+            }
+            if let Some(index) = self
+                .audiobookshelf_libraries
+                .iter()
+                .position(|library| library.id == library_id)
+            {
+                let mut next_page = None;
+                let mut selected_detail = None;
+                if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
+                    match result {
+                        Ok(page) => {
+                            state.append_page_books(page.page, page.total, page.items);
+                            next_page = state.needs_page();
+                            if !state.detail_loading {
+                                selected_detail = state.selected_id.clone();
+                            }
+                        }
+                        Err(error) => state.error = Some(error.to_string()),
+                    }
+                }
+                if let Some(selected_detail) = selected_detail {
+                    self.start_audiobookshelf_book_detail(selected_detail);
+                }
+                if let Some(next_page) = next_page {
+                    super::service_startup::start_audiobookshelf_books(
+                        self.config.lock().unwrap().clone(),
+                        generation,
+                        library_id,
+                        next_page,
+                        self.lib_tx.clone(),
+                    );
+                }
+            }
+            return;
+        }
+        if let LibEvent::AudiobookshelfBookDetailFetched {
+            generation,
+            library_item_id,
+            result,
+        } = ev
+        {
+            if !self.audiobookshelf_runtime.accepts(generation) {
+                return;
+            }
+            if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
+                state
+                    .books
+                    .iter()
+                    .any(|book| book.library_item_id == library_item_id)
+            }) {
+                state.detail_loading = false;
+                if let Ok(detail) = result {
+                    state.detail_cache.insert(library_item_id.clone(), detail);
+                }
+            }
+            return;
+        }
         if let LibEvent::AudiobookshelfDetailFetched {
             generation,
             library_item_id,
@@ -437,7 +515,10 @@ impl App {
             }
             LibEvent::AudiobookshelfDetailFetched { .. }
             | LibEvent::AudiobookshelfShowsFetched { .. }
-            | LibEvent::AudiobookshelfProgressAcknowledged(_) => unreachable!(),
+            | LibEvent::AudiobookshelfBooksFetched { .. }
+            | LibEvent::AudiobookshelfBookDetailFetched { .. }
+            | LibEvent::AudiobookshelfProgressAcknowledged(_)
+            | LibEvent::AudiobookshelfBookProgressAcknowledged(_) => unreachable!(),
             LibEvent::AlbumArtistFetched { album_id, artist } => {
                 self.album_artist_loading.remove(&album_id);
                 self.album_artist_cache
@@ -551,6 +632,49 @@ impl App {
                 mbv_core::audiobookshelf::AudiobookshelfProgress {
                     library_item_id: library_item_id.to_string(),
                     episode_id: episode_id.to_string(),
+                    current_time_seconds,
+                    is_finished,
+                },
+            );
+        }
+        if !matching_slot_ids.is_empty() {
+            self.save_queue_state();
+        }
+    }
+
+    /// Book-shaped counterpart to `reconcile_audiobookshelf_progress`:
+    /// matches queue slots by `library_item_id` only and applies
+    /// position/completion. Every book browse state's progress map (keyed by
+    /// `library_item_id` only) is updated the way the episode reconcile
+    /// updates `audiobookshelf_browse`.
+    pub(super) fn reconcile_audiobookshelf_book_progress(
+        &mut self,
+        library_item_id: &str,
+        position_ticks: i64,
+        is_finished: bool,
+    ) {
+        let matching_slot_ids: Vec<_> = self
+            .player_tab
+            .queue
+            .slots()
+            .iter()
+            .filter_map(|slot| {
+                slot.item.as_audiobookshelf_book().and_then(|book| {
+                    (book.library_item_id == library_item_id).then_some(slot.slot_id)
+                })
+            })
+            .collect();
+        for slot_id in matching_slot_ids.iter().cloned() {
+            self.player_tab
+                .queue
+                .apply_progress(slot_id, position_ticks, is_finished);
+        }
+        let current_time_seconds = position_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+        for state in &mut self.audiobookshelf_book_browse {
+            state.progress.insert(
+                library_item_id.to_string(),
+                mbv_core::audiobookshelf::AudiobookshelfBookProgress {
+                    library_item_id: library_item_id.to_string(),
                     current_time_seconds,
                     is_finished,
                 },

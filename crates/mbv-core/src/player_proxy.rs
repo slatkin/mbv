@@ -196,7 +196,7 @@ impl PlayerProxy {
                 // Never strip an unsupported item and send the remainder: a
                 // ctrl owner must reject the whole submission without local
                 // fall-through or Bound queue mutation.
-                if items.is_empty() || items.iter().any(QueueItem::is_audiobookshelf) {
+                if items.is_empty() || items.iter().any(QueueItem::is_audiobookshelf_any) {
                     return false;
                 }
                 let start_idx = start_idx.min(items.len() - 1);

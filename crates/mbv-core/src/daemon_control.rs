@@ -131,7 +131,13 @@ fn handle_ctrl(
                 return;
             }
             let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
-            if let Some(reason) = abs_queue_transport_rejection(&items, supports_abs_queue) {
+            let supports_abs_book_queue = ctrl_clients
+                .lock()
+                .unwrap()
+                .supports_abs_book_queue(client_id);
+            if let Some(reason) =
+                abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
+            {
                 reject_command(
                     request.reply_tx,
                     ctrl_clients,
@@ -311,7 +317,13 @@ fn handle_ctrl(
         // ── Unified queue commands ──────────────────────────────────────
         CtrlCmd::UnifiedQueueReplace { items, start_idx } => {
             let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
-            if let Some(reason) = abs_queue_transport_rejection(&items, supports_abs_queue) {
+            let supports_abs_book_queue = ctrl_clients
+                .lock()
+                .unwrap()
+                .supports_abs_book_queue(client_id);
+            if let Some(reason) =
+                abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
+            {
                 reject_command(
                     request.reply_tx,
                     ctrl_clients,
@@ -369,7 +381,13 @@ fn handle_ctrl(
                 return;
             }
             let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
-            if let Some(reason) = abs_queue_transport_rejection(&items, supports_abs_queue) {
+            let supports_abs_book_queue = ctrl_clients
+                .lock()
+                .unwrap()
+                .supports_abs_book_queue(client_id);
+            if let Some(reason) =
+                abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
+            {
                 reject_command(
                     request.reply_tx,
                     ctrl_clients,
@@ -502,4 +520,14 @@ fn handle_ctrl(
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source);
         }
     }
+}
+
+fn owner_admin_transport_allowed(
+    role: crate::daemon::DaemonRole,
+    kind: crate::config::ServiceKind,
+    transport: Option<CtrlTransport>,
+) -> bool {
+    let role_allowed =
+        role == crate::daemon::DaemonRole::Packaged || kind == crate::config::ServiceKind::Audiobookshelf;
+    role_allowed && transport == Some(CtrlTransport::Local)
 }

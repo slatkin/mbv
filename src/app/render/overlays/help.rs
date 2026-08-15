@@ -188,10 +188,11 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
         help_blank(),
     ];
     // The Audiobookshelf section advertises only Audiobookshelf keys: show
-    // navigation and episode selection (spec "Help and context actions reflect
-    // the selected destination"). Episode-mode Enter/Space is explicitly inert
-    // until #518 applies playback support, so no Emby play/enqueue/search/
-    // watched/shuffle/rescan/route/context action is listed here.
+    // navigation, episode selection, and the book tab's book/chapter
+    // navigation (spec "Help and context actions reflect the selected
+    // destination"). Episode-mode Enter/Space is explicitly inert until #518
+    // applies playback support, so no Emby play/enqueue/search/watched/
+    // shuffle/rescan/route/context action is listed here.
     let sec_audiobookshelf = vec![
         help_section_line("Audiobookshelf"),
         help_line(key_w, "Up / Down or k / j", "Move show rows"),
@@ -206,6 +207,13 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
             "Enter / Space (in episode)",
             "Play episode (inert until #518)",
         ),
+        help_line(key_w, "Up / Down or k / j", "Move book rows"),
+        help_line(key_w, "Left / Right or h / l", "Adjacent books"),
+        help_line(key_w, "Enter", "Enter chapter selection"),
+        help_line(key_w, "Space", "Play selected book"),
+        help_line(key_w, "Ctrl+A", "Add selected book to queue"),
+        help_line(key_w, "Enter (in chapter)", "Seek to chapter start"),
+        help_line(key_w, "Esc / Backspace", "Return to book selection"),
         help_blank(),
     ];
     let sec_feeds = vec![

@@ -364,6 +364,11 @@ fn apply_ctrl_event(
                 let _ = event_tx.send(PlayerEvent::AudiobookshelfProgress(event));
             }
         }
+        CtrlEvent::AudiobookshelfBookProgress(event) => {
+            if notify {
+                let _ = event_tx.send(PlayerEvent::AudiobookshelfBookProgress(event));
+            }
+        }
     }
 }
 

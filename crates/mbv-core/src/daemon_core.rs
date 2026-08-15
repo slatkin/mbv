@@ -7,9 +7,9 @@ use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
 use crate::ctrl::{
-    AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello, DisconnectReason,
-    PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
-    PlaybackIntentOutcome, PlaybackRequestId,
+    AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello,
+    DisconnectReason, PlaybackGeneration, PlaybackIntent, PlaybackIntentAction,
+    PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
 };
 use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
@@ -48,6 +48,9 @@ enum DaemonEvent {
     /// progress sender, routed here so the event loop can update the Bound
     /// queue and broadcast redacted progress to capable clients.
     AudiobookshelfProgress(crate::player::AudiobookshelfProgressUpdate),
+    /// Book-shaped counterpart to `AudiobookshelfProgress`, keyed by
+    /// `library_item_id` only.
+    AudiobookshelfBookProgress(crate::player::AudiobookshelfBookProgressUpdate),
     /// Carries the requesting client's own event sender alongside the
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.
@@ -110,6 +113,13 @@ struct CtrlClient {
     /// Whether this peer advertised `abs-progress` in its Hello. Gates
     /// whether it receives the redacted Audiobookshelf progress event.
     supports_abs_progress: bool,
+    /// Whether this peer advertised `abs-book-queue` in its Hello. Gates
+    /// whether it receives or may submit `QueueItem::AudiobookshelfBook`.
+    #[allow(dead_code)]
+    supports_abs_book_queue: bool,
+    /// Whether this peer advertised `abs-book-progress` in its Hello. Gates
+    /// whether it receives the redacted Audiobookshelf book progress event.
+    supports_abs_book_progress: bool,
 }
 
 type ClientRegistry = Arc<Mutex<CtrlClients>>;
@@ -455,6 +465,18 @@ fn broadcast_audiobookshelf_progress(clients: &ClientRegistry, event: Audiobooks
     clients.lock().unwrap().broadcast_progress_gated(json);
 }
 
+/// Fans out redacted Audiobookshelf book progress to peers that negotiated
+/// `abs-book-progress`.
+fn broadcast_audiobookshelf_book_progress(
+    clients: &ClientRegistry,
+    event: AudiobookshelfBookProgressEvent,
+) {
+    let Some(json) = serialize_ctrl_event(&CtrlEvent::AudiobookshelfBookProgress(event)) else {
+        return;
+    };
+    clients.lock().unwrap().broadcast_book_progress_gated(json);
+}
+
 impl CtrlClients {
     /// Append `tx` as a new ctrl connection. Multiple clients may coexist.
     /// Does NOT override authority if it is currently `EmbyRemote` — the new
@@ -466,6 +488,8 @@ impl CtrlClients {
         transport: CtrlTransport,
         supports_abs_queue: bool,
         supports_abs_progress: bool,
+        supports_abs_book_queue: bool,
+        supports_abs_book_progress: bool,
     ) -> CtrlClientId {
         let id = self.next_id;
         self.next_id += 1;
@@ -475,6 +499,8 @@ impl CtrlClients {
             transport,
             supports_abs_queue,
             supports_abs_progress,
+            supports_abs_book_queue,
+            supports_abs_book_progress,
         });
         if self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
@@ -525,6 +551,27 @@ impl CtrlClients {
             .is_some_and(|c| c.supports_abs_progress)
     }
 
+    /// Whether the client `id` advertised `abs-book-queue` support at Hello.
+    /// Used to gate Audiobookshelf book `QueueItem` transport in both
+    /// directions.
+    fn supports_abs_book_queue(&self, id: CtrlClientId) -> bool {
+        self.connection
+            .iter()
+            .find(|c| c.id == id)
+            .is_some_and(|c| c.supports_abs_book_queue)
+    }
+
+    /// Whether the client `id` advertised `abs-book-progress` support at
+    /// Hello. Used to gate delivery of the redacted Audiobookshelf book
+    /// progress event.
+    #[allow(dead_code)]
+    fn supports_abs_book_progress(&self, id: CtrlClientId) -> bool {
+        self.connection
+            .iter()
+            .find(|c| c.id == id)
+            .is_some_and(|c| c.supports_abs_book_progress)
+    }
+
     fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
         if let Some(client) = self.connection.iter().find(|client| client.id == id) {
             send_to(&client.tx, event);
@@ -543,16 +590,25 @@ impl CtrlClients {
     }
 
     /// Broadcasts a state event gated per client:
-    /// - `unified_abs_json` → peers advertising `abs-queue`
+    /// - `unified_full_json` → peers advertising `abs-queue` + `abs-book-queue`
+    /// - `unified_abs_json` → peers advertising `abs-queue` only
+    /// - `unified_book_json` → peers advertising `abs-book-queue` only
     /// - `unified_json` → all others
     ///
     /// Mirrors `broadcast_to_all`'s drop-on-failed-send behavior.
-    fn broadcast_state_gated(&mut self, unified_abs_json: String, unified_json: String) {
+    fn broadcast_state_gated(
+        &mut self,
+        unified_full_json: String,
+        unified_abs_json: String,
+        unified_book_json: String,
+        unified_json: String,
+    ) {
         self.connection.retain(|c| {
-            let json = if c.supports_abs_queue {
-                &unified_abs_json
-            } else {
-                &unified_json
+            let json = match (c.supports_abs_queue, c.supports_abs_book_queue) {
+                (true, true) => &unified_full_json,
+                (true, false) => &unified_abs_json,
+                (false, true) => &unified_book_json,
+                (false, false) => &unified_json,
             };
             c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
         });
@@ -565,6 +621,17 @@ impl CtrlClients {
     fn broadcast_progress_gated(&mut self, json: String) {
         self.connection.retain(|c| {
             if !c.supports_abs_progress {
+                return true;
+            }
+            c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
+        });
+    }
+
+    /// Sends redacted Audiobookshelf book progress `json` only to clients
+    /// that advertised `abs-book-progress` at Hello.
+    fn broadcast_book_progress_gated(&mut self, json: String) {
+        self.connection.retain(|c| {
+            if !c.supports_abs_book_progress {
                 return true;
             }
             c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()

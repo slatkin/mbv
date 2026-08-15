@@ -87,7 +87,27 @@ pub(super) enum LibEvent {
             mbv_core::audiobookshelf::AudiobookshelfError,
         >,
     },
+    AudiobookshelfBooksFetched {
+        generation: mbv_core::service_runtime::SetupGeneration,
+        library_id: String,
+        result: Result<
+            mbv_core::audiobookshelf::AudiobookshelfBookPage,
+            mbv_core::audiobookshelf::AudiobookshelfError,
+        >,
+    },
+    AudiobookshelfBookDetailFetched {
+        generation: mbv_core::service_runtime::SetupGeneration,
+        library_item_id: String,
+        result: Result<
+            (
+                Vec<mbv_core::audiobookshelf::AudiobookshelfChapter>,
+                Vec<mbv_core::audiobookshelf::AudiobookshelfAudioFile>,
+            ),
+            mbv_core::audiobookshelf::AudiobookshelfError,
+        >,
+    },
     AudiobookshelfProgressAcknowledged(mbv_core::player::AudiobookshelfProgressUpdate),
+    AudiobookshelfBookProgressAcknowledged(mbv_core::player::AudiobookshelfBookProgressUpdate),
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate nav_stack, stay on current tab).
     NavigateTo {

@@ -73,7 +73,7 @@ fn video_feed_qi(guid: &str) -> QueueItem {
 /// Connects a client the same way the accept thread does.
 fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(tx, CtrlTransport::Local, true, true);
+    let id = clients.connect(tx, CtrlTransport::Local, true, true, true, true);
     (id, rx)
 }
 

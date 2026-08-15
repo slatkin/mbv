@@ -85,7 +85,14 @@ impl App {
                         }
                     }
                     TabSelection::EmbyLibrary(lib_idx) => self.refresh_lib(lib_idx),
-                    TabSelection::AudiobookshelfLibrary(_) => self.audiobookshelf_refresh(),
+                    TabSelection::AudiobookshelfLibrary(index) => {
+                        match self.audiobookshelf_kind_at(index) {
+                            Some(
+                                super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book,
+                            ) => self.audiobookshelf_book_refresh(),
+                            _ => self.audiobookshelf_refresh(),
+                        }
+                    }
                     TabSelection::Feeds => self.refresh_feeds(),
                 }
             }

@@ -437,6 +437,9 @@ impl App {
                                 QueueItem::Audiobookshelf(ep) => {
                                     (ep.title.as_str(), ep.duration_ticks.unwrap_or(0))
                                 }
+                                QueueItem::AudiobookshelfBook(book) => {
+                                    (book.title.as_str(), book.duration_ticks.unwrap_or(0))
+                                }
                                 QueueItem::Emby(_) => unreachable!(),
                             };
                             let len_secs = duration_ticks as i64 / TICKS_PER_SECOND;

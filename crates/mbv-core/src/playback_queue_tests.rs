@@ -532,6 +532,7 @@ fn queue_state_round_trip_preserves_item_kind() {
         QueueItem::Emby(e) => assert_eq!(e.id, "emby-1"),
         QueueItem::Feed(_) => panic!("expected Emby variant"),
         QueueItem::Audiobookshelf(_) => panic!("expected Emby variant"),
+        QueueItem::AudiobookshelfBook(_) => panic!("expected Emby variant"),
     }
 
     // Feed kind preserved
@@ -546,6 +547,7 @@ fn queue_state_round_trip_preserves_item_kind() {
             );
         }
         QueueItem::Audiobookshelf(_) => panic!("expected Feed variant"),
+        QueueItem::AudiobookshelfBook(_) => panic!("expected Feed variant"),
     }
 }
 

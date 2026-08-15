@@ -334,7 +334,7 @@ impl App {
                             }
                         }
                     }
-                    TabSelection::AudiobookshelfLibrary(_) => {
+                    TabSelection::AudiobookshelfLibrary(index) => {
                         let click_y = (row - la.y) as usize;
                         let cols = crate::app::library_column_width::library_column_count(la.width);
                         let cell_width =
@@ -354,7 +354,12 @@ impl App {
                             })
                             .flatten();
                         if let Some(target) = target {
-                            self.select_audiobookshelf_show(target);
+                            match self.audiobookshelf_kind_at(index) {
+                                Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
+                                    self.select_audiobookshelf_book(target);
+                                }
+                                _ => self.select_audiobookshelf_show(target),
+                            }
                         }
                         return true;
                     }

@@ -250,6 +250,36 @@ impl App {
         self.library_position_dirty_at = Instant::now();
     }
 
+    /// Book-shaped sibling of `save_audiobookshelf_position`, keyed by the
+    /// same per-library position slot (so podcast and book libraries sharing
+    /// a server never collide) and carrying the book list cursor.
+    pub(super) fn save_audiobookshelf_book_position(&mut self, index: usize) {
+        let Some(key) = self.audiobookshelf_position_key(index) else {
+            return;
+        };
+        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
+            return;
+        };
+        let position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: state.library.id.clone(),
+                title: state.library.name.clone(),
+                focused_item_id: state.selected_id.clone(),
+                cursor_index: state.cursor(),
+                item_types: Some("book".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: Some(state.total),
+            }],
+            ..Default::default()
+        };
+        self.library_position_state.libraries.insert(key, position);
+        self.library_position_dirty = true;
+        self.library_position_dirty_at = Instant::now();
+    }
+
     pub(super) fn activate_audiobookshelf_position(&mut self, index: usize) {
         let saved = self
             .audiobookshelf_position_key(index)
@@ -274,6 +304,45 @@ impl App {
         }
         if self.tab.audiobookshelf_index() == Some(index) {
             self.start_audiobookshelf_detail(id);
+        }
+    }
+
+    /// Book-shaped sibling of `activate_audiobookshelf_position`. A saved
+    /// position's `item_types` distinguishes book from podcast slots; only a
+    /// book-typed slot is honored for a book library.
+    pub(super) fn activate_audiobookshelf_book_position(&mut self, index: usize) {
+        let saved = self
+            .audiobookshelf_position_key(index)
+            .and_then(|key| self.library_position_state.libraries.get(&key).cloned());
+        let Some(state) = self.audiobookshelf_book_browse.get_mut(index) else {
+            return;
+        };
+        let saved_is_book = saved
+            .as_ref()
+            .and_then(|position| position.levels.first())
+            .and_then(|level| level.item_types.as_deref())
+            == Some("book");
+        if state.selected_id.is_none() {
+            state.selected_id = if saved_is_book {
+                saved
+                    .as_ref()
+                    .and_then(|position| position.levels.first())
+                    .and_then(|level| level.focused_item_id.clone())
+            } else {
+                None
+            };
+        }
+        let Some(id) = state.selected_id.clone() else {
+            if !state.books.is_empty() {
+                state.select(0);
+            }
+            return;
+        };
+        if self.tab.audiobookshelf_index() == Some(index)
+            && !state.books.is_empty()
+            && !state.detail_cache.contains_key(&id)
+        {
+            self.start_audiobookshelf_book_detail(id);
         }
     }
 }

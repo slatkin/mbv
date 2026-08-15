@@ -518,6 +518,13 @@ impl App {
                     ev.is_finished,
                 );
             }
+            PlayerEvent::AudiobookshelfBookProgress(ev) => {
+                self.reconcile_audiobookshelf_book_progress(
+                    &ev.library_item_id,
+                    ev.position_ticks,
+                    ev.is_finished,
+                );
+            }
         }
         false
     }

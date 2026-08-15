@@ -52,6 +52,8 @@ pub struct App {
     pub(super) audiobookshelf_libraries: Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
     pub(super) audiobookshelf_browse:
         Vec<super::types_audiobookshelf_browse::AudiobookshelfBrowseState>,
+    pub(super) audiobookshelf_book_browse:
+        Vec<super::types_audiobookshelf_browse::AudiobookshelfBookBrowseState>,
     pub(super) audiobookshelf_test_rx:
         Option<super::service_startup::AudiobookshelfStartupReceiver>,
     pub(super) audiobookshelf_setup_rx:

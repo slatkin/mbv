@@ -21,6 +21,7 @@ impl App {
         self.audiobookshelf_catalog_rx = None;
         self.audiobookshelf_libraries.clear();
         self.audiobookshelf_browse.clear();
+        self.audiobookshelf_book_browse.clear();
         self.clear_audiobookshelf_images();
     }
 
@@ -39,47 +40,6 @@ impl App {
             super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX,
         );
     }
-    pub(super) fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
-            return;
-        };
-        if let Some(cached) = state.detail_cache.get(&library_item_id).cloned() {
-            state.episodes = Some(cached);
-            state.detail_loading = false;
-            return;
-        }
-        if state.episodes.is_some() || state.detail_loading {
-            return;
-        }
-        state.detail_loading = true;
-        let config_snapshot = self.config.lock().unwrap().clone();
-        let Some((setup, key)) =
-            super::service_startup::audiobookshelf_setup_and_key(&config_snapshot)
-        else {
-            return;
-        };
-        let generation = self.audiobookshelf_runtime.generation();
-        let tx = self.lib_tx.clone();
-        std::thread::spawn(move || {
-            let result = mbv_core::audiobookshelf::AudiobookshelfClient::new(&setup.server_url)
-                .and_then(|client| {
-                    client.podcast_detail_bounded(
-                        &key,
-                        &library_item_id,
-                        mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
-                    )
-                });
-            let _ = tx.send(super::types_events::LibEvent::AudiobookshelfDetailFetched {
-                generation,
-                library_item_id,
-                result,
-            });
-        });
-    }
-
     pub(super) fn apply_audiobookshelf_completion(
         &mut self,
         completion: super::service_startup::AudiobookshelfCompletion,

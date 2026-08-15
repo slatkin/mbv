@@ -60,19 +60,25 @@ fn project_queue_state(
 
 /// Projects the canonical queue into `UnifiedQueueStateData` for one
 /// connection. Audiobookshelf slots are included only when the peer
-/// negotiated `abs-queue`; when they are dropped, `active_slot` is cleared
-/// too if the active slot was itself an Audiobookshelf item, so a peer never
+/// negotiated the matching capability (`abs-queue` for episodes,
+/// `abs-book-queue` for books); when a slot is dropped, `active_slot` is
+/// cleared too if the active slot was itself dropped, so a peer never
 /// receives an `active_slot` pointing at a slot missing from `slots`.
 fn unified_queue_state_for_peer(
     status: &crate::player::PlayerStatus,
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
     supports_abs_queue: bool,
+    supports_abs_book_queue: bool,
 ) -> CtrlEvent {
     let slots: Vec<crate::ctrl::UnifiedQueueSlot> = queue
         .slots()
         .iter()
-        .filter(|s| supports_abs_queue || !s.item.is_audiobookshelf())
+        .filter(|s| match &s.item {
+            QueueItem::Audiobookshelf(_) => supports_abs_queue,
+            QueueItem::AudiobookshelfBook(_) => supports_abs_book_queue,
+            QueueItem::Emby(_) | QueueItem::Feed(_) => true,
+        })
         .map(|s| crate::ctrl::UnifiedQueueSlot {
             slot_id: crate::ctrl::slot_id_to_u64(s.slot_id),
             item: s.item.clone(),
@@ -101,17 +107,37 @@ fn broadcast_queue_state(
 ) {
     let status = player.status.lock().unwrap().clone();
 
-    // ── Unified-queue peers ────────────────────────────────────────────
-    let unified_abs_json =
-        serialize_ctrl_event(&unified_queue_state_for_peer(&status, queue, source, true));
-    let unified_json =
-        serialize_ctrl_event(&unified_queue_state_for_peer(&status, queue, source, false));
+    // ── Unified-queue peers, gate ABS episodes and books independently ──
+    let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
+        &status, queue, source, true, true,
+    ));
+    let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
+        &status, queue, source, true, false,
+    ));
+    let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
+        &status, queue, source, false, true,
+    ));
+    let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
+        &status, queue, source, false, false,
+    ));
 
-    if let (Some(unified_abs_json), Some(unified_json)) = (unified_abs_json, unified_json) {
-        ctrl_clients
-            .lock()
-            .unwrap()
-            .broadcast_state_gated(unified_abs_json, unified_json);
+    if let (
+        Some(unified_full_json),
+        Some(unified_abs_json),
+        Some(unified_book_json),
+        Some(unified_json),
+    ) = (
+        unified_full_json,
+        unified_abs_json,
+        unified_book_json,
+        unified_json,
+    ) {
+        ctrl_clients.lock().unwrap().broadcast_state_gated(
+            unified_full_json,
+            unified_abs_json,
+            unified_book_json,
+            unified_json,
+        );
     }
 
     // Update the reconnect snapshot.
@@ -161,12 +187,19 @@ fn daemon_admits(
 }
 
 /// Returns a rejection reason when `items` contains an Audiobookshelf item
-/// submitted by a peer that did not negotiate `abs-queue` transport. Checked
-/// ahead of queue mutation so an incapable peer's operation is refused
-/// outright rather than silently dropping the unsupported item.
-fn abs_queue_transport_rejection(items: &[QueueItem], supports_abs_queue: bool) -> Option<String> {
+/// submitted by a peer that did not negotiate the matching queue transport
+/// (`abs-queue` for episodes, `abs-book-queue` for books). Checked ahead of
+/// queue mutation so an incapable peer's operation is refused outright rather
+/// than silently dropping the unsupported item.
+fn abs_queue_transport_rejection(
+    items: &[QueueItem],
+    supports_abs_queue: bool,
+    supports_abs_book_queue: bool,
+) -> Option<String> {
     if !supports_abs_queue && items.iter().any(QueueItem::is_audiobookshelf) {
         Some("peer did not negotiate Audiobookshelf queue transport".to_string())
+    } else if !supports_abs_book_queue && items.iter().any(QueueItem::is_audiobookshelf_book) {
+        Some("peer did not negotiate Audiobookshelf book queue transport".to_string())
     } else {
         None
     }
@@ -186,8 +219,18 @@ fn reject_command(
     send_to(reply_tx, &CtrlEvent::CommandRejected(reason));
     let status = player.status.lock().unwrap().clone();
     let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
+    let supports_abs_book_queue = ctrl_clients
+        .lock()
+        .unwrap()
+        .supports_abs_book_queue(client_id);
     send_to(
         reply_tx,
-        &unified_queue_state_for_peer(&status, queue, source, supports_abs_queue),
+        &unified_queue_state_for_peer(
+            &status,
+            queue,
+            source,
+            supports_abs_queue,
+            supports_abs_book_queue,
+        ),
     );
 }

@@ -66,6 +66,10 @@ impl SlotProgress {
                 position_ticks: ep.position_ticks,
                 played: ep.played || ep.is_finished,
             },
+            QueueItem::AudiobookshelfBook(book) => Self {
+                position_ticks: book.position_ticks,
+                played: book.played || book.is_finished,
+            },
         }
     }
 
@@ -106,6 +110,13 @@ impl ProgressState {
                 },
                 pending_sync: None,
             },
+            QueueItem::AudiobookshelfBook(book) => Self {
+                local: SlotProgress {
+                    position_ticks: book.position_ticks,
+                    played: book.played || book.is_finished,
+                },
+                pending_sync: None,
+            },
         }
     }
 
@@ -125,6 +136,11 @@ impl ProgressState {
                 ep.position_ticks = self.local.position_ticks;
                 ep.played = self.local.played;
                 ep.is_finished = self.local.played;
+            }
+            QueueItem::AudiobookshelfBook(book) => {
+                book.position_ticks = self.local.position_ticks;
+                book.played = self.local.played;
+                book.is_finished = self.local.played;
             }
         }
     }

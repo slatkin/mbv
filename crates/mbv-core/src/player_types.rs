@@ -74,6 +74,10 @@ impl PlayerStatus {
                 self.title = ep.title.clone();
                 self.art_item_id = ep.episode_id.clone();
             }
+            QueueItem::AudiobookshelfBook(book) => {
+                self.title = book.title.clone();
+                self.art_item_id = book.library_item_id.clone();
+            }
         }
     }
 
@@ -260,6 +264,9 @@ pub enum PlayerEvent {
     /// progress. Dormant: delivered for a future browse-reconciliation
     /// consumer, but nothing applies it to queue or browse state yet.
     AudiobookshelfProgress(crate::ctrl::AudiobookshelfProgressEvent),
+    /// Book-shaped counterpart to `AudiobookshelfProgress`; keyed by
+    /// `library_item_id` only.
+    AudiobookshelfBookProgress(crate::ctrl::AudiobookshelfBookProgressEvent),
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

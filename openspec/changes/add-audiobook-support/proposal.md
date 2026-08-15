@@ -6,7 +6,7 @@ Audiobookshelf `media_type == "book"` libraries are currently filtered out at `r
 
 - Lift the `media_type == "podcast"` filter; book and podcast libraries interleave as peer tabs in server order, same as Emby libraries today. No type-partitioning or reordering.
 - Add a book browsing surface using the Music wide two-column hero-on-left layout (not the TV/podcast vertical hero), with an inline progress % in the hero meta.
-- Group and sort books alphabetically by author surname only (via the `human_name` crate), first-listed author decides sort position for multi-author books. No grouping pills, no series/narrator grouping.
+- Group and sort books alphabetically by author surname only (final title-cased contributor token of the raw credit), first-listed author decides sort position for multi-author books. No grouping pills, no series/narrator grouping.
 - Fork `Service browse dispatch` once per Audiobookshelf tab by `media_type` (podcast vs book) at `TabSelection::AudiobookshelfLibrary(usize)` resolution; downstream state, renderers, and input handlers never re-check `media_type` per action.
 - Add a new `QueueItemKind::AudiobookshelfBook` queue-item, content-identity, and progress-event shape, distinct from the existing episode-shaped `QueueItemKind::Audiobookshelf`. A book queues as one item; its `audioFiles` are handed to mpv as a single merged/EDL timeline (no manual file-offset math in mbv).
 - Add chapter rows as first-class browsable/seekable units: each row triggers one absolute seek on the merged timeline using the book-relative `chapters[]` Audiobookshelf already provides.
@@ -30,5 +30,4 @@ Audiobookshelf `media_type == "book"` libraries are currently filtered out at `r
 - `crates/mbv-core/src/audiobookshelf_catalog.rs`: book catalog fetch, author-surname grouping (mirrors `music_group.rs::build_grouped_album_catalog`).
 - `crates/mbv-core/src/playback_queue_items.rs`: new `QueueItemKind::AudiobookshelfBook` / `QueueItemContentId` variant.
 - `crates/mbv-core/src/audiobookshelf_playback.rs`, `player_sources.rs`, `ctrl.rs`: book playback-session resolution, merged-timeline mpv projection, and a book-shaped progress event alongside the existing episode-shaped one.
-- New dependency: `human_name` crate (Apache-2.0; adds `unicode-normalization`, `unicode-case-mapping`, `unidecode` as net-new build deps, the remaining 5 runtime deps already in the tree).
 - `CONTEXT.md` glossary: add audiobook library/book/chapter vocabulary alongside the existing Audiobookshelf podcast entries.
