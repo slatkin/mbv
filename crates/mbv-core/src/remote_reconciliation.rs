@@ -436,10 +436,6 @@ impl ReconciliationTracker {
         self.expected = None;
     }
 
-    pub fn poll_failed(&self) -> Vec<ReconciliationEffect> {
-        vec![]
-    }
-
     pub fn session_disappeared(&mut self) -> Vec<ReconciliationEffect> {
         if !self.active {
             return vec![];

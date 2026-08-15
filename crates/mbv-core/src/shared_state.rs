@@ -90,10 +90,6 @@ pub fn load_roaming_settings_mirror() -> Option<RoamingSettings> {
     serde_json::from_str(&text).ok()
 }
 
-pub fn clear_roaming_settings_mirror() {
-    let _ = std::fs::remove_file(roaming_settings_mirror_path());
-}
-
 /// Apply a shared record to the corresponding local persistence document.
 /// The existing persistence helpers retain the established JSON schemas and
 /// atomic temp-file/rename behavior.
