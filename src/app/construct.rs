@@ -52,6 +52,9 @@ impl App {
             player_rx: init.player_rx,
             ws_rx: init.ws_rx,
             ws_send_tx: init.ws_send_tx,
+            audiobookshelf_socket_rx: init.audiobookshelf_socket_rx,
+            audiobookshelf_socket_tx: init.audiobookshelf_socket_tx,
+            audiobookshelf_socket_generation: init.audiobookshelf_socket_generation,
             player_tab: init.player_tab,
             remote_player_tab: init.remote_player_tab,
             system_notifications: init.system_notifications,
@@ -310,6 +313,12 @@ impl App {
             player_rx,
             ws_rx,
             ws_send_tx: None,
+            audiobookshelf_socket_rx: {
+                let (_, rx) = mpsc::channel();
+                rx
+            },
+            audiobookshelf_socket_tx: None,
+            audiobookshelf_socket_generation: None,
             player_tab: PlayerTab::default(),
             remote_player_tab: None,
             initial_queue_scope: QueueScope::Local,
@@ -516,6 +525,12 @@ impl App {
             player_rx,
             ws_rx,
             ws_send_tx: None,
+            audiobookshelf_socket_rx: {
+                let (_, rx) = mpsc::channel();
+                rx
+            },
+            audiobookshelf_socket_tx: None,
+            audiobookshelf_socket_generation: None,
             player_tab,
             remote_player_tab,
             initial_queue_scope,

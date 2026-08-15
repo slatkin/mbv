@@ -279,6 +279,8 @@ impl App {
             self.player.stop();
             self.player.join_or_timeout(Duration::from_secs(5));
             let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
+            let (_dummy_abs_tx, dummy_abs_rx) =
+                mpsc::channel::<mbv_core::audiobookshelf_socket::SocketEvent>();
             let suspended = SuspendedLocalSession {
                 player: std::mem::replace(
                     &mut self.player,
@@ -287,6 +289,12 @@ impl App {
                 player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
                 ws_rx: std::mem::replace(&mut self.ws_rx, dummy_ws_rx),
                 ws_send_tx: self.ws_send_tx.take(),
+                audiobookshelf_socket_rx: std::mem::replace(
+                    &mut self.audiobookshelf_socket_rx,
+                    dummy_abs_rx,
+                ),
+                audiobookshelf_socket_tx: self.audiobookshelf_socket_tx.take(),
+                audiobookshelf_socket_generation: self.audiobookshelf_socket_generation.take(),
             };
             self.suspended_local = Some(suspended);
         } else {
@@ -378,6 +386,8 @@ impl App {
             self.player.stop();
             self.player.join_or_timeout(Duration::from_secs(5));
             let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
+            let (_dummy_abs_tx, dummy_abs_rx) =
+                mpsc::channel::<mbv_core::audiobookshelf_socket::SocketEvent>();
             let suspended = SuspendedLocalSession {
                 player: std::mem::replace(
                     &mut self.player,
@@ -386,6 +396,12 @@ impl App {
                 player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
                 ws_rx: std::mem::replace(&mut self.ws_rx, dummy_ws_rx),
                 ws_send_tx: self.ws_send_tx.take(),
+                audiobookshelf_socket_rx: std::mem::replace(
+                    &mut self.audiobookshelf_socket_rx,
+                    dummy_abs_rx,
+                ),
+                audiobookshelf_socket_tx: self.audiobookshelf_socket_tx.take(),
+                audiobookshelf_socket_generation: self.audiobookshelf_socket_generation.take(),
             };
             self.suspended_local = Some(suspended);
         } else {
@@ -462,6 +478,9 @@ impl App {
             self.player_rx = suspended.player_rx;
             self.ws_rx = suspended.ws_rx;
             self.ws_send_tx = suspended.ws_send_tx;
+            self.audiobookshelf_socket_rx = suspended.audiobookshelf_socket_rx;
+            self.audiobookshelf_socket_tx = suspended.audiobookshelf_socket_tx;
+            self.audiobookshelf_socket_generation = suspended.audiobookshelf_socket_generation;
             self.player_endpoint = None;
             debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
             // Mirror `switch_to_direct_remote`'s rebind (#175): the suspended
