@@ -527,8 +527,10 @@ impl App {
                 }
             }
             PlayerEvent::AudiobookshelfProgress(ev) => {
-                let generation =
-                    mbv_core::service_runtime::SetupGeneration::new(ev.setup_generation);
+                // No client-side generation gate: the daemon already drops
+                // stale-generation updates before emitting, and the daemon's
+                // generation counter is unrelated to this client's own runtime
+                // generation, so comparing them would reject every live event.
                 let current_time_seconds =
                     ev.position_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
                 self.reconcile_audiobookshelf_progress(
@@ -537,7 +539,6 @@ impl App {
                     ev.position_ticks,
                     current_time_seconds,
                     ev.is_finished,
-                    generation,
                 );
             }
         }

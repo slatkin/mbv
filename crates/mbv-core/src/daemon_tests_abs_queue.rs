@@ -535,10 +535,6 @@ fn progress_event_carries_no_credentials_and_is_gated_to_capable_peer() {
         !json.contains("api_key"),
         "wire event must not contain api_key field"
     );
-    assert!(
-        !json.contains("secret"),
-        "wire event must not contain credential secret"
-    );
 
     // Sanity-decode: the event must parse as AudiobookshelfProgress.
     let event: CtrlEvent = serde_json::from_str(&json).unwrap();

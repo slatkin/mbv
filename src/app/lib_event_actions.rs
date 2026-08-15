@@ -167,6 +167,9 @@ impl App {
 
     pub(super) fn handle_lib_event(&mut self, ev: LibEvent) {
         if let LibEvent::AudiobookshelfProgressAcknowledged(update) = ev {
+            if !self.audiobookshelf_runtime.accepts(update.generation) {
+                return;
+            }
             let position_ticks =
                 super::audiobookshelf_browse_actions::seconds_to_ticks(update.current_time_seconds);
             self.reconcile_audiobookshelf_progress(
@@ -175,7 +178,6 @@ impl App {
                 position_ticks,
                 update.current_time_seconds,
                 update.is_finished,
-                update.generation,
             );
             return;
         }
@@ -511,11 +513,13 @@ impl App {
 
     /// Shared acknowledged-progress reconcile used by both the bare owner
     /// (`LibEvent::AudiobookshelfProgressAcknowledged`) and a Local-daemon
-    /// client (`PlayerEvent::AudiobookshelfProgress`): generation-gated, matches
-    /// queue slots by provider-qualified identity, applies position/completion,
-    /// writes every browse state's progress map, and persists the queue. A
-    /// no-match event still updates browse state; only persistence is gated on
-    /// a queue match.
+    /// client (`PlayerEvent::AudiobookshelfProgress`): matches queue slots by
+    /// provider-qualified identity, applies position/completion, writes every
+    /// browse state's progress map, and persists the queue. A no-match event
+    /// still updates browse state; only persistence is gated on a queue match.
+    /// Generation gating is the caller's concern: the bare owner gates on its
+    /// own runtime generation, while the daemon drops stale updates before
+    /// emitting, so the daemon client reconciles unconditionally.
     pub(super) fn reconcile_audiobookshelf_progress(
         &mut self,
         library_item_id: &str,
@@ -523,11 +527,7 @@ impl App {
         position_ticks: i64,
         current_time_seconds: f64,
         is_finished: bool,
-        generation: mbv_core::service_runtime::SetupGeneration,
     ) {
-        if !self.audiobookshelf_runtime.accepts(generation) {
-            return;
-        }
         let matching_slot_ids: Vec<_> = self
             .player_tab
             .queue
