@@ -498,20 +498,31 @@ fn make_temp_data_dir() -> std::path::PathBuf {
     std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()))
 }
 
-// ── decode_html_entities ─────────────────────────────────────────────────
+// ── decode_entities ─────────────────────────────────────────────────────
 
 #[test]
-fn decode_html_entities_known_entities() {
-    assert_eq!(decode_html_entities("&quot;hi&quot;"), "\"hi\"");
-    assert_eq!(decode_html_entities("it&apos;s"), "it's");
-    assert_eq!(decode_html_entities("a &lt; b &gt; c"), "a < b > c");
-    assert_eq!(decode_html_entities("a &amp; b"), "a & b");
+fn decode_entities_known_entities() {
+    assert_eq!(decode_entities("&quot;hi&quot;"), "\"hi\"");
+    assert_eq!(decode_entities("it&apos;s"), "it's");
+    assert_eq!(decode_entities("a &lt; b &gt; c"), "a < b > c");
+    assert_eq!(decode_entities("a &amp; b"), "a & b");
 }
 
 #[test]
-fn decode_html_entities_passthrough() {
-    assert_eq!(decode_html_entities("plain text"), "plain text");
-    assert_eq!(decode_html_entities(""), "");
+fn decode_entities_passthrough() {
+    assert_eq!(decode_entities("plain text"), "plain text");
+    assert_eq!(decode_entities(""), "");
+}
+
+#[test]
+fn decode_entities_numeric_refs() {
+    assert_eq!(decode_entities("&#38;"), "&");
+    assert_eq!(decode_entities("&#x27;"), "'");
+    assert_eq!(decode_entities("&#x27A1;"), "➡");
+    // Unknown named/numeric refs and stray '&' are left untouched.
+    assert_eq!(decode_entities("&unknown;"), "&unknown;");
+    assert_eq!(decode_entities("a & b"), "a & b");
+    assert_eq!(decode_entities("50% &amp;amp; chance"), "50% &amp; chance");
 }
 
 // ── parse_video_info ─────────────────────────────────────────────────────

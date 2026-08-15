@@ -1,5 +1,5 @@
 use super::types_feed::IdleFeedItem;
-use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::api::{decode_entities, TICKS_PER_SECOND};
 use mbv_core::config::FeedKind;
 use mbv_core::playback_queue::FeedEntry;
 use std::sync::Arc;
@@ -287,7 +287,7 @@ fn extract_attribute(text: &str, attr: &str) -> Option<String> {
     let start = text.find(&needle)? + needle.len();
     let end = text[start..].find('"')?;
     let value = &text[start..start + end];
-    let decoded = decode_xml_entities(value);
+    let decoded = decode_entities(value);
     let sanitized = strip_control_chars(&decoded);
     Some(sanitized.trim().to_string())
 }
@@ -330,7 +330,7 @@ fn extract_tag(text: &str, tag: &str) -> Option<String> {
     // strip control characters that entity-decoding could otherwise
     // reintroduce, before finally trimming.
     let stripped = strip_tags(content);
-    let decoded = decode_xml_entities(&stripped);
+    let decoded = decode_entities(&stripped);
     let sanitized = strip_control_chars(&decoded);
     Some(sanitized.trim().to_string())
 }
@@ -343,7 +343,7 @@ fn extract_atom_link(text: &str) -> Option<String> {
     let href_start = link_tag.find("href=\"")? + 6;
     let href_end = link_tag[href_start..].find('"')?;
     let href = &link_tag[href_start..href_start + href_end];
-    let decoded = decode_xml_entities(href);
+    let decoded = decode_entities(href);
     let sanitized = strip_control_chars(&decoded);
     Some(sanitized.trim().to_string())
 }
@@ -389,59 +389,6 @@ fn strip_tags_no_cdata(text: &str) -> String {
             _ => {}
         }
     }
-    result
-}
-
-/// Decode common XML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`)
-/// and numeric character references (`&#NNN;` / `&#xHHHH;`) in a single
-/// left-to-right scan. Anything unrecognized (e.g. a stray `&`) is left
-/// untouched rather than erroring.
-fn decode_xml_entities(text: &str) -> String {
-    let mut result = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(amp_idx) = rest.find('&') {
-        result.push_str(&rest[..amp_idx]);
-        let tail = &rest[amp_idx..];
-        let Some(semi_idx) = tail.find(';') else {
-            result.push('&');
-            rest = &tail[1..];
-            continue;
-        };
-        let entity = &tail[1..semi_idx];
-        let decoded_char = match entity {
-            "amp" => Some('&'),
-            "lt" => Some('<'),
-            "gt" => Some('>'),
-            "quot" => Some('"'),
-            "apos" => Some('\''),
-            _ if entity.starts_with('#') => {
-                let num_part = &entity[1..];
-                let code_point = if let Some(hex) = num_part
-                    .strip_prefix('x')
-                    .or_else(|| num_part.strip_prefix('X'))
-                {
-                    u32::from_str_radix(hex, 16).ok()
-                } else {
-                    num_part.parse::<u32>().ok()
-                };
-                code_point.and_then(char::from_u32)
-            }
-            _ => None,
-        };
-        match decoded_char {
-            Some(ch) => {
-                result.push(ch);
-                rest = &tail[semi_idx + 1..];
-            }
-            None => {
-                // Unrecognized entity: leave the leading '&' untouched and
-                // keep scanning from just after it.
-                result.push('&');
-                rest = &tail[1..];
-            }
-        }
-    }
-    result.push_str(rest);
     result
 }
 
