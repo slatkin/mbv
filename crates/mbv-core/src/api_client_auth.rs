@@ -44,7 +44,11 @@ impl EmbyClient {
     }
 
     fn auth_header(&self) -> String {
-        format!("{}, Token=\"{}\"", self.unauthenticated_header(), self.token)
+        format!(
+            "{}, Token=\"{}\"",
+            self.unauthenticated_header(),
+            self.token
+        )
     }
 
     fn get(&self, path: &str) -> ureq::Request {
@@ -303,74 +307,6 @@ impl EmbyClient {
         )
     }
 
-    // Authenticate using credentials in self.config (password or api_key).
-    // Does not check the token cache. Saves a fresh token to the cache on success.
-    // Called by authenticate() on cache miss, and directly by the login screen.
-    pub fn authenticate_credentials(&mut self) -> Result<(), String> {
-        // Prefer password auth: yields a user-scoped token so sessions are attributed to the
-        // correct user (required for activity tracking and progress saving).
-        // API key auth yields an admin token with no user association — use only as fallback.
-        if !self.config.password.is_empty() {
-            let resp: Value = self
-                .agent
-                .post(&self.url("/Users/AuthenticateByName"))
-                .set("Authorization", &self.unauthenticated_header())
-                .send_json(ureq::json!({
-                    "Username": self.config.username,
-                    "Pw": self.config.password,
-                }))
-                .map_err(|e| format!("Auth failed: {e}"))?
-                .into_json()
-                .map_err(|e| format!("Auth parse failed: {e}"))?;
-            self.token = resp["AccessToken"].as_str().unwrap_or("").to_string();
-            self.user_id = resp["User"]["Id"].as_str().unwrap_or("").to_string();
-            if let Some(name) = resp["User"]["Name"]
-                .as_str()
-                .filter(|name| !name.is_empty())
-            {
-                self.config.username = name.to_string();
-            }
-            save_cached_token(&self.config.server_url, &self.token, &self.user_id);
-        } else if !self.config.api_key.is_empty() {
-            self.token = self.config.api_key.clone();
-            let users: Value = self
-                .agent
-                .get(&self.url("/Users"))
-                .query("api_key", &self.token)
-                .call()
-                .map_err(|e| format!("Auth failed: {e}"))?
-                .into_json()
-                .map_err(|e| format!("Auth parse failed: {e}"))?;
-            let users = users.as_array().ok_or("Expected array of users")?;
-            if users.is_empty() {
-                return Err("No users found on server".to_string());
-            }
-            if !self.config.username.is_empty() {
-                let uname = self.config.username.to_lowercase();
-                let found = users
-                    .iter()
-                    .find(|u| u["Name"].as_str().unwrap_or("").to_lowercase() == uname);
-                match found {
-                    Some(u) => {
-                        self.user_id = u["Id"].as_str().unwrap_or("").to_string();
-                        if let Some(name) = u["Name"].as_str().filter(|name| !name.is_empty()) {
-                            self.config.username = name.to_string();
-                        }
-                    }
-                    None => return Err(format!("User '{}' not found", self.config.username)),
-                }
-            } else {
-                self.user_id = users[0]["Id"].as_str().unwrap_or("").to_string();
-                if let Some(name) = users[0]["Name"].as_str().filter(|name| !name.is_empty()) {
-                    self.config.username = name.to_string();
-                }
-            }
-        } else {
-            return Err("No credentials configured".to_string());
-        }
-        Ok(())
-    }
-
     /// Fetch the current user's subtitle and audio language preferences from Emby.
     pub fn get_user_subtitle_prefs(&self) -> Result<crate::player::SubtitlePrefs, String> {
         let resp: serde_json::Value = self
@@ -399,60 +335,10 @@ impl EmbyClient {
         })
     }
 
-    pub fn validate_presented_token(&self, token: &str) -> Result<String, String> {
-        let token = token.trim();
-        if token.is_empty() {
-            return Err("missing Emby auth token".to_string());
-        }
-
-        let auth_header = format!(
-            "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"{}\"",
-            self.device_name,
-            self.device_id,
-            env!("CARGO_PKG_VERSION"),
-            token
-        );
-
-        let me_resp = self
-            .agent
-            .get(&self.url("/Users/Me"))
-            .set("Authorization", &auth_header)
-            .set("X-Emby-Token", token)
-            .call();
-        if let Ok(resp) = me_resp {
-            let resp: serde_json::Value = resp
-                .into_json()
-                .map_err(|e| format!("presented Emby token validation parse failed: {e}"))?;
-            let user_id = resp["Id"].as_str().unwrap_or("").trim();
-            if !user_id.is_empty() {
-                return Ok(user_id.to_string());
-            }
-        }
-
-        let users_resp = self
-            .agent
-            .get(&self.url("/Users"))
-            .query("api_key", token)
-            .call()
-            .map_err(|e| format!("presented Emby token rejected: {e}"))?;
-        let users: serde_json::Value = users_resp
-            .into_json()
-            .map_err(|e| format!("presented Emby token API-key validation parse failed: {e}"))?;
-        let users = users
-            .as_array()
-            .ok_or("presented Emby token API-key validation expected user array")?;
-        if users.is_empty() {
-            return Err("presented Emby token API-key validation returned no users".to_string());
-        }
-        Ok(users[0]["Id"].as_str().unwrap_or("").to_string())
-    }
-
-    /// Validate a presented Emby token for shared-data access. Unlike
-    /// `validate_presented_token`, this does NOT fall back to API-key user
-    /// list validation — a successful `/Users/Me` response with a non-empty
-    /// user ID is required unless the peer supplies an explicit user ID using
-    /// the shared-data user-id capability. The token is never persisted or
-    /// logged.
+    /// Validate a presented Emby token for shared-data access. A successful
+    /// `/Users/Me` response with a non-empty user ID is required unless the
+    /// peer supplies an explicit user ID using the shared-data user-id
+    /// capability. The token is never persisted or logged.
     pub fn validate_shared_data_token(
         &self,
         token: &str,

@@ -1,33 +1,6 @@
 use super::*;
 
 #[test]
-fn play_items_command_preserves_start_index() {
-    let json = serde_json::to_string(&CtrlCmd::PlayItems {
-        item_ids: vec!["a".to_string(), "b".to_string()],
-        start_idx: 1,
-        start_ticks: 42,
-        source: QueueSource::Album,
-    })
-    .unwrap();
-
-    let cmd: CtrlCmd = serde_json::from_str(&json).unwrap();
-    match cmd {
-        CtrlCmd::PlayItems {
-            item_ids,
-            start_idx,
-            start_ticks,
-            source,
-        } => {
-            assert_eq!(item_ids, vec!["a", "b"]);
-            assert_eq!(start_idx, 1);
-            assert_eq!(start_ticks, 42);
-            assert!(matches!(source, QueueSource::Album));
-        }
-        _ => panic!("expected PlayItems"),
-    }
-}
-
-#[test]
 fn current_hello_validates() {
     CtrlHello::current().validate_peer().unwrap();
     assert_eq!(CtrlHello::current().protocol_version, 9);
@@ -364,7 +337,7 @@ fn playback_intent_event_round_trips_structured_rejection() {
     ));
 }
 
-// ── LoadFeed / feed-playback capability ────────────────────────────────────
+// ── Unified queue wire types ──────────────────────────────────────────────
 
 fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
     crate::playback_queue::FeedEntry {
@@ -380,125 +353,6 @@ fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
         position_ticks: 0,
         played: false,
     }
-}
-
-#[test]
-fn load_feed_wire_tag_is_pinned() {
-    assert_eq!(
-        wire_tag(&WireCommand::LoadFeed {
-            entry: stub_feed_entry(),
-        }),
-        "LoadFeed"
-    );
-}
-
-#[test]
-fn load_feed_wire_round_trips_through_json() {
-    let entry = stub_feed_entry();
-    let wire = WireCommand::LoadFeed {
-        entry: entry.clone(),
-    };
-    let json = serde_json::to_string(&wire).unwrap();
-    let decoded: WireCommand = serde_json::from_str(&json).unwrap();
-    match decoded {
-        WireCommand::LoadFeed {
-            entry: decoded_entry,
-        } => {
-            assert_eq!(decoded_entry.guid, entry.guid);
-            assert_eq!(decoded_entry.title, entry.title);
-            assert_eq!(decoded_entry.enclosure_url, entry.enclosure_url);
-            assert_eq!(decoded_entry.mime_type, entry.mime_type);
-            assert_eq!(decoded_entry.duration_ticks, entry.duration_ticks);
-            assert_eq!(decoded_entry.pub_date_secs, entry.pub_date_secs);
-        }
-        _ => panic!("expected LoadFeed"),
-    }
-}
-
-#[test]
-fn load_feed_ctrl_cmd_round_trips_through_json() {
-    let entry = stub_feed_entry();
-    let cmd = CtrlCmd::PlayerCmd(WireCommand::LoadFeed {
-        entry: entry.clone(),
-    });
-    let json = serde_json::to_string(&cmd).unwrap();
-    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
-    match decoded {
-        CtrlCmd::PlayerCmd(wire) => match wire {
-            WireCommand::LoadFeed {
-                entry: decoded_entry,
-            } => {
-                assert_eq!(decoded_entry.guid, entry.guid);
-            }
-            _ => panic!("expected LoadFeed"),
-        },
-        _ => panic!("expected PlayerCmd"),
-    }
-}
-
-#[test]
-fn current_hello_advertises_feed_playback_capability() {
-    let hello = CtrlHello::current();
-    assert!(
-        hello.supports_feed_playback(),
-        "CtrlHello::current() must advertise feed-playback capability"
-    );
-}
-
-#[test]
-fn hello_missing_feed_playback_is_detected() {
-    let mut hello = CtrlHello::current();
-    hello
-        .capabilities
-        .retain(|cap| cap != CTRL_CAP_FEED_PLAYBACK);
-    assert!(
-        !hello.supports_feed_playback(),
-        "hello without feed-playback must be detected as lacking it"
-    );
-}
-
-#[test]
-fn ctrl_compatibility_supports_feed_playback() {
-    let compat = CtrlCompatibility::current();
-    assert!(compat.supports_feed_playback);
-}
-
-#[test]
-fn old_peer_without_feed_playback_capability_rejects_load_feed() {
-    let compat = CtrlCompatibility {
-        peer_protocol_version: CTRL_PROTOCOL_VERSION,
-        client_protocol_version: CTRL_PROTOCOL_VERSION,
-        supports_queue_append: true,
-        supports_lifecycle_shutdown: false,
-        supports_feed_playback: false,
-        supports_unified_queue: false,
-        supports_control_auth: false,
-        supports_abs_queue: false,
-        supports_abs_progress: false,
-        supports_abs_book_queue: false,
-        supports_abs_book_progress: false,
-    };
-    assert!(!compat.supports_feed_playback);
-}
-
-// ── Unified queue wire types ──────────────────────────────────────────────
-
-#[test]
-fn current_hello_advertises_unified_queue_capability() {
-    let hello = CtrlHello::current();
-    assert!(
-        hello.supports_unified_queue(),
-        "CtrlHello::current() must advertise unified-queue capability"
-    );
-}
-
-#[test]
-fn hello_without_unified_queue_detected() {
-    let mut hello = CtrlHello::current();
-    hello
-        .capabilities
-        .retain(|cap| cap != CTRL_CAP_UNIFIED_QUEUE);
-    assert!(!hello.supports_unified_queue());
 }
 
 #[test]
@@ -679,12 +533,6 @@ fn unified_queue_state_event_round_trips() {
         }
         _ => panic!("expected UnifiedQueueState"),
     }
-}
-
-#[test]
-fn ctrl_compatibility_current_supports_unified_queue() {
-    let compat = CtrlCompatibility::current();
-    assert!(compat.supports_unified_queue);
 }
 
 // Guards for task 4.2: capability advertisement is static protocol support —

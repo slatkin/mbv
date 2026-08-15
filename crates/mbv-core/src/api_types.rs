@@ -593,6 +593,7 @@ pub fn clear_cached_token() {
     let _ = std::fs::remove_file(crate::config::token_cache_path());
 }
 
+#[cfg(test)]
 fn save_cached_token(server_url: &str, token: &str, user_id: &str) {
     let path = crate::config::token_cache_path();
     if let Some(dir) = path.parent() {

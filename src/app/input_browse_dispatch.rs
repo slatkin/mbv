@@ -130,8 +130,7 @@ impl App {
                             .unwrap_or(0);
                         if track_count > 0 {
                             let delta: i64 = if key.code == KeyCode::Up { -1 } else { 1 };
-                            let new_idx =
-                                (idx as i64 + delta).clamp(0, track_count as i64 - 1) as usize;
+                            let new_idx = super::ui_util::move_cursor(idx, delta, track_count);
                             self.libs[lib_idx].album_track_focus = Some(new_idx);
                         }
                         return Some(false);
@@ -161,7 +160,7 @@ impl App {
                         let count = episodes.len();
                         if count > 0 {
                             let cur = self.libs[lib_idx].series_selection.unwrap_or(0);
-                            let new_idx = (cur as i64 + delta).clamp(0, count as i64 - 1) as usize;
+                            let new_idx = super::ui_util::move_cursor(cur, delta, count);
                             self.libs[lib_idx].series_selection = Some(new_idx);
                         }
                     }

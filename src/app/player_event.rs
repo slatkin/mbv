@@ -331,29 +331,6 @@ impl App {
                     log::warn!(target: "app", "next-up: NextUpPlay fired but next_up_item is None");
                 }
             }
-            PlayerEvent::QueueUpdated {
-                items,
-                cursor,
-                source,
-            } => {
-                let pending_local_cursor = self.pending_queue_edit_cursor.take();
-                let total = items.len();
-                let cursor = if self.has_direct_remote_queue() {
-                    self.pending_remote_move_cursor
-                        .take()
-                        .filter(|pending_cursor| *pending_cursor < total)
-                        .unwrap_or(cursor)
-                } else {
-                    pending_local_cursor
-                        .filter(|pending_cursor| *pending_cursor < total)
-                        .unwrap_or(cursor)
-                };
-                let queue = self.playback_queue_mut();
-                queue.set_items(items, cursor);
-                if !self.has_direct_remote_queue() {
-                    self.queue_source = source;
-                }
-            }
             PlayerEvent::UnifiedQueueUpdated(unified) => {
                 let total = unified.slots.len();
 

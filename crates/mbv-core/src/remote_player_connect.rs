@@ -197,7 +197,7 @@ impl std::fmt::Display for DaemonEndpoint {
 
 /// Performs the daemon control-protocol handshake (hello exchange, then the
 /// initial state) on `stream`, returning a reader ready for the long-running
-/// event-reading loop plus the initial `CtrlEvent::State`. Split out of
+/// event-reading loop plus the initial `UnifiedQueueState`. Split out of
 /// `connect_endpoint` so it can run on a worker thread bounded by
 /// `DAEMON_HANDSHAKE_HARD_BOUND` (issue #191 fix #5), and so it can be tested
 /// directly against a real stalled `TcpListener` without going through
@@ -224,8 +224,6 @@ where
             info.validate_peer()?;
             let mut compatibility = info.compatibility()?;
             compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
-            compatibility.supports_feed_playback = info.supports_feed_playback();
-            compatibility.supports_unified_queue = info.supports_unified_queue();
             compatibility.supports_control_auth = info.supports_control_auth();
             log::info!(
                 target: "remote",
@@ -338,26 +336,6 @@ fn apply_ctrl_event(
             current.current_idx = current_idx;
             current.queue_len = queue_len;
         }
-        CtrlEvent::State(s) => {
-            let mut next_status = s.status;
-            next_status.current_idx = s.cursor;
-            next_status.queue_len = s.items.len();
-            *status.lock().unwrap() = next_status;
-            *items.lock().unwrap() = s.items.clone();
-            *queue_source.lock().unwrap() = s.source.clone();
-            // The very first State snapshot read synchronously during connect()
-            // establishes baseline state before the App (and its event loop)
-            // exists; it must not be queued, or it would be applied *after* a
-            // local-daemon queue adoption that happens between connect() and
-            // App construction, transiently wiping the just-adopted queue.
-            if notify {
-                let _ = event_tx.send(PlayerEvent::QueueUpdated {
-                    items: s.items,
-                    cursor: s.cursor,
-                    source: s.source,
-                });
-            }
-        }
         CtrlEvent::Player(pe) => {
             match &pe {
                 PlayerEvent::Stopped { .. } => {
@@ -452,12 +430,12 @@ fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
     }
 }
 
-/// Applies a unified-queue state snapshot.  Updates the legacy `status`
-/// and `items` Arc values for backward-compatible status-bar consumers,
-/// and — when `notify` is true — emits a `PlayerEvent::UnifiedQueueUpdated`
-/// that carries the full tagged queue, slot identity, active slot, and
-/// revision so the TUI can reconstruct the canonical queue without
-/// decomposing it into Emby-only shapes.
+/// Applies a unified-queue state snapshot.  Updates the `status` and
+/// `items` Arc values backing status-bar consumers, and — when `notify` is
+/// true — emits a `PlayerEvent::UnifiedQueueUpdated` that carries the full
+/// tagged queue, slot identity, active slot, and revision so the TUI can
+/// reconstruct the canonical queue without decomposing it into Emby-only
+/// shapes.
 fn apply_unified_queue_state(
     unified: UnifiedQueueStateData,
     status: &Arc<Mutex<PlayerStatus>>,
@@ -478,9 +456,8 @@ fn apply_unified_queue_state(
         next_status.current_idx = active_index;
     }
 
-    // Project Emby-only items only for compatibility consumers. The status
-    // coordinates remain canonical; capable consumers use the stored unified
-    // snapshot, while legacy consumers continue to receive their projection.
+    // Project Emby-only items for consumers that need them; the status
+    // coordinates remain canonical, and the queue itself stays tagged.
     let emby_items: Vec<EmbyItem> = unified
         .slots
         .iter()

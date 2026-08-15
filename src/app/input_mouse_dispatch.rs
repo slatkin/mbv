@@ -103,7 +103,7 @@ impl App {
                         let delta = delta * 3;
                         let queue = self.displayed_queue_mut();
                         queue.queue_cursor =
-                            (queue.queue_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                            super::ui_util::move_cursor(queue.queue_cursor, delta, n);
                     }
                 } else if left_area.contains((col, row).into()) {
                     self.handle_mouse_scroll_browse(delta);

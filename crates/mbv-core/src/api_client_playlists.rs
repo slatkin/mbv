@@ -210,26 +210,6 @@ impl EmbyClient {
             .unwrap_or_default())
     }
 
-    /// Probes for the Chapter API plugin. Sets `chapter_api_available` on self.
-    /// Any HTTP response (even 500 for a bad id) means the plugin is installed;
-    /// only a 404 or connection failure means it's absent.
-    pub fn probe_chapter_api(&mut self) {
-        log::info!(target: "api", "outbound: ChapterAPI probe");
-        match self
-            .get("/chapter_api/get_chapters")
-            .query("id", "0")
-            .call()
-        {
-            Ok(_) | Err(ureq::Error::Status(_, _)) => {
-                self.chapter_api_available = true;
-                log::info!(target: "api", "inbound: ChapterAPI available");
-            }
-            Err(e) => {
-                log::info!(target: "api", "err: ChapterAPI not available: {e}");
-            }
-        }
-    }
-
     /// Returns `(intro_start_ticks, intro_end_ticks)` for an item if the Chapter API
     /// exposes IntroStart and IntroEnd markers.
     pub fn get_intro_times(&self, item_id: &str) -> Option<(i64, i64)> {

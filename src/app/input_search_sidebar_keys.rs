@@ -48,10 +48,7 @@ impl App {
             sidebar.scroll = 0;
             return;
         }
-        let cur = sidebar.cursor as i64;
-        let max = n as i64 - 1;
-        let new = (cur + delta).clamp(0, max) as usize;
-        sidebar.cursor = new;
+        sidebar.cursor = super::ui_util::move_cursor(sidebar.cursor, delta, n);
         let page = sidebar.list_height.max(1);
         if sidebar.cursor < sidebar.scroll {
             sidebar.scroll = sidebar.cursor;

@@ -212,11 +212,4 @@ impl QueueState {
             !matches!(item, crate::playback_queue::QueueItem::Audiobookshelf(_))
         })
     }
-
-    /// Remove both Emby and Audiobookshelf items, keeping only Feed entries.
-    /// Composition of `without_emby` and `without_audiobookshelf` would also
-    /// work, but this single-pass form avoids double allocation.
-    pub fn without_emby_and_audiobookshelf(&self) -> Self {
-        self.without_items(|item| matches!(item, crate::playback_queue::QueueItem::Feed(_)))
-    }
 }

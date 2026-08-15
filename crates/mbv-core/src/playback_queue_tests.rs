@@ -759,23 +759,3 @@ fn mixed_queue_replace_preserves_item_variants() {
     assert!(matches!(queue.slots()[1].item, QueueItem::Emby(_)));
     assert!(matches!(queue.slots()[2].item, QueueItem::Feed(_)));
 }
-
-#[test]
-fn legacy_cursor_maps_interleaved_queue_into_emby_index_space() {
-    let items = vec![
-        QueueItem::Emby(Box::new(item("emby0"))),
-        QueueItem::Feed(feed("feed0")),
-        QueueItem::Emby(Box::new(item("emby1"))),
-    ];
-
-    // emby1 active: representable in both projections at Emby index 1.
-    let queue = PlaybackQueue::from_queue_items(items.clone(), Some(2));
-    assert_eq!(queue.legacy_cursor(false), 1);
-    assert_eq!(queue.legacy_cursor(true), 1);
-
-    // feed0 active: only representable when the Feed tail is included, at
-    // emby_total (2) + feed_seen (0). Without the tail it's unrepresentable.
-    let queue = PlaybackQueue::from_queue_items(items, Some(1));
-    assert_eq!(queue.legacy_cursor(true), 2);
-    assert_eq!(queue.legacy_cursor(false), 0);
-}

@@ -174,31 +174,6 @@ fn table_key(user_id: &str, kind: SharedDocumentKind) -> (String, String) {
     (user_id.to_string(), kind.as_str().to_string())
 }
 
-/// Read a single document. Returns `None` if absent.
-pub fn read_document(
-    db: &Database,
-    user_id: &str,
-    kind: SharedDocumentKind,
-) -> Result<Option<SharedRecord>, String> {
-    let txn = db
-        .begin_read()
-        .map_err(|e| format!("begin read transaction: {e}"))?;
-    let table = txn
-        .open_table(DB_TABLE)
-        .map_err(|e| format!("open table for read: {e}"))?;
-    let (uk, kk) = table_key(user_id, kind);
-    let key: (&str, &str) = (&uk, &kk);
-    match table.get(key).map_err(|e| format!("read document: {e}"))? {
-        Some(guard) => {
-            let raw = guard.value();
-            let record: SharedRecord =
-                serde_json::from_str(raw).map_err(|e| format!("parse shared record: {e}"))?;
-            Ok(Some(record))
-        }
-        None => Ok(None),
-    }
-}
-
 /// Read all four documents for a user in one read transaction.
 pub fn read_all_documents(db: &Database, user_id: &str) -> Result<SharedDocumentTuple, String> {
     let txn = db
@@ -444,9 +419,7 @@ mod tests {
         let rec =
             create_document(&db, "user1", SharedDocumentKind::QueueState, val.clone()).unwrap();
         assert_eq!(rec.revision, 1);
-        let loaded = read_document(&db, "user1", SharedDocumentKind::QueueState)
-            .unwrap()
-            .unwrap();
+        let loaded = read_all_documents(&db, "user1").unwrap().0.unwrap();
         assert_eq!(loaded.revision, 1);
         assert_eq!(loaded.value, val);
     }
@@ -493,7 +466,7 @@ mod tests {
     #[test]
     fn read_absent() {
         let db = test_db();
-        let result = read_document(&db, "nobody", SharedDocumentKind::QueueState).unwrap();
+        let result = read_all_documents(&db, "nobody").unwrap().0;
         assert!(result.is_none());
     }
 
@@ -504,12 +477,8 @@ mod tests {
         create_document(&db, "user_a", SharedDocumentKind::QueueState, val).unwrap();
         let val_b = serde_json::json!({"user": "b"});
         create_document(&db, "user_b", SharedDocumentKind::QueueState, val_b.clone()).unwrap();
-        let rec_a = read_document(&db, "user_a", SharedDocumentKind::QueueState)
-            .unwrap()
-            .unwrap();
-        let rec_b = read_document(&db, "user_b", SharedDocumentKind::QueueState)
-            .unwrap()
-            .unwrap();
+        let rec_a = read_all_documents(&db, "user_a").unwrap().0.unwrap();
+        let rec_b = read_all_documents(&db, "user_b").unwrap().0.unwrap();
         assert_eq!(rec_a.value["user"], "a");
         assert_eq!(rec_b.value, val_b);
     }
@@ -529,9 +498,7 @@ mod tests {
             0,
             serde_json::json!({"overwrite": true}),
         );
-        let loaded = read_document(&db, "u", SharedDocumentKind::QueueState)
-            .unwrap()
-            .unwrap();
+        let loaded = read_all_documents(&db, "u").unwrap().0.unwrap();
         assert_eq!(loaded.revision, 1);
         assert_eq!(loaded.value, val);
     }

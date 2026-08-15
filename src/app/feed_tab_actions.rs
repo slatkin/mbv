@@ -131,8 +131,7 @@ impl App {
         if n == 0 {
             return;
         }
-        let cur = self.feed_tab.cursor as i64;
-        self.feed_tab.cursor = (cur + delta).clamp(0, n as i64 - 1) as usize;
+        self.feed_tab.cursor = super::ui_util::move_cursor(self.feed_tab.cursor, delta, n);
     }
 
     /// Jump the feed tab cursor to the start or end.
@@ -245,7 +244,7 @@ impl App {
         let all_items = self.playback_queue().all_queue_items();
         let start_idx = self.playback_queue().queue_cursor;
         let headless = all_items.iter().all(QueueItem::is_audio);
-        if existing_idx.is_some() && self.player.supports_unified_queue() {
+        if existing_idx.is_some() && self.player.is_remote() {
             let slot_id = self
                 .playback_queue()
                 .slot_id_at(unified_idx)

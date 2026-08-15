@@ -97,8 +97,8 @@ impl App {
         if n == 0 {
             return;
         }
-        let cur = self.home.continue_cursor.min(n - 1) as i64;
-        self.home.continue_cursor = (cur + delta).clamp(0, n as i64 - 1) as usize;
+        let cur = self.home.continue_cursor.min(n - 1);
+        self.home.continue_cursor = super::ui_util::move_cursor(cur, delta, n);
     }
 
     // The Continue Watching column shares state with the Home tab's

@@ -275,7 +275,6 @@ impl App {
             app_config.show_audio_window,
             app_config.use_mpv_config,
             app_config.no_scripts,
-            app_config.always_play_next,
             app_config.always_skip_intro,
             mbv_core::player::SubtitlePrefs {
                 mode: app_config.subtitle_mode.clone(),

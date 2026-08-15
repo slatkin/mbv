@@ -23,7 +23,6 @@ impl PlayerProxy {
             false,
             false,
             false,
-            false,
             SubtitlePrefs::default(),
             tx,
             None,
@@ -51,7 +50,6 @@ impl PlayerProxy {
         let mut player = Player::new(
             String::new(),
             String::new(),
-            false,
             false,
             false,
             false,
@@ -181,8 +179,7 @@ impl PlayerProxy {
     /// Item-generic queue submission: replace the current queue with `items`
     /// and start playback from `start_idx`.  For local players this routes
     /// through the unified `Player::submit_queue`; for remote players it
-    /// sends `UnifiedQueueReplace` when the daemon supports the capability,
-    /// falling back to legacy methods.
+    /// sends `UnifiedQueueReplace`.
     pub fn submit_queue(
         &self,
         items: Vec<QueueItem>,
@@ -199,62 +196,14 @@ impl PlayerProxy {
                 // Never strip an unsupported item and send the remainder: a
                 // ctrl owner must reject the whole submission without local
                 // fall-through or Bound queue mutation.
-                if items.is_empty() || items.iter().any(QueueItem::is_audiobookshelf) {
+                if items.is_empty() || items.iter().any(QueueItem::is_audiobookshelf_any) {
                     return false;
                 }
                 let start_idx = start_idx.min(items.len() - 1);
-                if r.supports_unified_queue() {
-                    // Unified path: send item-generic replace command.
-                    r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
-                        items,
-                        start_idx: Some(start_idx),
-                    })
-                } else if items.len() == 1 {
-                    // Legacy single-item path.
-                    match &items[0] {
-                        QueueItem::Emby(emby) => {
-                            if let Some(c) = client {
-                                r.play(
-                                    emby.as_ref(),
-                                    crate::config::QueueSource::default(),
-                                    c,
-                                    initial_volume,
-                                )
-                            } else {
-                                false
-                            }
-                        }
-                        QueueItem::Feed(entry) => r.play_feed(entry.clone()),
-                        QueueItem::Audiobookshelf(_) => false,
-                        QueueItem::AudiobookshelfBook(_) => false,
-                    }
-                } else if items.iter().any(|item| !matches!(item, QueueItem::Emby(_))) {
-                    // A legacy peer cannot represent a mixed canonical queue
-                    // or Audiobookshelf items; filtering would silently replace
-                    // the owner's queue with a different order and cursor.
-                    false
-                } else {
-                    // Legacy multi-item path: all items are Emby here.
-                    let emby_items: Vec<EmbyItem> = items
-                        .into_iter()
-                        .filter_map(|i| i.as_emby().cloned())
-                        .collect();
-                    if !emby_items.is_empty() {
-                        if let Some(c) = client {
-                            r.play_queue(
-                                emby_items,
-                                start_idx,
-                                crate::config::QueueSource::default(),
-                                c,
-                                initial_volume,
-                            )
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                }
+                r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
+                    items,
+                    start_idx: Some(start_idx),
+                })
             }
         }
     }
@@ -328,13 +277,6 @@ impl PlayerProxy {
         }
     }
 
-    pub fn supports_unified_queue(&self) -> bool {
-        match &self.inner {
-            PlayerProxyInner::Local(_) => false,
-            PlayerProxyInner::Remote(r) => r.supports_unified_queue(),
-        }
-    }
-
     pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.queue_append(items),
@@ -348,7 +290,7 @@ impl PlayerProxy {
     }
 
     /// Remove a slot by stable identity on a remote peer that supports
-    /// unified queue.  Returns `false` for local players or legacy peers.
+    /// unified queue.  Returns `false` for local players.
     pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
@@ -357,7 +299,7 @@ impl PlayerProxy {
     }
 
     /// Move a slot by stable identity on a remote peer that supports
-    /// unified queue.  Returns `false` for local players or legacy peers.
+    /// unified queue.  Returns `false` for local players.
     pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
@@ -366,8 +308,7 @@ impl PlayerProxy {
     }
 
     /// Begin playback of an existing slot by stable identity on a remote
-    /// peer that supports unified queue.  Returns `false` for local
-    /// players or legacy peers.
+    /// peer that supports unified queue.  Returns `false` for local players.
     pub fn queue_play_slot(&self, slot_id: u64) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,

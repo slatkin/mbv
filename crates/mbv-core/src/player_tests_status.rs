@@ -123,7 +123,6 @@ fn set_initial_queue_seeds_status_without_starting_playback() {
         false,
         false,
         false,
-        false,
         SubtitlePrefs::default(),
         tx,
         None,

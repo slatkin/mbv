@@ -25,17 +25,8 @@ fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
 
 fn connect_old_unified_peer(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    // supports_feed=true, supports_unified=true, abs_queue=false, abs_progress=false
-    let id = clients.connect(
-        tx,
-        CtrlTransport::Local,
-        true,
-        true,
-        false,
-        false,
-        false,
-        false,
-    );
+    // abs_queue=false, abs_progress=false, abs_book_*=false
+    let id = clients.connect(tx, CtrlTransport::Local, false, false, false, false);
     (id, rx)
 }
 
@@ -57,11 +48,13 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
 
-    let capable_data = match super::unified_queue_state_for_peer(&status, &queue, &source, true, false) {
-        CtrlEvent::UnifiedQueueState(d) => d,
-        _ => panic!("expected UnifiedQueueState"),
-    };
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, false, false) {
+    let capable_data =
+        match super::unified_queue_state_for_peer(&status, &queue, &source, true, false) {
+            CtrlEvent::UnifiedQueueState(d) => d,
+            _ => panic!("expected UnifiedQueueState"),
+        };
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, false, false)
+    {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
     };
@@ -85,7 +78,8 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
 
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, false, false) {
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, false, false)
+    {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
     };
@@ -136,7 +130,6 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
@@ -188,7 +181,6 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
@@ -249,7 +241,6 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
@@ -302,7 +293,6 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
         &registry,
         &mut PlaybackIntentState::default(),
         false,
-        None,
         &dummy_merged_tx,
     );
 
@@ -356,7 +346,6 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
         &registry,
         &mut PlaybackIntentState::default(),
         true,
-        None,
         &dummy_merged_tx,
     );
 

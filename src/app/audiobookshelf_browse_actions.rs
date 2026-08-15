@@ -173,8 +173,8 @@ impl App {
         if state.shows.is_empty() || state.episode_selection.is_some() {
             return;
         }
-        let cursor = (state.cursor() as i64 + delta).clamp(0, state.shows.len() as i64 - 1);
-        self.select_audiobookshelf_show(cursor as usize);
+        let cursor = super::ui_util::move_cursor(state.cursor(), delta, state.shows.len());
+        self.select_audiobookshelf_show(cursor);
     }
 
     pub(super) fn move_audiobookshelf_show_rows(&mut self, rows: i64) {
@@ -227,8 +227,7 @@ impl App {
         };
         let count = state.visible_episodes().len();
         if count > 0 {
-            state.episode_selection =
-                Some((cursor as i64 + delta).clamp(0, count as i64 - 1) as usize);
+            state.episode_selection = Some(super::ui_util::move_cursor(cursor, delta, count));
         }
     }
 
@@ -364,7 +363,7 @@ impl App {
         }
         if self.sync_playback_queue_items_after_append(scope, vec![item]) {
             self.persist_local_queue_state_if_needed(scope);
-            self.retire_remote_tracking_after_queue_mutation();
+            self.retire_remote_tracking(true);
         } else {
             self.queue_dirty = previous_dirty;
             *self.queue_for_scope_mut(scope) = previous_queue;

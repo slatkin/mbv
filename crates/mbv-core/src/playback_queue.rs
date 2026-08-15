@@ -284,39 +284,6 @@ impl PlaybackQueue {
         self.active_slot_id.and_then(|id| self.slot_index(id))
     }
 
-    /// Cursor for the legacy `CtrlState` projection: the active slot's index
-    /// within the Emby slots in canonical order, optionally followed by the
-    /// Feed tail. Returns 0 when the active slot is not Emby-representable
-    /// but `include_feed_tail` is false.
-    pub fn legacy_cursor(&self, include_feed_tail: bool) -> usize {
-        let Some(active_id) = self.active_slot_id else {
-            return 0;
-        };
-        let emby_total = self
-            .slots
-            .iter()
-            .filter(|s| matches!(s.item, QueueItem::Emby(_)))
-            .count();
-        let mut emby_seen = 0usize;
-        let mut feed_seen = 0usize;
-        for slot in &self.slots {
-            if slot.slot_id == active_id {
-                return match &slot.item {
-                    QueueItem::Emby(_) => emby_seen,
-                    QueueItem::Feed(_) if include_feed_tail => emby_total + feed_seen,
-                    QueueItem::Feed(_) => 0,
-                    QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => 0,
-                };
-            }
-            match &slot.item {
-                QueueItem::Emby(_) => emby_seen += 1,
-                QueueItem::Feed(_) => feed_seen += 1,
-                QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => {}
-            }
-        }
-        0
-    }
-
     pub fn active_slot(&self) -> Option<&QueueSlot> {
         self.active_slot_id.and_then(|slot_id| self.slot(slot_id))
     }
@@ -327,16 +294,6 @@ impl PlaybackQueue {
 
     pub fn is_empty(&self) -> bool {
         self.slots.is_empty()
-    }
-
-    /// Returns `true` when the queue contains any `Feed` slots that a
-    /// legacy peer (without `unified-queue` capability) cannot represent.
-    /// Used by the daemon to reject legacy queue replacements that would
-    /// silently overwrite hidden canonical slots.
-    pub fn has_feed_entries(&self) -> bool {
-        self.slots
-            .iter()
-            .any(|s| matches!(s.item, QueueItem::Feed(_)))
     }
 
     /// Returns `true` when the queue contains any Audiobookshelf slots.

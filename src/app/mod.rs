@@ -1,5 +1,7 @@
 mod action;
 mod actions;
+mod app_audiobookshelf_service_completion;
+mod app_emby_service_completion;
 mod app_struct;
 mod audio_subtitle_actions;
 mod audiobookshelf_browse_actions;

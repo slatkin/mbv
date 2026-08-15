@@ -319,11 +319,9 @@ fn remote_queue_update_reconciles_remote_queue_without_touching_local_queue() {
         remote_items[1].clone(),
     ];
 
-    app.handle_player_event(PlayerEvent::QueueUpdated {
-        items: updated_remote.clone(),
-        cursor: 2,
-        source: crate::config::QueueSource::Remote,
-    });
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
+        emby_unified_state(&updated_remote, 2),
+    )));
 
     assert_eq!(
         app.remote_player_tab
@@ -364,15 +362,16 @@ fn remote_queue_update_after_move_keeps_cursor_on_moved_item() {
 
     app.move_queue_item_up();
 
-    app.handle_player_event(PlayerEvent::QueueUpdated {
-        items: vec![
-            remote_items[1].clone(),
-            remote_items[0].clone(),
-            remote_items[2].clone(),
-        ],
-        cursor: 1,
-        source: crate::config::QueueSource::Remote,
-    });
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
+        emby_unified_state(
+            &[
+                remote_items[1].clone(),
+                remote_items[0].clone(),
+                remote_items[2].clone(),
+            ],
+            1,
+        ),
+    )));
 
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
     assert_eq!(
@@ -401,15 +400,16 @@ fn remote_queue_update_after_move_tracks_duplicate_item_by_position() {
 
     app.move_queue_item_down();
 
-    app.handle_player_event(PlayerEvent::QueueUpdated {
-        items: vec![
-            remote_items[0].clone(),
-            remote_items[2].clone(),
-            remote_items[1].clone(),
-        ],
-        cursor: 0,
-        source: crate::config::QueueSource::Remote,
-    });
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
+        emby_unified_state(
+            &[
+                remote_items[0].clone(),
+                remote_items[2].clone(),
+                remote_items[1].clone(),
+            ],
+            0,
+        ),
+    )));
 
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
     assert_eq!(

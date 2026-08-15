@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::api::{EmbyClient, EmbyItem};
 use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent};
-use crate::playback_queue::{FeedEntry, QueueItem};
+use crate::playback_queue::QueueItem;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 /// Response from a bounded shutdown request.
@@ -203,23 +203,13 @@ impl RemotePlayer {
             .collect();
         *self.items.lock().unwrap() = emby_items.clone();
         *self.queue_source.lock().unwrap() = source.clone();
-        if self.ctrl_compatibility.supports_unified_queue {
-            self.cmd_tx
-                .send(CtrlCmd::UnifiedAdoptQueue {
-                    items,
-                    cursor,
-                    source,
-                })
-                .is_ok()
-        } else {
-            self.cmd_tx
-                .send(CtrlCmd::AdoptQueue {
-                    items: emby_items,
-                    cursor,
-                    source,
-                })
-                .is_ok()
-        }
+        self.cmd_tx
+            .send(CtrlCmd::UnifiedAdoptQueue {
+                items,
+                cursor,
+                source,
+            })
+            .is_ok()
     }
 
     pub fn play(
@@ -229,42 +219,15 @@ impl RemotePlayer {
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) -> bool {
-        let sent = if self.ctrl_compatibility.supports_unified_queue {
-            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
-                items: vec![QueueItem::Emby(Box::new(item.clone()))],
-                start_idx: Some(0),
-            })
-        } else {
-            self.send_playback_intent(self.new_playback_intent(
-                crate::ctrl::PlaybackIntentAction::Play {
-                    item_ids: vec![item.id.clone()],
-                    start_idx: 0,
-                    start_ticks: item.playback_position_ticks,
-                    source: source.clone(),
-                },
-            ))
-        };
+        let sent = self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
+            items: vec![QueueItem::Emby(Box::new(item.clone()))],
+            start_idx: Some(0),
+        });
         if sent {
             *self.items.lock().unwrap() = vec![item.clone()];
             *self.queue_source.lock().unwrap() = source;
         }
         sent
-    }
-
-    pub fn supports_feed_playback(&self) -> bool {
-        self.ctrl_compatibility.supports_feed_playback
-    }
-
-    /// Legacy single-feed submission for peers that advertise `feed-playback`
-    /// but not `unified-queue`. Sends the surviving `WireCommand::LoadFeed`
-    /// envelope, which the daemon intercepts and folds into its canonical queue.
-    pub fn play_feed(&self, entry: FeedEntry) -> bool {
-        if !self.supports_feed_playback() {
-            return false;
-        }
-        self.send_ctrl_cmd(CtrlCmd::PlayerCmd(crate::ctrl::WireCommand::LoadFeed {
-            entry,
-        }))
     }
 
     pub fn play_queue(
@@ -275,30 +238,15 @@ impl RemotePlayer {
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) -> bool {
-        let sent = if self.ctrl_compatibility.supports_unified_queue {
-            let queue_items: Vec<QueueItem> = items
-                .iter()
-                .cloned()
-                .map(|i| QueueItem::Emby(Box::new(i)))
-                .collect();
-            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
-                items: queue_items,
-                start_idx: Some(start_idx),
-            })
-        } else {
-            let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
-            let start_ticks = items
-                .get(start_idx)
-                .map_or(0, |i| i.playback_position_ticks);
-            self.send_playback_intent(self.new_playback_intent(
-                crate::ctrl::PlaybackIntentAction::Play {
-                    item_ids,
-                    start_idx,
-                    start_ticks,
-                    source: source.clone(),
-                },
-            ))
-        };
+        let queue_items: Vec<QueueItem> = items
+            .iter()
+            .cloned()
+            .map(|i| QueueItem::Emby(Box::new(i)))
+            .collect();
+        let sent = self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
+            items: queue_items,
+            start_idx: Some(start_idx),
+        });
         if sent {
             *self.items.lock().unwrap() = items;
             *self.queue_source.lock().unwrap() = source;
@@ -339,10 +287,6 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_lifecycle_shutdown
     }
 
-    pub fn supports_unified_queue(&self) -> bool {
-        self.ctrl_compatibility.supports_unified_queue
-    }
-
     pub fn unified_queue_state(&self) -> Option<crate::ctrl::UnifiedQueueStateData> {
         self.unified_queue.lock().unwrap().clone()
     }
@@ -351,43 +295,22 @@ impl RemotePlayer {
         if items.is_empty() {
             return true;
         }
-        if self.supports_unified_queue() {
-            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueAppend { items })
-        } else if items.iter().any(|item| !matches!(item, QueueItem::Emby(_))) {
-            false
-        } else {
-            self.send_command(PlayerCommand::QueueAppend { items })
-        }
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueAppend { items })
     }
 
-    /// Remove a slot by its stable identity.  Falls back to `false` if the
-    /// peer does not advertise `unified-queue`.
+    /// Remove a slot by its stable identity.
     pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
-        if self.supports_unified_queue() {
-            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id })
-        } else {
-            false
-        }
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id })
     }
 
-    /// Move a slot by its stable identity to `to_index`.  Falls back to
-    /// `false` if the peer does not advertise `unified-queue`.
+    /// Move a slot by its stable identity to `to_index`.
     pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
-        if self.supports_unified_queue() {
-            self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index })
-        } else {
-            false
-        }
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index })
     }
 
-    /// Begin playback of an existing slot by its stable identity.  Falls
-    /// back to `false` if the peer does not advertise `unified-queue`.
+    /// Begin playback of an existing slot by its stable identity.
     pub fn queue_play_slot(&self, slot_id: u64) -> bool {
-        if self.supports_unified_queue() {
-            self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id })
-        } else {
-            false
-        }
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id })
     }
 
     pub(crate) fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {

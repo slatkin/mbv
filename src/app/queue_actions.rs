@@ -14,14 +14,6 @@ use std::sync::Arc;
 mod queue_actions_playlist_mutation;
 
 impl App {
-    fn retire_tracking_after_queue_mutation(&mut self) {
-        self.retire_remote_tracking(true);
-    }
-
-    pub(super) fn retire_remote_tracking_after_queue_mutation(&mut self) {
-        self.retire_tracking_after_queue_mutation();
-    }
-
     pub(super) fn remove_from_queue(&mut self, pos: usize) {
         let scope = self.visible_queue_scope();
         let controls_playback_queue = self.queue_scope_is_playback(scope);
@@ -104,14 +96,14 @@ impl App {
         }
         queue.clamp_cursor();
         if sent_queue_remove {
-            // The daemon's reply carries its own `cursor`, which tracks
+            // The daemon's reply carries its own cursor, which tracks
             // *playback* position, not this selection — without this, the
             // round trip would snap the display cursor onto the now-playing
             // item instead of leaving it on the item that shifted into this
-            // slot. See `PlayerEvent::QueueUpdated`.
+            // slot. See `PlayerEvent::UnifiedQueueUpdated`.
             self.pending_queue_edit_cursor = Some(queue.queue_cursor);
         }
-        self.retire_tracking_after_queue_mutation();
+        self.retire_remote_tracking(true);
     }
 
     /// Moves the item at the displayed queue's cursor one position earlier.
@@ -147,7 +139,7 @@ impl App {
             return;
         };
         if self.apply_queue_move_by_slot(scope, slot_id, from, to) {
-            self.retire_tracking_after_queue_mutation();
+            self.retire_remote_tracking(true);
             if scope == QueueScope::Remote {
                 self.pending_remote_move_cursor = Some(to);
             }
@@ -239,7 +231,7 @@ impl App {
                     self.queue_dirty = true;
                 }
                 self.persist_local_queue_state_if_needed(scope);
-                self.retire_tracking_after_queue_mutation();
+                self.retire_remote_tracking(true);
             }
             UndoEntry::Move { from, to, slot_id } => {
                 let still_in_place = self.queue_for_scope(scope).slot_id_matches_at(to, slot_id);
@@ -250,7 +242,7 @@ impl App {
                     );
                     return;
                 }
-                self.retire_tracking_after_queue_mutation();
+                self.retire_remote_tracking(true);
             }
         }
         self.set_queue_scope(scope);
@@ -352,7 +344,7 @@ impl App {
                     queue.clear();
                 }
                 if had_items {
-                    self.retire_tracking_after_queue_mutation();
+                    self.retire_remote_tracking(true);
                 }
                 if self.local_queue_metadata_applies(scope) {
                     self.save_queue_state_after_explicit_clear();

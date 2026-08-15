@@ -51,42 +51,6 @@ impl EmbyClient {
         items
     }
 
-    #[allow(dead_code)]
-    pub fn get_next_up(&self, series_id: &ItemId) -> Option<EmbyItem> {
-        log::debug!(target: "api", "outbound: NextUp series={series_id}");
-        let resp: Value = match self
-            .get("/Shows/NextUp")
-            .query("UserId", &self.user_id)
-            .query("SeriesId", series_id.as_str())
-            .query("Limit", "1")
-            .query(
-                "Fields",
-                "UserData,RunTimeTicks,SeriesId,SeriesName,ParentIndexNumber,IndexNumber",
-            )
-            .call()
-        {
-            Ok(r) => match r.into_json() {
-                Ok(v) => v,
-                Err(e) => {
-                    log::warn!(target: "api", "err: NextUp parse: {e}");
-                    return None;
-                }
-            },
-            Err(e) => {
-                log::warn!(target: "api", "err: NextUp: {e}");
-                return None;
-            }
-        };
-        let items = resp["Items"].as_array()?;
-        if items.is_empty() {
-            log::debug!(target: "api", "inbound: NextUp: none");
-            return None;
-        }
-        let item = parse_item(&items[0]);
-        log::info!(target: "api", "inbound: NextUp: {}", item.display_name());
-        Some(item)
-    }
-
     // ── Remote session control ───────────────────────────────────────────────
 
     fn get_sessions_with_active_within(
@@ -242,13 +206,5 @@ impl EmbyClient {
             }))
             .map_err(|e| e.to_string())?;
         Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub fn stream_url(&self, item_id: &str) -> String {
-        format!(
-            "{}/Videos/{}/stream?static=true&api_key={}",
-            self.config.server_url, item_id, self.token
-        )
     }
 }

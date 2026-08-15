@@ -107,7 +107,7 @@ fn broadcast_queue_state(
 ) {
     let status = player.status.lock().unwrap().clone();
 
-    // ── Unified-queue capable peers ────────────────────────────────────
+    // ── Unified-queue peers, gate ABS episodes and books independently ──
     let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
         &status, queue, source, true, true,
     ));
@@ -121,67 +121,28 @@ fn broadcast_queue_state(
         &status, queue, source, false, false,
     ));
 
-    // ── Legacy peers: derive split items from canonical queue ──
-    let (emby_items, feed_items) = split_queue_for_legacy(queue);
-    let capable_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
-        status: status.clone(),
-        items: emby_items.clone(),
-        cursor: queue.legacy_cursor(true),
-        source: source.clone(),
-        feed_items: feed_items.clone(),
-    }));
-    let legacy_json = serialize_ctrl_event(&CtrlEvent::State(CtrlState {
-        status,
-        items: emby_items,
-        cursor: queue.legacy_cursor(false),
-        source: source.clone(),
-        feed_items: Vec::new(),
-    }));
-
     if let (
         Some(unified_full_json),
         Some(unified_abs_json),
         Some(unified_book_json),
         Some(unified_json),
-        Some(capable_json),
-        Some(legacy_json),
     ) = (
         unified_full_json,
         unified_abs_json,
         unified_book_json,
         unified_json,
-        capable_json,
-        legacy_json,
     ) {
         ctrl_clients.lock().unwrap().broadcast_state_gated(
             unified_full_json,
             unified_abs_json,
             unified_book_json,
             unified_json,
-            capable_json,
-            legacy_json,
         );
     }
 
     // Update the reconnect snapshot.
     *shared_queue.queue.lock().unwrap() = queue.clone();
     *shared_queue.source.lock().unwrap() = source.clone();
-}
-
-/// Splits a canonical queue into the legacy `(Vec<EmbyItem>, Vec<FeedEntry>)`
-/// shape for `CtrlState` construction.  Feed entries appear at the tail
-/// matching the legacy split contract.
-fn split_queue_for_legacy(queue: &PlaybackQueue) -> (Vec<EmbyItem>, Vec<FeedEntry>) {
-    let mut emby = Vec::new();
-    let mut feed = Vec::new();
-    for slot in queue.slots() {
-        match &slot.item {
-            QueueItem::Emby(e) => emby.push((**e).clone()),
-            QueueItem::Feed(f) => feed.push(f.clone()),
-            QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => {}
-        }
-    }
-    (emby, feed)
 }
 
 fn admit_queue_items(
@@ -257,42 +218,19 @@ fn reject_command(
 ) {
     send_to(reply_tx, &CtrlEvent::CommandRejected(reason));
     let status = player.status.lock().unwrap().clone();
-    if ctrl_clients
+    let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
+    let supports_abs_book_queue = ctrl_clients
         .lock()
         .unwrap()
-        .supports_unified_queue(client_id)
-    {
-        let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
-        let supports_abs_book_queue = ctrl_clients
-            .lock()
-            .unwrap()
-            .supports_abs_book_queue(client_id);
-        send_to(
-            reply_tx,
-            &unified_queue_state_for_peer(
-                &status,
-                queue,
-                source,
-                supports_abs_queue,
-                supports_abs_book_queue,
-            ),
-        );
-    } else {
-        let (emby_items, feed_items) = split_queue_for_legacy(queue);
-        let include_feed = ctrl_clients
-            .lock()
-            .unwrap()
-            .supports_feed_playback(client_id);
-        let feed = if include_feed { feed_items } else { Vec::new() };
-        send_to(
-            reply_tx,
-            &CtrlEvent::State(CtrlState {
-                status,
-                items: emby_items,
-                cursor: queue.legacy_cursor(include_feed),
-                source: source.clone(),
-                feed_items: feed,
-            }),
-        );
-    }
+        .supports_abs_book_queue(client_id);
+    send_to(
+        reply_tx,
+        &unified_queue_state_for_peer(
+            &status,
+            queue,
+            source,
+            supports_abs_queue,
+            supports_abs_book_queue,
+        ),
+    );
 }

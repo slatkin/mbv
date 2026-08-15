@@ -1,3 +1,6 @@
+use crate::ctrl::WireCommand;
+use crate::player::PlayerCommand;
+
 #[test]
 fn adopt_queue_returns_false_when_ctrl_socket_is_dead() {
     // #119 task 5: `adopt_queue`'s return value is the only signal that
@@ -84,13 +87,15 @@ fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
 
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
-            source: crate::config::QueueSource::Unknown,
-            feed_items: Vec::new(),
-        }))
+        let initial_state = serde_json::to_string(&CtrlEvent::UnifiedQueueState(
+            crate::ctrl::UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: crate::config::QueueSource::Unknown,
+            },
+        ))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
@@ -143,13 +148,15 @@ fn spawn_test_daemon_up_to_state(
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
 
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
-            source: crate::config::QueueSource::Unknown,
-            feed_items: Vec::new(),
-        }))
+        let initial_state = serde_json::to_string(&CtrlEvent::UnifiedQueueState(
+            crate::ctrl::UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: crate::config::QueueSource::Unknown,
+            },
+        ))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
@@ -316,13 +323,15 @@ fn connect_endpoint_propagates_active_remote_playback_status() {
         reader.read_line(&mut client_hello).unwrap();
 
         // Initial baseline state: idle, nothing playing yet.
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
-            source: crate::config::QueueSource::Unknown,
-            feed_items: Vec::new(),
-        }))
+        let initial_state = serde_json::to_string(&CtrlEvent::UnifiedQueueState(
+            crate::ctrl::UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: crate::config::QueueSource::Unknown,
+            },
+        ))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
 
@@ -444,13 +453,15 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
         };
         assert_eq!(client_hello.control_token, None);
 
-        let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
-            status: PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
-            source: crate::config::QueueSource::Unknown,
-            feed_items: Vec::new(),
-        }))
+        let initial_state = serde_json::to_string(&CtrlEvent::UnifiedQueueState(
+            crate::ctrl::UnifiedQueueStateData {
+                status: PlayerStatus::default(),
+                slots: Vec::new(),
+                active_slot: None,
+                revision: 0,
+                source: crate::config::QueueSource::Unknown,
+            },
+        ))
         .unwrap();
         writeln!(writer, "{initial_state}").unwrap();
     });
@@ -469,7 +480,7 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
         Ok(v) => v,
         Err(e) => panic!("expected Ok, got Err({e})"),
     };
-    assert!(matches!(state_event, CtrlEvent::State(_)));
+    assert!(matches!(state_event, CtrlEvent::UnifiedQueueState(_)));
     assert_eq!(
         compatibility.peer_protocol_version,
         crate::ctrl::CTRL_PROTOCOL_VERSION

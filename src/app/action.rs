@@ -584,7 +584,7 @@ impl App {
                         self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
                     } else if t != current_idx {
                         self.pending_active_idx = Some(t);
-                        if self.player.supports_unified_queue() {
+                        if self.player.is_remote() {
                             let Some(slot_id) = slot_id else {
                                 return false;
                             };
@@ -673,8 +673,7 @@ impl App {
                         .map(|tracks| tracks.len())
                         .unwrap_or(0);
                     if track_count > 0 {
-                        let new_idx =
-                            (idx as i64 + delta).clamp(0, track_count as i64 - 1) as usize;
+                        let new_idx = super::ui_util::move_cursor(idx, delta, track_count);
                         self.libs[lib_idx].album_track_focus = Some(new_idx);
                     }
                 }

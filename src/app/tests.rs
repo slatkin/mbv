@@ -86,13 +86,13 @@ pub(crate) fn run_stub_daemon_handshake(stream: std::net::TcpStream) -> std::net
     let mut client_hello = String::new();
     reader.read_line(&mut client_hello).unwrap();
 
-    let initial_state = serde_json::to_string(&mbv_core::ctrl::CtrlEvent::State(
-        mbv_core::ctrl::CtrlState {
+    let initial_state = serde_json::to_string(&mbv_core::ctrl::CtrlEvent::UnifiedQueueState(
+        mbv_core::ctrl::UnifiedQueueStateData {
             status: mbv_core::player::PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
+            slots: Vec::new(),
+            active_slot: None,
+            revision: 0,
             source: crate::config::QueueSource::Unknown,
-            feed_items: Vec::new(),
         },
     ))
     .unwrap();
@@ -611,6 +611,30 @@ pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<EmbyItem>) -> App {
 }
 
 // ── cursor preservation during home refresh ──────────────────────────────
+
+/// Builds a `UnifiedQueueStateData` holding `items` as Emby slots, with slot
+/// `active_index` marked active — the shape a daemon broadcast after a queue
+/// mutation (cursor follows the active slot; pending client cursors override).
+pub(crate) fn emby_unified_state(
+    items: &[EmbyItem],
+    active_index: usize,
+) -> mbv_core::ctrl::UnifiedQueueStateData {
+    let slots: Vec<mbv_core::ctrl::UnifiedQueueSlot> = items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| mbv_core::ctrl::UnifiedQueueSlot {
+            slot_id: (100 + i) as u64,
+            item: mbv_core::playback_queue::QueueItem::Emby(Box::new(item.clone())),
+        })
+        .collect();
+    mbv_core::ctrl::UnifiedQueueStateData {
+        status: Default::default(),
+        active_slot: slots.get(active_index).map(|s| s.slot_id),
+        slots,
+        revision: 1,
+        source: crate::config::QueueSource::Remote,
+    }
+}
 
 pub(crate) fn sections(n: usize) -> Vec<(String, String, Vec<EmbyItem>, usize)> {
     (0..n)

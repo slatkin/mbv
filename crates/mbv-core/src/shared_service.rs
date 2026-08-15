@@ -9,21 +9,11 @@ use crate::shared_protocol::{SharedDataCmd, SharedDataEvent, SharedDataHello};
 use crate::shared_state::SharedDocumentKind;
 use crate::shared_worker::SharedStoreHandle;
 
-/// Transport type for a shared-data connection.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SharedTransport {
-    Local,
-    Tcp,
-    Tls,
-}
-
 /// Registry of active shared-data sessions, used for post-commit fan-out.
 struct SharedSession {
     id: u64,
     user_id: String,
     tx: mpsc::Sender<String>,
-    #[allow(dead_code)]
-    transport: SharedTransport,
 }
 
 pub struct SharedSessions {
@@ -217,7 +207,6 @@ pub fn start_shared_service(
                     match acceptor.accept(stream) {
                         Ok(tls_stream) => spawn_shared_client_handler(
                             tls_stream,
-                            SharedTransport::Tls,
                             registry.clone(),
                             client.clone(),
                             store.clone(),
@@ -230,7 +219,6 @@ pub fn start_shared_service(
                 } else {
                     spawn_shared_client_handler(
                         stream,
-                        SharedTransport::Tcp,
                         registry.clone(),
                         client.clone(),
                         store.clone(),
@@ -257,7 +245,6 @@ pub fn start_shared_service(
                 let Ok(stream) = stream else { continue };
                 spawn_shared_client_handler(
                     stream,
-                    SharedTransport::Local,
                     registry.clone(),
                     client.clone(),
                     store.clone(),
@@ -272,7 +259,6 @@ pub fn start_shared_service(
 
 fn spawn_shared_client_handler<S>(
     stream: S,
-    transport: SharedTransport,
     registry: SharedSessionRegistry,
     client: Arc<Mutex<EmbyClient>>,
     store: SharedStoreHandle,
@@ -398,7 +384,6 @@ fn spawn_shared_client_handler<S>(
                 id,
                 user_id: user_id.clone(),
                 tx: ev_tx.clone(),
-                transport,
             });
             id
         };
