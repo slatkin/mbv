@@ -115,7 +115,6 @@ pub(super) enum RemoteSlotState {
 /// own entries when populating `HomePane.latest`.
 /// `Audiobookshelf`/`Feeds` variants are constructed by Parts 2 and 3 of
 /// #543; matching on them here already keeps the merge keyed per provider.
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(super) enum HomeLatestSource {
     Emby(String),

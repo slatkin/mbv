@@ -440,10 +440,6 @@ impl App {
     }
 
     /// The single Feeds Latest-pill section, built from the Feeds tab's
-    /// combined `all_entries` (newest-first "All" group), honoring
-    /// `hidden_latest` via the literal `"feeds"` pseudo-name. When hidden
-    /// the entry is absent entirely, matching the Audiobookshelf/Emby pills.
-    /// The single Feeds Latest-pill section, built from the Feeds tab's
     /// combined `all_entries` (newest-first "All" group). The pill exists
     /// only when feed subscriptions are configured (mirroring the
     /// Audiobookshelf pill, which exists only per library), and honors
@@ -579,7 +575,7 @@ impl App {
 /// item count. Each Home writer (Emby in `fetch_home`, the Audiobookshelf
 /// shelf cache) calls this with its own kind, so it only ever touches its own
 /// entries and leaves other providers' pills untouched.
-fn merge_home_sections(
+pub(super) fn merge_home_sections(
     latest: &mut Vec<(String, HomeLatestSource, Vec<QueueItem>, usize)>,
     sections: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
     kind: impl Fn(&HomeLatestSource) -> bool,
