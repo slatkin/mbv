@@ -369,9 +369,9 @@ impl App {
         let Some(url) = mbv_core::audiobookshelf_socket::socket_url(&setup.server_url) else {
             return;
         };
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (event_tx, rx) = std::sync::mpsc::channel();
         self.audiobookshelf_socket_tx =
-            Some(mbv_core::audiobookshelf_socket::start(url.clone(), key, tx));
+            Some(mbv_core::audiobookshelf_socket::start(url, key, event_tx));
         self.audiobookshelf_socket_rx = rx;
         self.audiobookshelf_socket_generation = Some(generation);
     }
@@ -380,7 +380,7 @@ impl App {
     /// replace the receiver with a dummy so the drain loop has no effect.
     pub(super) fn stop_audiobookshelf_socket(&mut self) {
         if let Some(tx) = self.audiobookshelf_socket_tx.take() {
-            tx.shutdown();
+            let _ = tx.send(());
         }
         let (_, rx) = std::sync::mpsc::channel();
         self.audiobookshelf_socket_rx = rx;
@@ -395,8 +395,7 @@ impl App {
     ) {
         use super::notify_actions::ToastSeverity;
         match ev {
-            mbv_core::audiobookshelf_socket::SocketEvent::Authenticated
-            | mbv_core::audiobookshelf_socket::SocketEvent::Ignored => {}
+            mbv_core::audiobookshelf_socket::SocketEvent::Authenticated => {}
             mbv_core::audiobookshelf_socket::SocketEvent::InvalidToken => {
                 // Task 2.3: surface the same ABS authentication failure
                 // classification used elsewhere; do NOT clear the installed
@@ -412,7 +411,8 @@ impl App {
             }
             // Open, ConnectAck are consumed by the background thread and
             // never forwarded to the app.
-            _ => {}
+            mbv_core::audiobookshelf_socket::SocketEvent::Open { .. }
+            | mbv_core::audiobookshelf_socket::SocketEvent::ConnectAck => {}
         }
     }
 
