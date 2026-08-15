@@ -243,14 +243,6 @@ impl EmbyClient {
         }
     }
 
-    pub fn register_capabilities(&self) {
-        self.register_capabilities_with_extra_commands(&[]);
-    }
-
-    pub fn register_capabilities_with_extra_commands(&self, extra_commands: &[String]) {
-        self.register_capabilities_with_options(extra_commands, self.config.audio_pipe_enabled);
-    }
-
     pub fn register_capabilities_with_options(&self, extra_commands: &[String], audio_only: bool) {
         let media_types: &[&str] = if audio_only {
             &["Audio"]
@@ -295,5 +287,4 @@ impl EmbyClient {
             Err(e) => log::warn!(target: "api", "err: Capabilities: {e}"),
         }
     }
-
 }

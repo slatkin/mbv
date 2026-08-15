@@ -236,7 +236,7 @@ pub fn run_with_options(
         let client = client.lock().unwrap().clone();
         let direct_commands = direct_commands.clone();
         std::thread::spawn(move || {
-            register_capabilities(&client, &direct_commands, audio_only);
+            client.register_capabilities_with_options(&direct_commands, audio_only);
         });
     }
 
@@ -297,7 +297,7 @@ pub fn run_with_options(
             let client = client.lock().unwrap().clone();
             let direct_commands = direct_commands.clone();
             std::thread::spawn(move || {
-                register_capabilities(&client, &direct_commands, audio_only)
+                client.register_capabilities_with_options(&direct_commands, audio_only)
             });
             last_capabilities = Instant::now();
         }

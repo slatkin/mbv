@@ -131,7 +131,7 @@ fn reconcile_packaged_emby(
     std::thread::spawn({
         let direct_commands = direct_commands.to_vec();
         let next_client = next.client.lock().unwrap().clone();
-        move || register_capabilities(&next_client, &direct_commands, audio_only)
+        move || next_client.register_capabilities_with_options(&direct_commands, audio_only)
     });
     let merged_tx = merged_tx.clone();
     std::thread::spawn(move || {
