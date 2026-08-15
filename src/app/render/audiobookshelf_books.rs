@@ -9,7 +9,7 @@ use crate::app::library_column_width::{
 };
 use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use crate::app::ui_util::{fmt_duration_approx, trunc_str};
-use crate::app::{palette, App};
+use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -38,8 +38,35 @@ impl App {
         // Chapter selection renders the hero (title/author/cover/progress) +
         // chapter rows; otherwise the author-surname book browser.
         if state.chapter_selection.is_some() {
-            // Hero-on-top fallback mirrors the podcast tab; the wide
-            // hero-on-left composition arrives with task 3.x.
+            // Music-style composition: hero-on-left, list-on-right at the
+            // same two-column breakpoint the Music tab uses; hero-on-top
+            // below it (never the always-vertical podcast hero).
+            if area.width >= TWO_COLUMN_THRESHOLD {
+                let hero_col_width = ((area.width as u32 * 2 / 5) as u16)
+                    .max(12)
+                    .min(area.width.saturating_sub(12));
+                let hero_area = Rect {
+                    x: area.x,
+                    y: area.y,
+                    width: hero_col_width,
+                    height: area.height.saturating_sub(1),
+                };
+                let list_area = Rect {
+                    x: area.x + hero_col_width + 2,
+                    y: area.y,
+                    width: area.width.saturating_sub(hero_col_width + 2),
+                    height: area.height.saturating_sub(1),
+                };
+                layout.hero_area = hero_area;
+                layout.left_area = list_area;
+                if hero_area.width > 0 && hero_area.height > 0 {
+                    self.render_audiobookshelf_book_hero(f, hero_area, index, focused, layout);
+                }
+                if list_area.width > 0 && list_area.height > 0 {
+                    self.render_audiobookshelf_book_rows(f, list_area, &state, focused, layout);
+                }
+                return;
+            }
             let desired_rows =
                 self.audiobookshelf_book_hero_rows(&state, cols > 1) + HERO_BLOCK_EXTRA_ROWS;
             let top = top_hero_layout(area, desired_rows, false);

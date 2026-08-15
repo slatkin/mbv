@@ -14,7 +14,7 @@
 
 ## 3. Book tab layout
 
-- [ ] 3.1 Add the book tab's Music-style two-column composition to `src/app/layout.rs`, reusing the existing `TWO_COLUMN_THRESHOLD` breakpoint and hero-on-left/hero-on-top fallback.
+- [x] 3.1 Add the book tab's Music-style two-column composition to `src/app/layout.rs`, reusing the existing `TWO_COLUMN_THRESHOLD` breakpoint and hero-on-left/hero-on-top fallback.
 - [ ] 3.2 Substitute book/chapter/author for album/track/artist per the substitution table in the `audiobookshelf-book-browsing` spec.
 - [ ] 3.3 Add the inline progress `%`/`Finished` span to the book hero meta, matching the podcast tab's progress-span style.
 - [ ] 3.4 Render chapter rows (or `audioFiles` rows when `chapters[]` is empty) in the persistent list area with provider-native identity.
