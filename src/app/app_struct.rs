@@ -88,6 +88,10 @@ pub struct App {
     pub(super) mpris: Option<crate::mpris::MprisHandle>,
     pub(super) player_rx: mpsc::Receiver<PlayerEvent>,
     pub(super) ws_rx: mpsc::Receiver<WsEvent>,
+    pub(super) audiobookshelf_socket_rx:
+        mpsc::Receiver<mbv_core::audiobookshelf_socket::SocketEvent>,
+    pub(super) audiobookshelf_socket_tx: Option<mbv_core::audiobookshelf_socket::SocketSender>,
+    pub(super) audiobookshelf_socket_generation: Option<mbv_core::service_runtime::SetupGeneration>,
     pub(super) home: HomePane,
     pub(super) libs: Vec<LibraryTab>,
     pub(super) player_tab: PlayerTab,
@@ -455,6 +459,7 @@ impl App {
                 };
                 self.audiobookshelf_runtime
                     .commit_ready(completion.generation, user.clone());
+                self.start_audiobookshelf_socket(completion.generation);
                 self.install_audiobookshelf_player_context(completion.generation);
                 self.audiobookshelf_catalog_rx =
                     Some(super::service_startup::start_audiobookshelf_catalog(

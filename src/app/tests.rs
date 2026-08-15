@@ -183,6 +183,12 @@ pub(crate) fn make_app_stub() -> App {
         launched_as_remote: false,
         player_rx,
         ws_rx,
+        audiobookshelf_socket_rx: {
+            let (_, rx) = std::sync::mpsc::channel();
+            rx
+        },
+        audiobookshelf_socket_tx: None,
+        audiobookshelf_socket_generation: None,
         hidden_libraries: Vec::new(),
         library_routes: std::collections::HashMap::new(),
         hidden_latest: Vec::new(),
@@ -477,6 +483,12 @@ pub(crate) fn make_built_app() -> App {
         player_rx,
         ws_rx,
         ws_send_tx: None,
+        audiobookshelf_socket_rx: {
+            let (_, rx) = std::sync::mpsc::channel();
+            rx
+        },
+        audiobookshelf_socket_tx: None,
+        audiobookshelf_socket_generation: None,
         player_tab: PlayerTab::default(),
         remote_player_tab: None,
         initial_queue_scope: QueueScope::Local,

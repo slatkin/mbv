@@ -125,6 +125,10 @@ pub(super) struct SuspendedLocalSession {
     pub(super) player_rx: mpsc::Receiver<PlayerEvent>,
     pub(super) ws_rx: mpsc::Receiver<WsEvent>,
     pub(super) ws_send_tx: Option<mbv_core::ws::WsSender>,
+    pub(super) audiobookshelf_socket_rx:
+        mpsc::Receiver<mbv_core::audiobookshelf_socket::SocketEvent>,
+    pub(super) audiobookshelf_socket_tx: Option<mbv_core::audiobookshelf_socket::SocketSender>,
+    pub(super) audiobookshelf_socket_generation: Option<mbv_core::service_runtime::SetupGeneration>,
 }
 
 pub(super) enum PendingQueueAction {

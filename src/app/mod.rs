@@ -461,6 +461,11 @@ impl App {
                 self.handle_ws_event(ev);
             }
 
+            while let Ok(ev) = self.audiobookshelf_socket_rx.try_recv() {
+                had_events = true;
+                self.handle_audiobookshelf_socket_event(ev);
+            }
+
             // Drain idle feed items
             if let Some(ref mut idle_feed) = self.idle_feed {
                 while let Ok(items) = idle_feed.items_rx.try_recv() {
