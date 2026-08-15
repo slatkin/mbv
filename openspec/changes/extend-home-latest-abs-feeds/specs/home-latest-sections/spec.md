@@ -98,6 +98,7 @@ When the selected Home item is from an Audiobookshelf or Feed Latest pill, Home 
 
 - **WHEN** the selected Home item is an Audiobookshelf episode whose catalog response carries a `recentEpisode.description`
 - **THEN** Home SHALL display the episode title, its podcast/show name, its duration, and the episode description
+- **THEN** the description SHALL have its HTML converted to terminal text: paragraph tags as line breaks, decoded entities (e.g. `&amp;`), and links as `text (URL)`
 
 #### Scenario: Selecting a Feed entry with no known duration
 

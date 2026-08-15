@@ -78,6 +78,115 @@ pub fn decode_entities(text: &str) -> String {
     result
 }
 
+/// Convert a snippet of HTML (common in Audiobookshelf episode/podcast
+/// descriptions) into plain terminal text: block tags become paragraph
+/// breaks, links keep their visible text plus the URL as `text (URL)`,
+/// and entities are decoded. Inline styling/formatting tags are dropped.
+pub fn html_to_text(html: &str) -> String {
+    let mut result = String::with_capacity(html.len());
+    let mut rest = html;
+
+    // Stack of open link hrefs; text between `<a ...>` and `</a>` is kept,
+    // then the href follows in parentheses on closing.
+    let mut pending_links: Vec<Option<String>> = Vec::new();
+
+    while let Some(lt) = rest.find('<') {
+        result.push_str(&rest[..lt]);
+        let after = &rest[lt..];
+        let Some(gt) = after.find('>') else {
+            result.push_str(after);
+            break;
+        };
+        let tag = &after[1..gt];
+        let lower = tag.trim().to_ascii_lowercase();
+
+        if let Some(name) = lower.strip_prefix('/') {
+            if is_block_tag(name.trim()) {
+                push_paragraph_break(&mut result);
+            } else if name.trim() == "a" {
+                if let Some(href) = pending_links.pop().flatten() {
+                    if !result.is_empty() && !result.ends_with(' ') {
+                        result.push(' ');
+                    }
+                    result.push('(');
+                    result.push_str(&href);
+                    result.push(')');
+                }
+            }
+        } else {
+            let name = lower
+                .trim_end_matches('/')
+                .trim()
+                .split_whitespace()
+                .next()
+                .unwrap_or("");
+            if name == "a" {
+                pending_links.push(extract_href(&lower));
+            } else if name == "br" {
+                push_paragraph_break(&mut result);
+            } else if is_block_tag(name) {
+                push_paragraph_break(&mut result);
+            }
+        }
+        rest = &after[gt + 1..];
+    }
+    result.push_str(rest);
+
+    result = decode_entities(&result);
+    result = trim_blank_lines(&result);
+    result.trim().to_string()
+}
+
+fn is_block_tag(name: &str) -> bool {
+    matches!(
+        name,
+        "p" | "li"
+            | "ul"
+            | "ol"
+            | "div"
+            | "blockquote"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "tr"
+            | "table"
+            | "hr"
+    )
+}
+
+/// Push a newline unless the output already ends in one (collapsing runs of
+/// adjacent block/br tags into a single paragraph break).
+fn push_paragraph_break(out: &mut String) {
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+}
+
+/// Collapse runs of blank lines (and trailing spaces) down to single
+/// newlines, trimming each line.
+fn trim_blank_lines(text: &str) -> String {
+    text.split('\n')
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+        .fold(String::new(), |mut acc, line| {
+            if !acc.is_empty() {
+                acc.push('\n');
+            }
+            acc.push_str(&line);
+            acc
+        })
+}
+
+/// Extract the `href="..."` value from an `<a ...>` tag body.
+fn extract_href(tag_body: &str) -> Option<String> {
+    let key = "href=\"";
+    let start = tag_body.find(key)? + key.len();
+    let end = tag_body[start..].find('"')?;
+    Some(decode_entities(&tag_body[start..start + end]))
+}
+
 pub fn gen_session_id() -> EmbySessionId {
     EmbySessionId::new(uuid::Uuid::new_v4().simple().to_string())
 }

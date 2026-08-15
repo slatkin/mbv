@@ -293,7 +293,10 @@ fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShelfEntry {
             .unwrap_or_default(),
         show_title: metadata.and_then(|m| m.title.clone()),
         author: metadata.and_then(|m| m.author.clone()),
-        description: recent_episode.description.clone(),
+        description: recent_episode
+            .description
+            .as_deref()
+            .map(crate::api::html_to_text),
         duration_ticks: duration_seconds
             .map(|seconds| (seconds * crate::api::TICKS_PER_SECOND as f64) as u64),
         position_ticks: 0,
