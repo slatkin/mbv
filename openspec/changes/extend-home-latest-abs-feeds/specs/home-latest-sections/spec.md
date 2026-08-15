@@ -6,18 +6,43 @@ Defines Home's per-destination "Latest" pills: one pill per visible Emby library
 
 ### Requirement: Latest pills cover Emby, Audiobookshelf podcast libraries, and Feeds
 
-Home SHALL show one Latest pill per visible Emby library (existing behavior), one Latest pill per visible Audiobookshelf podcast library, and exactly one "Latest Feeds" pill combining every feed subscription. Home SHALL NOT show a Latest pill for an Audiobookshelf book library or a per-subscription Feeds pill.
+Home SHALL show one Latest pill per visible Emby library (existing behavior), one Latest pill per visible Audiobookshelf podcast library, and exactly one "Feeds" pill combining every feed subscription. Home SHALL NOT show a Latest pill for an Audiobookshelf book library or a per-subscription Feeds pill.
 
 #### Scenario: Home lists pills for a mixed server
 
 - **WHEN** the user has visible Emby libraries, at least one Audiobookshelf podcast library, an Audiobookshelf book library, and one or more feed subscriptions
-- **THEN** Home SHALL display a Latest pill for each Emby library, a Latest pill for the podcast library, and a single "Latest Feeds" pill
+- **THEN** Home SHALL display a Latest pill for each Emby library, a Latest pill for the podcast library, and a single "Feeds" pill
 - **THEN** Home SHALL NOT display a pill for the Audiobookshelf book library or a separate pill per feed subscription
 
 #### Scenario: Audiobookshelf podcast library has no newest-episodes data
 
 - **WHEN** an Audiobookshelf podcast library's server response has no `Newest Episodes` shelf or an empty one
-- **THEN** Home SHALL treat that library's Latest pill the same as an empty Emby Latest section (no selectable items, not a selectable pill)
+- **THEN** Home SHALL still display that library's Latest pill, with no selectable items (an `(empty)` section), matching the Continue Watching convention that a pill renders even when its section is bare
+
+#### Scenario: Every Latest pill renders even when empty
+
+- **WHEN** a section in `home.latest` (an Emby view, an Audiobookshelf podcast library, or the Feeds pill) has zero items
+- **THEN** Home SHALL still display its pill and render an `(empty)` section rather than hiding the pill
+
+#### Scenario: Latest pills keep a canonical provider ordering
+
+- **WHEN** Emby libraries, Audiobookshelf podcast libraries, and the Feeds pill are all present, regardless of which provider populated first
+- **THEN** Home SHALL display the Emby library pills, then the Audiobookshelf podcast library pills, then the "Feeds" pill, in that canonical order
+
+#### Scenario: A long Audiobookshelf description is truncated
+
+- **WHEN** a selected Audiobookshelf episode's description exceeds 200 display columns
+- **THEN** Home SHALL display it truncated to 200 columns ending in an ellipsis rather than growing the hero unboundedly
+
+### Requirement: The last-selected Latest pill is restored on launch
+
+When the user selects a Latest pill and then restarts the app, Home SHALL restore that same pill once it is available, matching the selection by the pill's underlying provider identity rather than its position.
+
+#### Scenario: Restoring an Audiobookshelf pill after restart
+
+- **WHEN** the user selects an Audiobookshelf podcast library's Latest pill, quits, and relaunches, and that library is still available
+- **THEN** Home SHALL select that same Audiobookshelf pill (not Continue Watching, and not a differently-positioned pill) once the library's section has populated
+- **THEN** if that library is no longer available, Home SHALL remain on Continue Watching
 
 ### Requirement: Latest pills populate and refresh independently of Emby's connection state
 
@@ -41,18 +66,18 @@ Home's Audiobookshelf and Feeds Latest pills SHALL populate, refresh, and remain
 - **THEN** Home SHALL add Continue Watching and Emby Latest pills
 - **THEN** the existing Audiobookshelf and Feeds Latest pills SHALL remain displayed with their data intact
 
-### Requirement: Latest Feeds pill reflects the Feeds tab's combined, newest-first entries
+### Requirement: Feeds pill reflects the Feeds tab's combined, newest-first entries
 
-The "Latest Feeds" pill's items SHALL be the same entries, in the same newest-first order, as the Feeds tab's combined "All" group, independent of any per-subscription grouping or watched-state filter currently active on the Feeds tab.
+The "Feeds" pill's items SHALL be the same entries, in the same newest-first order, as the Feeds tab's combined "All" group, independent of any per-subscription grouping or watched-state filter currently active on the Feeds tab.
 
 #### Scenario: Feeds tab filter does not affect the Home pill
 
 - **WHEN** the Feeds tab's watched-state filter is set to a value other than "All"
-- **THEN** the "Latest Feeds" pill on Home SHALL still show entries regardless of played state
+- **THEN** the "Feeds" pill on Home SHALL still show entries regardless of played state
 
 ### Requirement: `hidden_latest` hides pills by name across providers
 
-`hidden_latest` SHALL hide a Latest pill whose Emby or Audiobookshelf library name (case-insensitive) is listed, using the same settings mechanism as today's Emby-only hiding. `hidden_latest` SHALL also hide the "Latest Feeds" pill when it contains the literal value `"feeds"` (case-insensitive).
+`hidden_latest` SHALL hide a Latest pill whose Emby or Audiobookshelf library name (case-insensitive) is listed, using the same settings mechanism as today's Emby-only hiding. `hidden_latest` SHALL also hide the "Feeds" pill when it contains the literal value `"feeds"` (case-insensitive).
 
 #### Scenario: Hiding an Audiobookshelf library's Latest pill
 
@@ -62,7 +87,7 @@ The "Latest Feeds" pill's items SHALL be the same entries, in the same newest-fi
 #### Scenario: Hiding the Feeds pill
 
 - **WHEN** `hidden_latest` contains `"feeds"`
-- **THEN** Home SHALL NOT display the "Latest Feeds" pill
+- **THEN** Home SHALL NOT display the "Feeds" pill
 
 ### Requirement: Selecting and playing a Latest item works uniformly by item provider
 
@@ -76,7 +101,7 @@ The user SHALL be able to select any item in any visible Latest pill using the e
 
 #### Scenario: Playing a feed entry from Home whose Feeds-tab filter would hide it
 
-- **WHEN** the user plays an item from the "Latest Feeds" pill that is marked played, while the Feeds tab's watched-state filter is set to "Unplayed"
+- **WHEN** the user plays an item from the "Feeds" pill that is marked played, while the Feeds tab's watched-state filter is set to "Unplayed"
 - **THEN** mbv SHALL queue and play that feed entry
 - **THEN** the Feeds tab's selected group and filter SHALL remain unchanged
 
@@ -85,9 +110,15 @@ The user SHALL be able to select any item in any visible Latest pill using the e
 - **WHEN** the user plays an item from an Emby Latest pill or Continue Watching
 - **THEN** mbv SHALL use the existing Emby Home play routing unchanged
 
-### Requirement: Selected non-Emby Latest item shows a generic detail view
+### Requirement: Selected non-Emby Latest item shows a hero detail matching Emby's structure
 
-When the selected Home item is from an Audiobookshelf or Feed Latest pill, Home SHALL display its title, duration (if known), and cover art (if available), without depending on Emby-specific browse/navigation state.
+When the selected Home item is from an Audiobookshelf or Feed Latest pill, Home SHALL display a hero detail that follows the same structure as the Emby Keep Watching hero: yellow bold title, show name (for Audiobookshelf episodes), duration when known, and an overview when the item carries one, without depending on Emby-specific browse/navigation state.
+
+#### Scenario: Selecting an Audiobookshelf episode with a description
+
+- **WHEN** the selected Home item is an Audiobookshelf episode whose catalog response carries a `recentEpisode.description`
+- **THEN** Home SHALL display the episode title, its podcast/show name, its duration, and the episode description
+- **THEN** the description SHALL have its HTML converted to terminal text: paragraph tags as line breaks, decoded entities (e.g. `&amp;`), and links as `text (URL)`
 
 #### Scenario: Selecting a Feed entry with no known duration
 

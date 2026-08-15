@@ -122,6 +122,30 @@ pub(super) enum HomeLatestSource {
     Feeds,
 }
 
+impl HomeLatestSource {
+    /// Solid string identity for persistence: `"emby:<id>"`, `"abs:<id>"`,
+    /// or `"feeds"`. Restoring by identity (not section index) lets Home
+    /// leave the pill unselected until a section matching it actually arrives
+    /// asynchronously.
+    pub(super) fn pref_key(&self) -> String {
+        match self {
+            HomeLatestSource::Emby(id) => format!("emby:{id}"),
+            HomeLatestSource::Audiobookshelf(id) => format!("abs:{id}"),
+            HomeLatestSource::Feeds => "feeds".into(),
+        }
+    }
+
+    pub(super) fn from_pref_key(key: &str) -> Option<Self> {
+        let (prefix, id) = key.split_once(':').unwrap_or((key, ""));
+        match prefix {
+            "emby" => Some(HomeLatestSource::Emby(id.to_string())),
+            "abs" => Some(HomeLatestSource::Audiobookshelf(id.to_string())),
+            "feeds" => Some(HomeLatestSource::Feeds),
+            _ => None,
+        }
+    }
+}
+
 pub(super) struct HomePane {
     pub(super) continue_items: Vec<EmbyItem>,
     pub(super) continue_cursor: usize,

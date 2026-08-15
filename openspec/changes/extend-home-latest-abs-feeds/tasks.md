@@ -28,7 +28,7 @@
 
 ### 5. Widen Audiobookshelf shelf parsing
 
-- [x] 5.1 Extend `ShelfEntryWire`/`ShelfWire` in `crates/mbv-core/src/audiobookshelf_catalog.rs` to capture `media.metadata.{title,author,coverPath}` and `recentEpisode.{title,publishedAt,audioFile.duration}` for episode entries.
+- [x] 5.1 Rewrite `ShelfWire`/`ShelfEntryWire` in `crates/mbv-core/src/audiobookshelf_catalog.rs` to match ABS 2.36.0's actual `/personalized` shape: shelf carries `entities` (not `entries`), each entity is a full minified library item `{ id, mediaType, media, recentEpisode }` with `recentEpisode` as a top-level sibling of `media` (no per-entry `type` tag), capturing `media.metadata.{title,author}`, `media.coverPath`, and `recentEpisode.{id,title,description,publishedAt,audioFile.duration}`.
 - [x] 5.2 Update `AudiobookshelfShelf`/`AudiobookshelfShelfEntry` so a `Newest Episodes` entry carries enough fields to build an `AudiobookshelfQueueItem` (library_item_id, episode_id, title, show_title, author, duration, cover_path, published_at) without a follow-up fetch.
 - [x] 5.3 Update `tests/fixtures/audiobookshelf/shelves.json` and add/extend a fixture test asserting the widened parse against the recorded live-server shape.
 - [x] 5.4 Verify a shelf other than `Newest Episodes` (e.g. `Continue Listening`, `Discover`) parses without error and is simply unused by Home.
@@ -54,9 +54,14 @@
 ### 9. Home rendering for the Audiobookshelf pill
 
 - [x] 9.1 Add `src/app/render/home_latest_row.rs` with a generic list-row renderer for a `QueueItem` (title/`display_name()`, duration, marker/selection styling matching the existing Home row look).
-- [x] 9.2 Add a minimal generic detail block (title, duration if known, cover art if `artwork_url()`/an Audiobookshelf cover fetch resolves) for a selected non-Emby Home item, called instead of `render_selected_home_video_detail`/`render_compact_detail` when the selected item isn't `QueueItem::Emby`.
+- [x] 9.2 Add a generic hero detail for a selected non-Emby Home item (yellow bold wrapped title, show name, duration subtitle, blank separator, wrapped overview block, 16:9 image filling the column) matching the Emby Keep Watching hero structure, called instead of `render_selected_home_video_detail`/`render_compact_detail` when the selected item isn't `QueueItem::Emby`. Add `QueueItem::overview()` and carry `recentEpisode.description` on `AudiobookshelfQueueItem` so ABS episodes render an overview.
+- [x] 9.6 Convert the Audiobookshelf description's HTML to terminal text at parse time (`html_to_text` in `mbv-core`, reused in `decode_entities`' module): `<p>`/`<br>`/block tags to paragraph breaks, decoded entities, links as `text (URL)`, inline formatting/images dropped.
 - [x] 9.3 Wire cover-art loading for Audiobookshelf Home rows through the existing `images.rs` `ImageSource::Audiobookshelf` path.
 - [x] 9.4 Update `render/home.rs`'s pill-row and item-list dispatch to call the new generic renderer for non-Emby pills, keeping the existing Emby two-column/hero code path unchanged.
+- [x] 9.5 Remove the `!items.is_empty()` gate from `render_home_section_pills_row`, `render_home_list`, `home_new_sections`, and `home_section_is_valid` so every section in `home.latest` (Emby view, Audiobookshelf podcast library, Feeds) always renders its pill and an `(empty)` section when bare, matching the Continue Watching convention (Decision 12).
+- [x] 9.7 Sort `home.latest` by a canonical provider rank (Emby, Audiobookshelf, Feeds) at the end of `merge_home_sections`, so async completion order never reorders the pill row (Decision 13).
+- [x] 9.8 Truncate the generic Home hero's description to 200 display columns with an ellipsis before wrapping (Decision 14).
+- [x] 9.9 Persist the selected Home pill by `HomeLatestSource` identity (`home_section` pref) and restore it once the matching section populates (Decision 15).
 
 ### 10. Verify Part 2
 
@@ -70,6 +75,7 @@
 
 - [x] 11.1 Update `fetch_home()` to add one Feeds entry cloning `FeedTabState.all_entries` into `QueueItem::Feed`.
 - [x] 11.2 Extend the `hidden_latest` filtering in `fetch_home()` to also match the literal `"feeds"` pseudo-name.
+- [x] 11.3 Auto-fetch feeds asynchronously at startup (flash-free `start_feed_fetch()` at TUI entry) and rebuild the Home Feeds pill when feed fetches drain, so the pill and Feeds tab are populated shortly after launch instead of staying empty until manual refresh.
 
 ### 12. Extend the shared submit primitive to Feeds
 
@@ -82,7 +88,7 @@
 
 ### 14. Verify Part 3
 
-- [x] 14.1 Unit tests: the "Latest Feeds" pill reflects `FeedTabState.all_entries` newest-first, independent of the Feeds tab's own `selected_group`/`watched_filter`.
+- [x] 14.1 Unit tests: the "Feeds" pill reflects `FeedTabState.all_entries` newest-first, independent of the Feeds tab's own `selected_group`/`watched_filter`.
 - [x] 14.2 Unit tests: playing/enqueueing a Feed item from Home does not mutate the Feeds tab's own cursor/selected group/filter.
 - [x] 14.3 Focused render test for a Feed entry in the generic Home row/detail renderer (no known duration, no artwork).
 

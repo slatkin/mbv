@@ -36,6 +36,7 @@ fn abs_episode(id: &str) -> AudiobookshelfQueueItem {
         title: format!("Episode {id}"),
         show_title: Some("Podcast".into()),
         author: None,
+        description: None,
         duration_ticks: None,
         position_ticks: 0,
         played: false,
@@ -116,6 +117,8 @@ fn apply_emby_bootstrap_merges_only_emby_entries() {
 
     // Pre-existing mixed Home: an Audiobookshelf and a Feeds entry alongside
     // an Emby entry (view id "movies") that the bootstrap will replace.
+    // Canonical pill order (Emby, Audiobookshelf, Feeds) is applied by the
+    // merge regardless of this arrival order.
     app.home.latest = vec![
         (
             "Podcasts".into(),
@@ -124,7 +127,7 @@ fn apply_emby_bootstrap_merges_only_emby_entries() {
             0,
         ),
         (
-            "Latest Feeds".into(),
+            "Feeds".into(),
             HomeLatestSource::Feeds,
             vec![QueueItem::Feed(feed_item("Feed one"))],
             1,
@@ -152,20 +155,20 @@ fn apply_emby_bootstrap_merges_only_emby_entries() {
         3,
         "Emby entry replaced, no duplicates"
     );
-    // Non-Emby entries untouched, in their original positions.
+    // Canonical pill order is Emby, then Audiobookshelf, then Feeds —
+    // regardless of arrival order.
     assert!(matches!(
         &app.home.latest[0].1,
-        HomeLatestSource::Audiobookshelf(lib) if lib == "abs-lib"
-    ));
-    assert!(matches!(&app.home.latest[1].1, HomeLatestSource::Feeds));
-    assert_eq!(app.home.latest[1].2.len(), 1);
-    // The Emby entry carries the fresh bootstrap data.
-    assert!(matches!(
-        &app.home.latest[2].1,
         HomeLatestSource::Emby(id) if id == "movies"
     ));
+    assert_eq!(app.home.latest[0].2.len(), 1);
+    assert_eq!(app.home.latest[0].2[0].display_name(), "New");
+    assert!(matches!(
+        &app.home.latest[1].1,
+        HomeLatestSource::Audiobookshelf(lib) if lib == "abs-lib"
+    ));
+    assert!(matches!(&app.home.latest[2].1, HomeLatestSource::Feeds));
     assert_eq!(app.home.latest[2].2.len(), 1);
-    assert_eq!(app.home.latest[2].2[0].display_name(), "New");
 }
 
 #[test]
@@ -515,7 +518,7 @@ fn feeds_pill_reflects_all_entries_newest_first_independent_of_tab_filter() {
         .iter()
         .find(|(_, source, _, _)| matches!(source, HomeLatestSource::Feeds))
         .expect("Feeds pill must be present");
-    assert_eq!(feeds.0, "Latest Feeds");
+    assert_eq!(feeds.0, "Feeds");
     let titles: Vec<String> = feeds.2.iter().map(|i| i.display_name()).collect();
     assert_eq!(
         titles,
@@ -562,7 +565,7 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
 
     // Home pill for the same entries, with the cursor on a Feed item.
     app.home.latest = vec![(
-        "Latest Feeds".into(),
+        "Feeds".into(),
         HomeLatestSource::Feeds,
         app.feed_tab
             .all_entries
@@ -590,5 +593,107 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
     assert_eq!(
         app.feed_tab.cursor, 1,
         "enqueue/play from Home must not touch the Feeds tab's cursor"
+    );
+}
+
+#[test]
+fn empty_abs_library_section_is_still_a_selectable_pill() {
+    // Home pill convention: every section in `home.latest` is a real pill
+    // (an ABS library, an Emby view, or Feeds), empty or not — matching
+    // Continue Watching, which always renders and shows "(empty)" when bare.
+    // An empty ABS library must be selectable so the feature is discoverable
+    // even before any episode has been published/fetched.
+    let mut app = make_app_stub();
+    app.home.latest = vec![(
+        "Podcasts".into(),
+        HomeLatestSource::Audiobookshelf("abs-pod".into()),
+        Vec::new(),
+        0,
+    )];
+
+    assert!(
+        app.home_section_is_valid(1),
+        "an empty ABS library section must still be a valid pill"
+    );
+
+    app.home_select_section(1);
+    assert_eq!(
+        app.home.section, 1,
+        "selecting the empty pill keeps section 1"
+    );
+}
+
+#[test]
+fn later_arrivals_do_not_reorder_provider_pills() {
+    // Canonical pill order is Emby (0), Audiobookshelf (1), Feeds (2),
+    // regardless of async completion order. A Feeds pill that lands before an
+    // Audiobookshelf shelf cache, or an Emby bootstrap that lands last, must
+    // not reorder the sections.
+    let mut app = make_app_stub();
+    app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: mbv_core::config::FeedKind::Audio,
+    }];
+
+    // Feeds populate first.
+    app.rebuild_feeds_latest();
+    // Audiobookshelf shelf arrives after: its pill lands after the Feeds one
+    // in arrival order, but the merge ranks Audiobookshelf before Feeds.
+    app.audiobookshelf_libraries = vec![abs_library("abs-pod", "podcast")];
+    app.rebuild_audiobookshelf_latest();
+    assert!(matches!(
+        &app.home.latest[0].1,
+        HomeLatestSource::Audiobookshelf(id) if id == "abs-pod"
+    ));
+    assert!(matches!(&app.home.latest[1].1, HomeLatestSource::Feeds));
+
+    // Emby bootstrap arriving last sorts before both.
+    app.apply_emby_bootstrap(EmbyBootstrap {
+        continue_items: Vec::new(),
+        views: Vec::new(),
+        latest: vec![EmbyLatestSection {
+            title: "Movies".into(),
+            view_id: "movies".into(),
+            items: vec![make_item("New", "Movie")],
+        }],
+    });
+    assert!(matches!(
+        &app.home.latest[0].1,
+        HomeLatestSource::Emby(id) if id == "movies"
+    ));
+    assert!(matches!(
+        &app.home.latest[1].1,
+        HomeLatestSource::Audiobookshelf(id) if id == "abs-pod"
+    ));
+    assert!(matches!(&app.home.latest[2].1, HomeLatestSource::Feeds));
+}
+
+#[test]
+fn home_latest_source_pref_key_round_trips() {
+    for source in [
+        HomeLatestSource::Emby("view-1".into()),
+        HomeLatestSource::Audiobookshelf("abs-lib".into()),
+        HomeLatestSource::Feeds,
+    ] {
+        let key = source.pref_key();
+        assert_eq!(
+            HomeLatestSource::from_pref_key(&key),
+            Some(source),
+            "pref_key round-trips {key:?}"
+        );
+    }
+    assert_eq!(HomeLatestSource::from_pref_key(""), None);
+    assert_eq!(HomeLatestSource::from_pref_key("unknown:2"), None);
+}
+
+#[test]
+fn home_section_pref_is_empty_for_continue_watching() {
+    let app = make_app_stub();
+    assert!(app.home.latest.is_empty());
+    let key = app.home_section_pref();
+    assert!(
+        key.is_empty(),
+        "Continue Watching persists as no section key"
     );
 }

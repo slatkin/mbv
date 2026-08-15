@@ -9,6 +9,7 @@ fn proxy_audiobookshelf_item() -> QueueItem {
         title: "Episode 1".into(),
         show_title: None,
         author: None,
+        description: None,
         duration_ticks: Some(100),
         position_ticks: 0,
         played: false,

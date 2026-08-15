@@ -84,6 +84,9 @@ impl App {
         if had_events {
             self.feed_tab.rebuild_all_entries();
             self.feed_tab.clamp_state();
+            // Reflect the freshly loaded entries in Home's "Feeds" pill
+            // without waiting for the next Home population trigger.
+            self.rebuild_feeds_latest();
         }
         had_events
     }
@@ -105,6 +108,19 @@ impl App {
             );
             return;
         }
+        self.start_feed_fetch();
+        self.flash("Refreshing feeds...".into(), ToastSeverity::Neutral);
+    }
+
+    /// Spawn one background fetch per configured feed subscription, marking the
+    /// Feeds tab loading until every result drains. Shared by the manual
+    /// `refresh_feeds` (which adds a user-facing flash) and the async startup
+    /// auto-fetch (which stays silent). Does nothing if already loading or if
+    /// no subscriptions are configured.
+    pub(super) fn start_feed_fetch(&mut self) {
+        if self.feed_tab.loading || self.feed_tab.subscriptions.is_empty() {
+            return;
+        }
         self.feed_tab.loading = true;
         self.feed_tab.pending_results = self.feed_tab.subscriptions.len();
         let tx = self.feed_tab.refresh_tx.clone();
@@ -122,7 +138,6 @@ impl App {
                 });
             });
         }
-        self.flash("Refreshing feeds...".into(), ToastSeverity::Neutral);
     }
 
     /// Move the feed tab cursor by `delta` rows (clamped).

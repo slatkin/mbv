@@ -310,6 +310,11 @@ impl App {
             ));
         }
 
+        // Auto-fetch configured feeds asynchronously so the Feeds tab and the
+        // Home "Feeds" pill are populated shortly after startup instead
+        // of staying empty until the user presses the manual refresh key.
+        self.start_feed_fetch();
+
         if let Some(client) = self.emby_client() {
             client.lock().unwrap().register_capabilities();
         }

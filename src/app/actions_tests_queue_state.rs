@@ -141,6 +141,7 @@ fn queue_restore_cursor_typed_feed_and_abs_are_provider_qualified() {
         title: "a".into(),
         show_title: None,
         author: None,
+        description: None,
         duration_ticks: None,
         position_ticks: 0,
         played: false,

@@ -359,6 +359,7 @@ mod reporting_tests {
             title: "ABS".into(),
             show_title: None,
             author: None,
+        description: None,
             duration_ticks: None,
             position_ticks: 0,
             played: false,

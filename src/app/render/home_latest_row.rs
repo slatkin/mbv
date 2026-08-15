@@ -9,6 +9,7 @@ use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
+use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
 /// Generic single-line Home "Latest" row for a non-Emby `QueueItem`
@@ -74,25 +75,78 @@ pub(super) fn render_home_latest_row(
 }
 
 impl App {
-    /// Minimal generic detail for a selected non-Emby Home item (Task 9.2):
-    /// title, duration if known, and cover art when one resolves. Audiobookshelf
-    /// covers load through the existing `ImageSource::Audiobookshelf` path
-    /// (Task 9.3); items with no artwork degrade to no image, not an error.
+    /// Generic hero detail for a selected non-Emby Home item, following the
+    /// same visual structure as the Emby Keep Watching hero: yellow bold
+    /// wrapped title, a show-name line, a subtitle line, a blank separator,
+    /// and a wrapped overview block, with a 16:9 image filling the column.
+    /// Audiobookshelf covers load through the existing
+    /// `ImageSource::Audiobookshelf` path; items with no artwork degrade to no
+    /// image, not an error.
     pub(super) fn render_home_latest_detail(
         &mut self,
         f: &mut Frame,
         area: Rect,
         item: &QueueItem,
     ) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+        let text_w = area.width as usize;
+        let title = item.title();
+        let show_name = match item {
+            QueueItem::Audiobookshelf(ep) => ep.show_title.clone().unwrap_or_default(),
+            _ => String::new(),
+        };
+        let overview = item.overview().map(str::to_owned);
+
+        // Title (yellow, bold, wrapped), then one row each for show name,
+        // subtitle, blank separator, then the wrapped overview block.
+        let title_lines: Vec<String> = wrap(title, text_w)
+            .into_iter()
+            .map(|s| s.into_owned())
+            .collect();
+        let overview_lines: Vec<String> = if overview.as_deref().is_none_or(str::is_empty) {
+            Vec::new()
+        } else {
+            // Cap long descriptions, with an ellipsis, so the hero doesn't
+            // grow unboundedly. The 200-char limit is on display width and
+            // includes the ellipsis itself.
+            let capped = trunc_str(overview.as_deref().unwrap(), 200);
+            let ov_w = text_w.saturating_sub(4); // 2-col padding each side
+            wrap(&capped, ov_w)
+                .into_iter()
+                .map(|s| s.into_owned())
+                .collect()
+        };
+        let meta_height = title_lines.len() as u16
+            + if show_name.is_empty() { 0 } else { 1 }
+            + 1 // subtitle row
+            + 1 // blank separator
+            + if overview_lines.is_empty() {
+                0
+            } else {
+                1 + overview_lines.len() as u16 + 1 // overview block: pad + lines + pad
+            };
+
+        // Terminal cells are roughly twice as tall as they are wide, so a
+        // 16:9 image needs 9 rows for every 32 columns, matching the Emby hero.
+        let image_height = (area.width.saturating_mul(9).saturating_add(31) / 32)
+            .max(1)
+            .min(area.height.saturating_sub(meta_height + 1));
+        let img_w = area.width;
+
         let mut row = area.y;
         let max_y = area.y + area.height;
 
-        if row < max_y {
+        for line in &title_lines {
+            if row >= max_y {
+                break;
+            }
             f.render_widget(
                 Paragraph::new(Span::styled(
-                    trunc_str(&item.display_name(), area.width as usize),
+                    line.clone(),
                     Style::default()
-                        .fg(palette::WHITE)
+                        .fg(palette::YELLOW)
                         .add_modifier(Modifier::BOLD),
                 )),
                 Rect {
@@ -104,13 +158,37 @@ impl App {
             );
             row += 1;
         }
-        if let Some(ticks) = item.duration() {
-            if row < max_y {
+
+        if row < max_y && !show_name.is_empty() {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    trunc_str(&show_name, text_w),
+                    Style::default().fg(palette::FOAM),
+                )),
+                Rect {
+                    x: area.x,
+                    y: row,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+            row += 1;
+        }
+
+        if row < max_y {
+            let mut spans: Vec<Span> = Vec::new();
+            if let Some(ticks) = item.duration() {
+                spans.push(Span::styled(
+                    trunc_str(
+                        &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
+                        text_w,
+                    ),
+                    Style::default().fg(palette::SUBTLE),
+                ));
+            }
+            if !spans.is_empty() {
                 f.render_widget(
-                    Paragraph::new(Span::styled(
-                        fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
-                        Style::default().fg(palette::SUBTLE),
-                    )),
+                    Paragraph::new(Line::from(spans)),
                     Rect {
                         x: area.x,
                         y: row,
@@ -118,8 +196,40 @@ impl App {
                         height: 1,
                     },
                 );
-                row += 1;
             }
+            row += 1;
+        }
+
+        row += 1; // blank separator row
+
+        if !overview_lines.is_empty() && row < max_y {
+            let block_h = 1 + overview_lines.len() as u16 + 1; // top pad + lines + bottom pad
+            let block_area = Rect {
+                x: area.x,
+                y: row,
+                width: area.width,
+                height: block_h,
+            };
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                block_area,
+            );
+            let inner = Rect {
+                x: block_area.x + 2,
+                y: block_area.y + 1,
+                width: block_area.width.saturating_sub(4),
+                height: block_area.height.saturating_sub(2),
+            };
+            let overview_text: Vec<Line> = overview_lines
+                .iter()
+                .map(|line| {
+                    Line::from(Span::styled(
+                        line.clone(),
+                        Style::default().fg(palette::WHITE),
+                    ))
+                })
+                .collect();
+            f.render_widget(Paragraph::new(overview_text), inner);
         }
 
         // Cover art: only Audiobookshelf episodes carry artwork today. The
@@ -128,6 +238,9 @@ impl App {
         let QueueItem::Audiobookshelf(episode) = item else {
             return;
         };
+        if image_height == 0 {
+            return;
+        }
         let setup = self.config.lock().unwrap().audiobookshelf_setup.clone();
         let Some(setup) = setup else {
             return;
@@ -146,13 +259,11 @@ impl App {
         let Some(image) = self.cached_image_protocol_mut(&image_key) else {
             return;
         };
-        let img_w = (area.width / 3).clamp(8, 40);
-        let img_h = (img_w.saturating_mul(9).saturating_add(31) / 32).max(1);
         let image_rect = Rect {
             x: area.x,
-            y: row.saturating_add(1),
+            y: area.y + area.height - image_height,
             width: img_w,
-            height: img_h,
+            height: image_height,
         };
         type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
         f.render_stateful_widget(
@@ -195,6 +306,7 @@ mod tests {
             title: format!("Episode {id}"),
             show_title: Some("Podcast".into()),
             author: None,
+            description: None,
             duration_ticks,
             position_ticks: 0,
             played: false,
@@ -274,15 +386,14 @@ mod tests {
         .unwrap();
         let out = buffer_to_string(&term);
         let lines: Vec<&str> = out.split('\n').collect();
-        assert!(
-            lines[0].contains("Podcast - Episode a"),
-            "title row: {out:?}"
-        );
-        assert!(lines[1].contains("1:05"), "duration row: {out:?}");
+        assert!(lines[0].contains("Episode a"), "title row: {out:?}");
+        assert!(lines[1].contains("Podcast"), "show-name row: {out:?}");
+        assert!(lines[2].contains("1:05"), "duration row: {out:?}");
     }
 
     /// Task 10.2: detail with no known duration skips the duration row but
-    /// still renders the title; no configured server means no cover fetch.
+    /// still renders the title and show name; no configured server means no
+    /// cover fetch.
     #[test]
     fn detail_without_duration_omits_duration_row() {
         let mut app = make_app_stub();
@@ -295,13 +406,61 @@ mod tests {
         .unwrap();
         let out = buffer_to_string(&term);
         let lines: Vec<&str> = out.split('\n').collect();
+        assert!(lines[0].contains("Episode b"), "title row: {out:?}");
+        assert!(lines[1].contains("Podcast"), "show-name row: {out:?}");
         assert!(
-            lines[0].contains("Podcast - Episode b"),
-            "title row: {out:?}"
+            lines[2..].iter().all(|l| !l.contains("0:00")),
+            "no fabricated duration: {out:?}"
+        );
+    }
+
+    /// Long ABS descriptions are capped at 200 display columns with an
+    /// ellipsis so the hero doesn't grow unboundedly.
+    #[test]
+    fn detail_truncates_long_description_with_ellipsis() {
+        let mut app = make_app_stub();
+        // The truncation limit is on the description width; build a much wider
+        // buffer item by item so the assertion below is about the ellipsis,
+        // not about a coincidental line-wrap boundary.
+        let long = "word ".repeat(80);
+        let item = QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+            library_item_id: "show-t".into(),
+            episode_id: "episode-t".into(),
+            title: "Episode t".into(),
+            show_title: Some("Podcast".into()),
+            author: None,
+            description: Some(long),
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        });
+        let backend = TestBackend::new(200, 40);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_home_latest_detail(f, Rect::new(0, 0, 200, 40), &item);
+        })
+        .unwrap();
+        let out = buffer_to_string(&term);
+        // Reassemble the description block's visible lines (title, show name,
+        // subtitle, blank separator precede it) joining trimmed rows.
+        let desc_region: String = out
+            .split('\n')
+            .skip(3)
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            desc_region.ends_with('\u{2026}'),
+            "long description ends with an ellipsis: ...{desc_region:?}"
         );
         assert!(
-            lines[1..].iter().all(|l| !l.contains("0:00")),
-            "no fabricated duration: {out:?}"
+            desc_region.chars().count() <= 201,
+            "description column budget is 200 + ellipsis, got {} chars",
+            desc_region.chars().count()
         );
     }
 

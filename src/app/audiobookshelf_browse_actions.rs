@@ -353,6 +353,7 @@ impl App {
             title: episode.title.clone(),
             show_title: show.map(|show| show.title.clone()),
             author: show.and_then(|show| show.author.clone()),
+            description: None,
             duration_ticks: episode.duration_seconds.and_then(seconds_to_ticks_u64),
             position_ticks,
             played: is_finished,

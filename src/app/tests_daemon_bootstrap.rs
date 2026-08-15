@@ -225,6 +225,7 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
             title: "Episode A".into(),
             show_title: None,
             author: None,
+            description: None,
             duration_ticks: None,
             position_ticks: acknowledged_position_ticks,
             played: false,

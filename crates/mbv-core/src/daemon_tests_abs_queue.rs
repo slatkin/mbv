@@ -17,6 +17,7 @@ fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
         title: "Test Episode".into(),
         show_title: None,
         author: None,
+        description: None,
         duration_ticks: None,
         position_ticks: 0,
         played: false,

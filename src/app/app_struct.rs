@@ -14,8 +14,8 @@ use super::types_feed_tab::FeedTabState;
 use super::types_feeds_manage::FeedsManagePopup;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
-    HomePane, PendingQueueAction, PlaylistMutationState, QueueScope, RemoteQueueProjection,
-    RemoteReanchorPopup, SuspendedLocalSession, UndoEntry,
+    HomeLatestSource, HomePane, PendingQueueAction, PlaylistMutationState, QueueScope,
+    RemoteQueueProjection, RemoteReanchorPopup, SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
@@ -195,6 +195,7 @@ pub struct App {
     pub(super) queue_column_width: u16,
     pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
+    pub(super) home_section_pending: Option<HomeLatestSource>, // restored from prefs; applied once a Home pill matching it exists
     pub(super) queue_scroll: usize,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,

@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::tests::*;
+use crate::app::types_playback::HomeLatestSource;
 
 #[test]
 fn build_restores_panel_focus_from_prefs_for_both_values() {
@@ -34,6 +35,24 @@ fn build_always_starts_on_home_without_affecting_saved_queue_state() {
     assert!(app.tab.is_home());
     assert_eq!(app.library_tab_pending, 0);
     assert!(app.player_tab.emby_items().is_empty());
+}
+
+#[test]
+fn build_restores_home_section_pending_from_prefs() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    std::fs::write(
+        crate::config::prefs_path(),
+        serde_json::json!({ "home_section": "abs:lib-1" }).to_string(),
+    )
+    .expect("write prefs");
+
+    let app = make_built_app();
+
+    assert_eq!(
+        app.home_section_pending,
+        Some(HomeLatestSource::Audiobookshelf("lib-1".into())),
+        "the saved pill identity is loaded, to be applied once the section exists"
+    );
 }
 
 #[test]
