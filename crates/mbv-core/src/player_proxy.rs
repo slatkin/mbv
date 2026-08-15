@@ -109,12 +109,18 @@ impl PlayerProxy {
         }
     }
 
-    /// Only the in-process Player can own Audiobookshelf credentials and its
-    /// playback lifecycle. Ctrl owners are deliberately never eligible.
+    /// Only an owner that can carry Audiobookshelf items may bind them. The
+    /// in-process Player admits only with an active `AudiobookshelfPlayerContext`
+    /// (bare mode); a ctrl peer admits only when it negotiated the
+    /// `abs-queue`/`abs-book-queue` transport. Eligibility itself stays with
+    /// the owner — a capable daemon without installed setup rejects visibly.
     pub fn can_admit_audiobookshelf(&self) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(player) => player.can_admit_audiobookshelf(),
-            PlayerProxyInner::Remote(_) => false,
+            PlayerProxyInner::Remote(remote) => {
+                remote.ctrl_compatibility.supports_abs_queue
+                    && remote.ctrl_compatibility.supports_abs_book_queue
+            }
         }
     }
 
@@ -195,8 +201,20 @@ impl PlayerProxy {
             PlayerProxyInner::Remote(r) => {
                 // Never strip an unsupported item and send the remainder: a
                 // ctrl owner must reject the whole submission without local
-                // fall-through or Bound queue mutation.
-                if items.is_empty() || items.iter().any(QueueItem::is_audiobookshelf_any) {
+                // fall-through or Bound queue mutation. An Audiobookshelf
+                // item is sent only when the peer negotiated its queue
+                // transport; the owner decides admission.
+                if items.is_empty() {
+                    return false;
+                }
+                if items.iter().any(QueueItem::is_audiobookshelf)
+                    && !r.ctrl_compatibility.supports_abs_queue
+                {
+                    return false;
+                }
+                if items.iter().any(QueueItem::is_audiobookshelf_book)
+                    && !r.ctrl_compatibility.supports_abs_book_queue
+                {
                     return false;
                 }
                 let start_idx = start_idx.min(items.len() - 1);
@@ -282,7 +300,14 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.queue_append(items),
             PlayerProxyInner::Remote(r) => {
-                if items.iter().any(QueueItem::is_audiobookshelf) {
+                if items.iter().any(QueueItem::is_audiobookshelf)
+                    && !r.ctrl_compatibility.supports_abs_queue
+                {
+                    return false;
+                }
+                if items.iter().any(QueueItem::is_audiobookshelf_book)
+                    && !r.ctrl_compatibility.supports_abs_book_queue
+                {
                     return false;
                 }
                 r.queue_append(items)

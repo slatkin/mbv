@@ -123,17 +123,17 @@ fn prompt(label: &str) -> Result<String, String> {
     Ok(value.trim().to_string())
 }
 
-fn prompt_password() -> Result<String, String> {
+fn prompt_secret(label: &str) -> Result<String, String> {
     let stdin = io::stdin();
-    let mut termios = nix::sys::termios::tcgetattr(&stdin)
-        .map_err(|_| "mbvd: password prompt failed".to_string())?;
+    let mut termios =
+        nix::sys::termios::tcgetattr(&stdin).map_err(|_| "mbvd: prompt failed".to_string())?;
     let original = termios.clone();
     termios
         .local_flags
         .remove(nix::sys::termios::LocalFlags::ECHO);
     nix::sys::termios::tcsetattr(&stdin, nix::sys::termios::SetArg::TCSADRAIN, &termios)
-        .map_err(|_| "mbvd: password prompt failed".to_string())?;
-    let result = prompt("Password");
+        .map_err(|_| "mbvd: prompt failed".to_string())?;
+    let result = prompt(label);
     let _ = nix::sys::termios::tcsetattr(&stdin, nix::sys::termios::SetArg::TCSADRAIN, &original);
     println!();
     result
@@ -173,7 +173,7 @@ fn connect_emby() -> Result<(), String> {
     let _lock = administration_lock("emby")?;
     let server_url = prompt("Emby server URL")?;
     let username = prompt("Username")?;
-    let password = prompt_password()?;
+    let password = prompt_secret("Password")?;
     let config = config::load_config()
         .map_err(|_| "mbvd: could not load owner configuration".to_string())?;
     let existing = config.emby_setup.clone();
@@ -241,7 +241,7 @@ fn connect_abs() -> Result<(), String> {
     std::env::set_var("MBV_SYSTEM", "1");
     let _lock = administration_lock("abs")?;
     let server_url = prompt("Audiobookshelf server URL")?;
-    let api_key = prompt_password()?;
+    let api_key = prompt_secret("Audiobookshelf API key")?;
     let config = config::load_config()
         .map_err(|_| "mbvd: could not load owner configuration".to_string())?;
     let existing = config.audiobookshelf_setup.clone();
