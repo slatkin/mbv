@@ -73,7 +73,7 @@ impl App {
                             if self.local_queue_metadata_applies(scope) {
                                 self.queue_dirty = true;
                             }
-                            self.retire_remote_tracking_after_queue_mutation();
+                            self.retire_remote_tracking(true);
                         }
                     }
                 }
