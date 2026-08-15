@@ -97,18 +97,19 @@ Acknowledged mbv-owned Audiobookshelf progress SHALL update matching canonical q
 - **WHEN** a progress completion belongs to a replaced or removed setup generation
 - **THEN** mbv SHALL ignore it without updating current queue or browse state
 
-### Requirement: Bare podcast playback does not add Socket.IO, audiobook, or credential transport
-Bare-mode Audiobookshelf playback SHALL NOT connect to Audiobookshelf Socket.IO, support audiobook media, transfer Service credentials between processes, or make Audiobookshelf items playable by a remote-only ctrl owner. Daemon owners that have negotiated transport capability MAY carry Audiobookshelf queue items and acknowledged progress over the capability-gated ctrl seam established by the transport child (#525); this is not a bare-mode concern.
+### Requirement: Bare podcast playback adds no audiobook support or credential transport, and no Socket.IO remote control
+Bare-mode Audiobookshelf playback SHALL NOT support audiobook media, transfer Service credentials between processes, or make Audiobookshelf items playable by a remote-only ctrl owner. The Audiobookshelf Socket.IO connection added by the `audiobookshelf-progress-refresh` capability SHALL NOT carry remote-control commands and SHALL NOT alter the in-process Player owner's own playback-session lifecycle, which remains driven exclusively by REST. Daemon owners that have negotiated transport capability MAY carry Audiobookshelf queue items and acknowledged progress over the capability-gated ctrl seam established by the transport child (#525); this is not a bare-mode concern.
 
 #### Scenario: User plays podcasts in bare mode
 - **WHEN** the user plays, seeks, pauses, completes, or stops downloaded Audiobookshelf episodes in bare mode
 - **THEN** all Audiobookshelf credentials and playback-session lifecycle SHALL remain in the in-process Player owner
-- **THEN** no Socket.IO connection SHALL be required or opened
+- **THEN** the active session's progress SHALL be driven only by REST synchronization, never by a Socket.IO event
 
 #### Scenario: Daemon owner carries Audiobookshelf transport over ctrl
 - **WHEN** a daemon owner with installed setup and a capable attached client plays an Audiobookshelf episode
 - **THEN** Audiobookshelf credentials and playback-session lifecycle SHALL remain in the daemon owner
 - **THEN** queue items and acknowledged progress MAY flow over the capability-gated ctrl seam to capable clients
+- **THEN** no Audiobookshelf Socket.IO connection SHALL be opened by the daemon owner
 
 ### Requirement: Daemon owner updates its canonical queue by provider-qualified identity at the post-sync acknowledgement point
 After Audiobookshelf accepts a synchronization request, the daemon owner SHALL update the matching slot in its canonical Bound queue by provider-qualified identity (`library_item_id`, `episode_id`) with the acknowledged position and completion state. The daemon owner SHALL then broadcast acknowledged provider-qualified progress to all capable attached clients, reusing the capability-gated broadcast seam.

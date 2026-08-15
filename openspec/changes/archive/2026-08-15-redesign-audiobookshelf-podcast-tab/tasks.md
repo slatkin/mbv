@@ -37,12 +37,12 @@
 
 ## 6. Add Objective Regression Gates
 
-- [ ] 6.1 Add a render-test harness for Audiobookshelf podcasts after the panel layout stabilizes; assert top-hero and show-list geometry at one- and two-column widths.
-- [ ] 6.2 Add a render regression assertion that no terminal width produces horizontally adjacent show-list and detail rectangles, and compare podcast hero/list geometry with TV Shows.
-- [ ] 6.3 Add rendered-output assertions for selected podcast title, description, show-row presence, and hero selection tracking after the panel layout stabilizes.
-- [ ] 6.4 Add image-path regression coverage for the selected Audiobookshelf cover slot and images-enabled/disabled behavior after the panel image design stabilizes.
+- [x] 6.1 Add a render-test harness for Audiobookshelf podcasts after the panel layout stabilizes; assert top-hero and show-list geometry at one- and two-column widths.
+- [x] 6.2 Add a render regression assertion that no terminal width produces horizontally adjacent show-list and detail rectangles, and compare podcast hero/list geometry with TV Shows.
+- [x] 6.3 Add rendered-output assertions for selected podcast title, description, show-row presence, and hero selection tracking after the panel layout stabilizes.
+- [x] 6.4 Add image-path regression coverage for the selected Audiobookshelf cover slot and images-enabled/disabled behavior after the panel image design stabilizes.
 - [x] 6.5 Add state/input regressions for exact filter membership, incomplete progress as Unplayed, filter cursor clamping, provider-native identity restoration, show-to-episode mode entry, escape back to show selection, inert episode activation, and shelf omission.
-- [ ] 6.6 Manually compare representative narrow and wide podcast tabs with images enabled and disabled against TV Shows when the panel UI is no longer undergoing active churn.
+- [x] 6.6 Manually compare representative narrow and wide podcast tabs with images enabled and disabled against TV Shows when the panel UI is no longer undergoing active churn.
 
 ## 7. Final Verification
 

@@ -173,8 +173,12 @@ mbv SHALL display the authenticated user's Audiobookshelf progress for downloade
 - **THEN** mbv SHALL display it as unstarted rather than borrowing progress from another show or episode
 
 #### Scenario: Progress changes outside mbv while the tab remains open
-- **WHEN** progress changes on the server without an explicit REST refresh
-- **THEN** mbv MAY continue displaying the last REST-loaded value because live Socket.IO refresh is outside this capability
+- **WHEN** progress changes on the server while the Audiobookshelf Socket.IO connection is authenticated and the tab remains open
+- **THEN** mbv SHALL update the displayed progress for the matching episode from the resulting `user_item_progress_updated` event, without requiring an explicit REST refresh
+
+#### Scenario: Progress changes while the socket is disconnected
+- **WHEN** progress changes on the server while the Audiobookshelf Socket.IO connection is not currently authenticated
+- **THEN** mbv MAY continue displaying the last REST-loaded value until the socket reconnects or an explicit REST refresh occurs
 
 ### Requirement: Podcast artwork is authenticated and Service-scoped
 mbv SHALL fetch Audiobookshelf podcast artwork through the configured Service credential without exposing that credential in cache keys, logs, user-visible errors, or cross-Service state. Artwork state SHALL be isolated from Emby and from a replacement Audiobookshelf server.
