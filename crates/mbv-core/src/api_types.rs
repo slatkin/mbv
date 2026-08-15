@@ -86,9 +86,9 @@ pub fn html_to_text(html: &str) -> String {
     let mut result = String::with_capacity(html.len());
     let mut rest = html;
 
-    // Stack of open link hrefs; text between `<a ...>` and `</a>` is kept,
+    // Href of the open <a> tag; text between `<a ...>` and `</a>` is kept,
     // then the href follows in parentheses on closing.
-    let mut pending_links: Vec<Option<String>> = Vec::new();
+    let mut pending_link: Option<String> = None;
 
     while let Some(lt) = rest.find('<') {
         result.push_str(&rest[..lt]);
@@ -102,9 +102,9 @@ pub fn html_to_text(html: &str) -> String {
 
         if let Some(name) = lower.strip_prefix('/') {
             if is_block_tag(name.trim()) {
-                push_paragraph_break(&mut result);
+                result.push('\n');
             } else if name.trim() == "a" {
-                if let Some(href) = pending_links.pop().flatten() {
+                if let Some(href) = pending_link.take() {
                     if !result.is_empty() && !result.ends_with(' ') {
                         result.push(' ');
                     }
@@ -116,16 +116,13 @@ pub fn html_to_text(html: &str) -> String {
         } else {
             let name = lower
                 .trim_end_matches('/')
-                .trim()
                 .split_whitespace()
                 .next()
                 .unwrap_or("");
             if name == "a" {
-                pending_links.push(extract_href(&lower));
-            } else if name == "br" {
-                push_paragraph_break(&mut result);
+                pending_link = extract_href(&lower);
             } else if is_block_tag(name) {
-                push_paragraph_break(&mut result);
+                result.push('\n');
             }
         }
         rest = &after[gt + 1..];
@@ -138,31 +135,7 @@ pub fn html_to_text(html: &str) -> String {
 }
 
 fn is_block_tag(name: &str) -> bool {
-    matches!(
-        name,
-        "p" | "li"
-            | "ul"
-            | "ol"
-            | "div"
-            | "blockquote"
-            | "h1"
-            | "h2"
-            | "h3"
-            | "h4"
-            | "h5"
-            | "h6"
-            | "tr"
-            | "table"
-            | "hr"
-    )
-}
-
-/// Push a newline unless the output already ends in one (collapsing runs of
-/// adjacent block/br tags into a single paragraph break).
-fn push_paragraph_break(out: &mut String) {
-    if !out.is_empty() && !out.ends_with('\n') {
-        out.push('\n');
-    }
+    matches!(name, "p" | "div" | "li" | "ul" | "ol" | "br")
 }
 
 /// Collapse runs of blank lines (and trailing spaces) down to single
@@ -170,13 +143,9 @@ fn push_paragraph_break(out: &mut String) {
 fn trim_blank_lines(text: &str) -> String {
     text.split('\n')
         .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
-        .fold(String::new(), |mut acc, line| {
-            if !acc.is_empty() {
-                acc.push('\n');
-            }
-            acc.push_str(&line);
-            acc
-        })
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Extract the `href="..."` value from an `<a ...>` tag body.

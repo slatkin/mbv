@@ -111,7 +111,7 @@ impl App {
             // Cap long descriptions, with an ellipsis, so the hero doesn't
             // grow unboundedly. The 200-char limit is on display width and
             // includes the ellipsis itself.
-            let capped = trunc_str(&overview.unwrap_or_default(), 200);
+            let capped = trunc_str(overview.as_deref().unwrap(), 200);
             let ov_w = text_w.saturating_sub(4); // 2-col padding each side
             wrap(&capped, ov_w)
                 .into_iter()
