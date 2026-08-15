@@ -87,7 +87,7 @@
 
 ### 14. Verify Part 3
 
-- [x] 14.1 Unit tests: the "Latest Feeds" pill reflects `FeedTabState.all_entries` newest-first, independent of the Feeds tab's own `selected_group`/`watched_filter`.
+- [x] 14.1 Unit tests: the "Feeds" pill reflects `FeedTabState.all_entries` newest-first, independent of the Feeds tab's own `selected_group`/`watched_filter`.
 - [x] 14.2 Unit tests: playing/enqueueing a Feed item from Home does not mutate the Feeds tab's own cursor/selected group/filter.
 - [x] 14.3 Focused render test for a Feed entry in the generic Home row/detail renderer (no known duration, no artwork).
 

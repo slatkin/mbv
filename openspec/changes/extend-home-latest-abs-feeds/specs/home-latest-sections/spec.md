@@ -6,12 +6,12 @@ Defines Home's per-destination "Latest" pills: one pill per visible Emby library
 
 ### Requirement: Latest pills cover Emby, Audiobookshelf podcast libraries, and Feeds
 
-Home SHALL show one Latest pill per visible Emby library (existing behavior), one Latest pill per visible Audiobookshelf podcast library, and exactly one "Latest Feeds" pill combining every feed subscription. Home SHALL NOT show a Latest pill for an Audiobookshelf book library or a per-subscription Feeds pill.
+Home SHALL show one Latest pill per visible Emby library (existing behavior), one Latest pill per visible Audiobookshelf podcast library, and exactly one "Feeds" pill combining every feed subscription. Home SHALL NOT show a Latest pill for an Audiobookshelf book library or a per-subscription Feeds pill.
 
 #### Scenario: Home lists pills for a mixed server
 
 - **WHEN** the user has visible Emby libraries, at least one Audiobookshelf podcast library, an Audiobookshelf book library, and one or more feed subscriptions
-- **THEN** Home SHALL display a Latest pill for each Emby library, a Latest pill for the podcast library, and a single "Latest Feeds" pill
+- **THEN** Home SHALL display a Latest pill for each Emby library, a Latest pill for the podcast library, and a single "Feeds" pill
 - **THEN** Home SHALL NOT display a pill for the Audiobookshelf book library or a separate pill per feed subscription
 
 #### Scenario: Audiobookshelf podcast library has no newest-episodes data
@@ -27,7 +27,7 @@ Home SHALL show one Latest pill per visible Emby library (existing behavior), on
 #### Scenario: Latest pills keep a canonical provider ordering
 
 - **WHEN** Emby libraries, Audiobookshelf podcast libraries, and the Feeds pill are all present, regardless of which provider populated first
-- **THEN** Home SHALL display the Emby library pills, then the Audiobookshelf podcast library pills, then the "Latest Feeds" pill, in that canonical order
+- **THEN** Home SHALL display the Emby library pills, then the Audiobookshelf podcast library pills, then the "Feeds" pill, in that canonical order
 
 #### Scenario: A long Audiobookshelf description is truncated
 
@@ -56,18 +56,18 @@ Home's Audiobookshelf and Feeds Latest pills SHALL populate, refresh, and remain
 - **THEN** Home SHALL add Continue Watching and Emby Latest pills
 - **THEN** the existing Audiobookshelf and Feeds Latest pills SHALL remain displayed with their data intact
 
-### Requirement: Latest Feeds pill reflects the Feeds tab's combined, newest-first entries
+### Requirement: Feeds pill reflects the Feeds tab's combined, newest-first entries
 
-The "Latest Feeds" pill's items SHALL be the same entries, in the same newest-first order, as the Feeds tab's combined "All" group, independent of any per-subscription grouping or watched-state filter currently active on the Feeds tab.
+The "Feeds" pill's items SHALL be the same entries, in the same newest-first order, as the Feeds tab's combined "All" group, independent of any per-subscription grouping or watched-state filter currently active on the Feeds tab.
 
 #### Scenario: Feeds tab filter does not affect the Home pill
 
 - **WHEN** the Feeds tab's watched-state filter is set to a value other than "All"
-- **THEN** the "Latest Feeds" pill on Home SHALL still show entries regardless of played state
+- **THEN** the "Feeds" pill on Home SHALL still show entries regardless of played state
 
 ### Requirement: `hidden_latest` hides pills by name across providers
 
-`hidden_latest` SHALL hide a Latest pill whose Emby or Audiobookshelf library name (case-insensitive) is listed, using the same settings mechanism as today's Emby-only hiding. `hidden_latest` SHALL also hide the "Latest Feeds" pill when it contains the literal value `"feeds"` (case-insensitive).
+`hidden_latest` SHALL hide a Latest pill whose Emby or Audiobookshelf library name (case-insensitive) is listed, using the same settings mechanism as today's Emby-only hiding. `hidden_latest` SHALL also hide the "Feeds" pill when it contains the literal value `"feeds"` (case-insensitive).
 
 #### Scenario: Hiding an Audiobookshelf library's Latest pill
 
@@ -77,7 +77,7 @@ The "Latest Feeds" pill's items SHALL be the same entries, in the same newest-fi
 #### Scenario: Hiding the Feeds pill
 
 - **WHEN** `hidden_latest` contains `"feeds"`
-- **THEN** Home SHALL NOT display the "Latest Feeds" pill
+- **THEN** Home SHALL NOT display the "Feeds" pill
 
 ### Requirement: Selecting and playing a Latest item works uniformly by item provider
 
@@ -91,7 +91,7 @@ The user SHALL be able to select any item in any visible Latest pill using the e
 
 #### Scenario: Playing a feed entry from Home whose Feeds-tab filter would hide it
 
-- **WHEN** the user plays an item from the "Latest Feeds" pill that is marked played, while the Feeds tab's watched-state filter is set to "Unplayed"
+- **WHEN** the user plays an item from the "Feeds" pill that is marked played, while the Feeds tab's watched-state filter is set to "Unplayed"
 - **THEN** mbv SHALL queue and play that feed entry
 - **THEN** the Feeds tab's selected group and filter SHALL remain unchanged
 

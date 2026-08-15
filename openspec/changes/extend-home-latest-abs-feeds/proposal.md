@@ -26,7 +26,7 @@ Decoupling Home's population from Emby is the primary design decision here, not 
 
 ### Part 3 — Add Home's Feeds Latest pill
 
-- Fold Feeds in as **one** pill ("Latest Feeds"), wrapping the Feeds tab's existing flattened, newest-first `all_entries` — not one pill per subscription. No new fetch: Feeds already loads independently of Emby, so this reads `FeedTabState.all_entries` as it stands whenever Home population runs.
+- Fold Feeds in as **one** pill ("Feeds"), wrapping the Feeds tab's existing flattened, newest-first `all_entries` — not one pill per subscription. No new fetch: Feeds already loads independently of Emby, so this reads `FeedTabState.all_entries` as it stands whenever Home population runs.
 - Extend the shared queue-submission primitive built in Part 2 to `feed_tab_play_selected`/`feed_tab_enqueue_selected`'s near-duplicate tail logic, so Home can play/enqueue a Feed item the same way. (Same reasoning as Part 2: the Feeds tab resolves its "selected item" through `watched_filter`+`selected_group`/`visible_entries()`, so Home cannot borrow its cursor.)
 - Reuse Part 2's generic Home row/detail renderer for Feed items; confirm a Feed entry with no known duration or artwork degrades cleanly rather than erroring.
 - Extend `hidden_latest` to also match a synthetic `"Feeds"` pseudo-name.

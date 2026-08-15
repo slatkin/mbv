@@ -127,7 +127,7 @@ fn apply_emby_bootstrap_merges_only_emby_entries() {
             0,
         ),
         (
-            "Latest Feeds".into(),
+            "Feeds".into(),
             HomeLatestSource::Feeds,
             vec![QueueItem::Feed(feed_item("Feed one"))],
             1,
@@ -518,7 +518,7 @@ fn feeds_pill_reflects_all_entries_newest_first_independent_of_tab_filter() {
         .iter()
         .find(|(_, source, _, _)| matches!(source, HomeLatestSource::Feeds))
         .expect("Feeds pill must be present");
-    assert_eq!(feeds.0, "Latest Feeds");
+    assert_eq!(feeds.0, "Feeds");
     let titles: Vec<String> = feeds.2.iter().map(|i| i.display_name()).collect();
     assert_eq!(
         titles,
@@ -565,7 +565,7 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
 
     // Home pill for the same entries, with the cursor on a Feed item.
     app.home.latest = vec![(
-        "Latest Feeds".into(),
+        "Feeds".into(),
         HomeLatestSource::Feeds,
         app.feed_tab
             .all_entries

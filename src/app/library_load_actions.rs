@@ -462,7 +462,7 @@ impl App {
             .cloned()
             .map(QueueItem::Feed)
             .collect();
-        Some(("Latest Feeds".into(), HomeLatestSource::Feeds, items))
+        Some(("Feeds".into(), HomeLatestSource::Feeds, items))
     }
 
     /// Rebuilds the Feeds portion of `home.latest` from the Feeds tab's

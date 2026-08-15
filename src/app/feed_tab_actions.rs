@@ -84,7 +84,7 @@ impl App {
         if had_events {
             self.feed_tab.rebuild_all_entries();
             self.feed_tab.clamp_state();
-            // Reflect the freshly loaded entries in Home's "Latest Feeds" pill
+            // Reflect the freshly loaded entries in Home's "Feeds" pill
             // without waiting for the next Home population trigger.
             self.rebuild_feeds_latest();
         }
