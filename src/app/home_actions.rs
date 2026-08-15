@@ -36,11 +36,7 @@ impl App {
         for (idx, (_, _, items, _)) in self.home.latest.iter().enumerate() {
             let current_section = idx + 1;
             if current_section == section_idx {
-                return if items.is_empty() {
-                    None
-                } else {
-                    Some((pos, items.len()))
-                };
+                return Some((pos, items.len()));
             }
             pos += items.len();
         }
@@ -48,18 +44,15 @@ impl App {
     }
 
     fn home_new_sections(&self) -> Vec<usize> {
-        let mut sections = Vec::new();
-        for (idx, (_, _, items, _)) in self.home.latest.iter().enumerate() {
-            if !items.is_empty() {
-                sections.push(idx + 1);
-            }
-        }
-        sections
+        // Every section in `home.latest` is a selectable pill (an ABS library,
+        // an Emby view, or Feeds), empty or not — matching Continue Watching.
+        // An empty section renders as an "(empty)" row rather than vanishing.
+        (0..self.home.latest.len()).map(|idx| idx + 1).collect()
     }
 
     /// Whether `section_idx` is a selectable Home pill: section 0 (Continue
-    /// Watching) is always valid, and any other index is valid iff it has a
-    /// non-empty Newest section.
+    /// Watching) is always valid, and any other index is valid iff it maps to
+    /// a section in `home.latest` (even an empty one).
     pub(super) fn home_section_is_valid(&self, section_idx: usize) -> bool {
         section_idx == 0 || self.home_new_sections().contains(&section_idx)
     }

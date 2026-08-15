@@ -25,7 +25,7 @@ The cross-provider `QueueItem` enum (`crates/mbv-core/src/playback_queue_items.r
 - Continue Watching for Audiobookshelf or Feeds. `continue_items` stays Emby-only for now — it populates only when an Emby client exists, same as today. An Audiobookshelf/Feeds-only user sees Latest pills but no Continue Watching section; unifying resume/progress across providers is separate follow-up work.
 - Feature-parity detail/expanded view for non-Emby Home rows. `render_compact_detail` is keyed on `lib_idx`/nav-stack and is Emby-specific; this change adds a minimal generic detail (title, duration, cover if available) rather than extending that path.
 - Any change to Emby Home play/enqueue routing, session handling, or series auto-play-next.
-- A fully live-reactive Home. Latest pills refresh on Home's existing refresh triggers (TUI entry, manual refresh, context-menu actions, ws events, settings changes) plus each provider's own connection-completion event; this does not add a new streaming/subscription mechanism to push a Feeds-tab background refresh onto Home while the user is idle on it.
+- A fully live-reactive Home. Latest pills refresh on Home's existing refresh triggers (TUI entry, manual refresh, context-menu actions, ws events, settings changes) plus each provider's own connection-completion event, and the Feeds pill additionally rebuilds when a feed fetch drains (Decision 9); this does not add a new streaming/subscription mechanism.
 
 ## Decisions
 
@@ -64,7 +64,7 @@ Alternative considered: borrow-and-delegate by temporarily writing into the targ
 
 ### 6. Widen Audiobookshelf shelf wire parsing to keep the fields Home needs
 
-Change `ShelfEntryWire`/`ShelfWire` deserialization to also capture `media.metadata.{title,author,coverPath}` and `recentEpisode.{title,publishedAt,audioFile.duration}`, and change `shelves()`/`AudiobookshelfShelf` to surface a fully-populated `AudiobookshelfQueueItem` per entry instead of bare `library_item_id`/`episode_id`. This is real parsing work, not free reuse of an existing typed shape — the current `ShelfEntryWire` intentionally discards the payload.
+Change `ShelfWire`/`ShelfEntryWire` deserialization to match ABS 2.36.0's actual `/personalized` response, not the shape an earlier revision invented. Verified against the live server source: each shelf is `{ label, entities }` (the key is `entities`, not `entries`), and each entity is a **full minified library item** — `{ id, mediaType, media, recentEpisode }` where `id` is the podcast/library-item id, `media` is the podcast (`media.metadata.{title,author}`, `media.coverPath`), and `recentEpisode` is a **top-level sibling of `media`** (not nested inside it) carrying `{ id, title, publishedAt, audioFile.duration }`. There is no per-entry `type` tag (the `type` field lives on the shelf, and is `"episode"` for the recency shelf). Map each entity to a fully-populated `AudiobookshelfQueueItem`; an entity whose `recentEpisode` is null (a podcast with no published episode yet) maps to a bare `Show` id rather than a playable episode. This is real parsing work — the pre-fix `ShelfEntryWire` discarded the payload AND parsed a shape the server never returns.
 
 ### 7. Minimal generic detail treatment and a shared row renderer for non-Emby Home rows
 
@@ -78,7 +78,7 @@ Audiobookshelf library names are matched into `hidden_latest` the same lowercase
 
 ### 9. Feeds' Home entry is read from existing local state, not fetched separately
 
-Home's Feeds pill is built by cloning `FeedTabState.all_entries` as it stands whenever Home population runs. No new Feeds fetch is introduced, and no async completion/cache mechanism like Decision 4's is needed: Feeds already loads independently of Emby via `spawn_idle_feed_fetch`/`refresh_feeds`, so `fetch_home()` can read it directly. A corollary is that the Feeds pill only reflects a Feeds-tab background fetch that completed *before* the next Home population trigger fires; that gap is accepted (see Non-Goals) rather than closed with new cross-tab notification plumbing.
+Home's Feeds pill is built by cloning `FeedTabState.all_entries` as it stands whenever Home population runs. No new Feeds fetch is introduced, and no async completion/cache mechanism like Decision 4's is needed: Feeds already loads independently of Emby via `refresh_feeds`/`start_feed_fetch`, so `fetch_home()` can read it directly. To ensure the pill (and the Feeds tab) have data shortly after startup rather than staying empty until the user presses the manual refresh key, feeds are auto-fetched asynchronously at TUI entry via `start_feed_fetch()` (the flash-free shared spawn), and `drain_feed_tab_results()` rebuilds the Home Feeds pill whenever entries finish loading. A corollary is that the Feeds pill reflects whichever feed fetches have completed before the last population trigger fires; that race is accepted (see Non-Goals) rather than closed with new cross-tab notification plumbing beyond the drain-time rebuild.
 
 ### 10. Feeds tab adopts Part 2's shared submit primitive
 
@@ -88,6 +88,12 @@ Home's Feeds pill is built by cloning `FeedTabState.all_entries` as it stands wh
 
 A literal pseudo-name `"Feeds"` is added for the single Feeds pill, matched the same lowercased way. A real Emby or Audiobookshelf library literally named "Feeds" would collide and become hideable/unhideable together with the Feeds pill; this is called out as an accepted, documented edge case rather than solved with a namespaced key.
 
+### 12. Every section in `home.latest` renders its pill, empty or not
+
+Home's pill bar and section list follow the Continue Watching convention: the pill for a section is part of the section's identity, not gated on whether it has items. `render_home_section_pills_row`, `render_home_list`, `home_new_sections`, and `home_section_is_valid` previously suppressed any section whose `items` was empty, so a bare Audiobookshelf library (or a Feeds pill before feeds load) produced no pill at all — making the feature invisible until it had data. This is inconsistent with Continue Watching, which always renders and shows an `(empty)` row. The fix removes the `!items.is_empty()` gate from those four sites so every section in `home.latest` (an Emby view, an Audiobookshelf podcast library, or Feeds) is always a visible, selectable pill; an empty one renders `(empty)`. This is uniform across providers — "different data, same UI."
+
+Note this subsumes the pre-fix design's "reduced Latest pill count if a server exposes no `Newest Episodes` shelf" risk: the pill still renders (empty) rather than vanishing, so a library with no recency shelf remains discoverable on Home.
+
 ## Risks / Trade-offs
 
 - **Part 1 changes shared, load-bearing code**: the merge semantics of an existing async Emby-completion handler, and a startup gate every Home population path relies on. Mitigated by keying every writer's changes to `home.latest` by `HomeLatestSource` (Decision 2) so each writer only ever touches its own entries, and by reusing the existing `SetupGeneration` staleness guard each provider's completion handler already checks.
@@ -95,8 +101,8 @@ A literal pseudo-name `"Feeds"` is added for the single Feeds pill, matched the 
 - **A second cache (Decision 4) for Audiobookshelf shelf data, alongside `home.latest` itself.** Extra state to keep in sync, in exchange for `fetch_home()` never needing a blocking Audiobookshelf network call. Mitigated by treating the cache as write-once-per-fetch, read-many, with `home.latest` always rebuilt from it rather than mutated ad hoc.
 - **Queue-submission extraction changes an existing call site (Audiobookshelf in Part 2, Feeds in Part 3), not just Home's new one.** Mitigated by extracting the shared helper as a faithful lift of existing logic and keeping the existing tests as regression coverage for each refactor.
 - **Audiobookshelf `/personalized` shape is undocumented outside this exploration's live-server check.** Mitigated by fixture-testing the widened parser against the recorded `shelves.json` fixture and treating any shelf other than `Newest Episodes` as unused.
-- **Reduced Latest pill count if an Audiobookshelf server exposes no `Newest Episodes` shelf** (e.g., very old ABS versions). Home simply shows no pill for that library, same as an Emby library returning zero latest items today.
-- **Feeds pill can go stale while the user is on Home** (Decision 9, accepted). If this proves confusing in practice, the follow-up is a Home refresh when `FeedTabState.rebuild_all_entries()` runs, not a new fetch mechanism.
+- **Reduced Latest pill count if an Audiobookshelf server exposes no `Newest Episodes` shelf** (e.g., very old ABS versions). Per Decision 12 the pill still renders `(empty)` rather than vanishing, so the library stays discoverable; it just has no items to select.
+- **Feeds pill can lag feeds that finish loading mid-session** (Decision 9, accepted). Mitigated by rebuilding the Home Feeds pill whenever a feed fetch drains; the only residual gap is a feed fetch that completes while the user is idle on Home with no later population trigger — accepted, no new push mechanism.
 
 ## Open Questions
 

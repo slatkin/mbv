@@ -48,11 +48,8 @@ fn progress_and_shelf_fixtures_preserve_user_and_server_order() {
         .unwrap();
     assert_eq!(completed.media_progress[0].is_finished, Some(true));
     let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
-    assert_eq!(shelves[0].label, "Continue listening");
-    assert!(matches!(
-        shelves[0].entries[1],
-        ShelfEntryWire::Episode { .. }
-    ));
+    assert_eq!(shelves[0].label, "Continue Listening");
+    assert!(matches!(shelves[0].entities[0], ShelfEntryWire { .. }));
 }
 
 #[test]
@@ -60,10 +57,10 @@ fn newest_episodes_shelf_wire_carries_the_embedded_payload() {
     let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
     let newest = shelves
         .iter()
-        .find(|shelf| shelf.label == "Newest episodes")
+        .find(|shelf| shelf.label == "Newest Episodes")
         .expect("fixture keeps the live server's recency shelf");
     let mapped: Vec<AudiobookshelfShelfEntry> = newest
-        .entries
+        .entities
         .iter()
         .cloned()
         .map(shelf_entry_from_wire)
@@ -101,49 +98,52 @@ fn newest_episodes_shelf_wire_carries_the_embedded_payload() {
     );
     assert_eq!(second.duration_ticks, None, "missing audioFile stays None");
     assert_eq!(second.cover_path, None, "missing coverPath stays None");
-    assert!(matches!(
-        shelves[0]
-            .entries
-            .clone()
-            .into_iter()
-            .map(shelf_entry_from_wire)
-            .next(),
-        Some(AudiobookshelfShelfEntry::Show(_))
-    ));
+    assert!(
+        matches!(&mapped[0], AudiobookshelfShelfEntry::Episode(_)),
+        "every Newest Episodes entry maps to an episode"
+    );
 }
 
 #[test]
 fn non_newest_episodes_shelves_parse_and_stay_unused() {
     // Home's Latest pill reads only the `Newest Episodes` shelf (Task 6.3);
     // every other shelf the live server returns must still parse cleanly and
-    // simply never feed Home. The fixture's `Continue listening` shelf pins
+    // simply never feed Home. The fixture's `Continue Listening` shelf pins
     // both the show shape and the bare (no embedded media) episode shape.
     let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
     let continue_listening = shelves
         .iter()
-        .find(|shelf| shelf.label == "Continue listening")
+        .find(|shelf| shelf.label == "Continue Listening")
         .expect("fixture keeps a non-recency shelf");
     let mapped: Vec<AudiobookshelfShelfEntry> = continue_listening
-        .entries
+        .entities
         .iter()
         .cloned()
         .map(shelf_entry_from_wire)
         .collect();
     assert!(
-        matches!(&mapped[0], AudiobookshelfShelfEntry::Show(id) if id == "show-2"),
-        "show entries survive the widen unchanged"
+        matches!(&mapped[0], AudiobookshelfShelfEntry::Episode(_)),
+        "podcast Continue Listening entries carry a recentEpisode and map to Episode"
     );
-    let AudiobookshelfShelfEntry::Episode(bare) = &mapped[1] else {
-        panic!("bare episode entries map to Episode");
-    };
-    assert_eq!(bare.episode_id, "episode-1");
     assert!(
-        bare.title.is_empty(),
-        "no embedded media means no payload fields"
+        matches!(&mapped[1], AudiobookshelfShelfEntry::Show(id) if id == "missing-show"),
+        "an entry with a null recentEpisode maps to a bare Show id"
     );
-    assert_eq!(bare.show_title, None);
-    assert_eq!(bare.duration_ticks, None);
-    assert_eq!(bare.cover_path, None);
+    let AudiobookshelfShelfEntry::Episode(first) = &mapped[0] else {
+        panic!("first Continue Listening entry is an episode");
+    };
+    assert_eq!(first.episode_id, "episode-1");
+    assert_eq!(
+        first.show_title.as_deref(),
+        Some("Second Show"),
+        "Continue Listening entries carry embedded media like Newest Episodes"
+    );
+    assert_eq!(first.duration_ticks, None, "no audioFile means no duration");
+    assert_eq!(
+        first.cover_path.as_deref(),
+        Some("/api/items/show-2/cover"),
+        "cover comes from media.coverPath"
+    );
 }
 
 #[test]

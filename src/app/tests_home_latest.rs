@@ -592,3 +592,30 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
         "enqueue/play from Home must not touch the Feeds tab's cursor"
     );
 }
+
+#[test]
+fn empty_abs_library_section_is_still_a_selectable_pill() {
+    // Home pill convention: every section in `home.latest` is a real pill
+    // (an ABS library, an Emby view, or Feeds), empty or not — matching
+    // Continue Watching, which always renders and shows "(empty)" when bare.
+    // An empty ABS library must be selectable so the feature is discoverable
+    // even before any episode has been published/fetched.
+    let mut app = make_app_stub();
+    app.home.latest = vec![(
+        "Podcasts".into(),
+        HomeLatestSource::Audiobookshelf("abs-pod".into()),
+        Vec::new(),
+        0,
+    )];
+
+    assert!(
+        app.home_section_is_valid(1),
+        "an empty ABS library section must still be a valid pill"
+    );
+
+    app.home_select_section(1);
+    assert_eq!(
+        app.home.section, 1,
+        "selecting the empty pill keeps section 1"
+    );
+}

@@ -17,7 +17,12 @@ Home SHALL show one Latest pill per visible Emby library (existing behavior), on
 #### Scenario: Audiobookshelf podcast library has no newest-episodes data
 
 - **WHEN** an Audiobookshelf podcast library's server response has no `Newest Episodes` shelf or an empty one
-- **THEN** Home SHALL treat that library's Latest pill the same as an empty Emby Latest section (no selectable items, not a selectable pill)
+- **THEN** Home SHALL still display that library's Latest pill, with no selectable items (an `(empty)` section), matching the Continue Watching convention that a pill renders even when its section is bare
+
+#### Scenario: Every Latest pill renders even when empty
+
+- **WHEN** a section in `home.latest` (an Emby view, an Audiobookshelf podcast library, or the Feeds pill) has zero items
+- **THEN** Home SHALL still display its pill and render an `(empty)` section rather than hiding the pill
 
 ### Requirement: Latest pills populate and refresh independently of Emby's connection state
 

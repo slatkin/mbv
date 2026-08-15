@@ -47,10 +47,6 @@ impl App {
         let mut flat = continue_items.len();
         let mut new_sections: Vec<Section> = Vec::new();
         for (idx, (_title, _lib, items, _cur)) in latest.iter().enumerate() {
-            if items.is_empty() {
-                flat += items.len();
-                continue;
-            }
             new_sections.push(Section {
                 section_idx: idx + 1,
                 flat_start: flat,
@@ -674,10 +670,12 @@ impl App {
         }
 
         let mut labels: Vec<(usize, String)> = vec![(0, "Continue Watching".to_string())];
-        for (idx, (title, _lib, items, _cur)) in self.home.latest.iter().enumerate() {
-            if !items.is_empty() {
-                labels.push((idx + 1, title.clone()));
-            }
+        for (idx, (title, _lib, _items, _cur)) in self.home.latest.iter().enumerate() {
+            // Every section in `home.latest` is a real pill (an ABS library,
+            // an Emby view, or Feeds). Match the Continue Watching convention:
+            // the pill always renders even when its section is empty (which
+            // shows an "(empty)" row), so a bare section is still discoverable.
+            labels.push((idx + 1, title.clone()));
         }
         if !labels
             .iter()
