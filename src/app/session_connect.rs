@@ -279,6 +279,8 @@ impl App {
             self.player.stop();
             self.player.join_or_timeout(Duration::from_secs(5));
             let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
+            let (_dummy_abs_tx, dummy_abs_rx) =
+                mpsc::channel::<mbv_core::audiobookshelf_socket::SocketEvent>();
             let suspended = SuspendedLocalSession {
                 player: std::mem::replace(
                     &mut self.player,
@@ -287,10 +289,10 @@ impl App {
                 player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
                 ws_rx: std::mem::replace(&mut self.ws_rx, dummy_ws_rx),
                 ws_send_tx: self.ws_send_tx.take(),
-                audiobookshelf_socket_rx: {
-                    let (_, rx) = mpsc::channel();
-                    rx
-                },
+                audiobookshelf_socket_rx: std::mem::replace(
+                    &mut self.audiobookshelf_socket_rx,
+                    dummy_abs_rx,
+                ),
                 audiobookshelf_socket_tx: self.audiobookshelf_socket_tx.take(),
                 audiobookshelf_socket_generation: self.audiobookshelf_socket_generation.take(),
             };
@@ -384,6 +386,8 @@ impl App {
             self.player.stop();
             self.player.join_or_timeout(Duration::from_secs(5));
             let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
+            let (_dummy_abs_tx, dummy_abs_rx) =
+                mpsc::channel::<mbv_core::audiobookshelf_socket::SocketEvent>();
             let suspended = SuspendedLocalSession {
                 player: std::mem::replace(
                     &mut self.player,
@@ -392,10 +396,10 @@ impl App {
                 player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
                 ws_rx: std::mem::replace(&mut self.ws_rx, dummy_ws_rx),
                 ws_send_tx: self.ws_send_tx.take(),
-                audiobookshelf_socket_rx: {
-                    let (_, rx) = mpsc::channel();
-                    rx
-                },
+                audiobookshelf_socket_rx: std::mem::replace(
+                    &mut self.audiobookshelf_socket_rx,
+                    dummy_abs_rx,
+                ),
                 audiobookshelf_socket_tx: self.audiobookshelf_socket_tx.take(),
                 audiobookshelf_socket_generation: self.audiobookshelf_socket_generation.take(),
             };
