@@ -272,27 +272,8 @@ impl Player {
 
         let cursor = cursor.min(items.len().saturating_sub(1));
         let start_item = &items[cursor];
-        st.position_ticks = start_item.playback_position_ticks();
-        st.runtime_ticks = start_item.runtime_ticks();
-        st.paused = false;
-        st.current_idx = cursor;
-        st.queue_len = items.len();
+        st.seed_from_item(start_item, cursor, items.len());
         st.active = false;
-        match start_item {
-            QueueItem::Emby(emby) => st.set_current_item_metadata(emby),
-            QueueItem::Feed(entry) => {
-                st.title = entry.title.clone();
-                st.art_item_id = entry.guid.clone();
-            }
-            QueueItem::Audiobookshelf(ep) => {
-                st.title = ep.title.clone();
-                st.art_item_id = ep.episode_id.clone();
-            }
-            QueueItem::AudiobookshelfBook(book) => {
-                st.title = book.title.clone();
-                st.art_item_id = book.library_item_id.clone();
-            }
-        }
     }
 
     // Pipe mode always forces headless (no video window), regardless of item
@@ -375,26 +356,7 @@ impl Player {
             let start_item = &items[start_idx];
             {
                 let mut st = self.status.lock().unwrap();
-                st.position_ticks = start_item.playback_position_ticks();
-                st.runtime_ticks = start_item.runtime_ticks();
-                st.paused = false;
-                st.current_idx = start_idx;
-                st.queue_len = items.len();
-                match start_item {
-                    QueueItem::Emby(emby) => st.set_current_item_metadata(emby),
-                    QueueItem::Feed(entry) => {
-                        st.title = entry.title.clone();
-                        st.art_item_id = entry.guid.clone();
-                    }
-                    QueueItem::Audiobookshelf(ep) => {
-                        st.title = ep.title.clone();
-                        st.art_item_id = ep.episode_id.clone();
-                    }
-                    QueueItem::AudiobookshelfBook(book) => {
-                        st.title = book.title.clone();
-                        st.art_item_id = book.library_item_id.clone();
-                    }
-                }
+                st.seed_from_item(start_item, start_idx, items.len());
             }
             return self.send_command(PlayerCommand::SubmitQueue { items, start_idx });
         }
@@ -447,27 +409,8 @@ impl Player {
         let start_item = &items[start_idx];
         {
             let mut st = status.lock().unwrap();
-            st.position_ticks = start_item.playback_position_ticks();
-            st.runtime_ticks = start_item.runtime_ticks();
-            st.paused = false;
-            st.current_idx = start_idx;
-            st.queue_len = items.len();
+            st.seed_from_item(start_item, start_idx, items.len());
             st.active = true;
-            match start_item {
-                QueueItem::Emby(emby) => st.set_current_item_metadata(emby),
-                QueueItem::Feed(entry) => {
-                    st.title = entry.title.clone();
-                    st.art_item_id = entry.guid.clone();
-                }
-                QueueItem::Audiobookshelf(ep) => {
-                    st.title = ep.title.clone();
-                    st.art_item_id = ep.episode_id.clone();
-                }
-                QueueItem::AudiobookshelfBook(book) => {
-                    st.title = book.title.clone();
-                    st.art_item_id = book.library_item_id.clone();
-                }
-            }
         }
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();

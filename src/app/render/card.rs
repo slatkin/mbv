@@ -186,7 +186,7 @@ impl App {
         const PREFETCH_BEHIND: usize = 1;
         let queue_ref = self.playback_queue();
         let n = queue_ref.total_queue_len();
-        let start = cursor.saturating_sub(PREFETCH_BEHIND);
+        let start = cursor.saturating_sub(PREFETCH_BEHIND).min(n);
         let end = (cursor + PREFETCH_AHEAD + 1).min(n);
         let prefetch: Vec<(String, String, String, String)> = queue_ref.slots()[start..end]
             .iter()
@@ -345,6 +345,20 @@ mod tests {
 
         assert!(fetch_triggered(&app, "id2:P"));
         assert!(!fetch_triggered(&app, "id0:P"));
+    }
+
+    #[test]
+    fn stopped_local_selection_with_empty_remote_playback_queue_does_not_panic() {
+        let local_items = make_items(3);
+        let mut app = make_direct_remote_app(local_items, Vec::new());
+        app.set_queue_scope(QueueScope::Local);
+        app.player_tab.set_items(make_items(3), 2);
+        app.image_protocol_enabled = true;
+        app.player.status.lock().unwrap().active = false;
+
+        render_card(&mut app);
+
+        assert!(fetch_triggered(&app, "id2:P"));
     }
 
     #[test]

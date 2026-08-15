@@ -54,17 +54,9 @@ fn format_episode_date(value: &str) -> Option<String> {
     } else {
         timestamp
     };
-    let days = seconds.div_euclid(86_400) as i64;
-    let z = days + 719_468;
-    let era = (if z >= 0 { z } else { z - 146_096 }).div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096).div_euclid(365);
-    let year = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let month_part = (5 * doy + 2).div_euclid(153);
-    let day = doy - (153 * month_part + 2).div_euclid(5) + 1;
-    let month = month_part + if month_part < 10 { 3 } else { -9 };
-    let year = year + i64::from(month <= 2);
+    let dt = time::OffsetDateTime::from_unix_timestamp(seconds as i64).ok()?;
+    let year = dt.year();
+    let (month, day) = (u8::from(dt.month()), dt.day());
     Some(format!("{day:02}/{month:02}/{year:04}"))
 }
 

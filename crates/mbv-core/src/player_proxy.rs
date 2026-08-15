@@ -225,7 +225,8 @@ impl PlayerProxy {
     pub fn join(&self) {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.join(),
-            PlayerProxyInner::Remote(r) => r.join(),
+            // Daemon keeps running when the TUI exits; nothing to join.
+            PlayerProxyInner::Remote(_) => {}
         }
     }
 

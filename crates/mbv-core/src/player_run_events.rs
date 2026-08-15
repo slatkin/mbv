@@ -84,8 +84,7 @@ impl PlaybackRun {
     }
 
     fn on_playlist_pos_changed(&mut self, pos: i64) {
-        if self.projection.is_active_file() {
-            self.projection.observe_playlist_pos(&mut self.queue, pos);
+        if self.active_file {
             return;
         }
         if pos < 0 {
@@ -114,9 +113,7 @@ impl PlaybackRun {
     }
 
     fn on_playlist_count_changed(&mut self, count: usize) {
-        if self.projection.is_active_file() {
-            self.projection
-                .observe_playlist_count(&mut self.queue, count);
+        if self.active_file {
             return;
         }
         if count == self.queue_len() {
@@ -251,10 +248,7 @@ impl PlaybackRun {
             }
             return true;
         }
-        if self.projection.is_active_file()
-            && self.active_file_starting
-            && reason == mpv_end_file_reason::Error
-        {
+        if self.active_file && self.active_file_starting && reason == mpv_end_file_reason::Error {
             self.active_file_starting = false;
             self.close_prepared_source();
             progress.stop_and_join(self.progress_join_budget());
@@ -440,7 +434,7 @@ impl PlaybackRun {
         // next_idx < queue_len() was already checked above, so set_active_index
         // (which only fails when the index is out of bounds) cannot fail here.
         let next_slot_id = self.slot_id_at(next_idx);
-        let advanced = if self.projection.is_active_file() {
+        let advanced = if self.active_file {
             self.close_prepared_source_at(provider_lifecycle_close_pos(
                 &completed_item,
                 natural,
@@ -461,7 +455,7 @@ impl PlaybackRun {
             .cloned()
             .expect("active item must exist after successful set_active_index");
         self.load_active_item_state();
-        if self.projection.is_active_file() && !advanced {
+        if self.active_file && !advanced {
             let error = AudiobookshelfError::from_class(AudiobookshelfFailureClass::Unavailable);
             progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;

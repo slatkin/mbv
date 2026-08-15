@@ -25,12 +25,57 @@ pub fn should_resume(position_ticks: i64, runtime_ticks: i64) -> bool {
     }
 }
 
-fn decode_html_entities(s: &str) -> String {
-    s.replace("&quot;", "\"")
-        .replace("&apos;", "'")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&amp;", "&")
+/// Decode common XML/HTML entities (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`)
+/// and numeric character references (`&#NNN;` / `&#xHHHH;`) in a single
+/// left-to-right scan. Anything unrecognized (e.g. a stray `&` or an
+/// unsupported named entity) is left untouched rather than erroring.
+pub fn decode_entities(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(amp_idx) = rest.find('&') {
+        result.push_str(&rest[..amp_idx]);
+        let tail = &rest[amp_idx..];
+        let Some(semi_idx) = tail.find(';') else {
+            result.push('&');
+            rest = &tail[1..];
+            continue;
+        };
+        let entity = &tail[1..semi_idx];
+        let decoded_char = match entity {
+            "amp" => Some('&'),
+            "lt" => Some('<'),
+            "gt" => Some('>'),
+            "quot" => Some('"'),
+            "apos" => Some('\''),
+            _ if entity.starts_with('#') => {
+                let num_part = &entity[1..];
+                let code_point = if let Some(hex) = num_part
+                    .strip_prefix('x')
+                    .or_else(|| num_part.strip_prefix('X'))
+                {
+                    u32::from_str_radix(hex, 16).ok()
+                } else {
+                    num_part.parse::<u32>().ok()
+                };
+                code_point.and_then(char::from_u32)
+            }
+            _ => None,
+        };
+        match decoded_char {
+            Some(ch) => {
+                result.push(ch);
+                rest = &tail[semi_idx + 1..];
+            }
+            None => {
+                // Unrecognized entity: leave the leading '&' untouched and
+                // keep scanning from just after it.
+                result.push('&');
+                rest = &tail[1..];
+            }
+        }
+    }
+    result.push_str(rest);
+    result
 }
 
 pub fn gen_session_id() -> EmbySessionId {
@@ -536,7 +581,7 @@ fn parse_item(raw: &Value) -> EmbyItem {
             .and_then(|s| s.get(..4))
             .and_then(|s| s.parse().ok())
             .unwrap_or(0),
-        overview: decode_html_entities(raw["Overview"].as_str().unwrap_or("")),
+        overview: decode_entities(raw["Overview"].as_str().unwrap_or("")),
         premiere_date: raw["PremiereDate"]
             .as_str()
             .and_then(|s| s.get(..10))

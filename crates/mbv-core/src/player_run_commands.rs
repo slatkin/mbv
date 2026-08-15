@@ -26,7 +26,7 @@ impl PlaybackRun {
             }
             PlayerCommand::JumpTo(idx) => {
                 if let Some(slot_id) = self.slot_id_at(idx) {
-                    if self.projection.is_active_file() {
+                    if self.active_file {
                         if let Err(error) = self.select_active_slot(slot_id, mpv) {
                             log::warn!(target: "player", "active-file selection failed: {error}");
                         } else {
@@ -55,7 +55,7 @@ impl PlaybackRun {
             PlayerCommand::QueueRemove(idx) => {
                 if let Some(slot_id) = self.slot_id_at(idx) {
                     let active_slot_id = self.active_slot_id();
-                    if self.projection.is_active_file() {
+                    if self.active_file {
                         let active = active_slot_id == Some(slot_id);
                         if active {
                             let next = if idx + 1 < self.queue_len() {
@@ -110,7 +110,7 @@ impl PlaybackRun {
                     // Passing to + 1 (one past the end when to == n - 1, which
                     // mpv also accepts as "move to end") makes mpv's result
                     // match this struct's from/to bookkeeping below.
-                    if !self.projection.is_active_file() {
+                    if !self.active_file {
                         let mpv_to = if from < to { to + 1 } else { to };
                         let _ =
                             mpv.command("playlist-move", &[&from.to_string(), &mpv_to.to_string()]);
@@ -215,7 +215,7 @@ impl PlaybackRun {
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
-        if self.projection.is_active_file() {
+        if self.active_file {
             self.replace_with_queue_items(
                 new_items
                     .into_iter()
@@ -319,7 +319,7 @@ impl PlaybackRun {
             return;
         }
 
-        if self.projection.is_active_file() {
+        if self.active_file {
             self.append_items_to_queue(new_items);
             return;
         }
@@ -339,7 +339,7 @@ impl PlaybackRun {
                 return;
             }
             self.append_items_to_queue(new_items);
-            self.projection.activate();
+            self.active_file = true;
             return;
         }
         for item in &new_items {
@@ -430,7 +430,7 @@ impl PlaybackRun {
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
-        if self.projection.is_active_file() || items.iter().any(QueueItem::is_audiobookshelf) {
+        if self.active_file || items.iter().any(QueueItem::is_audiobookshelf) {
             self.replace_with_queue_items(items, start_idx, mpv, progress);
             return;
         }
@@ -584,7 +584,7 @@ impl PlaybackRun {
         progress.stop_and_join(self.progress_join_budget());
         self.queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
         self.current_idx = start_idx;
-        self.projection.activate();
+        self.active_file = true;
         if let Err(error) = self.install_active_projection(mpv, prepared, &active_item) {
             log::warn!(target: "player", "active-file replacement failed: {error}");
             self.accept_stopped_replacement(
@@ -645,7 +645,7 @@ impl PlaybackRun {
             self.queue = PlaybackQueue::from_queue_items(items, Some(start_idx));
         }
         self.current_idx = start_idx;
-        self.projection.activate();
+        self.active_file = true;
         self.origin = if self.queue_len() == 1 {
             PlaybackOrigin::Standalone
         } else {
