@@ -311,26 +311,15 @@ impl App {
         total: usize,
         scroll: usize,
     ) {
-        let visible = content.height as usize;
-        if visible == 0 || total <= visible {
-            return;
-        }
-        let max_offset = total.saturating_sub(visible);
-        let scrollbar = ScrollBar::vertical(ScrollLengths {
-            content_len: total,
-            viewport_len: visible,
-        })
-        .offset(scroll.min(max_offset))
-        .glyph_set(thin_vertical_thumb(GlyphSet::box_drawing()))
-        .track_style(Style::default().fg(palette::SCROLLBAR))
-        .thumb_style(Style::default().fg(palette::SCROLLBAR));
-        f.render_widget(
-            &scrollbar,
-            Rect {
-                x: content.x.saturating_add(content.width),
-                width: 1,
-                ..content
-            },
+        super::widgets::render_scrollbar_with_viewport_at(
+            f,
+            content,
+            total,
+            content.height as usize,
+            scroll,
+            content.x.saturating_add(content.width),
+            thin_vertical_thumb(GlyphSet::box_drawing()),
+            palette::SCROLLBAR,
         );
     }
 

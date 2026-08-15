@@ -141,7 +141,7 @@ pub(super) fn render_right_scrollbar_with_viewport(
     );
 }
 
-fn render_scrollbar_with_viewport_at(
+pub(super) fn render_scrollbar_with_viewport_at(
     f: &mut Frame,
     area: Rect,
     content_length: usize,
