@@ -354,7 +354,7 @@ fn removing_non_active_item_keeps_cursor_off_now_playing_after_daemon_ack() {
     // Simulate the daemon's async ack of the removal: its `active_slot` reports
     // the playback position (still track 0), not the UI's selection.
     app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
-        emby_unified_state(app.player_tab.emby_items(), 0),
+        emby_unified_state(&app.player_tab.emby_items(), 0),
     )));
 
     assert_eq!(

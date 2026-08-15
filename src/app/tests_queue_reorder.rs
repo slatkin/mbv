@@ -320,7 +320,7 @@ fn remote_queue_update_reconciles_remote_queue_without_touching_local_queue() {
     ];
 
     app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
-        emby_unified_state(updated_remote.clone(), 2),
+        emby_unified_state(&updated_remote, 2),
     )));
 
     assert_eq!(
@@ -364,7 +364,7 @@ fn remote_queue_update_after_move_keeps_cursor_on_moved_item() {
 
     app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
         emby_unified_state(
-            vec![
+            &[
                 remote_items[1].clone(),
                 remote_items[0].clone(),
                 remote_items[2].clone(),
@@ -402,7 +402,7 @@ fn remote_queue_update_after_move_tracks_duplicate_item_by_position() {
 
     app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
         emby_unified_state(
-            vec![
+            &[
                 remote_items[0].clone(),
                 remote_items[2].clone(),
                 remote_items[1].clone(),

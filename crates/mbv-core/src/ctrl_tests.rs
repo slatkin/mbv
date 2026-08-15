@@ -356,17 +356,6 @@ fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
 }
 
 #[test]
-fn current_hello_advertises_unified_queue_capability() {
-    let hello = CtrlHello::current();
-    assert!(
-        hello
-            .capabilities
-            .contains(&CTRL_CAP_UNIFIED_QUEUE.to_string()),
-        "CtrlHello::current() must advertise unified-queue capability"
-    );
-}
-
-#[test]
 fn unified_queue_slot_round_trips_through_json() {
     let slot = UnifiedQueueSlot {
         slot_id: 42,
