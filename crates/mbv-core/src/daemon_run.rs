@@ -71,7 +71,6 @@ pub fn run_with_options(
         client_locked.config.use_mpv_config,
         client_locked.config.no_scripts,
         false,
-        false,
         crate::player::SubtitlePrefs::default(),
         player_tx,
         ws_send_tx.clone(),

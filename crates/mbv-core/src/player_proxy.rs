@@ -23,7 +23,6 @@ impl PlayerProxy {
             false,
             false,
             false,
-            false,
             SubtitlePrefs::default(),
             tx,
             None,
@@ -51,7 +50,6 @@ impl PlayerProxy {
         let mut player = Player::new(
             String::new(),
             String::new(),
-            false,
             false,
             false,
             false,

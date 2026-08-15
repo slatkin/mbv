@@ -118,7 +118,6 @@ fn shutdown_stop_sets_timeout_without_changing_plain_stop() {
         false,
         false,
         false,
-        false,
         SubtitlePrefs::default(),
         event_tx,
         None,
@@ -206,7 +205,6 @@ fn player_join_or_timeout_does_not_wait_for_a_stuck_run() {
     let player = Player::new(
         String::new(),
         String::new(),
-        false,
         false,
         false,
         false,

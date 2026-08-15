@@ -93,7 +93,6 @@ fn cold_player() -> Player {
         false,
         true,
         false,
-        false,
         SubtitlePrefs::default(),
         event_tx,
         None,
