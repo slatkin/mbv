@@ -131,8 +131,7 @@ impl App {
         if n == 0 {
             return;
         }
-        let cur = self.feed_tab.cursor as i64;
-        self.feed_tab.cursor = (cur + delta).clamp(0, n as i64 - 1) as usize;
+        self.feed_tab.cursor = super::ui_util::move_cursor(self.feed_tab.cursor, delta, n);
     }
 
     /// Jump the feed tab cursor to the start or end.

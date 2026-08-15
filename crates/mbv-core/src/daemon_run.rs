@@ -71,7 +71,6 @@ pub fn run_with_options(
         client_locked.config.use_mpv_config,
         client_locked.config.no_scripts,
         false,
-        false,
         crate::player::SubtitlePrefs::default(),
         player_tx,
         ws_send_tx.clone(),
@@ -236,7 +235,7 @@ pub fn run_with_options(
         let client = client.lock().unwrap().clone();
         let direct_commands = direct_commands.clone();
         std::thread::spawn(move || {
-            register_capabilities(&client, &direct_commands, audio_only);
+            client.register_capabilities_with_options(&direct_commands, audio_only);
         });
     }
 
@@ -297,7 +296,7 @@ pub fn run_with_options(
             let client = client.lock().unwrap().clone();
             let direct_commands = direct_commands.clone();
             std::thread::spawn(move || {
-                register_capabilities(&client, &direct_commands, audio_only)
+                client.register_capabilities_with_options(&direct_commands, audio_only)
             });
             last_capabilities = Instant::now();
         }

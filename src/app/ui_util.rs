@@ -23,6 +23,15 @@ pub(super) fn cycle_lang(my_languages: &[String], current: &str) -> String {
     cycle[(idx + 1) % cycle.len()].to_string()
 }
 
+/// Move a list cursor by `delta` rows (signed), clamped to `[0, len-1]`.
+/// Handles the empty-list case by returning 0.
+pub(crate) fn move_cursor(cur: usize, delta: i64, len: usize) -> usize {
+    if len == 0 {
+        return 0;
+    }
+    (cur as i64 + delta).clamp(0, len as i64 - 1) as usize
+}
+
 pub fn natural_sort_key(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 16);
     let mut chars = s.chars().peekable();
@@ -60,14 +69,6 @@ pub fn sort_audio_tracks(items: &mut [EmbyItem]) {
         });
     } else {
         items.sort_by_key(|i| natural_sort_key(i.sort_key()));
-    }
-}
-
-pub fn fmt_duration(s: i64) -> String {
-    if s >= 3600 {
-        format!("{}:{:02}:{:02}", s / 3600, (s % 3600) / 60, s % 60)
-    } else {
-        format!("{}:{:02}", s / 60, s % 60)
     }
 }
 

@@ -1,5 +1,5 @@
 use super::super::super::palette;
-use super::super::super::ui_util::{fmt_duration, trunc_str};
+use super::super::super::ui_util::{fmt_duration_short, trunc_str};
 use super::super::super::App;
 use super::super::super::SESSIONS_PANEL_W;
 use ratatui::layout::Rect;
@@ -147,8 +147,8 @@ impl App {
             let time = if s.now_playing.is_some() {
                 format!(
                     " {}/{}",
-                    fmt_duration(s.position_s),
-                    fmt_duration(s.runtime_s)
+                    fmt_duration_short(s.position_s),
+                    fmt_duration_short(s.runtime_s)
                 )
             } else {
                 String::new()

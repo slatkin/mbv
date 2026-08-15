@@ -457,7 +457,7 @@ impl App {
         }
         if self.sync_playback_queue_after_append(scope, vec![appended]) {
             self.persist_local_queue_state_if_needed(scope);
-            self.retire_tracking_after_queue_mutation();
+            self.retire_remote_tracking(true);
         } else {
             self.queue_dirty = previous_dirty;
             *self.queue_for_scope_mut(scope) = previous_queue;

@@ -15,12 +15,6 @@ use crate::playback_queue::{FeedEntry, PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 
-/// Shared by the startup registration and the periodic 10-minute
-/// re-registration in the main loop below.
-fn register_capabilities(client: &EmbyClient, direct_commands: &[String], audio_only: bool) {
-    client.register_capabilities_with_options(direct_commands, audio_only);
-}
-
 fn bind_ctrl_listener() -> Option<UnixListener> {
     let path = crate::config::control_socket_path();
     let _ = std::fs::remove_file(&path);

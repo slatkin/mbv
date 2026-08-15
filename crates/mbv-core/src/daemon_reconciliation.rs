@@ -24,12 +24,14 @@ fn stop_old_emby_run(player: &Player) -> bool {
     !player.status.lock().unwrap().active
 }
 
-fn purge_emby_queue(queue: &mut PlaybackQueue) -> Vec<QueueItem> {
+/// Drop slots matching `drop` from the canonical queue, retaining the active
+/// slot only if it survived. Returns the retained items.
+fn purge_queue(queue: &mut PlaybackQueue, drop: impl Fn(&QueueItem) -> bool) -> Vec<QueueItem> {
     let active = queue.active_slot_id();
     let retained: Vec<_> = queue
         .slots()
         .iter()
-        .filter(|slot| !matches!(slot.item, QueueItem::Emby(_)))
+        .filter(|slot| !drop(&slot.item))
         .map(|slot| (slot.slot_id, slot.item.clone()))
         .collect();
     let active = active.filter(|id| retained.iter().any(|(slot_id, _)| slot_id == id));
@@ -92,7 +94,7 @@ fn reconcile_packaged_emby(
         if active_old_emby && !stop_old_emby_run(player) {
             return Err(ServiceSetupRejection::TransitionRejected);
         }
-        let items = purge_emby_queue(queue);
+        let items = purge_queue(queue, |item| matches!(item, QueueItem::Emby(_)));
         let active_index = queue.active_index();
         *source = if items.is_empty() {
             QueueSource::Unknown
@@ -131,7 +133,7 @@ fn reconcile_packaged_emby(
     std::thread::spawn({
         let direct_commands = direct_commands.to_vec();
         let next_client = next.client.lock().unwrap().clone();
-        move || register_capabilities(&next_client, &direct_commands, audio_only)
+        move || next_client.register_capabilities_with_options(&direct_commands, audio_only)
     });
     let merged_tx = merged_tx.clone();
     std::thread::spawn(move || {
@@ -168,7 +170,7 @@ fn reconcile_packaged_audiobookshelf(
         if !finalize_active_audiobookshelf(player, queue) {
             return Err(ServiceSetupRejection::TransitionRejected);
         }
-        let items = purge_audiobookshelf_queue(queue);
+        let items = purge_queue(queue, |item| matches!(item, QueueItem::Audiobookshelf(_)));
         let active_index = queue.active_index();
         *source = if items.is_empty() {
             QueueSource::Unknown
@@ -194,7 +196,7 @@ fn reconcile_packaged_audiobookshelf(
         if !finalize_active_audiobookshelf(player, queue) {
             return Err(ServiceSetupRejection::TransitionRejected);
         }
-        let items = purge_audiobookshelf_queue(queue);
+        let items = purge_queue(queue, |item| matches!(item, QueueItem::Audiobookshelf(_)));
         let active_index = queue.active_index();
         *source = if items.is_empty() {
             QueueSource::Unknown
@@ -237,20 +239,4 @@ fn finalize_active_audiobookshelf(player: &Player, queue: &PlaybackQueue) -> boo
     player.stop_for_shutdown(remaining(deadline));
     player.join_or_timeout(remaining(deadline));
     !player.status.lock().unwrap().active
-}
-
-/// Drop Audiobookshelf slots from the canonical queue, retaining the active
-/// slot only if it survived. Returns the retained items.
-fn purge_audiobookshelf_queue(queue: &mut PlaybackQueue) -> Vec<QueueItem> {
-    let active = queue.active_slot_id();
-    let retained: Vec<_> = queue
-        .slots()
-        .iter()
-        .filter(|slot| !matches!(slot.item, QueueItem::Audiobookshelf(_)))
-        .map(|slot| (slot.slot_id, slot.item.clone()))
-        .collect();
-    let active = active.filter(|id| retained.iter().any(|(slot_id, _)| slot_id == id));
-    let revision = queue.revision();
-    *queue = PlaybackQueue::from_slot_items(retained.clone(), active, revision);
-    retained.into_iter().map(|(_, item)| item).collect()
 }
