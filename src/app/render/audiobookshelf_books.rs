@@ -1,23 +1,41 @@
 use super::list::{hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS};
-use super::list_rows::{
-    draw_column_selection_markers, focused_or_subtle, item_cell_spans, SELECTED_BLOCK_SIDE_PADDING,
-};
+use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::images::audiobookshelf_book_cover_cache_key;
 use crate::app::layout::LayoutMain;
-use crate::app::library_column_width::{
-    library_cell_width, library_column_count, LIBRARY_COLUMN_GAP,
-};
 use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use crate::app::ui_util::{fmt_duration_approx, trunc_str};
 use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Cell, List, ListItem, Paragraph, Row, Table, TableState};
+use ratatui::widgets::{Block, Cell, Paragraph, Row, Table, TableState};
 use ratatui::Frame;
+
+/// Padding inside recessed wide-book blocks, matching Music's wide layout
+/// (`music_wide.rs::PANE_PAD_X`/`PANE_PAD_Y`) -- duplicated rather than
+/// shared per this change's design (two consumers isn't yet a strong case
+/// for extraction).
+pub(super) const PANE_PAD_X: u16 = 2;
+pub(super) const PANE_PAD_Y: u16 = 1;
+/// Empty columns separating the wide hero+chapters and browser panes.
+const WIDE_PANE_GAP: u16 = 2;
+/// Minimum pane width, matching Music's wide layout.
+const MIN_PANE_WIDTH: u16 = 40;
+/// Minimum outer area width and height for the wide two-pane layout; below
+/// this the caller falls back to the narrow hero-on-top renderer.
+const MIN_WIDE_AREA_HEIGHT: u16 = 6;
+/// Blank row separating the hero from the chapter list in the wide left pane.
+const LEFT_SEPARATOR_ROWS: u16 = 1;
+/// Height of the bucket-pill row inside the right pane.
+pub(super) const PILLS_ROW_HEIGHT: u16 = 1;
+/// Blank rows below the pills before the book list starts.
+pub(super) const PILLS_GAP_ROWS: u16 = 1;
+
 /// The book tab's persistent list renders one row per chapter from the
 /// selected book's `chapters[]` (or its `audioFiles` when `chapters[]` is
-/// empty). The browser above it is the author-surname-grouped book list.
+/// empty). The right pane is the alphabetical-bucket-filtered book browser.
+/// Both panes are always visible (book-browsing spec: "Book libraries use
+/// the Music tab composition").
 impl App {
     pub(super) fn render_audiobookshelf_books(
         &mut self,
@@ -26,6 +44,7 @@ impl App {
         focused: bool,
         layout: &mut LayoutMain,
     ) {
+        layout.audiobookshelf_book_right_area = Rect::default();
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -33,74 +52,197 @@ impl App {
             super::render_placeholder(f, area, "Audiobookshelf loading…");
             return;
         };
-
-        let cols = library_column_count(area.width);
-        // Chapter selection renders the hero (title/author/cover/progress) +
-        // chapter rows; otherwise the author-surname book browser.
-        if state.chapter_selection.is_some() {
-            // Music-style composition: hero-on-left, list-on-right at the
-            // same two-column breakpoint the Music tab uses; hero-on-top
-            // below it (never the always-vertical podcast hero).
-            if area.width >= TWO_COLUMN_THRESHOLD {
-                let hero_col_width = ((area.width as u32 * 2 / 5) as u16)
-                    .max(12)
-                    .min(area.width.saturating_sub(12));
-                let hero_area = Rect {
-                    x: area.x,
-                    y: area.y,
-                    width: hero_col_width,
-                    height: area.height.saturating_sub(1),
-                };
-                let list_area = Rect {
-                    x: area.x + hero_col_width + 2,
-                    y: area.y,
-                    width: area.width.saturating_sub(hero_col_width + 2),
-                    height: area.height.saturating_sub(1),
-                };
-                layout.hero_area = hero_area;
-                layout.left_area = list_area;
-                if hero_area.width > 0 && hero_area.height > 0 {
-                    self.render_audiobookshelf_book_hero(f, hero_area, index, focused, layout);
-                }
-                if list_area.width > 0 && list_area.height > 0 {
-                    self.render_audiobookshelf_book_rows(f, list_area, &state, focused, layout);
-                }
-                return;
-            }
-            let desired_rows =
-                self.audiobookshelf_book_hero_rows(&state, cols > 1) + HERO_BLOCK_EXTRA_ROWS;
-            let top = top_hero_layout(area, desired_rows, false);
-            layout.hero_area = top.hero_area;
-            layout.left_area = top.list_area;
-            if top.hero_rows > 0 {
-                hero_block_shell(f, top.hero_area, top.hero_rows, focused);
-                let content = Rect {
-                    x: top.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                    y: top.hero_area.y + 2,
-                    width: top
-                        .hero_area
-                        .width
-                        .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-                    height: top.hero_rows - HERO_BLOCK_EXTRA_ROWS,
-                };
-                self.render_audiobookshelf_book_hero(f, content, index, focused, layout);
-            }
-            self.render_audiobookshelf_book_rows(f, top.list_area, &state, focused, layout);
+        if state.books.is_empty() {
+            super::render_placeholder(
+                f,
+                area,
+                state
+                    .error
+                    .as_deref()
+                    .unwrap_or(if state.loading_pages.is_empty() {
+                        "No audiobooks"
+                    } else {
+                        "Loading audiobooks…"
+                    }),
+            );
             return;
         }
 
-        self.render_audiobookshelf_book_browser(f, area, index, focused, cols, layout);
+        let chapters_focused = state.chapter_selection.is_some();
+        let left_focused = focused && chapters_focused;
+        let right_focused = focused && !chapters_focused;
+
+        if area.width >= TWO_COLUMN_THRESHOLD
+            && area.height.saturating_sub(1) >= MIN_WIDE_AREA_HEIGHT
+        {
+            self.render_wide_audiobookshelf_books(
+                f,
+                area,
+                index,
+                &state,
+                left_focused,
+                right_focused,
+                layout,
+            );
+            return;
+        }
+        self.render_narrow_audiobookshelf_books(
+            f,
+            area,
+            index,
+            &state,
+            left_focused,
+            right_focused,
+            layout,
+        );
     }
 
-    fn audiobookshelf_book_hero_rows(
-        &self,
+    fn render_wide_audiobookshelf_books(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        index: usize,
         state: &AudiobookshelfBookBrowseState,
-        show_title: bool,
-    ) -> u16 {
-        let mut rows = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
+        left_focused: bool,
+        right_focused: bool,
+        layout: &mut LayoutMain,
+    ) {
+        let content_area = Rect {
+            height: area.height.saturating_sub(1),
+            ..area
+        };
+        let (mut left_panel, right_panel) = book_wide_panes(area);
+        left_panel.height = content_area.height;
+
+        // Library-side separator row below the left pane, matching Music.
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+            Rect {
+                x: left_panel.x,
+                y: left_panel.bottom(),
+                width: left_panel.width,
+                height: 1,
+            },
+        );
+
+        let left_area = inset_pane_vertically(left_panel);
+        let right_area = inset_pane_vertically(right_panel);
+
+        let left_bg = if left_focused {
+            palette::BG_GREEN
+        } else {
+            palette::PLAYBACK_PANEL_BG
+        };
+        f.render_widget(
+            Block::default().style(Style::default().bg(left_bg)),
+            left_panel,
+        );
+
+        let hero_content_area = Rect {
+            x: left_area.x.saturating_add(PANE_PAD_X),
+            width: left_area.width.saturating_sub(PANE_PAD_X * 2),
+            ..left_area
+        };
+        let hero_rows_wanted = self.audiobookshelf_book_hero_rows(state) + 1; // +1 trailing blank
+        let sep = if hero_content_area.height > hero_rows_wanted + LEFT_SEPARATOR_ROWS {
+            LEFT_SEPARATOR_ROWS
+        } else {
+            0
+        };
+        let hero_h = hero_rows_wanted.min(hero_content_area.height.saturating_sub(sep));
+        let hero_area = Rect {
+            height: hero_h,
+            ..hero_content_area
+        };
+        let chapters_area = Rect {
+            y: hero_content_area.y + hero_h + sep,
+            height: hero_content_area.height.saturating_sub(hero_h + sep),
+            ..hero_content_area
+        };
+
+        layout.left_area = left_area;
+        layout.hero_area = hero_area;
+        if hero_area.width > 0 && hero_area.height > 0 {
+            self.render_audiobookshelf_book_hero(f, hero_area, index, left_focused, layout);
+        }
+        if chapters_area.width > 0 && chapters_area.height > 0 {
+            self.render_audiobookshelf_book_rows(f, chapters_area, state, left_focused, layout);
+        }
+
+        layout.audiobookshelf_book_right_area = right_area;
+        self.render_audiobookshelf_book_right_pane_wide(
+            f,
+            right_panel,
+            right_area,
+            index,
+            right_focused,
+            layout,
+        );
+    }
+
+    fn render_narrow_audiobookshelf_books(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        index: usize,
+        state: &AudiobookshelfBookBrowseState,
+        left_focused: bool,
+        right_focused: bool,
+        layout: &mut LayoutMain,
+    ) {
+        let desired_rows = self.audiobookshelf_book_hero_rows(state) + HERO_BLOCK_EXTRA_ROWS;
+        let top = top_hero_layout(area, desired_rows, false);
+        layout.hero_area = top.hero_area;
+        if top.hero_rows > 0 {
+            hero_block_shell(f, top.hero_area, top.hero_rows, left_focused);
+            let content = Rect {
+                x: top.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
+                y: top.hero_area.y + 2,
+                width: top
+                    .hero_area
+                    .width
+                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
+                height: top.hero_rows - HERO_BLOCK_EXTRA_ROWS,
+            };
+            self.render_audiobookshelf_book_hero(f, content, index, left_focused, layout);
+        }
+
+        // The remaining area below the hero stacks the chapter list (the
+        // left pane's persistent list) above the bucket-pill row and the
+        // book browser (the right pane), since a narrow terminal has no
+        // room for a horizontal split -- both stay rendered per the
+        // book-browsing spec's narrow-terminal fallback.
+        let remaining = top.list_area;
+        let chapters_h = (remaining.height as u32 * 2 / 5) as u16;
+        let chapters_area = Rect {
+            height: chapters_h,
+            ..remaining
+        };
+        let browser_area = Rect {
+            y: remaining.y + chapters_h,
+            height: remaining.height.saturating_sub(chapters_h),
+            ..remaining
+        };
+        layout.left_area = chapters_area;
+        if chapters_area.height > 0 {
+            self.render_audiobookshelf_book_rows(f, chapters_area, state, left_focused, layout);
+        }
+
+        layout.audiobookshelf_book_right_area = browser_area;
+        self.render_audiobookshelf_book_right_pane_narrow(
+            f,
+            browser_area,
+            index,
+            right_focused,
+            layout,
+        );
+    }
+
+    fn audiobookshelf_book_hero_rows(&self, state: &AudiobookshelfBookBrowseState) -> u16 {
+        let mut rows = HERO_TITLE_ROWS;
         let book = state.selected_book();
         rows += book.and_then(|book| book.author_display.as_ref()).is_some() as u16;
-        rows += 2; // progress row + trailing blank
+        rows += 1; // progress row
         rows
     }
 
@@ -231,7 +373,9 @@ impl App {
     }
 
     /// Chapter (or audioFiles) rows for the selected book: the persistent
-    /// list area's provider-native content.
+    /// list area's provider-native content, always rendered below the hero
+    /// (Music's track-list analog; book-browsing spec: "Chapters render as
+    /// first-class rows in the persistent list").
     fn render_audiobookshelf_book_rows(
         &self,
         f: &mut Frame,
@@ -315,92 +459,39 @@ impl App {
             &mut table_state,
         );
     }
+}
 
-    /// Author-surname-grouped book browser (the persistent grid when no
-    /// chapter selection is active).
-    fn render_audiobookshelf_book_browser(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        index: usize,
-        focused: bool,
-        cols: usize,
-        layout: &mut LayoutMain,
-    ) {
-        let state = &mut self.audiobookshelf_book_browse[index];
-        if state.books.is_empty() {
-            super::render_placeholder(
-                f,
-                area,
-                state
-                    .error
-                    .as_deref()
-                    .unwrap_or(if state.loading_pages.is_empty() {
-                        "No audiobooks"
-                    } else {
-                        "Loading audiobooks…"
-                    }),
-            );
-            return;
-        }
-        let cursor = state.cursor();
-        let rows = state
-            .books
-            .iter()
-            .enumerate()
-            .collect::<Vec<_>>()
-            .chunks(cols.max(1))
-            .map(|chunk| chunk.iter().map(|(i, _)| *i).collect::<Vec<_>>())
-            .collect::<Vec<_>>();
-        let cursor_row = rows
-            .iter()
-            .position(|row| row.contains(&cursor))
-            .unwrap_or(0);
-        let visible = area.height as usize;
-        let lower = (cursor_row + 1).saturating_sub(visible).min(cursor_row);
-        state.scroll = state.scroll.clamp(lower, cursor_row);
-        let scroll = state.scroll;
-        let cell_width = library_cell_width(area, cols) as usize;
-        let items = rows
-            .iter()
-            .skip(scroll)
-            .take(if visible == 0 { 0 } else { visible })
-            .map(|indices| {
-                let mut spans = Vec::new();
-                for (cell, book_index) in indices.iter().enumerate() {
-                    let selected = *book_index == cursor;
-                    let title = trunc_str(
-                        &state.books[*book_index].title,
-                        cell_width.saturating_sub(2),
-                    );
-                    let pad_to = if cell + 1 == indices.len() {
-                        cell_width
-                    } else {
-                        cell_width + LIBRARY_COLUMN_GAP as usize
-                    };
-                    spans.extend(item_cell_spans(
-                        title,
-                        String::new(),
-                        selected,
-                        focused,
-                        focused_or_subtle(focused),
-                        pad_to,
-                        cols,
-                    ));
-                }
-                ListItem::new(Line::from(spans))
-            })
-            .collect::<Vec<_>>();
-        layout.left_row_map = rows
-            .iter()
-            .skip(scroll)
-            .take(if visible == 0 { 0 } else { visible })
-            .map(|row| row.first().copied())
-            .collect();
-        layout.left_item_rows = rows;
-        layout.left_screen_offset = scroll;
-        layout.cursor_screen_y = Some(area.y + cursor_row.saturating_sub(scroll) as u16);
-        f.render_widget(List::new(items), area);
-        draw_column_selection_markers(f, area, cursor, cols, &layout.left_item_rows, scroll);
+/// Returns `(left_pane, right_pane)` for the wide two-column split, matching
+/// Music's `wide_music_panes` ratio (40/60, `MIN_PANE_WIDTH`-clamped, with a
+/// `WIDE_PANE_GAP`-column gap).
+fn book_wide_panes(content_area: Rect) -> (Rect, Rect) {
+    let left_w = ((content_area.width as u32 * 2 / 5) as u16)
+        .max(MIN_PANE_WIDTH)
+        .min(content_area.width.saturating_sub(MIN_PANE_WIDTH));
+    let right_w = content_area
+        .width
+        .saturating_sub(left_w)
+        .saturating_sub(WIDE_PANE_GAP);
+    (
+        Rect {
+            x: content_area.x,
+            y: content_area.y,
+            width: left_w,
+            height: content_area.height,
+        },
+        Rect {
+            x: content_area.x + left_w + WIDE_PANE_GAP,
+            y: content_area.y,
+            width: right_w,
+            height: content_area.height,
+        },
+    )
+}
+
+fn inset_pane_vertically(area: Rect) -> Rect {
+    Rect {
+        y: area.y.saturating_add(PANE_PAD_Y),
+        height: area.height.saturating_sub(PANE_PAD_Y * 2),
+        ..area
     }
 }

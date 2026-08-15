@@ -207,13 +207,12 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
             "Enter / Space (in episode)",
             "Play episode (inert until #518)",
         ),
-        help_line(key_w, "Up / Down or k / j", "Move book rows"),
-        help_line(key_w, "Left / Right or h / l", "Adjacent books"),
-        help_line(key_w, "Enter", "Enter chapter selection"),
+        help_line(key_w, "Left / Right", "Focus chapters or books"),
+        help_line(key_w, "Up / Down or k / j", "Move focused rows"),
+        help_line(key_w, "[ / ]", "Switch author bucket"),
         help_line(key_w, "Space", "Play selected book"),
         help_line(key_w, "Ctrl+A", "Add selected book to queue"),
-        help_line(key_w, "Enter (in chapter)", "Seek to chapter start"),
-        help_line(key_w, "Esc / Backspace", "Return to book selection"),
+        help_line(key_w, "Enter (in chapters)", "Seek to chapter start"),
         help_blank(),
     ];
     let sec_feeds = vec![

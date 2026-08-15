@@ -104,6 +104,12 @@ pub(crate) struct LayoutMain {
     /// Bounding rect of the wide Music right pane (album browser).
     /// Populated only when the wide Music layout is active.
     pub wide_music_right_area: Rect,
+    /// Bounding rect of the Audiobookshelf book tab's right pane (bucket
+    /// pills + book browser). Populated whenever the book tab renders, in
+    /// both the wide two-column layout and the narrow hero-on-top fallback
+    /// -- unlike `wide_music_right_area`, both book panes are always
+    /// visible (book-browsing spec).
+    pub audiobookshelf_book_right_area: Rect,
     /// The destination (`self.tab`) the last completed render frame was drawn
     /// for. Set by `App::render` only on the layout that completes and is
     /// installed, never on intermediate drafts; the fresh-frame replacement
@@ -137,6 +143,9 @@ impl LayoutMain {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum LibraryRowTarget {
     Album(usize),
+    /// A book row in the Audiobookshelf book tab's right-pane browser,
+    /// carrying the book's index into the surname-sorted `books` list.
+    Book(usize),
 }
 
 /// All per-frame layout geometry, grouped by the view that produces it.

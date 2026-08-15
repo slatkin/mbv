@@ -45,8 +45,9 @@ fn audiobookshelf_book_app() -> App {
 }
 
 /// Task 6.2: the book library tab exposure — its `media_type` forks to the
-/// book browse kind, Enter enters chapter selection, and the podcast browse
-/// state at the same index stays untouched.
+/// book browse kind, Left arrow focuses the hero's chapter list (replacing
+/// the old Enter-to-enter modal transition), and the podcast browse state at
+/// the same index stays untouched.
 #[test]
 fn audiobookshelf_book_tab_dispatches_to_book_kind_not_podcast() {
     let mut app = audiobookshelf_book_app();
@@ -55,19 +56,19 @@ fn audiobookshelf_book_tab_dispatches_to_book_kind_not_podcast() {
         Some(super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book)
     );
 
-    let enter = crossterm::event::KeyEvent::new(
-        crossterm::event::KeyCode::Enter,
+    let left = crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Left,
         crossterm::event::KeyModifiers::NONE,
     );
     assert_eq!(
-        app.handle_key_view_dispatch(enter),
+        app.handle_key_view_dispatch(left),
         Some(false),
-        "Enter must be consumed by the book handler"
+        "Left arrow must be consumed by the book handler"
     );
     assert_eq!(
         app.audiobookshelf_book_browse[0].chapter_selection,
         Some(0),
-        "Enter on a selected book must enter chapter selection"
+        "Left arrow on a selected book must focus the hero's chapter list"
     );
     assert!(
         app.audiobookshelf_browse.is_empty(),

@@ -99,6 +99,8 @@ impl App {
                     }
                 }
             }
+            // `music_group_navigation` (Emby-only) never produces this.
+            LibraryRowTarget::Book(_) => {}
         }
         true
     }
@@ -145,6 +147,8 @@ impl App {
                     self.libs[lib_idx].album_track_focus = None;
                 }
             }
+            // `music_group_navigation` (Emby-only) never produces this.
+            LibraryRowTarget::Book(_) => {}
         }
         true
     }
@@ -200,6 +204,8 @@ impl App {
                         }
                     }
                 }
+                // `music_group_navigation` (Emby-only) never produces this.
+                LibraryRowTarget::Book(_) => {}
             }
         }
         if idle {

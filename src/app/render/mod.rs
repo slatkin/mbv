@@ -5,6 +5,7 @@ mod album_detail;
 mod album_plan;
 mod album_rows;
 mod audiobookshelf;
+mod audiobookshelf_book_browser;
 mod audiobookshelf_books;
 mod card;
 mod chrome;
@@ -686,6 +687,9 @@ mod album_focus_tests;
 #[cfg(test)]
 #[path = "tests_album_listing.rs"]
 mod album_listing_tests;
+#[cfg(test)]
+#[path = "tests_audiobookshelf_books.rs"]
+mod audiobookshelf_book_tests;
 #[cfg(test)]
 #[path = "tests_music_groups.rs"]
 mod music_group_tests;
