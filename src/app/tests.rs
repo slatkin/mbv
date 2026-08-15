@@ -599,6 +599,30 @@ pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<EmbyItem>) -> App {
 
 // ── cursor preservation during home refresh ──────────────────────────────
 
+/// Builds a `UnifiedQueueStateData` holding `items` as Emby slots, with slot
+/// `active_index` marked active — the shape a daemon broadcast after a queue
+/// mutation (cursor follows the active slot; pending client cursors override).
+pub(crate) fn emby_unified_state(
+    items: Vec<EmbyItem>,
+    active_index: usize,
+) -> mbv_core::ctrl::UnifiedQueueStateData {
+    let slots: Vec<mbv_core::ctrl::UnifiedQueueSlot> = items
+        .into_iter()
+        .enumerate()
+        .map(|(i, item)| mbv_core::ctrl::UnifiedQueueSlot {
+            slot_id: (100 + i) as u64,
+            item: mbv_core::playback_queue::QueueItem::Emby(Box::new(item)),
+        })
+        .collect();
+    mbv_core::ctrl::UnifiedQueueStateData {
+        status: Default::default(),
+        active_slot: slots.get(active_index).map(|s| s.slot_id),
+        slots,
+        revision: 1,
+        source: crate::config::QueueSource::Remote,
+    }
+}
+
 pub(crate) fn sections(n: usize) -> Vec<(String, String, Vec<EmbyItem>, usize)> {
     (0..n)
         .map(|i| (format!("Sec {i}"), format!("lib{i}"), make_items(3), 0))

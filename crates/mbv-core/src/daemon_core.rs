@@ -428,8 +428,7 @@ impl PlaybackIntentState {
 
 /// Snapshot of the daemon's canonical queue used to seed newly-connecting
 /// ctrl-socket clients.  The queue itself is the single source of truth;
-/// legacy `CtrlState` and capable `UnifiedQueueState` are both derived from
-/// it at the broadcast boundary.
+/// `UnifiedQueueState` is derived from it at the broadcast boundary.
 #[derive(Clone)]
 struct SharedQueueState {
     queue: Arc<Mutex<PlaybackQueue>>,

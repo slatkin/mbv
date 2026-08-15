@@ -279,13 +279,6 @@ impl PlayerProxy {
         }
     }
 
-    pub fn supports_unified_queue(&self) -> bool {
-        match &self.inner {
-            PlayerProxyInner::Local(_) => false,
-            PlayerProxyInner::Remote(r) => r.supports_unified_queue(),
-        }
-    }
-
     pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.queue_append(items),
@@ -299,7 +292,7 @@ impl PlayerProxy {
     }
 
     /// Remove a slot by stable identity on a remote peer that supports
-    /// unified queue.  Returns `false` for local players or legacy peers.
+    /// unified queue.  Returns `false` for local players.
     pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
@@ -308,7 +301,7 @@ impl PlayerProxy {
     }
 
     /// Move a slot by stable identity on a remote peer that supports
-    /// unified queue.  Returns `false` for local players or legacy peers.
+    /// unified queue.  Returns `false` for local players.
     pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
@@ -317,8 +310,7 @@ impl PlayerProxy {
     }
 
     /// Begin playback of an existing slot by stable identity on a remote
-    /// peer that supports unified queue.  Returns `false` for local
-    /// players or legacy peers.
+    /// peer that supports unified queue.  Returns `false` for local players.
     pub fn queue_play_slot(&self, slot_id: u64) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,

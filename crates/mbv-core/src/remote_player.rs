@@ -287,10 +287,6 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_lifecycle_shutdown
     }
 
-    pub fn supports_unified_queue(&self) -> bool {
-        self.ctrl_compatibility.supports_unified_queue
-    }
-
     pub fn unified_queue_state(&self) -> Option<crate::ctrl::UnifiedQueueStateData> {
         self.unified_queue.lock().unwrap().clone()
     }

@@ -191,12 +191,6 @@ pub enum PlayerEvent {
     QueueNextUp {
         next_idx: usize,
     },
-    /// Emitted by RemotePlayer when CtrlState arrives so App can sync player_tab.
-    QueueUpdated {
-        items: Vec<crate::api::EmbyItem>,
-        cursor: usize,
-        source: crate::config::QueueSource,
-    },
     /// Emitted by RemotePlayer when a `UnifiedQueueState` arrives so App can
     /// sync the full canonical queue (tagged QueueItems, slot identity, active
     /// slot, revision) without decomposing into legacy Emby-only shapes.

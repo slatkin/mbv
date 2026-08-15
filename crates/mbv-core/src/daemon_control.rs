@@ -356,7 +356,7 @@ fn handle_ctrl(
             // `send_command` alone only reaches an already-running mpv
             // thread; on a freshly started daemon no thread exists yet, so
             // route through `submit_queue`, which cold-starts one when
-            // needed (matches the legacy PlayItems path via play/play_queue).
+            // needed (as `play_resolved_items` does).
             let queue_items: Vec<QueueItem> =
                 queue.slots().iter().map(|s| s.item.clone()).collect();
             let all_audio = queue_items.iter().all(|item| item.is_audio());

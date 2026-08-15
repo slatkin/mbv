@@ -245,7 +245,7 @@ impl App {
         let all_items = self.playback_queue().all_queue_items();
         let start_idx = self.playback_queue().queue_cursor;
         let headless = all_items.iter().all(QueueItem::is_audio);
-        if existing_idx.is_some() && self.player.supports_unified_queue() {
+        if existing_idx.is_some() && self.player.is_remote() {
             let slot_id = self
                 .playback_queue()
                 .slot_id_at(unified_idx)

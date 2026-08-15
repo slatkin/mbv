@@ -359,18 +359,11 @@ fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
 fn current_hello_advertises_unified_queue_capability() {
     let hello = CtrlHello::current();
     assert!(
-        hello.supports_unified_queue(),
+        hello
+            .capabilities
+            .contains(&CTRL_CAP_UNIFIED_QUEUE.to_string()),
         "CtrlHello::current() must advertise unified-queue capability"
     );
-}
-
-#[test]
-fn hello_without_unified_queue_detected() {
-    let mut hello = CtrlHello::current();
-    hello
-        .capabilities
-        .retain(|cap| cap != CTRL_CAP_UNIFIED_QUEUE);
-    assert!(!hello.supports_unified_queue());
 }
 
 #[test]
@@ -551,12 +544,6 @@ fn unified_queue_state_event_round_trips() {
         }
         _ => panic!("expected UnifiedQueueState"),
     }
-}
-
-#[test]
-fn ctrl_compatibility_current_supports_unified_queue() {
-    let compat = CtrlCompatibility::current();
-    assert!(compat.supports_unified_queue);
 }
 
 // Guards for task 4.2: capability advertisement is static protocol support —

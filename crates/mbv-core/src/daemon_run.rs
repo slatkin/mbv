@@ -124,8 +124,7 @@ pub fn run_with_options(
     install_daemon_audiobookshelf_context(&player, &audiobookshelf_runtime, &merged_tx);
 
     // Shared state for ctrl socket initial-state snapshots — stores the
-    // canonical queue so both legacy and unified-queue peers are seeded
-    // from one source.
+    // canonical queue so all ctrl peers are seeded from one source.
     let shared_queue = SharedQueueState {
         queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
@@ -340,8 +339,7 @@ pub fn run_with_options(
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::TrackChanged(clamped_idx)),
                 );
-                // Broadcast full state so both legacy and capable peers see
-                // the authoritative playback position.
+                // Broadcast full state so peers see the authoritative playback position.
                 let status = player.status.lock().unwrap().clone();
                 let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
                     &status, &queue, &source, true,

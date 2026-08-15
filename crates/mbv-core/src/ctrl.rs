@@ -114,12 +114,6 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_LIFECYCLE_SHUTDOWN)
     }
 
-    pub fn supports_unified_queue(&self) -> bool {
-        self.capabilities
-            .iter()
-            .any(|cap| cap == CTRL_CAP_UNIFIED_QUEUE)
-    }
-
     pub fn supports_control_auth(&self) -> bool {
         self.capabilities
             .iter()
@@ -165,7 +159,6 @@ pub struct CtrlCompatibility {
     pub client_protocol_version: u32,
     pub supports_queue_append: bool,
     pub supports_lifecycle_shutdown: bool,
-    pub supports_unified_queue: bool,
     pub supports_control_auth: bool,
     pub supports_abs_queue: bool,
     pub supports_abs_progress: bool,
@@ -179,7 +172,6 @@ impl CtrlCompatibility {
                 client_protocol_version: CTRL_PROTOCOL_VERSION,
                 supports_queue_append: true,
                 supports_lifecycle_shutdown: false,
-                supports_unified_queue: true,
                 supports_control_auth: true,
                 supports_abs_queue: true,
                 supports_abs_progress: true,
