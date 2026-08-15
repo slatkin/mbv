@@ -7,12 +7,6 @@ use crate::shared_store::FeedEntryState;
 
 /// Requests sent to the storage worker.
 pub enum SharedStoreRequest {
-    /// Read a single document.
-    Read {
-        user_id: String,
-        kind: SharedDocumentKind,
-        reply: mpsc::Sender<Result<Option<SharedRecord>, String>>,
-    },
     /// Read all four documents for a user (snapshot).
     ReadAll {
         user_id: String,
@@ -65,24 +59,6 @@ pub struct SharedStoreHandle {
 }
 
 impl SharedStoreHandle {
-    pub fn read(
-        &self,
-        user_id: &str,
-        kind: SharedDocumentKind,
-    ) -> Result<Option<SharedRecord>, String> {
-        let (reply_tx, reply_rx) = mpsc::channel();
-        self.tx
-            .send(SharedStoreRequest::Read {
-                user_id: user_id.to_string(),
-                kind,
-                reply: reply_tx,
-            })
-            .map_err(|_| "storage worker shut down".to_string())?;
-        reply_rx
-            .recv()
-            .map_err(|_| "storage worker reply channel closed".to_string())?
-    }
-
     pub fn read_all(&self, user_id: &str) -> Result<SharedDocumentTuple, String> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.tx
@@ -219,17 +195,6 @@ pub fn spawn_shared_store_worker(db: Arc<Mutex<Database>>) -> SharedStoreHandle 
         while let Ok(req) = rx.recv() {
             let db = db.lock().unwrap();
             match req {
-                SharedStoreRequest::Read {
-                    user_id,
-                    kind,
-                    reply,
-                } => {
-                    let result = crate::shared_store::read_document(&db, &user_id, kind);
-                    if let Err(error) = &result {
-                        log::warn!(target: "shared_data", "read document failed: {error}");
-                    }
-                    let _ = reply.send(result);
-                }
                 SharedStoreRequest::ReadAll { user_id, reply } => {
                     let result = crate::shared_store::read_all_documents(&db, &user_id);
                     if let Err(error) = &result {

@@ -47,56 +47,6 @@ pub struct SharedRecord {
     pub value: serde_json::Value,
 }
 
-/// Minimal envelope used for CAS operations in the storage worker.
-/// The caller sends the expected revision; the worker compares it against
-/// the current record.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SharedReadRequest {
-    pub kind: SharedDocumentKind,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SharedReadResponse {
-    pub kind: SharedDocumentKind,
-    pub record: Option<SharedRecord>,
-}
-
-/// Create-if-absent: the document must not already exist.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SharedCreateRequest {
-    pub kind: SharedDocumentKind,
-    pub value: serde_json::Value,
-}
-
-/// Update with expected revision (CAS). If the expected revision does not
-/// match the current record, the update is rejected.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SharedUpdateRequest {
-    pub kind: SharedDocumentKind,
-    pub expected_revision: u64,
-    pub value: serde_json::Value,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum SharedWriteOutcome {
-    /// The write was committed; the record carries the new revision.
-    Committed(SharedRecord),
-    /// The write was rejected because the expected revision was stale.
-    /// The payload is the current winning record.
-    StaleWrite { current: SharedRecord },
-    /// The document did not exist and the creation was committed.
-    Created(SharedRecord),
-    /// The document already exists; creation was rejected.
-    /// The payload is the existing record.
-    AlreadyExists { current: SharedRecord },
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SharedWriteResponse {
-    pub kind: SharedDocumentKind,
-    pub outcome: SharedWriteOutcome,
-}
-
 /// Full snapshot returned to a client on initial connection.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SharedSnapshotResponse {
@@ -104,15 +54,6 @@ pub struct SharedSnapshotResponse {
     pub library_position_state: Option<SharedRecord>,
     pub last_remote_connection: Option<SharedRecord>,
     pub roaming_settings: Option<SharedRecord>,
-}
-
-/// Notification broadcast to other same-user shared-data clients after a
-/// committed write. Recipients compare revisions to avoid overwriting
-/// newer state.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SharedDocumentNotification {
-    pub kind: SharedDocumentKind,
-    pub record: SharedRecord,
 }
 
 /// Roaming settings stored in the shared database and mirrored locally.
