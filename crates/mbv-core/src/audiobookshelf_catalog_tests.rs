@@ -87,6 +87,11 @@ fn newest_episodes_shelf_wire_carries_the_embedded_payload() {
     );
     assert_eq!(first.cover_path.as_deref(), Some("/api/items/show-2/cover"));
     assert_eq!(first.pub_date_secs, Some(1_700_000_000));
+    assert_eq!(
+        first.description.as_deref(),
+        Some("An episode about testing shelf parsing."),
+        "recentEpisode.description is carried for the Home hero"
+    );
     let AudiobookshelfShelfEntry::Episode(second) = &mapped[1] else {
         panic!("second episode entry is an episode");
     };

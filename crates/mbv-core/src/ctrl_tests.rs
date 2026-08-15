@@ -602,6 +602,7 @@ fn audiobookshelf_queue_item_wire_fields_exact() {
         title: "Episode 1".to_string(),
         show_title: Some("My Podcast".to_string()),
         author: Some("Author".to_string()),
+        description: None,
         duration_ticks: Some(600_000_000),
         position_ticks: 0,
         played: false,
@@ -618,6 +619,7 @@ fn audiobookshelf_queue_item_wire_fields_exact() {
         [
             "author",
             "cover_path",
+            "description",
             "duration_ticks",
             "episodeId",
             "is_finished",

@@ -43,6 +43,7 @@ fn audiobookshelf_episode(library_item_id: &str, episode_id: &str) -> Audiobooks
         title: "ABS episode".into(),
         show_title: Some("Show".into()),
         author: Some("Author".into()),
+        description: None,
         duration_ticks: Some(120 * TICKS_PER_SECOND as u64),
         position_ticks: 30 * TICKS_PER_SECOND,
         played: false,

@@ -185,6 +185,7 @@ fn audiobookshelf_item() -> QueueItem {
         title: "Episode 1".into(),
         show_title: Some("Show".into()),
         author: None,
+        description: None,
         duration_ticks: Some(100),
         position_ticks: 0,
         played: false,

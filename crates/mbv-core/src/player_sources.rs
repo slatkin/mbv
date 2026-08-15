@@ -376,6 +376,7 @@ mod source_tests {
             title: "Title".into(),
             show_title: None,
             author: None,
+        description: None,
             duration_ticks: Some(100),
             position_ticks: 99,
             played: true,

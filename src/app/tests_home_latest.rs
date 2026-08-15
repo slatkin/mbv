@@ -36,6 +36,7 @@ fn abs_episode(id: &str) -> AudiobookshelfQueueItem {
         title: format!("Episode {id}"),
         show_title: Some("Podcast".into()),
         author: None,
+        description: None,
         duration_ticks: None,
         position_ticks: 0,
         played: false,

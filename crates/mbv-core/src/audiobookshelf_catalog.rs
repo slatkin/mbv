@@ -254,6 +254,8 @@ struct RecentEpisodeWire {
     id: String,
     #[serde(default)]
     title: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
     #[serde(rename = "publishedAt", default)]
     published_at: Option<serde_json::Value>,
     #[serde(rename = "audioFile", default)]
@@ -291,6 +293,7 @@ fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShelfEntry {
             .unwrap_or_default(),
         show_title: metadata.and_then(|m| m.title.clone()),
         author: metadata.and_then(|m| m.author.clone()),
+        description: recent_episode.description.clone(),
         duration_ticks: duration_seconds
             .map(|seconds| (seconds * crate::api::TICKS_PER_SECOND as f64) as u64),
         position_ticks: 0,

@@ -42,6 +42,10 @@ pub struct AudiobookshelfQueueItem {
     pub show_title: Option<String>,
     #[serde(default)]
     pub author: Option<String>,
+    /// Episode synopsis/description, when the catalog carries one. Used by
+    /// Home's hero detail for Audiobookshelf rows.
+    #[serde(default)]
+    pub description: Option<String>,
     #[serde(default)]
     pub duration_ticks: Option<u64>,
     /// Playback position in ticks. Zero means start from the beginning.
@@ -337,6 +341,24 @@ impl QueueItem {
                 }
             }
             QueueItem::AudiobookshelfBook(book) => book.title.clone(),
+        }
+    }
+
+    /// A short synopsis/overview for the item, when one is available. Used by
+    /// Home's hero detail. Emby exposes its episode/movie overview; the other
+    /// providers return `None` unless their catalog carries a description.
+    pub fn overview(&self) -> Option<&str> {
+        match self {
+            QueueItem::Emby(item) => {
+                if item.overview.is_empty() {
+                    None
+                } else {
+                    Some(&item.overview)
+                }
+            }
+            QueueItem::Feed(_) => None,
+            QueueItem::Audiobookshelf(ep) => ep.description.as_deref(),
+            QueueItem::AudiobookshelfBook(_) => None,
         }
     }
 

@@ -28,6 +28,7 @@ fn abs_item() -> QueueItem {
         title: "Episode".into(),
         show_title: None,
         author: None,
+        description: None,
         duration_ticks: Some(100_u64),
         position_ticks: 0,
         played: false,

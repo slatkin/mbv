@@ -90,9 +90,14 @@ The user SHALL be able to select any item in any visible Latest pill using the e
 - **WHEN** the user plays an item from an Emby Latest pill or Continue Watching
 - **THEN** mbv SHALL use the existing Emby Home play routing unchanged
 
-### Requirement: Selected non-Emby Latest item shows a generic detail view
+### Requirement: Selected non-Emby Latest item shows a hero detail matching Emby's structure
 
-When the selected Home item is from an Audiobookshelf or Feed Latest pill, Home SHALL display its title, duration (if known), and cover art (if available), without depending on Emby-specific browse/navigation state.
+When the selected Home item is from an Audiobookshelf or Feed Latest pill, Home SHALL display a hero detail that follows the same structure as the Emby Keep Watching hero: yellow bold title, show name (for Audiobookshelf episodes), duration when known, and an overview when the item carries one, without depending on Emby-specific browse/navigation state.
+
+#### Scenario: Selecting an Audiobookshelf episode with a description
+
+- **WHEN** the selected Home item is an Audiobookshelf episode whose catalog response carries a `recentEpisode.description`
+- **THEN** Home SHALL display the episode title, its podcast/show name, its duration, and the episode description
 
 #### Scenario: Selecting a Feed entry with no known duration
 
