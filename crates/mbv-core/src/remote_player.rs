@@ -260,10 +260,6 @@ impl RemotePlayer {
         );
     }
 
-    pub fn join(&self) {
-        // No thread to join; daemon keeps running when TUI exits.
-    }
-
     /// Actively tears down the control-socket connection (#233): shuts
     /// down the shared underlying socket so the reader thread's blocking
     /// `read()` (inside `reader.lines()` in `connect_endpoint`) observes
