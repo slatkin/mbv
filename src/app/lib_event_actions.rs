@@ -172,42 +172,13 @@ impl App {
             }
             let position_ticks =
                 super::audiobookshelf_browse_actions::seconds_to_ticks(update.current_time_seconds);
-            let matching_slot_ids: Vec<_> = self
-                .player_tab
-                .queue
-                .slots()
-                .iter()
-                .filter_map(|slot| {
-                    slot.item.as_audiobookshelf().and_then(|episode| {
-                        (episode.library_item_id == update.library_item_id
-                            && episode.episode_id == update.episode_id)
-                            .then_some(slot.slot_id)
-                    })
-                })
-                .collect();
-            for slot_id in matching_slot_ids.iter().cloned() {
-                self.player_tab
-                    .queue
-                    .apply_progress(slot_id, position_ticks, update.is_finished);
-            }
-            let library_item_id = update.library_item_id.clone();
-            let episode_id = update.episode_id.clone();
-            let current_time_seconds = update.current_time_seconds;
-            let is_finished = update.is_finished;
-            for state in &mut self.audiobookshelf_browse {
-                state.progress.insert(
-                    (library_item_id.clone(), episode_id.clone()),
-                    mbv_core::audiobookshelf::AudiobookshelfProgress {
-                        library_item_id: library_item_id.clone(),
-                        episode_id: episode_id.clone(),
-                        current_time_seconds,
-                        is_finished,
-                    },
-                );
-            }
-            if !matching_slot_ids.is_empty() {
-                self.save_queue_state();
-            }
+            self.reconcile_audiobookshelf_progress(
+                &update.library_item_id,
+                &update.episode_id,
+                position_ticks,
+                update.current_time_seconds,
+                update.is_finished,
+            );
             return;
         }
         if let LibEvent::AudiobookshelfDetailFetched {
@@ -537,6 +508,56 @@ impl App {
             LibEvent::Error(e) => {
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }
+        }
+    }
+
+    /// Shared acknowledged-progress reconcile used by both the bare owner
+    /// (`LibEvent::AudiobookshelfProgressAcknowledged`) and a Local-daemon
+    /// client (`PlayerEvent::AudiobookshelfProgress`): matches queue slots by
+    /// provider-qualified identity, applies position/completion, writes every
+    /// browse state's progress map, and persists the queue. A no-match event
+    /// still updates browse state; only persistence is gated on a queue match.
+    /// Generation gating is the caller's concern: the bare owner gates on its
+    /// own runtime generation, while the daemon drops stale updates before
+    /// emitting, so the daemon client reconciles unconditionally.
+    pub(super) fn reconcile_audiobookshelf_progress(
+        &mut self,
+        library_item_id: &str,
+        episode_id: &str,
+        position_ticks: i64,
+        current_time_seconds: f64,
+        is_finished: bool,
+    ) {
+        let matching_slot_ids: Vec<_> = self
+            .player_tab
+            .queue
+            .slots()
+            .iter()
+            .filter_map(|slot| {
+                slot.item.as_audiobookshelf().and_then(|episode| {
+                    (episode.library_item_id == library_item_id && episode.episode_id == episode_id)
+                        .then_some(slot.slot_id)
+                })
+            })
+            .collect();
+        for slot_id in matching_slot_ids.iter().cloned() {
+            self.player_tab
+                .queue
+                .apply_progress(slot_id, position_ticks, is_finished);
+        }
+        for state in &mut self.audiobookshelf_browse {
+            state.progress.insert(
+                (library_item_id.to_string(), episode_id.to_string()),
+                mbv_core::audiobookshelf::AudiobookshelfProgress {
+                    library_item_id: library_item_id.to_string(),
+                    episode_id: episode_id.to_string(),
+                    current_time_seconds,
+                    is_finished,
+                },
+            );
+        }
+        if !matching_slot_ids.is_empty() {
+            self.save_queue_state();
         }
     }
 }

@@ -186,6 +186,111 @@ fn local_daemon_app_keeps_live_queue_over_stale_disk_snapshot() {
     assert_eq!(app.player_tab.emby_items()[0].id, remote_items[0].id);
 }
 
+// Task 4.1: A later capable client adopts the daemon's live Audiobookshelf
+// queue (active slot, position) over a stale saved local/shared disk snapshot,
+// and reconciles browse state on adoption via the daemon progress event path.
+#[test]
+fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
+    // Create a local daemon app with no Emby remote items so the live queue
+    // starts empty — we inject an ABS slot directly below.
+    let mut app = make_local_daemon_app_stub(Vec::new());
+
+    // Set up ABS browse state (mirrors audiobookshelf_app() setup).
+    let library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
+        id: "abs-podcasts".into(),
+        name: "ABS Podcasts".into(),
+        media_type: "podcast".into(),
+    };
+    let mut browse =
+        crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState::new(library.clone());
+    browse.episodes = Some(vec![
+        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            published_at: None,
+            duration_seconds: Some(300.0),
+        },
+    ]);
+    app.audiobookshelf_libraries.push(library);
+    app.audiobookshelf_browse.push(browse);
+
+    // Inject the live ABS queue slot (simulates the daemon broadcasting its
+    // queue to the newly attached client via PlayerEvent::UnifiedQueueUpdated).
+    let acknowledged_position_ticks = (30.0 * mbv_core::api::TICKS_PER_SECOND as f64) as i64;
+    let abs_item = mbv_core::playback_queue::QueueItem::Audiobookshelf(
+        mbv_core::playback_queue::AudiobookshelfQueueItem {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            show_title: None,
+            author: None,
+            duration_ticks: None,
+            position_ticks: acknowledged_position_ticks,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        },
+    );
+    app.player_tab.set_queue_items(vec![abs_item], 0);
+    assert_eq!(app.player_tab.total_queue_len(), 1);
+
+    // Save a stale disk snapshot (5 Emby items) — what a previous session left.
+    crate::config::save_queue_state(&crate::config::QueueState {
+        source: crate::config::QueueSource::Unknown,
+        items: make_items(5)
+            .into_iter()
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .collect(),
+        cursor: 0,
+        last_played_content_id: None,
+        last_played_item_id: None,
+        last_played_completed: false,
+        positions: Default::default(),
+    })
+    .expect("save stale queue state");
+
+    // The local-daemon guard must prevent the stale snapshot from clobbering
+    // the live adopted ABS queue.
+    app.maybe_restore_queue_state();
+
+    assert_eq!(
+        app.player_tab.total_queue_len(),
+        1,
+        "live ABS queue must survive maybe_restore_queue_state"
+    );
+    let ep = app.player_tab.queue.slots()[0]
+        .item
+        .as_audiobookshelf()
+        .expect("surviving slot must be an Audiobookshelf item");
+    assert_eq!(ep.library_item_id, "show-a");
+    assert_eq!(
+        ep.position_ticks, acknowledged_position_ticks,
+        "last-acknowledged position must not be clobbered by the stale snapshot"
+    );
+
+    // Browse reconcile: simulate the progress event the daemon sends when a
+    // client attaches (Decision-2 apply path).
+    let generation = app.audiobookshelf_runtime.generation();
+    app.handle_player_event(mbv_core::player::PlayerEvent::AudiobookshelfProgress(
+        mbv_core::ctrl::AudiobookshelfProgressEvent {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            position_ticks: acknowledged_position_ticks,
+            is_finished: false,
+            setup_generation: generation.value(),
+        },
+    ));
+
+    let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
+    assert_eq!(
+        progress.current_time_seconds, 30.0,
+        "browse must reflect the adopted acknowledged position"
+    );
+    assert!(!progress.is_finished);
+}
+
 #[test]
 fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
     let items: Vec<mbv_core::playback_queue::QueueItem> = make_items(3)
