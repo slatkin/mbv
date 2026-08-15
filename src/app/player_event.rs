@@ -526,8 +526,19 @@ impl App {
                     self.refresh_after_stop();
                 }
             }
-            PlayerEvent::AudiobookshelfProgress(_) => {
-                // Dormant: no browse-reconciliation consumer exists yet.
+            PlayerEvent::AudiobookshelfProgress(ev) => {
+                let generation =
+                    mbv_core::service_runtime::SetupGeneration::new(ev.setup_generation);
+                let current_time_seconds =
+                    ev.position_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+                self.reconcile_audiobookshelf_progress(
+                    &ev.library_item_id,
+                    &ev.episode_id,
+                    ev.position_ticks,
+                    current_time_seconds,
+                    ev.is_finished,
+                    generation,
+                );
             }
         }
         false

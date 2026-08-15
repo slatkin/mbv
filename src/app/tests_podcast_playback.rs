@@ -1,4 +1,5 @@
 use super::*;
+use mbv_core::player::PlayerEvent;
 
 fn enable_audiobookshelf_owner(app: &App) {
     let context = mbv_core::player::AudiobookshelfPlayerContext::new(
@@ -284,4 +285,170 @@ fn stale_audiobookshelf_progress_ack_is_ignored_after_generation_advance() {
         .collect::<Vec<_>>();
     assert_eq!(after_queue, before_queue);
     assert_eq!(app.audiobookshelf_browse[0].progress, before_progress);
+}
+
+// Task 3.1(a)(b)(c): daemon route via PlayerEvent::AudiobookshelfProgress
+// updates queue slots, browse progress map, and Unplayed filter.
+#[test]
+fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
+    let mut app = super::tests_podcast::audiobookshelf_app();
+    app.audiobookshelf_browse[0].episodes = Some(vec![
+        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            published_at: None,
+            duration_seconds: Some(120.0),
+        },
+        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-b".into(),
+            title: "Episode B".into(),
+            published_at: None,
+            duration_seconds: Some(120.0),
+        },
+    ]);
+    app.enter_audiobookshelf_episode_selection();
+    enable_audiobookshelf_owner(&app);
+    app.play_selected_audiobookshelf_episode(0);
+    app.audiobookshelf_browse[0].episode_selection = Some(1);
+    app.enqueue_selected_audiobookshelf_episode(0);
+
+    let generation = app.audiobookshelf_runtime.generation();
+    let position_ticks = (120.0 * mbv_core::api::TICKS_PER_SECOND as f64) as i64;
+
+    // (a)(b)(c): completion via daemon route.
+    app.handle_player_event(PlayerEvent::AudiobookshelfProgress(
+        mbv_core::ctrl::AudiobookshelfProgressEvent {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            position_ticks,
+            is_finished: true,
+            setup_generation: generation.value(),
+        },
+    ));
+
+    // (a) Matching queue slots reflect acknowledged position_ticks and is_finished.
+    let matching: Vec<_> = app
+        .player_tab
+        .queue
+        .slots()
+        .iter()
+        .filter_map(|slot| slot.item.as_audiobookshelf())
+        .filter(|ep| ep.library_item_id == "show-a" && ep.episode_id == "episode-a")
+        .collect();
+    assert!(!matching.is_empty(), "must have at least one matching slot");
+    assert!(
+        matching.iter().all(|ep| ep.is_finished),
+        "all matching slots must be marked finished"
+    );
+    assert!(
+        matching
+            .iter()
+            .all(|ep| ep.position_ticks == position_ticks),
+        "all matching slots must have the acknowledged position_ticks"
+    );
+
+    // (b) Browse progress map updated.
+    let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
+    assert!(progress.is_finished);
+    assert_eq!(progress.current_time_seconds, 120.0);
+
+    // (c) Unplayed filter excludes the finished episode.
+    app.audiobookshelf_browse[0].set_episode_filter(
+        super::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::Unplayed,
+    );
+    assert!(
+        app.audiobookshelf_browse[0]
+            .visible_episodes()
+            .iter()
+            .all(|ep| ep.episode_id != "episode-a"),
+        "finished episode must be excluded from Unplayed filter"
+    );
+}
+
+// Task 3.1(d): a no-match daemon-route event leaves the queue unchanged but
+// still writes the browse progress map for the episode.
+#[test]
+fn audiobookshelf_progress_via_daemon_route_no_match_updates_browse_only() {
+    let mut app = super::tests_podcast::audiobookshelf_app();
+    app.enter_audiobookshelf_episode_selection();
+    enable_audiobookshelf_owner(&app);
+    // Queue is intentionally empty — episode-b has no slot.
+
+    let generation = app.audiobookshelf_runtime.generation();
+    // 60 seconds in ticks.
+    let position_ticks = (60.0 * mbv_core::api::TICKS_PER_SECOND as f64) as i64;
+    let before_queue_len = app.player_tab.total_queue_len();
+
+    app.handle_player_event(PlayerEvent::AudiobookshelfProgress(
+        mbv_core::ctrl::AudiobookshelfProgressEvent {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-b".into(), // not in queue
+            position_ticks,
+            is_finished: false,
+            setup_generation: generation.value(),
+        },
+    ));
+
+    // Queue unchanged — no matching slot.
+    assert_eq!(
+        app.player_tab.total_queue_len(),
+        before_queue_len,
+        "no-match event must not mutate the queue"
+    );
+
+    // Browse progress map updated even on no queue match.
+    let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-b".into())];
+    assert_eq!(progress.current_time_seconds, 60.0);
+    assert!(!progress.is_finished);
+}
+
+// Task 3.1(e): a superseded-generation daemon-route event is dropped without
+// touching either the queue or the browse progress map.
+#[test]
+fn audiobookshelf_progress_via_daemon_route_stale_generation_is_dropped() {
+    let mut app = super::tests_podcast::audiobookshelf_app();
+    app.enter_audiobookshelf_episode_selection();
+    enable_audiobookshelf_owner(&app);
+    app.enqueue_selected_audiobookshelf_episode(0);
+
+    let before_queue: Vec<_> = app
+        .player_tab
+        .queue
+        .slots()
+        .iter()
+        .filter_map(|slot| slot.item.as_audiobookshelf().map(|ep| ep.position_ticks))
+        .collect();
+    let before_progress = app.audiobookshelf_browse[0].progress.clone();
+
+    let stale = app.audiobookshelf_runtime.generation();
+    app.audiobookshelf_runtime.begin_validation();
+
+    app.handle_player_event(PlayerEvent::AudiobookshelfProgress(
+        mbv_core::ctrl::AudiobookshelfProgressEvent {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            position_ticks: (42.5 * mbv_core::api::TICKS_PER_SECOND as f64) as i64,
+            is_finished: true,
+            setup_generation: stale.value(),
+        },
+    ));
+
+    // Nothing must change when the generation is stale.
+    let after_queue: Vec<_> = app
+        .player_tab
+        .queue
+        .slots()
+        .iter()
+        .filter_map(|slot| slot.item.as_audiobookshelf().map(|ep| ep.position_ticks))
+        .collect();
+    assert_eq!(
+        after_queue, before_queue,
+        "stale-generation event must not mutate queue slots"
+    );
+    assert_eq!(
+        app.audiobookshelf_browse[0].progress, before_progress,
+        "stale-generation event must not update browse progress"
+    );
 }
