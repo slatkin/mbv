@@ -98,7 +98,6 @@ fn send_ep_info(mpv: &Mpv, item: &crate::api::EmbyItem) {
 
 include!("player_types.rs");
 include!("player_sources.rs");
-include!("player_projection.rs");
 include!("player_runtime.rs");
 include!("player_reporting.rs");
 include!("player_run_state.rs");

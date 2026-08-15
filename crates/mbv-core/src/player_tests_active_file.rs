@@ -58,7 +58,7 @@ fn failed_eager_transition_preserves_canonical_queue_and_mode() {
         old_slots
     );
     assert_eq!(run.active_slot_id(), old_active);
-    assert!(!run.projection.is_active_file());
+    assert!(!run.active_file);
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn replacement_prepare_failure_accepts_new_stopped_queue_and_clears_mpv() {
     assert_eq!(run.queue_len(), 1);
     assert_eq!(run.active_item().unwrap().title(), "Replacement");
     assert_eq!(run.current_idx, 0);
-    assert!(run.projection.is_active_file());
+    assert!(run.active_file);
     assert_eq!(run.active_item().unwrap().id(), "episode");
     assert_eq!(mpv.get_property::<i64>("playlist-count").unwrap(), 0);
     let status = status.lock().unwrap();
@@ -116,7 +116,7 @@ fn replacement_prepare_failure_accepts_new_stopped_queue_and_clears_mpv() {
 #[test]
 fn active_file_replacement_uses_canonical_item_generic_path_and_one_mpv_entry() {
     let (mut run, status) = make_queue_session_for_pos_tests(0);
-    run.projection.activate();
+    run.active_file = true;
     let mpv = test_mpv();
     let mut progress = noop_progress();
     let items = vec![
@@ -126,7 +126,7 @@ fn active_file_replacement_uses_canonical_item_generic_path_and_one_mpv_entry() 
 
     run.replace_with_queue_items(items, 1, &mpv, &mut progress);
 
-    assert!(run.projection.is_active_file());
+    assert!(run.active_file);
     assert_eq!(run.queue_len(), 2);
     assert_eq!(run.current_idx, 1);
     assert_eq!(mpv.get_property::<i64>("playlist-count").unwrap(), 1);
@@ -136,7 +136,7 @@ fn active_file_replacement_uses_canonical_item_generic_path_and_one_mpv_entry() 
 #[test]
 fn asynchronous_active_file_start_error_stops_and_preserves_canonical_queue() {
     let (mut run, status) = make_queue_session_for_pos_tests(0);
-    run.projection.activate();
+    run.active_file = true;
     run.active_file_starting = true;
     let slots: Vec<_> = run.queue.slots().iter().map(|slot| slot.slot_id).collect();
     let active_slot = run.active_slot_id();

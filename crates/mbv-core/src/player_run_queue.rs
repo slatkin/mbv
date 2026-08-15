@@ -438,9 +438,8 @@ impl PlaybackRun {
             "playback init origin={origin:?} idx={start_idx} item_pos={}s",
             initial_pos / crate::api::TICKS_PER_SECOND
         );
-        let mut projection = QueueProjection::eager();
-        projection.activate_for(&queue);
-        let active_file_starting = projection.is_active_file() && prepared_source.is_some();
+        let active_file = queue.has_audiobookshelf_entries();
+        let active_file_starting = active_file && prepared_source.is_some();
         let mut prepared_source = prepared_source;
         let active_lifecycle = ActiveItemLifecycle::for_item(
             &initial_item,
@@ -459,7 +458,7 @@ impl PlaybackRun {
             token,
             queue,
             audiobookshelf_context,
-            projection,
+            active_file,
             prepared_source,
             active_lifecycle,
             active_file_starting,
