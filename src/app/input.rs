@@ -241,6 +241,16 @@ impl App {
             .unwrap_or_default()
     }
 
+    /// The currently selected Home pill's persistent identity, or an empty
+    /// string when Continue Watching (section 0) is selected.
+    pub(super) fn home_section_pref(&self) -> String {
+        self.home
+            .latest
+            .get(self.home.section.saturating_sub(1))
+            .map(|(_, source, _, _)| source.pref_key())
+            .unwrap_or_default()
+    }
+
     pub(super) fn save_prefs(&self) {
         let path = crate::config::prefs_path();
         // New keys only (#361) -- readers still fall back to the old
@@ -258,6 +268,7 @@ impl App {
                 .tab
                 .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
             "queue_column_width": self.queue_column_width,
+            "home_section": self.home_section_pref(),
         });
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);

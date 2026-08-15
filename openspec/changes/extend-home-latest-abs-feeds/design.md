@@ -102,6 +102,10 @@ Sections arrive in async completion order — Feeds can populate before an Audio
 
 The generic Home hero caps an Audiobookshelf/Feed description with `trunc_str` at 200 display columns (including the ellipsis) before wrapping, so a long episode description never expands the hero unboundedly.
 
+### 15. The last-selected Home pill is persisted and restored across launches
+
+Home's selected section is a numeric index into an asynchronously-populated list, so it cannot be restored by index (Emby may connect after ABS, feeds load at their own pace). Instead the currently selected pill's `HomeLatestSource` identity is persisted to prefs (`home_section` -> `pref_key()`, e.g. `emby:<view-id>`, `abs:<library-id>`, `feeds`) whenever the section changes (`home_select_section`) and on quit. At startup it is loaded into a `home_section_pending` field and applied by the pills-row renderer only once a section with that identity actually exists; until then Home stays on Continue Watching. A section that never appears (e.g. the library was removed) simply never restores.
+
 ## Risks / Trade-offs
 
 - **Part 1 changes shared, load-bearing code**: the merge semantics of an existing async Emby-completion handler, and a startup gate every Home population path relies on. Mitigated by keying every writer's changes to `home.latest` by `HomeLatestSource` (Decision 2) so each writer only ever touches its own entries, and by reusing the existing `SetupGeneration` staleness guard each provider's completion handler already checks.

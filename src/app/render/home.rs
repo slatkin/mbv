@@ -677,6 +677,21 @@ impl App {
             // shows an "(empty)" row), so a bare section is still discoverable.
             labels.push((idx + 1, title.clone()));
         }
+        // Restore the last-selected Home pill from prefs once a section with
+        // that source identity exists (sections arrive asynchronously across
+        // providers). Keep it pending until the section appears.
+        if let Some(pending) = self.home_section_pending.as_ref() {
+            if let Some((idx, _)) = self
+                .home
+                .latest
+                .iter()
+                .enumerate()
+                .find(|(_, (_, source, _, _))| source == pending)
+            {
+                self.home.section = idx + 1;
+                self.home_section_pending = None;
+            }
+        }
         if !labels
             .iter()
             .any(|(section_idx, _)| *section_idx == self.home.section)

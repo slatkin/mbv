@@ -34,6 +34,16 @@ Home SHALL show one Latest pill per visible Emby library (existing behavior), on
 - **WHEN** a selected Audiobookshelf episode's description exceeds 200 display columns
 - **THEN** Home SHALL display it truncated to 200 columns ending in an ellipsis rather than growing the hero unboundedly
 
+### Requirement: The last-selected Latest pill is restored on launch
+
+When the user selects a Latest pill and then restarts the app, Home SHALL restore that same pill once it is available, matching the selection by the pill's underlying provider identity rather than its position.
+
+#### Scenario: Restoring an Audiobookshelf pill after restart
+
+- **WHEN** the user selects an Audiobookshelf podcast library's Latest pill, quits, and relaunches, and that library is still available
+- **THEN** Home SHALL select that same Audiobookshelf pill (not Continue Watching, and not a differently-positioned pill) once the library's section has populated
+- **THEN** if that library is no longer available, Home SHALL remain on Continue Watching
+
 ### Requirement: Latest pills populate and refresh independently of Emby's connection state
 
 Home's Audiobookshelf and Feeds Latest pills SHALL populate, refresh, and remain hideable via `hidden_latest` whether or not an Emby Service is configured, connecting, or reachable. A refresh of Home SHALL NOT fail, and SHALL NOT skip updating the Audiobookshelf or Feeds pills, solely because no Emby Service is configured or connected. Continue Watching MAY remain empty when no Emby Service is configured, since it stays Emby-only.

@@ -75,6 +75,8 @@ impl App {
                 self.home.home_cursor.clamp(start, start + len - 1)
             };
         }
+        // Persist the selection so the pill is restored on the next launch.
+        self.save_prefs();
     }
 
     fn home_visible_indices(&self) -> Vec<usize> {

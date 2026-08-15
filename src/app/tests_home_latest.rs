@@ -668,3 +668,32 @@ fn later_arrivals_do_not_reorder_provider_pills() {
     ));
     assert!(matches!(&app.home.latest[2].1, HomeLatestSource::Feeds));
 }
+
+#[test]
+fn home_latest_source_pref_key_round_trips() {
+    for source in [
+        HomeLatestSource::Emby("view-1".into()),
+        HomeLatestSource::Audiobookshelf("abs-lib".into()),
+        HomeLatestSource::Feeds,
+    ] {
+        let key = source.pref_key();
+        assert_eq!(
+            HomeLatestSource::from_pref_key(&key),
+            Some(source),
+            "pref_key round-trips {key:?}"
+        );
+    }
+    assert_eq!(HomeLatestSource::from_pref_key(""), None);
+    assert_eq!(HomeLatestSource::from_pref_key("unknown:2"), None);
+}
+
+#[test]
+fn home_section_pref_is_empty_for_continue_watching() {
+    let app = make_app_stub();
+    assert!(app.home.latest.is_empty());
+    let key = app.home_section_pref();
+    assert!(
+        key.is_empty(),
+        "Continue Watching persists as no section key"
+    );
+}
