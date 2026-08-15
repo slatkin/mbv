@@ -167,6 +167,107 @@ impl App {
             })
     }
 
+    /// Reattach to the same daemon endpoint after an unannounced drop when
+    /// `auto_reconnect` is enabled. Runs before the local-restore fallback so
+    /// a restarted daemon lands the TUI straight back on its canonical queue
+    /// instead of dropping to local playback for the rest of the session.
+    ///
+    /// Returns `true` when the player has been swapped to a live reattach and
+    /// the caller must skip `restore_local_mode`. Local daemons are excluded:
+    /// those already have the modal / `home_is_local_daemon` reconnect paths.
+    pub(super) fn try_reattach_remote_daemon(&mut self) -> bool {
+        let Some(endpoint) = self.player_endpoint.clone() else {
+            return false;
+        };
+        if matches!(endpoint, mbv_core::remote_player::DaemonEndpoint::Local) {
+            return false;
+        }
+        if !self.config.lock().unwrap().auto_reconnect {
+            return false;
+        }
+        log::info!(target: "auto_reconnect", "reconnect enabled; reattaching to {endpoint}");
+        // The daemon may still be coming back up, so retry a few times with
+        // backoff before falling through to the local-restore path. Bounded
+        // and short so an unreachable daemon cannot wedge the UI.
+        let mut backoff = Duration::from_millis(300);
+        for attempt in 0..3 {
+            match self.connect_daemon_route_endpoint(&endpoint) {
+                Ok((remote, remote_rx)) => {
+                    self.attach_reattached_daemon(remote, remote_rx, &endpoint, attempt);
+                    return true;
+                }
+                Err(e) => {
+                    log::warn!(
+                        target: "auto_reconnect",
+                        "reattach attempt {attempt} to {endpoint} failed: {e}"
+                    );
+                    std::thread::sleep(backoff);
+                    backoff *= 2;
+                }
+            }
+        }
+        false
+    }
+
+    fn attach_reattached_daemon(
+        &mut self,
+        remote: mbv_core::remote_player::RemotePlayer,
+        remote_rx: mpsc::Receiver<PlayerEvent>,
+        endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        attempt: usize,
+    ) {
+        let initial_items = remote.items.lock().unwrap().clone();
+        let initial_unified_state = remote.unified_queue_state();
+        let has_initial_items = initial_unified_state
+            .as_ref()
+            .map_or(!initial_items.is_empty(), |state| !state.slots.is_empty());
+        let initial_cursor = remote.status.lock().unwrap().current_idx;
+        let always_play_next = self.config.lock().unwrap().always_play_next;
+        let mpris_remote = remote.clone();
+        // #233: tear down the dead connection before replacing it so its
+        // reader thread observes the shutdown and exits instead of leaking.
+        self.player.disconnect_remote();
+        self.player = PlayerProxy::remote(remote, always_play_next);
+        self.player_rx = remote_rx;
+        self.player_endpoint = Some(endpoint.clone());
+        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+        if let Some(handle) = &self.mpris {
+            let disconnected = mpris_remote.disconnected_flag();
+            crate::mpris::rebind(
+                handle,
+                mpris_remote.status.clone(),
+                move |cmd| {
+                    mpris_remote.send_command(cmd);
+                },
+                Some(disconnected),
+            );
+        }
+        self.remote_player_tab = Some(initial_unified_state.as_ref().map_or_else(
+            || PlayerTab::from_emby_items(initial_items, initial_cursor),
+            PlayerTab::from_unified_state,
+        ));
+        self.direct_remote_connected = true;
+        self.retire_remote_tracking(true);
+        self.session_miss_count = 0;
+        self.remote_pos_s = 0;
+        self.remote_pos_at = Instant::now();
+        self.remote_api_pos_advanced_at = Instant::now() - Duration::from_secs(60);
+        self.remote_seek_pending_until = Instant::now() - Duration::from_secs(1);
+        self.runtime_zero_since = None;
+        self.next_up_item = None;
+        self.skip_intro_end_ticks = None;
+        if has_initial_items {
+            self.set_queue_scope(QueueScope::Remote);
+        } else {
+            self.set_queue_scope(QueueScope::Local);
+        }
+        self.sync_subtitle_prefs_to_player();
+        self.flash(
+            format!("Reconnected to daemon (attempt {})", attempt + 1),
+            ToastSeverity::Success,
+        );
+    }
+
     /// Restores the remote connection active when mbv last exited (issue
     /// #236 -- #222's original "auto-reconnect" intent). Called once from
     /// `App::new` (never `App::new_remote`, whose `--connect-daemon`

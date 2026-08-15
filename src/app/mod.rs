@@ -770,6 +770,10 @@ mod tests_remote_reconciliation;
 mod tests_route_state;
 
 #[cfg(test)]
+#[path = "tests_reattach.rs"]
+mod tests_reattach;
+
+#[cfg(test)]
 #[path = "tests_status_bar.rs"]
 mod tests_status_bar;
 

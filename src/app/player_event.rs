@@ -61,9 +61,13 @@ impl App {
                     );
                     // A client of a local daemon can offer to restart it; a
                     // client of a genuinely remote daemon cannot, and keeps
-                    // today's silent-fallback behavior (task 7.2).
+                    // today's silent-fallback behavior (task 7.2). Before
+                    // any fallback, try an auto-reconnect reattach to the
+                    // same remote daemon when the option is enabled.
                     if self.is_local_daemon() {
                         self.raise_daemon_lost_modal();
+                    } else if self.try_reattach_remote_daemon() {
+                        return true;
                     } else {
                         self.restore_local_mode("Daemon disconnected — returned to local mode");
                     }
@@ -476,6 +480,9 @@ impl App {
                 }
             }
             PlayerEvent::RemoteDisconnected(reason) => {
+                if self.try_reattach_remote_daemon() {
+                    return true;
+                }
                 self.restore_local_mode(&reason);
                 self.refresh_after_stop();
                 return true;
