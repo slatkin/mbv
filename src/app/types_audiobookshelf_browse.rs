@@ -363,6 +363,7 @@ fn compare_publication_dates(left: Option<&str>, right: Option<&str>) -> std::cm
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mbv_core::audiobookshelf::audiobook_author_sort_key;
 
     fn library() -> AudiobookshelfLibrary {
         AudiobookshelfLibrary {
@@ -489,6 +490,87 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["new", "old", "undated"]
         );
+    }
+
+    #[test]
+    fn audiobookshelf_kind_resolves_once_by_media_type() {
+        assert_eq!(
+            AudiobookshelfBrowseKind::from_media_type("book"),
+            AudiobookshelfBrowseKind::Book
+        );
+        assert_eq!(
+            AudiobookshelfBrowseKind::from_media_type("podcast"),
+            AudiobookshelfBrowseKind::Podcast
+        );
+        assert_eq!(
+            AudiobookshelfBrowseKind::from_media_type("book"),
+            AudiobookshelfBrowseKind::Book,
+            "book resolves to Book every time — dispatch forks once and never re-reads media_type"
+        );
+    }
+
+    #[test]
+    fn book_pages_group_by_author_surname_only() {
+        let mut state = AudiobookshelfBookBrowseState::new(library());
+        state.append_page_books(
+            0,
+            20,
+            3,
+            vec![
+                book("c", "Title C", "Zelda Author"),
+                book("a", "Title A", "Alpha Author"),
+                book("b", "Title B", "Beta Author"),
+            ],
+        );
+        assert_eq!(
+            state
+                .books
+                .iter()
+                .map(|b| b.library_item_id.as_str())
+                .collect::<Vec<_>>(),
+            ["a", "b", "c"],
+            "books group and sort by author surname, not title"
+        );
+    }
+
+    #[test]
+    fn visible_rows_fall_back_to_audio_files_when_chapters_empty() {
+        let mut state = AudiobookshelfBookBrowseState::new(library());
+        let id = "book-1";
+        state.selected_id = Some(id.into());
+        state.detail_cache.insert(
+            id.into(),
+            (
+                Vec::new(),
+                vec![
+                    AudiobookshelfAudioFile {
+                        index: 1,
+                        ino: "f1".into(),
+                        duration: 100.0,
+                    },
+                    AudiobookshelfAudioFile {
+                        index: 2,
+                        ino: "f2".into(),
+                        duration: 200.0,
+                    },
+                ],
+            ),
+        );
+        let rows = state.visible_rows(id);
+        assert_eq!(rows.len(), 2);
+        assert!(matches!(rows[0], BookRow::AudioFile { index: 1, .. }));
+    }
+
+    fn book(id: &str, title: &str, author: &str) -> AudiobookshelfBook {
+        AudiobookshelfBook {
+            library_item_id: id.into(),
+            title: title.into(),
+            author_display: Some(author.into()),
+            author_sort_key: audiobook_author_sort_key(author),
+            cover_path: None,
+            chapters: Vec::new(),
+            audio_files: Vec::new(),
+        }
     }
 
     fn episode_with_date(

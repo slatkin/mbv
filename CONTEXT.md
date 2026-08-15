@@ -103,7 +103,7 @@ _Avoid_: instance, master, host
 **Bare mode**:
 The default presentation, where one process is both the terminal UI and the
 Player owner. Closing it stops playback. Bare mode is currently the only owner
-eligible for Audiobookshelf podcast playback.
+eligible for Audiobookshelf podcast and book playback.
 _Avoid_: foreground mode, standalone, normal mode
 
 **Stay-alive**:
@@ -126,7 +126,7 @@ Distinct from Session (the Emby-tracked record that exists independently of
 mbv) and from an Audiobookshelf playback session. The owner's canonical queue
 remains authoritative whether mpv mirrors it eagerly or materializes only its
 active file (active-file projection is used once a lifecycle-backed source such
-as an Audiobookshelf episode enters the run).
+as an Audiobookshelf episode or book enters the run).
 _Avoid_: session, playback session
 
 ## Processes
@@ -254,11 +254,12 @@ field names are unchanged. Positions for EmbyItems report to the Emby API.
 _Avoid_: MediaItem, media item, emby entry
 
 **QueueItem**:
-The queue's media snapshot — an EmbyItem, FeedEntry, or
-AudiobookshelfQueueItem. Generic queue operations use shared presentation and
-identity behavior; Service-specific admission, source preparation, lifecycle,
-progress, and cleanup remain explicit boundaries. Persistence round-trips tagged
-QueueItem values; legacy untagged Emby-only payloads remain readable.
+The queue's media snapshot — an EmbyItem, FeedEntry, AudiobookshelfQueueItem,
+or AudiobookshelfBookQueueItem. Generic queue operations use shared presentation
+and identity behavior; Service-specific admission, source preparation,
+lifecycle, progress, and cleanup remain explicit boundaries. Persistence
+round-trips tagged QueueItem values; legacy untagged Emby-only payloads remain
+readable.
 _Avoid_: queue entry, playable, mixed item
 
 **Playback resume**:
@@ -345,9 +346,11 @@ _Avoid_: played filter, hide watched, unwatched filter
 ## Audiobookshelf
 
 **Audiobookshelf library**:
-One Audiobookshelf library exposed as a peer tab. Currently only podcast
-libraries produce a tab; an audiobook-only server stays Ready with no tab.
-Identity is Service kind + library ID.
+One Audiobookshelf library exposed as a peer tab, resolved once into a
+podcast kind or a book kind at tab selection. Book and podcast libraries
+interleave as peer tabs in the server's `/api/libraries` order, exactly as
+Emby libraries do; no type-partitioning or reordering. Identity is Service
+kind + library ID.
 _Avoid_: ABS library, audiobookshelf collection, podcast library (as kind)
 
 **Downloaded podcast episode**:
@@ -362,6 +365,31 @@ by Service kind + `libraryItemId`. Holds title, author, cover path, and a
 paged list of downloaded episodes.
 _Avoid_: podcast, show item, ABS show
 
+**Audiobookshelf book**:
+One audiobook inside an Audiobookshelf book library, identified by Service
+kind + `libraryItemId` only — books have no episode identity. Carries title,
+the raw author credit (`author_display`) and its first-listed-author surname
+sort key (`author_sort_key`, via `human_name`, falling back to the raw credit),
+cover path, and a book-relative `chapters[]` / `audioFiles` detail. Queueing
+projects the whole book as one item and one continuous mpv timeline across its
+audio files; chapter rows seek absolutely against that merged timeline.
+_Avoid_: audiobook item, book episode, track
+
+**Audiobook chapter**:
+One book-relative seekable range `{start, end}` in seconds across the whole
+book timeline, as Audiobookshelf's `chapters[]` reports it (it may span audio
+files). mbv renders each as a first-class row and issues one absolute seek to
+`start` on the merged timeline on activation.
+_Avoid_: track, segment, file part
+
+**AudiobookshelfBookQueueItem**:
+The QueueItem snapshot of a book: content identity, presentation, progress,
+completion, and Service-scoped artwork identity keyed by `libraryItemId` only
+— a sibling of `AudiobookshelfQueueItem`, never an `episode_id` optional. It
+carries no credential, server URL, playback-session ID, resolved source, or
+request headers, matching the episode item's redaction boundary.
+_Avoid_: ABS book item, audiobook episode, book queue entry
+
 **AudiobookshelfQueueItem**:
 The QueueItem snapshot of a downloaded podcast episode. It carries content
 identity, presentation, progress, completion, and Service-scoped artwork
@@ -373,10 +401,11 @@ _Avoid_: Audiobookshelf episode, ABS item, feed entry
 
 **Audiobookshelf playback session**:
 Ephemeral Audiobookshelf lifecycle state opened to resolve and play one episode
-and synchronize its progress. It is neither an Emby Session nor an mbv Playback
-run. Created just in time for the active slot; close is bounded and finalized
-before next session opens. Monotonic wall-clock listening time is accumulated
-only while not paused.
+or one book and synchronize its progress. It is neither an Emby Session nor an
+mbv Playback run. Created just in time for the active slot; close is bounded and
+finalized before next session opens. Monotonic wall-clock listening time is
+accumulated only while not paused. Episode sessions are keyed by
+`libraryItemId` + `episodeId`; book sessions by `libraryItemId` only.
 _Avoid_: session, playback run, Emby session
 
 ## Feeds

@@ -690,6 +690,10 @@ mod tests_mouse_browse_dispatch;
 mod tests_panel_focus;
 
 #[cfg(test)]
+#[path = "tests_audiobook.rs"]
+mod tests_audiobook;
+
+#[cfg(test)]
 #[path = "tests_lifecycle.rs"]
 mod tests_lifecycle;
 

@@ -709,3 +709,7 @@ fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
     (seconds.is_finite() && seconds >= 0.0)
         .then(|| (seconds * TICKS_PER_SECOND as f64).round() as u64)
 }
+
+#[cfg(test)]
+#[path = "audiobookshelf_book_seek_tests.rs"]
+mod book_seek_tests;
