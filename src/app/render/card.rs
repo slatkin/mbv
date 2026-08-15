@@ -1,7 +1,10 @@
 use super::RENDER_FILTER;
-use crate::app::images::QUEUE_CARD_PLACEHOLDER_KEY;
+use crate::app::images::{
+    audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key, QUEUE_CARD_PLACEHOLDER_KEY,
+};
 use crate::app::{palette, App};
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
@@ -112,6 +115,58 @@ impl App {
         (placeholder, placeholder_w, image_loading)
     }
 
+    /// Renders artwork for the active/selected queue item when it isn't an
+    /// `EmbyItem` (Audiobookshelf episode or book). Feed entries carry no
+    /// artwork (`QueueItem::artwork_url` is always `None` for them) and fall
+    /// straight through to the placeholder, same as an empty queue.
+    fn render_non_emby_card(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        left_align: bool,
+        raw_item: Option<QueueItem>,
+    ) -> (u16, u16, bool) {
+        let cover_id = match raw_item {
+            Some(QueueItem::Audiobookshelf(ep)) => Some((ep.library_item_id, false)),
+            Some(QueueItem::AudiobookshelfBook(book)) => Some((book.library_item_id, true)),
+            _ => None,
+        };
+        let Some((item_id, is_book)) = cover_id else {
+            return self.render_card_placeholder(f, area, left_align);
+        };
+        let Some(server_url) = self
+            .config
+            .lock()
+            .unwrap()
+            .audiobookshelf_setup
+            .as_ref()
+            .map(|setup| setup.server_url.clone())
+        else {
+            return self.render_card_placeholder(f, area, left_align);
+        };
+
+        if is_book {
+            self.fetch_audiobookshelf_book_cover(server_url.clone(), item_id.clone());
+        } else {
+            self.fetch_audiobookshelf_cover(server_url.clone(), item_id.clone());
+        }
+        let suffix = self.current_protocol_suffix();
+        let cache_key = if is_book {
+            audiobookshelf_book_cover_cache_key(&server_url, &item_id, suffix)
+        } else {
+            audiobookshelf_cover_cache_key(&server_url, &item_id, suffix)
+        };
+
+        let use_placeholder = self
+            .card_image_states
+            .get(&cache_key)
+            .is_some_and(|e| e.img.is_none());
+        if use_placeholder {
+            return self.render_card_placeholder(f, area, left_align);
+        }
+        self.render_card_image(f, area, &cache_key, area.height, left_align)
+    }
+
     fn render_card_placeholder(
         &mut self,
         f: &mut Frame,
@@ -165,7 +220,19 @@ impl App {
                 .map(|item| (queue.queue_cursor, item))
         };
         let Some((cursor, item)) = active_source.or_else(selected_source) else {
-            return self.render_card_placeholder(f, area, left_align);
+            // The active/selected slot holds a non-Emby item (or the queue is
+            // empty) -- resolve the raw `QueueItem` the same active-first,
+            // then-selected way so Audiobookshelf artwork still renders here.
+            let raw_item = if playback.active {
+                self.playback_queue().item_at(playback.active_idx).cloned()
+            } else {
+                None
+            }
+            .or_else(|| {
+                let queue = self.displayed_queue();
+                queue.item_at(queue.queue_cursor).cloned()
+            });
+            return self.render_non_emby_card(f, area, left_align, raw_item);
         };
 
         let img_types = card_image_types(&item.item_type);
@@ -345,6 +412,58 @@ mod tests {
 
         assert!(fetch_triggered(&app, "id2:P"));
         assert!(!fetch_triggered(&app, "id0:P"));
+    }
+
+    #[test]
+    fn stopped_playback_with_audiobookshelf_selection_fetches_cover_not_placeholder() {
+        let mut app = make_app_stub();
+        app.image_protocol_enabled = true;
+        app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.config.lock().unwrap().audiobookshelf_setup = Some(
+            mbv_core::config::AudiobookshelfSetup::new("https://books.example"),
+        );
+        mbv_core::config::save_service_secret(
+            mbv_core::config::ServiceKind::Audiobookshelf,
+            "book-secret",
+        )
+        .unwrap();
+
+        let episode = mbv_core::playback_queue::QueueItem::Audiobookshelf(
+            mbv_core::playback_queue::AudiobookshelfQueueItem {
+                library_item_id: "show-1".into(),
+                episode_id: "ep-1".into(),
+                title: "Episode".into(),
+                show_title: None,
+                author: None,
+                description: None,
+                duration_ticks: None,
+                position_ticks: 0,
+                played: false,
+                pub_date_secs: None,
+                is_finished: false,
+                cover_path: None,
+            },
+        );
+        app.player_tab.queue.append(episode);
+
+        render_card(&mut app);
+
+        assert!(
+            !app.card_image_states
+                .contains_key(QUEUE_CARD_PLACEHOLDER_KEY),
+            "a selected Audiobookshelf queue item must not fall back to the bundled placeholder"
+        );
+        let cache_key = crate::app::images::audiobookshelf_cover_cache_key(
+            "https://books.example",
+            "show-1",
+            app.current_protocol_suffix(),
+        );
+        assert!(
+            app.card_image_loading.contains(&cache_key)
+                || app.card_image_states.contains_key(&cache_key),
+            "expected the Audiobookshelf cover fetch to be triggered"
+        );
     }
 
     #[test]
