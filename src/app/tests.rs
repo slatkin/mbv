@@ -86,13 +86,13 @@ pub(crate) fn run_stub_daemon_handshake(stream: std::net::TcpStream) -> std::net
     let mut client_hello = String::new();
     reader.read_line(&mut client_hello).unwrap();
 
-    let initial_state = serde_json::to_string(&mbv_core::ctrl::CtrlEvent::State(
-        mbv_core::ctrl::CtrlState {
+    let initial_state = serde_json::to_string(&mbv_core::ctrl::CtrlEvent::UnifiedQueueState(
+        mbv_core::ctrl::UnifiedQueueStateData {
             status: mbv_core::player::PlayerStatus::default(),
-            items: Vec::new(),
-            cursor: 0,
+            slots: Vec::new(),
+            active_slot: None,
+            revision: 0,
             source: crate::config::QueueSource::Unknown,
-            feed_items: Vec::new(),
         },
     ))
     .unwrap();

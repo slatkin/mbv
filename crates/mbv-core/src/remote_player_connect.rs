@@ -224,8 +224,6 @@ where
             info.validate_peer()?;
             let mut compatibility = info.compatibility()?;
             compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
-            compatibility.supports_feed_playback = info.supports_feed_playback();
-            compatibility.supports_unified_queue = info.supports_unified_queue();
             compatibility.supports_control_auth = info.supports_control_auth();
             log::info!(
                 target: "remote",
@@ -337,26 +335,6 @@ fn apply_ctrl_event(
             *current = s;
             current.current_idx = current_idx;
             current.queue_len = queue_len;
-        }
-        CtrlEvent::State(s) => {
-            let mut next_status = s.status;
-            next_status.current_idx = s.cursor;
-            next_status.queue_len = s.items.len();
-            *status.lock().unwrap() = next_status;
-            *items.lock().unwrap() = s.items.clone();
-            *queue_source.lock().unwrap() = s.source.clone();
-            // The very first State snapshot read synchronously during connect()
-            // establishes baseline state before the App (and its event loop)
-            // exists; it must not be queued, or it would be applied *after* a
-            // local-daemon queue adoption that happens between connect() and
-            // App construction, transiently wiping the just-adopted queue.
-            if notify {
-                let _ = event_tx.send(PlayerEvent::QueueUpdated {
-                    items: s.items,
-                    cursor: s.cursor,
-                    source: s.source,
-                });
-            }
         }
         CtrlEvent::Player(pe) => {
             match &pe {
