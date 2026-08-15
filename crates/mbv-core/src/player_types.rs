@@ -55,6 +55,28 @@ pub struct PlayerStatus {
 }
 
 impl PlayerStatus {
+    /// Copy the start item's playback position, runtime, and identity into
+    /// this status — the shared "player about to start / just scheduled"
+    /// seeding used by every queue path. Callers set `active`.
+    pub fn seed_from_item(&mut self, item: &QueueItem, idx: usize, queue_len: usize) {
+        self.position_ticks = item.playback_position_ticks();
+        self.runtime_ticks = item.runtime_ticks();
+        self.paused = false;
+        self.current_idx = idx;
+        self.queue_len = queue_len;
+        match item {
+            QueueItem::Emby(emby) => self.set_current_item_metadata(emby),
+            QueueItem::Feed(entry) => {
+                self.title = entry.title.clone();
+                self.art_item_id = entry.guid.clone();
+            }
+            QueueItem::Audiobookshelf(ep) => {
+                self.title = ep.title.clone();
+                self.art_item_id = ep.episode_id.clone();
+            }
+        }
+    }
+
     pub fn set_current_item_metadata(&mut self, item: &EmbyItem) {
         self.title = item.display_name();
         self.artist = item.artist.clone();
