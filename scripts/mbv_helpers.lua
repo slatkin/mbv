@@ -11,6 +11,62 @@ function set_osd(res_x, res_y, text)
     state.osd:update()
 end
 
+-- Transient OSD overlay (skip-intro, next-up): the hide/show state machine, the
+-- playres dimension fallback, mouse-region registration, and the window-resize
+-- re-render are identical across overlays; only the draw body and z-index differ.
+-- regions is a list of names shared by each region's virt-mouse-area and
+-- key-binding set.
+-- draw(pw, ph) returns the ASS text; it may call set_virt_mouse_area() (with
+-- matching `name`) and mp.enable_key_bindings(region) itself.
+function make_overlay(z, regions, draw)
+    local overlay = {
+        visible = false,
+        osd     = mp.create_osd_overlay('ass-events'),
+    }
+
+    function overlay.hide(on_hidden)
+        if not overlay.visible then return end
+        overlay.visible = false
+        overlay.osd.data = ''
+        overlay.osd:update()
+        for _, region in ipairs(regions) do
+            set_virt_mouse_area(0, 0, 0, 0, region)
+            mp.disable_key_bindings(region)
+        end
+        if on_hidden then on_hidden() end
+    end
+
+    function overlay.render()
+        if not overlay.visible then return end
+
+        local pw = osc_param.playresx
+        local ph = osc_param.playresy
+        -- osc_param is 0 until the OSC render loop first fires
+        if pw <= 0 or ph <= 0 then
+            local dim = mp.get_property_native('osd-dimensions')
+            if not dim or dim.w <= 0 or dim.h <= 0 then return end
+            pw = dim.w
+            ph = dim.h
+        end
+
+        local ass_text = draw(pw, ph)
+        if not ass_text then return end
+
+        overlay.osd.res_x = pw
+        overlay.osd.res_y = ph
+        overlay.osd.data  = ass_text
+        overlay.osd.z     = z
+        overlay.osd:update()
+    end
+
+    -- Re-render on window resize
+    mp.observe_property('osd-dimensions', 'native', function()
+        if overlay.visible then overlay.render() end
+    end)
+
+    return overlay
+end
+
 -- scale factor for translating between real and virtual ASS coordinates
 function get_virt_scale_factor()
     local w, h = mp.get_osd_size()

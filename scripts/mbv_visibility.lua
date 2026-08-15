@@ -52,50 +52,13 @@ set_virt_mouse_area(0, 0, 0, 0, 'window-controls')
 -- While visible the OSC is hidden and inaccessible.
 --
 
-local next_up = {
-    visible         = false,
-    item_id         = '',
-    show_title      = '',
-    ep_title        = '',
-    artist          = '',
-    osd             = mp.create_osd_overlay('ass-events'),
-    osc_was_enabled = false,
-    -- button hitboxes in virtual ASS coords
-    dismiss_x1 = 0, dismiss_y1 = 0, dismiss_x2 = 0, dismiss_y2 = 0,
-    skip_x1    = 0, skip_y1    = 0, skip_x2    = 0, skip_y2    = 0,
-}
+local next_up = make_overlay(1001, {
+    'next-up-skip',
+    'next-up-dismiss',
+}, function(pw, ph)
+    if not next_up.visible then return nil end
 
-local function next_up_hide()
-    if not next_up.visible then return end
-    next_up.visible      = false
-    next_up.osd.data     = ''
-    next_up.osd:update()
-    set_virt_mouse_area(0, 0, 0, 0, 'next-up-dismiss')
-    set_virt_mouse_area(0, 0, 0, 0, 'next-up-skip')
-    mp.disable_key_bindings('next-up-dismiss')
-    mp.disable_key_bindings('next-up-skip')
-    if next_up.osc_was_enabled then
-        enable_osc(true)
-    end
-end
-
-local function next_up_render()
-    if not next_up.visible then return end
-
-    local pw = osc_param.playresx
-    local ph = osc_param.playresy
-    if pw <= 0 or ph <= 0 then
-        local dim = mp.get_property_native('osd-dimensions')
-        if not dim or dim.w <= 0 or dim.h <= 0 then return end
-        pw = dim.w
-        ph = dim.h
-    end
-
-    -- Overlay spans the full width, same height as the OSC (180 virtual units).
-    local bar_h = 180
-    local bar_y = ph - bar_h  -- top edge of overlay
-
-    -- Display label: series > artist > title
+    -- "NEXT UP" content state
     local show_t = next_up.show_title or ''
     local ep_t   = next_up.ep_title   or ''
     local art_t  = next_up.artist     or ''
@@ -112,6 +75,8 @@ local function next_up_render()
     local pad = math.floor(pw * 0.03)  -- left/right padding
 
     -- Buttons: right-aligned, stacked vertically (SKIP on top, DISMISS below)
+    local bar_h = 180
+    local bar_y = ph - bar_h  -- top edge of overlay
     local btn_w   = math.max(110, math.floor(pw * 0.13))
     local btn_h   = math.max(30,  math.floor(ph / 24))
     local btn_r   = math.floor(btn_h / 3)
@@ -131,15 +96,10 @@ local function next_up_render()
     local dismiss_y1 = skip_y2 + btn_gap
     local dismiss_y2 = dismiss_y1 + btn_h
 
-    next_up.skip_x1    = btn_x;         next_up.skip_y1    = skip_y1
-    next_up.skip_x2    = btn_x + btn_w; next_up.skip_y2    = skip_y2
-    next_up.dismiss_x1 = btn_x;         next_up.dismiss_y1 = dismiss_y1
-    next_up.dismiss_x2 = btn_x + btn_w; next_up.dismiss_y2 = dismiss_y2
-
-    set_virt_mouse_area(next_up.skip_x1,    next_up.skip_y1,
-                        next_up.skip_x2,    next_up.skip_y2,    'next-up-skip')
-    set_virt_mouse_area(next_up.dismiss_x1, next_up.dismiss_y1,
-                        next_up.dismiss_x2, next_up.dismiss_y2, 'next-up-dismiss')
+    set_virt_mouse_area(btn_x,        skip_y1,
+                        btn_x + btn_w, skip_y2,       'next-up-skip')
+    set_virt_mouse_area(btn_x,        dismiss_y1,
+                        btn_x + btn_w, dismiss_y2,    'next-up-dismiss')
     mp.enable_key_bindings('next-up-skip')
     mp.enable_key_bindings('next-up-dismiss')
 
@@ -202,11 +162,21 @@ local function next_up_render()
     ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', btn_fs))
     ass:append('DISMISS')
 
-    next_up.osd.res_x = pw
-    next_up.osd.res_y = ph
-    next_up.osd.data  = ass.text
-    next_up.osd.z     = 1001
-    next_up.osd:update()
+    return ass.text
+end)
+
+next_up.item_id         = ''
+next_up.show_title      = ''
+next_up.ep_title        = ''
+next_up.artist          = ''
+next_up.osc_was_enabled = false
+
+local function next_up_hide()
+    next_up.hide(function()
+        if next_up.osc_was_enabled then
+            enable_osc(true)
+        end
+    end)
 end
 
 mp.register_script_message('mbv-next-up', function(item_id, show_title, ep_title, artist)
@@ -220,15 +190,11 @@ mp.register_script_message('mbv-next-up', function(item_id, show_title, ep_title
         if state.enabled then enable_osc(false) end
     end
     next_up.visible = true
-    next_up_render()
+    next_up.render()
 end)
 
 mp.register_script_message('mbv-next-up-dismiss', function()
     next_up_hide()
-end)
-
-mp.observe_property('osd-dimensions', 'native', function()
-    if next_up.visible then next_up_render() end
 end)
 
 mp.set_key_bindings({
