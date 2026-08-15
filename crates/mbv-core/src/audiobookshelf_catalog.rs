@@ -38,6 +38,21 @@ pub struct AudiobookshelfProgress {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum AudiobookshelfShelfEntry {
+    Show(String),
+    Episode {
+        library_item_id: String,
+        episode_id: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AudiobookshelfShelf {
+    pub label: String,
+    pub entries: Vec<AudiobookshelfShelfEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct AudiobookshelfShowPage {
     pub page: usize,
     pub limit: usize,
@@ -122,6 +137,27 @@ struct ProgressWire {
     #[serde(rename = "isFinished")]
     is_finished: Option<bool>,
 }
+#[derive(Debug, Deserialize)]
+struct ShelfWire {
+    label: String,
+    entries: Vec<ShelfEntryWire>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+enum ShelfEntryWire {
+    #[serde(rename = "show")]
+    Show {
+        #[serde(rename = "libraryItemId")]
+        library_item_id: String,
+    },
+    #[serde(rename = "episode")]
+    Episode {
+        #[serde(rename = "libraryItemId")]
+        library_item_id: String,
+        #[serde(rename = "episodeId")]
+        episode_id: String,
+    },
+}
 
 impl AudiobookshelfClient {
     /// Runs `f` against a cloned client on a bounded worker thread. All
@@ -179,6 +215,16 @@ impl AudiobookshelfClient {
     ) -> Result<HashMap<(String, String), AudiobookshelfProgress>, AudiobookshelfError> {
         let key = key.to_owned();
         self.bounded(bound, move |client| client.progress(&key))
+    }
+    pub fn shelves_bounded(
+        &self,
+        key: &str,
+        library_id: &str,
+        bound: Duration,
+    ) -> Result<Vec<AudiobookshelfShelf>, AudiobookshelfError> {
+        let key = key.to_owned();
+        let id = library_id.to_owned();
+        self.bounded(bound, move |client| client.shelves(&key, &id))
     }
     pub fn cover_bounded(
         &self,
@@ -308,6 +354,38 @@ impl AudiobookshelfClient {
             })
             .collect())
     }
+    fn shelves(
+        &self,
+        key: &str,
+        id: &str,
+    ) -> Result<Vec<AudiobookshelfShelf>, AudiobookshelfError> {
+        let response: Vec<ShelfWire> = self
+            .get(key, &format!("/api/libraries/{id}/personalized"))?
+            .into_json()
+            .map_err(|_| AudiobookshelfError::malformed())?;
+        Ok(response
+            .into_iter()
+            .map(|x| AudiobookshelfShelf {
+                label: x.label,
+                entries: x
+                    .entries
+                    .into_iter()
+                    .map(|entry| match entry {
+                        ShelfEntryWire::Show { library_item_id } => {
+                            AudiobookshelfShelfEntry::Show(library_item_id)
+                        }
+                        ShelfEntryWire::Episode {
+                            library_item_id,
+                            episode_id,
+                        } => AudiobookshelfShelfEntry::Episode {
+                            library_item_id,
+                            episode_id,
+                        },
+                    })
+                    .collect(),
+            })
+            .collect())
+    }
     fn cover(&self, key: &str, id: &str) -> Result<Vec<u8>, AudiobookshelfError> {
         let response = self.get(key, &format!("/api/items/{id}/cover"))?;
         let mut bytes = Vec::new();
@@ -374,7 +452,7 @@ mod tests {
     }
 
     #[test]
-    fn progress_fixture_preserves_user_and_server_order() {
+    fn progress_and_shelf_fixtures_preserve_user_and_server_order() {
         let progress: ProgressResponse = serde_json::from_str(&fixture("progress")).unwrap();
         assert_eq!(progress.media_progress[0].library_item_id, "show-2");
         assert!(!progress.media_progress[0].is_finished.unwrap());
@@ -383,6 +461,12 @@ mod tests {
         )
         .unwrap();
         assert_eq!(completed.media_progress[0].is_finished, Some(true));
+        let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
+        assert_eq!(shelves[0].label, "Continue listening");
+        assert!(matches!(
+            shelves[0].entries[1],
+            ShelfEntryWire::Episode { .. }
+        ));
     }
 
     #[test]
