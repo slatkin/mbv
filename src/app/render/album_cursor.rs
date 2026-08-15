@@ -112,7 +112,7 @@ impl App {
         if len == 0 {
             return pos;
         }
-        (pos as i64 + delta).clamp(0, len as i64 - 1) as usize
+        crate::app::ui_util::move_cursor(pos, delta, len)
     }
 
     pub(in crate::app) fn jump_music_group_display_cursor(

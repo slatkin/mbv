@@ -143,8 +143,7 @@ impl App {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                 let n = state.selected_len();
                 if n > 0 {
-                    state.video_cursor =
-                        (state.video_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                    state.video_cursor = super::ui_util::move_cursor(state.video_cursor, delta, n);
                     self.save_default_library_position(lib_idx);
                 }
             }
@@ -166,7 +165,7 @@ impl App {
                     .iter()
                     .position(|&i| i == current)
                     .unwrap_or(0);
-                let new_pos = (pos as i64 + delta).clamp(0, sorted_n as i64 - 1) as usize;
+                let new_pos = super::ui_util::move_cursor(pos, delta, sorted_n);
                 let new_cursor = self.layout.main.left_sorted_indices[new_pos];
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
@@ -183,14 +182,14 @@ impl App {
         if let Some(s) = &mut lib.search {
             let n = s.results.len();
             if n > 0 {
-                s.cursor = (s.cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                s.cursor = super::ui_util::move_cursor(s.cursor, delta, n);
             }
             return;
         }
         if let Some(lvl) = lib.nav_stack.last_mut() {
             let n = lvl.items.len();
             if n > 0 {
-                lvl.cursor = (lvl.cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                lvl.cursor = super::ui_util::move_cursor(lvl.cursor, delta, n);
                 self.save_default_library_position(lib_idx);
             }
         }
@@ -345,7 +344,7 @@ impl App {
             return;
         }
         let cur = self.libs[lib_idx].series_season_cursor;
-        let new_cur = (cur as i64 + delta).clamp(0, n as i64 - 1) as usize;
+        let new_cur = super::ui_util::move_cursor(cur, delta, n);
         if new_cur == cur {
             return;
         }

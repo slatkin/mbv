@@ -109,7 +109,7 @@ impl App {
             .iter()
             .position(|idx| *idx == self.home.home_cursor)
             .unwrap_or(0);
-        let next = (pos as i64 + delta).clamp(0, indices.len() as i64 - 1) as usize;
+        let next = super::ui_util::move_cursor(pos, delta, indices.len());
         self.home.home_cursor = indices[next];
     }
 

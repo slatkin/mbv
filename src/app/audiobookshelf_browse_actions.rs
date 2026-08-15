@@ -71,8 +71,8 @@ impl App {
         if state.shows.is_empty() || state.episode_selection.is_some() {
             return;
         }
-        let cursor = (state.cursor() as i64 + delta).clamp(0, state.shows.len() as i64 - 1);
-        self.select_audiobookshelf_show(cursor as usize);
+        let cursor = super::ui_util::move_cursor(state.cursor(), delta, state.shows.len());
+        self.select_audiobookshelf_show(cursor);
     }
 
     pub(super) fn move_audiobookshelf_show_rows(&mut self, rows: i64) {
@@ -125,8 +125,7 @@ impl App {
         };
         let count = state.visible_episodes().len();
         if count > 0 {
-            state.episode_selection =
-                Some((cursor as i64 + delta).clamp(0, count as i64 - 1) as usize);
+            state.episode_selection = Some(super::ui_util::move_cursor(cursor, delta, count));
         }
     }
 

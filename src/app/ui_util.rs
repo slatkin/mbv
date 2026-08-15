@@ -23,6 +23,15 @@ pub(super) fn cycle_lang(my_languages: &[String], current: &str) -> String {
     cycle[(idx + 1) % cycle.len()].to_string()
 }
 
+/// Move a list cursor by `delta` rows (signed), clamped to `[0, len-1]`.
+/// Handles the empty-list case by returning 0.
+pub(crate) fn move_cursor(cur: usize, delta: i64, len: usize) -> usize {
+    if len == 0 {
+        return 0;
+    }
+    (cur as i64 + delta).clamp(0, len as i64 - 1) as usize
+}
+
 pub fn natural_sort_key(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 16);
     let mut chars = s.chars().peekable();
