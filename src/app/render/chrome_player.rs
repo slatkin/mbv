@@ -140,8 +140,8 @@ impl App {
         }
 
         let (pos_ticks, rt_ticks, paused) = self.playback_progress();
-        let pos_str = fmt_duration(pos_ticks / TICKS_PER_SECOND);
-        let dur_str = fmt_duration(rt_ticks / TICKS_PER_SECOND);
+        let pos_str = fmt_duration_short(pos_ticks / TICKS_PER_SECOND);
+        let dur_str = fmt_duration_short(rt_ticks / TICKS_PER_SECOND);
 
         let (glyph, gcolor): (&str, Color) = if paused {
             (play_icon(self.use_nerd_fonts), palette::AQUA)

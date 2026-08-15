@@ -63,14 +63,6 @@ pub fn sort_audio_tracks(items: &mut [EmbyItem]) {
     }
 }
 
-pub fn fmt_duration(s: i64) -> String {
-    if s >= 3600 {
-        format!("{}:{:02}:{:02}", s / 3600, (s % 3600) / 60, s % 60)
-    } else {
-        format!("{}:{:02}", s / 60, s % 60)
-    }
-}
-
 /// Format duration as `H:MM:SS` (or `M:SS` when under an hour). Only the
 /// first component drops zero-padding; every later component is zero-padded
 /// to two digits so `2:02` and `2:02:02` read as intended, not `2:2`. Intended
