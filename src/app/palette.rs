@@ -50,6 +50,7 @@ pub const PURPLE: Color = Color::Rgb(214, 153, 182); // muted purple (#d699b6)
 // Surfaces
 pub const SURFACE_BACKDROP: Color = LIBRARY_SIDE_BG;
 pub const SURFACE_CHROME: Color = DARK_BG;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const SURFACE_PANEL: Color = PANEL_BG;
 pub const SURFACE_FOCUSED: Color = BG_GREEN;
 pub const SURFACE_RESTING: Color = PLAYBACK_PANEL_BG; // resting-content / unfocused half
@@ -59,42 +60,72 @@ pub const SURFACE_ITEM_FOCUSED: Color = FOCUSED;
 pub const SURFACE_STATUS_PILL: Color = STATUS_PILL_BG;
 
 // Text
+//
+// Reserved roles below (#[allow(dead_code)]): defined per design.md's Role
+// vocabulary table, not yet adopted at a call site -- existing screens still
+// paint text with the raw primitives (WHITE, TEXT, ...) directly, migrating
+// role by role as later phases touch each screen (design.md task 1.1: role
+// constants "stay until callers migrate").
+#[allow(dead_code)]
 pub const TEXT_PRIMARY: Color = TEXT;
+#[allow(dead_code)]
 pub const TEXT_SECONDARY: Color = SUBTLE;
+#[allow(dead_code)]
 pub const TEXT_MUTED: Color = MUTED;
+#[allow(dead_code)]
 pub const TEXT_EMPHASIS: Color = WHITE;
+#[allow(dead_code)]
 pub const TEXT_SOFT: Color = SOFT_WHITE;
+#[allow(dead_code)]
 pub const TEXT_ON_ACCENT: Color = BASE;
+#[allow(dead_code)]
 pub const TEXT_ON_STATE: Color = TOAST_FG;
+#[allow(dead_code)]
 pub const TEXT_DETAIL: Color = MUTED_GREEN;
+#[allow(dead_code)]
 pub const TEXT_QUEUE_UNFOCUSED: Color = QUEUE_UNFOCUSED_FG;
+#[allow(dead_code)]
 pub const TEXT_PLAYBACK: Color = PLAYBACK_CONTENT_FG;
+#[allow(dead_code)]
 pub const TEXT_PLAYBACK_META: Color = PLAYBACK_META_FG;
 
 // Accents
 pub const ACCENT: Color = AQUA; // selection marker, watched, folders
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const ACCENT_BLUE: Color = FOAM;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const ACCENT_GREEN: Color = GREEN;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const ACCENT_SAGE: Color = IRIS; // active tab, focused pill text
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const ACCENT_WARM: Color = YELLOW;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const ACCENT_ORANGE: Color = ORANGE;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const ACCENT_PURPLE: Color = PURPLE;
 
 // Rules
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const RULE: Color = SEEK_TRACK; // hero shell border and seek track share this role
 pub const BORDER_UNFOCUSED: Color = OVERLAY;
 
 // State
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const STATE_ERROR: Color = RED;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const STATE_SUCCESS: Color = TOAST_BG_SUCCESS;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const STATE_WARNING: Color = TOAST_BG_WARNING;
 
 // Pill selector (renamed without value changes)
 pub const PILL_ROW_BG: Color = PILL_SELECTOR_ROW_BG;
 pub const PILL_BG: Color = PILL_SELECTOR_BG;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const PILL_FG: Color = PILL_SELECTOR_FG;
 pub const PILL_SELECTED_BG: Color = PILL_SELECTOR_SELECTED_BG;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const PILL_SELECTED_FG: Color = PILL_SELECTOR_SELECTED_FG;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
 pub const PILL_OVERFLOW_FG: Color = PILL_SELECTOR_OVERFLOW_FG;
 
 /// The central focus lever (design decision 8). Every panel and component
