@@ -487,6 +487,7 @@ impl App {
                 visible,
                 top_pad_abs,
                 bottom_pad_abs,
+                super::SelectedBlockBorderStyle::HeroOnTop,
             );
         }
 

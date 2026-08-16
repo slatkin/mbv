@@ -57,8 +57,8 @@ use widgets::{
     content_width, render_count_label, render_pill_bar, render_placeholder,
     render_queue_panel_frame, render_right_scrollbar, render_right_scrollbar_with_viewport,
     render_scrollbar_with_viewport_at, render_selected_block_background,
-    render_selected_block_borders, right_panel_content_area, PillBar, COLUMN_GAP,
-    MUSIC_ALBUM_IMAGE_TYPES, RENDER_FILTER,
+    render_selected_block_borders, right_panel_content_area, PillBar, SelectedBlockBorderStyle,
+    COLUMN_GAP, MUSIC_ALBUM_IMAGE_TYPES, RENDER_FILTER,
 };
 
 use super::ui_util::natural_sort_key;

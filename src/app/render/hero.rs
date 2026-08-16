@@ -135,7 +135,15 @@ pub(super) fn hero_block_shell(f: &mut Frame, hero_area: Rect, hero_rows: u16, f
         bottom_pad_abs,
         bg,
     );
-    super::render_selected_block_borders(f, hero_area, 0, visible, top_pad_abs, bottom_pad_abs);
+    super::render_selected_block_borders(
+        f,
+        hero_area,
+        0,
+        visible,
+        top_pad_abs,
+        bottom_pad_abs,
+        super::SelectedBlockBorderStyle::HeroOnTop,
+    );
 }
 
 /// Paints the selected item's name on the hero's top row (two-column lists
@@ -485,48 +493,30 @@ pub(super) fn hero_on_left_right_pane(
     }
 }
 
-/// Paints the hero-on-left arrangement's right (list) pane border: a `▔` top
-/// row and a `▁` bottom row in `palette::SEEK_TRACK`, one row inside
-/// `list_panel`'s own top/bottom edge. Deliberately independent of
-/// `render_selected_block_borders`/`hero_block_shell` (hero-on-top's shared
-/// shell) rather than routed through it, so a hero-on-left-only change here
-/// can never reach the hero-on-top arrangement. The three hero-on-left
-/// adopters (Music, audiobooks, Home) all called
-/// `render_selected_block_borders` on this exact `(offset=0, top_pad=1,
-/// bottom_pad=height-2)` window directly; centralizing it here means a
-/// future edit touches one function instead of three call sites.
+/// Paints the hero-on-left arrangement's right (list) pane border: hero-on-left's
+/// declared variant of the shared [`render_selected_block_borders`] primitive
+/// (design.md decision 6) -- a `▔` top row and a `▁` bottom row, with a
+/// focus-resolved background, one row inside `list_panel`'s own top/bottom
+/// edge. The variant is a separate match arm in `render_selected_block_borders`
+/// (`SelectedBlockBorderStyle::HeroOnLeft`), so a hero-on-left-only change
+/// here can never reach the `HeroOnTop` arm hero-on-top's `hero_block_shell`
+/// uses. hero-on-left's own fixed window mirrors `hero_block_shell`'s
+/// (`offset = 0`, fully visible, padding rows `[1, height - 2]`); this is
+/// hero-on-left's thin shell entry point, the same role `hero_block_shell`
+/// plays for hero-on-top.
 pub(super) fn hero_on_left_list_panel_border(f: &mut Frame, list_panel: Rect, focused: bool) {
     if list_panel.height == 0 {
         return;
     }
-    let bg = palette::resolve_surface_focus(focused);
-    let style = Style::default().fg(palette::SEEK_TRACK).bg(bg);
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "\u{2594}".repeat(list_panel.width as usize),
-            style,
-        ))),
-        Rect {
-            x: list_panel.x,
-            y: list_panel.y,
-            width: list_panel.width,
-            height: 1,
-        },
+    super::render_selected_block_borders(
+        f,
+        list_panel,
+        0,
+        list_panel.height as usize,
+        1,
+        (list_panel.height as usize).saturating_sub(2),
+        super::SelectedBlockBorderStyle::HeroOnLeft { focused },
     );
-    if list_panel.height > 1 {
-        f.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                "\u{2581}".repeat(list_panel.width as usize),
-                style,
-            ))),
-            Rect {
-                x: list_panel.x,
-                y: list_panel.bottom() - 1,
-                width: list_panel.width,
-                height: 1,
-            },
-        );
-    }
 }
 
 /// One line of the `Hero` component's hero-on-left text block. Unlike

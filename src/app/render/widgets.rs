@@ -157,6 +157,16 @@ pub(super) fn render_selected_block_background(
     }
 }
 
+/// The declared per-arrangement variant for [`render_selected_block_borders`]
+/// (design.md decision 6: differences are declared in one block, not
+/// expressed by forking the painter). `HeroOnTop` and `HeroOnLeft` are
+/// separate match arms in the function body, so editing one arrangement's
+/// glyphs/background can never reach the other's.
+pub(super) enum SelectedBlockBorderStyle {
+    HeroOnTop,
+    HeroOnLeft { focused: bool },
+}
+
 /// Paints the ▁/▔ border rows on the reserved rows one position outside
 /// the colored block's padding rows `[top_pad_abs, bottom_pad_abs]`.
 /// The padding rows are inserted with extra detail rule rows for border space.
@@ -168,15 +178,27 @@ pub(super) fn render_selected_block_borders(
     visible: usize,
     top_pad_abs: usize,
     bottom_pad_abs: usize,
+    style: SelectedBlockBorderStyle,
 ) {
-    let border_style = Style::default().fg(palette::SEEK_TRACK);
+    let (top_glyph, bottom_glyph, bg) = match style {
+        SelectedBlockBorderStyle::HeroOnTop => ("\u{2581}", "\u{2594}", None),
+        SelectedBlockBorderStyle::HeroOnLeft { focused } => (
+            "\u{2594}",
+            "\u{2581}",
+            Some(palette::resolve_surface_focus(focused)),
+        ),
+    };
+    let mut border_style = Style::default().fg(palette::SEEK_TRACK);
+    if let Some(bg) = bg {
+        border_style = border_style.bg(bg);
+    }
     // Top border: paint one row before the colored block padding
     if let Some(top_border) = top_pad_abs.checked_sub(1) {
         if top_border >= offset && top_border < offset + visible {
             let top_y = area.y + (top_border - offset) as u16;
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2581}".repeat(area.width as usize),
+                    top_glyph.repeat(area.width as usize),
                     border_style,
                 ))),
                 Rect {
@@ -194,7 +216,7 @@ pub(super) fn render_selected_block_borders(
         let bot_y = area.y + (bot_border - offset) as u16;
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
-                "\u{2594}".repeat(area.width as usize),
+                bottom_glyph.repeat(area.width as usize),
                 border_style,
             ))),
             Rect {
