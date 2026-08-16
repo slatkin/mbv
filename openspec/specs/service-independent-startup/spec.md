@@ -21,6 +21,12 @@ mbv SHALL enter its TUI without requiring an Emby or Audiobookshelf Service to b
 - **THEN** the TUI SHALL remain open
 - **THEN** Emby SHALL enter Needs authentication
 
+#### Scenario: Home browsing is available with only Audiobookshelf or Feeds configured
+- **WHEN** mbv starts with an Audiobookshelf Service, feed subscriptions, or both, and no Emby Service configured
+- **THEN** the Home tab SHALL show Audiobookshelf and Feeds Latest pills with their available data
+- **THEN** Home SHALL NOT show an Emby-related error and SHALL NOT require an Emby Service to become available
+- **THEN** the Continue Watching section MAY remain empty, since it stays Emby-only
+
 ### Requirement: Remote Services initialize after TUI entry
 mbv SHALL begin each configured Remote Service's connection independently after the TUI has started. One Service's connection attempt or failure SHALL NOT delay another Service or the Feeds Service.
 
