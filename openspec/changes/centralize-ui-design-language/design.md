@@ -59,8 +59,8 @@ needs per-screen direction. It is the model for this change.
 - Left panel layout. Only its focus colours join the central lever.
 - Overlays, modals, the settings surface and the search sidebar. They are not hero-plus-list screens
   and do not use the arrangements.
-- Making the hero focusable on Home. The two-pane contract allows it; supplying content does not
-  happen here.
+- Making Home's hero focusable. It is a non-focusable preview; whether it ever becomes focusable
+  is deferred and out of scope for this change.
 
 ## Decisions
 
@@ -91,19 +91,22 @@ image sits above or beside it (`home.rs:181` vs `home.rs:260` pass different wid
 the same function), text wrapping moves into the shared code and screens hand over unwrapped
 strings. The shared code is therefore substantially larger than a frame-drawing helper.
 
-**Narrow hero shell is uniform.** Home's narrow hero is not a bespoke composition: its
-image-beside-metadata with overview wrapping below the image is already the shared hero-on-top
-shape (`detail.rs` `text_dims` narrows text beside the poster, then re-wraps full-width past it).
-What distinguishes Home narrow today is only the absent `hero_block_shell` — it draws no `▁`/`▔`
-borders, where movies/TV/books/podcasts all do. The shared narrow fallback SHALL draw the bordered
-`hero_block_shell`, and Home narrow gains borders to match. Image aspect (16:9 half-width vs fixed
-portrait) remains a declared `image shape` difference, not a shell concern.
+**Narrow hero shell is uniform.** Home's narrow hero shares the image-beside-metadata shape (with
+overview wrapping below the image) with the mature hero-on-top (`detail.rs` `text_dims`), but it is
+the only screen that draws no `hero_block_shell` — no `▁`/`▔` borders, where movies/TV/books/
+podcasts all do. Folding Home narrow into the shared fallback therefore ADDS the borders: a visible
+change to Home narrow, accepted by the "Home bends to match" rule, not a no-op. Image aspect (16:9
+half-width vs fixed portrait) remains a declared `image shape` difference, not a shell concern.
 
-**Selection marker is one glyph.** The marker variants in use today (music's inline `▍`, the
-multi-column edge `▎`/`▏`, Home narrow's gutter `▎`, and books' blank) collapse to a single
-central marker: the thinnest block glyph (`▏` U+258F). Selection marks SHALL NOT vary between
-lists; the arrangement owns the glyph and its placement, and screens cannot override it. The tab
-bar is the exception and keeps its own selected-tab marker.
+**Selection marker is unified on the two-column list's convention.** Every list SHALL render its
+selection marker the way the two-column library list does today: a thin AQUA block at the list's
+outer edge, directional in two-column mode (`▎` at the left column's left edge, `▏` at the right
+column's right edge), with no inline glyph and no `##` title prefix. This retires the
+single-column `▌`+`##` indicator (`list_rows.rs:97-98`), the inline `▍` used by music, the album
+list, the queue and Home's wide rows, and books' blank marker. It is a deliberate visible change
+to every list, so it is an explicit exception to "mature screens change least" and to the
+"unchanged" claims of phases 3-4; it lands as its own phase. The tab bar is the exception and
+keeps its own selected-tab marker.
 
 ### 3. The width is tested once, outside every screen
 
@@ -126,7 +129,9 @@ shared code with no proven consumer.
 
 This also makes "mature screens change least" structurally true rather than a promise checked at
 review: they are the reference, so by construction they move least. Where two screens disagree
-today, the mature screen's value wins and Home bends.
+today, the mature screen's value wins: Home adopts movies/TV/music's colour values (task 1.3), the
+bordered hero shell, and the shared narrow fallback. Home is never a value source — it is always an
+adopter.
 
 ### 5. One breakpoint, with ownership inverted
 
@@ -139,10 +144,11 @@ wants them to differ, and four knobs is four things to keep consistent. Reconsid
 later found to cross over at the wrong width.
 
 The width breakpoint is not the only responsive threshold — it is only the one screens currently
-test themselves. The arrangement also owns a height floor (`MIN_WIDE_AREA_HEIGHT`), a minimum pane
-width (`MIN_PANE_WIDTH`), the below-image metadata side-width floor, and the hero-suppression rule
-when height cannot fit a hero and a usable list. These are arrangement-owned thresholds, not
-per-screen decisions, and screens own none of them.
+test themselves. The arrangement also owns a height floor (`MIN_WIDE_AREA_HEIGHT`, today 6), a
+minimum pane width (`MIN_PANE_WIDTH`, today 40), the below-image metadata side-width floor (today
+15), and the hero-suppression rule when height cannot fit a hero and a usable list — each keeping
+today's value as it moves into shared code. These are arrangement-owned thresholds, not per-screen
+decisions, and screens own none of them.
 
 ### 6. Per-screen differences are declared together, not expressed at the point of use
 
@@ -162,10 +168,16 @@ than speculated:
 | hero image shape | Home computes 16:9 backdrops (`w*9/32`); books and podcasts use portrait covers via `SERIES_IMAGE_COLS` |
 | metadata lines and order | Home: title / show name / duration+progress / overview. Books: title / author / narrator. Movies: title / year / runtime / overview |
 | colour variant | see decision 7 |
-| element presence | not every screen has pills, an image, or a count row |
+| element presence | every screen shows a hero image (source and shape above). A pill row is present on Home (sections), music (groups), books (surname buckets), feeds (groups), movies and TV (letter ranges, large libraries), and podcasts (episode filter, only while active). Home videos are the exception: a count label row and no pills |
 
 Nothing else was found to vary. Declarations may not cover geometry, the breakpoint, or focus
 behaviour.
+
+**Domain content is data, not a declaration.** The arrangement renders whatever hero content, list
+rows, and pills a screen hands it. What the list shows (tracks vs chapters) and how its pills group
+(artist vs author-surname bucket) are DATA the screen supplies, not presentation differences, so
+they are not declaration fields and SHALL NOT be claimed as such. A screen's substitution table
+documents its domain data; its declaration covers only the presentation fields above.
 
 **On image shape specifically:** it sits close to geometry, which declarations are otherwise
 forbidden from touching, so it was raised for review and resolved in favour of keeping it. It is a
@@ -188,8 +200,9 @@ to serve three unrelated jobs (right-column base, unfocused queue, and Home's se
 ### 8. Focus colouring is one lever, covering the left panel
 
 Screens pass focus and never name a colour. Focus is two inputs, not one bool: the existing
-`PanelFocus` (which panel is focused) plus, for hero-on-left screens only, a pane bit naming which
-pane (`left`/`right`). Hero-on-top screens have one focusable region and pass no pane bit. Grouped
+`PanelFocus` (which panel is focused) plus, for hero-on-left screens only, a `left_focused: bool`
+naming which pane is focused (`false` = right pane). Hero-on-top screens have one focusable region
+and pass no pane bit. Grouped
 Music already derives exactly this (`left_focused = library_focused && track_active`,
 `right_focused = library_focused && !track_active`); the arrangement consumes the two inputs rather
 than a single `focused: bool`, which cannot express both the hero's panel-level brightness and the
@@ -241,9 +254,11 @@ renaming is a large mechanical diff. → Settle the role names in phase 1 review
 begins, not while it is under way.
 
 **`PLAYBACK_PANEL_BG` does two unrelated jobs** — the actual now-playing strip, and "resting content
-panel" on five screens. Splitting them will reveal places where the shared value was silently
-providing visual continuity between the playback strip and an adjacent panel. → Expect one or two
-seams to look wrong on first render and need a deliberate call; do not assume the split is neutral.
+panel" on essentially every content screen (25 references across 13 render files). Splitting them will reveal places where the shared value was silently
+providing visual continuity between the playback strip and an adjacent panel. → Verify each
+adjacency between the now-playing strip and a resting content panel after the split; where the
+shared value was supplying continuity, name the seam and choose the correct role before migrating
+(task 1.6).
 
 **Feeds and home videos gain a wide arrangement they have never had.** This is new behaviour, not a
 refactor, and no design for it exists beyond "hero-on-top like the others". → Land those two last,
@@ -280,12 +295,14 @@ decision 11.
 5. **Adoption:** Home, then audiobooks. Visible change expected and intended; Home bends to the
    shared definition.
 6. **New wide arrangements:** feeds, home videos.
-7. **Unified mouse hit targets**, with the per-screen `LayoutMain` fields removed.
-8. **Component files.** May be deferred to a follow-up change if phases 1-7 have already satisfied
+7. **Selection marker unification.** Every list adopts the two-column library list's edge marker
+   (decision 2). Deliberate visible change to every list.
+8. **Unified mouse hit targets**, with the per-screen `LayoutMain` fields removed.
+9. **Component files.** May be deferred to a follow-up change if phases 1-8 have already satisfied
    the 800-line cap.
 
 **Rollback:** each phase is a separate commit against unchanged behaviour for phases 1-4, so any of
-them can be reverted independently. Phases 5-6 change appearance deliberately and would be reverted
+them can be reverted independently. Phases 5-7 change appearance deliberately and would be reverted
 as a unit with their spec deltas.
 
 ## Open Questions
@@ -293,5 +310,5 @@ as a unit with their spec deltas.
 - Should the shared arrangement own the *count* of hero metadata lines, or only their order and
   content, when a screen is height-constrained? Deferrable: it affects the shared code's internals,
   not the specs or the phase order.
-- Whether phase 8 lands here or as a follow-up change. Deferrable: it depends on how much splitting
-  phases 1-7 already force, which is not knowable until phase 7.
+- Whether phase 9 (component files) lands here or as a follow-up change. Deferrable: it depends on
+  how much splitting phases 1-8 already force, which is not knowable until phase 8.

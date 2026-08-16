@@ -9,10 +9,19 @@ breakpoint SHALL NOT be derived from the list's minimum cell width; instead the 
 whatever the breakpoint leaves. When the available width falls below the breakpoint the list SHALL
 render a single column.
 
+This requirement governs hero-on-top screens' lists only. A hero-on-left screen's list SHALL render
+a single column regardless of the available width, per `right-panel-arrangements`; its column count
+SHALL NOT change at the breakpoint.
+
 #### Scenario: Wide list pane
 
 - **WHEN** the library list pane reaches the shared breakpoint
 - **THEN** the list SHALL render two columns of items
+
+#### Scenario: Hero-on-left list stays single-column
+
+- **WHEN** a hero-on-left screen's list is at or above the shared breakpoint
+- **THEN** the list SHALL render a single column, not two
 
 #### Scenario: Narrow list pane
 

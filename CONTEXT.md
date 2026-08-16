@@ -338,10 +338,10 @@ Queue.
 _Avoid_: layout mode, view mode, panel state
 
 **Wide mode / Narrow mode**:
-The right panel's responsive arrangement, chosen from the width available to
-that panel. Narrow places the hero above a single-column list. Wide uses either
-Hero-on-top or Hero-on-left, fixed per surface. Distinct from Panel mode, which
-is app-wide.
+The right panel's responsive width states, chosen from the width available to
+that panel. Narrow is not a distinct arrangement: it is always hero-on-top with
+a single-column list. Wide uses either Hero-on-top or Hero-on-left, fixed per
+surface. Distinct from Panel mode, which is app-wide.
 _Avoid_: responsive mode, view mode, layout mode, breakpoint mode
 
 **Hero-on-top**:

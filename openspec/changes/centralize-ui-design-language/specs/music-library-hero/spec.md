@@ -1,3 +1,8 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: Wide Music focus uses the Home visual language`
+  TO: `### Requirement: Hero-on-left uses one focus treatment`
+
 ## MODIFIED Requirements
 
 ### Requirement: Grouped Music uses responsive compositions
@@ -24,7 +29,7 @@ change arrangement because of this requirement.
 - **WHEN** a library assigned hero-on-top is rendered at or above the breakpoint
 - **THEN** it renders hero-on-top with a two-column list and does not adopt hero-on-left
 
-### Requirement: Wide Music focus uses the Home visual language
+### Requirement: Hero-on-left uses one focus treatment
 
 The hero-on-left arrangement SHALL apply one focused and unfocused surface treatment to every screen
 that uses it, including grouped Music and Home. During album browsing the list pane SHALL carry the

@@ -4,8 +4,8 @@ Every new screen and every visual tweak currently has to be directed page by pag
 definition of what a screen looks like, so the same decision is re-made in each renderer and then
 drifts. Measured across `src/app/render/` today: 49 hand-rolled background fills, 22 longhand
 focused/unfocused colour ternaries that already disagree with each other, 13 hand-rolled border
-rules despite a shared helper existing, and 99 references to per-screen `two_column`/`is_wide`/
-`is_narrow` flags.
+rules despite a shared helper existing, and per-screen `two_column`/`is_wide`/`is_narrow` flags
+scattered across the renderers.
 
 The wide/narrow arrangement has the same problem in a sharper form. Each screen tests the width
 itself and then branches on that flag throughout its renderer, so the two arrangements are the same

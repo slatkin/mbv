@@ -1,6 +1,11 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: Book libraries use the Music tab composition`
+  TO: `### Requirement: Book libraries use the hero-on-left arrangement`
+
 ## MODIFIED Requirements
 
-### Requirement: Book libraries use the Music tab composition
+### Requirement: Book libraries use the hero-on-left arrangement
 
 An Audiobookshelf book library SHALL use the hero-on-left arrangement, the same arrangement grouped
 Music uses: a persistent hero pane with chapters below, beside a persistent single-column book
@@ -9,8 +14,11 @@ with a single list column below it. Both panes SHALL remain visible at all times
 obtain this arrangement from the shared definition rather than by reproducing the Music tab's
 implementation, and SHALL NOT evaluate the breakpoint itself.
 
-The following substitutions SHALL be the only domain changes to that arrangement, and SHALL be
-expressed in the book tab's single declaration of differences:
+The following substitutions SHALL be the only domain changes to that arrangement. They are DATA
+the book tab supplies — the arrangement renders whatever hero content, list rows, and pills the
+screen hands it — so they are not presentation declarations. The book tab's single declaration of
+differences SHALL cover only the presentation fields (image shape, metadata lines and order, colour
+variant, element presence, and the `image source` for the cover):
 
 | Hero-on-left default | Audiobookshelf book tab |
 |---|---|

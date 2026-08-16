@@ -1,13 +1,14 @@
 ## 0. Prerequisites
 
+The unrelated pre-existing build errors (the `AudiobookshelfBook` match arms and the private
+`home_section_pref`) are fixed in their own change before this one starts; this change assumes a
+clean, runnable baseline.
+
 - [ ] 0.1 Archive the two completed-but-unarchived changes (`extend-home-latest-abs-feeds`,
       `redesign-audiobookshelf-book-browsing`) so this change's deltas apply to a current spec base
-- [ ] 0.2 Resolve the pre-existing build errors in the working tree (`AudiobookshelfBook` match arms
-      in `player_types.rs`, `player_run_commands.rs`, `player_reporting.rs`; private
-      `home_section_pref` in `tests_home_latest.rs`) so "unchanged" comparisons are meaningful
-- [ ] 0.3 Add a throwaway capture harness (uncommitted) that renders a named screen at one narrow and
-      one wide width to text, for before/after diffing
-- [ ] 0.4 Capture baselines for all eight screens; record where audiobooks differs from music at the
+- [ ] 0.2 Add a throwaway capture harness (uncommitted) that renders a named screen at one narrow and
+      one wide width to text, for before/after diffing; "unchanged" means byte-identical text
+- [ ] 0.3 Capture baselines for all eight screens; record where audiobooks differs from music at the
       same size, so the intended end state of phase 5 is known rather than discovered
 
 ## 1. Colour roles and the central focus lever
@@ -76,7 +77,7 @@
 - [ ] 5.3 Move Home's narrow hero onto the shared hero-on-top fallback: it keeps its
       image-beside-metadata wrap (already the shared shape) and gains the `hero_block_shell`
       (`▁`/`▔`) borders it lacks today (design decision 2)
-- [ ] 5.4 Move audiobooks onto hero-on-left, correcting the gap recorded in task 0.4; delete its
+- [ ] 5.4 Move audiobooks onto hero-on-left, correcting the gap recorded in task 0.3; delete its
       bespoke hero and browser painting
 - [ ] 5.5 Confirm Home and audiobooks now render identically to music at the same size, apart from
       their declared differences
@@ -88,33 +89,43 @@
 - [ ] 6.2 Move home videos onto hero-on-top; same
 - [ ] 6.3 Visually review both at wide widths — this is new behaviour with no prior design
 
-## 7. Unified mouse hit targets
+## 7. Selection marker unification
 
-- [ ] 7.1 Define one hit-target representation produced by both arrangements
-- [ ] 7.2 Replace the four per-screen row representations in `LayoutMain` (`left_item_rows`,
+- [ ] 7.1 Replace every list's selection marker with the two-column library list's edge
+      convention: a thin AQUA block at the list's outer edge, directional in two-column mode
+      (`▎` left, `▏` right), no inline glyph, no `##` title prefix (design decision 2)
+- [ ] 7.2 Remove the superseded markers: single-column `▌`+`##` (`list_rows.rs:97`), inline `▍`
+      (music_wide, album_rows, queue, home_latest_row), Home narrow's gutter `▎`, books' blank
+- [ ] 7.3 Verify by hand: every list's selected row shows the edge marker; this is a deliberate
+      visible change, so the "unchanged" claims of phases 3-4 do not apply to the marker
+
+## 8. Unified mouse hit targets
+
+- [ ] 8.1 Define one hit-target representation produced by both arrangements
+- [ ] 8.2 Replace the four per-screen row representations in `LayoutMain` (`left_item_rows`,
       `home.hitmap`, `wide_music_track_hitmap`, `audiobookshelf_episode_rows`) with it
-- [ ] 7.3 Replace the two per-screen pane rects (`wide_music_right_area`,
+- [ ] 8.3 Replace the two per-screen pane rects (`wide_music_right_area`,
       `audiobookshelf_book_right_area`) and delete `LayoutMain::is_wide_music_active()`
-- [ ] 7.4 Collapse the per-screen branches in `input_mouse.rs`, `input_mouse_panels.rs` and
+- [ ] 8.4 Collapse the per-screen branches in `input_mouse.rs`, `input_mouse_panels.rs` and
       `lib_cursor_actions.rs` onto the common form
-- [ ] 7.5 Verify by hand: click an item row, a pill, and each pane on all eight screens, in both
+- [ ] 8.5 Verify by hand: click an item row, a pill, and each pane on all eight screens, in both
       arrangements
 
-## 8. Component files
+## 9. Component files
 
-- [ ] 8.1 Decide whether this phase lands here or as a follow-up change (design Open Questions),
-      based on how much splitting phases 1-7 already forced
-- [ ] 8.2 Split `render_main` into one file per component: card, queue list, playback strip, tab bar,
+- [ ] 9.1 Decide whether this phase lands here or as a follow-up change (design Open Questions),
+      based on how much splitting phases 1-8 already forced
+- [ ] 9.2 Split `render_main` into one file per component: card, queue list, playback strip, tab bar,
       status bar, visualizer, library content
-- [ ] 8.3 Add **Component** to `CONTEXT.md` under Presentation, defined so it does not collide with
+- [ ] 9.3 Add **Component** to `CONTEXT.md` under Presentation, defined so it does not collide with
       Panel
 
-## 9. Close-out
+## 10. Close-out
 
-- [ ] 9.1 Delete the throwaway capture harness and all captures
-- [ ] 9.2 Run `rtk cargo clippy --workspace --all-targets` and
+- [ ] 10.1 Delete the throwaway capture harness and all captures
+- [ ] 10.2 Run `rtk cargo clippy --workspace --all-targets` and
       `rtk cargo nextest run -p mbv -p mbv-core`
-- [ ] 9.3 Run `rtk make check-code-file-lines`
-- [ ] 9.4 Confirm `CONTEXT.md` matches what was built (Wide/Narrow mode, Hero-on-top, Hero-on-left
+- [ ] 10.3 Run `rtk make check-code-file-lines`
+- [ ] 10.4 Confirm `CONTEXT.md` matches what was built (Wide/Narrow mode, Hero-on-top, Hero-on-left
       were added during design)
-- [ ] 9.5 Merge the applied deltas into `openspec/specs/` and archive this change
+- [ ] 10.5 Merge the applied deltas into `openspec/specs/` and archive this change

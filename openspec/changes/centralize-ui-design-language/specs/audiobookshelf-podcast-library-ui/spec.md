@@ -1,6 +1,11 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: Podcast libraries use the TV Shows tab composition`
+  TO: `### Requirement: Podcast libraries use the hero-on-top arrangement`
+
 ## MODIFIED Requirements
 
-### Requirement: Podcast libraries use the TV Shows tab composition
+### Requirement: Podcast libraries use the hero-on-top arrangement
 
 An Audiobookshelf podcast library SHALL use the hero-on-top arrangement, the same arrangement the TV
 Shows tab uses. The selected podcast hero SHALL occupy the dedicated full-width area pinned above the
@@ -8,8 +13,11 @@ podcast show list. The podcast show list SHALL occupy the remaining area below t
 appear beside the hero or detail content at any terminal width. The podcast tab SHALL obtain this
 composition from the shared arrangement rather than by reproducing the TV Shows tab's implementation.
 
-The following substitutions SHALL be the only domain changes to that arrangement, and SHALL be
-expressed in the podcast tab's single declaration of differences:
+The following substitutions SHALL be the only domain changes to that arrangement. They are DATA
+the podcast tab supplies — the arrangement renders whatever hero content, list rows, and pills the
+screen hands it — so they are not presentation declarations. The podcast tab's single declaration
+of differences SHALL cover only the presentation fields (image shape, metadata lines and order,
+colour variant, element presence, and the `image source` for the cover):
 
 | Hero-on-top default | Audiobookshelf podcast tab |
 |---|---|
