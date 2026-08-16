@@ -652,10 +652,24 @@ impl App {
             // Single-column Home paints its whole panel (content plus the
             // shared tab gutters) green while focused, replacing the base
             // `SURFACE_BACKDROP` fill painted above for `right_full_area`.
+            // When a player panel is present, also reclaim its trailing
+            // blank spacer row (`chrome_player.rs`'s `bottom_area`, always
+            // `SURFACE_BACKDROP` and identical for every tab) so the green
+            // fill owns that row outright instead of home.rs reaching back
+            // into player-panel territory to recolor part of it.
             if home_single_col_focused {
+                let fill_area = if player_h > 0 {
+                    Rect {
+                        y: right_area.y.saturating_sub(1),
+                        height: right_area.height.saturating_add(1),
+                        ..right_area
+                    }
+                } else {
+                    right_area
+                };
                 f.render_widget(
                     Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
-                    right_area,
+                    fill_area,
                 );
             }
             self.render_library(f, render_lib_area, left_focused, layout);

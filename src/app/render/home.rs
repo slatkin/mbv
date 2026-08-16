@@ -408,26 +408,10 @@ impl App {
         // green.)
         let selection_bg = palette::SURFACE_BACKDROP;
 
-        // Single-column Home owns the row above its pill bar (the playback
-        // panel's trailing indicator row): it follows the right panel's focus
-        // fill. The wide layout is a separate view and keeps the shared
-        // chrome color.
-        if !two_column {
-            let top_gap = Rect {
-                y: pills_area.y.saturating_sub(1),
-                height: 1,
-                ..pills_area
-            };
-            let top_gap_bg = if focused {
-                palette::SURFACE_FOCUSED
-            } else {
-                palette::SURFACE_BACKDROP
-            };
-            f.render_widget(
-                Block::default().style(Style::default().bg(top_gap_bg)),
-                top_gap,
-            );
-        }
+        // The row above the pill bar (the player panel's trailing blank
+        // spacer row) is owned by `render_main`'s top-level Home-focus fill
+        // now, not reached into from here — see `mod.rs`'s
+        // `home_single_col_focused` block.
 
         // Keep the row immediately below the Home pill bar free of list text.
         // The wide layout uses the list panel surface; other layouts inherit
