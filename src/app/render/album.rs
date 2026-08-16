@@ -490,11 +490,11 @@ impl App {
             );
         }
 
-        // Draw the aqua gutter marker for the two-column selected row,
-        // matching the movie library's two-column selection appearance.
-        if cols > 1 {
-            draw_column_selection_markers(f, area, cursor, &layout.left_item_rows, screen_offset);
-        }
+        // Draw the unified edge selection marker (design.md decision 2):
+        // every list shows it regardless of column count, matching every
+        // other `draw_column_selection_markers` caller (movies/TV,
+        // audiobooks, feeds).
+        draw_column_selection_markers(f, area, cursor, &layout.left_item_rows, screen_offset);
 
         offset
     }

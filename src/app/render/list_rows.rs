@@ -234,3 +234,33 @@ pub(super) fn draw_column_selection_markers(
         );
     }
 }
+
+#[cfg(test)]
+mod selection_marker_tests {
+    use super::*;
+
+    // Replaces `home_latest_row.rs`'s deleted `row_unselected_has_no_marker`
+    // (design.md decision 2 centralized every list's marker onto this one
+    // component, so the "unselected rows carry no marker glyph" guarantee
+    // belongs here now, not in a per-screen row painter).
+    #[test]
+    fn inactive_marker_is_blank() {
+        for edge in [MarkerEdge::Left, MarkerEdge::Right] {
+            let span = selection_marker(false, edge);
+            assert_eq!(span.content.as_ref(), " ");
+            assert_eq!(span.style.fg, None);
+        }
+    }
+
+    #[test]
+    fn active_marker_uses_directional_glyph() {
+        assert_eq!(
+            selection_marker(true, MarkerEdge::Left).content.as_ref(),
+            "\u{258e}"
+        );
+        assert_eq!(
+            selection_marker(true, MarkerEdge::Right).content.as_ref(),
+            "\u{1fb87}"
+        );
+    }
+}
