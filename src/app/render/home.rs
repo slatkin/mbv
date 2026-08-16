@@ -75,6 +75,9 @@ impl App {
         // Same threshold the library list uses to switch to two columns, so
         // Home's hero/list split and the library list cross over together.
         let two_column = area.width >= TWO_COLUMN_THRESHOLD;
+        // Single-column Home's whole panel (content plus the shared tab
+        // gutters) is painted green while focused in `render_main`, before
+        // this function runs.
         // The wide layout keeps two blank rows below the pill bar (panel
         // surface transition); the single-column layout only needs one.
         let pill_gap_rows: u16 = if two_column { 2 } else { 1 };
@@ -387,17 +390,33 @@ impl App {
         // top/bottom border rule, which the single-column layout doesn't
         // have.
         let selection_bg_full = green_panel_full.unwrap_or(list_area);
-        // The wide layout's row highlight (`LIBRARY_SIDE_BG`) reads as a
-        // contrasting dark bar against its own green panel surface. The
-        // single-column layout has no such panel — its ambient background
-        // *is* `LIBRARY_SIDE_BG` — so it needs a genuinely different,
-        // lighter fill (`BG_GREEN`, the app's other established
-        // selected/focused surface color) to actually show up.
-        let selection_bg = if green_panel_full.is_some() {
-            palette::LIBRARY_SIDE_BG
-        } else {
-            palette::BG_GREEN
-        };
+        // Selected-row highlight is the dark bar in both layouts: on the wide
+        // layout's green list panel, and on the single-column layout's green
+        // focused panel — so the same `LIBRARY_SIDE_BG` reads in both. (The
+        // single-column selection only draws while focused, when the panel is
+        // green.)
+        let selection_bg = palette::LIBRARY_SIDE_BG;
+
+        // Single-column Home owns the row above its pill bar (the playback
+        // panel's trailing indicator row): it follows the right panel's focus
+        // fill. The wide layout is a separate view and keeps the shared
+        // chrome color.
+        if !two_column {
+            let top_gap = Rect {
+                y: pills_area.y.saturating_sub(1),
+                height: 1,
+                ..pills_area
+            };
+            let top_gap_bg = if focused {
+                palette::BG_GREEN
+            } else {
+                palette::PLAYBACK_INDICATOR_BG
+            };
+            f.render_widget(
+                Block::default().style(Style::default().bg(top_gap_bg)),
+                top_gap,
+            );
+        }
 
         // Keep the row immediately below the Home pill bar free of list text.
         // The wide layout uses the list panel surface; other layouts inherit
@@ -415,12 +434,14 @@ impl App {
                 } else {
                     palette::PLAYBACK_PANEL_BG
                 }
+            } else if focused {
+                palette::BG_GREEN
             } else {
                 palette::LIBRARY_SIDE_BG
             };
             f.render_widget(
                 Paragraph::new(" ".repeat(pill_gap.width as usize))
-                    .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                    .style(Style::default().bg(panel_bg)),
                 pill_gap,
             );
             if pill_gap_rows > 1 {

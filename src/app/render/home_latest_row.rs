@@ -187,8 +187,13 @@ pub(super) fn render_home_latest_row(
     let title_col_w = avail.saturating_sub(META_COL_W + META_INNER_PAD * 2);
 
     let bold = selected && focused;
-    let mut spans: Vec<Span> = if is_narrow {
-        vec![Span::styled(
+    let mut spans: Vec<Span> = vec![
+        if selected && focused {
+            Span::styled("▍", Style::default().fg(palette::AQUA))
+        } else {
+            Span::raw(" ")
+        },
+        Span::styled(
             trunc_str(&item.display_name(), title_col_w),
             Style::default()
                 .fg(if wide_unfocused {
@@ -201,30 +206,11 @@ pub(super) fn render_home_latest_row(
                 } else {
                     Modifier::empty()
                 }),
-        )]
-    } else {
-        vec![
-            if selected && focused {
-                Span::styled("▍", Style::default().fg(palette::AQUA))
-            } else {
-                Span::raw(" ")
-            },
-            Span::styled(
-                trunc_str(&item.display_name(), title_col_w),
-                Style::default()
-                    .fg(if wide_unfocused {
-                        palette::MUTED
-                    } else {
-                        palette::WHITE
-                    })
-                    .add_modifier(if bold {
-                        Modifier::BOLD
-                    } else {
-                        Modifier::empty()
-                    }),
-            ),
-        ]
-    };
+        ),
+    ];
+    if is_narrow {
+        spans.remove(0);
+    }
     let actual_title_w: usize = spans.iter().map(|s| s.content.width()).sum();
 
     let meta_text = item

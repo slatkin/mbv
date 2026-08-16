@@ -319,6 +319,15 @@ impl App {
             } else {
                 palette::MUTED
             };
+            // The overview "card" blends with the panel surface: green in the
+            // single-column layout while the whole Home panel is green
+            // (`overview_pad == 0` identifies that layout), library surface
+            // otherwise.
+            let block_bg = if overview_pad == 0 && focused {
+                palette::BG_GREEN
+            } else {
+                palette::LIBRARY_SIDE_BG
+            };
             let bg_row = |wide: bool, y: u16| -> Rect {
                 if wide {
                     Rect {
@@ -339,7 +348,7 @@ impl App {
             let first_wide = layout.overview_lines[0].1;
             let last_wide = layout.overview_lines[layout.overview_lines.len() - 1].1;
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                Block::default().style(Style::default().bg(block_bg)),
                 bg_row(first_wide, row),
             );
             row += 1;
@@ -348,10 +357,7 @@ impl App {
                     break;
                 }
                 let r = bg_row(*wide, row);
-                f.render_widget(
-                    Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
-                    r,
-                );
+                f.render_widget(Block::default().style(Style::default().bg(block_bg)), r);
                 let text_r = Rect {
                     x: r.x + overview_pad,
                     width: r.width.saturating_sub(overview_pad * 2),
@@ -368,7 +374,7 @@ impl App {
             }
             if row < max_y {
                 f.render_widget(
-                    Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                    Block::default().style(Style::default().bg(block_bg)),
                     bg_row(last_wide, row),
                 );
             }

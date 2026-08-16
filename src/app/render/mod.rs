@@ -372,6 +372,14 @@ impl App {
                 .saturating_sub(player_h),
         };
 
+        // Single-column Home owns the whole right column (title bar, gutters,
+        // and content) with a green surface while it's focused, the same way
+        // the queue column goes green while it's focused.
+        let home_single_col_focused = right_visible
+            && left_focused
+            && self.tab == TabSelection::Home
+            && right_area.width < TWO_COLUMN_THRESHOLD;
+
         // Tab bar at the very top of the right column.
         let tab_area = Rect {
             x: right_area.x,
@@ -645,6 +653,15 @@ impl App {
             }
         }
         if right_visible {
+            // Single-column Home paints its whole panel (content plus the
+            // shared tab gutters) green while focused, replacing the base
+            // `LIBRARY_SIDE_BG` fill painted above for `right_full_area`.
+            if home_single_col_focused {
+                f.render_widget(
+                    Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                    right_area,
+                );
+            }
             self.render_library(f, render_lib_area, left_focused, layout);
         }
 
