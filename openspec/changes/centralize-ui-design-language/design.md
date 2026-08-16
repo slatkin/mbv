@@ -62,6 +62,138 @@ needs per-screen direction. It is the model for this change.
 - Making Home's hero focusable. It is a non-focusable preview; whether it ever becomes focusable
   is deferred and out of scope for this change.
 
+## Design language
+
+The deliverable the title names is a *language*, and a language has a structure and a vocabulary.
+Both are recorded here so the change reads as a design system rather than as a refactor.
+
+### Three tiers
+
+1. **Primitives** — raw hues. The 45 constants in `palette.rs` as they are today, made private.
+   After this change nothing outside `palette.rs` names a primitive.
+2. **Roles** — the public API. A role names what a colour *means* (a resting surface, a selected
+   row, a rule), never what hue it is. Every call site uses a role; changing a role changes every
+   use.
+3. **Variants** — named deviations from a role (decision 7), defined once beside the roles and opted
+   into by name. Nothing else may override a role.
+
+A new screen writes against roles and variants only: it cannot invent a hue the language does not
+already contain, and it cannot re-answer a question the language already answers.
+
+### Role vocabulary (final)
+
+Every constant in `palette.rs` is assigned to exactly one role below. Names are SCREAMING_SNAKE,
+grouped by category prefix. The value column is today's constant, unchanged. Where several constants
+share a hue they become one role; where one constant serves two jobs it becomes two roles with the
+same value (`SURFACE_PLAYBACK` / `SURFACE_RESTING`). `PRUPLE` is renamed `PURPLE`; nothing else is
+renamed or retired except as the table states. This table is the implementation; no role name is
+invented or re-decided during migration.
+
+**Surfaces**
+
+| Role | Value | Collapses |
+|---|---|---|
+| `SURFACE_BACKDROP` | `#2d353b` | `LIBRARY_SIDE_BG`, `PLAYBACK_INDICATOR_BG` |
+| `SURFACE_CHROME` | `#1e2326` | `DARK_BG`, `QUEUE_BUTTON_FOCUSED_BG` |
+| `SURFACE_PANEL` | `#3c424a` | `PANEL_BG` |
+| `SURFACE_FOCUSED` | `#3c4841` | `BG_GREEN`, `MEDIA_SELECTED_BG`, `QUEUE_COLUMN_FOCUSED_BG` |
+| `SURFACE_RESTING` | `#333c43` | `PLAYBACK_PANEL_BG` — the resting-content / unfocused half |
+| `SURFACE_PLAYBACK` | `#333c43` | `PLAYBACK_PANEL_BG` — the now-playing-strip half |
+| `SURFACE_ACCENT_SOFT` | `#48584e` | `BG_GREEN_SOFT`, `SCROLLBAR`, `TRACK_BLOCK_BG` |
+| `SURFACE_ITEM_FOCUSED` | `#535353` | `FOCUSED` |
+| `SURFACE_STATUS_PILL` | `#282828` | `STATUS_PILL_BG` |
+
+`QUEUE_LIST_BG` is retired: the focused queue list adopts `SURFACE_FOCUSED`, and its hue remains
+available only through `SURFACE_ACCENT_SOFT`.
+
+**Text**
+
+| Role | Value | Collapses |
+|---|---|---|
+| `TEXT_PRIMARY` | `#e6e6e6` | `TEXT` |
+| `TEXT_SECONDARY` | `#9e9e9e` | `SUBTLE` |
+| `TEXT_MUTED` | `#6c6c6c` | `MUTED` |
+| `TEXT_EMPHASIS` | `#fdf6e3` | `WHITE` |
+| `TEXT_SOFT` | `#f4ead3` | `SOFT_WHITE` |
+| `TEXT_ON_ACCENT` | `#1a1a1a` | `BASE` |
+| `TEXT_ON_STATE` | `#1e2326` | `TOAST_FG` |
+| `TEXT_DETAIL` | `#6c766c` | `MUTED_GREEN` |
+| `TEXT_QUEUE_UNFOCUSED` | `#48584e` | `QUEUE_UNFOCUSED_FG` |
+| `TEXT_PLAYBACK` | `#83c092` | `PLAYBACK_CONTENT_FG` |
+| `TEXT_PLAYBACK_META` | `#859289` | `PLAYBACK_META_FG` |
+
+**Accents**
+
+| Role | Value | Collapses |
+|---|---|---|
+| `ACCENT` | `#35a77c` | `AQUA` — selection marker, watched, folders |
+| `ACCENT_BLUE` | `#3a94c5` | `FOAM` |
+| `ACCENT_GREEN` | `#93b259` | `GREEN` |
+| `ACCENT_SAGE` | `#a7c080` | `IRIS` — active tab, focused pill text |
+| `ACCENT_WARM` | `#dbbc7f` | `YELLOW` |
+| `ACCENT_ORANGE` | `#e59875` | `ORANGE` |
+| `ACCENT_PURPLE` | `#d699b6` | `PRUPLE` (renamed) |
+
+**Rules**
+
+| Role | Value | Collapses |
+|---|---|---|
+| `RULE` | `#46545f` | `SEEK_TRACK` — the hero shell border and the seek track are one role, exactly as they share it today |
+| `BORDER_UNFOCUSED` | `#3f3f3f` | `OVERLAY` |
+
+**State**
+
+| Role | Value | Collapses |
+|---|---|---|
+| `STATE_ERROR` | `#e57e80` | `RED`, `TOAST_BG` |
+| `STATE_SUCCESS` | `#648c5a` | `TOAST_BG_SUCCESS` |
+| `STATE_WARNING` | `#b49650` | `TOAST_BG_WARNING` |
+
+**Pill selector** — the existing `PILL_SELECTOR_*` group is already a role group; it is renamed
+without value changes:
+
+| Role | Value | Collapses |
+|---|---|---|
+| `PILL_ROW_BG` | `#1e2326` | `PILL_SELECTOR_ROW_BG` |
+| `PILL_BG` | `#1e2326` | `PILL_SELECTOR_BG` |
+| `PILL_FG` | `#495156` | `PILL_SELECTOR_FG` |
+| `PILL_SELECTED_BG` | `#3a94c5` | `PILL_SELECTOR_SELECTED_BG` |
+| `PILL_SELECTED_FG` | `#1e2326` | `PILL_SELECTOR_SELECTED_FG` |
+| `PILL_OVERFLOW_FG` | `#3c4841` | `PILL_SELECTOR_OVERFLOW_FG` |
+
+The focus lever (decision 8) selects `SURFACE_FOCUSED` vs `SURFACE_RESTING` from the two-input focus
+model, so a screen supplies focus and never names either. This change defines **zero variants**:
+every colour disagreement is resolved by the mature-screen-wins rule (decision 4), so no screen needs
+one yet. The variant mechanism exists so a future screen can declare one without reaching for a
+literal; a variant added later is appended to this table, never defined at a call site.
+
+## Component catalogue
+
+A reusable component is the unit a screen or arrangement composes. Its contract: given a `Rect`, its
+data, and a focus state, it paints itself and returns its mouse hit targets. It never reads the
+breakpoint, never tests which screen it is on, and never names a colour — it uses roles. The
+arrangement decides *position and focus* and *which components are present*; it does not paint their
+contents.
+
+`render_pill_bar` is the one presentation concern that has never drifted, and it is the model for
+every row below. The catalogue records what each component is and what this change does to it.
+
+| Component | Today | This change |
+|---|---|---|
+| `PillBar` | shared, never drifted (`widgets.rs:339`); already returns hit targets | keep as-is |
+| `Scrollbar` | shared, but `render_scrollbar` takes a `color` arg while `render_right_scrollbar` hardcodes `SCROLLBAR` | role, not arg; one entry point |
+| `HeroShell` | two near-identical ▁/▔ painters: `hero_block_shell` (`list.rs:97`) and `render_selected_block_borders` (`widgets.rs:212`) | merge into one; takes focus state, resolves bg via the lever |
+| `Hero` | five bespoke implementations (`home_hero.rs`, `detail.rs`, `audiobookshelf.rs`, `music_wide.rs`, `audiobookshelf_books.rs`) | extract; owns image, metadata lines and order, overview wrapping; takes unwrapped strings + image shape |
+| `List` | per-screen row rendering + markers | extract; owns rows, the selection marker, and its scrollbar; returns row hit targets |
+| `SelectionMarker` | a no-op `selection_marker` (`widgets.rs:316`); four competing markers in the tree | make real: the unified edge block (decision 2) |
+| `QueuePanelFrame` | `render_queue_panel_frame` (`widgets.rs:258`) | joins the focus lever (task 1.10) |
+| `Card`, `TabBar`, `PlaybackStrip`, `StatusBar`, `Visualizer` | already separate files (`card.rs`, `chrome_tabs.rs`, `chrome_status.rs`, `visualizer.rs`) | formalize as components; stop being painted inline by `render_main` |
+
+The two arrangements are thin compositions of `Hero`, `List`, `PillBar`, `Scrollbar`, and
+`SelectionMarker`. This is stronger than the earlier "shared code paints" wording: the components
+being the *only* painters is what removes the 49 hand-rolled backgrounds and 13 hand-rolled rules,
+because a screen cannot reach past a component to paint a different background.
+
 ## Decisions
 
 ### 1. Two arrangements, not three
@@ -75,10 +207,12 @@ fallback that already exists and is exercised daily.
 maintaining three presentations where the third is a strict subset of the first, and would have left
 the hero-on-top screens with a mode change they do not actually have.
 
-### 2. Shared code paints; it does not return geometry
+### 2. Components paint; arrangements compose them
 
-The shared arrangement code owns hero text layout and wrapping, row rendering, pills, selection
-highlight, scrollbar, borders and backgrounds. Screens supply data.
+A reusable component owns its painting; the arrangement positions components and decides focus, and
+does not paint their contents (see "Component catalogue"). The arrangement reads the breakpoint once
+and hands each component a `Rect` and a focus state; each component returns its hit targets. Screens
+supply data.
 
 *Alternative rejected:* geometry-only helpers that return `Rect`s and let each screen paint. This is
 exactly what exists — `top_hero_layout` and `hero_block_shell` have been shared by three screens for
@@ -86,10 +220,23 @@ some time — and the tree still accumulated 49 hand-rolled background fills and
 rules. Geometry-only leaves every paint decision at the call site, which is the behaviour being
 removed.
 
-**Consequence to accept:** because the hero's text must wrap differently depending on whether the
-image sits above or beside it (`home.rs:181` vs `home.rs:260` pass different widths and padding to
-the same function), text wrapping moves into the shared code and screens hand over unwrapped
-strings. The shared code is therefore substantially larger than a frame-drawing helper.
+*Alternative rejected:* one arrangement object that paints everything itself — hero text, rows,
+pills, selection, scrollbar, borders and backgrounds. This removes drift but replaces eight drifting
+renderers with one god-object, and it strands the components that are already shared (`PillBar`,
+`Scrollbar`, `HeroShell`) inside an arrangement they cannot be reused from. Composition gives the
+same single point of control in smaller, reusable units.
+
+**Consequence:** the hero's text must wrap differently depending on whether the image sits above or
+beside it (`home.rs:181` vs `home.rs:260` pass different widths and padding to the same function), so
+text wrapping moves into the `Hero` component and screens hand over unwrapped strings. The `Hero`
+component is therefore substantially larger than a frame-drawing helper, and it owns the full
+metadata layout — order, content, and how many lines fit the rows it is given — since line count is
+a function of available height, not a per-screen decision.
+
+**Consequence:** the shared components become the single point of control. A bug in one affects every
+screen that uses it, where today a bug affects one. This is the same bet already made — successfully
+— with `render_pill_bar`; control is spread across small single-purpose components, so a defect is
+isolated to one concern (marker, shell, list) rather than one screen.
 
 **Narrow hero shell is uniform.** Home's narrow hero shares the image-beside-metadata shape (with
 overview wrapping below the image) with the mature hero-on-top (`detail.rs` `text_dims`), but it is
@@ -105,14 +252,15 @@ column's right edge), with no inline glyph and no `##` title prefix. This retire
 single-column `▌`+`##` indicator (`list_rows.rs:97-98`), the inline `▍` used by music, the album
 list, the queue and Home's wide rows, and books' blank marker. It is a deliberate visible change
 to every list, so it is an explicit exception to "mature screens change least" and to the
-"unchanged" claims of phases 3-4; it lands as its own phase. The tab bar is the exception and
-keeps its own selected-tab marker.
+"unchanged" claims of the component-extraction phases. The tab bar is the exception and keeps its
+own selected-tab marker.
 
 ### 3. The width is tested once, outside every screen
 
 No screen evaluates the breakpoint. `home.rs` loses `two_column` and its four derived aliases;
 `list.rs`, `audiobookshelf_books.rs` and both `render/mod.rs` sites lose their checks. The parent
-passes a `Rect` and a focus state and nothing else.
+reads the breakpoint once, resolves which arrangement each screen gets, and passes a `Rect`, a focus
+state, and that resolved arrangement — nothing else. No component reads the breakpoint.
 
 *Alternative rejected:* keeping the check per-screen but tidying it into a computed layout struct
 before rendering. The render path would still be shared between the two arrangements, so an edit
@@ -213,6 +361,15 @@ The queue and card join this even though their layout does not, because their cu
 (`BG_GREEN`/`PLAYBACK_PANEL_BG`), and leaving them out would preserve the exact complaint: having to
 direct a change panel by panel.
 
+**The card and queue list adopt the content-panel focus scale.** Their focused surface becomes
+`SURFACE_FOCUSED` (`#3c4841`, today's `BG_GREEN`) and their unfocused surface becomes
+`SURFACE_RESTING` (`#333c43`, today's `PLAYBACK_PANEL_BG`). This is a deliberate, small visible
+change to the left panel — focused `#48584e` → `#3c4841`, unfocused `#2d353b` → `#333c43` — and is
+part of "mature screens win", not a no-op. The left column's full backdrop already uses
+`QUEUE_COLUMN_FOCUSED_BG`/`PLAYBACK_PANEL_BG` (the content scale), so only the queue list and card
+surfaces move. `LIBRARY_SIDE_BG` keeps its remaining job — the right panel's backdrop — as
+`SURFACE_BACKDROP`.
+
 ### 9. One set of mouse hit targets
 
 `LayoutMain` currently has four representations of "rows you can click" (`left_item_rows`,
@@ -223,15 +380,18 @@ exists only because those fields are per-screen. The arrangement produces one co
 Without this, drawing would be unified but clicking would not, and each new screen would still add a
 field plus a branch in `input_mouse.rs`.
 
-### 10. Components get their own files; "Panel" keeps its meaning
+### 10. Components are the primitive; "Panel" keeps its meaning
 
-`render_main` draws roughly a dozen distinct things in 445 lines, which is why it is unclear where
-one element ends and the next begins. Each gets a file: card, queue list, playback strip, tab bar,
-status bar, visualizer, library content. They are called **components**, because `CONTEXT.md` binds
-**Panel** to Library-or-Queue.
+The reusable units are **components** — `Hero`, `List`, `PillBar`, `Scrollbar`, `SelectionMarker`,
+`HeroShell`, plus the chrome (`Card`, `TabBar`, `PlaybackStrip`, `StatusBar`, `Visualizer`) — because
+`CONTEXT.md` binds **Panel** to Library-or-Queue and that meaning must not drift. Each lives in its
+own file, and an arrangement is a composition of them (see "Component catalogue").
 
-This is sequenced last because nothing else depends on it, and the 800-line cap will already have
-forced much of it.
+Most of the chrome already has its file (`card.rs`, `chrome_tabs.rs`, `chrome_status.rs`,
+`visualizer.rs`); what remains is finishing `render_main`'s decomposition so it only composes and no
+longer paints inline (the backgrounds at `render/mod.rs:330,344` and the reach-ins at `:378`,
+`:526`). This is therefore a small, early phase rather than a deferred one: components are what
+phases 3-5 extract and compose, not an afterthought.
 
 ### 11. Verification is by throwaway comparison, not committed tests
 
@@ -242,73 +402,70 @@ width before the change, diffs after, and deletes the captures. Mechanical evide
 Existing structural tests that are not brittle (for example the column-count boundary test in
 `library_column_width.rs`) stay.
 
-## Risks / Trade-offs
+## Risks
+
+Each risk below names its mitigation, which is a task; nothing here is left for the implementer to
+judge later.
 
 **Home has no render tests at all.** `home_tests.rs` tests only a scroll helper that lives in
 another file, and `tests_home_latest.rs` (18 tests) never renders. Home is also the screen changing
-most. → Home's phase relies entirely on throwaway capture plus direct visual check; treat it as the
-phase most likely to need a second pass.
+most. → Home's adoption phase (phase 6) is verified by throwaway capture plus a direct visual check;
+the capture diff is the acceptance criterion, and no committed test is added.
 
-**Token naming is a one-way door in practice.** Once several hundred call sites use a role name,
-renaming is a large mechanical diff. → Settle the role names in phase 1 review, before migration
-begins, not while it is under way.
+**Role renames are a one-way door.** Renaming a role after call sites migrate is a large mechanical
+diff. → Implementers use exactly the role names in "Role vocabulary"; no alias or synonym is
+introduced during migration.
 
 **`PLAYBACK_PANEL_BG` does two unrelated jobs** — the actual now-playing strip, and "resting content
-panel" on essentially every content screen (25 references across 13 render files). Splitting them will reveal places where the shared value was silently
-providing visual continuity between the playback strip and an adjacent panel. → Verify each
-adjacency between the now-playing strip and a resting content panel after the split; where the
-shared value was supplying continuity, name the seam and choose the correct role before migrating
-(task 1.6).
+panel" on essentially every content screen (25 references across 13 render files). → Split into
+`SURFACE_PLAYBACK` (now-playing strip) and `SURFACE_RESTING` (resting content panel), both `#333c43`.
+Each of the 25 references is read and assigned to the role of what it draws; the values are identical
+so there is no visual change, but the assignment is by reading, not by convention.
 
 **Feeds and home videos gain a wide arrangement they have never had.** This is new behaviour, not a
-refactor, and no design for it exists beyond "hero-on-top like the others". → Land those two last,
-after the arrangement is proven by screens that already had a wide form.
+refactor. → Phase 7, last among the arrangement phases, after the arrangements are proven by screens
+that already had a wide form.
 
 **Audiobooks is specified as hero-on-left but is not applied as one.** The delta makes the spec
-enforceable, but the current visual gap is unmeasured. → Diff books against music at the same size
-before starting, so the intended end state is known rather than discovered.
+enforceable, but the current visual gap is unmeasured. → Task 0.3 diffs books against music at the
+same size before starting, so the intended end state is known before phase 6 begins.
 
 **Big-bang risk across eight screens plus the palette.** → Phased commits, each independently
 reviewable and revertable, in the order below.
 
 **Two completed changes are unarchived** (`extend-home-latest-abs-feeds`,
 `redesign-audiobookshelf-book-browsing`, both at 100%). Their deltas are not yet merged into
-`openspec/specs/`, so this change's deltas may be written against a stale base. → Archive both before
-implementation starts.
-
-**Trade-off accepted:** the shared code becomes large and central. A bug in it affects every screen
-at once, where today a bug affects one. This is the deliberate exchange for a single point of
-control, and is the same bet already made — successfully — with `render_pill_bar`.
+`openspec/specs/`, so this change's deltas may be written against a stale base. → Task 0.1 archives
+both before implementation starts.
 
 ## Migration Plan
 
 Phases are independently reviewable and land in order. Each ends with the throwaway comparison of
 decision 11.
 
-1. **Colour roles and the focus lever.** Additive; raw constants stay. No visible change anywhere,
-   including the left panel. This is the phase where role names are agreed.
+1. **Colour roles and the focus lever.** Additive; raw constants stay. The only visible change is
+   the card and queue list adopting the content-panel focus scale (decision 8); every other surface
+   is byte-identical. The role names are the "Role vocabulary" table; no name is decided during this
+   phase.
 2. **One breakpoint.** Ownership inverts, value unchanged; the compile-time assert is removed;
    `render/mod.rs` stops testing it. No visible change.
-3. **Hero-on-top extracted** from movies/TV; podcasts moves onto it. Mature screens, so any visible
-   change here is a defect.
-4. **Hero-on-left extracted** from grouped Music. Same standard.
-5. **Adoption:** Home, then audiobooks. Visible change expected and intended; Home bends to the
+3. **Extract the components.** `HeroShell` (merge the two ▁/▔ painters), `Scrollbar` (role, not
+   colour arg), `SelectionMarker` (make real — the unified edge marker; a deliberate visible change
+   to every list, so it is an explicit exception to "mature screens change least"), then `Hero` and
+   `List`, extracted from movies/TV (hero-on-top's source) and grouped Music (hero-on-left's source).
+4. **Assemble hero-on-top** from the components; movies/TV move onto it; podcasts adopt and delete
+   their duplicate hero. Mature screens, so any visible change here is a defect.
+5. **Assemble hero-on-left** from the components; grouped Music moves onto it, including the
+   two-pane focus model and the hero-on-left pill row.
+6. **Adoption:** Home, then audiobooks. Visible change expected and intended; Home bends to the
    shared definition.
-6. **New wide arrangements:** feeds, home videos.
-7. **Selection marker unification.** Every list adopts the two-column library list's edge marker
-   (decision 2). Deliberate visible change to every list.
-8. **Unified mouse hit targets**, with the per-screen `LayoutMain` fields removed.
-9. **Component files.** May be deferred to a follow-up change if phases 1-8 have already satisfied
-   the 800-line cap.
+7. **New wide arrangements:** feeds, home videos.
+8. **Unified mouse hit targets.** Components already return targets, so this phase removes the four
+   per-screen row representations and the two pane rects from `LayoutMain` and collapses the
+   `input_mouse*` branches.
+9. **Chrome component files.** Finish `render_main`'s decomposition so it only composes; most chrome
+   already has its file.
 
-**Rollback:** each phase is a separate commit against unchanged behaviour for phases 1-4, so any of
-them can be reverted independently. Phases 5-7 change appearance deliberately and would be reverted
-as a unit with their spec deltas.
-
-## Open Questions
-
-- Should the shared arrangement own the *count* of hero metadata lines, or only their order and
-  content, when a screen is height-constrained? Deferrable: it affects the shared code's internals,
-  not the specs or the phase order.
-- Whether phase 9 (component files) lands here or as a follow-up change. Deferrable: it depends on
-  how much splitting phases 1-8 already force, which is not knowable until phase 8.
+**Rollback:** each phase is a separate commit. Phases 2, 4-5 and 8-9 are no-visible-change and
+revert independently. Phases 1 (card/queue focus scale), 3 (selection marker) and 6-7 change
+appearance deliberately and would be reverted as a unit with their spec deltas.

@@ -31,7 +31,8 @@ Feeds and home videos have no wide arrangement at all.
   screens supply a focus state — the existing `PanelFocus` plus, for hero-on-left screens, a pane
   bit — and never name a colour. This covers the left panel (card and queue) as well, whose current
   pair (`QUEUE_LIST_BG`/`LIBRARY_SIDE_BG`) disagrees with every content panel
-  (`BG_GREEN`/`PLAYBACK_PANEL_BG`).
+  (`BG_GREEN`/`PLAYBACK_PANEL_BG`). The card and queue adopt the content-panel focus scale — a
+  deliberate, small visible change (`#48584e`→`#3c4841` focused, `#2d353b`→`#333c43` unfocused).
 - Per-screen colour exceptions are permitted, but only as **named variants** defined once in the
   token layer and opted into by name. No call site passes a raw `Color`.
 - Where two screens disagree today, **the mature screen wins**: movies, TV shows and music define
@@ -49,11 +50,15 @@ Feeds and home videos have no wide arrangement at all.
 - **One breakpoint**, centrally managed, keeping today's value. It stops being derived from library
   cell arithmetic (`library_column_width.rs:29` currently hard-asserts `82 == 2*40 + 2`); the library
   column count derives from the breakpoint instead of defining it.
-- Shared code **paints**, it does not merely return geometry. It owns hero text layout and wrapping,
-  rows, pills, selection highlight, scrollbar, borders and backgrounds. Screens supply data.
-- Shared code owns the whole arrangement, including regions the parent currently reaches in to
-  paint: `render/mod.rs:378` (Home's narrow background) and `render/mod.rs:526-547` (Music's pills
-  row). The parent passes a `Rect` and a focus state (panel + pane), nothing else.
+- **Reusable components paint; arrangements compose them.** Components (`Hero`, `List`, `PillBar`,
+  `Scrollbar`, `SelectionMarker`, `HeroShell`) own their painting — hero text layout and wrapping,
+  rows, pills, selection, scrollbar, borders and backgrounds — and each returns its mouse hit
+  targets. The two arrangements are composite components that position the same leaves and decide
+  focus. Screens supply data.
+- The arrangement, including regions the parent currently reaches in to paint — `render/mod.rs:378`
+  (Home's narrow background) and `render/mod.rs:526-547` (Music's pills row) — is produced by the
+  shared components. The parent passes a `Rect`, a focus state (panel + pane), and the resolved
+  arrangement, nothing else.
 - **Up to two focusable panes** in hero-on-left. Home has none to focus today; that is
   unimplemented content, not a different contract.
 - **NEW BEHAVIOUR**: feeds and home videos gain a wide arrangement (hero-on-top). They currently
@@ -79,12 +84,15 @@ Feeds and home videos have no wide arrangement at all.
 
 ### Component file boundaries
 
-- One file per UI component, so it is unambiguous where one begins and another ends: card, queue
-  list, playback strip, tab bar, status bar, visualizer, library content. `render_main` currently
-  draws all of them in a single 445-line function.
+- One file per UI component, so it is unambiguous where one begins and another ends. The reusable
+  units are `Hero`, `List`, `PillBar`, `Scrollbar`, `SelectionMarker`, `HeroShell`, plus the chrome
+  (`Card`, `TabBar`, `PlaybackStrip`, `StatusBar`, `Visualizer`). Most of the chrome already has its
+  file (`card.rs`, `chrome_tabs.rs`, `chrome_status.rs`, `visualizer.rs`); `render_main` still
+  paints some inline backgrounds and reaches into Home and Music.
 - "Component" is the chosen word because **Panel** is already taken by the glossary, where it means
   Library-or-Queue (what Panel mode and Panel focus switch between).
-- This may land as a later phase if that is simpler.
+- Components are the primitive; the arrangements are compositions of them, not a separate deferred
+  phase (see `design.md`).
 
 ## Capabilities
 
@@ -113,7 +121,8 @@ Feeds and home videos have no wide arrangement at all.
 ## Impact
 
 **Glossary** — `CONTEXT.md` gained Wide mode / Narrow mode, Hero-on-top and Hero-on-left under
-Presentation during design. Component may need adding.
+Presentation during design. **Component** is added under Presentation (task 9.2), defined so it does
+not collide with **Panel**.
 
 **Code, by area:**
 
