@@ -28,8 +28,9 @@ Feeds and home videos have no wide arrangement at all.
 - Add a semantic token layer over `palette.rs`. Tokens name roles, not hues. The existing raw
   constants stay until callers migrate, then are removed.
 - **Focus colour becomes a single central lever.** Shared code owns the focused/unfocused switch;
-  screens pass `focused: bool` and never name a colour. This covers the left panel (card and queue)
-  as well, whose current pair (`QUEUE_LIST_BG`/`LIBRARY_SIDE_BG`) disagrees with every content panel
+  screens supply a focus state — the existing `PanelFocus` plus, for hero-on-left screens, a pane
+  bit — and never name a colour. This covers the left panel (card and queue) as well, whose current
+  pair (`QUEUE_LIST_BG`/`LIBRARY_SIDE_BG`) disagrees with every content panel
   (`BG_GREEN`/`PLAYBACK_PANEL_BG`).
 - Per-screen colour exceptions are permitted, but only as **named variants** defined once in the
   token layer and opted into by name. No call site passes a raw `Color`.
@@ -52,8 +53,8 @@ Feeds and home videos have no wide arrangement at all.
   rows, pills, selection highlight, scrollbar, borders and backgrounds. Screens supply data.
 - Shared code owns the whole arrangement, including regions the parent currently reaches in to
   paint: `render/mod.rs:378` (Home's narrow background) and `render/mod.rs:526-547` (Music's pills
-  row). The parent passes a `Rect` and `focused`, nothing else.
-- **Two focusable panes** in hero-on-left, uniformly. Home has none to focus today; that is
+  row). The parent passes a `Rect` and a focus state (panel + pane), nothing else.
+- **Up to two focusable panes** in hero-on-left. Home has none to focus today; that is
   unimplemented content, not a different contract.
 - **NEW BEHAVIOUR**: feeds and home videos gain a wide arrangement (hero-on-top). They currently
   render identically at 200 columns and at 60.
