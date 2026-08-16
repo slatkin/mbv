@@ -97,13 +97,6 @@ pub const PILL_SELECTED_BG: Color = PILL_SELECTOR_SELECTED_BG;
 pub const PILL_SELECTED_FG: Color = PILL_SELECTOR_SELECTED_FG;
 pub const PILL_OVERFLOW_FG: Color = PILL_SELECTOR_OVERFLOW_FG;
 
-/// Named colour variants (design decision 7): a per-screen colour exception
-/// is defined once here and opted into by name; no call site may pass a raw
-/// `Color`. This phase defines zero variants — every colour disagreement
-/// today is resolved by the mature-screen-wins rule instead. A variant added
-/// later is appended to this enum, never defined at a call site.
-pub enum ColorVariant {}
-
 /// The central focus lever (design decision 8). Every panel and component
 /// resolves its focused/unfocused surface through this single function
 /// instead of naming `SURFACE_FOCUSED`/`SURFACE_RESTING` at the call site.
