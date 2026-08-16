@@ -84,7 +84,7 @@ fn spawn_ctrl_client(
         };
 
         let status = player_status.lock().unwrap().clone();
-        let q = shared_queue.queue.lock().unwrap();
+        let q = shared_queue.queue.lock().unwrap().clone();
         let source = shared_queue.source.lock().unwrap().clone();
         let init_event = unified_queue_state_for_peer(
             &status,
