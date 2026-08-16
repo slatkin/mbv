@@ -148,7 +148,7 @@ impl App {
                 );
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
-                        super::selection_marker(true),
+                        super::selection_marker(false, super::MarkerEdge::Left),
                         Span::raw(" "),
                         Span::styled(hint.to_string(), Style::default().fg(palette::MUTED)),
                     ])),
@@ -163,7 +163,7 @@ impl App {
                 if row + 1 < max_y {
                     f.render_widget(
                         Paragraph::new(Line::from(vec![
-                            super::selection_marker(true),
+                            super::selection_marker(false, super::MarkerEdge::Left),
                             Span::raw(" "),
                         ])),
                         Rect {
@@ -252,13 +252,15 @@ impl App {
                 let is_cursor = i == cursor;
                 let selected = is_cursor && focused;
                 let row_style = if is_cursor && focused {
-                    Style::default().fg(palette::YELLOW).bg(palette::BG_GREEN)
+                    Style::default()
+                        .fg(palette::YELLOW)
+                        .bg(palette::SURFACE_FOCUSED)
                 } else if focused {
                     Style::default().fg(palette::WHITE)
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker = super::selection_marker(selected_region_gutter);
+                let marker = super::selection_marker(selected, super::MarkerEdge::Left);
                 let text_fg = if selected {
                     palette::YELLOW
                 } else {
@@ -349,7 +351,13 @@ impl App {
         let visible_rows = table_area.height as usize;
         if !selected_region_gutter && n > visible_rows {
             let max_offset = n.saturating_sub(visible_rows);
-            super::render_right_scrollbar(f, table_area, max_offset, state.offset());
+            super::render_right_scrollbar(
+                f,
+                table_area,
+                max_offset,
+                state.offset(),
+                palette::SCROLLBAR,
+            );
         }
     }
 }

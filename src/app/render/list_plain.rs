@@ -4,7 +4,7 @@ use super::list_rows::{
 };
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
-use crate::app::App;
+use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -102,8 +102,9 @@ impl App {
                         };
 
                         // Every cell starts with a 1-column leading
-                        // separator (the selected cell's `▍` grabber, a
-                        // space otherwise), so titles align across rows.
+                        // separator (the selected cell's highlight
+                        // background, a plain space otherwise), so titles
+                        // align across rows.
                         let avail = cell_w.saturating_sub(2);
                         let name_w = avail.saturating_sub(dur_str.width());
                         let title = trunc_str(&item_name, name_w);
@@ -114,9 +115,7 @@ impl App {
                         } else {
                             cell_w + LIBRARY_COLUMN_GAP as usize
                         };
-                        spans.extend(item_cell_spans(
-                            title, dur_str, selected, focused, fg, pad_to, cols,
-                        ));
+                        spans.extend(item_cell_spans(title, dur_str, selected, fg, pad_to));
                     }
                     ListItem::new(Line::from(spans))
                 }
@@ -155,17 +154,10 @@ impl App {
 
         if show_scrollbar {
             let max_off = total_display.saturating_sub(visible);
-            super::render_right_scrollbar(f, content_area, max_off, offset);
+            super::render_right_scrollbar(f, content_area, max_off, offset, palette::SCROLLBAR);
         }
 
-        draw_column_selection_markers(
-            f,
-            content_area,
-            cursor,
-            cols,
-            &layout.left_item_rows,
-            offset,
-        );
+        draw_column_selection_markers(f, content_area, cursor, &layout.left_item_rows, offset);
 
         final_offset
     }

@@ -1,4 +1,6 @@
-use super::list::{hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS};
+use super::hero::{
+    self, hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
+};
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::images::audiobookshelf_book_cover_cache_key;
 use crate::app::layout::LayoutMain;
@@ -17,18 +19,14 @@ use ratatui::Frame;
 /// for extraction).
 pub(super) const PANE_PAD_X: u16 = 2;
 pub(super) const PANE_PAD_Y: u16 = 1;
-/// Empty columns separating the wide hero+chapters and browser panes.
-const WIDE_PANE_GAP: u16 = 2;
-/// Minimum pane width, matching Music's wide layout.
-const MIN_PANE_WIDTH: u16 = 40;
-/// Minimum outer area width and height for the wide two-pane layout; below
-/// this the caller falls back to the narrow hero-on-top renderer.
-const MIN_WIDE_AREA_HEIGHT: u16 = 6;
 /// Blank row separating the hero from the chapter list in the wide left pane.
 const LEFT_SEPARATOR_ROWS: u16 = 1;
-/// Height of the bucket-pill row inside the right pane.
+/// Height of the bucket-pill row inside the narrow right pane. The wide right
+/// pane's pill row height comes from `hero::hero_on_left_right_pane` instead
+/// (phase 6, "Adopt: Home and audiobooks").
 pub(super) const PILLS_ROW_HEIGHT: u16 = 1;
-/// Blank rows below the pills before the book list starts.
+/// Blank rows below the pills before the book list starts, narrow-pane only
+/// (see `PILLS_ROW_HEIGHT`).
 pub(super) const PILLS_GAP_ROWS: u16 = 1;
 
 /// The book tab's persistent list renders one row per chapter from the
@@ -73,7 +71,7 @@ impl App {
         let right_focused = focused && !chapters_focused;
 
         if area.width >= TWO_COLUMN_THRESHOLD
-            && area.height.saturating_sub(1) >= MIN_WIDE_AREA_HEIGHT
+            && area.height.saturating_sub(1) >= hero::HERO_ON_LEFT_MIN_AREA_HEIGHT
         {
             self.render_wide_audiobookshelf_books(
                 f,
@@ -111,12 +109,12 @@ impl App {
             height: area.height.saturating_sub(1),
             ..area
         };
-        let (mut left_panel, right_panel) = book_wide_panes(area);
+        let (mut left_panel, right_panel) = hero::hero_on_left_panes(area);
         left_panel.height = content_area.height;
 
         // Library-side separator row below the left pane, matching Music.
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
             Rect {
                 x: left_panel.x,
                 y: left_panel.bottom(),
@@ -128,11 +126,7 @@ impl App {
         let left_area = inset_pane_vertically(left_panel);
         let right_area = inset_pane_vertically(right_panel);
 
-        let left_bg = if left_focused {
-            palette::BG_GREEN
-        } else {
-            palette::PLAYBACK_PANEL_BG
-        };
+        let left_bg = palette::resolve_surface_focus(left_focused);
         f.render_widget(
             Block::default().style(Style::default().bg(left_bg)),
             left_panel,
@@ -262,7 +256,7 @@ impl App {
         };
         let max_y = area.y + area.height;
         let mut row = area.y;
-        row = super::detail::render_hero_title_row(
+        row = super::hero::render_hero_title_row(
             f,
             area.x,
             row,
@@ -412,11 +406,7 @@ impl App {
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker = if selected {
-                    super::selection_marker(focused)
-                } else {
-                    Span::raw(" ")
-                };
+                let marker = super::selection_marker(selected, super::MarkerEdge::Left);
                 let (title, duration) = match row {
                     BookRow::Chapter { title, end, start } => {
                         let seconds = (*end - *start).max(0.0) as i64;
@@ -459,33 +449,6 @@ impl App {
             &mut table_state,
         );
     }
-}
-
-/// Returns `(left_pane, right_pane)` for the wide two-column split, matching
-/// Music's `wide_music_panes` ratio (40/60, `MIN_PANE_WIDTH`-clamped, with a
-/// `WIDE_PANE_GAP`-column gap).
-fn book_wide_panes(content_area: Rect) -> (Rect, Rect) {
-    let left_w = ((content_area.width as u32 * 2 / 5) as u16)
-        .max(MIN_PANE_WIDTH)
-        .min(content_area.width.saturating_sub(MIN_PANE_WIDTH));
-    let right_w = content_area
-        .width
-        .saturating_sub(left_w)
-        .saturating_sub(WIDE_PANE_GAP);
-    (
-        Rect {
-            x: content_area.x,
-            y: content_area.y,
-            width: left_w,
-            height: content_area.height,
-        },
-        Rect {
-            x: content_area.x + left_w + WIDE_PANE_GAP,
-            y: content_area.y,
-            width: right_w,
-            height: content_area.height,
-        },
-    )
 }
 
 fn inset_pane_vertically(area: Rect) -> Rect {

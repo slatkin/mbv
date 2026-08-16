@@ -17,6 +17,7 @@ mod detail;
 mod detail_series;
 mod detail_series_view;
 mod feeds;
+mod hero;
 mod home;
 mod home_feed;
 mod home_hero;
@@ -47,6 +48,7 @@ mod widgets;
 // and/or `use super::*` in render/tests.rs.
 pub(super) use album_plan::sorted_group_album_order;
 use chrome::LIST_PLAY_ICON;
+use list_rows::{selection_marker, MarkerEdge};
 pub(super) use sort_filter::{
     effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,
 };
@@ -54,9 +56,9 @@ pub(crate) use sort_filter::{initial_group_artist_sort_key, LetterFilter, LIBRAR
 use widgets::{
     content_width, render_count_label, render_pill_bar, render_placeholder,
     render_queue_panel_frame, render_right_scrollbar, render_right_scrollbar_with_viewport,
-    render_scrollbar, render_selected_block_background, render_selected_block_borders,
-    right_panel_content_area, selection_marker, PillBar, COLUMN_GAP, MUSIC_ALBUM_IMAGE_TYPES,
-    RENDER_FILTER,
+    render_scrollbar_with_viewport_at, render_selected_block_background,
+    render_selected_block_borders, right_panel_content_area, PillBar, COLUMN_GAP,
+    MUSIC_ALBUM_IMAGE_TYPES, RENDER_FILTER,
 };
 
 use super::ui_util::natural_sort_key;
@@ -79,8 +81,6 @@ use visualizer::VISUALIZER_HEIGHT;
 use mbv_core::api::TICKS_PER_SECOND;
 #[cfg(test)]
 use unicode_width::UnicodeWidthStr;
-#[cfg(test)]
-use widgets::render_scrollbar_with_viewport;
 
 /// Height of the tab-bar box: 1 row padding + 1 row tab + 1 row spacer.
 pub(super) const TAB_BAR_BOX_HEIGHT: u16 = 3;
@@ -322,11 +322,7 @@ impl App {
 
         // Full-column background behind the card image and queue list.
         if self.panel_mode != PanelMode::LibraryOnly {
-            let left_bg = if queue_focused {
-                palette::QUEUE_COLUMN_FOCUSED_BG
-            } else {
-                palette::PLAYBACK_PANEL_BG
-            };
+            let left_bg = palette::resolve_surface_focus(queue_focused);
             f.render_widget(
                 Block::default().style(Style::default().bg(left_bg)),
                 left_area,
@@ -342,7 +338,7 @@ impl App {
         };
         if right_visible {
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
                 right_full_area,
             );
         }
@@ -400,9 +396,9 @@ impl App {
                 height: player_h,
             };
             let playback_panel_bg = if queue_focused {
-                palette::BG_GREEN
+                palette::SURFACE_FOCUSED
             } else {
-                palette::PLAYBACK_PANEL_BG
+                palette::SURFACE_PLAYBACK
             };
             self.render_player_panel(
                 f,
@@ -447,7 +443,7 @@ impl App {
                         height: card_h,
                     };
                     f.render_widget(
-                        Block::default().style(Style::default().bg(palette::DARK_BG)),
+                        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
                         panel_area,
                     );
                     self.render_player_panel(
@@ -457,10 +453,10 @@ impl App {
                         player_h,
                         show_controls,
                         now_playing_title,
-                        palette::DARK_BG,
+                        palette::SURFACE_CHROME,
                     );
                     // Fill leftover space below the playback content with the
-                    // visualizer when enabled; otherwise it stays DARK_BG.
+                    // visualizer when enabled; otherwise it stays SURFACE_CHROME.
                     let wide_viz_h = card_h.saturating_sub(player_h);
                     if self.visualizer_enabled && wide_viz_h >= 3 {
                         let wide_viz_area = Rect {
@@ -469,7 +465,7 @@ impl App {
                             width: panel_area.width,
                             height: wide_viz_h,
                         };
-                        self.render_visualizer(f, wide_viz_area, palette::DARK_BG);
+                        self.render_visualizer(f, wide_viz_area, palette::SURFACE_CHROME);
                     }
                 } else {
                     let panel_area = Rect {
@@ -485,7 +481,7 @@ impl App {
                         player_h,
                         show_controls,
                         now_playing_title,
-                        palette::DARK_BG,
+                        palette::SURFACE_CHROME,
                     );
                     narrow_player_h = player_h;
                     left_remaining = left_remaining.saturating_sub(player_h);
@@ -599,7 +595,7 @@ impl App {
                     width: qla.width.saturating_sub(4),
                     height: 1,
                 };
-                let pill_bg = palette::DARK_BG;
+                let pill_bg = palette::SURFACE_CHROME;
                 f.render_widget(
                     Block::default().style(Style::default().bg(pill_bg)),
                     pill_row,
@@ -633,7 +629,7 @@ impl App {
                     width: left_content.width,
                     height: visualizer_h,
                 };
-                self.render_visualizer(f, left_viz_area, palette::LIBRARY_SIDE_BG);
+                self.render_visualizer(f, left_viz_area, palette::SURFACE_BACKDROP);
                 // Render horizontal rule at the bottom of the left visualizer
                 let bottom_y = left_viz_area.y + left_viz_area.height - 1;
                 let hr_text = "▁".repeat(left_viz_area.width as usize);
@@ -641,7 +637,7 @@ impl App {
                     hr_text,
                     Style::default()
                         .fg(palette::SEEK_TRACK)
-                        .bg(palette::LIBRARY_SIDE_BG),
+                        .bg(palette::SURFACE_BACKDROP),
                 ));
                 let hr_area = Rect {
                     x: left_viz_area.x,
@@ -655,10 +651,10 @@ impl App {
         if right_visible {
             // Single-column Home paints its whole panel (content plus the
             // shared tab gutters) green while focused, replacing the base
-            // `LIBRARY_SIDE_BG` fill painted above for `right_full_area`.
+            // `SURFACE_BACKDROP` fill painted above for `right_full_area`.
             if home_single_col_focused {
                 f.render_widget(
-                    Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                    Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
                     right_area,
                 );
             }
@@ -683,7 +679,7 @@ impl App {
                 let styled_as_status_bar = self.status_expires.is_none()
                     || self.status_severity == super::notify_actions::ToastSeverity::Neutral;
                 let (toast_bg, toast_fg) = if styled_as_status_bar {
-                    (palette::DARK_BG, palette::TEXT)
+                    (palette::SURFACE_CHROME, palette::TEXT)
                 } else {
                     (self.status_severity.toast_bg(), palette::TOAST_FG)
                 };
@@ -729,3 +725,8 @@ mod test_helpers;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+// THROWAWAY (task 0.2/10.1): centralize-ui-design-language capture harness,
+// deleted at close-out along with this registration line.
+#[cfg(test)]
+#[path = "capture_harness.rs"]
+mod capture_harness;

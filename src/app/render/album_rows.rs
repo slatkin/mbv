@@ -53,7 +53,7 @@ impl App {
         let label_style = Style::default().fg(palette::YELLOW);
         let mut spans = Vec::with_capacity(3);
         if grouped_block {
-            spans.push(super::selection_marker(false));
+            spans.push(super::selection_marker(false, super::MarkerEdge::Left));
             spans.push(Span::raw(" "));
         } else {
             spans.push(Span::raw(" "));
@@ -119,7 +119,7 @@ impl App {
                     let title_style = if selected {
                         Style::default()
                             .fg(palette::YELLOW)
-                            .bg(palette::PLAYBACK_PANEL_BG)
+                            .bg(palette::SURFACE_RESTING)
                             .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(focused_or_subtle(focused))
@@ -177,7 +177,7 @@ impl App {
                         line.into_owned(),
                         Style::default()
                             .fg(palette::YELLOW)
-                            .bg(palette::PLAYBACK_PANEL_BG)
+                            .bg(palette::SURFACE_RESTING)
                             .add_modifier(Modifier::BOLD),
                     ),
                 ];
@@ -218,7 +218,7 @@ impl App {
         let title_style = if selected {
             Style::default()
                 .fg(palette::YELLOW)
-                .bg(palette::PLAYBACK_PANEL_BG)
+                .bg(palette::SURFACE_RESTING)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(focused_or_subtle(focused))
@@ -249,7 +249,7 @@ impl App {
     ) {
         let (_, year, title) = &album_info[idx];
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
             Rect {
                 x: panel_area.x,
                 y: row_area.y,
@@ -268,7 +268,7 @@ impl App {
             .saturating_sub(4 + suffix.chars().count() as u16) as usize;
         let title = trunc_str(title, title_width);
         let mut spans = vec![
-            Span::styled("▍", Style::default().fg(palette::AQUA)),
+            super::selection_marker(true, super::MarkerEdge::Left),
             Span::raw(" "),
             Span::styled(
                 title,

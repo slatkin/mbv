@@ -1,12 +1,11 @@
-use super::detail::render_hero_title_row;
 use super::detail_series::{
     wrap_overview_lines, SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
     SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS,
     SERIES_IMAGE_ROWS,
 };
-use super::list::{
-    hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS,
-    HERO_TITLE_ROWS,
+use super::hero::{
+    hero_block_shell, top_hero_layout, HeroContent, HeroImage, ImageTop, HERO_BLOCK_EXTRA_ROWS,
+    HERO_PLACEHOLDER_ROWS, HERO_TITLE_ROWS,
 };
 use super::list_rows::{
     draw_column_selection_markers, focused_or_subtle, item_cell_spans, SELECTED_BLOCK_SIDE_PADDING,
@@ -200,20 +199,6 @@ impl App {
             return;
         };
         let max_y = area.y + area.height;
-        let mut row = area.y;
-        if show_title {
-            row = render_hero_title_row(
-                f,
-                area.x,
-                row,
-                max_y,
-                area.width.saturating_sub(1),
-                &show.title,
-                focused,
-            );
-        }
-
-        let image_start = row;
         let server_url = self
             .config
             .lock()
@@ -257,8 +242,33 @@ impl App {
                     (0, 0, false)
                 }
             });
-        let image_x = area.x + area.width.saturating_sub(image_width);
-        let image_end = image_start + image_height;
+        // Title row (paints into `area`, same shape as the movie/series
+        // hero's top-row title) plus the image's right-aligned reservation,
+        // via the shared `Hero` component; the author/description block
+        // below keeps its own choreography (spacer only before a present
+        // description, then an unconditional trailing spacer), which
+        // doesn't match either of `Hero`'s two built-in spacer patterns, so
+        // it stays hand-painted here rather than forced through
+        // `HeroContent::lines`.
+        let hero_content = HeroContent {
+            title: show_title.then_some(show.title.as_str()),
+            meta_line: None,
+            meta_color: palette::SUBTLE,
+            show_playing: false,
+            unconditional_spacer_after_meta: false,
+            lines: &[],
+            image: (image_height > 0).then_some(HeroImage {
+                actual_w: image_width,
+                height: image_height,
+                top: ImageTop::AfterTitle,
+            }),
+        };
+        let hero_result = super::hero::paint_hero_content(f, area, &hero_content, focused);
+        let mut row = hero_result.next_row;
+        let (image_x, image_start, image_end) = match hero_result.img_rect {
+            Some(r) => (r.x, r.y, r.y + r.height),
+            None => (area.x + area.width, area.y, area.y),
+        };
         let text_width = |current_row: u16| {
             if image_height > 0 && current_row >= image_start && current_row < image_end {
                 area.width.saturating_sub(image_width)
@@ -324,7 +334,7 @@ impl App {
             layout.inline_image_rect = Some(image_rect);
             if placeholder {
                 f.render_widget(
-                    Block::default().style(Style::default().bg(palette::OVERLAY)),
+                    Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
                     image_rect,
                 );
             } else if let Some(key) = image_key.as_ref() {
@@ -416,11 +426,7 @@ impl App {
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker = if selected {
-                    super::selection_marker(focused)
-                } else {
-                    Span::raw(" ")
-                };
+                let marker = super::selection_marker(selected, super::MarkerEdge::Left);
                 let published = episode
                     .published_at
                     .as_deref()
@@ -572,10 +578,8 @@ impl App {
                         title,
                         String::new(),
                         selected,
-                        focused,
                         focused_or_subtle(focused),
                         pad_to,
-                        cols,
                     ));
                 }
                 ListItem::new(Line::from(spans))
@@ -597,9 +601,10 @@ impl App {
                 area,
                 layout.left_item_rows.len().saturating_sub(visible),
                 scroll,
+                palette::SCROLLBAR,
             );
         }
-        draw_column_selection_markers(f, area, cursor, cols, &layout.left_item_rows, scroll);
+        draw_column_selection_markers(f, area, cursor, &layout.left_item_rows, scroll);
     }
 }
 

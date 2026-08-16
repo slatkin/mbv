@@ -1,4 +1,5 @@
 use super::audiobookshelf_books::{PANE_PAD_X, PANE_PAD_Y, PILLS_GAP_ROWS, PILLS_ROW_HEIGHT};
+use super::hero;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::ui_util::trunc_str;
 use crate::app::{palette, App};
@@ -26,29 +27,17 @@ impl App {
         layout: &mut LayoutMain,
     ) {
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
             right_panel,
         );
 
-        let pills_area = Rect {
-            x: right_area.x,
-            y: right_panel.y,
-            width: right_area.width,
-            height: PILLS_ROW_HEIGHT,
-        };
+        let right_pane = hero::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
+        let pills_area = right_pane.pills_area;
         if pills_area.y + pills_area.height <= right_area.bottom() {
             self.render_audiobookshelf_book_bucket_pills(f, pills_area, index, layout);
         }
 
-        let browser_y = right_panel.y + PILLS_ROW_HEIGHT + PILLS_GAP_ROWS;
-        let list_panel = Rect {
-            x: right_area.x,
-            y: browser_y,
-            width: right_area.width,
-            height: right_panel
-                .height
-                .saturating_sub(PILLS_ROW_HEIGHT + PILLS_GAP_ROWS + PANE_PAD_Y),
-        };
+        let list_panel = right_pane.list_panel;
         let browser_area = Rect {
             x: list_panel.x.saturating_add(PANE_PAD_X),
             y: list_panel.y.saturating_add(PANE_PAD_Y),
@@ -56,11 +45,7 @@ impl App {
             height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
         };
         if list_panel.height > 0 {
-            let list_bg = if right_focused {
-                palette::BG_GREEN
-            } else {
-                palette::PLAYBACK_PANEL_BG
-            };
+            let list_bg = palette::resolve_surface_focus(right_focused);
             f.render_widget(
                 Block::default().style(Style::default().bg(list_bg)),
                 list_panel,
@@ -76,23 +61,14 @@ impl App {
             );
         }
         if list_panel.height > 0 {
-            let border_style = Style::default().fg(palette::SEEK_TRACK);
-            for (y, glyph) in [
-                (list_panel.y, '\u{2594}'),
-                (list_panel.bottom().saturating_sub(1), '\u{2581}'),
-            ] {
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        glyph.to_string().repeat(list_panel.width as usize),
-                        border_style,
-                    ))),
-                    Rect {
-                        y,
-                        height: 1,
-                        ..list_panel
-                    },
-                );
-            }
+            super::render_selected_block_borders(
+                f,
+                list_panel,
+                0,
+                list_panel.height as usize,
+                1,
+                (list_panel.height as usize).saturating_sub(2),
+            );
         }
     }
 
@@ -227,16 +203,12 @@ impl App {
             };
             if selected && right_focused {
                 f.render_widget(
-                    Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                    Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
                     row_area,
                 );
                 layout.cursor_screen_y = Some(row_area.y);
             }
-            let marker = if selected {
-                super::selection_marker(right_focused)
-            } else {
-                Span::raw(" ")
-            };
+            let marker = super::selection_marker(selected, super::MarkerEdge::Left);
             let title = trunc_str(&book.title, area.width.saturating_sub(2) as usize);
             f.render_widget(
                 Paragraph::new(Line::from(vec![marker, Span::raw(title)])).style(style),
@@ -250,7 +222,7 @@ impl App {
 
         if count > visible && right_focused {
             let max_offset = count.saturating_sub(visible);
-            super::render_right_scrollbar(f, area, max_offset, scroll);
+            super::render_right_scrollbar(f, area, max_offset, scroll, palette::SCROLLBAR);
         }
     }
 }

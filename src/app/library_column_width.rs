@@ -11,22 +11,10 @@ use ratatui::layout::Rect;
 
 use super::TWO_COLUMN_THRESHOLD;
 
-/// Narrowest width (columns) at which one library list cell is readable;
-/// anchors the two-column cell sizing. Mirrors `LEFT_WIDTH_DEFAULT`
-/// (`src/app/mod.rs`), the established narrowest comfortable width for a
-/// media title row. The shared two-column threshold
-/// (`TWO_COLUMN_THRESHOLD`) is `2 * LIBRARY_COLUMN_MIN_WIDTH +
-/// LIBRARY_COLUMN_GAP`; the assert below pins the relationship at compile
-/// time so they cannot drift.
-pub(super) const LIBRARY_COLUMN_MIN_WIDTH: u16 = 40;
 /// Columns of empty space between adjacent library list cells.
 pub(super) const LIBRARY_COLUMN_GAP: u16 = 2;
 /// Cap on the library list column count (two-column list; never more).
 pub(super) const LIBRARY_MAX_COLUMNS: usize = 2;
-
-/// Compile-time guard: the shared threshold must equal two min cells plus
-/// one gap. If you change any of the three values, change all of them.
-const _: () = assert!(TWO_COLUMN_THRESHOLD == 2 * LIBRARY_COLUMN_MIN_WIDTH + LIBRARY_COLUMN_GAP);
 
 /// Column count for a list pane of the given width: two when the pane meets
 /// `TWO_COLUMN_THRESHOLD` (the shared two-column threshold

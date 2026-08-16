@@ -81,11 +81,7 @@ pub(super) fn render_home_video_item(
     let title_y = row_y + if expanded { 2 } else { 0 };
 
     if expanded {
-        let bg = if focused {
-            palette::MEDIA_SELECTED_BG
-        } else {
-            palette::PLAYBACK_PANEL_BG
-        };
+        let bg = palette::resolve_surface_focus(focused);
         f.render_widget(
             Block::default().style(Style::default().bg(bg)),
             Rect {
@@ -97,7 +93,7 @@ pub(super) fn render_home_video_item(
         );
     }
 
-    let marker = super::selection_marker(selected && focused && !expanded);
+    let marker = super::selection_marker(selected && focused && !expanded, super::MarkerEdge::Left);
     f.render_widget(
         Paragraph::new(marker),
         Rect {
@@ -319,6 +315,7 @@ impl App {
                 n,
                 visible_items.max(1),
                 scroll,
+                palette::SCROLLBAR,
             );
         }
     }

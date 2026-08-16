@@ -211,7 +211,7 @@ impl App {
             }
             f.render_widget(
                 Paragraph::new(Line::from(spans))
-                    .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                    .style(Style::default().bg(palette::SURFACE_BACKDROP)),
                 Rect {
                     x: area.x,
                     y: row,
@@ -301,7 +301,7 @@ impl App {
                 FeedDisplayRow::Spacer => {
                     f.render_widget(
                         Paragraph::new(Line::default())
-                            .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                            .style(Style::default().bg(palette::SURFACE_BACKDROP)),
                         Rect {
                             x: list_area.x,
                             y: row,
@@ -324,7 +324,7 @@ impl App {
                                     .add_modifier(Modifier::BOLD),
                             ),
                         ]))
-                        .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                        .style(Style::default().bg(palette::SURFACE_BACKDROP)),
                         Rect {
                             x: list_area.x,
                             y: row,
@@ -340,16 +340,12 @@ impl App {
                     let entry = &entries[*i];
                     let selected = *i == cursor;
 
-                    let selected_bg = if focused {
-                        palette::MEDIA_SELECTED_BG
-                    } else {
-                        palette::PLAYBACK_PANEL_BG
-                    };
+                    let selected_bg = palette::resolve_surface_focus(focused);
 
                     let bg = if selected {
                         selected_bg
                     } else {
-                        palette::LIBRARY_SIDE_BG
+                        palette::SURFACE_BACKDROP
                     };
                     let fg = if selected {
                         if focused {
@@ -432,6 +428,7 @@ impl App {
                 display_rows.len(),
                 visible_count,
                 scroll,
+                palette::SCROLLBAR,
             );
         }
     }

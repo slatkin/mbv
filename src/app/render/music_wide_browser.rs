@@ -1,7 +1,7 @@
 use super::album_plan::HeaderFocusCtx;
 use super::album_rows::AlbumRowCtx;
 use crate::app::layout::LayoutMain;
-use crate::app::App;
+use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::Frame;
 
@@ -168,7 +168,7 @@ impl App {
         // Scrollbar.
         if total_rows > visible && right_focused {
             let max_off = total_rows.saturating_sub(visible);
-            super::render_right_scrollbar(f, browser_area, max_off, offset);
+            super::render_right_scrollbar(f, browser_area, max_off, offset, palette::SCROLLBAR);
         }
 
         // Populate left_row_targets for mouse hit-testing in the right pane.

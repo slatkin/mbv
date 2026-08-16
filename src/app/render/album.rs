@@ -11,7 +11,7 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
 
-/// Inset of the TRACK_BLOCK_BG box from the row's own bounds, on each side.
+/// Inset of the SURFACE_ACCENT_SOFT box from the row's own bounds, on each side.
 const TRACK_BLOCK_MARGIN: u16 = 2;
 /// Further inset of the track text/cursor-highlight from the block's edge,
 /// on each side -- kept as its own constant so the "track text sits inside
@@ -241,11 +241,7 @@ impl App {
 
         // Paint the colored background block before rendering row content
         if let Some((top_pad_abs, bottom_pad_abs)) = selected_block_bounds {
-            let bg = if focused {
-                palette::MEDIA_SELECTED_BG
-            } else {
-                palette::PLAYBACK_PANEL_BG
-            };
+            let bg = palette::resolve_surface_focus(focused);
             super::render_selected_block_background(
                 f,
                 area,
@@ -270,7 +266,7 @@ impl App {
                     .saturating_sub(2 * TRACK_BLOCK_MARGIN)
                     .saturating_sub(selected_art_reserved_w);
                 f.render_widget(
-                    Block::default().style(Style::default().bg(palette::TRACK_BLOCK_BG)),
+                    Block::default().style(Style::default().bg(palette::SURFACE_ACCENT_SOFT)),
                     Rect {
                         x: block_x,
                         y: block_y,
@@ -401,7 +397,8 @@ impl App {
                         if detail_focused && height > 0 {
                             let scroll_offset = cursor.saturating_sub(height as usize - 1);
                             f.render_widget(
-                                Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                                Block::default()
+                                    .style(Style::default().bg(palette::SURFACE_FOCUSED)),
                                 Rect {
                                     x: row_area.x + TRACK_BLOCK_MARGIN,
                                     y: row_area.y + cursor.saturating_sub(scroll_offset) as u16,
@@ -439,7 +436,7 @@ impl App {
                         .into_iter()
                         .map(|line| {
                             Line::from(vec![
-                                super::selection_marker(true),
+                                super::selection_marker(true, super::MarkerEdge::Left),
                                 Span::raw(" "),
                                 Span::styled(
                                     line.into_owned(),
@@ -463,7 +460,7 @@ impl App {
 
         if focused && total_screen_rows > visible {
             let max_off = total_screen_rows.saturating_sub(visible);
-            super::render_right_scrollbar(f, area, max_off, screen_offset);
+            super::render_right_scrollbar(f, area, max_off, screen_offset, palette::SCROLLBAR);
         }
 
         if let Some((art_top, art_bottom)) = selected_art_abs_rows {
@@ -496,14 +493,7 @@ impl App {
         // Draw the aqua gutter marker for the two-column selected row,
         // matching the movie library's two-column selection appearance.
         if cols > 1 {
-            draw_column_selection_markers(
-                f,
-                area,
-                cursor,
-                cols as usize,
-                &layout.left_item_rows,
-                screen_offset,
-            );
+            draw_column_selection_markers(f, area, cursor, &layout.left_item_rows, screen_offset);
         }
 
         offset

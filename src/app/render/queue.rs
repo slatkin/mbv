@@ -29,7 +29,7 @@ impl App {
         }
 
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::DARK_BG)),
+            Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
             Rect {
                 x: area.x,
                 y: area.y,
@@ -70,7 +70,7 @@ impl App {
                 icon.content = "\u{F0AFE}".into();
             }
         }
-        let local_bg = palette::QUEUE_BUTTON_FOCUSED_BG;
+        let local_bg = palette::SURFACE_CHROME;
         let local_fg = palette::YELLOW;
         if show_split {
             if let Some(label) = local_spans.get_mut(2) {
@@ -130,7 +130,7 @@ impl App {
             height: 1,
         };
         let (_icon, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
-        let target_bg = palette::QUEUE_BUTTON_FOCUSED_BG;
+        let target_bg = palette::SURFACE_CHROME;
         let target_fg = if is_mbv_session {
             palette::AQUA
         } else {
@@ -195,7 +195,7 @@ impl App {
             width: button_pill_w,
             height: 1,
         };
-        let base_bg = palette::QUEUE_BUTTON_FOCUSED_BG;
+        let base_bg = palette::SURFACE_CHROME;
         let local_btn_bg = if local_selected {
             palette::AQUA
         } else {
@@ -378,7 +378,8 @@ impl App {
 
                             if is_cursor {
                                 f.render_widget(
-                                    Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                                    Block::default()
+                                        .style(Style::default().bg(palette::SURFACE_FOCUSED)),
                                     Rect {
                                         x: area.x,
                                         y: area.y + line_offset,
@@ -398,15 +399,11 @@ impl App {
 
                             let mut spans: Vec<Span> = Vec::new();
                             if indent > 0 {
-                                if is_cursor {
-                                    spans.push(Span::styled(
-                                        "▍",
-                                        Style::default().fg(palette::AQUA),
-                                    ));
-                                    spans.push(Span::raw(" "));
-                                } else {
-                                    spans.push(Span::raw("  "));
-                                }
+                                spans.push(super::selection_marker(
+                                    is_cursor,
+                                    super::MarkerEdge::Left,
+                                ));
+                                spans.push(Span::raw(" "));
                             }
                             let title_w_actual = title.width();
                             spans.push(Span::styled(title, Style::default().fg(title_color)));
@@ -462,7 +459,8 @@ impl App {
 
                             if is_cursor {
                                 f.render_widget(
-                                    Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                                    Block::default()
+                                        .style(Style::default().bg(palette::SURFACE_FOCUSED)),
                                     Rect {
                                         x: area.x,
                                         y: area.y + line_offset,
@@ -482,15 +480,11 @@ impl App {
 
                             let mut spans: Vec<Span> = Vec::new();
                             if indent > 0 {
-                                if is_cursor {
-                                    spans.push(Span::styled(
-                                        "▍",
-                                        Style::default().fg(palette::AQUA),
-                                    ));
-                                    spans.push(Span::raw(" "));
-                                } else {
-                                    spans.push(Span::raw("  "));
-                                }
+                                spans.push(super::selection_marker(
+                                    is_cursor,
+                                    super::MarkerEdge::Left,
+                                ));
+                                spans.push(Span::raw(" "));
                             }
                             let title_w_actual = title.width();
                             spans.push(Span::styled(title, Style::default().fg(title_color)));
@@ -525,7 +519,16 @@ impl App {
 
         if need_sb {
             let max_off = total.saturating_sub(visible);
-            super::render_scrollbar(f, area, max_off, offset, palette::SOFT_WHITE);
+            super::render_scrollbar_with_viewport_at(
+                f,
+                area,
+                max_off.saturating_add(visible),
+                visible,
+                offset,
+                area.x + area.width.saturating_sub(1),
+                super::chrome::thin_vertical_thumb(tui_scrollbar::GlyphSet::minimal()),
+                palette::SOFT_WHITE,
+            );
         }
     }
 }

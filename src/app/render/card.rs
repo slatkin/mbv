@@ -103,7 +103,7 @@ impl App {
         // for posters specifically, so this fills the full reserved area.
         if image_loading && placeholder > 0 {
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::OVERLAY)),
+                Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
                 Rect {
                     x: area.x,
                     y: area.y,

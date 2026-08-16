@@ -177,7 +177,7 @@ impl App {
             }
         }
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::OVERLAY)),
+            Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
             img_area,
         );
     }
@@ -324,9 +324,9 @@ impl App {
             // (`overview_pad == 0` identifies that layout), library surface
             // otherwise.
             let block_bg = if overview_pad == 0 && focused {
-                palette::BG_GREEN
+                palette::SURFACE_FOCUSED
             } else {
-                palette::LIBRARY_SIDE_BG
+                palette::SURFACE_BACKDROP
             };
             let bg_row = |wide: bool, y: u16| -> Rect {
                 if wide {

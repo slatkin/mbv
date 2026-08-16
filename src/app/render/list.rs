@@ -1,6 +1,10 @@
 use super::album::AlbumRowsCursorCtx;
 use super::album_art::INLINE_ALBUM_ART_RESERVED;
 use super::detail::compact_banner_image_cache_key;
+use super::hero::{
+    hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS,
+    HERO_TITLE_ROWS,
+};
 use super::list_rows::{ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING};
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
@@ -9,136 +13,6 @@ use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
-
-/// Height reserved for the hero panel while it has no content to size to.
-/// A letter-pill switch clears the slice (so the selected item disappears)
-/// before the new one loads in; without a reserved slot the panel collapses
-/// to zero rows and the whole list jumps up each switch. The placeholder is
-/// a minimum stand-in only -- the panel grows to fit its content once a
-/// Movie/Series is actually selected.
-pub(super) const HERO_PLACEHOLDER_ROWS: u16 = 18;
-/// Row budget for the selected item's title on the hero's top row, rendered
-/// in yellow. Reserved only in two-column lists (`show_title`), where the
-/// list row's own title is truncated to a narrow cell; one-column lists
-/// skip it since the full-width row title right above the hero already shows
-/// the name.
-pub(super) const HERO_TITLE_ROWS: u16 = 1;
-/// Rows the hero *block* adds beyond the content rows, matching the
-/// selected-block look of music/homevideo: a `▁` top border row and a `▔`
-/// bottom border row (painted in `palette::SEEK_TRACK`) plus one bare
-/// colored-bg padding row just inside each border. The borders are part of
-/// the hero block's reserved rows (the list makes room), not painted over
-/// list content like `render_selected_block_borders` does.
-pub(super) const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
-/// Blank row separating the hero block from the list below it.
-const HERO_SEPARATOR_ROWS: u16 = 1;
-
-pub(super) struct TopHeroLayout {
-    pub hero_area: Rect,
-    pub pills_area: Rect,
-    pub list_area: Rect,
-    pub hero_rows: u16,
-}
-
-pub(super) fn top_hero_layout(
-    content_area: Rect,
-    desired_hero_rows: u16,
-    show_pills: bool,
-) -> TopHeroLayout {
-    let pills_reserved = if show_pills {
-        2.min(content_area.height)
-    } else {
-        0
-    };
-    let separator_reserve = if show_pills { 0 } else { HERO_SEPARATOR_ROWS };
-    let hero_rows = match desired_hero_rows.min(
-        content_area
-            .height
-            .saturating_sub(1 + separator_reserve + pills_reserved),
-    ) {
-        r if r < HERO_BLOCK_EXTRA_ROWS => 0,
-        r => r,
-    };
-    let separator_rows = if hero_rows > 0 { separator_reserve } else { 0 };
-    let hero_shift = if hero_rows > 0 && content_area.y > 0 {
-        1
-    } else {
-        0
-    };
-    let hero_area = Rect {
-        y: content_area.y.saturating_sub(hero_shift),
-        height: hero_rows,
-        ..content_area
-    };
-    let pills_area = Rect {
-        y: content_area.y.saturating_sub(hero_shift) + hero_rows + separator_rows,
-        height: if show_pills { 1 } else { 0 },
-        ..content_area
-    };
-    let list_area = Rect {
-        y: content_area.y.saturating_sub(hero_shift) + hero_rows + separator_rows + pills_reserved,
-        height: (content_area.height + hero_shift)
-            .saturating_sub(hero_rows + separator_rows + pills_reserved),
-        ..content_area
-    };
-    TopHeroLayout {
-        hero_area,
-        pills_area,
-        list_area,
-        hero_rows,
-    }
-}
-
-/// Paints the hero block's outer shell -- the colored bg (focused/unfocused
-/// pattern) plus the `▁` top and `▔` bottom borders in SEEK_TRACK on the
-/// block's outer-row one -- shared by the normal hero path and the empty
-/// "placeholder panel" path (slice loading after a pill switch) so the block
-/// is always drawn identically while it's reserved.
-pub(super) fn hero_block_shell(f: &mut Frame, hero_area: Rect, hero_rows: u16, focused: bool) {
-    let bg = if focused {
-        palette::MEDIA_SELECTED_BG
-    } else {
-        palette::PLAYBACK_PANEL_BG
-    };
-    // Colored bg across the padding + content rows (inside the borders, i.e.
-    // `hero_rows - 2` rows starting one row down).
-    f.render_widget(
-        Block::default().style(Style::default().bg(bg)),
-        Rect {
-            x: hero_area.x,
-            y: hero_area.y + 1,
-            width: hero_area.width,
-            height: hero_rows - 2,
-        },
-    );
-    // Top `▁` / bottom `▔` borders in SEEK_TRACK, painted on the hero
-    // block's own outer rows.
-    let border_style = Style::default().fg(palette::SEEK_TRACK);
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "\u{2581}".repeat(hero_area.width as usize),
-            border_style,
-        ))),
-        Rect {
-            x: hero_area.x,
-            y: hero_area.y,
-            width: hero_area.width,
-            height: 1,
-        },
-    );
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "\u{2594}".repeat(hero_area.width as usize),
-            border_style,
-        ))),
-        Rect {
-            x: hero_area.x,
-            y: hero_area.y + hero_rows - 1,
-            width: hero_area.width,
-            height: 1,
-        },
-    );
-}
 
 impl App {
     /// Renders the Continue/library list items into `area`.
@@ -729,7 +603,7 @@ impl App {
                             );
                             f.render_widget(
                                 Paragraph::new(Line::from(vec![
-                                    super::selection_marker(true),
+                                    super::selection_marker(false, super::MarkerEdge::Left),
                                     Span::raw(" "),
                                     Span::styled(
                                         hint.to_string(),

@@ -111,7 +111,7 @@ impl App {
             };
             f.render_widget(
                 Paragraph::new(Span::raw(" ".repeat(bottom_area.width as usize)))
-                    .style(Style::default().bg(palette::PLAYBACK_INDICATOR_BG)),
+                    .style(Style::default().bg(palette::SURFACE_BACKDROP)),
                 bottom_area,
             );
         }
@@ -211,11 +211,11 @@ impl App {
             .map(|span| {
                 Span::styled(
                     span.content.to_string(),
-                    span.style.bg(palette::PLAYBACK_INDICATOR_BG),
+                    span.style.bg(palette::SURFACE_BACKDROP),
                 )
             })
             .collect::<Vec<_>>();
-        let pill_bg = palette::PLAYBACK_INDICATOR_BG;
+        let pill_bg = palette::SURFACE_BACKDROP;
         let pct_str = fmt_playback_pct(pos_ticks, rt_ticks);
         let throbber = self.now_playing_throbber_span();
         let mut progress_spans: Vec<Span<'static>> = vec![
@@ -235,7 +235,7 @@ impl App {
         if !right.is_empty() {
             right.push(Span::styled(
                 " ",
-                Style::default().bg(palette::PLAYBACK_INDICATOR_BG),
+                Style::default().bg(palette::SURFACE_BACKDROP),
             ));
         }
 

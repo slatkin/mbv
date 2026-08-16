@@ -27,7 +27,7 @@ impl App {
             RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
         );
         let glyph_style = Style::default()
-            .bg(palette::STATUS_PILL_BG)
+            .bg(palette::SURFACE_STATUS_PILL)
             .fg(ratatui::style::Color::White);
 
         let target = match remote_state {
@@ -62,10 +62,10 @@ impl App {
             } else {
                 ratatui::style::Color::Black
             })
-            .bg(palette::STATUS_PILL_BG);
+            .bg(palette::SURFACE_STATUS_PILL);
 
         vec![
-            Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
             Span::styled(
                 if self.use_nerd_fonts {
                     "\u{f1616}"
@@ -75,7 +75,7 @@ impl App {
                 glyph_style,
             ),
             Span::styled(label, label_style),
-            Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
         ]
     }
 
@@ -127,14 +127,14 @@ impl App {
             _ => (format!("{gap}none"), false),
         };
         let glyph_style = Style::default()
-            .bg(palette::STATUS_PILL_BG)
+            .bg(palette::SURFACE_STATUS_PILL)
             .fg(ratatui::style::Color::White);
         let label_style = Style::default()
             .fg(if on { palette::YELLOW } else { palette::SUBTLE })
-            .bg(palette::STATUS_PILL_BG);
+            .bg(palette::SURFACE_STATUS_PILL);
 
         vec![
-            Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
             Span::styled(
                 if self.use_nerd_fonts {
                     "\u{f03a}"
@@ -144,7 +144,7 @@ impl App {
                 glyph_style,
             ),
             Span::styled(label, label_style),
-            Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
         ]
     }
 
@@ -156,26 +156,26 @@ impl App {
         };
         if self.queue_dirty {
             Some(vec![
-                Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
                 Span::styled(
                     " UNSAVED ",
                     Style::default()
                         .fg(palette::YELLOW)
-                        .bg(palette::STATUS_PILL_BG)
+                        .bg(palette::SURFACE_STATUS_PILL)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
             ])
         } else if autosave_on {
             Some(vec![
-                Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
                 Span::styled(
                     " AUTOSAVE ",
                     Style::default()
                         .fg(palette::AQUA)
-                        .bg(palette::STATUS_PILL_BG),
+                        .bg(palette::SURFACE_STATUS_PILL),
                 ),
-                Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
             ])
         } else {
             None
@@ -187,15 +187,15 @@ impl App {
             .displayed_mute(self)
             .then(|| {
                 vec![
-                    Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+                    Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
                     Span::styled(
                         "muted",
                         Style::default()
                             .fg(palette::RED)
-                            .bg(palette::STATUS_PILL_BG)
+                            .bg(palette::SURFACE_STATUS_PILL)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
+                    Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
                 ]
             })
     }
@@ -266,7 +266,7 @@ impl App {
         show_session_pill: bool,
     ) {
         // Keep the row itself darker so the pills read as segments sitting on top of it.
-        let bar_style = Style::default().bg(palette::DARK_BG);
+        let bar_style = Style::default().bg(palette::SURFACE_CHROME);
         f.render_widget(Block::default().style(bar_style), area);
         layout.ind_mu = Rect::default();
 
@@ -439,7 +439,7 @@ impl App {
                     &mut right_spans,
                     Span::styled(
                         format!(" {label} "),
-                        Style::default().fg(color).bg(palette::STATUS_PILL_BG),
+                        Style::default().fg(color).bg(palette::SURFACE_STATUS_PILL),
                     ),
                 );
             }
@@ -451,13 +451,13 @@ impl App {
                     " 🯅",
                     Style::default()
                         .fg(palette::FOAM)
-                        .bg(palette::STATUS_PILL_BG),
+                        .bg(palette::SURFACE_STATUS_PILL),
                 ));
                 right_spans.push(Span::styled(
                     format!(" {username} "),
                     Style::default()
                         .fg(palette::PLAYBACK_META_FG)
-                        .bg(palette::STATUS_PILL_BG),
+                        .bg(palette::SURFACE_STATUS_PILL),
                 ));
             }
             if let Some(server) = server_url_label(&server_url) {
@@ -469,13 +469,13 @@ impl App {
                         " \u{F06B4}",
                         Style::default()
                             .fg(palette::AQUA)
-                            .bg(palette::STATUS_PILL_BG),
+                            .bg(palette::SURFACE_STATUS_PILL),
                     ));
                     right_spans.push(Span::styled(
                         format!(" {server} "),
                         Style::default()
                             .fg(palette::SUBTLE)
-                            .bg(palette::STATUS_PILL_BG),
+                            .bg(palette::SURFACE_STATUS_PILL),
                     ));
                 } else {
                     append_right(
@@ -484,7 +484,7 @@ impl App {
                             format!(" {server} "),
                             Style::default()
                                 .fg(palette::SUBTLE)
-                                .bg(palette::STATUS_PILL_BG),
+                                .bg(palette::SURFACE_STATUS_PILL),
                         ),
                     );
                 }

@@ -163,7 +163,7 @@ impl App {
         }
         f.render_widget(
             Block::default().style(Style::default().bg(if style {
-                palette::PLAYBACK_PANEL_BG
+                palette::SURFACE_RESTING
             } else {
                 palette::PANEL_BG
             })),
@@ -193,9 +193,9 @@ impl App {
         let header_style = Style::default()
             .fg(palette::TEXT)
             .bg(if style {
-                palette::QUEUE_BUTTON_FOCUSED_BG
+                palette::SURFACE_CHROME
             } else {
-                palette::FOCUSED
+                palette::SURFACE_ITEM_FOCUSED
             })
             .add_modifier(Modifier::BOLD);
         let header_area = if style {
@@ -221,16 +221,17 @@ impl App {
         f.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(title_text, header_style)])).style(
                 if style {
-                    Style::default().bg(palette::QUEUE_BUTTON_FOCUSED_BG)
+                    Style::default().bg(palette::SURFACE_CHROME)
                 } else {
-                    Style::default().bg(palette::FOCUSED)
+                    Style::default().bg(palette::SURFACE_ITEM_FOCUSED)
                 },
             ),
             header_area,
         );
         if !style {
             f.render_widget(
-                Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
+                Paragraph::new(Span::raw(" "))
+                    .style(Style::default().bg(palette::SURFACE_ITEM_FOCUSED)),
                 Rect {
                     x: sidebar.x + sidebar.width - 1,
                     y: sidebar.y,
@@ -255,9 +256,9 @@ impl App {
             );
         }
         let footer_bg = if style {
-            palette::DARK_BG
+            palette::SURFACE_CHROME
         } else {
-            palette::FOCUSED
+            palette::SURFACE_ITEM_FOCUSED
         };
         f.render_widget(
             Paragraph::new(Line::from(vec![Span::styled(
@@ -274,8 +275,7 @@ impl App {
         );
         if style {
             f.render_widget(
-                Paragraph::new(Span::raw(""))
-                    .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                Paragraph::new(Span::raw("")).style(Style::default().bg(palette::SURFACE_RESTING)),
                 Rect {
                     x: sidebar.x,
                     y: sidebar.y + sidebar.height - 1,
@@ -286,7 +286,8 @@ impl App {
         }
         if !style {
             f.render_widget(
-                Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
+                Paragraph::new(Span::raw(" "))
+                    .style(Style::default().bg(palette::SURFACE_ITEM_FOCUSED)),
                 Rect {
                     x: sidebar.x + sidebar.width - 1,
                     y: footer_y,

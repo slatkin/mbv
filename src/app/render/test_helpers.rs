@@ -38,7 +38,7 @@ pub fn render_scrollbar_column(height: u16, max_offset: usize, offset: usize) ->
     let backend = TestBackend::new(1, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        render_scrollbar(
+        render_right_scrollbar(
             f,
             Rect::new(0, 0, 1, height),
             max_offset,
@@ -59,7 +59,7 @@ pub fn render_scrollbar_column_with_viewport(
     let backend = TestBackend::new(1, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        render_scrollbar_with_viewport(
+        render_right_scrollbar_with_viewport(
             f,
             Rect::new(0, 0, 1, height),
             content_length,

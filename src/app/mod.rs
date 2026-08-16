@@ -178,11 +178,11 @@ static SESSIONS_LOAD_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 pub(super) const LEFT_WIDTH_DEFAULT: u16 = 40;
 pub(super) const LEFT_WIDTH_STEP: u16 = 5;
-/// Minimum list-pane / Home-pane width at which the view switches to a
-/// two-column layout. Used by both the library list renderer
-/// (`library_column_count`) and the Home view's hero/list split, so they
-/// cross the threshold together. Equals `2 * LIBRARY_COLUMN_MIN_WIDTH +
-/// LIBRARY_COLUMN_GAP`.
+/// The single wide/narrow breakpoint. Minimum list-pane / Home-pane width at
+/// which the view switches to a two-column layout. Every screen and
+/// arrangement reads this one constant instead of testing width itself; the
+/// library list's column count derives from it (`library_column_count`), not
+/// the other way around.
 pub(super) const TWO_COLUMN_THRESHOLD: u16 = 82;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
 pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
