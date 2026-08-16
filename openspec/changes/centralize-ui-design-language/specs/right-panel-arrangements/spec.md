@@ -69,11 +69,12 @@ part of that screen's arrangement.
 - **WHEN** the presentation of one arrangement is changed
 - **THEN** the other arrangement is unaffected
 
-### Requirement: Hero-on-left presents two focusable panes
+### Requirement: Hero-on-left presents up to two focusable panes
 
-The hero-on-left arrangement SHALL present two panes, of which at most one is focused, and only
-while the right panel itself is focused. A screen with no focusable content in its hero pane SHALL
-be treated as having that content unimplemented rather than as a different arrangement.
+The hero-on-left arrangement SHALL present up to two panes, of which at most one is focused, and
+only while the right panel itself is focused. A screen with no focusable content in its hero pane
+(such as Home, whose hero is a non-focusable preview) SHALL be treated as having that content
+unimplemented rather than as a different arrangement.
 
 #### Scenario: Focus moves between panes
 

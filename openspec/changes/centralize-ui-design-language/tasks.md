@@ -73,7 +73,9 @@
       (`wide_pill_section`, `green_panel_full`, `wide_home_panel_unfocused`, `is_narrow`)
 - [ ] 5.2 Remove the mode parameters from `home_latest_row.rs` (`is_narrow`,
       `wide_home_panel_unfocused`); rows stop being mode-aware
-- [ ] 5.3 Fold Home's bespoke narrow hero (image beside metadata) into the shared narrow fallback
+- [ ] 5.3 Move Home's narrow hero onto the shared hero-on-top fallback: it keeps its
+      image-beside-metadata wrap (already the shared shape) and gains the `hero_block_shell`
+      (`▁`/`▔`) borders it lacks today (design decision 2)
 - [ ] 5.4 Move audiobooks onto hero-on-left, correcting the gap recorded in task 0.4; delete its
       bespoke hero and browser painting
 - [ ] 5.5 Confirm Home and audiobooks now render identically to music at the same size, apart from

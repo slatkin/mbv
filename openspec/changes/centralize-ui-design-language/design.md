@@ -91,6 +91,20 @@ image sits above or beside it (`home.rs:181` vs `home.rs:260` pass different wid
 the same function), text wrapping moves into the shared code and screens hand over unwrapped
 strings. The shared code is therefore substantially larger than a frame-drawing helper.
 
+**Narrow hero shell is uniform.** Home's narrow hero is not a bespoke composition: its
+image-beside-metadata with overview wrapping below the image is already the shared hero-on-top
+shape (`detail.rs` `text_dims` narrows text beside the poster, then re-wraps full-width past it).
+What distinguishes Home narrow today is only the absent `hero_block_shell` — it draws no `▁`/`▔`
+borders, where movies/TV/books/podcasts all do. The shared narrow fallback SHALL draw the bordered
+`hero_block_shell`, and Home narrow gains borders to match. Image aspect (16:9 half-width vs fixed
+portrait) remains a declared `image shape` difference, not a shell concern.
+
+**Selection marker is one glyph.** The marker variants in use today (music's inline `▍`, the
+multi-column edge `▎`/`▏`, Home narrow's gutter `▎`, and books' blank) collapse to a single
+central marker: the thinnest block glyph (`▏` U+258F). Selection marks SHALL NOT vary between
+lists; the arrangement owns the glyph and its placement, and screens cannot override it. The tab
+bar is the exception and keeps its own selected-tab marker.
+
 ### 3. The width is tested once, outside every screen
 
 No screen evaluates the breakpoint. `home.rs` loses `two_column` and its four derived aliases;
@@ -123,6 +137,12 @@ the two together is removed.
 *Alternative rejected:* one breakpoint per decision (four constants). More precise, but nothing today
 wants them to differ, and four knobs is four things to keep consistent. Reconsider if a screen is
 later found to cross over at the wrong width.
+
+The width breakpoint is not the only responsive threshold — it is only the one screens currently
+test themselves. The arrangement also owns a height floor (`MIN_WIDE_AREA_HEIGHT`), a minimum pane
+width (`MIN_PANE_WIDTH`), the below-image metadata side-width floor, and the hero-suppression rule
+when height cannot fit a hero and a usable list. These are arrangement-owned thresholds, not
+per-screen decisions, and screens own none of them.
 
 ### 6. Per-screen differences are declared together, not expressed at the point of use
 
@@ -167,10 +187,18 @@ to serve three unrelated jobs (right-column base, unfocused queue, and Home's se
 
 ### 8. Focus colouring is one lever, covering the left panel
 
-Screens pass `focused: bool` and never name a colour. The queue and card join this even though their
-layout does not, because their current pair (`QUEUE_LIST_BG`/`LIBRARY_SIDE_BG`) already disagrees
-with every content panel's (`BG_GREEN`/`PLAYBACK_PANEL_BG`), and leaving them out would preserve the
-exact complaint: having to direct a change panel by panel.
+Screens pass focus and never name a colour. Focus is two inputs, not one bool: the existing
+`PanelFocus` (which panel is focused) plus, for hero-on-left screens only, a pane bit naming which
+pane (`left`/`right`). Hero-on-top screens have one focusable region and pass no pane bit. Grouped
+Music already derives exactly this (`left_focused = library_focused && track_active`,
+`right_focused = library_focused && !track_active`); the arrangement consumes the two inputs rather
+than a single `focused: bool`, which cannot express both the hero's panel-level brightness and the
+track list's pane-level brightness at once.
+
+The queue and card join this even though their layout does not, because their current pair
+(`QUEUE_LIST_BG`/`LIBRARY_SIDE_BG`) already disagrees with every content panel's
+(`BG_GREEN`/`PLAYBACK_PANEL_BG`), and leaving them out would preserve the exact complaint: having to
+direct a change panel by panel.
 
 ### 9. One set of mouse hit targets
 
