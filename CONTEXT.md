@@ -337,6 +337,23 @@ or QueueOnly. LibraryOnly forces Panel focus to Library; QueueOnly forces it to
 Queue.
 _Avoid_: layout mode, view mode, panel state
 
+**Wide mode / Narrow mode**:
+The right panel's responsive arrangement, chosen from the width available to
+that panel. Narrow places the hero above a single-column list. Wide uses either
+Hero-on-top or Hero-on-left, fixed per surface. Distinct from Panel mode, which
+is app-wide.
+_Avoid_: responsive mode, view mode, layout mode, breakpoint mode
+
+**Hero-on-top**:
+The wide arrangement used by movies, shows, podcasts, feeds, and home videos:
+hero above the list, list in two columns.
+_Avoid_: stacked, two-column mode, dual column
+
+**Hero-on-left**:
+The wide arrangement used by Home, music, and audiobooks: hero beside the list,
+list in a single column.
+_Avoid_: split, side-by-side, hero-on-side
+
 **Search sidebar**:
 The global cross-library search surface filtering to navigable media types
 (Series, Episode, Season, Movie, Audio, MusicAlbum, MusicArtist), with optional
