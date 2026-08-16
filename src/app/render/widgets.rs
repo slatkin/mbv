@@ -497,11 +497,8 @@ impl App {
                 self.ensure_music_group_album_level(lib_idx);
                 self.ensure_feed_home_video_group_level(lib_idx);
                 let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
-                let is_home_video = self.is_home_video_view(lib_idx);
                 if is_feed_group {
                     self.render_feed_home_video_group_view(f, area, lib_idx, focused, layout);
-                } else if is_home_video {
-                    self.render_home_video_list(f, area, lib_idx, focused, layout);
                 } else {
                     self.render_list(f, area, focused, layout);
                 }

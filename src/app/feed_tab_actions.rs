@@ -149,6 +149,57 @@ impl App {
         self.feed_tab.cursor = super::ui_util::move_cursor(self.feed_tab.cursor, delta, n);
     }
 
+    /// Move the feed tab cursor by `item_rows` *display* rows (Up/Down,
+    /// j/k), resolved through the last frame's packed `left_item_rows` so a
+    /// two-column list moves visually down/up rather than sideways --
+    /// mirrors the Emby library list's `letter_vertical_delta`, simplified
+    /// since feed entries need no separate sorted-order translation (their
+    /// packed row order already matches `visible_entries()`). Falls back to
+    /// the flat `feed_tab_move_cursor` when the layout is stale (cursor not
+    /// found in `left_item_rows`, e.g. before the first render).
+    pub(super) fn feed_tab_move_cursor_rows(&mut self, item_rows: i64) {
+        let n = self.feed_tab.visible_entries().len();
+        if n == 0 {
+            return;
+        }
+        if let Some(delta) = self.feed_tab_row_delta(item_rows) {
+            self.feed_tab.cursor = super::ui_util::move_cursor(self.feed_tab.cursor, delta, n);
+        } else {
+            self.feed_tab_move_cursor(item_rows);
+        }
+    }
+
+    fn feed_tab_row_delta(&self, item_rows: i64) -> Option<i64> {
+        let rows: Vec<&Vec<usize>> = self
+            .layout
+            .main
+            .left_item_rows
+            .iter()
+            .filter(|r| !r.is_empty())
+            .collect();
+        if rows.is_empty() {
+            return None;
+        }
+        let cursor = self.feed_tab.cursor;
+        let (cur_row, cur_col) = rows
+            .iter()
+            .enumerate()
+            .find_map(|(r, row)| row.iter().position(|&i| i == cursor).map(|c| (r, c)))?;
+        let row_count = rows.len();
+        let target_row = if item_rows < 0 {
+            cur_row.saturating_sub(item_rows.unsigned_abs() as usize)
+        } else {
+            cur_row
+                .saturating_add(item_rows as usize)
+                .min(row_count.saturating_sub(1))
+        };
+        let target = rows[target_row]
+            .get(cur_col)
+            .copied()
+            .or_else(|| rows[target_row].last().copied())?;
+        Some(target as i64 - cursor as i64)
+    }
+
     /// Jump the feed tab cursor to the start or end.
     pub(super) fn feed_tab_jump_cursor(&mut self, to_end: bool) {
         let n = self.feed_tab.visible_entries().len();

@@ -93,6 +93,34 @@ impl App {
             );
         }
 
+        // Home videos' declared element-presence difference (design.md
+        // decision 6): a count label row instead of the letter-pill row
+        // every other hero-on-top screen may show (`should_show_letter_pills`
+        // already excludes home videos, so the two never both show).
+        if focused
+            && content_area.height > 0
+            && self
+                .tab
+                .emby_library_index()
+                .is_some_and(|lib_idx| self.is_home_video_view(lib_idx))
+        {
+            let lib_idx = self.tab.emby_library_index().unwrap();
+            let total = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|l| l.total_count)
+                .unwrap_or(0);
+            content_area = super::render_count_label(f, content_area, total);
+            // Leave the blank gap row `top_hero_layout`'s `hero_shift`
+            // expects directly above `content_area`, so the hero's top
+            // border reclaims that row instead of overwriting the label.
+            content_area = Rect {
+                y: content_area.y + 1,
+                height: content_area.height.saturating_sub(1),
+                ..content_area
+            };
+        }
+
         // Selected movie/Series item, computed once and reused below for the
         // prefetch gate, the hero row-count calc, and the hero paint --
         // `selected_movie_item`/`selected_series_item` each clone

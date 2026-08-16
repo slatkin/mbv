@@ -41,20 +41,56 @@ impl App {
                 self.feed_tab.cycle_watched_filter();
                 Some(false)
             }
-            // Cursor navigation.
+            // Cursor navigation. Up/Down (and j/k) move by display row,
+            // resolved through the packed layout so a two-column list moves
+            // visually down/up. Left/Right (and h/l) move across cells in
+            // 2-col mode, mirroring the Emby library list's arrow-key
+            // column navigation.
             KeyCode::Up => {
-                self.feed_tab_move_cursor(-1);
+                self.feed_tab_move_cursor_rows(-1);
                 Some(false)
             }
             KeyCode::Down => {
-                self.feed_tab_move_cursor(1);
+                self.feed_tab_move_cursor_rows(1);
                 Some(false)
             }
             KeyCode::Char('k') => {
-                self.feed_tab_move_cursor(-1);
+                self.feed_tab_move_cursor_rows(-1);
                 Some(false)
             }
             KeyCode::Char('j') => {
+                self.feed_tab_move_cursor_rows(1);
+                Some(false)
+            }
+            KeyCode::Left
+                if crate::app::library_column_width::library_column_count(
+                    self.layout.main.left_area.width,
+                ) > 1 =>
+            {
+                self.feed_tab_move_cursor(-1);
+                Some(false)
+            }
+            KeyCode::Right
+                if crate::app::library_column_width::library_column_count(
+                    self.layout.main.left_area.width,
+                ) > 1 =>
+            {
+                self.feed_tab_move_cursor(1);
+                Some(false)
+            }
+            KeyCode::Char('h')
+                if crate::app::library_column_width::library_column_count(
+                    self.layout.main.left_area.width,
+                ) > 1 =>
+            {
+                self.feed_tab_move_cursor(-1);
+                Some(false)
+            }
+            KeyCode::Char('l')
+                if crate::app::library_column_width::library_column_count(
+                    self.layout.main.left_area.width,
+                ) > 1 =>
+            {
                 self.feed_tab_move_cursor(1);
                 Some(false)
             }

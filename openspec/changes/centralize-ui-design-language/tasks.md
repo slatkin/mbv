@@ -253,9 +253,49 @@ skipped; `make check-code-file-lines` clean.
 
 ## 7. New wide arrangements: feeds and home videos
 
-- [ ] 7.1 Move feeds onto hero-on-top; it gains a wide arrangement and a two-column list
-- [ ] 7.2 Move home videos onto hero-on-top; same
-- [ ] 7.3 Visually review both at wide widths — this is new behaviour with no prior design
+- [x] 7.1 Move feeds onto hero-on-top; it gains a wide arrangement and a two-column list
+      Feeds now paints `hero::top_hero_layout`/`hero_block_shell`/`paint_hero_content` for the
+      cursor-selected entry (text-only `HeroContent`, no image), inserted between feeds' existing
+      pill-bar/watched-filter chrome and its list, so that chrome stays screen-owned exactly as
+      design.md's per-screen declarations allow. The list gains a two-column packed layout at the
+      shared breakpoint via a new `pack_feed_rows` render-time transform (reusing the generic
+      `library_column_width.rs` geometry helpers, not Emby-specific despite the module name) that
+      wraps entries into `cols`-wide rows without crossing feed-age-group boundaries; the original
+      `feed_display_rows`/`FeedDisplayRow` and their tests are untouched. Feeds' old inline `"▶ "`
+      marker is retired in favor of the unified outer-edge `SelectionMarker` (decision 2), via
+      `list_rows.rs`'s `draw_column_selection_markers`.
+      Scope flagged and confirmed with the user beyond what 7.1 named: two-column mode needs
+      Up/Down/Left/Right keyboard and mouse-click behavior, which design.md's Impact list didn't
+      specify for feeds. Wired fully, mirroring the existing Emby-library-list precedents rather
+      than inventing new interaction patterns: `feed_tab_actions.rs` gained
+      `feed_tab_move_cursor_rows`/`feed_tab_row_delta` (mirrors `lib_cursor_actions.rs`'s
+      `letter_vertical_delta`, reading `layout.main.left_item_rows` directly); Up/Down/j/k in
+      `input_feed_tab_keys.rs` now call it, and Left/Right/h/l call the existing flat
+      `feed_tab_move_cursor(±1)` gated on `library_column_count(..) > 1`; `input_mouse.rs`'s
+      `TabSelection::Feeds` arm gained a `cell_target` resolution mirroring the
+      `TabSelection::EmbyLibrary` arm's, checked before the pre-existing `left_row_map` fallback.
+- [x] 7.2 Move home videos onto hero-on-top; same
+      Home videos already qualified for `render_list`'s existing hero-on-top machinery:
+      `selected_movie_item` already recognized `"homevideos"` (truncate_overview), and
+      `should_show_letter_pills` already excluded it (element-presence difference: no
+      pills). Rerouted `widgets.rs`'s dispatch from the bespoke `render_home_video_list`
+      straight to `render_list`, added home videos' one remaining declared difference (a
+      count-label row instead of pills, `render_list`'s `is_home_video_view` gate calling
+      the pre-existing shared `render_count_label`), and deleted `render_home_video_list`
+      (dead after the reroute). `render_home_video_item`/`render_selected_home_video_detail`/
+      `home_panel_scroll` stay: still used by the separate "feed home video group view"
+      (`home_feed.rs`, grouping by folder), which is not one of design.md's eight screens
+      and was left untouched — flagging this as an intentionally out-of-scope gap, not an
+      oversight: it still uses the old inline-expand-in-row style rather than hero-on-top.
+      Found and fixed a layout bug during verification: `top_hero_layout`'s `hero_shift`
+      reclaims the blank row directly above `content_area` for the hero's top border,
+      which silently overwrote the new count-label row until an explicit blank gap row
+      was added back after it (mirroring the gap that existed there for every other
+      hero-on-top screen).
+- [x] 7.3 Visually review both at wide widths — this is new behaviour with no prior design
+      Reviewed via the capture harness (feeds-146/78, home_videos-146/78) and confirmed by the
+      user directly in-app. User signed off: "very good initial implementation," with a few
+      follow-up issues to be addressed one by one in a later pass rather than blocking this phase.
 
 ## 8. Unified mouse hit targets
 
