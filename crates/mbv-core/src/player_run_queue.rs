@@ -331,8 +331,7 @@ impl PlaybackRun {
                     self.season = 0;
                     self.episode = 0;
                 }
-                let (intro_start, intro_end) = load_intro_times(&self.reporter.client, &emby.id);
-                self.set_intro(intro_start, intro_end, emby.playback_position_ticks);
+                self.set_intro(0, 0, emby.playback_position_ticks);
             }
             QueueItem::Feed(entry) => {
                 self.osd_title = entry.title.clone();
@@ -452,7 +451,7 @@ impl PlaybackRun {
                     } else {
                         emby.playback_position_ticks
                     };
-                    let (intro_start, intro_end) = load_intro_times(&reporter.client, &emby.id);
+                    let (intro_start, intro_end) = (0, 0);
                     let past = intro_end > 0 && pos >= intro_end;
                     let sid = if emby.item_type == "Episode" {
                         ItemId::new(emby.series_id.clone())

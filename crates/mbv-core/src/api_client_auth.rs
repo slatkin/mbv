@@ -25,7 +25,6 @@ impl EmbyClient {
             token: String::new(),
             device_name: device_name(),
             device_id: device_id(),
-            chapter_api_available: false,
             agent,
         }
     }

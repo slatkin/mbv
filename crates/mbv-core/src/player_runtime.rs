@@ -624,14 +624,6 @@ fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
     }
 }
 
-fn load_intro_times(client: &EmbyClient, item_id: &str) -> (i64, i64) {
-    if client.chapter_api_available {
-        client.get_intro_times(item_id).unwrap_or((0, 0))
-    } else {
-        (0, 0)
-    }
-}
-
 fn handle_intro(
     ticks: i64,
     start: i64,

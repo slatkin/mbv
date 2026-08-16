@@ -209,27 +209,4 @@ impl EmbyClient {
             .map(|arr| arr.iter().map(parse_item).collect())
             .unwrap_or_default())
     }
-
-    /// Returns `(intro_start_ticks, intro_end_ticks)` for an item if the Chapter API
-    /// exposes IntroStart and IntroEnd markers.
-    pub fn get_intro_times(&self, item_id: &str) -> Option<(i64, i64)> {
-        log::debug!(target: "api", "outbound: ChapterAPI get_chapters item={item_id}");
-        let resp = self
-            .get("/chapter_api/get_chapters")
-            .query("id", item_id)
-            .call()
-            .ok()?;
-        let body: serde_json::Value = resp.into_json().ok()?;
-        let chapters = body["chapters"].as_array()?;
-        let start = chapters
-            .iter()
-            .find(|c| c["MarkerType"].as_str() == Some("IntroStart"))?["StartPositionTicks"]
-            .as_i64()?;
-        let end = chapters
-            .iter()
-            .find(|c| c["MarkerType"].as_str() == Some("IntroEnd"))?["StartPositionTicks"]
-            .as_i64()?;
-        log::info!(target: "api", "inbound: ChapterAPI intro start={start} end={end}");
-        Some((start, end))
-    }
 }

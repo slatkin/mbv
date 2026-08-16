@@ -739,6 +739,5 @@ pub struct EmbyClient {
     pub token: String,
     pub device_name: String,
     pub device_id: String,
-    pub chapter_api_available: bool,
     agent: ureq::Agent,
 }
