@@ -485,6 +485,50 @@ pub(super) fn hero_on_left_right_pane(
     }
 }
 
+/// Paints the hero-on-left arrangement's right (list) pane border: a `▔` top
+/// row and a `▁` bottom row in `palette::SEEK_TRACK`, one row inside
+/// `list_panel`'s own top/bottom edge. Deliberately independent of
+/// `render_selected_block_borders`/`hero_block_shell` (hero-on-top's shared
+/// shell) rather than routed through it, so a hero-on-left-only change here
+/// can never reach the hero-on-top arrangement. The three hero-on-left
+/// adopters (Music, audiobooks, Home) all called
+/// `render_selected_block_borders` on this exact `(offset=0, top_pad=1,
+/// bottom_pad=height-2)` window directly; centralizing it here means a
+/// future edit touches one function instead of three call sites.
+pub(super) fn hero_on_left_list_panel_border(f: &mut Frame, list_panel: Rect, focused: bool) {
+    if list_panel.height == 0 {
+        return;
+    }
+    let bg = palette::resolve_surface_focus(focused);
+    let style = Style::default().fg(palette::SEEK_TRACK).bg(bg);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "\u{2594}".repeat(list_panel.width as usize),
+            style,
+        ))),
+        Rect {
+            x: list_panel.x,
+            y: list_panel.y,
+            width: list_panel.width,
+            height: 1,
+        },
+    );
+    if list_panel.height > 1 {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "\u{2581}".repeat(list_panel.width as usize),
+                style,
+            ))),
+            Rect {
+                x: list_panel.x,
+                y: list_panel.bottom() - 1,
+                width: list_panel.width,
+                height: 1,
+            },
+        );
+    }
+}
+
 /// One line of the `Hero` component's hero-on-left text block. Unlike
 /// hero-on-top's single-row, truncated [`HeroLine`], hero-on-left text wraps
 /// across as many rows as it needs (design.md decision 2's "Consequence":

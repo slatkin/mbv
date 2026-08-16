@@ -348,16 +348,7 @@ impl App {
                 layout,
             );
         }
-        if list_panel.height > 0 {
-            super::render_selected_block_borders(
-                f,
-                list_panel,
-                0,
-                list_panel.height as usize,
-                1,
-                (list_panel.height as usize).saturating_sub(2),
-            );
-        }
+        hero::hero_on_left_list_panel_border(f, list_panel, right_focused);
     }
 
     /// Renders the wide left pane's hero: album title, metadata, and

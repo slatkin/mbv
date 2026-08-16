@@ -424,7 +424,7 @@ impl App {
         };
         if pill_gap.y < area.bottom() && pill_gap.width > 0 {
             let panel_bg = if wide_pill_section {
-                palette::resolve_surface_focus(focused)
+                palette::SURFACE_BACKDROP
             } else if focused {
                 palette::SURFACE_FOCUSED
             } else {
@@ -629,16 +629,7 @@ impl App {
         }
 
         if let Some(panel) = green_panel_full {
-            if panel.height > 0 {
-                super::render_selected_block_borders(
-                    f,
-                    panel,
-                    0,
-                    panel.height as usize,
-                    1,
-                    (panel.height as usize).saturating_sub(2),
-                );
-            }
+            hero::hero_on_left_list_panel_border(f, panel, focused);
         }
     }
 
