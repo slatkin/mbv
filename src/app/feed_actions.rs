@@ -160,7 +160,6 @@ impl App {
             return;
         }
         self.clamp_feed_home_video_state(lib_idx);
-        self.log_feed_home_video_state(lib_idx, "ensure_group_level");
     }
 
     /// Common guard for kicking off `spawn_feed_home_video_aggregate` (or the
