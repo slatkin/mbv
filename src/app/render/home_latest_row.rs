@@ -14,25 +14,17 @@ use unicode_width::UnicodeWidthStr;
 
 /// Single-line Home row for an Emby item: title (episode rows also show the
 /// series name), a playback-progress percent, and a right-aligned duration.
-/// In the single-column layout (`is_narrow`) the caller already draws the
-/// selected-row background and gutter marker outside `row_rect`, so this
-/// reserves no marker column and stays flush with the hero title; the wide
-/// layout keeps its inline marker column.
-#[allow(clippy::too_many_arguments)]
+/// The caller always draws the selected-row background and marker outside
+/// `row_rect` (design.md decision 2's unified edge marker), so this reserves
+/// no marker column and stays flush with `row_rect`'s own left edge.
 pub(super) fn render_home_emby_row(
     f: &mut Frame,
     row_rect: Rect,
     item: &mbv_core::api::EmbyItem,
     selected_row: bool,
     focused: bool,
-    wide_home_panel_unfocused: bool,
-    is_narrow: bool,
 ) {
-    let avail = if is_narrow {
-        row_rect.width as usize
-    } else {
-        (row_rect.width as usize).saturating_sub(1)
-    };
+    let avail = row_rect.width as usize;
 
     let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
         fmt_duration_short(item.runtime_ticks / TICKS_PER_SECOND)
@@ -62,17 +54,6 @@ pub(super) fn render_home_emby_row(
     let title_col_w =
         avail.saturating_sub(META_COL_W + META_RIGHT_MARGIN + META_INNER_PAD * 2 + PCT_COL_W);
 
-    // Build left column (title). Single-column layout: no leading marker
-    // span — the caller already drew the marker in the left gutter, so the
-    // title starts flush with the hero title above it. Wide layout keeps
-    // its inline 1-char marker column.
-    let lead: Vec<Span> = if is_narrow {
-        Vec::new()
-    } else if selected_row && focused {
-        vec![Span::styled("▍", Style::default().fg(palette::AQUA))]
-    } else {
-        vec![Span::raw(" ")]
-    };
     let is_episode = item.item_type == "Episode" && !item.series_name.is_empty();
     let mut title_spans: Vec<Span> = if is_episode {
         let show_w = title_col_w * 2 / 5;
@@ -84,8 +65,7 @@ pub(super) fn render_home_emby_row(
         } else {
             Modifier::empty()
         };
-        let mut spans = lead;
-        spans.extend([
+        vec![
             Span::styled(
                 show,
                 Style::default().fg(palette::YELLOW).add_modifier(bold),
@@ -94,33 +74,30 @@ pub(super) fn render_home_emby_row(
             Span::styled(
                 ep_title,
                 Style::default()
-                    .fg(if wide_home_panel_unfocused {
-                        palette::MUTED
-                    } else {
+                    .fg(if focused {
                         palette::WHITE
+                    } else {
+                        palette::MUTED
                     })
                     .add_modifier(bold),
             ),
-        ]);
-        spans
+        ]
     } else {
         let title = trunc_str(&item.display_name(), title_col_w);
-        let mut spans = lead;
-        spans.push(Span::styled(
+        vec![Span::styled(
             title,
             Style::default()
-                .fg(if wide_home_panel_unfocused {
-                    palette::MUTED
-                } else {
+                .fg(if focused {
                     palette::WHITE
+                } else {
+                    palette::MUTED
                 })
                 .add_modifier(if selected_row && focused {
                     Modifier::BOLD
                 } else {
                     Modifier::empty()
                 }),
-        ));
-        spans
+        )]
     };
 
     // Add playback progress percentage to the right of the title
@@ -163,54 +140,37 @@ pub(super) fn render_home_emby_row(
 
 /// Generic single-line Home "Latest" row for a non-Emby `QueueItem`
 /// (Audiobookshelf today, Feeds in Part 3): a `display_name()` title and a
-/// right-aligned duration with marker/selection styling matching the existing
-/// Emby Home row look. No per-provider metadata. In the single-column layout
-/// (`is_narrow`) the caller already draws the selected-row background and
-/// gutter marker outside `row_rect`, so this reserves no marker column and
-/// stays flush with the hero title; the wide layout keeps its inline marker.
+/// right-aligned duration, matching the Emby Home row look. No per-provider
+/// metadata. The caller always draws the selected-row background and marker
+/// outside `row_rect` (design.md decision 2's unified edge marker), so this
+/// reserves no marker column and stays flush with `row_rect`'s own left edge.
 pub(super) fn render_home_latest_row(
     f: &mut Frame,
     row_rect: Rect,
     item: &QueueItem,
     selected: bool,
     focused: bool,
-    wide_unfocused: bool,
-    is_narrow: bool,
 ) {
-    let avail = if is_narrow {
-        row_rect.width as usize
-    } else {
-        (row_rect.width as usize).saturating_sub(1)
-    };
+    let avail = row_rect.width as usize;
     const META_COL_W: usize = 10;
     const META_INNER_PAD: usize = 1;
     let title_col_w = avail.saturating_sub(META_COL_W + META_INNER_PAD * 2);
 
     let bold = selected && focused;
-    let mut spans: Vec<Span> = vec![
-        if selected && focused {
-            Span::styled("▍", Style::default().fg(palette::AQUA))
-        } else {
-            Span::raw(" ")
-        },
-        Span::styled(
-            trunc_str(&item.display_name(), title_col_w),
-            Style::default()
-                .fg(if wide_unfocused {
-                    palette::MUTED
-                } else {
-                    palette::WHITE
-                })
-                .add_modifier(if bold {
-                    Modifier::BOLD
-                } else {
-                    Modifier::empty()
-                }),
-        ),
-    ];
-    if is_narrow {
-        spans.remove(0);
-    }
+    let mut spans: Vec<Span> = vec![Span::styled(
+        trunc_str(&item.display_name(), title_col_w),
+        Style::default()
+            .fg(if focused {
+                palette::WHITE
+            } else {
+                palette::MUTED
+            })
+            .add_modifier(if bold {
+                Modifier::BOLD
+            } else {
+                Modifier::empty()
+            }),
+    )];
     let actual_title_w: usize = spans.iter().map(|s| s.content.width()).sum();
 
     let meta_text = item
@@ -374,7 +334,7 @@ impl App {
                 height: block_h,
             };
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
                 block_area,
             );
             let inner = Rect {
@@ -483,15 +443,7 @@ mod tests {
         let backend = TestBackend::new(row_w, 1);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            render_home_latest_row(
-                f,
-                Rect::new(0, 0, row_w, 1),
-                item,
-                selected,
-                focused,
-                false,
-                false,
-            );
+            render_home_latest_row(f, Rect::new(0, 0, row_w, 1), item, selected, focused);
         })
         .unwrap();
         buffer_to_string(&term)
@@ -509,7 +461,6 @@ mod tests {
             "expected duration right-aligned, got: {line:?}"
         );
         assert!(line.contains("Podcast - Episode 1"));
-        assert!(line.trim_start().starts_with('▍'), "selected marker");
     }
 
     /// Task 10.1: an item with no known duration leaves the metadata column
@@ -523,18 +474,6 @@ mod tests {
         assert!(
             after_title.trim().is_empty(),
             "no meta text expected, got: {line:?}"
-        );
-    }
-
-    /// Task 10.1: an unselected / unfocused row drops the marker glyph.
-    #[test]
-    fn row_unselected_has_no_marker() {
-        let item = abs_item("3", None, None);
-        let out = render_row(20, &item, false, false);
-        let line = out.split('\n').next().unwrap();
-        assert!(
-            !line.contains('▍'),
-            "no marker without selection, got: {line:?}"
         );
     }
 

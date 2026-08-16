@@ -1,6 +1,8 @@
 use super::super::ui_util::*;
+use super::hero::{self, HERO_BLOCK_EXTRA_ROWS};
 use super::home_hero::KeepWatchingHeroLayout;
 use super::home_video::home_panel_scroll;
+use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
@@ -11,12 +13,23 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 
+/// Padding around the wide (hero-on-left) hero column's content, matching
+/// the hero-on-left arrangement's shared `PANE_PAD_X`/`PANE_PAD_Y` convention
+/// (`music_wide.rs`, `audiobookshelf_books.rs`).
 const HOME_HERO_PAD_X: u16 = 2;
 const HOME_HERO_PAD_Y: u16 = 1;
 /// The two-column (wide) hero's original 2-col horizontal padding around
 /// the overview text block. The single-column hero has none (flush with
 /// the title above it).
 const WIDE_OVERVIEW_PAD: usize = 2;
+
+fn inset_pane_vertically(area: Rect) -> Rect {
+    Rect {
+        y: area.y.saturating_add(HOME_HERO_PAD_Y),
+        height: area.height.saturating_sub(HOME_HERO_PAD_Y * 2),
+        ..area
+    }
+}
 
 impl App {
     pub(super) fn render_home_list(
@@ -152,18 +165,20 @@ impl App {
         }
         let hero_data: Option<HeroData>;
         let list_area: Rect;
+        // Narrow layout's hero shell (area, row count), painted after the
+        // pill-gap fill below rather than inline here: `top_hero_layout`
+        // shifts the hero up into the blank row above `content_area` when
+        // one exists, which is the same row the pill-gap fill owns, so the
+        // shell must paint last to win that row rather than be painted over.
+        let mut narrow_shell: Option<(Rect, u16)> = None;
 
         if two_column {
-            // Two-column layout: hero on left, list on right.
-            let hero_col_width = ((area.width as u32 * 2 / 5) as u16)
-                .max(12)
-                .min(area.width.saturating_sub(12));
-            let hero_panel = Rect {
-                x: area.x,
-                y: area.y,
-                width: hero_col_width,
-                height: area.height.saturating_sub(1),
-            };
+            // Two-column layout: hero on left, list on right (hero-on-left,
+            // design.md decision 4/5: the pane split and its minimum pane
+            // width are the shared arrangement's, not a Home-local ratio).
+            let (mut hero_panel, right_panel) = hero::hero_on_left_panes(area);
+            hero_panel.height = area.height.saturating_sub(1);
+            let hero_col_width = hero_panel.width;
             let hero_content = Rect {
                 x: hero_panel.x.saturating_add(HOME_HERO_PAD_X),
                 y: hero_panel.y.saturating_add(HOME_HERO_PAD_Y),
@@ -222,33 +237,41 @@ impl App {
 
             if hero_data.is_some() {
                 f.render_widget(
-                    Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                    Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
                     hero_panel,
                 );
             }
 
             list_area = if hero_data.is_some() {
-                Rect {
-                    x: content_area.x + hero_col_width + 2,
-                    y: area.y.saturating_add(2),
-                    width: content_area.width.saturating_sub(hero_col_width + 2),
-                    height: area.height.saturating_sub(2),
-                }
+                right_panel
             } else {
                 // No hero item: list takes full width
                 content_area
             };
         } else {
-            // Vertical layout: hero on top, list below (unchanged behavior)
+            // Vertical layout: hero-on-top fallback (design.md decision 1),
+            // reusing the shared reserved-block geometry and the HeroShell
+            // (`▁`/`▔`) border every other hero-on-top screen already has
+            // (decision 2's "Narrow hero shell is uniform" -- Home was the
+            // one screen missing it). The image-beside-metadata content wrap
+            // itself is unchanged; it already matches the shared shape.
             let max_allowed = content_area.height.saturating_sub(7);
+            let inner_w = content_area
+                .width
+                .saturating_sub(SELECTED_BLOCK_SIDE_PADDING * 2);
 
-            hero_data = if area.width < 24 {
-                None
+            enum HeroContentDims {
+                Emby(mbv_core::api::EmbyItem, u16, KeepWatchingHeroLayout, u16),
+                Generic(QueueItem, u16),
+                None,
+            }
+            let dims = if area.width < 24 {
+                HeroContentDims::None
             } else {
                 match emby_item {
                     Some(item) => {
-                        let img_w = area.width / 2;
-                        let meta_w = area.width.saturating_sub(img_w + 1) as usize;
+                        let img_w = inner_w / 2;
+                        let meta_w = inner_w.saturating_sub(img_w + 1) as usize;
                         // Image sits beside the metadata column, top-aligned.
                         // Compute its row extent before laying out the
                         // overview, so overview text wraps around it: at
@@ -260,125 +283,113 @@ impl App {
                         let meta_layout = Self::keep_watching_hero_layout(
                             &item,
                             meta_w,
-                            area.width as usize,
+                            inner_w as usize,
                             image_rows,
                             0,
                         );
-                        let hero_height = image_rows.max(meta_layout.height);
                         if meta_layout.height < 4 {
-                            None
+                            HeroContentDims::None
                         } else {
-                            let hero_area = Rect {
-                                x: content_area.x,
-                                y: content_area.y,
-                                width: content_area.width,
-                                height: hero_height,
-                            };
-                            let meta_area = Rect {
-                                x: hero_area.x,
-                                y: hero_area.y,
-                                width: hero_area.width.saturating_sub(img_w + 1),
-                                height: hero_height,
-                            };
-                            let img_area = Rect {
-                                x: hero_area.x + hero_area.width.saturating_sub(img_w),
-                                y: hero_area.y,
-                                width: img_w,
-                                height: hero_height,
-                            };
-                            Some(HeroData::Emby(
-                                Box::new(item),
-                                meta_area,
-                                hero_area,
-                                img_area,
-                                meta_layout,
-                            ))
+                            HeroContentDims::Emby(item, img_w, meta_layout, image_rows)
                         }
                     }
                     None => current_item
                         .filter(|item| item.as_emby().is_none())
-                        .map(|item| {
-                            HeroData::Generic(
-                                item,
-                                Rect {
-                                    x: content_area.x,
-                                    y: content_area.y,
-                                    width: content_area.width,
-                                    height: max_allowed,
-                                },
-                            )
-                        }),
+                        .map(|item| HeroContentDims::Generic(item, max_allowed))
+                        .unwrap_or(HeroContentDims::None),
                 }
             };
+            let content_rows = match &dims {
+                HeroContentDims::Emby(_, _, meta_layout, image_rows) => {
+                    meta_layout.height.max(*image_rows)
+                }
+                HeroContentDims::Generic(_, rows) => *rows,
+                HeroContentDims::None => 0,
+            };
+            let desired_hero_rows = if content_rows > 0 {
+                content_rows + HERO_BLOCK_EXTRA_ROWS
+            } else {
+                0
+            };
+            let top = hero::top_hero_layout(content_area, desired_hero_rows, false);
+            if top.hero_rows > 0 {
+                narrow_shell = Some((top.hero_area, top.hero_rows));
+            }
+            let hero_content = Rect {
+                x: top.hero_area.x.saturating_add(SELECTED_BLOCK_SIDE_PADDING),
+                y: top.hero_area.y.saturating_add(2),
+                width: top
+                    .hero_area
+                    .width
+                    .saturating_sub(SELECTED_BLOCK_SIDE_PADDING * 2),
+                height: top.hero_rows.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
+            };
+            hero_data = match dims {
+                HeroContentDims::Emby(item, img_w, meta_layout, image_rows) => {
+                    let hero_height = image_rows.max(meta_layout.height);
+                    let meta_area = Rect {
+                        x: hero_content.x,
+                        y: hero_content.y,
+                        width: hero_content.width.saturating_sub(img_w + 1),
+                        height: hero_height,
+                    };
+                    let img_area = Rect {
+                        x: hero_content.x + hero_content.width.saturating_sub(img_w),
+                        y: hero_content.y,
+                        width: img_w,
+                        height: hero_height,
+                    };
+                    Some(HeroData::Emby(
+                        Box::new(item),
+                        meta_area,
+                        hero_content,
+                        img_area,
+                        meta_layout,
+                    ))
+                }
+                HeroContentDims::Generic(item, _) => Some(HeroData::Generic(item, hero_content)),
+                HeroContentDims::None => None,
+            };
 
-            let hero_h = match &hero_data {
-                Some(HeroData::Emby(_, meta_area, _, _, _)) => meta_area.height,
-                Some(HeroData::Generic(_, area)) => area.height,
-                None => 0,
-            };
-            let list_gap = if hero_data.is_some() { 1 } else { 2 };
-            list_area = Rect {
-                y: content_area.y + hero_h + list_gap,
-                height: content_area.height.saturating_sub(hero_h + list_gap),
-                ..content_area
-            };
+            list_area = top.list_area;
         }
 
+        // Hero-on-left's right pane: pill row at the pane's top, then the
+        // list panel below it (design.md decision 6, shared with Music and
+        // audiobooks via `hero::hero_on_left_right_pane`). With no hero item
+        // there is no right pane at all -- pills span the full row and the
+        // list takes the full width, same as the single-column layout.
         let wide_pill_section = two_column && hero_data.is_some();
-        let pills_area = if wide_pill_section {
-            Rect {
-                x: list_area.x,
-                y: area.y,
-                width: list_area.width,
-                height: 1,
-            }
+        let (pills_area, green_panel_full): (Rect, Option<Rect>) = if wide_pill_section {
+            let right_area = inset_pane_vertically(list_area);
+            let right_pane = hero::hero_on_left_right_pane(list_area, right_area, HOME_HERO_PAD_Y);
+            (right_pane.pills_area, Some(right_pane.list_panel))
         } else {
-            Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
-                height: 1,
-            }
+            (
+                Rect {
+                    x: area.x,
+                    y: area.y,
+                    width: area.width,
+                    height: 1,
+                },
+                None,
+            )
         };
         self.render_home_section_pills_row(f, pills_area, layout);
 
-        // In the wide Home layout, the list body is a separate right-column
-        // green surface directly below the pill row. Keep one blank green row
-        // at its top and bottom.
-        // `green_panel_full` tracks the painted green panel so focused rows and
-        // its top/bottom rules can span the entire width.
-        let green_panel_full: Option<Rect>;
-        let list_area = if two_column && hero_data.is_some() {
-            const RIGHT_COLUMN_INNER_INSET: u16 = 2;
-            let panel_h = list_area.height.saturating_sub(1);
-            let panel_area = Rect {
-                height: panel_h,
-                ..list_area
-            };
-            green_panel_full = Some(panel_area);
-            let green_bg = if focused {
-                palette::BG_GREEN
-            } else {
-                palette::PLAYBACK_PANEL_BG
-            };
+        let list_area = if let Some(list_panel) = green_panel_full {
+            let panel_bg = palette::resolve_surface_focus(focused);
             f.render_widget(
-                Block::default().style(Style::default().bg(green_bg)),
-                panel_area,
+                Block::default().style(Style::default().bg(panel_bg)),
+                list_panel,
             );
-            let interior_area = Rect {
-                y: list_area.y.saturating_add(1),
-                height: panel_h.saturating_sub(3),
-                ..list_area
-            };
             Rect {
-                x: interior_area.x + RIGHT_COLUMN_INNER_INSET,
-                width: interior_area
-                    .width
-                    .saturating_sub(2 * RIGHT_COLUMN_INNER_INSET),
-                ..interior_area
+                x: list_panel.x.saturating_add(HOME_HERO_PAD_X),
+                y: list_panel.y.saturating_add(HOME_HERO_PAD_Y),
+                width: list_panel.width.saturating_sub(HOME_HERO_PAD_X * 2),
+                height: list_panel.height.saturating_sub(HOME_HERO_PAD_Y * 2),
             }
         } else {
-            green_panel_full = None;
             list_area
         };
         // The selected row's full-width background fill uses this rect in
@@ -395,28 +406,12 @@ impl App {
         // focused panel — so the same `LIBRARY_SIDE_BG` reads in both. (The
         // single-column selection only draws while focused, when the panel is
         // green.)
-        let selection_bg = palette::LIBRARY_SIDE_BG;
+        let selection_bg = palette::SURFACE_BACKDROP;
 
-        // Single-column Home owns the row above its pill bar (the playback
-        // panel's trailing indicator row): it follows the right panel's focus
-        // fill. The wide layout is a separate view and keeps the shared
-        // chrome color.
-        if !two_column {
-            let top_gap = Rect {
-                y: pills_area.y.saturating_sub(1),
-                height: 1,
-                ..pills_area
-            };
-            let top_gap_bg = if focused {
-                palette::BG_GREEN
-            } else {
-                palette::PLAYBACK_INDICATOR_BG
-            };
-            f.render_widget(
-                Block::default().style(Style::default().bg(top_gap_bg)),
-                top_gap,
-            );
-        }
+        // The row above the pill bar (the player panel's trailing blank
+        // spacer row) is owned by `render_main`'s top-level Home-focus fill
+        // now, not reached into from here — see `mod.rs`'s
+        // `home_single_col_focused` block.
 
         // Keep the row immediately below the Home pill bar free of list text.
         // The wide layout uses the list panel surface; other layouts inherit
@@ -429,15 +424,11 @@ impl App {
         };
         if pill_gap.y < area.bottom() && pill_gap.width > 0 {
             let panel_bg = if wide_pill_section {
-                if focused {
-                    palette::BG_GREEN
-                } else {
-                    palette::PLAYBACK_PANEL_BG
-                }
+                palette::resolve_surface_focus(focused)
             } else if focused {
-                palette::BG_GREEN
+                palette::SURFACE_FOCUSED
             } else {
-                palette::LIBRARY_SIDE_BG
+                palette::SURFACE_BACKDROP
             };
             f.render_widget(
                 Paragraph::new(" ".repeat(pill_gap.width as usize))
@@ -460,6 +451,12 @@ impl App {
         }
 
         layout.left_area = list_area;
+
+        // Painted last so it wins the row it shares with the pill-gap fill
+        // above (see `narrow_shell`'s doc comment).
+        if let Some((hero_area, hero_rows)) = narrow_shell {
+            hero::hero_block_shell(f, hero_area, hero_rows, focused);
+        }
 
         // Render hero (shared between both layout modes)
         match &hero_data {
@@ -493,7 +490,6 @@ impl App {
             None => {}
         }
 
-        let wide_home_panel_unfocused = two_column && hero_data.is_some() && !focused;
         let needs_scrollbar = content_h > list_area.height;
         let list_w = super::content_width(list_area.width, needs_scrollbar) as u16;
         let cursor_row = rows
@@ -545,6 +541,14 @@ impl App {
                     // every row kind (Emby and the generic ABS/Feed
                     // renderer) so the highlight always spans the whole
                     // panel, matching the wide layout's selected-row style.
+                    // The marker always draws in a 2-col gutter left of the
+                    // text (design.md decision 2: a thin edge marker, no
+                    // inline glyph, the same convention every other list
+                    // uses), whether that gutter is inside the row's own
+                    // background fill (wide, where `list_area` is already
+                    // inset from the panel edge) or borrowed from the
+                    // chrome margin outside `list_area` (single-column,
+                    // which has no such inset).
                     if selected_row && focused {
                         f.render_widget(
                             Block::default().style(Style::default().bg(selection_bg)),
@@ -555,70 +559,56 @@ impl App {
                                 height: 1,
                             },
                         );
-                        // Single-column layout: the marker lives in the
-                        // panel's own left padding gutter (the same 2-col
-                        // margin `draw_column_selection_markers` uses for
-                        // multi-column lists), so row text never reserves a
-                        // column and stays flush with the hero title above
-                        // it. The wide layout keeps its inline marker
-                        // (unaffected — it has no shared left edge to align
-                        // with, and this block only runs when there's no
-                        // green panel).
-                        if green_panel_full.is_none() {
-                            let gutter_x = row_x.saturating_sub(2);
-                            f.render_widget(
-                                Block::default().style(Style::default().bg(selection_bg)),
-                                Rect {
-                                    x: gutter_x,
-                                    y: sy,
-                                    width: 2,
-                                    height: 1,
-                                },
-                            );
-                            f.render_widget(
-                                Paragraph::new(Span::styled(
-                                    "\u{258e}",
-                                    Style::default().fg(palette::AQUA),
-                                )),
-                                Rect {
-                                    x: gutter_x,
-                                    y: sy,
-                                    width: 1,
-                                    height: 1,
-                                },
-                            );
-                        }
+                        let gutter_x = if list_area.x > row_x {
+                            row_x
+                        } else {
+                            row_x.saturating_sub(2)
+                        };
+                        f.render_widget(
+                            Block::default().style(Style::default().bg(selection_bg)),
+                            Rect {
+                                x: gutter_x,
+                                y: sy,
+                                width: 2,
+                                height: 1,
+                            },
+                        );
+                        f.render_widget(
+                            Paragraph::new(super::selection_marker(true, super::MarkerEdge::Left)),
+                            Rect {
+                                x: gutter_x,
+                                y: sy,
+                                width: 1,
+                                height: 1,
+                            },
+                        );
                     }
 
-                    // Single-column layout: the marker draws in the left
-                    // gutter (see above), so no column is reserved for it
-                    // and text stays flush with the hero title. The wide
-                    // layout keeps its inline 1-char marker column.
-                    let is_narrow = green_panel_full.is_none();
+                    let text_rect = Rect {
+                        x: row_x + 2,
+                        width: row_rect.width.saturating_sub(2),
+                        ..row_rect
+                    };
 
                     // Non-Emby rows (Audiobookshelf today, Feeds in Part 3) use
                     // the generic single-line renderer.
                     let Some(emby) = item.as_emby() else {
                         super::home_latest_row::render_home_latest_row(
                             f,
-                            row_rect,
+                            text_rect,
                             item,
                             selected_row,
                             focused,
-                            wide_home_panel_unfocused,
-                            is_narrow,
                         );
                         hitmap.push((row_rect, *flat_idx));
                         continue;
                     };
                     super::home_latest_row::render_home_emby_row(
                         f,
-                        row_rect,
+                        text_rect,
                         emby,
                         selected_row,
                         focused,
-                        wide_home_panel_unfocused,
-                        is_narrow,
                     );
                     hitmap.push((row_rect, *flat_idx));
                 }
@@ -629,28 +619,25 @@ impl App {
 
         if needs_scrollbar && focused {
             let max_off = content_h.saturating_sub(list_area.height) as usize;
-            super::render_right_scrollbar(f, list_area, max_off, scroll_y as usize);
+            super::render_right_scrollbar(
+                f,
+                list_area,
+                max_off,
+                scroll_y as usize,
+                palette::SCROLLBAR,
+            );
         }
 
         if let Some(panel) = green_panel_full {
             if panel.height > 0 {
-                let border_style = Style::default().fg(palette::SEEK_TRACK);
-                for (y, glyph) in [
-                    (panel.y, '\u{2594}'),
-                    (panel.bottom().saturating_sub(1), '\u{2581}'),
-                ] {
-                    f.render_widget(
-                        Paragraph::new(Line::from(Span::styled(
-                            glyph.to_string().repeat(panel.width as usize),
-                            border_style,
-                        ))),
-                        Rect {
-                            y,
-                            height: 1,
-                            ..panel
-                        },
-                    );
-                }
+                super::render_selected_block_borders(
+                    f,
+                    panel,
+                    0,
+                    panel.height as usize,
+                    1,
+                    (panel.height as usize).saturating_sub(2),
+                );
             }
         }
     }

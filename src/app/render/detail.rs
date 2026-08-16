@@ -1,11 +1,11 @@
 use super::super::ui_util::*;
+use super::hero::{HeroContent, HeroImage, HeroLine, ImageTop};
 use super::RENDER_FILTER;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
-use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
@@ -21,45 +21,6 @@ const IMG_ROWS: u16 = 14;
 /// differently and silently miss each other's cache entries.
 pub(super) fn compact_banner_image_cache_key(item_id: &str) -> String {
     format!("{item_id}:cmp_primary")
-}
-
-/// Paints the hero's top-row title (two-column lists only, when `show_title`
-/// is set at the call site): the selected item's name in yellow, bold when
-/// focused. Shared by the movie hero (`render_compact_detail`) and the
-/// Series inline hero (`render_series_inline_detail`), which otherwise
-/// duplicated this block with only the geometry differing. Returns `row + 1`
-/// if the title was painted, else `row` unchanged, so callers push
-/// subsequent content down by the result.
-pub(super) fn render_hero_title_row(
-    f: &mut Frame,
-    x: u16,
-    row: u16,
-    max_y: u16,
-    width: u16,
-    name: &str,
-    focused: bool,
-) -> u16 {
-    if row >= max_y {
-        return row;
-    }
-    let title = trunc_str(name, width as usize);
-    let title_style = if focused {
-        Style::default()
-            .fg(palette::YELLOW)
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(palette::YELLOW)
-    };
-    f.render_widget(
-        Paragraph::new(Line::from(Span::styled(title, title_style))),
-        Rect {
-            x,
-            y: row,
-            width,
-            height: 1,
-        },
-    );
-    row + 1
 }
 
 /// Estimated placeholder size for a poster that hasn't been fetched/decoded
@@ -395,166 +356,67 @@ impl App {
         let content =
             self.compact_banner_layout_with_overview(&item, area.width, truncate_overview);
 
-        let inner_x = area.x;
-        let inner_w = area.width as usize;
-        let inner_w16 = area.width;
-        let mut row = area.y;
-        let max_y = area.y + area.height;
-
-        let text_color = if focused {
-            palette::WHITE
-        } else {
-            palette::SUBTLE
-        };
-
-        // — Title row (two-column lists only) —
+        // — Title (two-column lists only) —
         // The selected item's name on the hero's top row, in yellow (bold
         // when focused), mirroring the album-detail title block. Skipped for
         // one-column lists, where the full-width list-row title directly
         // above the hero already shows the name (and reserving the row there
         // would not have been budgeted for).
-        if show_title {
-            row = render_hero_title_row(
-                f,
-                inner_x,
-                row,
-                max_y,
-                inner_w16,
-                &item.display_name(),
-                focused,
-            );
-        }
-
-        let img_actual_w = content.img_actual_w;
-        let img_height = content.img_height;
-        let img_is_placeholder = content.img_is_placeholder;
-        let img_x = area.x + area.width.saturating_sub(img_actual_w);
-        // The poster is right-aligned on the hero's top row, sharing that
-        // row with the title in two-column lists or flush with the hero's
-        // top border in one-column lists.
-        let img_y = area.y.min(area.y + area.height.saturating_sub(1));
-        let img_end_row = img_y + img_height;
-        layout.inline_image_rect = if img_height > 0 {
-            Some(Rect {
-                x: img_x,
-                y: img_y,
-                width: img_actual_w,
-                height: img_height,
-            })
-        } else {
-            None
-        };
-
-        let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
-        let narrow_w16 = inner_w16.saturating_sub(img_actual_w);
-        let text_dims = |r: u16| -> (usize, u16) {
-            if img_height > 0 && r < img_end_row {
-                (narrow_w, narrow_w16)
-            } else {
-                (inner_w, inner_w16)
-            }
-        };
-
-        if let Some(meta) = &content.meta_line {
-            if row < max_y {
-                let (tw, tw16) = text_dims(row);
-                // The metadata row directly below the selected movie title
-                // renders in #9e9e9e foreground (palette::SUBTLE) — light grey
-                // text on the MEDIA_SELECTED_BG block that frames the
-                // selected row + banner.
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        trunc_str(meta, tw),
-                        Style::default().fg(palette::MUTED_GREEN),
-                    ))),
-                    Rect {
-                        x: inner_x,
-                        y: row,
-                        width: tw16,
-                        height: 1,
-                    },
-                );
-                row += 1;
-                // Spacer row between metadata and description
-                row += 1;
-            }
-        }
-
-        if content.show_playing && row < max_y {
-            let (_tw, tw16) = text_dims(row);
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    "Playing",
-                    Style::default()
-                        .fg(palette::BG_GREEN)
-                        .add_modifier(Modifier::BOLD),
-                ))),
-                Rect {
-                    x: inner_x,
-                    y: row,
-                    width: tw16,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
+        let title = item.display_name();
 
         // — Overview + Director (#204, #263) —
-        // The banner grows to fit this block's full wrapped height (computed
-        // by `compact_banner_layout` and consumed by the list layout before
-        // any of this renders, so `area` is already sized to fit every
-        // line) instead of clipping or scrolling it.
-        for (idx, line_text) in content.lines.iter().enumerate() {
-            if row >= max_y {
-                break;
-            }
-            let (tw, tw16) = text_dims(row);
-            if Some(idx) == content.director_line_idx {
-                f.render_widget(
-                    Paragraph::new(Line::from(vec![
-                        Span::styled("Director: ", Style::default().fg(palette::MUTED_GREEN)),
-                        Span::styled(
-                            trunc_str(&item.director, tw),
-                            Style::default().fg(palette::TEXT),
-                        ),
-                    ])),
-                    Rect {
-                        x: inner_x,
-                        y: row,
-                        width: tw16,
-                        height: 1,
-                    },
-                );
-            } else if !line_text.is_empty() {
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        trunc_str(line_text, tw),
-                        Style::default().fg(text_color),
-                    ))),
-                    Rect {
-                        x: inner_x,
-                        y: row,
-                        width: tw16,
-                        height: 1,
-                    },
-                );
-            }
-            row += 1;
-        }
+        // The Director line is rendered specially (its own label style); every
+        // other line is the banner's wrapped overview text, which grows to
+        // fit the block's full wrapped height (computed by
+        // `compact_banner_layout` and consumed by the list layout before any
+        // of this renders, so `area` is already sized to fit every line)
+        // instead of clipping or scrolling it.
+        let lines: Vec<HeroLine> = content
+            .lines
+            .iter()
+            .enumerate()
+            .map(|(idx, line_text)| {
+                if Some(idx) == content.director_line_idx {
+                    HeroLine::Prefixed {
+                        label: "Director: ",
+                        value: item.director.clone(),
+                    }
+                } else {
+                    HeroLine::Plain(line_text.clone())
+                }
+            })
+            .collect();
 
-        if img_height > 0 {
-            let img_rect = Rect {
-                x: img_x,
-                y: img_y,
-                width: img_actual_w,
-                height: img_height,
-            };
-            if img_is_placeholder {
+        let hero_content = HeroContent {
+            title: show_title.then_some(title.as_str()),
+            // The metadata row directly below the selected movie title
+            // renders in #9e9e9e foreground (palette::SUBTLE) — light grey
+            // text on the SURFACE_FOCUSED block that frames the selected
+            // row + banner.
+            meta_line: content.meta_line.as_deref(),
+            meta_color: palette::MUTED_GREEN,
+            show_playing: content.show_playing,
+            unconditional_spacer_after_meta: false,
+            lines: &lines,
+            // The poster is right-aligned on the hero's top row, sharing that
+            // row with the title in two-column lists or flush with the
+            // hero's top border in one-column lists.
+            image: (content.img_height > 0).then_some(HeroImage {
+                actual_w: content.img_actual_w,
+                height: content.img_height,
+                top: ImageTop::AreaTop,
+            }),
+        };
+        let result = super::hero::paint_hero_content(f, area, &hero_content, focused);
+        layout.inline_image_rect = result.img_rect;
+
+        if let Some(img_rect) = result.img_rect {
+            if content.img_is_placeholder {
                 // Image still loading -- draw a dim placeholder block to
                 // hold the space (mirrors episode.rs's series-image
                 // placeholder).
                 f.render_widget(
-                    Block::default().style(Style::default().bg(palette::OVERLAY)),
+                    Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
                     img_rect,
                 );
             } else {

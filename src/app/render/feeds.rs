@@ -1,11 +1,19 @@
+use super::hero::{
+    hero_block_shell, paint_hero_content, top_hero_layout, HeroContent, HERO_BLOCK_EXTRA_ROWS,
+    HERO_TITLE_ROWS,
+};
+use super::list_rows::{draw_column_selection_markers, SELECTED_BLOCK_SIDE_PADDING};
 use super::widgets::{
-    content_width, render_pill_bar, render_placeholder, render_right_scrollbar_with_viewport,
-    PillBar,
+    render_pill_bar, render_placeholder, render_right_scrollbar_with_viewport, PillBar,
 };
 use crate::app::layout::LayoutMain;
+use crate::app::library_column_width::{
+    library_cell_width, library_column_count, LIBRARY_COLUMN_GAP,
+};
 use crate::app::palette;
 use crate::app::App;
 use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::playback_queue::FeedEntry;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -124,6 +132,80 @@ fn format_pub_date(secs: Option<u64>) -> String {
     }
 }
 
+/// Row budget for the feeds hero's text content (design.md decision 6:
+/// element presence -- no image, since feed entries carry no artwork), a
+/// title row (two-column lists only) plus a single metadata line and its
+/// trailing spacer.
+fn feed_hero_content_rows(show_title: bool) -> u16 {
+    let title_rows = if show_title { HERO_TITLE_ROWS } else { 0 };
+    title_rows + 2
+}
+
+/// The feeds hero's one metadata line: duration, publish date, MIME type,
+/// and watched state, in that order -- feeds' declared metadata set
+/// (design.md decision 6).
+fn feed_entry_meta_line(entry: &FeedEntry) -> String {
+    let mut parts = Vec::new();
+    let duration = format_duration(entry.duration_ticks);
+    if !duration.is_empty() {
+        parts.push(duration);
+    }
+    let date = format_pub_date(entry.pub_date_secs);
+    if !date.is_empty() {
+        parts.push(date);
+    }
+    if let Some(mime) = entry.mime_type.as_deref() {
+        if !mime.is_empty() {
+            parts.push(mime.to_string());
+        }
+    }
+    if entry.played {
+        parts.push("Watched".to_string());
+    }
+    parts.join("   ")
+}
+
+/// One physical list row after packing `FeedDisplayRow`s into `cols`-wide
+/// rows (design.md's two-column list): headings and spacers always occupy
+/// their own row; entries pack `cols` per row, never crossing a heading/
+/// spacer boundary (same rule `list_letter_groups.rs`'s `push_item_row`
+/// uses for the Emby library list).
+enum PackedFeedRow {
+    Spacer,
+    Heading(FeedAgeGroup),
+    Items(Vec<usize>),
+}
+
+fn pack_feed_rows(display_rows: &[FeedDisplayRow], cols: usize) -> Vec<PackedFeedRow> {
+    let cols = cols.max(1);
+    let mut packed = Vec::new();
+    let mut current: Vec<usize> = Vec::with_capacity(cols);
+    for row in display_rows {
+        match row {
+            FeedDisplayRow::Entry(idx) => {
+                current.push(*idx);
+                if current.len() >= cols {
+                    packed.push(PackedFeedRow::Items(std::mem::take(&mut current)));
+                }
+            }
+            FeedDisplayRow::Spacer | FeedDisplayRow::Heading(_) => {
+                if !current.is_empty() {
+                    packed.push(PackedFeedRow::Items(std::mem::take(&mut current)));
+                }
+                packed.push(match row {
+                    FeedDisplayRow::Spacer => PackedFeedRow::Spacer,
+                    FeedDisplayRow::Heading(g) => PackedFeedRow::Heading(*g),
+                    FeedDisplayRow::Entry(_) => unreachable!(),
+                });
+            }
+        }
+    }
+    if !current.is_empty() {
+        packed.push(PackedFeedRow::Items(current));
+    }
+    packed
+}
+
 impl App {
     pub(super) fn render_feeds(
         &mut self,
@@ -211,7 +293,7 @@ impl App {
             }
             f.render_widget(
                 Paragraph::new(Line::from(spans))
-                    .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                    .style(Style::default().bg(palette::SURFACE_BACKDROP)),
                 Rect {
                     x: area.x,
                     y: row,
@@ -277,43 +359,84 @@ impl App {
         // index in `visible_entries()`.
         let cursor = self.feed_tab.cursor.min(n.saturating_sub(1));
         let display_rows = feed_display_rows(self.feed_tab.visible_entries(), current_time_secs());
+        let cols = library_column_count(list_area.width);
+        let packed = pack_feed_rows(&display_rows, cols);
+
+        // Hero: the cursor-selected entry's title + metadata, painted above
+        // the (now packed) list -- feeds' hero-on-top arrangement
+        // (design.md decision 6: no image, since feed entries carry none).
+        let selected_entry = self.feed_tab.visible_entries()[cursor].clone();
+        let show_title = cols > 1;
+        let hero_rows_desired = feed_hero_content_rows(show_title) + HERO_BLOCK_EXTRA_ROWS;
+        let hero_layout = top_hero_layout(list_area, hero_rows_desired, false);
+        let hero_area = hero_layout.hero_area;
+        let list_area = hero_layout.list_area;
+        let hero_rows = hero_layout.hero_rows;
+        layout.hero_area = hero_area;
+
+        if hero_rows > 0 {
+            hero_block_shell(f, hero_area, hero_rows, focused);
+            let content_rect = Rect {
+                x: hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
+                y: hero_area.y + 2,
+                width: hero_area
+                    .width
+                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
+                height: hero_rows.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
+            };
+            let meta = feed_entry_meta_line(&selected_entry);
+            let hero_content = HeroContent {
+                title: show_title.then_some(selected_entry.title.as_str()),
+                meta_line: Some(meta.as_str()),
+                meta_color: palette::PLAYBACK_META_FG,
+                show_playing: false,
+                unconditional_spacer_after_meta: false,
+                lines: &[],
+                image: None,
+            };
+            paint_hero_content(f, content_rect, &hero_content, focused);
+        }
+
+        layout.left_area = list_area;
+        if list_area.height == 0 {
+            return;
+        }
+
         let visible = list_area.height as usize;
-        let display_cursor = display_rows
+        let packed_cursor_row = packed
             .iter()
-            .position(|row| matches!(row, FeedDisplayRow::Entry(idx) if *idx == cursor))
+            .position(|row| matches!(row, PackedFeedRow::Items(idxs) if idxs.contains(&cursor)))
             .unwrap_or(0);
-        let lower_bound = display_cursor.saturating_add(1).saturating_sub(visible);
-        let upper_bound = display_cursor.min(display_rows.len().saturating_sub(visible));
+        let lower_bound = packed_cursor_row.saturating_add(1).saturating_sub(visible);
+        let upper_bound = packed_cursor_row.min(packed.len().saturating_sub(visible));
         let scroll = self.feed_tab.scroll.clamp(lower_bound, upper_bound);
         self.feed_tab.scroll = scroll;
-        let entries = self.feed_tab.visible_entries();
-        let text_w_with_sb = (list_area.width as usize).saturating_sub(1);
-        let text_w = content_width(list_area.width, true);
-        let visible_count = display_rows.len().saturating_sub(scroll).min(visible);
+        let cell_w = library_cell_width(list_area, cols);
+        let row_w = list_area.width.saturating_sub(1);
+        let visible_count = packed.len().saturating_sub(scroll).min(visible);
         let mut row_map: Vec<Option<usize>> = Vec::with_capacity(list_area.height as usize);
+        let entries = self.feed_tab.visible_entries();
+        let mut row_y = list_area.y;
 
-        for display_row in display_rows.iter().skip(scroll).take(visible) {
-            if row >= list_area.y + list_area.height {
+        for packed_row in packed.iter().skip(scroll).take(visible) {
+            if row_y >= list_area.y + list_area.height {
                 break;
             }
-
-            match display_row {
-                FeedDisplayRow::Spacer => {
+            match packed_row {
+                PackedFeedRow::Spacer => {
                     f.render_widget(
                         Paragraph::new(Line::default())
-                            .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                            .style(Style::default().bg(palette::SURFACE_BACKDROP)),
                         Rect {
                             x: list_area.x,
-                            y: row,
-                            width: text_w.min(text_w_with_sb) as u16,
+                            y: row_y,
+                            width: row_w,
                             height: 1,
                         },
                     );
                     row_map.push(None);
-                    row += 1;
-                    continue;
                 }
-                FeedDisplayRow::Heading(group) => {
+                PackedFeedRow::Heading(group) => {
                     f.render_widget(
                         Paragraph::new(Line::from(vec![
                             Span::raw(" "),
@@ -324,117 +447,130 @@ impl App {
                                     .add_modifier(Modifier::BOLD),
                             ),
                         ]))
-                        .style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+                        .style(Style::default().bg(palette::SURFACE_BACKDROP)),
                         Rect {
                             x: list_area.x,
-                            y: row,
-                            width: text_w.min(text_w_with_sb) as u16,
+                            y: row_y,
+                            width: row_w,
                             height: 1,
                         },
                     );
                     row_map.push(None);
-                    row += 1;
-                    continue;
                 }
-                FeedDisplayRow::Entry(i) => {
-                    let entry = &entries[*i];
-                    let selected = *i == cursor;
-
-                    let selected_bg = if focused {
-                        palette::MEDIA_SELECTED_BG
-                    } else {
-                        palette::PLAYBACK_PANEL_BG
-                    };
-
-                    let bg = if selected {
-                        selected_bg
-                    } else {
-                        palette::LIBRARY_SIDE_BG
-                    };
-                    let fg = if selected {
-                        if focused {
-                            palette::WHITE
-                        } else {
-                            palette::SUBTLE
-                        }
-                    } else {
-                        palette::TEXT
-                    };
-
-                    let marker = if selected { "▶ " } else { "  " };
-                    let title = &entry.title;
-                    let duration = format_duration(entry.duration_ticks);
-                    let date = format_pub_date(entry.pub_date_secs);
-                    let mime = entry.mime_type.as_deref().unwrap_or("");
-
-                    // Build the display line.
-                    let mut spans = vec![Span::styled(
-                        marker,
-                        Style::default()
-                            .fg(palette::AQUA)
-                            .add_modifier(Modifier::BOLD),
-                    )];
-                    if entry.played {
-                        spans.push(Span::styled("✓ ", Style::default().fg(palette::GREEN)));
+                PackedFeedRow::Items(idxs) => {
+                    for (cell_idx, &i) in idxs.iter().enumerate() {
+                        let entry = &entries[i];
+                        let selected = i == cursor;
+                        let cell_x = list_area.x + cell_idx as u16 * (cell_w + LIBRARY_COLUMN_GAP);
+                        render_feed_entry_cell(f, entry, cell_x, row_y, cell_w, selected, focused);
                     }
-                    spans.push(Span::styled(
-                        format!("{title}  "),
-                        Style::default().fg(fg).add_modifier(if selected {
-                            Modifier::BOLD
-                        } else {
-                            Modifier::empty()
-                        }),
-                    ));
-                    if !duration.is_empty() {
-                        spans.push(Span::styled(
-                            format!("{duration} "),
-                            Style::default().fg(palette::PLAYBACK_META_FG),
-                        ));
-                    }
-                    if !date.is_empty() {
-                        spans.push(Span::styled(
-                            format!("{date} "),
-                            Style::default().fg(palette::MUTED),
-                        ));
-                    }
-                    if !mime.is_empty() {
-                        spans.push(Span::styled(
-                            mime.to_string(),
-                            Style::default().fg(palette::MUTED),
-                        ));
-                    }
-
-                    // Truncate to available width.
-                    let line = Line::from(spans);
-                    let display_w = text_w.min(text_w_with_sb) as u16;
-                    f.render_widget(
-                        Paragraph::new(line).style(Style::default().bg(bg)),
-                        Rect {
-                            x: list_area.x,
-                            y: row,
-                            width: display_w,
-                            height: 1,
-                        },
-                    );
-
-                    row_map.push(Some(*i));
-                    row += 1;
+                    row_map.push(idxs.first().copied());
                 }
             }
+            row_y += 1;
         }
         row_map.resize(list_area.height as usize, None);
         layout.left_row_map = row_map;
+        layout.left_item_rows = packed
+            .iter()
+            .map(|row| match row {
+                PackedFeedRow::Items(idxs) => idxs.clone(),
+                _ => Vec::new(),
+            })
+            .collect();
 
-        if visible_count > 0 && visible_count < display_rows.len() {
+        if visible_count > 0 && visible_count < packed.len() {
             render_right_scrollbar_with_viewport(
                 f,
                 list_area,
-                display_rows.len(),
+                packed.len(),
                 visible_count,
                 scroll,
+                palette::SCROLLBAR,
             );
         }
+        draw_column_selection_markers(f, list_area, cursor, &layout.left_item_rows, scroll);
     }
+}
+
+/// Renders one feed entry into a `cell_w`-wide cell: selection marker
+/// (painted separately, at the list's outer edge, by
+/// `draw_column_selection_markers`), watched check, title, and duration.
+/// The full metadata set (publish date, MIME type) lives in the hero for the
+/// selected entry; list rows stay terse in both column counts, mirroring how
+/// the movie/TV list rows stay terse while their hero holds the detail.
+fn render_feed_entry_cell(
+    f: &mut Frame,
+    entry: &FeedEntry,
+    x: u16,
+    y: u16,
+    cell_w: u16,
+    selected: bool,
+    focused: bool,
+) {
+    if cell_w == 0 {
+        return;
+    }
+    let bg = if selected {
+        palette::resolve_surface_focus(focused)
+    } else {
+        palette::SURFACE_BACKDROP
+    };
+    let fg = if selected {
+        if focused {
+            palette::WHITE
+        } else {
+            palette::SUBTLE
+        }
+    } else {
+        palette::TEXT
+    };
+
+    let duration = format_duration(entry.duration_ticks);
+    let dur_str = if duration.is_empty() {
+        String::new()
+    } else {
+        format!(" {duration}")
+    };
+    let dur_w = dur_str.chars().count();
+    let prefix_w = 3usize; // leading space + watched check + space
+    let title_w = (cell_w as usize).saturating_sub(prefix_w + dur_w);
+
+    let mut spans: Vec<Span> = vec![Span::styled(" ", Style::default().bg(bg))];
+    spans.push(if entry.played {
+        Span::styled("✓", Style::default().fg(palette::GREEN).bg(bg))
+    } else {
+        Span::styled(" ", Style::default().bg(bg))
+    });
+    let title = super::super::ui_util::trunc_str(&entry.title, title_w);
+    spans.push(Span::styled(
+        format!(" {title}"),
+        Style::default().fg(fg).bg(bg).add_modifier(if selected {
+            Modifier::BOLD
+        } else {
+            Modifier::empty()
+        }),
+    ));
+    if !dur_str.is_empty() {
+        spans.push(Span::styled(
+            dur_str,
+            Style::default().fg(palette::PLAYBACK_META_FG).bg(bg),
+        ));
+    }
+    let used: usize = spans.iter().map(|s| s.width()).sum();
+    let pad = (cell_w as usize).saturating_sub(used);
+    if pad > 0 {
+        spans.push(Span::styled(" ".repeat(pad), Style::default().bg(bg)));
+    }
+    f.render_widget(
+        Paragraph::new(Line::from(spans)),
+        Rect {
+            x,
+            y,
+            width: cell_w,
+            height: 1,
+        },
+    );
 }
 
 #[cfg(test)]

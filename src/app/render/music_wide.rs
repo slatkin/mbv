@@ -1,4 +1,15 @@
+//! Grouped Music's wide (hero-on-left) rendering: `compute_wide_left_layout`
+//! below is design.md's hero-on-left geometry source (component catalogue,
+//! decision 4), the counterpart to `hero.rs`'s hero-on-top
+//! `top_hero_layout`. It stays in this file rather than moving into
+//! `hero.rs` because its sizing constants (`PANE_PAD_X`, `PANE_PAD_Y`, ...)
+//! are shared with this file's non-hero list-pane layout below; the pane
+//! split, right-pane pill/list geometry, and hero text paint moved into
+//! `hero.rs` in phase 5 ("Assemble hero-on-left") since those have no
+//! remaining dependency on this file's local constants.
+
 use super::album_art::INLINE_ALBUM_ART_RESERVED;
+use super::hero::{self, WrappedHeroLine};
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, PanelFocus, TWO_COLUMN_THRESHOLD};
 use ratatui::layout::*;
@@ -6,23 +17,12 @@ use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
-use textwrap::wrap;
 
-/// Height of the music-group pills row inside the right rail.
-const PILLS_ROW_HEIGHT: u16 = 1;
-/// Blank rows below the pills before the album list starts.
-const PILLS_GAP_ROWS: u16 = 1;
 /// Padding inside recessed wide-music blocks, matching the Home overview block.
 const PANE_PAD_X: u16 = 2;
 const PANE_PAD_Y: u16 = 1;
-/// Empty columns separating the wide Music hero and album-browser panes.
-const WIDE_PANE_GAP: u16 = 2;
 /// Minimum left-pane height needed to draw a hero/track separator row.
 const MIN_LEFT_HEIGHT_FOR_SEPARATOR: u16 = 6;
-/// Minimum outer area width and height for the wide two-column layout;
-/// below this the caller falls back to the narrow renderer.
-const MIN_WIDE_AREA_HEIGHT: u16 = 6;
-const MIN_PANE_WIDTH: u16 = 40;
 /// Minimum width for the hero metadata column to remain beside the artwork.
 /// Narrower columns move the metadata below the artwork instead.
 const MIN_HERO_METADATA_SIDE_WIDTH: u16 = 15;
@@ -182,62 +182,11 @@ fn compute_wide_left_layout(
     }
 }
 
-/// Returns `(left_pane, right_pane)` for the wide Music horizontal split.
-/// Uses the Home-style 40/60 ratio with a two-column gap between panes.
-fn wide_music_panes(content_area: Rect) -> (Rect, Rect) {
-    let left_w = ((content_area.width as u32 * 2 / 5) as u16)
-        .max(MIN_PANE_WIDTH)
-        .min(content_area.width.saturating_sub(MIN_PANE_WIDTH));
-    let right_w = content_area
-        .width
-        .saturating_sub(left_w)
-        .saturating_sub(WIDE_PANE_GAP);
-    (
-        Rect {
-            x: content_area.x,
-            y: content_area.y,
-            width: left_w,
-            height: content_area.height,
-        },
-        Rect {
-            x: content_area.x + left_w + WIDE_PANE_GAP,
-            y: content_area.y,
-            width: right_w,
-            height: content_area.height,
-        },
-    )
-}
-
 fn inset_pane_vertically(area: Rect) -> Rect {
     Rect {
         y: area.y.saturating_add(PANE_PAD_Y),
         height: area.height.saturating_sub(PANE_PAD_Y * 2),
         ..area
-    }
-}
-
-fn render_wrapped_text(
-    f: &mut Frame,
-    area: Rect,
-    row: &mut u16,
-    text: &str,
-    width: usize,
-    style: Style,
-) {
-    for line in wrap(text, width.max(1)) {
-        if *row >= area.bottom() {
-            break;
-        }
-        f.render_widget(
-            Paragraph::new(Line::from(Span::styled(line.into_owned(), style))),
-            Rect {
-                x: area.x,
-                y: *row,
-                width: area.width,
-                height: 1,
-            },
-        );
-        *row += 1;
     }
 }
 
@@ -260,19 +209,21 @@ impl App {
             height: area.height.saturating_sub(1),
             ..area
         };
-        if area.width < TWO_COLUMN_THRESHOLD || left_content_area.height < MIN_WIDE_AREA_HEIGHT {
+        if area.width < TWO_COLUMN_THRESHOLD
+            || left_content_area.height < hero::HERO_ON_LEFT_MIN_AREA_HEIGHT
+        {
             // Too narrow for wide mode — fall back to narrow rendering.
             self.render_list(f, area, focused, layout);
             return;
         }
 
-        let (mut left_panel, right_panel) = wide_music_panes(area);
+        let (mut left_panel, right_panel) = hero::hero_on_left_panes(area);
         left_panel.height = left_content_area.height;
 
         // Keep a library-side separator row below the left pane, while the
         // right pane remains flush with the status bar below the library area.
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
             Rect {
                 x: left_panel.x,
                 y: left_panel.bottom(),
@@ -322,11 +273,7 @@ impl App {
         layout.hero_area = left_layout.hero_area;
 
         // Pane background (reciprocal palette).
-        let left_bg = if left_focused {
-            palette::BG_GREEN
-        } else {
-            palette::PLAYBACK_PANEL_BG
-        };
+        let left_bg = palette::resolve_surface_focus(left_focused);
         f.render_widget(
             Block::default().style(Style::default().bg(left_bg)),
             left_panel,
@@ -362,33 +309,22 @@ impl App {
         // Keep the pill bar on the library-side surface. The focused green
         // surface belongs only to the album list below it.
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::LIBRARY_SIDE_BG)),
+            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
             right_panel,
         );
 
-        // Pills at the top of the right rail.
-        let pills_area = Rect {
-            x: right_area.x,
-            y: right_panel.y,
-            width: right_area.width,
-            height: PILLS_ROW_HEIGHT,
-        };
+        // Pills at the top of the right rail, then the album browser below
+        // them (design.md decision 6's "pill row at top of list pane"). The
+        // list panel uses the same one-row padding and upper/lower
+        // three-quarter borders as Home's wide list panel; the browser
+        // itself is inset inside it.
+        let right_pane = hero::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
+        let pills_area = right_pane.pills_area;
         if pills_area.y + pills_area.height <= right_area.bottom() {
             self.render_music_group_pills_row(f, pills_area, lib_idx, layout);
         }
 
-        // Album browser below the pills. The list panel uses
-        // the same one-row padding and upper/lower three-quarter borders as
-        // Home's wide list panel; the browser itself is inset inside it.
-        let browser_y = right_panel.y + PILLS_ROW_HEIGHT + PILLS_GAP_ROWS;
-        let list_panel = Rect {
-            x: right_area.x,
-            y: browser_y,
-            width: right_area.width,
-            height: right_panel
-                .height
-                .saturating_sub(PILLS_ROW_HEIGHT + PILLS_GAP_ROWS + PANE_PAD_Y),
-        };
+        let list_panel = right_pane.list_panel;
         let browser_area = Rect {
             x: list_panel.x.saturating_add(PANE_PAD_X),
             y: list_panel.y.saturating_add(PANE_PAD_Y),
@@ -396,11 +332,7 @@ impl App {
             height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
         };
         if list_panel.height > 0 {
-            let list_bg = if right_focused {
-                palette::BG_GREEN
-            } else {
-                palette::PLAYBACK_PANEL_BG
-            };
+            let list_bg = palette::resolve_surface_focus(right_focused);
             f.render_widget(
                 Block::default().style(Style::default().bg(list_bg)),
                 list_panel,
@@ -417,23 +349,14 @@ impl App {
             );
         }
         if list_panel.height > 0 {
-            let border_style = Style::default().fg(palette::SEEK_TRACK);
-            for (y, glyph) in [
-                (list_panel.y, '\u{2594}'),
-                (list_panel.bottom().saturating_sub(1), '\u{2581}'),
-            ] {
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        glyph.to_string().repeat(list_panel.width as usize),
-                        border_style,
-                    ))),
-                    Rect {
-                        y,
-                        height: 1,
-                        ..list_panel
-                    },
-                );
-            }
+            super::render_selected_block_borders(
+                f,
+                list_panel,
+                0,
+                list_panel.height as usize,
+                1,
+                (list_panel.height as usize).saturating_sub(2),
+            );
         }
     }
 
@@ -449,50 +372,34 @@ impl App {
         layout: &mut LayoutMain,
     ) {
         let text = &left_layout.text_area;
-        if text.height > 0 && text.width >= 3 {
-            let artist = self.resolve_group_album_artist(album);
-            let (title, release_year) = wide_album_metadata(album, &artist);
-            let text_width = (text.width as usize).saturating_sub(1);
-            let mut row = text.y;
-
-            // ── Album title ──
-            let title_style = if left_focused || library_focused {
-                Style::default()
-                    .fg(palette::YELLOW)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::YELLOW)
-            };
-            render_wrapped_text(f, *text, &mut row, &title, text_width, title_style);
-
-            // ── Artist ──
-            if !artist.is_empty() && artist != "Unknown Artist" {
-                render_wrapped_text(
-                    f,
-                    *text,
-                    &mut row,
-                    &artist,
-                    text_width,
-                    Style::default().fg(palette::FOAM),
-                );
-            }
-
-            // ── Release year ──
-            if release_year > 0 && row < text.bottom() {
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        release_year.to_string(),
-                        Style::default().fg(palette::SUBTLE),
-                    ))),
-                    Rect {
-                        x: text.x,
-                        y: row,
-                        width: text.width,
-                        height: 1,
-                    },
-                );
-            }
+        let artist = self.resolve_group_album_artist(album);
+        let (title, release_year) = wide_album_metadata(album, &artist);
+        let title_style = if left_focused || library_focused {
+            Style::default()
+                .fg(palette::YELLOW)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(palette::YELLOW)
+        };
+        let show_artist = !artist.is_empty() && artist != "Unknown Artist";
+        let year_text = (release_year > 0).then(|| release_year.to_string());
+        let mut hero_lines = vec![WrappedHeroLine {
+            text: &title,
+            style: title_style,
+        }];
+        if show_artist {
+            hero_lines.push(WrappedHeroLine {
+                text: &artist,
+                style: Style::default().fg(palette::FOAM),
+            });
         }
+        if let Some(year) = year_text.as_deref() {
+            hero_lines.push(WrappedHeroLine {
+                text: year,
+                style: Style::default().fg(palette::SUBTLE),
+            });
+        }
+        hero::paint_hero_on_left_text(f, *text, &hero_lines);
 
         // ── Artwork ──
         if left_layout.art_area.width > 0 && left_layout.art_area.height > 0 {
@@ -530,9 +437,9 @@ impl App {
             ..*track_area
         };
         let track_panel_bg = if left_focused {
-            palette::TRACK_BLOCK_BG
+            palette::SURFACE_ACCENT_SOFT
         } else {
-            palette::LIBRARY_SIDE_BG
+            palette::SURFACE_BACKDROP
         };
         f.render_widget(
             Block::default().style(Style::default().bg(track_panel_bg)),
@@ -623,7 +530,7 @@ impl App {
                     // Focused-track cursor highlight.
                     if is_cursor && left_focused {
                         f.render_widget(
-                            Block::default().style(Style::default().bg(palette::BG_GREEN)),
+                            Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
                             row_rect,
                         );
                     }
@@ -644,14 +551,10 @@ impl App {
                     };
 
                     let used = track_num.chars().count() + name.chars().count();
-                    let mut spans = if selected {
-                        vec![
-                            Span::styled("▍", Style::default().fg(palette::AQUA)),
-                            Span::raw(" "),
-                        ]
-                    } else {
-                        vec![Span::raw("  ")]
-                    };
+                    let mut spans = vec![
+                        super::selection_marker(selected, super::MarkerEdge::Left),
+                        Span::raw(" "),
+                    ];
                     spans.push(Span::styled(track_num, Style::default().fg(text_fg)));
                     spans.push(Span::styled(name, Style::default().fg(text_fg)));
                     // Duration right-aligned.
@@ -673,7 +576,13 @@ impl App {
                 // Scrollbar if needed.
                 if n > visible && library_focused {
                     let max_offset = n.saturating_sub(visible);
-                    super::render_right_scrollbar(f, list_area, max_offset, scroll);
+                    super::render_right_scrollbar(
+                        f,
+                        list_area,
+                        max_offset,
+                        scroll,
+                        palette::SCROLLBAR,
+                    );
                 }
 
                 // Update cursor_screen_y for the focused track.

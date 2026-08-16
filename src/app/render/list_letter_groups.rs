@@ -192,8 +192,8 @@ impl App {
                         };
                         // Same width budget for every row (selected or not)
                         // so titles align across the row; the selected
-                        // cell's `▍` grabber occupies its 1-column leading
-                        // separator rather than adding an indent.
+                        // cell's 1-column leading separator carries the
+                        // highlight background rather than adding an indent.
                         let avail = normal_avail;
                         let name_w = avail.saturating_sub(dur_str.width());
                         let title = trunc_str(&item_name, name_w);
@@ -203,9 +203,7 @@ impl App {
                         } else {
                             cell_w + LIBRARY_COLUMN_GAP as usize
                         };
-                        spans.extend(item_cell_spans(
-                            title, dur_str, selected, focused, fg, pad_to, cols,
-                        ));
+                        spans.extend(item_cell_spans(title, dur_str, selected, fg, pad_to));
                     }
                     ListItem::new(Line::from(spans))
                 }
@@ -224,17 +222,10 @@ impl App {
 
         if show_scrollbar {
             let max_off = total_display.saturating_sub(visible);
-            super::render_right_scrollbar(f, content_area, max_off, offset);
+            super::render_right_scrollbar(f, content_area, max_off, offset, palette::SCROLLBAR);
         }
 
-        draw_column_selection_markers(
-            f,
-            content_area,
-            cursor,
-            cols,
-            &layout.left_item_rows,
-            offset,
-        );
+        draw_column_selection_markers(f, content_area, cursor, &layout.left_item_rows, offset);
 
         final_offset
     }

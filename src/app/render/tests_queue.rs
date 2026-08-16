@@ -65,7 +65,7 @@ fn queue_only_renders_queue_unfocused() {
     let cell = &buf[(layout.queue_area.x + 1, layout.queue_area.y + 1)];
     assert_eq!(
         cell.style().bg,
-        Some(palette::LIBRARY_SIDE_BG),
+        Some(palette::SURFACE_RESTING),
         "queue-only must use the unfocused frame background, got {:?}",
         cell.style().bg
     );
@@ -80,7 +80,7 @@ fn both_mode_focused_queue_keeps_focused_styling() {
     let cell = &buf[(layout.queue_area.x + 1, layout.queue_area.y + 1)];
     assert_eq!(
         cell.style().bg,
-        Some(palette::QUEUE_LIST_BG),
+        Some(palette::SURFACE_FOCUSED),
         "focused queue in both mode must keep the focused frame background, got {:?}",
         cell.style().bg
     );

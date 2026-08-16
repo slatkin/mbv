@@ -184,7 +184,7 @@ impl App {
 
         if use_placeholder {
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::OVERLAY)),
+                Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
                 img_rect,
             );
         } else if let Some(state) = self.cached_image_protocol_mut(&cache_key) {

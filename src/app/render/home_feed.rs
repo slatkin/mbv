@@ -1,7 +1,7 @@
 use super::super::ui_util::*;
 use super::home_video::render_home_video_item;
 use crate::app::layout::LayoutMain;
-use crate::app::App;
+use crate::app::{palette, App};
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
@@ -188,6 +188,7 @@ impl App {
                 items.len(),
                 visible_items.max(1),
                 scroll,
+                palette::SCROLLBAR,
             );
         }
     }

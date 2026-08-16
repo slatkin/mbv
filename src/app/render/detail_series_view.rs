@@ -4,6 +4,7 @@ use super::detail_series::{
     SERIES_DETAIL_EPISODE_ROWS_ESTIMATE, SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS,
     SERIES_IMAGE_PLACEHOLDER_ROWS, SERIES_IMAGE_ROWS,
 };
+use super::hero::{HeroContent, HeroImage, HeroLine, ImageTop};
 use super::RENDER_FILTER;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
@@ -45,38 +46,13 @@ impl App {
             self.fetch_series_detail(item.id.clone());
         }
 
-        let inner_x = area.x;
         let inner_w = (area.width as usize).saturating_sub(1);
         let inner_w16 = area.width.saturating_sub(1);
         let max_y = area.y + area.height;
-        let mut row = area.y;
 
-        let text_color = if focused {
-            palette::WHITE
-        } else {
-            palette::SUBTLE
-        };
-
-        // — Title row (two-column lists only) —
-        // Mirrors the movie hero's top-row title (`render_compact_detail`
-        // in `detail.rs`): the selected item's name in yellow, pushing the
-        // poster/meta content down a row. Skipped for one-column lists, where
-        // the full-width list-row title directly above the block already
-        // shows the name.
-        if show_title {
-            row = super::detail::render_hero_title_row(
-                f,
-                inner_x,
-                row,
-                max_y,
-                inner_w16,
-                &item.display_name(),
-                focused,
-            );
-        }
-
-        // ── Series Primary image (right-aligned, text wraps around it) ───
-        let img_start_row = row;
+        // ── Series Primary image sizing (right-aligned, text wraps around
+        //    it) -- resolved here (needs `self`'s image cache) and handed to
+        //    the `Hero` component to lay text out around ───────────────────
         let primary_cache_key = format!("{}:ser_primary", item.id);
         if !item.id.is_empty() && self.images_enabled() {
             self.fetch_card_image(
@@ -105,47 +81,33 @@ impl App {
                 (0, 0, false)
             }
         };
-        let img_x = area.x + area.width.saturating_sub(img_actual_w);
-        let img_end_row = img_start_row + img_height;
+
+        // Series metadata (year range + genre) and overview need the same
+        // width-narrowing `text_dims` the movie hero uses, computed here
+        // (before the image's actual on-screen row is known) only for the
+        // overview's line-by-line wrap width -- the title row hasn't
+        // rendered yet, so estimate the image's top row the same way the
+        // `Hero` component will (`ImageTop::AfterTitle`: right after the
+        // title row, or `area.y` if there's no title).
+        let title_rows = if show_title { 1 } else { 0 };
+        let img_start_row_estimate = area.y + title_rows;
+        let img_end_row_estimate = img_start_row_estimate + img_height;
         let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
-        let narrow_w16 = inner_w16.saturating_sub(img_actual_w);
-        let text_dims = |r: u16| -> (usize, u16) {
-            if img_height > 0 && r >= img_start_row && r < img_end_row {
-                (narrow_w, narrow_w16)
+        let text_dims_pre = |r: u16| -> usize {
+            if img_height > 0 && r >= img_start_row_estimate && r < img_end_row_estimate {
+                narrow_w
             } else {
-                (inner_w, inner_w16)
+                inner_w
             }
         };
 
-        // Series metadata (year range + genre)
         let ser_meta = series_meta_line(&item);
-        if !ser_meta.is_empty() && row < max_y {
-            let (tw, tw16) = text_dims(row);
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    trunc_str(&ser_meta, tw),
-                    Style::default().fg(palette::SUBTLE),
-                ))),
-                Rect {
-                    x: inner_x,
-                    y: row,
-                    width: tw16,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
-
-        // Blank spacer after series block
-        if row < max_y {
-            row += 1;
-        }
-
-        // Overview (word-wrapped, respects image shadow width)
-        if !item.overview.is_empty() && row < max_y {
-            let overview_start_row = row;
+        // Row the overview starts on: title (0/1) + meta (0/1) + spacer (1,
+        // unconditional -- see `unconditional_spacer_after_meta`).
+        let overview_start_row = area.y + title_rows + (!ser_meta.is_empty()) as u16 + 1;
+        let overview_lines = if !item.overview.is_empty() {
             let lines = wrap_overview_lines(&item.overview, |line_idx| {
-                text_dims(overview_start_row + line_idx as u16).0
+                text_dims_pre(overview_start_row + line_idx as u16)
             });
             // Cap at available rows minus space for the season row and episode list --
             // shares SERIES_DETAIL_* constants with `series_inline_detail_rows`
@@ -157,43 +119,62 @@ impl App {
                     0
                 }
                 + SERIES_DETAIL_TRAILING_BLANK_ROWS) as u16;
-            let available_rows =
-                (max_y.saturating_sub(row).saturating_sub(reserved_for_below)) as usize;
-            for line_text in lines.iter().take(available_rows) {
-                if row >= max_y {
-                    break;
-                }
-                let (_, tw16) = text_dims(row);
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        line_text.clone(),
-                        Style::default().fg(text_color),
-                    ))),
-                    Rect {
-                        x: inner_x,
-                        y: row,
-                        width: tw16,
-                        height: 1,
-                    },
-                );
-                row += 1;
+            let available_rows = (max_y
+                .saturating_sub(overview_start_row)
+                .saturating_sub(reserved_for_below)) as usize;
+            lines.into_iter().take(available_rows).collect()
+        } else {
+            Vec::new()
+        };
+        let hero_lines: Vec<HeroLine> = overview_lines.into_iter().map(HeroLine::Plain).collect();
+        let has_overview_lines = !hero_lines.is_empty();
+        let title = item.display_name();
+
+        let hero_content = HeroContent {
+            title: show_title.then_some(title.as_str()),
+            meta_line: (!ser_meta.is_empty()).then_some(ser_meta.as_str()),
+            meta_color: palette::SUBTLE,
+            show_playing: false,
+            unconditional_spacer_after_meta: true,
+            lines: &hero_lines,
+            image: (img_height > 0).then_some(HeroImage {
+                actual_w: img_actual_w,
+                height: img_height,
+                top: ImageTop::AfterTitle,
+            }),
+        };
+        let result = super::hero::paint_hero_content(f, area, &hero_content, focused);
+        // Trailing spacer after the overview block, matching the original's
+        // "if !lines.is_empty() && row < max_y { row += 1 }".
+        let mut row = if has_overview_lines && result.next_row < max_y {
+            result.next_row + 1
+        } else {
+            result.next_row
+        };
+
+        // Reconstruct `text_dims` from the Hero's actual painted image rect
+        // (not the pre-title estimate above) for the season row/table below,
+        // which still need to narrow around the image exactly as before.
+        let (img_start_row, img_actual_w, img_height) = match result.img_rect {
+            Some(r) => (r.y, r.width, r.height),
+            None => (0, 0, 0),
+        };
+        let img_end_row = img_start_row + img_height;
+        let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
+        let narrow_w16 = inner_w16.saturating_sub(img_actual_w);
+        let text_dims = |r: u16| -> (usize, u16) {
+            if img_height > 0 && r >= img_start_row && r < img_end_row {
+                (narrow_w, narrow_w16)
+            } else {
+                (inner_w, inner_w16)
             }
-            if !lines.is_empty() && row < max_y {
-                row += 1;
-            }
-        }
+        };
 
         // ── Render series image last so it layers over text ───────────────
-        if img_height > 0 {
-            let img_rect = Rect {
-                x: img_x,
-                y: img_start_row,
-                width: img_actual_w,
-                height: img_height,
-            };
+        if let Some(img_rect) = result.img_rect {
             if img_is_placeholder {
                 f.render_widget(
-                    Block::default().style(Style::default().bg(palette::OVERLAY)),
+                    Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
                     img_rect,
                 );
             } else if let Some(state) = self.cached_image_protocol_mut(&primary_cache_key) {
@@ -327,11 +308,8 @@ impl App {
                             } else {
                                 Style::default().fg(palette::SUBTLE)
                             };
-                            let marker = if is_cursor {
-                                super::selection_marker(focused)
-                            } else {
-                                ratatui::text::Span::raw(" ")
-                            };
+                            let marker =
+                                super::selection_marker(is_cursor, super::MarkerEdge::Left);
                             let ep_num_w = episodes.len().to_string().len();
                             let ep_label = if ep.index_number > 0 {
                                 format!("{:>ep_num_w$}. ", ep.index_number)

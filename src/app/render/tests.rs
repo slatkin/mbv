@@ -29,7 +29,7 @@ fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
             "Title",
             palette::BG_GREEN,
             &mut layout,
-            palette::PLAYBACK_PANEL_BG,
+            palette::SURFACE_PLAYBACK,
         );
     })
     .unwrap();
@@ -65,7 +65,7 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
             "Title",
             palette::BG_GREEN,
             &mut layout,
-            palette::PLAYBACK_PANEL_BG,
+            palette::SURFACE_PLAYBACK,
         );
     })
     .unwrap();

@@ -8,7 +8,6 @@ pub const TEXT: Color = Color::Rgb(230, 230, 230); // primary text
 pub const WHITE: Color = Color::Rgb(253, 246, 227); // warm white (#fdf6e3)
 pub const BG_GREEN_SOFT: Color = Color::Rgb(72, 88, 78); // softer green-grey (#48584e)
 pub const QUEUE_UNFOCUSED_FG: Color = BG_GREEN_SOFT; // queue row text
-pub const QUEUE_BUTTON_FOCUSED_BG: Color = Color::Rgb(30, 35, 38); // focused queue button (#1E2326)
 pub const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc7f)
 pub const AQUA: Color = Color::Rgb(53, 167, 124); // emby green — folders, watched (#35a77c)
 pub const FOAM: Color = Color::Rgb(58, 148, 197); // project blue (#3a94c5)
@@ -19,12 +18,9 @@ pub const FOCUSED: Color = Color::Rgb(83, 83, 83); // focused item bg (#535353)
 pub const RED: Color = Color::Rgb(229, 126, 128); // muted red (#e57e80)
 pub const STATUS_PILL_BG: Color = Color::Rgb(40, 40, 40); // status bar pill background (#282828)
 pub const SEEK_TRACK: Color = Color::Rgb(70, 84, 95); // unplayed seek track (design #46545f)
-pub const MEDIA_SELECTED_BG: Color = BG_GREEN; // selected movie block background
-pub const QUEUE_COLUMN_FOCUSED_BG: Color = BG_GREEN;
 pub const DARK_BG: Color = Color::Rgb(30, 35, 38); // tab bar (Home, etc) background (#1e2326)
 pub const LIBRARY_SIDE_BG: Color = Color::Rgb(45, 53, 59); // library-side background, reused for the queue column's unfocused/dim state (#2d353b)
 pub const PLAYBACK_PANEL_BG: Color = Color::Rgb(51, 60, 67); // now-playing panel background (#333c43)
-pub const PLAYBACK_INDICATOR_BG: Color = Color::Rgb(45, 53, 59); // indicator block background (#2d353b)
 pub const PLAYBACK_CONTENT_FG: Color = Color::Rgb(131, 192, 146); // playback title/codec value (#83c092)
 pub const PLAYBACK_META_FG: Color = Color::Rgb(133, 146, 137); // playback metadata captions/time (#859289)
 pub const TOAST_BG: Color = RED; // toast background (#e57e80)
@@ -41,6 +37,109 @@ pub const PILL_SELECTOR_SELECTED_FG: Color = Color::Rgb(30, 35, 38); // selected
 pub const PILL_SELECTOR_OVERFLOW_FG: Color = BG_GREEN; // pill-selector overflow/edge accent
 pub const SCROLLBAR: Color = BG_GREEN_SOFT; // library/chrome scrollbar track/thumb
 pub const ORANGE: Color = Color::Rgb(229, 152, 117); // warm orange (#e59875)
-pub const PRUPLE: Color = Color::Rgb(214, 153, 182); // muted purple (#d699b6)
-pub const TRACK_BLOCK_BG: Color = BG_GREEN_SOFT; // track block background
-pub const QUEUE_LIST_BG: Color = BG_GREEN_SOFT; // queue list panel background
+pub const PURPLE: Color = Color::Rgb(214, 153, 182); // muted purple (#d699b6)
+
+// ---------------------------------------------------------------------------
+// Roles (openspec/changes/centralize-ui-design-language) — the public API.
+// A role names what a colour *means*, never what hue it is. The raw
+// constants above are primitives; new call sites use roles, never
+// primitives directly. See design.md "Role vocabulary" for the source
+// table this block implements verbatim.
+// ---------------------------------------------------------------------------
+
+// Surfaces
+pub const SURFACE_BACKDROP: Color = LIBRARY_SIDE_BG;
+pub const SURFACE_CHROME: Color = DARK_BG;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const SURFACE_PANEL: Color = PANEL_BG;
+pub const SURFACE_FOCUSED: Color = BG_GREEN;
+pub const SURFACE_RESTING: Color = PLAYBACK_PANEL_BG; // resting-content / unfocused half
+pub const SURFACE_PLAYBACK: Color = PLAYBACK_PANEL_BG; // now-playing-strip half
+pub const SURFACE_ACCENT_SOFT: Color = BG_GREEN_SOFT;
+pub const SURFACE_ITEM_FOCUSED: Color = FOCUSED;
+pub const SURFACE_STATUS_PILL: Color = STATUS_PILL_BG;
+
+// Text
+//
+// Reserved roles below (#[allow(dead_code)]): defined per design.md's Role
+// vocabulary table, not yet adopted at a call site -- existing screens still
+// paint text with the raw primitives (WHITE, TEXT, ...) directly, migrating
+// role by role as later phases touch each screen (design.md task 1.1: role
+// constants "stay until callers migrate").
+#[allow(dead_code)]
+pub const TEXT_PRIMARY: Color = TEXT;
+#[allow(dead_code)]
+pub const TEXT_SECONDARY: Color = SUBTLE;
+#[allow(dead_code)]
+pub const TEXT_MUTED: Color = MUTED;
+#[allow(dead_code)]
+pub const TEXT_EMPHASIS: Color = WHITE;
+#[allow(dead_code)]
+pub const TEXT_SOFT: Color = SOFT_WHITE;
+#[allow(dead_code)]
+pub const TEXT_ON_ACCENT: Color = BASE;
+#[allow(dead_code)]
+pub const TEXT_ON_STATE: Color = TOAST_FG;
+#[allow(dead_code)]
+pub const TEXT_DETAIL: Color = MUTED_GREEN;
+#[allow(dead_code)]
+pub const TEXT_QUEUE_UNFOCUSED: Color = QUEUE_UNFOCUSED_FG;
+#[allow(dead_code)]
+pub const TEXT_PLAYBACK: Color = PLAYBACK_CONTENT_FG;
+#[allow(dead_code)]
+pub const TEXT_PLAYBACK_META: Color = PLAYBACK_META_FG;
+
+// Accents
+pub const ACCENT: Color = AQUA; // selection marker, watched, folders
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const ACCENT_BLUE: Color = FOAM;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const ACCENT_GREEN: Color = GREEN;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const ACCENT_SAGE: Color = IRIS; // active tab, focused pill text
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const ACCENT_WARM: Color = YELLOW;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const ACCENT_ORANGE: Color = ORANGE;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const ACCENT_PURPLE: Color = PURPLE;
+
+// Rules
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const RULE: Color = SEEK_TRACK; // hero shell border and seek track share this role
+pub const BORDER_UNFOCUSED: Color = OVERLAY;
+
+// State
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const STATE_ERROR: Color = RED;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const STATE_SUCCESS: Color = TOAST_BG_SUCCESS;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const STATE_WARNING: Color = TOAST_BG_WARNING;
+
+// Pill selector (renamed without value changes)
+pub const PILL_ROW_BG: Color = PILL_SELECTOR_ROW_BG;
+pub const PILL_BG: Color = PILL_SELECTOR_BG;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const PILL_FG: Color = PILL_SELECTOR_FG;
+pub const PILL_SELECTED_BG: Color = PILL_SELECTOR_SELECTED_BG;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const PILL_SELECTED_FG: Color = PILL_SELECTOR_SELECTED_FG;
+#[allow(dead_code)] // reserved role, not yet adopted at a call site
+pub const PILL_OVERFLOW_FG: Color = PILL_SELECTOR_OVERFLOW_FG;
+
+/// The central focus lever (design decision 8). Every panel and component
+/// resolves its focused/unfocused surface through this single function
+/// instead of naming `SURFACE_FOCUSED`/`SURFACE_RESTING` at the call site.
+///
+/// `focused` is the caller's two-input focus model already collapsed to one
+/// bool: the existing `PanelFocus` (which panel is focused) for
+/// hero-on-top screens with one focusable region, or `PanelFocus` combined
+/// with a pane bit (`left_focused`) for hero-on-left screens with two.
+pub fn resolve_surface_focus(focused: bool) -> Color {
+    if focused {
+        SURFACE_FOCUSED
+    } else {
+        SURFACE_RESTING
+    }
+}

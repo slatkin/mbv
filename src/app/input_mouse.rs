@@ -345,13 +345,46 @@ impl App {
                             return true;
                         }
                         let click_y = (row - la.y) as usize;
+                        let n = self.feed_tab.visible_entries().len();
+                        // Two-column lists: resolve the clicked *cell* through
+                        // `left_item_rows` (populated for every packed row,
+                        // not just the visible slice, hence the `scroll`
+                        // offset), mirroring the EmbyLibrary arm's cell_target
+                        // below.
+                        let cell_target: Option<usize> = {
+                            use crate::app::library_column_width::{
+                                library_cell_width, library_column_count, LIBRARY_COLUMN_GAP,
+                            };
+                            let cols = library_column_count(la.width);
+                            let cw = library_cell_width(la, cols) as usize;
+                            let x = (col as usize).saturating_sub(la.x as usize);
+                            if !self.layout.main.left_item_rows.is_empty() && cols > 1 && cw > 0 {
+                                let cell = x / (cw + LIBRARY_COLUMN_GAP as usize);
+                                if cell < cols {
+                                    self.layout
+                                        .main
+                                        .left_item_rows
+                                        .get(self.feed_tab.scroll + click_y)
+                                        .and_then(|row| row.get(cell).copied())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        };
+                        if let Some(item_idx) = cell_target {
+                            if item_idx < n {
+                                self.feed_tab.cursor = item_idx;
+                            }
+                            return true;
+                        }
                         let use_row_map = !self.layout.main.left_row_map.is_empty();
                         let row_map_item = if use_row_map {
                             self.layout.main.left_row_map.get(click_y).copied()
                         } else {
                             None
                         };
-                        let n = self.feed_tab.visible_entries().len();
                         if let Some(Some(item_idx)) = row_map_item {
                             if item_idx < n {
                                 self.feed_tab.cursor = item_idx;
