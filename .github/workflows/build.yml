@@ -114,6 +114,11 @@ jobs:
 
       - name: Commit PKGBUILD with sha256 to main
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        # Non-fatal: a non-fast-forward push race (main advanced since checkout on
+        # a detached HEAD) must not abort the job before the AUR publish trigger
+        # below. AUR reads the sha256 from the release asset, not this commit, so
+        # a missed PKGBUILD commit is cosmetic and can be redone by hand.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
