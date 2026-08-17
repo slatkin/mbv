@@ -12,4 +12,4 @@
 
 ## 3. Land
 
-- [ ] 3.1 Open as its own small PR against `main`. (Not an amendment to #555 — that PR is merged and closed.)
+- [x] 3.1 Open as its own small PR against `main`. (Not an amendment to #555 — that PR is merged and closed.)
