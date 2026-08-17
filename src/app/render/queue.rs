@@ -15,6 +15,26 @@ use unicode_width::UnicodeWidthStr;
 // which are already accounted for separately via `pct_w`/`right_w`.
 const QUEUE_TITLE_QUIET_COLUMNS: usize = 2;
 
+/// Time text for one queue row. The now-playing row shows the moving
+/// elapsed time next to its duration (`1:05 / 3:22`), matching the playback
+/// panel's time readout; every other row shows just its duration. Empty
+/// when the duration is unknown.
+fn queue_row_time_text(pos_ticks: i64, dur_ticks: i64, show_elapsed: bool) -> String {
+    let dur_s = dur_ticks / TICKS_PER_SECOND;
+    if dur_s <= 0 {
+        return String::new();
+    }
+    if show_elapsed {
+        format!(
+            "{} / {}",
+            fmt_duration_short(pos_ticks / TICKS_PER_SECOND),
+            fmt_duration_short(dur_s)
+        )
+    } else {
+        fmt_duration_short(dur_s)
+    }
+}
+
 impl App {
     /// Renders the "Queue" title pill (and optional Local/Remote scope pills)
     /// at the top of the queue column on a single row.
@@ -355,12 +375,7 @@ impl App {
                                 fmt_playback_pct(pt, rt)
                             };
 
-                            let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
-                            let dur = if len_secs > 0 {
-                                fmt_duration_short(len_secs)
-                            } else {
-                                String::new()
-                            };
+                            let dur = queue_row_time_text(pt, item.runtime_ticks, is_active);
                             let dim_color = if focused {
                                 palette::SUBTLE
                             } else {
@@ -439,12 +454,13 @@ impl App {
                                 }
                                 QueueItem::Emby(_) => unreachable!(),
                             };
-                            let len_secs = duration_ticks as i64 / TICKS_PER_SECOND;
-                            let dur = if len_secs > 0 {
-                                fmt_duration_short(len_secs)
+                            let pos_ticks = if is_active {
+                                playback.position_ticks
                             } else {
-                                String::new()
+                                0
                             };
+                            let dur =
+                                queue_row_time_text(pos_ticks, duration_ticks as i64, is_active);
                             let dim_color = if focused {
                                 palette::SUBTLE
                             } else {
@@ -539,6 +555,59 @@ mod tests {
     use crate::app::tests::{make_app_stub, make_item};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+
+    /// Renders `app.render_queue` into a string of buffer rows.
+    fn render_queue_rows(app: &mut App) -> Vec<String> {
+        let backend = TestBackend::new(40, 15);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutMain::default();
+        term.draw(|f| {
+            app.render_queue(f, Rect::new(0, 0, 40, 15), true, &mut layout);
+        })
+        .unwrap();
+        let buf = term.backend().buffer();
+        (0..15)
+            .map(|y| (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect())
+            .collect()
+    }
+
+    #[test]
+    fn now_playing_queue_row_shows_elapsed_next_to_duration() {
+        let mut app = make_app_stub();
+        app.panel_focus = crate::app::PanelFocus::Queue;
+
+        let tick = mbv_core::api::TICKS_PER_SECOND;
+        let mut items = Vec::new();
+        for i in 0..3 {
+            let mut item = make_item(&format!("A{i}"), "Movie");
+            item.id = format!("a-{i}");
+            item.runtime_ticks = 3 * 60 * tick;
+            items.push(item);
+        }
+        app.player_tab.set_items(items, 0);
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 0;
+            status.queue_len = 3;
+            status.position_ticks = 45 * tick;
+            status.runtime_ticks = 3 * 60 * tick;
+        }
+
+        let rows = render_queue_rows(&mut app);
+        assert!(
+            rows.iter().any(|row| row.contains("0:45 / 3:00")),
+            "active row must show elapsed next to duration:\n{}",
+            rows.join("\n")
+        );
+        // Sibling rows keep showing only their own duration.
+        assert!(
+            rows.iter()
+                .any(|row| row.contains("3:00") && !row.contains(" / ")),
+            "non-active rows must show duration without elapsed:\n{}",
+            rows.join("\n")
+        );
+    }
 
     #[test]
     fn render_queue_scroll_up_reaches_top_without_regressing() {
