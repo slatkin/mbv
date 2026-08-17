@@ -79,6 +79,52 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
 }
 
 #[test]
+fn narrow_queue_only_panel_puts_title_on_bottom_now_playing_row() {
+    let mut app = make_app_stub();
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.terminal_width = 120; // >= MINI_VIEW_THRESHOLD, so stored panel_mode applies
+    app.use_nerd_fonts = false;
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.queue_len = 1;
+        st.current_idx = 0;
+        st.runtime_ticks = 60 * TICKS_PER_SECOND;
+    }
+
+    let backend = TestBackend::new(60, 5);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = LayoutPlayback::default();
+    term.draw(|f| {
+        app.render_player_panel(
+            f,
+            Rect::new(0, 0, 60, 5),
+            &mut layout,
+            4,
+            true,
+            &Some(("My Title".to_string(), palette::WHITE)),
+            palette::SURFACE_CHROME,
+        );
+    })
+    .unwrap();
+
+    let text = buffer_to_string(&term);
+    let lines: Vec<&str> = text.lines().collect();
+    // Title row (y+1) must NOT contain the title.
+    assert!(
+        !lines[1].contains("My Title"),
+        "title row held title:\n{}",
+        lines[1]
+    );
+    // Bottom row (y+3) must carry the prefixed title.
+    assert!(
+        lines[3].contains("On Now: My Title"),
+        "bottom row:\n{}",
+        lines[3]
+    );
+}
+
+#[test]
 fn remote_status_spans_prefers_active_route_label_over_daemon_endpoint() {
     let mut app = make_app_stub();
     app.active_route = Some("music".to_string());

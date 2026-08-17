@@ -5,7 +5,7 @@ use super::chrome::play_icon;
 use super::indicators;
 use crate::app::layout::LayoutPlayback;
 use crate::app::{
-    palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE, TABBAR_RIGHT_RESERVE,
+    palette, App, PanelFocus, PanelMode, RemoteSlotState, TABBAR_LEFT_RESERVE, TABBAR_RIGHT_RESERVE,
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Rect};
@@ -49,6 +49,11 @@ impl App {
             );
         }
         // Title row (when panel is expanded).
+        // Narrow queue-only fork: the title leaves the crowded control row
+        // and lives here on its own "Now Playing:" row, which is otherwise an
+        // empty #2d353b fill (see explanation below the `player_h >= 4` block).
+        let narrow_player = self.effective_panel_mode() == PanelMode::QueueOnly;
+
         if player_h >= 2 {
             let title_row_area = Rect {
                 y: area.y + 1,
@@ -67,7 +72,15 @@ impl App {
                 height: 1,
             };
             if let Some((ref title, color)) = now_playing_title {
-                self.render_title_row(f, title_area, title, *color, layout, panel_bg);
+                if narrow_player {
+                    // Narrow queue-only fork: the title moves out of the
+                    // crowded control row to the bottom "Now Playing:" row
+                    // (see the `player_h >= 4` block below); the control row
+                    // keeps glyphs, time, and pills, just no title text.
+                    self.render_title_row(f, title_area, "", *color, layout, panel_bg);
+                } else {
+                    self.render_title_row(f, title_area, title, *color, layout, panel_bg);
+                }
             } else if !show_controls {
                 // Idle state: show feed item title if available
                 if let Some(ref idle_feed) = self.idle_feed {
@@ -109,11 +122,27 @@ impl App {
                 height: 1,
                 ..area
             };
+            // Plain #2d353b fill: in the two-pane view the library hero's top
+            // border overwrites this row; in narrow queue-only mode it was
+            // dead space, now repurposed for the "Now Playing:" title line.
             f.render_widget(
                 Paragraph::new(Span::raw(" ".repeat(bottom_area.width as usize)))
                     .style(Style::default().bg(palette::SURFACE_BACKDROP)),
                 bottom_area,
             );
+            if narrow_player && show_controls {
+                if let Some((ref title, color)) = now_playing_title {
+                    let prefix = "On Now: ";
+                    let label = format!("{prefix}{title}");
+                    let clipped = trunc_str(&label, bottom_area.width as usize);
+                    f.render_widget(
+                        Paragraph::new(Span::styled(clipped, Style::default().fg(*color)))
+                            .style(Style::default().bg(palette::SURFACE_BACKDROP))
+                            .alignment(Alignment::Center),
+                        bottom_area,
+                    );
+                }
+            }
         }
     }
 
@@ -142,6 +171,9 @@ impl App {
         let (pos_ticks, rt_ticks, paused) = self.playback_progress();
         let pos_str = fmt_duration_short(pos_ticks / TICKS_PER_SECOND);
         let dur_str = fmt_duration_short(rt_ticks / TICKS_PER_SECOND);
+        // Narrow queue-only mode declutters the control row: no title text
+        // and elapsed-only time (no duration).
+        let narrow_player = self.effective_panel_mode() == PanelMode::QueueOnly;
 
         let (glyph, gcolor): (&str, Color) = if paused {
             (play_icon(self.use_nerd_fonts), palette::AQUA)
@@ -243,24 +275,59 @@ impl App {
         // A running `x` cursor tracks where each clickable glyph lands in the
         // rendered `Line`, so `layout.*_area` exactly matches what's on screen
         // rather than an estimate.
-        let time_text = format!("{pos_str} / {dur_str}");
         let time_sep = " ";
-        let right = {
-            let mut r = vec![Span::styled(
-                time_text,
+        let mut right_full = right; // status pills (with trailing space)
+        let mut right_elapsed = right_full.clone();
+        right_full.insert(
+            0,
+            Span::styled(
+                format!("{pos_str} / {dur_str}"),
                 Style::default().fg(palette::PLAYBACK_META_FG),
-            )];
-            r.push(Span::raw(time_sep));
-            r.extend(right);
-            r
-        };
-        let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
+            ),
+        );
+        right_full.insert(1, Span::raw(time_sep));
+        right_elapsed.insert(
+            0,
+            Span::styled(
+                pos_str.clone(),
+                Style::default().fg(palette::PLAYBACK_META_FG),
+            ),
+        );
+        right_elapsed.insert(1, Span::raw(time_sep));
+        let right_full_w: u16 = right_full.iter().map(|s| s.content.width() as u16).sum();
+        let right_elapsed_w: u16 = right_elapsed.iter().map(|s| s.content.width() as u16).sum();
+
+        let glyph_text = format!("{glyph} ");
+        let glyph_w = glyph_text.width() as u16;
+        let stop_w = stop_glyph.width() as u16;
+        let next_w = next_glyph.width() as u16;
+        let buttons_w = stop_w as usize + stop_gap.width() + next_w as usize + next_gap.width();
+        let av = area.width as usize;
+
+        // Sacrifice ladder for the normal panel, most intact first: keep both
+        // the two buttons and the duration, then drop the buttons, then the
+        // duration (elapsed only), and only split/truncate the title when none
+        // of those fit. Narrow queue-only mode uses elapsed-only time and an
+        // empty title (rendered separately on the "On Now:" bottom row).
+        let mut show_buttons = true;
+        let (mut right, mut right_w) = (right_full, right_full_w);
+        if narrow_player {
+            show_buttons = true;
+            (right, right_w) = (right_elapsed, right_elapsed_w);
+        } else if av.saturating_sub(glyph_w as usize + right_full_w as usize + buttons_w)
+            < title.width()
+        {
+            // Drop the two buttons first...
+            show_buttons = false;
+            if av.saturating_sub(glyph_w as usize + right_full_w as usize) < title.width() {
+                // ...then the duration (elapsed only) before truncating the title.
+                (right, right_w) = (right_elapsed, right_elapsed_w);
+            }
+        }
 
         let mut left: Vec<Span> = Vec::new();
         let mut x = area.x;
 
-        let glyph_text = format!("{glyph} ");
-        let glyph_w = glyph_text.width() as u16;
         layout.play_pause_area = Rect {
             x,
             y: area.y,
@@ -272,15 +339,6 @@ impl App {
             glyph_text,
             Style::default().fg(gcolor).add_modifier(Modifier::BOLD),
         ));
-
-        let stop_w = stop_glyph.width() as u16;
-        let next_w = next_glyph.width() as u16;
-        let buttons_w = stop_w as usize + stop_gap.width() + next_w as usize + next_gap.width();
-        let base_fixed_w = glyph_w as usize + right_w as usize;
-        // Stop/next are the first thing sacrificed at narrow widths: only hide
-        // them once keeping them would force the title to truncate.
-        let show_buttons =
-            (area.width as usize).saturating_sub(base_fixed_w + buttons_w) >= title.width();
 
         if show_buttons {
             layout.stop_area = Rect {
@@ -307,13 +365,14 @@ impl App {
             layout.next_area = Rect::default();
         }
 
-        let fixed_w = base_fixed_w + if show_buttons { buttons_w } else { 0 };
-        let title_w = (area.width as usize).saturating_sub(fixed_w);
+        let fixed_w =
+            glyph_w as usize + right_w as usize + if show_buttons { buttons_w } else { 0 };
+        let title_w = av.saturating_sub(fixed_w);
 
         left.extend(self.playback_title_spans(title, title_color, title_w));
 
         let left_w: u16 = left.iter().map(|s| s.content.width() as u16).sum();
-        let gap = area.width.saturating_sub(left_w + right_w) as usize;
+        let gap = av.saturating_sub(left_w as usize + right_w as usize);
 
         let mut spans = left;
         spans.push(Span::raw(" ".repeat(gap)));
