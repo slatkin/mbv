@@ -7,7 +7,8 @@ impl EmbyClient {
         let resp: Value = req
             .call()
             .map_err(|e| e.to_string())?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|e| e.to_string())?;
         Ok(resp["Items"]
             .as_array()
@@ -26,7 +27,8 @@ impl EmbyClient {
             .get("/Library/VirtualFolders")
             .call()
             .map_err(|e| Self::service_failure("Emby views request failed", e))?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|e| {
                 crate::service_runtime::EmbyFailure::unavailable(format!(
                     "Emby views response failed: {e}"
@@ -34,10 +36,14 @@ impl EmbyClient {
             })?;
 
         let user_views: Value = self
-            .get(&format!("/Users/{}/Views", self.user_id))
+            .get(&format!(
+                "/Users/{}/Views",
+                crate::encode_path_segment(&self.user_id)
+            ))
             .call()
             .map_err(|e| Self::service_failure("Emby user views request failed", e))?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|e| {
                 crate::service_runtime::EmbyFailure::unavailable(format!(
                     "Emby user views response failed: {e}"
@@ -70,7 +76,10 @@ impl EmbyClient {
     }
 
     pub fn get_user_views(&self) -> Result<Vec<EmbyItem>, String> {
-        self.fetch_items(&format!("/Users/{}/Views", self.user_id), &[])
+        self.fetch_items(
+            &format!("/Users/{}/Views", crate::encode_path_segment(&self.user_id)),
+            &[],
+        )
     }
 
     pub fn get_items_sorted(
@@ -119,12 +128,12 @@ impl EmbyClient {
         name_ge: Option<&str>,
         name_lt: Option<&str>,
     ) -> Result<(Vec<EmbyItem>, usize), String> {
-        let mut req = self.get(&format!("/Users/{}/Items", self.user_id))
+        let mut req = self.get(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)))
             .query("ParentId", parent_id)
             .query("SortBy", sort_by)
             .query("SortOrder", sort_order)
-            .query("StartIndex", &start_index.to_string())
-            .query("Limit", &limit.to_string())
+            .query("StartIndex", start_index.to_string())
+            .query("Limit", limit.to_string())
             .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres")
             .query("EnableUserData", "true");
         if let Some(types) = item_types {
@@ -144,7 +153,7 @@ impl EmbyClient {
         let call_started = std::time::Instant::now();
         let resp_result = req.call();
         let call_ms = call_started.elapsed().as_millis();
-        let resp = resp_result.map_err(|e| {
+        let mut resp = resp_result.map_err(|e| {
             log::warn!(
                 target: "api",
                 "get_items_sorted: parent={parent_id} types={item_types:?} err after {call_ms}ms: {e}"
@@ -152,7 +161,7 @@ impl EmbyClient {
             e.to_string()
         })?;
         let parse_started = std::time::Instant::now();
-        let resp: Value = resp.into_json().map_err(|e| e.to_string())?;
+        let resp: Value = resp.body_mut().read_json().map_err(|e| e.to_string())?;
         let total = resp["TotalRecordCount"].as_u64().unwrap_or(0) as usize;
         let items: Vec<EmbyItem> = resp["Items"]
             .as_array()
@@ -169,7 +178,7 @@ impl EmbyClient {
 
     pub fn search_items(&self, term: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
-        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
             ("SearchTerm",  term),
             ("Recursive",   "true"),
             ("Limit",       &limit),
@@ -179,7 +188,7 @@ impl EmbyClient {
 
     pub fn get_continue_watching(&self, limit: usize) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
-        self.fetch_items(&format!("/Users/{}/Items/Resume", self.user_id), &[
+        self.fetch_items(&format!("/Users/{}/Items/Resume", crate::encode_path_segment(&self.user_id)), &[
             ("UserId",     &self.user_id),
             ("Limit",      &limit),
             ("Fields",     "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,Overview,PremiereDate"),
@@ -188,13 +197,13 @@ impl EmbyClient {
     }
 
     pub fn get_latest(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
-        let resp: Value = self.get(&format!("/Users/{}/Items/Latest", self.user_id))
+        let resp: Value = self.get(&format!("/Users/{}/Items/Latest", crate::encode_path_segment(&self.user_id)))
             .query("ParentId", parent_id)
-            .query("Limit", &limit.to_string())
+            .query("Limit", limit.to_string())
             .query("GroupItems", "true")
             .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,AlbumId,Overview,PremiereDate")
             .call().map_err(|e| e.to_string())?
-            .into_json().map_err(|e| e.to_string())?;
+            .body_mut().read_json().map_err(|e| e.to_string())?;
         Ok(resp
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
@@ -207,7 +216,7 @@ impl EmbyClient {
         limit: usize,
     ) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
-        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
             ("ParentId",          parent_id),
             ("Limit",             &limit),
             ("IncludeItemTypes",  "Episode"),
@@ -220,7 +229,7 @@ impl EmbyClient {
     }
 
     pub fn get_all_playable_recursive(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
-        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video,Audio"),
             ("Recursive",        "true"),
@@ -232,7 +241,7 @@ impl EmbyClient {
     }
 
     pub fn get_direct_playable(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
-        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video,Audio"),
             ("SortBy",           "SortName"),
@@ -243,7 +252,7 @@ impl EmbyClient {
     }
 
     pub fn get_all_videos_recursive(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
-        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video"),
             ("Recursive",        "true"),
@@ -257,39 +266,51 @@ impl EmbyClient {
     // ── Library actions ──────────────────────────────────────────────────────
 
     pub fn mark_played(&self, item_id: &str) -> Result<(), String> {
-        self.post(&format!("/Users/{}/PlayedItems/{}", self.user_id, item_id))
-            .call()
-            .map_err(|e| e.to_string())?;
+        self.post(&format!(
+            "/Users/{}/PlayedItems/{}",
+            crate::encode_path_segment(&self.user_id),
+            crate::encode_path_segment(item_id)
+        ))
+        .send_empty()
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn mark_unplayed(&self, item_id: &str) -> Result<(), String> {
-        self.delete(&format!("/Users/{}/PlayedItems/{}", self.user_id, item_id))
-            .call()
-            .map_err(|e| e.to_string())?;
+        self.delete(&format!(
+            "/Users/{}/PlayedItems/{}",
+            crate::encode_path_segment(&self.user_id),
+            crate::encode_path_segment(item_id)
+        ))
+        .call()
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn hide_from_resume(&self, item_id: &str) -> Result<(), String> {
         self.post(&format!(
             "/Users/{}/Items/{}/HideFromResume",
-            self.user_id, item_id
+            crate::encode_path_segment(&self.user_id),
+            crate::encode_path_segment(item_id)
         ))
         .query("Hide", "true")
-        .call()
+        .send_empty()
         .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn post_library_refresh(&self, library_id: &str) -> Result<(), String> {
-        self.post(&format!("/Items/{library_id}/Refresh"))
-            .query("Recursive", "true")
-            .query("ImageRefreshMode", "Default")
-            .query("MetadataRefreshMode", "Default")
-            .query("ReplaceAllImages", "false")
-            .query("ReplaceAllMetadata", "false")
-            .call()
-            .map_err(|e| e.to_string())?;
+        self.post(&format!(
+            "/Items/{}/Refresh",
+            crate::encode_path_segment(library_id)
+        ))
+        .query("Recursive", "true")
+        .query("ImageRefreshMode", "Default")
+        .query("MetadataRefreshMode", "Default")
+        .query("ReplaceAllImages", "false")
+        .query("ReplaceAllMetadata", "false")
+        .send_empty()
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 

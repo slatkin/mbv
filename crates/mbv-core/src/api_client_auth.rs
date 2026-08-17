@@ -1,7 +1,23 @@
+fn emby_agent(
+    connect_timeout: std::time::Duration,
+    total_timeout: std::time::Duration,
+) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .provider(ureq::tls::TlsProvider::NativeTls)
+                .build(),
+        )
+        .timeout_connect(Some(connect_timeout))
+        .timeout_global(Some(total_timeout))
+        .build()
+        .into()
+}
+
 impl EmbyClient {
     fn service_failure(context: &str, error: ureq::Error) -> crate::service_runtime::EmbyFailure {
         let class = match error {
-            ureq::Error::Status(401 | 403, _) => {
+            ureq::Error::StatusCode(401 | 403) => {
                 crate::service_runtime::EmbyFailureClass::AuthenticationRejected
             }
             _ => crate::service_runtime::EmbyFailureClass::Unavailable,
@@ -15,10 +31,10 @@ impl EmbyClient {
     // ── HTTP infrastructure ──────────────────────────────────────────────────
 
     pub fn new(config: Config) -> Self {
-        let agent = ureq::AgentBuilder::new()
-            .timeout_connect(std::time::Duration::from_secs(5))
-            .timeout(std::time::Duration::from_secs(30))
-            .build();
+        let agent = emby_agent(
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_secs(30),
+        );
         EmbyClient {
             config,
             user_id: String::new(),
@@ -50,34 +66,31 @@ impl EmbyClient {
         )
     }
 
-    fn get(&self, path: &str) -> ureq::Request {
+    fn get(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {
         self.agent
             .get(&self.url(path))
-            .set("Authorization", &self.auth_header())
-            .set("X-Emby-Token", &self.token)
+            .header("Authorization", &self.auth_header())
+            .header("X-Emby-Token", &self.token)
     }
 
-    fn post(&self, path: &str) -> ureq::Request {
+    fn post(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithBody> {
         self.agent
             .post(&self.url(path))
-            .set("Authorization", &self.auth_header())
-            .set("X-Emby-Token", &self.token)
+            .header("Authorization", &self.auth_header())
+            .header("X-Emby-Token", &self.token)
     }
 
     fn with_request_timeout(&self, timeout: std::time::Duration) -> Self {
         let mut client = self.clone();
-        client.agent = ureq::AgentBuilder::new()
-            .timeout_connect(timeout)
-            .timeout(timeout)
-            .build();
+        client.agent = emby_agent(timeout, timeout);
         client
     }
 
-    fn delete(&self, path: &str) -> ureq::Request {
+    fn delete(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {
         self.agent
             .delete(&self.url(path))
-            .set("Authorization", &self.auth_header())
-            .set("X-Emby-Token", &self.token)
+            .header("Authorization", &self.auth_header())
+            .header("X-Emby-Token", &self.token)
     }
 
     // ── Authentication ───────────────────────────────────────────────────────
@@ -97,16 +110,22 @@ impl EmbyClient {
         self.token = token;
         self.user_id = user_id;
 
-        match self.get(&format!("/Users/{}", self.user_id)).call() {
-            Ok(resp) => {
-                if let Ok(user) = resp.into_json::<Value>() {
+        match self
+            .get(&format!(
+                "/Users/{}",
+                crate::encode_path_segment(&self.user_id)
+            ))
+            .call()
+        {
+            Ok(mut resp) => {
+                if let Ok(user) = resp.body_mut().read_json::<Value>() {
                     if let Some(name) = user["Name"].as_str().filter(|name| !name.is_empty()) {
                         self.config.username = name.to_string();
                     }
                 }
                 Ok(())
             }
-            Err(ureq::Error::Status(401 | 403, _)) => {
+            Err(ureq::Error::StatusCode(401 | 403)) => {
                 clear_cached_token();
                 self.token.clear();
                 self.user_id.clear();
@@ -160,7 +179,8 @@ impl EmbyClient {
                     .get("/Users")
                     .call()
                     .map_err(|e| format!("service credential validation failed: {e}"))?
-                    .into_json()
+                    .body_mut()
+                    .read_json()
                     .map_err(|e| format!("service credential response failed: {e}"))?;
                 let users = users
                     .as_array()
@@ -204,7 +224,10 @@ impl EmbyClient {
         crate::bounded::run_with_hard_bound(
             move || {
                 clone
-                    .get(&format!("/Users/{}", clone.user_id))
+                    .get(&format!(
+                        "/Users/{}",
+                        crate::encode_path_segment(&clone.user_id)
+                    ))
                     .call()
                     .map_err(|e| {
                         Self::service_failure("service credential validation failed", e)
@@ -237,10 +260,11 @@ impl EmbyClient {
                 let resp: Value = client
                     .agent
                     .post(&client.url("/Users/AuthenticateByName"))
-                    .set("Authorization", &client.unauthenticated_header())
-                    .send_json(ureq::json!({"Username": username, "Pw": password}))
+                    .header("Authorization", &client.unauthenticated_header())
+                    .send_json(serde_json::json!({"Username": username, "Pw": password}))
                     .map_err(|e| format!("Emby authentication failed: {e}"))?
-                    .into_json()
+                    .body_mut()
+                    .read_json()
                     .map_err(|e| format!("Emby authentication response parse failed: {e}"))?;
                 let token = resp["AccessToken"]
                     .as_str()
@@ -316,7 +340,8 @@ impl EmbyClient {
             .get("/Users/Me")
             .call()
             .map_err(|e| e.to_string())?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|e| e.to_string())?;
         let cfg = &resp["Configuration"];
         let mode = cfg["SubtitleMode"]
@@ -373,16 +398,17 @@ impl EmbyClient {
             token
         );
 
-        let resp = self
+        let mut resp = self
             .agent
             .get(&self.url(&user_path))
-            .set("Authorization", &auth_header)
-            .set("X-Emby-Token", token)
+            .header("Authorization", &auth_header)
+            .header("X-Emby-Token", token)
             .call()
             .map_err(|e| format!("shared-data token validation failed: {e}"))?;
 
         let resp: serde_json::Value = resp
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|e| format!("shared-data token validation parse failed: {e}"))?;
 
         let user_id = resp["Id"].as_str().unwrap_or("").trim();

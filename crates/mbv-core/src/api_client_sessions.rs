@@ -4,7 +4,10 @@ impl EmbyClient {
     pub fn get_episodes_from(&self, series_id: &ItemId, from_item_id: &ItemId) -> Vec<EmbyItem> {
         log::debug!(target: "api", "outbound: EpisodesFrom series={series_id} from={from_item_id}");
         let resp: Value = match self
-            .get(&format!("/Shows/{}/Episodes", series_id))
+            .get(&format!(
+                "/Shows/{}/Episodes",
+                crate::encode_path_segment(series_id.as_str())
+            ))
             .query("UserId", &self.user_id)
             .query(
                 "Fields",
@@ -12,7 +15,7 @@ impl EmbyClient {
             )
             .call()
         {
-            Ok(r) => match r.into_json() {
+            Ok(mut r) => match r.body_mut().read_json() {
                 Ok(v) => v,
                 Err(e) => {
                     log::warn!(target: "api", "err: EpisodesFrom parse: {e}");
@@ -64,7 +67,8 @@ impl EmbyClient {
         let arr: Value = req
             .call()
             .map_err(|e| e.to_string())?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|e| e.to_string())?;
         let sessions = arr
             .as_array()
@@ -136,57 +140,78 @@ impl EmbyClient {
     }
 
     pub fn session_transport(&self, id: &str, cmd: &str) -> Result<(), String> {
-        self.post(&format!("/Sessions/{id}/Playing/{cmd}"))
-            .send_string("")
-            .map_err(|e| e.to_string())?;
+        self.post(&format!(
+            "/Sessions/{}/Playing/{cmd}",
+            crate::encode_path_segment(id)
+        ))
+        .send("")
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn session_seek(&self, id: &str, ticks: i64) -> Result<(), String> {
-        self.post(&format!("/Sessions/{id}/Playing/Seek"))
-            .query("SeekPositionTicks", &ticks.to_string())
-            .send_string("")
-            .map_err(|e| e.to_string())?;
+        self.post(&format!(
+            "/Sessions/{}/Playing/Seek",
+            crate::encode_path_segment(id)
+        ))
+        .query("SeekPositionTicks", ticks.to_string())
+        .send("")
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn session_set_volume(&self, id: &str, vol: i64) -> Result<(), String> {
-        self.post(&format!("/Sessions/{id}/Command/SetVolume"))
-            .send_json(ureq::json!({"Arguments":{"Volume": vol.to_string()}}))
-            .map_err(|e| e.to_string())?;
+        self.post(&format!(
+            "/Sessions/{}/Command/SetVolume",
+            crate::encode_path_segment(id)
+        ))
+        .send_json(serde_json::json!({"Arguments":{"Volume": vol.to_string()}}))
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn session_set_subtitle_index(&self, id: &str, index: i64) -> Result<(), String> {
-        self.post(&format!("/Sessions/{id}/Command/SetSubtitleStreamIndex"))
-            .send_json(ureq::json!({"Arguments":{"Index": index.to_string()}}))
-            .map_err(|e| e.to_string())?;
+        self.post(&format!(
+            "/Sessions/{}/Command/SetSubtitleStreamIndex",
+            crate::encode_path_segment(id)
+        ))
+        .send_json(serde_json::json!({"Arguments":{"Index": index.to_string()}}))
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn session_set_audio_index(&self, id: &str, index: i64) -> Result<(), String> {
-        self.post(&format!("/Sessions/{id}/Command/SetAudioStreamIndex"))
-            .send_json(ureq::json!({"Arguments":{"Index": index.to_string()}}))
-            .map_err(|e| e.to_string())?;
+        self.post(&format!(
+            "/Sessions/{}/Command/SetAudioStreamIndex",
+            crate::encode_path_segment(id)
+        ))
+        .send_json(serde_json::json!({"Arguments":{"Index": index.to_string()}}))
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn session_set_mute(&self, id: &str, muted: bool) -> Result<(), String> {
         let cmd = if muted { "Mute" } else { "Unmute" };
-        self.post(&format!("/Sessions/{id}/Command/{cmd}"))
-            .send_string("")
-            .map_err(|e| e.to_string())?;
+        self.post(&format!(
+            "/Sessions/{}/Command/{cmd}",
+            crate::encode_path_segment(id)
+        ))
+        .send("")
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn session_play(&self, id: &str, item_id: &str, start_ticks: i64) -> Result<(), String> {
-        self.post(&format!("/Sessions/{id}/Playing"))
-            .send_json(ureq::json!({
-                "PlayCommand": "PlayNow",
-                "ItemIds": [item_id],
-                "StartPositionTicks": start_ticks
-            }))
-            .map_err(|e| e.to_string())?;
+        self.post(&format!(
+            "/Sessions/{}/Playing",
+            crate::encode_path_segment(id)
+        ))
+        .send_json(serde_json::json!({
+            "PlayCommand": "PlayNow",
+            "ItemIds": [item_id],
+            "StartPositionTicks": start_ticks
+        }))
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -197,14 +222,17 @@ impl EmbyClient {
         start_idx: usize,
         start_ticks: i64,
     ) -> Result<(), String> {
-        self.post(&format!("/Sessions/{id}/Playing"))
-            .send_json(ureq::json!({
-                "PlayCommand": "PlayNow",
-                "ItemIds": item_ids,
-                "StartIndex": start_idx,
-                "StartPositionTicks": start_ticks
-            }))
-            .map_err(|e| e.to_string())?;
+        self.post(&format!(
+            "/Sessions/{}/Playing",
+            crate::encode_path_segment(id)
+        ))
+        .send_json(serde_json::json!({
+            "PlayCommand": "PlayNow",
+            "ItemIds": item_ids,
+            "StartIndex": start_idx,
+            "StartPositionTicks": start_ticks
+        }))
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 }

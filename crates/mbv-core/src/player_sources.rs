@@ -376,7 +376,7 @@ mod source_tests {
             title: "Title".into(),
             show_title: None,
             author: None,
-        description: None,
+            description: None,
             duration_ticks: Some(100),
             position_ticks: 99,
             played: true,
@@ -505,8 +505,11 @@ mod source_tests {
             let sync = requests.recv().unwrap();
             let close = requests.recv().unwrap();
             let body = sync.split("\r\n\r\n").nth(1).unwrap();
+            // ureq 3.x's send_json pretty-prints the body (2.x sent compact
+            // JSON); strip whitespace before matching so both formats pass.
+            let no_ws: String = body.chars().filter(|c| !c.is_whitespace()).collect();
             assert!(
-                body.contains(&format!("\"currentTime\":{expected}")),
+                no_ws.contains(&format!("\"currentTime\":{expected}")),
                 "{body}"
             );
             assert!(close.starts_with("POST /api/session/%3CSESSION_ID%3E/close HTTP/1.1"));

@@ -13,7 +13,11 @@ fn audiobookshelf_response(
         let size = stream.read(&mut request).unwrap();
         let request = String::from_utf8_lossy(&request[..size]);
         assert!(request.contains("GET /api/me "));
-        assert!(request.contains("Authorization: Bearer test-api-key\r\n"));
+        // Header name casing is not significant per RFC 7230 3.2, and ureq
+        // 3.x lowercases header names on the wire (2.x sent them as-set).
+        assert!(request
+            .to_ascii_lowercase()
+            .contains("authorization: bearer test-api-key\r\n"));
         write!(
             stream,
             "HTTP/1.1 {status} Response\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",

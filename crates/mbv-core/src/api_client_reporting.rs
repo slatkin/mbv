@@ -5,7 +5,7 @@ impl EmbyClient {
         media_source_id: &MediaSourceId,
         session_id: &EmbySessionId,
     ) -> bool {
-        let body = ureq::json!({
+        let body = serde_json::json!({
             "UserId": self.user_id,
             "ItemId": item.id,
             "MediaSourceId": media_source_id.as_str(),
@@ -97,7 +97,7 @@ impl EmbyClient {
         session_id: &EmbySessionId,
         event_name: &str,
     ) {
-        let body = ureq::json!({
+        let body = serde_json::json!({
             "UserId": self.user_id,
             "ItemId": item_id.as_str(),
             "MediaSourceId": media_source_id.as_str(),
@@ -122,7 +122,7 @@ impl EmbyClient {
         match self
             .post("/Sessions/Playing/Ping")
             .query("PlaySessionId", session_id.as_str())
-            .send_string("")
+            .send("")
         {
             Ok(r) => log::debug!(target: "api", "inbound: {} Ping", r.status()),
             Err(e) => log::warn!(target: "api",  "err: Ping: {e}"),
@@ -178,7 +178,7 @@ impl EmbyClient {
         session_id: &EmbySessionId,
         runtime_ticks: i64,
     ) -> serde_json::Value {
-        ureq::json!({
+        serde_json::json!({
             "UserId": self.user_id,
             "ItemId": item_id.as_str(),
             "MediaSourceId": media_source_id.as_str(),
@@ -280,7 +280,7 @@ impl EmbyClient {
             commands.retain(|c| c != "SetSubtitleStreamIndex");
         }
         commands.extend(extra_commands.iter().cloned());
-        let body = ureq::json!({
+        let body = serde_json::json!({
             "PlayableMediaTypes": media_types,
             "SupportedCommands": commands,
             "SupportsMediaControl": true,

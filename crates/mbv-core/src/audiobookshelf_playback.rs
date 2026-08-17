@@ -257,10 +257,15 @@ impl AudiobookshelfClient {
         let response = self
             .post_json(
                 api_key,
-                &format!("/api/items/{library_item_id}/play/{episode_id}"),
+                &format!(
+                    "/api/items/{}/play/{}",
+                    crate::encode_path_segment(library_item_id),
+                    crate::encode_path_segment(episode_id)
+                ),
                 &body,
             )?
-            .into_json::<serde_json::Value>()
+            .body_mut()
+            .read_json::<serde_json::Value>()
             .map_err(|_| AudiobookshelfError::malformed())?;
         let opened_id = response
             .get("id")
@@ -279,7 +284,10 @@ impl AudiobookshelfClient {
             if let Some(session_id) = opened_id {
                 let _ = self.post_json(
                     api_key,
-                    &format!("/api/session/{session_id}/close"),
+                    &format!(
+                        "/api/session/{}/close",
+                        crate::encode_path_segment(&session_id)
+                    ),
                     &AudiobookshelfPlaybackProgress {
                         current_time: 0.0,
                         time_listened: 0.0,
@@ -314,10 +322,14 @@ impl AudiobookshelfClient {
         let response = self
             .post_json(
                 api_key,
-                &format!("/api/items/{library_item_id}/play"),
+                &format!(
+                    "/api/items/{}/play",
+                    crate::encode_path_segment(library_item_id)
+                ),
                 &body,
             )?
-            .into_json::<serde_json::Value>()
+            .body_mut()
+            .read_json::<serde_json::Value>()
             .map_err(|_| AudiobookshelfError::malformed())?;
         let opened_id = response
             .get("id")
@@ -334,7 +346,10 @@ impl AudiobookshelfClient {
             if let Some(session_id) = opened_id {
                 let _ = self.post_json(
                     api_key,
-                    &format!("/api/session/{session_id}/close"),
+                    &format!(
+                        "/api/session/{}/close",
+                        crate::encode_path_segment(&session_id)
+                    ),
                     &AudiobookshelfPlaybackProgress {
                         current_time: 0.0,
                         time_listened: 0.0,
@@ -469,7 +484,10 @@ impl AudiobookshelfClient {
                 client
                     .post_json(
                         &api_key,
-                        &format!("/api/session/{session_id}/{action}"),
+                        &format!(
+                            "/api/session/{}/{action}",
+                            crate::encode_path_segment(&session_id)
+                        ),
                         &progress,
                     )
                     .map(|_| ())
@@ -483,11 +501,11 @@ impl AudiobookshelfClient {
         api_key: &str,
         path: &str,
         body: &T,
-    ) -> Result<ureq::Response, AudiobookshelfError> {
+    ) -> Result<ureq::http::Response<ureq::Body>, AudiobookshelfError> {
         self.agent
             .post(&format!("{}{}", self.server_url, path))
-            .set("Authorization", &format!("Bearer {api_key}"))
-            .set("Content-Type", "application/json")
+            .header("Authorization", &format!("Bearer {api_key}"))
+            .header("Content-Type", "application/json")
             .send_json(body)
             .map_err(super::audiobookshelf_catalog::map_error)
     }
@@ -503,15 +521,16 @@ impl AudiobookshelfClient {
         let started = Instant::now();
         while started.elapsed() < hard_bound {
             match self.agent.get(url).call() {
-                Ok(response) if response.status() == 200 => {
+                Ok(mut response) if response.status() == 200 => {
                     let body = response
-                        .into_string()
+                        .body_mut()
+                        .read_to_string()
                         .map_err(|_| AudiobookshelfError::malformed())?;
                     if body.starts_with("#EXTM3U") {
                         return Ok(());
                     }
                 }
-                Ok(_) | Err(ureq::Error::Status(_, _)) | Err(ureq::Error::Transport(_)) => {}
+                Ok(_) | Err(_) => {}
             }
             std::thread::sleep(
                 Self::HLS_POLL_INTERVAL.min(hard_bound.saturating_sub(started.elapsed())),
