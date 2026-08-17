@@ -20,15 +20,7 @@ fn fetch_feed_body(url: &str) -> Result<String, String> {
 /// explicitly on the agent's config, or `https://` requests fail with "no
 /// TLS backend is configured".
 pub(super) fn tls_agent(global_timeout: Option<std::time::Duration>) -> ureq::Agent {
-    ureq::Agent::config_builder()
-        .tls_config(
-            ureq::tls::TlsConfig::builder()
-                .provider(ureq::tls::TlsProvider::NativeTls)
-                .build(),
-        )
-        .timeout_global(global_timeout)
-        .build()
-        .into()
+    mbv_core::native_tls_agent(None, global_timeout)
 }
 pub(super) fn normalize_feed_url(input: &str) -> Result<String, String> {
     let Some((host, path_and_query)) = url_authority_and_path(input) else {
