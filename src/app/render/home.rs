@@ -401,21 +401,25 @@ impl App {
         // top/bottom border rule, which the single-column layout doesn't
         // have.
         let selection_bg_full = green_panel_full.unwrap_or(list_area);
-        // Selected-row highlight is the dark bar in both layouts: on the wide
-        // layout's green list panel, and on the single-column layout's green
-        // focused panel — so the same `LIBRARY_SIDE_BG` reads in both. (The
-        // single-column selection only draws while focused, when the panel is
-        // green.)
-        let selection_bg = palette::SURFACE_BACKDROP;
-
-        // The row above the pill bar (the player panel's trailing blank
-        // spacer row) is owned by `render_main`'s top-level Home-focus fill
-        // now, not reached into from here — see `mod.rs`'s
-        // `home_single_col_focused` block.
+        // Selected-row highlight colour: the wide layout's list panel is
+        // itself green while focused, so the dark `SURFACE_BACKDROP` bar
+        // reads against it. The single-column layout has no such green
+        // panel (its surrounding surface is the ordinary `SURFACE_BACKDROP`
+        // library background, same as every other hero-on-top tab), so it
+        // uses the same lighter `SURFACE_RESTING` highlight movies/TV lists
+        // use (`list_rows.rs`'s `build_list_row_spans`) to stay visible
+        // against that darker backdrop.
+        let selection_bg = if green_panel_full.is_some() {
+            palette::SURFACE_BACKDROP
+        } else {
+            palette::SURFACE_RESTING
+        };
 
         // Keep the row immediately below the Home pill bar free of list text.
-        // The wide layout uses the list panel surface; other layouts inherit
-        // the library panel surface.
+        // The wide layout uses the list panel surface; the single-column
+        // layout inherits the ordinary library panel surface (no green
+        // focus fill -- Home's panel background matches every other
+        // hero-on-top tab's regardless of focus).
         let pill_gap = Rect {
             x: pills_area.x,
             y: pills_area.y.saturating_add(1),
@@ -423,13 +427,7 @@ impl App {
             height: 1,
         };
         if pill_gap.y < area.bottom() && pill_gap.width > 0 {
-            let panel_bg = if wide_pill_section {
-                palette::SURFACE_BACKDROP
-            } else if focused {
-                palette::SURFACE_FOCUSED
-            } else {
-                palette::SURFACE_BACKDROP
-            };
+            let panel_bg = palette::SURFACE_BACKDROP;
             f.render_widget(
                 Paragraph::new(" ".repeat(pill_gap.width as usize))
                     .style(Style::default().bg(panel_bg)),
