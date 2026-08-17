@@ -653,6 +653,35 @@ pub(super) fn hero_on_left_list_panel_border(f: &mut Frame, list_panel: Rect, fo
     );
 }
 
+/// Renders the fuzzy-search input box (query text plus a `[loading…]`
+/// suffix while a search is in flight) into `area`.
+pub(super) fn render_search_box(f: &mut Frame, area: Rect, query: &str, loading: bool) {
+    use ratatui::widgets::{Block, BorderType, Borders};
+
+    let input_text = if loading {
+        format!("{query}█ [loading…]")
+    } else {
+        format!("{query}█")
+    };
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            input_text,
+            Style::default().fg(palette::BG_GREEN),
+        ))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(palette::IRIS))
+                .title(Span::styled(
+                    " Search ",
+                    Style::default().fg(palette::YELLOW),
+                )),
+        ),
+        area,
+    );
+}
+
 /// One line of the `Hero` component's hero-on-left text block. Unlike
 /// hero-on-top's single-row, truncated [`HeroLine`], hero-on-left text wraps
 /// across as many rows as it needs (design.md decision 2's "Consequence":

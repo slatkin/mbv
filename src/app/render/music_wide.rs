@@ -21,6 +21,9 @@ use ratatui::Frame;
 /// Padding inside recessed wide-music blocks, matching the Home overview block.
 const PANE_PAD_X: u16 = 2;
 const PANE_PAD_Y: u16 = 1;
+/// Height of the fuzzy-search box shown in the right rail's pill row slot
+/// while search is active (replaces the pill bar).
+const HERO_ON_LEFT_SEARCH_ROWS: u16 = 3;
 /// Minimum left-pane height needed to draw a hero/track separator row.
 const MIN_LEFT_HEIGHT_FOR_SEPARATOR: u16 = 6;
 /// Minimum width for the hero metadata column to remain beside the artwork.
@@ -320,11 +323,34 @@ impl App {
         // itself is inset inside it.
         let right_pane = hero::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
         let pills_area = right_pane.pills_area;
-        if pills_area.y + pills_area.height <= right_area.bottom() {
+        let search_active = self.libs[lib_idx].search.is_some();
+
+        // The fuzzy search box replaces the pill bar at the top of the right
+        // rail while search is active (never pills and filtering at once).
+        if search_active {
+            let s = self.libs[lib_idx].search.as_ref().unwrap();
+            let search_area = Rect {
+                x: pills_area.x,
+                y: pills_area.y,
+                width: pills_area.width,
+                height: HERO_ON_LEFT_SEARCH_ROWS,
+            };
+            super::hero::render_search_box(f, search_area, &s.query, s.loading);
+        } else if pills_area.y + pills_area.height <= right_area.bottom() {
             self.render_music_group_pills_row(f, pills_area, lib_idx, layout);
         }
 
-        let list_panel = right_pane.list_panel;
+        // A 3-row search box replaces the pill row (1) plus its blank gap row
+        // (1), so the browser panel shifts down one row while searching.
+        let list_panel = if search_active {
+            Rect {
+                y: right_pane.list_panel.y.saturating_add(1),
+                height: right_pane.list_panel.height.saturating_sub(1),
+                ..right_pane.list_panel
+            }
+        } else {
+            right_pane.list_panel
+        };
         // `render_wide_right_album_browser` renders text one cell right of
         // `browser_area.x` (the row painters' own leading gutter), so inset
         // one cell less than the panel's other padded content to land text
@@ -346,14 +372,47 @@ impl App {
             );
         }
         if browser_area.height > 0 && browser_area.width > 0 {
-            self.render_wide_right_album_browser(
-                f,
-                browser_area,
-                list_panel,
-                lib_idx,
-                right_focused,
-                layout,
-            );
+            if search_active {
+                // Fuzzy search results, a plain one/multi-column list fed from
+                // `lib.search` (same construction as the narrow path in
+                // `render_list`), replacing the grouped album browser.
+                let s = self.libs[lib_idx].search.as_ref().unwrap();
+                let items: Vec<mbv_core::api::EmbyItem> = s
+                    .results
+                    .iter()
+                    .filter_map(|&i| {
+                        s.items
+                            .get(i)
+                            .map(|item| self.recursive_album_display_item(lib_idx, i, item.clone()))
+                    })
+                    .collect();
+                let cols =
+                    crate::app::library_column_width::library_column_count(browser_area.width);
+                let scroll = self.render_plain_rows(
+                    f,
+                    super::list_rows::ListRenderCtx {
+                        content_area: browser_area,
+                        items: &items,
+                        cursor: s.cursor,
+                        stored_scroll: s.scroll,
+                        cols,
+                        focused: right_focused,
+                    },
+                    layout,
+                );
+                if let Some(sl) = self.libs[lib_idx].search.as_mut() {
+                    sl.scroll = scroll;
+                }
+            } else {
+                self.render_wide_right_album_browser(
+                    f,
+                    browser_area,
+                    list_panel,
+                    lib_idx,
+                    right_focused,
+                    layout,
+                );
+            }
         }
         hero::hero_on_left_list_panel_border(f, list_panel, right_focused);
     }
