@@ -66,6 +66,17 @@ impl App {
                 self.sync_subtitle_prefs_from_emby();
                 self.flash("Emby is ready".into(), ToastSeverity::Success);
                 log::info!(target: "startup", "Emby startup completed");
+                // `App::new_independent`'s launch (no daemon attached at
+                // construction) has no Emby client yet when it's built, so
+                // it can't call `try_auto_reconnect` synchronously the way
+                // `App::new_remote` does (construct.rs) -- it has to wait
+                // for the async startup this method completes. Guarded on
+                // `player_endpoint` being still unset so this only fires on
+                // that first-ever completion, not on a later reconfigure
+                // that also flows through this branch.
+                if self.player_endpoint.is_none() {
+                    self.try_auto_reconnect();
+                }
             }
             Err(error) => {
                 let state = super::service_startup::classify_failure(&error);

@@ -269,10 +269,14 @@ impl App {
     }
 
     /// Restores the remote connection active when mbv last exited (issue
-    /// #236 -- #222's original "auto-reconnect" intent). Called once from
-    /// `App::new` (never `App::new_remote`, whose `--connect-daemon`
-    /// startup path is a separate, unaffected mechanism per ADR 0010). A
-    /// no-op unless `auto_reconnect` is enabled and
+    /// #236 -- #222's original "auto-reconnect" intent). Called once per
+    /// launch: synchronously from `App::new_remote`'s local-daemon-attach
+    /// path (construct.rs) when the Emby client is already available at
+    /// construction, or from `apply_emby_completion`
+    /// (app_emby_service_completion.rs) once the async Emby startup used by
+    /// `App::new_independent` completes. A genuinely remote
+    /// `--connect-daemon` launch is a separate, unaffected mechanism per
+    /// ADR 0010. A no-op unless `auto_reconnect` is enabled and
     /// `load_last_remote_connection` has a record. One shot, no retry: a
     /// failed connect, a route no longer present in `library_routes`, or a
     /// device not found in the current session list all fall back to (stay
