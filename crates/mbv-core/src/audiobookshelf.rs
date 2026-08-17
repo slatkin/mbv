@@ -144,16 +144,10 @@ impl AudiobookshelfClient {
         if server_url.is_empty() {
             return Err(AudiobookshelfError::protocol());
         }
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .tls_config(
-                ureq::tls::TlsConfig::builder()
-                    .provider(ureq::tls::TlsProvider::NativeTls)
-                    .build(),
-            )
-            .timeout_connect(Some(Self::REQUEST_HARD_BOUND))
-            .timeout_global(Some(Self::REQUEST_HARD_BOUND))
-            .build()
-            .into();
+        let agent = crate::native_tls_agent(
+            Some(Self::REQUEST_HARD_BOUND),
+            Some(Self::REQUEST_HARD_BOUND),
+        );
         Ok(Self {
             server_url: server_url.to_string(),
             agent,

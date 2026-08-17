@@ -212,7 +212,7 @@ impl App {
                 "{}/Items?ParentId={}&IncludeItemTypes=Audio&Limit=5&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Fields=AlbumArtist,Artists&api_key={}",
                 server_url, album_id, token
             );
-            let items: Vec<serde_json::Value> = super::feed_parse::tls_agent()
+            let items: Vec<serde_json::Value> = super::feed_parse::tls_agent(None)
                 .get(&url)
                 .call()
                 .ok()
@@ -607,15 +607,8 @@ impl App {
                     Some(cached)
                 } else {
                     let fetch_url = |url: &str| -> Option<Vec<u8>> {
-                        let agent: ureq::Agent = ureq::Agent::config_builder()
-                            .tls_config(
-                                ureq::tls::TlsConfig::builder()
-                                    .provider(ureq::tls::TlsProvider::NativeTls)
-                                    .build(),
-                            )
-                            .timeout_global(Some(std::time::Duration::from_secs(10)))
-                            .build()
-                            .into();
+                        let agent =
+                            super::feed_parse::tls_agent(Some(std::time::Duration::from_secs(10)));
                         agent.get(url).call().ok().and_then(|r| {
                             let mut buf = Vec::new();
                             r.into_body()

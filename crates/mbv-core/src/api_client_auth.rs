@@ -2,16 +2,7 @@ fn emby_agent(
     connect_timeout: std::time::Duration,
     total_timeout: std::time::Duration,
 ) -> ureq::Agent {
-    ureq::Agent::config_builder()
-        .tls_config(
-            ureq::tls::TlsConfig::builder()
-                .provider(ureq::tls::TlsProvider::NativeTls)
-                .build(),
-        )
-        .timeout_connect(Some(connect_timeout))
-        .timeout_global(Some(total_timeout))
-        .build()
-        .into()
+    crate::native_tls_agent(Some(connect_timeout), Some(total_timeout))
 }
 
 impl EmbyClient {

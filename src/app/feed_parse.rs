@@ -6,7 +6,7 @@ use mbv_core::playback_queue::FeedEntry;
 use super::feed_parse_date::parse_pub_date_secs;
 
 fn fetch_feed_body(url: &str) -> Result<String, String> {
-    tls_agent()
+    tls_agent(None)
         .get(url)
         .call()
         .map_err(|e| format!("HTTP request failed: {e}"))?
@@ -19,13 +19,14 @@ fn fetch_feed_body(url: &str) -> Result<String, String> {
 /// automatically from the `native-tls` feature flag — it must be selected
 /// explicitly on the agent's config, or `https://` requests fail with "no
 /// TLS backend is configured".
-pub(super) fn tls_agent() -> ureq::Agent {
+pub(super) fn tls_agent(global_timeout: Option<std::time::Duration>) -> ureq::Agent {
     ureq::Agent::config_builder()
         .tls_config(
             ureq::tls::TlsConfig::builder()
                 .provider(ureq::tls::TlsProvider::NativeTls)
                 .build(),
         )
+        .timeout_global(global_timeout)
         .build()
         .into()
 }
@@ -66,7 +67,7 @@ pub(super) fn normalize_feed_url(input: &str) -> Result<String, String> {
         _ => return Err("URL is not a resolvable YouTube channel URL".to_string()),
     }
 
-    let body = tls_agent()
+    let body = tls_agent(None)
         .get(input)
         .call()
         .map_err(|e| format!("Failed to resolve YouTube channel: {e}"))?

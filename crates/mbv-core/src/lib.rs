@@ -42,3 +42,22 @@ const PATH_SEGMENT: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANU
 pub(crate) fn encode_path_segment(value: &str) -> percent_encoding::PercentEncode<'_> {
     percent_encoding::utf8_percent_encode(value, PATH_SEGMENT)
 }
+
+/// Build an agent using the explicit native-tls provider (ureq 3 no longer
+/// auto-enables native-tls from the feature flag). Shared by the Emby and
+/// Audiobookshelf clients so the TLS-config incantation lives in one place.
+pub(crate) fn native_tls_agent(
+    connect_timeout: Option<std::time::Duration>,
+    global_timeout: Option<std::time::Duration>,
+) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .provider(ureq::tls::TlsProvider::NativeTls)
+                .build(),
+        )
+        .timeout_connect(connect_timeout)
+        .timeout_global(global_timeout)
+        .build()
+        .into()
+}
