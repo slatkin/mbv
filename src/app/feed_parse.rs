@@ -2,29 +2,33 @@ use super::types_feed::IdleFeedItem;
 use mbv_core::api::{decode_entities, TICKS_PER_SECOND};
 use mbv_core::config::FeedKind;
 use mbv_core::playback_queue::FeedEntry;
-use std::sync::Arc;
 
 use super::feed_parse_date::parse_pub_date_secs;
 
 fn fetch_feed_body(url: &str) -> Result<String, String> {
-    tls_agent()?
+    tls_agent(None)
         .get(url)
         .call()
         .map_err(|e| format!("HTTP request failed: {e}"))?
-        .into_string()
+        .body_mut()
+        .read_to_string()
         .map_err(|e| format!("Failed to read response body: {e}"))
 }
 
-/// `ureq::get` never picks up the `native-tls` feature on its own — it only
-/// activates when a connector is configured explicitly on the agent — so
-/// plain shortcut calls fail every `https://` request with "no TLS backend
-/// is configured". Build an agent with the connector wired up instead.
-fn tls_agent() -> Result<ureq::Agent, String> {
-    let connector =
-        native_tls::TlsConnector::new().map_err(|e| format!("Failed to initialize TLS: {e}"))?;
-    Ok(ureq::AgentBuilder::new()
-        .tls_connector(Arc::new(connector))
-        .build())
+/// ureq's TLS provider defaults to rustls and is never picked up
+/// automatically from the `native-tls` feature flag — it must be selected
+/// explicitly on the agent's config, or `https://` requests fail with "no
+/// TLS backend is configured".
+pub(super) fn tls_agent(global_timeout: Option<std::time::Duration>) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .provider(ureq::tls::TlsProvider::NativeTls)
+                .build(),
+        )
+        .timeout_global(global_timeout)
+        .build()
+        .into()
 }
 pub(super) fn normalize_feed_url(input: &str) -> Result<String, String> {
     let Some((host, path_and_query)) = url_authority_and_path(input) else {
@@ -63,11 +67,12 @@ pub(super) fn normalize_feed_url(input: &str) -> Result<String, String> {
         _ => return Err("URL is not a resolvable YouTube channel URL".to_string()),
     }
 
-    let body = tls_agent()?
+    let body = tls_agent(None)
         .get(input)
         .call()
         .map_err(|e| format!("Failed to resolve YouTube channel: {e}"))?
-        .into_string()
+        .body_mut()
+        .read_to_string()
         .map_err(|e| format!("Failed to read YouTube channel page: {e}"))?;
     extract_rss_link(&body)
         .ok_or_else(|| "YouTube channel page did not contain an RSS feed URL".to_string())

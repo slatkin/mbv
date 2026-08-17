@@ -479,17 +479,22 @@ impl AudiobookshelfClient {
         self.bounded(bound, move |client| client.book_progress(&key))
     }
 
-    pub(super) fn get(&self, key: &str, path: &str) -> Result<ureq::Response, AudiobookshelfError> {
+    pub(super) fn get(
+        &self,
+        key: &str,
+        path: &str,
+    ) -> Result<ureq::http::Response<ureq::Body>, AudiobookshelfError> {
         self.agent
             .get(&format!("{}{}", self.server_url, path))
-            .set("Authorization", &format!("Bearer {key}"))
+            .header("Authorization", &format!("Bearer {key}"))
             .call()
             .map_err(map_error)
     }
     fn libraries(&self, key: &str) -> Result<Vec<AudiobookshelfLibrary>, AudiobookshelfError> {
         let response: LibrariesResponse = self
             .get(key, "/api/libraries")?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
         Ok(response
             .libraries
@@ -508,10 +513,14 @@ impl AudiobookshelfClient {
         page: usize,
         limit: usize,
     ) -> Result<AudiobookshelfShowPage, AudiobookshelfError> {
-        let path = format!("/api/libraries/{id}/items?page={page}&limit={limit}");
+        let path = format!(
+            "/api/libraries/{}/items?page={page}&limit={limit}",
+            crate::encode_path_segment(id)
+        );
         let response: ItemsResponse = self
             .get(key, &path)?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
         if response.limit == 0 {
             return Err(AudiobookshelfError::protocol());
@@ -549,8 +558,12 @@ impl AudiobookshelfClient {
         id: &str,
     ) -> Result<Vec<AudiobookshelfDownloadedEpisode>, AudiobookshelfError> {
         let response: ExpandedWire = self
-            .get(key, &format!("/api/items/{id}?expanded=1"))?
-            .into_json()
+            .get(
+                key,
+                &format!("/api/items/{}?expanded=1", crate::encode_path_segment(id)),
+            )?
+            .body_mut()
+            .read_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
         if response.id != id {
             return Err(AudiobookshelfError::protocol());
@@ -579,7 +592,8 @@ impl AudiobookshelfClient {
     ) -> Result<HashMap<(String, String), AudiobookshelfProgress>, AudiobookshelfError> {
         let response: ProgressResponse = self
             .get(key, "/api/me/progress")?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
         Ok(response
             .media_progress
@@ -603,10 +617,14 @@ impl AudiobookshelfClient {
         page: usize,
         limit: usize,
     ) -> Result<AudiobookshelfBookPage, AudiobookshelfError> {
-        let path = format!("/api/libraries/{id}/items?page={page}&limit={limit}");
+        let path = format!(
+            "/api/libraries/{}/items?page={page}&limit={limit}",
+            crate::encode_path_segment(id)
+        );
         let response: BooksResponse = self
             .get(key, &path)?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
         if response.limit == 0 {
             return Err(AudiobookshelfError::protocol());
@@ -652,8 +670,12 @@ impl AudiobookshelfClient {
     ) -> Result<(Vec<AudiobookshelfChapter>, Vec<AudiobookshelfAudioFile>), AudiobookshelfError>
     {
         let response: BookDetailWire = self
-            .get(key, &format!("/api/items/{id}?expanded=1"))?
-            .into_json()
+            .get(
+                key,
+                &format!("/api/items/{}?expanded=1", crate::encode_path_segment(id)),
+            )?
+            .body_mut()
+            .read_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
         if response.id != id {
             return Err(AudiobookshelfError::protocol());
@@ -688,7 +710,8 @@ impl AudiobookshelfClient {
     ) -> Result<HashMap<String, AudiobookshelfBookProgress>, AudiobookshelfError> {
         let response: ProgressResponse = self
             .get(key, "/api/me/progress")?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
         Ok(response
             .media_progress
@@ -710,8 +733,15 @@ impl AudiobookshelfClient {
         id: &str,
     ) -> Result<Vec<AudiobookshelfShelf>, AudiobookshelfError> {
         let response: Vec<ShelfWire> = self
-            .get(key, &format!("/api/libraries/{id}/personalized"))?
-            .into_json()
+            .get(
+                key,
+                &format!(
+                    "/api/libraries/{}/personalized",
+                    crate::encode_path_segment(id)
+                ),
+            )?
+            .body_mut()
+            .read_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
         Ok(response
             .into_iter()
@@ -722,9 +752,13 @@ impl AudiobookshelfClient {
             .collect())
     }
     fn cover(&self, key: &str, id: &str) -> Result<Vec<u8>, AudiobookshelfError> {
-        let response = self.get(key, &format!("/api/items/{id}/cover"))?;
+        let response = self.get(
+            key,
+            &format!("/api/items/{}/cover", crate::encode_path_segment(id)),
+        )?;
         let mut bytes = Vec::new();
         response
+            .into_body()
             .into_reader()
             .read_to_end(&mut bytes)
             .map_err(|_| AudiobookshelfError::malformed())?;
@@ -734,13 +768,13 @@ impl AudiobookshelfClient {
 
 pub(super) fn map_error(error: ureq::Error) -> AudiobookshelfError {
     match error {
-        ureq::Error::Status(401 | 403, _) => {
+        ureq::Error::StatusCode(401 | 403) => {
             AudiobookshelfError::new(super::AudiobookshelfFailureClass::AuthenticationRejected)
         }
-        ureq::Error::Status(status, _) if status >= 500 => {
+        ureq::Error::StatusCode(status) if status >= 500 => {
             AudiobookshelfError::new(super::AudiobookshelfFailureClass::Server)
         }
-        ureq::Error::Status(_, _) => AudiobookshelfError::protocol(),
+        ureq::Error::StatusCode(_) => AudiobookshelfError::protocol(),
         _ => AudiobookshelfError::connectivity(),
     }
 }

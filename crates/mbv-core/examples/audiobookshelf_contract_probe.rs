@@ -37,10 +37,16 @@ impl LiveClient {
         Ok(Self {
             base: setup.server_url,
             token,
-            agent: ureq::AgentBuilder::new()
-                .timeout_connect(REQUEST_BOUND)
-                .timeout(REQUEST_BOUND)
-                .build(),
+            agent: ureq::Agent::config_builder()
+                .tls_config(
+                    ureq::tls::TlsConfig::builder()
+                        .provider(ureq::tls::TlsProvider::NativeTls)
+                        .build(),
+                )
+                .timeout_connect(Some(REQUEST_BOUND))
+                .timeout_global(Some(REQUEST_BOUND))
+                .build()
+                .into(),
             open_sessions: BTreeSet::new(),
         })
     }
@@ -49,11 +55,15 @@ impl LiveClient {
         let request = self
             .agent
             .post(&format!("{}{}", self.base, path))
-            .set("Authorization", &format!("Bearer {}", self.token))
-            .set("Content-Type", "application/json");
+            .header("Authorization", &format!("Bearer {}", self.token))
+            .header("Content-Type", "application/json");
         match request.send_json(body) {
             Ok(response) => read_response(response),
-            Err(ureq::Error::Status(_, response)) => read_response(response),
+            // ureq 3.x error status codes no longer carry the response body,
+            // only the status code.
+            Err(ureq::Error::StatusCode(status)) => {
+                Ok((status, "<body unavailable after ureq 3.x upgrade>".into()))
+            }
             Err(_) => Err("request failed before an HTTP response".into()),
         }
     }
@@ -61,11 +71,11 @@ impl LiveClient {
     fn get_status(&self, path: &str, authenticated: bool) -> Result<u16, String> {
         let mut request = self.agent.get(&format!("{}{}", self.base, path));
         if authenticated {
-            request = request.set("Authorization", &format!("Bearer {}", self.token));
+            request = request.header("Authorization", &format!("Bearer {}", self.token));
         }
         match request.call() {
-            Ok(response) => Ok(response.status()),
-            Err(ureq::Error::Status(status, _)) => Ok(status),
+            Ok(response) => Ok(response.status().into()),
+            Err(ureq::Error::StatusCode(status)) => Ok(status),
             Err(_) => Err("GET failed before an HTTP response".into()),
         }
     }
@@ -136,10 +146,11 @@ impl Drop for LiveClient {
     }
 }
 
-fn read_response(response: ureq::Response) -> Result<(u16, String), String> {
-    let status = response.status();
+fn read_response(mut response: ureq::http::Response<ureq::Body>) -> Result<(u16, String), String> {
+    let status = response.status().into();
     response
-        .into_string()
+        .body_mut()
+        .read_to_string()
         .map(|text| (status, text))
         .map_err(|_| "response body could not be read".into())
 }
@@ -186,15 +197,16 @@ fn wait_hls(client: &LiveClient, url: &str) -> Result<usize, String> {
     while start.elapsed() < READY_BOUND {
         attempts += 1;
         match client.agent.get(url).call() {
-            Ok(response) if response.status() == 200 => {
+            Ok(mut response) if response.status() == 200 => {
                 let body = response
-                    .into_string()
+                    .body_mut()
+                    .read_to_string()
                     .map_err(|_| "playlist body unreadable")?;
                 if body.starts_with("#EXTM3U") {
                     return Ok(attempts);
                 }
             }
-            Ok(_) | Err(ureq::Error::Status(_, _)) | Err(ureq::Error::Transport(_)) => {}
+            Ok(_) | Err(_) => {}
         }
         std::thread::sleep(Duration::from_millis(250));
     }
@@ -419,11 +431,11 @@ fn main() -> Result<(), String> {
     let auth = live
         .agent
         .get(&format!("{}/api/me", live.base))
-        .set("Authorization", "Bearer <INVALID_CREDENTIAL>")
+        .header("Authorization", "Bearer <INVALID_CREDENTIAL>")
         .call();
     let auth_status = match auth {
-        Err(ureq::Error::Status(status, _)) => status,
-        Ok(r) => r.status(),
+        Err(ureq::Error::StatusCode(status)) => status,
+        Ok(r) => r.status().into(),
         Err(_) => 0,
     };
 

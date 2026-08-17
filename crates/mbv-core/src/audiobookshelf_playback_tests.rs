@@ -149,15 +149,22 @@ fn session_requests_are_bearer_post_json_and_bounded() {
 
     let captured: Vec<_> = (0..3).map(|_| requests.recv().unwrap()).collect();
     for request in &captured {
-        assert!(request.contains("Authorization: Bearer secret\r\n"));
-        assert!(request.contains("Content-Type: application/json\r\n"));
+        // Header name casing is not significant per RFC 7230 3.2, and ureq
+        // 3.x lowercases header names on the wire (2.x sent them as-set).
+        let lower = request.to_ascii_lowercase();
+        assert!(lower.contains("authorization: bearer secret\r\n"));
+        assert!(lower.contains("content-type: application/json\r\n"));
     }
     assert!(captured[0]
         .starts_with("POST /api/items/%3CLIBRARY_ITEM_ID%3E/play/%3CEPISODE_ID%3E HTTP/1.1"));
-    assert!(captured[0].contains("\"deviceId\":\"device\""));
+    // ureq 3.x's send_json pretty-prints the body (2.x sent compact JSON);
+    // strip whitespace before matching so both formats pass.
+    let no_ws = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+    assert!(no_ws(&captured[0]).contains("\"deviceId\":\"device\""));
     assert!(captured[1].starts_with("POST /api/session/%3CSESSION_ID%3E/sync HTTP/1.1"));
     assert!(captured[2].starts_with("POST /api/session/%3CSESSION_ID%3E/close HTTP/1.1"));
-    assert!(captured[1].contains("\"currentTime\":1.0,\"timeListened\":1.0,\"duration\":3054.336"));
+    assert!(no_ws(&captured[1])
+        .contains("\"currentTime\":1.0,\"timeListened\":1.0,\"duration\":3054.336"));
 
     let (base, _) = serve(vec![(401, fixture("authentication-failure.json"))]);
     let error = AudiobookshelfClient::new(&base)
@@ -238,7 +245,7 @@ fn playback_failures_and_rest_only_hls_readiness_are_classified() {
         .unwrap();
     let request = request.recv().unwrap();
     assert!(request.starts_with("GET /hls/session/index.m3u8 HTTP/1.1"));
-    assert!(!request.contains("Authorization:"));
+    assert!(!request.to_ascii_lowercase().contains("authorization:"));
 }
 
 #[test]

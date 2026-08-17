@@ -144,10 +144,10 @@ impl AudiobookshelfClient {
         if server_url.is_empty() {
             return Err(AudiobookshelfError::protocol());
         }
-        let agent = ureq::AgentBuilder::new()
-            .timeout_connect(Self::REQUEST_HARD_BOUND)
-            .timeout(Self::REQUEST_HARD_BOUND)
-            .build();
+        let agent = crate::native_tls_agent(
+            Some(Self::REQUEST_HARD_BOUND),
+            Some(Self::REQUEST_HARD_BOUND),
+        );
         Ok(Self {
             server_url: server_url.to_string(),
             agent,
@@ -188,9 +188,10 @@ impl AudiobookshelfClient {
     }
 
     fn me(&self, api_key: &str) -> Result<AudiobookshelfUser, AudiobookshelfError> {
-        let response = self.get(api_key, "/api/me")?;
+        let mut response = self.get(api_key, "/api/me")?;
         let user: AudiobookshelfMeResponse = response
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|_| AudiobookshelfError::malformed())?;
         if !user.is_active || user.id.trim().is_empty() || user.username.trim().is_empty() {
             return Err(AudiobookshelfError::malformed());

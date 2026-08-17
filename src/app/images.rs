@@ -212,10 +212,11 @@ impl App {
                 "{}/Items?ParentId={}&IncludeItemTypes=Audio&Limit=5&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Fields=AlbumArtist,Artists&api_key={}",
                 server_url, album_id, token
             );
-            let items: Vec<serde_json::Value> = ureq::get(&url)
+            let items: Vec<serde_json::Value> = super::feed_parse::tls_agent(None)
+                .get(&url)
                 .call()
                 .ok()
-                .and_then(|r| r.into_json::<serde_json::Value>().ok())
+                .and_then(|mut r| r.body_mut().read_json::<serde_json::Value>().ok())
                 .and_then(|v| v["Items"].as_array().cloned())
                 .unwrap_or_default();
 
@@ -606,12 +607,12 @@ impl App {
                     Some(cached)
                 } else {
                     let fetch_url = |url: &str| -> Option<Vec<u8>> {
-                        let agent = ureq::AgentBuilder::new()
-                            .timeout(std::time::Duration::from_secs(10))
-                            .build();
+                        let agent =
+                            super::feed_parse::tls_agent(Some(std::time::Duration::from_secs(10)));
                         agent.get(url).call().ok().and_then(|r| {
                             let mut buf = Vec::new();
-                            r.into_reader()
+                            r.into_body()
+                                .into_reader()
                                 .take(10 * 1024 * 1024)
                                 .read_to_end(&mut buf)
                                 .ok()?;

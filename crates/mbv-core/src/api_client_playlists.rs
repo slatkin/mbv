@@ -1,6 +1,6 @@
 impl EmbyClient {
     pub fn get_playback_info(&self, item_id: &str) -> PlaybackInfo {
-        let body = ureq::json!({
+        let body = serde_json::json!({
             "UserId": self.user_id,
             "MaxStreamingBitrate": 140000000,
             "EnableDirectPlay": true,
@@ -9,10 +9,13 @@ impl EmbyClient {
         });
         log::info!(target: "api", "outbound: PlaybackInfo item={item_id}");
         let resp: Value = match self
-            .post(&format!("/Items/{item_id}/PlaybackInfo"))
+            .post(&format!(
+                "/Items/{}/PlaybackInfo",
+                crate::encode_path_segment(item_id)
+            ))
             .send_json(body)
         {
-            Ok(r) => match r.into_json() {
+            Ok(mut r) => match r.body_mut().read_json() {
                 Ok(v) => v,
                 Err(e) => {
                     log::warn!(target: "api", "err: PlaybackInfo parse: {e}");
@@ -66,7 +69,7 @@ impl EmbyClient {
 
     pub fn get_playlists(&self) -> Result<Vec<EmbyItem>, String> {
         self.fetch_items(
-            &format!("/Users/{}/Items", self.user_id),
+            &format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)),
             &[
                 ("IncludeItemTypes", "Playlist"),
                 ("Recursive", "true"),
@@ -76,7 +79,7 @@ impl EmbyClient {
     }
 
     pub fn create_playlist(&self, name: &str, item_ids: &[String]) -> Result<String, String> {
-        let body = ureq::json!({
+        let body = serde_json::json!({
             "Name": name,
             "Ids": item_ids.join(","),
             "UserId": self.user_id,
@@ -84,14 +87,9 @@ impl EmbyClient {
         let resp: Value = self
             .post("/Playlists")
             .send_json(body)
-            .map_err(|e| match e {
-                ureq::Error::Status(code, r) => {
-                    let body = r.into_string().unwrap_or_default();
-                    format!("HTTP {code}: {body}")
-                }
-                e => e.to_string(),
-            })?
-            .into_json()
+            .map_err(|e| e.to_string())?
+            .body_mut()
+            .read_json()
             .map_err(|e| e.to_string())?;
         resp["Id"]
             .as_str()
@@ -100,35 +98,35 @@ impl EmbyClient {
     }
 
     pub fn delete_playlist(&self, playlist_id: &str) -> Result<(), String> {
-        self.delete(&format!("/Items/{}", playlist_id))
-            .call()
-            .map_err(|e| e.to_string())?;
+        self.delete(&format!(
+            "/Items/{}",
+            crate::encode_path_segment(playlist_id)
+        ))
+        .call()
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     pub fn rename_playlist(&self, playlist_id: &str, new_name: &str) -> Result<(), String> {
-        let body = ureq::json!({"Name": new_name});
-        self.post(&format!("/Items/{}", playlist_id))
-            .send_json(body)
-            .map_err(|e| match e {
-                ureq::Error::Status(code, r) => {
-                    let body = r.into_string().unwrap_or_default();
-                    format!("HTTP {code}: {body}")
-                }
-                e => e.to_string(),
-            })?;
+        let body = serde_json::json!({"Name": new_name});
+        self.post(&format!(
+            "/Items/{}",
+            crate::encode_path_segment(playlist_id)
+        ))
+        .send_json(body)
+        .map_err(|e| e.to_string())?;
         Ok(())
     }
 
     /// Replace a playlist's contents with the given item ids (in order).
     /// Fetches current entry ids, deletes them all, then adds the new set.
     pub fn get_playlist_items(&self, playlist_id: &str) -> Result<Vec<EmbyItem>, String> {
-        let resp: serde_json::Value = self.get(&format!("/Playlists/{}/Items", playlist_id))
+        let resp: serde_json::Value = self.get(&format!("/Playlists/{}/Items", crate::encode_path_segment(playlist_id)))
             .query("UserId", &self.user_id)
             .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres")
             .query("EnableUserData", "true")
             .call().map_err(|e| e.to_string())?
-            .into_json().map_err(|e| e.to_string())?;
+            .body_mut().read_json().map_err(|e| e.to_string())?;
         Ok(resp["Items"]
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
@@ -142,11 +140,15 @@ impl EmbyClient {
     ) -> Result<(), String> {
         // Get current playlist entry ids
         let resp: serde_json::Value = self
-            .get(&format!("/Playlists/{}/Items", playlist_id))
+            .get(&format!(
+                "/Playlists/{}/Items",
+                crate::encode_path_segment(playlist_id)
+            ))
             .query("UserId", &self.user_id)
             .call()
             .map_err(|e| e.to_string())?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|e| e.to_string())?;
         let entry_ids: Vec<String> = resp["Items"]
             .as_array()
@@ -159,18 +161,24 @@ impl EmbyClient {
             .unwrap_or_default();
         // Delete existing entries
         if !entry_ids.is_empty() {
-            self.delete(&format!("/Playlists/{}/Items", playlist_id))
-                .query("EntryIds", &entry_ids.join(","))
-                .call()
-                .map_err(|e| e.to_string())?;
+            self.delete(&format!(
+                "/Playlists/{}/Items",
+                crate::encode_path_segment(playlist_id)
+            ))
+            .query("EntryIds", entry_ids.join(","))
+            .call()
+            .map_err(|e| e.to_string())?;
         }
         // Add new items in order
         if !item_ids.is_empty() {
-            self.post(&format!("/Playlists/{}/Items", playlist_id))
-                .query("Ids", &item_ids.join(","))
-                .query("UserId", &self.user_id)
-                .call()
-                .map_err(|e| e.to_string())?;
+            self.post(&format!(
+                "/Playlists/{}/Items",
+                crate::encode_path_segment(playlist_id)
+            ))
+            .query("Ids", item_ids.join(","))
+            .query("UserId", &self.user_id)
+            .send_empty()
+            .map_err(|e| e.to_string())?;
         }
         Ok(())
     }
@@ -182,7 +190,7 @@ impl EmbyClient {
             return Ok(vec![]);
         }
         let joined = ids.join(",");
-        let mut items = self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+        let mut items = self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
             ("Ids",    &joined),
             ("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists"),
         ])?;
@@ -198,11 +206,15 @@ impl EmbyClient {
 
     pub fn get_ancestors(&self, item_id: &str) -> Result<Vec<EmbyItem>, String> {
         let resp: Value = self
-            .get(&format!("/Items/{}/Ancestors", item_id))
+            .get(&format!(
+                "/Items/{}/Ancestors",
+                crate::encode_path_segment(item_id)
+            ))
             .query("Fields", "SortName")
             .call()
             .map_err(|e| e.to_string())?
-            .into_json()
+            .body_mut()
+            .read_json()
             .map_err(|e| e.to_string())?;
         Ok(resp
             .as_array()
