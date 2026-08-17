@@ -114,10 +114,12 @@ jobs:
 
       - name: Commit PKGBUILD with sha256 to main
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-        # Non-fatal: a non-fast-forward push race (main advanced since checkout on
-        # a detached HEAD) must not abort the job before the AUR publish trigger
-        # below. AUR reads the sha256 from the release asset, not this commit, so
-        # a missed PKGBUILD commit is cosmetic and can be redone by hand.
+        # Non-fatal: retries below handle the common non-fast-forward race (main
+        # advanced since checkout on a detached HEAD), but if every retry still
+        # loses the race this must not abort the job before the AUR publish
+        # trigger step. AUR reads the sha256 from the release asset, not this
+        # commit, so a missed PKGBUILD commit is cosmetic and can be redone by
+        # hand.
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -134,10 +136,19 @@ jobs:
           git config user.name "mbv release"
           git config user.email "github@poo.town"
           git add PKGBUILD
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update PKGBUILD to v${PKGVER}"
-            git push origin HEAD:main
+          if git diff --staged --quiet; then
+            exit 0
           fi
+          git commit -m "chore: update PKGBUILD to v${PKGVER}"
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "push rejected (attempt ${attempt}), rebasing onto latest main" >&2
+            git fetch origin main
+            git rebase origin/main || { git rebase --abort; exit 1; }
+          done
+          exit 1
 
       - name: Trigger AUR publish
         # Fire-and-forget: AUR publishing runs in its own workflow (aur.yml)
