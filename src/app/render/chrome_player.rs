@@ -243,6 +243,19 @@ impl App {
         // A running `x` cursor tracks where each clickable glyph lands in the
         // rendered `Line`, so `layout.*_area` exactly matches what's on screen
         // rather than an estimate.
+        let time_text = format!("{pos_str} / {dur_str}");
+        let time_sep = " ";
+        let right = {
+            let mut r = vec![Span::styled(
+                time_text,
+                Style::default().fg(palette::PLAYBACK_META_FG),
+            )];
+            r.push(Span::raw(time_sep));
+            r.extend(right);
+            r
+        };
+        let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
+
         let mut left: Vec<Span> = Vec::new();
         let mut x = area.x;
 
@@ -261,46 +274,40 @@ impl App {
         ));
 
         let stop_w = stop_glyph.width() as u16;
-        layout.stop_area = Rect {
-            x,
-            y: area.y,
-            width: stop_w,
-            height: 1,
-        };
-        x += stop_w;
-        left.push(Span::styled(stop_glyph, Style::default().fg(stop_color)));
-        left.push(Span::raw(stop_gap));
-        x += stop_gap.width() as u16;
-
         let next_w = next_glyph.width() as u16;
-        layout.next_area = Rect {
-            x,
-            y: area.y,
-            width: next_w,
-            height: 1,
-        };
-        left.push(Span::styled(next_glyph, Style::default().fg(next_color)));
+        let buttons_w = stop_w as usize + stop_gap.width() + next_w as usize + next_gap.width();
+        let base_fixed_w = glyph_w as usize + right_w as usize;
+        // Stop/next are the first thing sacrificed at narrow widths: only hide
+        // them once keeping them would force the title to truncate.
+        let show_buttons =
+            (area.width as usize).saturating_sub(base_fixed_w + buttons_w) >= title.width();
 
-        left.push(Span::raw(next_gap));
+        if show_buttons {
+            layout.stop_area = Rect {
+                x,
+                y: area.y,
+                width: stop_w,
+                height: 1,
+            };
+            x += stop_w;
+            left.push(Span::styled(stop_glyph, Style::default().fg(stop_color)));
+            left.push(Span::raw(stop_gap));
+            x += stop_gap.width() as u16;
 
-        let time_text = format!("{pos_str} / {dur_str}");
-        let time_sep = " ";
-        let right = {
-            let mut r = vec![Span::styled(
-                time_text,
-                Style::default().fg(palette::PLAYBACK_META_FG),
-            )];
-            r.push(Span::raw(time_sep));
-            r.extend(right);
-            r
-        };
-        let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
-        let fixed_w = glyph_w as usize
-            + stop_w as usize
-            + stop_gap.width()
-            + next_w as usize
-            + next_gap.width()
-            + right_w as usize;
+            layout.next_area = Rect {
+                x,
+                y: area.y,
+                width: next_w,
+                height: 1,
+            };
+            left.push(Span::styled(next_glyph, Style::default().fg(next_color)));
+            left.push(Span::raw(next_gap));
+        } else {
+            layout.stop_area = Rect::default();
+            layout.next_area = Rect::default();
+        }
+
+        let fixed_w = base_fixed_w + if show_buttons { buttons_w } else { 0 };
         let title_w = (area.width as usize).saturating_sub(fixed_w);
 
         left.extend(self.playback_title_spans(title, title_color, title_w));
