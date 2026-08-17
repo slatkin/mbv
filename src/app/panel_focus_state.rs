@@ -42,6 +42,20 @@ impl App {
     }
 
     pub(super) fn set_panel_focus(&mut self, focus: PanelFocus) {
+        // Below MINI_VIEW_THRESHOLD, focus-follow call sites (mouse clicks,
+        // Alt+Left/Right, context actions) must move the ephemeral mini-view
+        // focus, never the real persisted panel_focus -- that state has to
+        // survive narrowing/widening untouched.
+        if self.terminal_width < super::MINI_VIEW_THRESHOLD {
+            if self.mini_view_focus == focus {
+                return;
+            }
+            if matches!(focus, PanelFocus::Queue) {
+                self.focus_queue_initial_item();
+            }
+            self.mini_view_focus = focus;
+            return;
+        }
         if self.panel_focus == focus {
             return;
         }

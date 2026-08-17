@@ -143,6 +143,11 @@ pub fn render_view_to_terminal(
     width: u16,
     height: u16,
 ) -> (Terminal<TestBackend>, LayoutMain) {
+    // Mirror App::render(), which syncs terminal_width from the drawn Rect
+    // before render_main runs -- without this, effective_panel_mode()/
+    // effective_panel_focus() see whatever width the app was constructed
+    // with instead of the width this call is actually rendering at.
+    app.terminal_width = width;
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     let mut layout = LayoutMain::default();

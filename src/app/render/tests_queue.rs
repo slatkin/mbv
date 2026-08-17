@@ -58,11 +58,17 @@ fn queue_only_layout_spans_full_width() {
 #[test]
 fn queue_only_renders_queue_focused_when_queue_holds_focus() {
     // Queue-only with the queue holding panel focus must render with focused
-    // styling — no longer the old forced-unfocused look — at any width.
+    // styling — no longer the old forced-unfocused look — at any width. Below
+    // MINI_VIEW_THRESHOLD, queue-only is driven by mini_view_focus rather
+    // than the wide-mode panel_mode/panel_focus.
     for width in [79, 80, 100] {
         let mut app = make_queue_app(20);
-        app.panel_mode = crate::app::PanelMode::QueueOnly;
-        assert_eq!(app.panel_focus, crate::app::PanelFocus::Queue);
+        if width < crate::app::MINI_VIEW_THRESHOLD {
+            app.mini_view_focus = crate::app::PanelFocus::Queue;
+        } else {
+            app.panel_mode = crate::app::PanelMode::QueueOnly;
+            assert_eq!(app.panel_focus, crate::app::PanelFocus::Queue);
+        }
 
         let (term, layout) = render_view_to_terminal(&mut app, width, 20);
         let buf = term.backend().buffer();
@@ -97,9 +103,6 @@ fn mini_view_starts_at_library_only_by_default() {
     // library-only (the default mini_view_focus), not both and not queue-only.
     let mut app = make_movie_app();
     let width = crate::app::MINI_VIEW_THRESHOLD - 1;
-    // render_main doesn't update terminal_width (render() does), so set it to
-    // the narrow value the effective helpers branch on.
-    app.terminal_width = width;
 
     let layout = render_view(&mut app, width, 20);
 
