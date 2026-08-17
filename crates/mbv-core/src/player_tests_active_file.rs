@@ -9,8 +9,10 @@ fn test_mpv() -> Mpv {
         audio_pipe_samplerate: 0,
         audio_pipe_bitdepth: 0,
     });
+    let mpv = result.unwrap().0;
+    mpv.set_property("ao", "null").unwrap();
     drop(env_lock);
-    result.unwrap().0
+    mpv
 }
 
 fn noop_progress() -> ProgressGuard {
