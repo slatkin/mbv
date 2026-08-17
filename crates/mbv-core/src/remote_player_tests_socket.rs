@@ -491,32 +491,25 @@ fn perform_handshake_succeeds_promptly_when_daemon_responds() {
 
 #[test]
 fn perform_handshake_rejects_old_version_before_sending_client_hello() {
-    use std::net::TcpListener;
+    // A UnixStream::pair replaces the old listener + accept-thread + 250ms
+    // read-timeout race (a daemon-thread read racing the client's close
+    // flaked under CI load). Everything here is sequential on one thread:
+    // the peer read below happens strictly after `perform_handshake`
+    // returned, so any bytes the client wrote are already delivered and the
+    // assertion cannot race. Same pattern as daemon_tests_ctrl_auth.rs.
+    use std::os::unix::net::UnixStream;
 
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-    let daemon = std::thread::spawn(move || {
-        let (stream, _) = listener.accept().unwrap();
-        let mut writer = stream.try_clone().unwrap();
-        let mut reader = BufReader::new(stream);
-        let mut old_hello = CtrlHello::current();
-        old_hello.protocol_version -= 1;
-        writeln!(
-            writer,
-            "{}",
-            serde_json::to_string(&CtrlEvent::Hello(old_hello)).unwrap()
-        )
-        .unwrap();
-        reader
-            .get_mut()
-            .set_read_timeout(Some(Duration::from_millis(250)))
-            .unwrap();
-        let mut client_hello = String::new();
-        assert_eq!(reader.read_line(&mut client_hello).unwrap(), 0);
-    });
+    let (client, mut peer) = UnixStream::pair().unwrap();
+    let mut old_hello = CtrlHello::current();
+    old_hello.protocol_version -= 1;
+    writeln!(
+        peer,
+        "{}",
+        serde_json::to_string(&CtrlEvent::Hello(old_hello)).unwrap()
+    )
+    .unwrap();
 
-    let stream = SocketStream::Tcp(TcpStream::connect(addr).unwrap());
-    let result = perform_handshake(stream, || {
+    let result = perform_handshake(SocketStream::Unix(client), || {
         panic!("version mismatch must not request a Control credential")
     });
     let error = match result {
@@ -524,7 +517,16 @@ fn perform_handshake_rejects_old_version_before_sending_client_hello() {
         Err(error) => error,
     };
     assert!(error.contains("incompatible daemon protocol version"));
-    daemon.join().unwrap();
+
+    // `perform_handshake` closed the client end on the error path, so the
+    // peer end now reads EOF. It must be EOF with zero bytes: no client
+    // hello may have been written before (or after) the rejection.
+    let mut client_hello = Vec::new();
+    peer.read_to_end(&mut client_hello).unwrap();
+    assert!(
+        client_hello.is_empty(),
+        "old-version rejection must precede any client hello, got {client_hello:?}"
+    );
 }
 
 #[test]
