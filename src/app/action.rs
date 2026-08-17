@@ -679,21 +679,33 @@ impl App {
                 }
             }
             Command::CyclePanelMode => {
-                self.panel_mode = match self.panel_mode {
-                    super::PanelMode::Both => super::PanelMode::LibraryOnly,
-                    super::PanelMode::LibraryOnly => super::PanelMode::QueueOnly,
-                    super::PanelMode::QueueOnly => super::PanelMode::Both,
-                };
-                match self.panel_mode {
-                    super::PanelMode::LibraryOnly => {
-                        if matches!(self.panel_focus, super::PanelFocus::Queue) {
-                            self.set_panel_focus(super::PanelFocus::Library);
+                // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view
+                // toggles exactly two states, library-only ⇄ queue-only.
+                if self.terminal_width < super::MINI_VIEW_THRESHOLD {
+                    self.mini_view_focus = match self.mini_view_focus {
+                        super::PanelFocus::Library => super::PanelFocus::Queue,
+                        super::PanelFocus::Queue => super::PanelFocus::Library,
+                    };
+                    if matches!(self.mini_view_focus, super::PanelFocus::Queue) {
+                        self.focus_queue_initial_item();
+                    }
+                } else {
+                    self.panel_mode = match self.panel_mode {
+                        super::PanelMode::Both => super::PanelMode::LibraryOnly,
+                        super::PanelMode::LibraryOnly => super::PanelMode::QueueOnly,
+                        super::PanelMode::QueueOnly => super::PanelMode::Both,
+                    };
+                    match self.panel_mode {
+                        super::PanelMode::LibraryOnly => {
+                            if matches!(self.panel_focus, super::PanelFocus::Queue) {
+                                self.set_panel_focus(super::PanelFocus::Library);
+                            }
                         }
+                        super::PanelMode::QueueOnly => {
+                            self.set_panel_focus(super::PanelFocus::Queue);
+                        }
+                        super::PanelMode::Both => {}
                     }
-                    super::PanelMode::QueueOnly => {
-                        self.set_panel_focus(super::PanelFocus::Queue);
-                    }
-                    super::PanelMode::Both => {}
                 }
             }
         }

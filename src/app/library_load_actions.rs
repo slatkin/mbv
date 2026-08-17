@@ -71,7 +71,7 @@ impl App {
 
     pub(super) fn refresh_current_view(&mut self) {
         self.force_clear = true;
-        match self.panel_focus {
+        match self.effective_panel_focus() {
             // Queue refresh is a refresh of the visible queue only and never
             // indexes the selected browse destination.
             PanelFocus::Queue => self.refresh_queue(),

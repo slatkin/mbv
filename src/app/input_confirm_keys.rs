@@ -258,7 +258,7 @@ impl App {
         {
             return None;
         }
-        if matches!(self.panel_focus, PanelFocus::Queue)
+        if matches!(self.effective_panel_focus(), PanelFocus::Queue)
             && self.visible_queue_scope() == QueueScope::Remote
         {
             self.flash(

@@ -10,9 +10,10 @@ impl App {
         let lib_idx = self.context_menu_lib_idx();
         match action {
             Some(ContextAction::Play) => {
-                if matches!(self.panel_focus, PanelFocus::Library) && self.tab.is_home() {
+                if matches!(self.effective_panel_focus(), PanelFocus::Library) && self.tab.is_home()
+                {
                     self.cw_play();
-                } else if matches!(self.panel_focus, PanelFocus::Queue) {
+                } else if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
                     // Was its own third copy of queue-cursor activation, with
                     // a subtly narrower `else` branch than the keyboard/mouse
                     // paths (no seek-to-start for an already-playing audio
@@ -41,7 +42,8 @@ impl App {
                 }
             }
             Some(ContextAction::Enqueue) => {
-                if matches!(self.panel_focus, PanelFocus::Library) && self.tab.is_home() {
+                if matches!(self.effective_panel_focus(), PanelFocus::Library) && self.tab.is_home()
+                {
                     self.cw_enqueue();
                 } else {
                     self.enqueue_selected(lib_idx);

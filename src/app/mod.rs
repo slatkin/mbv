@@ -184,6 +184,12 @@ pub(super) const LEFT_WIDTH_STEP: u16 = 5;
 /// library list's column count derives from it (`library_column_count`), not
 /// the other way around.
 pub(super) const TWO_COLUMN_THRESHOLD: u16 = 82;
+/// The narrow-terminal breakpoint below which the Power View uses the
+/// two-state "mini view" (`x` toggles library-only ⇄ queue-only) instead of
+/// the three-state both/library-only/queue-only cycle. Independent of and
+/// unrelated to `TWO_COLUMN_THRESHOLD` (82), which governs the library
+/// panel's internal list-column layout (see design.md).
+pub(super) const MINI_VIEW_THRESHOLD: u16 = 80;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
 pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
 /// Left margin for the tab row. The control pill used to live here (hence

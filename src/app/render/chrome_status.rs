@@ -401,27 +401,27 @@ impl App {
             let source_label: Option<(String, Color)> = match &self.queue_source {
                 crate::config::QueueSource::Playlist { .. } => None,
                 crate::config::QueueSource::Album
-                    if matches!(self.panel_focus, PanelFocus::Queue) =>
+                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
                 {
                     Some(("ALBUM".to_string(), palette::MUTED))
                 }
                 crate::config::QueueSource::Series
-                    if matches!(self.panel_focus, PanelFocus::Queue) =>
+                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
                 {
                     Some(("SERIES".to_string(), palette::MUTED))
                 }
                 crate::config::QueueSource::Shuffle
-                    if matches!(self.panel_focus, PanelFocus::Queue) =>
+                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
                 {
                     Some(("SHUFFLE".to_string(), palette::MUTED))
                 }
                 crate::config::QueueSource::Remote
-                    if matches!(self.panel_focus, PanelFocus::Queue) =>
+                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
                 {
                     Some(("REMOTE Q".to_string(), palette::MUTED))
                 }
                 crate::config::QueueSource::Collection { collection_type }
-                    if matches!(self.panel_focus, PanelFocus::Queue) =>
+                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
                 {
                     Some((collection_type.to_uppercase(), palette::MUTED))
                 }

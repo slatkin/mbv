@@ -127,7 +127,7 @@ impl App {
         self.last_nav_at = now;
         self.mark_library_navigation(now);
 
-        if matches!(self.panel_focus, PanelFocus::Library)
+        if matches!(self.effective_panel_focus(), PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
             && self.move_music_group_display_cursor(lib_idx, delta)
@@ -204,7 +204,7 @@ impl App {
         if lib_idx >= self.libs.len() {
             return;
         }
-        if matches!(self.panel_focus, PanelFocus::Library)
+        if matches!(self.effective_panel_focus(), PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
             && self.jump_music_group_display_cursor(lib_idx, to_end)

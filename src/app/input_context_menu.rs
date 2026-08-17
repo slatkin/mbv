@@ -22,7 +22,8 @@ impl App {
     pub(super) fn open_context_menu(&mut self) {
         let mut entries: Vec<ContextMenuEntry> = vec![];
 
-        let cw_focused = matches!(self.panel_focus, PanelFocus::Library) && self.tab.is_home();
+        let cw_focused =
+            matches!(self.effective_panel_focus(), PanelFocus::Library) && self.tab.is_home();
         let lib_idx = self.context_menu_lib_idx();
         let in_podcast =
             lib_idx.is_some_and(|idx| self.is_podcast_library(idx)) || self.is_in_podcast_library();
@@ -42,7 +43,7 @@ impl App {
         // rows, non-Emby queue items, and absent or stale targets produce no
         // Emby menu. `cw_focused` / `lib_idx` above drive the Emby-menu content
         // that follows; this match only resolves which target (if any) exists.
-        let current_item = match (self.panel_focus, self.tab) {
+        let current_item = match (self.effective_panel_focus(), self.tab) {
             (PanelFocus::Library, TabSelection::Home) => self
                 .home
                 .continue_items
@@ -96,7 +97,9 @@ impl App {
                 }
             } else {
                 Self::push_context_action(&mut entries, "Play", ContextAction::Play);
-                if cw_focused || lib_idx.is_some() || !matches!(self.panel_focus, PanelFocus::Queue)
+                if cw_focused
+                    || lib_idx.is_some()
+                    || !matches!(self.effective_panel_focus(), PanelFocus::Queue)
                 {
                     Self::push_context_action(&mut entries, "Add to Queue", ContextAction::Enqueue);
                 }
@@ -131,7 +134,7 @@ impl App {
                         ContextAction::RemoveFromContinueWatching,
                     );
                 }
-                if !cw_focused && matches!(self.panel_focus, PanelFocus::Queue) {
+                if !cw_focused && matches!(self.effective_panel_focus(), PanelFocus::Queue) {
                     let pos = self.displayed_queue().queue_cursor;
                     Self::push_context_action(
                         &mut entries,
@@ -139,7 +142,7 @@ impl App {
                         ContextAction::RemoveFromQueue(pos),
                     );
                 }
-                if matches!(self.panel_focus, PanelFocus::Queue) {
+                if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
                     Self::push_context_action(
                         &mut entries,
                         "Go to Library",
@@ -187,7 +190,7 @@ impl App {
     }
 
     fn context_menu_spawn_point(&self) -> (u16, u16) {
-        match self.panel_focus {
+        match self.effective_panel_focus() {
             PanelFocus::Library => {
                 let area = self.layout.main.left_area;
                 if area.width > 0 {

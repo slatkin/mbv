@@ -244,7 +244,7 @@ impl App {
         // ── Focus state ──────────────────────────────────────────────────
         // Derive internal pane focus from outer PanelFocus and
         // album_track_focus without adding persisted focus state.
-        let library_focused = matches!(self.panel_focus, PanelFocus::Library);
+        let library_focused = matches!(self.effective_panel_focus(), PanelFocus::Library);
         let track_active = self.libs[lib_idx].album_track_focus.is_some();
         // In wide mode: track_active → left focused; otherwise → right focused.
         let left_focused = library_focused && track_active;

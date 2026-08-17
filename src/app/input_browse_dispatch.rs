@@ -9,14 +9,14 @@ impl App {
     /// `handle_key_view_dispatch` ahead of panel/destination dispatch.
     pub(super) fn handle_key_alt(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Right if matches!(self.panel_focus, PanelFocus::Queue) => {
+            KeyCode::Right if matches!(self.effective_panel_focus(), PanelFocus::Queue) => {
                 self.set_panel_focus(PanelFocus::Library);
                 self.last_card_height = 0; // reset stale image height for new view
                 self.last_card_width = 0;
             }
             KeyCode::Left
-                if matches!(self.panel_focus, PanelFocus::Library)
-                    && self.panel_mode == PanelMode::Both =>
+                if matches!(self.effective_panel_focus(), PanelFocus::Library)
+                    && self.effective_panel_mode() == PanelMode::Both =>
             {
                 self.set_panel_focus(PanelFocus::Queue);
                 self.last_card_height = 0;

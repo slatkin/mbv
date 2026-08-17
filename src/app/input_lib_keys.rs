@@ -28,7 +28,7 @@ impl App {
         if key.modifiers.contains(KeyModifiers::ALT)
             || key.modifiers.contains(KeyModifiers::CONTROL)
             || self.context_menu_open()
-            || !matches!(self.panel_focus, PanelFocus::Library)
+            || !matches!(self.effective_panel_focus(), PanelFocus::Library)
         {
             return None;
         }
@@ -98,7 +98,7 @@ impl App {
     }
 
     pub(super) fn handle_key_album_track_mode(&mut self, key: KeyEvent) -> Option<bool> {
-        if matches!(self.panel_focus, PanelFocus::Queue)
+        if matches!(self.effective_panel_focus(), PanelFocus::Queue)
             && matches!(key.code, KeyCode::Up | KeyCode::Down)
         {
             return None;

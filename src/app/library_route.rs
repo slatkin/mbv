@@ -188,7 +188,7 @@ impl App {
         item: &mbv_core::api::EmbyItem,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
         log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} library_tab={}", item.id, item.name, self.tab.to_position_with_counts(self.libs.len(), self.feeds_tab_pos()));
-        if matches!(self.panel_focus, PanelFocus::Queue) {
+        if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
             log::info!(target: "library_route", "resolution path=queue item_id={:?}", item.id);
             self.active_route
                 .clone()

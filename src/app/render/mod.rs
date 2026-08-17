@@ -287,19 +287,19 @@ impl App {
         self.normalize_stale_browse_destination();
 
         // Left panel (card + queue) | Right panel (library, remaining).
-        let left_w = match self.panel_mode {
+        let left_w = match self.effective_panel_mode() {
             PanelMode::Both => self.queue_column_width,
             PanelMode::LibraryOnly => 0,
             PanelMode::QueueOnly => area.width,
         };
         let right_w = area.width.saturating_sub(left_w);
-        let right_visible = self.panel_mode != PanelMode::QueueOnly;
+        let right_visible = self.effective_panel_mode() != PanelMode::QueueOnly;
 
         // Header row removed — the tab bar above indicates current location.
         layout.breadcrumbs = Vec::new();
         layout.selector_tabs = Vec::new();
         let content_h = area.height;
-        let left_area = if self.panel_mode == PanelMode::LibraryOnly {
+        let left_area = if self.effective_panel_mode() == PanelMode::LibraryOnly {
             Rect::default()
         } else {
             Rect {
@@ -312,16 +312,15 @@ impl App {
         layout.panel_area = left_area;
         layout.panel_content_area = Self::left_panel_content_area(left_area);
 
-        // The queue panel always renders with the unfocused appearance while
-        // it's the sole visible panel: full-width queue-only keeps the calm,
-        // muted styling instead of the bright focused treatment. Input focus
-        // itself is unaffected -- key handling still routes to the queue.
-        let queue_focused = self.panel_mode != PanelMode::QueueOnly
-            && matches!(self.panel_focus, PanelFocus::Queue);
+        // The queue panel always renders with focused styling whenever it
+        // holds real panel focus — including queue-only mode and mini view.
+        // (Previously queue-only forced unfocused styling, which at narrow
+        // widths made the sole visible panel look unresponsive.)
+        let queue_focused = matches!(self.effective_panel_focus(), PanelFocus::Queue);
         let left_focused = !queue_focused;
 
         // Full-column background behind the card image and queue list.
-        if self.panel_mode != PanelMode::LibraryOnly {
+        if self.effective_panel_mode() != PanelMode::LibraryOnly {
             let left_bg = palette::resolve_surface_focus(queue_focused);
             f.render_widget(
                 Block::default().style(Style::default().bg(left_bg)),
@@ -420,12 +419,12 @@ impl App {
         };
 
         let mut visualizer_h: u16 = 0;
-        let (lib_area, queue_area) = if self.panel_mode == PanelMode::LibraryOnly {
+        let (lib_area, queue_area) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
             (right_area, Rect::default())
         } else {
             // The card fills the top of the left column; the queue list takes
             // the rows below it. Short terminals keep that same structure.
-            let is_queue_only = self.panel_mode == PanelMode::QueueOnly;
+            let is_queue_only = self.effective_panel_mode() == PanelMode::QueueOnly;
             let is_wide = is_queue_only && left_area.width >= 100;
             let (card_h, card_w, _) = self.render_card(f, card_area, is_wide);
             let mut left_remaining = left_content.height.saturating_sub(card_h);
@@ -515,7 +514,8 @@ impl App {
         // instead of each renderer inventing its own. When the left column is
         // collapsed the user has asked to reclaim maximum width, so the gutters
         // are dropped and the library spans the panel edge-to-edge.
-        let lib_area = right_panel_content_area(lib_area, self.panel_mode != PanelMode::Both);
+        let lib_area =
+            right_panel_content_area(lib_area, self.effective_panel_mode() != PanelMode::Both);
         let mut render_lib_area = lib_area;
         // Music-group pills are carved from the top only in narrow mode.
         // In wide mode, the wide music renderer places pills in the right rail.
@@ -556,7 +556,7 @@ impl App {
         // above, letter pills only ever gate libraries that can show a
         // hero, so the ordering has to live where the hero split happens.
 
-        if self.panel_mode != PanelMode::LibraryOnly {
+        if self.effective_panel_mode() != PanelMode::LibraryOnly {
             let queue_list_area = render_queue_panel_frame(f, queue_area, queue_focused);
             let qla = queue_list_area;
 

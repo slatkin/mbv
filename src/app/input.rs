@@ -33,7 +33,7 @@ impl App {
     }
 
     pub(super) fn context_menu_lib_idx(&self) -> Option<usize> {
-        if matches!(self.panel_focus, PanelFocus::Library) {
+        if matches!(self.effective_panel_focus(), PanelFocus::Library) {
             // Positive match: the browse dispatch front door has already
             // normalized the destination, so a library-focused context menu
             // can only belong to the explicitly selected Emby library.
@@ -168,7 +168,7 @@ impl App {
             self.handle_key_alt(key);
             return Some(false);
         }
-        match self.panel_focus {
+        match self.effective_panel_focus() {
             PanelFocus::Queue => Some(self.handle_queue_key(key)),
             PanelFocus::Library => self.handle_key_browse_dispatch(key),
         }

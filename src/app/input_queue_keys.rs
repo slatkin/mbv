@@ -21,7 +21,7 @@ impl App {
 
     fn handle_queue_column_width_key(&mut self, key: KeyEvent) -> bool {
         if self.context_menu_open()
-            || self.panel_mode != PanelMode::Both
+            || self.effective_panel_mode() != PanelMode::Both
             || !Self::is_queue_column_width_resize_key(key)
         {
             return false;
@@ -59,7 +59,7 @@ impl App {
         // keys are handled above it. Bracket keys own the queue panel's
         // Local/Remote scope switching, and PageUp/PageDown use the actual
         // queue panel height.
-        if matches!(self.panel_focus, PanelFocus::Queue) {
+        if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
             match key.code {
                 KeyCode::Char('[')
                     if self.has_direct_remote_queue()
@@ -82,7 +82,7 @@ impl App {
         }
 
         // Queue focus: PageUp/PageDown use the actual queue panel height.
-        if matches!(self.panel_focus, PanelFocus::Queue) {
+        if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
             let page = self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize;
             match key.code {
                 KeyCode::PageUp => {
@@ -105,14 +105,14 @@ impl App {
         match key.code {
             KeyCode::Char('t')
                 if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && matches!(self.panel_focus, PanelFocus::Queue)
+                    && matches!(self.effective_panel_focus(), PanelFocus::Queue)
                     && self.remote_tracker.is_some() =>
             {
                 self.stop_remote_tracking();
             }
             KeyCode::Char('r')
                 if key.modifiers.contains(KeyModifiers::CONTROL)
-                    && matches!(self.panel_focus, PanelFocus::Queue)
+                    && matches!(self.effective_panel_focus(), PanelFocus::Queue)
                     && self.remote_tracker.is_some() =>
             {
                 self.reanchor_remote_tracking();
