@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=mbv
+GenericName=Media player
+Comment=Terminal media client for Emby server
+Exec=mbv
+Terminal=true
+Icon=mbv
+Categories=AudioVideo;Player;ConsoleOnly;

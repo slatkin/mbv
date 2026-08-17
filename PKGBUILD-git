@@ -32,6 +32,8 @@ package() {
     cd "${pkgname}"
     install -Dm755 "target/release/mbv" "${pkgdir}/usr/bin/mbv"
     install -Dm755 "target/release/mbvd" "${pkgdir}/usr/bin/mbvd"
+    install -Dm644 "contrib/mbv.desktop" "${pkgdir}/usr/share/applications/mbv.desktop"
+    install -Dm644 "assets/icon.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/mbv.svg"
     install -Dm644 "scripts/mbv.lua" "${pkgdir}/usr/share/mbv/scripts/mbv.lua"
     for script in scripts/mbv_*.lua; do
         install -Dm644 "${script}" "${pkgdir}/usr/share/mbv/scripts/${script##*/}"

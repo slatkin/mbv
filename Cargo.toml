@@ -72,6 +72,8 @@ section = "video"
 priority = "optional"
 assets = [
     ["target/release/mbv", "usr/bin/mbv", "755"],
+    ["contrib/mbv.desktop", "usr/share/applications/mbv.desktop", "644"],
+    ["assets/icon.svg", "usr/share/icons/hicolor/scalable/apps/mbv.svg", "644"],
     ["scripts/mbv.lua", "usr/share/mbv/scripts/mbv.lua", "644"],
     ["scripts/mbv_state.lua", "usr/share/mbv/scripts/mbv_state.lua", "644"],
     ["scripts/mbv_helpers.lua", "usr/share/mbv/scripts/mbv_helpers.lua", "644"],

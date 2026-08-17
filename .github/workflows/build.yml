@@ -85,6 +85,8 @@ jobs:
           cp dist/config.toml "${DIST}/"
           cp dist/mbvd.toml "${DIST}/"
           cp contrib/mbvd.service "${DIST}/"
+          cp contrib/mbv.desktop "${DIST}/"
+          cp assets/icon.svg "${DIST}/icon.svg"
           tar czf "${DIST}-linux-x86_64.tar.gz" "${DIST}"
           echo "TARBALL=${DIST}-linux-x86_64.tar.gz" >> "$GITHUB_ENV"
           echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
