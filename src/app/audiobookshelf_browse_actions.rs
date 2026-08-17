@@ -696,7 +696,7 @@ impl App {
             return;
         }
         self.set_queue_scope(scope);
-        if !matches!(self.panel_focus, super::PanelFocus::Library) {
+        if !matches!(self.effective_panel_focus(), super::PanelFocus::Library) {
             self.set_panel_focus(super::PanelFocus::Queue);
         }
     }

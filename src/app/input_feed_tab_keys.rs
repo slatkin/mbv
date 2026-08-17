@@ -23,7 +23,7 @@ impl App {
         if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
             return None;
         }
-        if !matches!(self.panel_focus, PanelFocus::Library) {
+        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             return None;
         }
         if !self.tab.is_feeds() {

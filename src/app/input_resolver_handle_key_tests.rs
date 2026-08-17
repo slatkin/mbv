@@ -256,6 +256,87 @@ fn x_entering_both_leaves_focus_alone() {
     );
 }
 
+// Mini view: below MINI_VIEW_THRESHOLD columns, `x` toggles exactly two
+// states (library-only ⇄ queue-only), never Both, and carries panel focus with
+// it. Widening back to 80+ restores the prior wide-mode panel_mode/panel_focus
+// untouched (mini view is derived, never written into stored state).
+
+#[test]
+fn mini_view_x_toggles_library_only_and_queue_only_only() {
+    let mut app = make_app_stub();
+    app.terminal_width = crate::app::MINI_VIEW_THRESHOLD - 1;
+    app.panel_mode = crate::app::PanelMode::Both;
+    app.panel_focus = crate::app::PanelFocus::Library;
+
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert_eq!(
+        app.effective_panel_mode(),
+        crate::app::PanelMode::QueueOnly,
+        "first x in mini view goes to queue-only"
+    );
+    assert_eq!(
+        app.effective_panel_focus(),
+        crate::app::PanelFocus::Queue,
+        "toggling to queue moves focus with the panel"
+    );
+
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert_eq!(
+        app.effective_panel_mode(),
+        crate::app::PanelMode::LibraryOnly,
+        "second x in mini view goes to library-only"
+    );
+    assert_eq!(
+        app.effective_panel_focus(),
+        crate::app::PanelFocus::Library,
+        "toggling back to library moves focus with the panel"
+    );
+
+    // Still narrow: any number of presses never shows both panels, and the
+    // stored wide-mode state was never touched.
+    for _ in 0..3 {
+        app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+        assert_ne!(
+            app.effective_panel_mode(),
+            crate::app::PanelMode::Both,
+            "Both must be unreachable in mini view"
+        );
+    }
+    assert_eq!(
+        app.panel_mode,
+        crate::app::PanelMode::Both,
+        "stored wide panel_mode must stay untouched while narrow"
+    );
+    assert_eq!(
+        app.panel_focus,
+        crate::app::PanelFocus::Library,
+        "stored wide panel_focus must stay untouched while narrow"
+    );
+}
+
+#[test]
+fn mini_view_widening_restores_prior_wide_mode_state() {
+    let mut app = make_app_stub();
+    app.terminal_width = crate::app::MINI_VIEW_THRESHOLD - 1;
+    // Simulate a queue-only-with-queue-focus wide state that was current
+    // before narrowing.
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.panel_focus = crate::app::PanelFocus::Queue;
+
+    // Narrow: toggle mini view to library-only and back a couple times.
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+
+    // Widen back to 80+.
+    app.terminal_width = crate::app::MINI_VIEW_THRESHOLD;
+    // The stored wide state is unchanged by any narrow toggling.
+    assert_eq!(app.panel_mode, crate::app::PanelMode::QueueOnly);
+    assert_eq!(app.panel_focus, crate::app::PanelFocus::Queue);
+    // And the effective view now reflects that restored wide state.
+    assert_eq!(app.effective_panel_mode(), crate::app::PanelMode::QueueOnly);
+    assert_eq!(app.effective_panel_focus(), crate::app::PanelFocus::Queue);
+}
+
 /// Regression guard in the other direction: the panel-mode cycle key used to
 /// be 'h'; the binding moved to 'x' so 'h' could be repurposed for vim-style
 /// horizontal navigation in 2-col library lists. Make sure 'h' no longer

@@ -191,6 +191,11 @@ pub struct App {
     // Main UI scalars.
     // reuses shared self.libs.
     pub(super) panel_focus: PanelFocus,
+    // Ephemeral narrow-terminal (< MINI_VIEW_THRESHOLD columns) two-state
+    // toggle target: Library ⇄ Queue. Never read from or written to prefs;
+    // tracked independently so wide-mode `panel_mode`/`panel_focus` stay
+    // untouched while narrow. Defaults to Library.
+    pub(super) mini_view_focus: PanelFocus,
     pub(super) tab: TabSelection, // which left-panel tab is active
     pub(super) queue_column_width: u16,
     pub(super) panel_mode: PanelMode,

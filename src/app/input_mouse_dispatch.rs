@@ -211,7 +211,7 @@ impl App {
                         self.seek_to_col(col);
                         return;
                     }
-                    if matches!(self.panel_focus, PanelFocus::Queue) {
+                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
                         let queue = self.displayed_queue();
                         let t = queue.queue_cursor;
                         // Spatial hit-test stays local (issue #134); the

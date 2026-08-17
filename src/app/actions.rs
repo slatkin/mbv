@@ -199,7 +199,7 @@ impl App {
         }
         self.set_queue_scope(self.playback_target_queue_scope());
         // Keep library focus when playing from the library panel.
-        if !matches!(self.panel_focus, PanelFocus::Library) {
+        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
         if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -251,7 +251,7 @@ impl App {
             self.on_queue_replace_silent();
         }
         // Keep library focus when playing from the library panel.
-        if !matches!(self.panel_focus, PanelFocus::Library) {
+        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
         let label = item.playback_label();
@@ -427,7 +427,7 @@ impl App {
             return false;
         }
         self.set_queue_scope(scope);
-        if !matches!(self.panel_focus, PanelFocus::Library) {
+        if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
         true

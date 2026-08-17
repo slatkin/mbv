@@ -165,7 +165,7 @@ impl App {
         // Click in queue area: focus queue and move cursor.
         let qa = self.layout.main.queue_area;
         if qa.contains((col, row).into()) {
-            if !matches!(self.panel_focus, PanelFocus::Queue) {
+            if !matches!(self.effective_panel_focus(), PanelFocus::Queue) {
                 self.last_card_height = 0;
                 self.last_card_width = 0;
             }
@@ -307,7 +307,7 @@ impl App {
             // Click in the left panel: focus it and set its cursor.
             let la = self.layout.main.left_area;
             if la.contains((col, row).into()) {
-                if !matches!(self.panel_focus, PanelFocus::Library) {
+                if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
                     self.last_card_height = 0;
                     self.last_card_width = 0;
                 }
