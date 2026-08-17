@@ -1,7 +1,6 @@
 use super::App;
 
 impl App {
-    #[allow(dead_code)]
     pub(super) fn test_audiobookshelf_connection(&mut self) {
         if self.audiobookshelf_runtime.state
             == mbv_core::service_runtime::ServiceState::NotConfigured

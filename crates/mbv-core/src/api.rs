@@ -9,6 +9,7 @@ include!("api_client_sessions.rs");
 
 #[cfg(test)]
 mod tests {
-    include!("api_tests.rs");
+    include!("api_tests_parsing.rs");
+    include!("api_tests_client.rs");
     include!("api_failure_tests.rs");
 }

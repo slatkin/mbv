@@ -678,8 +678,3 @@ mod test_helpers;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
-// THROWAWAY (task 0.2/10.1): centralize-ui-design-language capture harness,
-// deleted at close-out along with this registration line.
-#[cfg(test)]
-#[path = "capture_harness.rs"]
-mod capture_harness;

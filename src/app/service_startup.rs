@@ -4,7 +4,6 @@ use mbv_core::config::{load_service_secret, EmbySetup, ServiceKind};
 use mbv_core::service_runtime::{EmbyFailure, EmbyFailureClass, ServiceState, SetupGeneration};
 use std::sync::mpsc;
 
-#[allow(dead_code)]
 pub(super) enum AudiobookshelfCompletionKind {
     Startup,
     Test,

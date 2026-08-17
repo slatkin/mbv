@@ -115,7 +115,6 @@ struct CtrlClient {
     supports_abs_progress: bool,
     /// Whether this peer advertised `abs-book-queue` in its Hello. Gates
     /// whether it receives or may submit `QueueItem::AudiobookshelfBook`.
-    #[allow(dead_code)]
     supports_abs_book_queue: bool,
     /// Whether this peer advertised `abs-book-progress` in its Hello. Gates
     /// whether it receives the redacted Audiobookshelf book progress event.
@@ -541,16 +540,6 @@ impl CtrlClients {
             .is_some_and(|c| c.supports_abs_queue)
     }
 
-    /// Whether the client `id` advertised `abs-progress` support at Hello.
-    /// Used to gate delivery of the redacted Audiobookshelf progress event.
-    #[allow(dead_code)]
-    fn supports_abs_progress(&self, id: CtrlClientId) -> bool {
-        self.connection
-            .iter()
-            .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_abs_progress)
-    }
-
     /// Whether the client `id` advertised `abs-book-queue` support at Hello.
     /// Used to gate Audiobookshelf book `QueueItem` transport in both
     /// directions.
@@ -559,17 +548,6 @@ impl CtrlClients {
             .iter()
             .find(|c| c.id == id)
             .is_some_and(|c| c.supports_abs_book_queue)
-    }
-
-    /// Whether the client `id` advertised `abs-book-progress` support at
-    /// Hello. Used to gate delivery of the redacted Audiobookshelf book
-    /// progress event.
-    #[allow(dead_code)]
-    fn supports_abs_book_progress(&self, id: CtrlClientId) -> bool {
-        self.connection
-            .iter()
-            .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_abs_book_progress)
     }
 
     fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
