@@ -176,9 +176,23 @@ impl App {
                 return;
             }
         }
+        // `img_area`'s height is sometimes stretched to match the metadata
+        // column beside it (e.g. a long overview in narrow layout, home.rs's
+        // `hero_height = image_rows.max(meta_layout.height)`), so it can be
+        // taller than the image itself will ever be -- the real image above
+        // self-corrects via `size_for`'s aspect fit, but the placeholder must
+        // do the same or it briefly renders as a too-tall block. Recompute
+        // the same 16:9 natural height both `home.rs` layouts derive the
+        // image column from, and cap the placeholder to it.
+        let natural_h = (img_area.width.saturating_mul(9).saturating_add(31) / 32)
+            .max(1)
+            .min(img_area.height);
         f.render_widget(
             Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
-            img_area,
+            Rect {
+                height: natural_h,
+                ..img_area
+            },
         );
     }
 

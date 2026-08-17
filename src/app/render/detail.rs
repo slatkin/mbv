@@ -34,13 +34,13 @@ pub(super) fn compact_banner_image_cache_key(item_id: &str) -> String {
 /// Only the ratio of the dummy image matters here, not its absolute size, so
 /// it's kept tiny (2x3 px) to make the allocation this runs once per render
 /// frame effectively free.
-fn poster_placeholder_size(font_size: ratatui_image::FontSize) -> (u16, u16) {
+fn poster_placeholder_size(font_size: ratatui_image::FontSize, img_cols: u16) -> (u16, u16) {
     let canonical_poster_aspect = image::DynamicImage::new_rgb8(2, 3);
     let size = ratatui_image::Resize::Scale(Some(RENDER_FILTER)).size_for(
         &canonical_poster_aspect,
         font_size,
         ratatui::layout::Size {
-            width: IMG_COLS,
+            width: img_cols,
             height: IMG_ROWS,
         },
     );
@@ -185,6 +185,12 @@ impl App {
         // isn't yet ready to show, and only the "is it the real image or the
         // placeholder" choice below still depends on the nav-idle gate.
         let nav_gate_open = self.right_panel_image_renders_allowed();
+        // Cap the poster's bounding-box width at half the panel's inner width,
+        // so a narrow panel (single-panel view) doesn't reserve the same
+        // wide/tall box a full-width panel would -- the fixed IMG_COLS box
+        // looked oversized (and briefly all the more so as the placeholder)
+        // once the panel got narrow enough for it to dominate the banner.
+        let img_cols = IMG_COLS.min((inner_w / 2) as u16);
         // `image_picker` is only `None` before the run loop's one-time init
         // (or in tests that don't set one up) -- fall back to the full
         // bounding box in that case, since there's no real font metrics yet
@@ -192,8 +198,8 @@ impl App {
         let (placeholder_w, placeholder_h) = self
             .image_picker
             .as_ref()
-            .map(|picker| poster_placeholder_size(picker.font_size()))
-            .unwrap_or((IMG_COLS, IMG_ROWS));
+            .map(|picker| poster_placeholder_size(picker.font_size(), img_cols))
+            .unwrap_or((img_cols, IMG_ROWS));
 
         let has_no_art = self
             .card_image_states
@@ -214,7 +220,7 @@ impl App {
                     Some(state) => match state.size_for(
                         ratatui_image::Resize::Scale(Some(RENDER_FILTER)),
                         ratatui::layout::Size {
-                            width: IMG_COLS,
+                            width: img_cols,
                             height: IMG_ROWS,
                         },
                     ) {

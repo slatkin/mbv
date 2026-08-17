@@ -34,7 +34,8 @@ pub(super) const TAB_LEFT_PAD: u16 = 2;
 pub(super) fn right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
     if left_collapsed {
         Rect {
-            width: area.width.saturating_sub(1),
+            x: area.x + 1,
+            width: area.width.saturating_sub(2),
             ..area
         }
     } else {
