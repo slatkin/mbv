@@ -234,7 +234,11 @@ pub(super) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focused: bool)
         return Rect::default();
     }
 
-    let bg = palette::resolve_surface_focus(focused);
+    let bg = if focused {
+        palette::BG_GREEN_SOFT
+    } else {
+        palette::LIBRARY_SIDE_BG
+    };
     f.render_widget(Block::default().style(Style::default().bg(bg)), area);
 
     area

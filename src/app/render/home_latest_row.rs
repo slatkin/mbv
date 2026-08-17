@@ -333,10 +333,6 @@ impl App {
                 width: area.width,
                 height: block_h,
             };
-            f.render_widget(
-                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-                block_area,
-            );
             let inner = Rect {
                 x: block_area.x + overview_pad as u16,
                 y: block_area.y + 1,
