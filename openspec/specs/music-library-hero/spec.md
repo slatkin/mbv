@@ -5,19 +5,27 @@ Provides a responsive grouped Music layout that preserves the current narrow her
 ## Requirements
 ### Requirement: Grouped Music uses responsive compositions
 
-The grouped Music album view SHALL use the existing shared wide-layout breakpoint to choose its composition. Below the breakpoint it SHALL preserve the current pills-above, hero-above-list, one-column layout. At or above the breakpoint it SHALL render a Music-specific horizontal split with album detail and tracks on the left and album browsing on the right. Other library types SHALL NOT change composition because of this requirement.
+The grouped Music album view SHALL use the hero-on-left arrangement. Below the shared breakpoint it
+SHALL fall back to hero-on-top with a single list column. At or above the breakpoint it SHALL render
+hero-on-left, with album detail and tracks in the hero pane and album browsing in the list pane. The
+grouped Music view SHALL NOT evaluate the breakpoint itself. Screens assigned hero-on-top SHALL NOT
+change arrangement because of this requirement.
 
 #### Scenario: Grouped Music below the breakpoint
-- **WHEN** the grouped Music content area is narrower than the shared wide-layout breakpoint
-- **THEN** group pills span the content width, the album hero renders above the list, and albums render one per row as they do before this change
+
+- **WHEN** the grouped Music content area is narrower than the shared breakpoint
+- **THEN** group pills span the content width, the album hero renders above the list, and albums
+  render one per row
 
 #### Scenario: Grouped Music at the breakpoint
-- **WHEN** the grouped Music content area reaches the shared wide-layout breakpoint
-- **THEN** it switches to the horizontal Music composition
+
+- **WHEN** the grouped Music content area reaches the shared breakpoint
+- **THEN** it renders the hero-on-left arrangement
 
 #### Scenario: Non-Music library at wide width
-- **WHEN** any non-Music library is rendered at or above the breakpoint
-- **THEN** its existing layout remains unchanged
+
+- **WHEN** a library assigned hero-on-top is rendered at or above the breakpoint
+- **THEN** it renders hero-on-top with a two-column list and does not adopt hero-on-left
 
 ### Requirement: Wide left pane persistently shows album detail and tracks
 
@@ -55,21 +63,35 @@ In the wide grouped Music composition, the music-group pills SHALL render at the
 - **WHEN** the user selects another music-group pill in wide mode
 - **THEN** the right rail loads that group's albums, returns focus to album browsing, and the left pane follows the resulting album selection
 
-### Requirement: Wide Music focus uses the Home visual language
+### Requirement: Hero-on-left uses one focus treatment
 
-The wide grouped Music view SHALL use the same focused and unfocused surface treatment as the Home wide split. During album browsing the right rail SHALL be the focused green surface and the left track workspace SHALL use the playback-panel surface. During track selection those treatments SHALL reverse. When the Library panel itself is unfocused, both Music panes SHALL use the normal dimmed library treatment.
+The hero-on-left arrangement SHALL apply one focused and unfocused surface treatment to every screen
+that uses it, including grouped Music and Home. During album browsing the list pane SHALL carry the
+focused treatment and the hero pane SHALL carry the resting treatment. During track selection those
+treatments SHALL reverse. When the Library panel itself is unfocused, both panes SHALL use the
+unfocused treatment. Grouped Music SHALL NOT define these colours itself.
 
 #### Scenario: Album browser has focus
+
 - **WHEN** track selection is inactive and the Library panel is focused
-- **THEN** the right rail has Home's focused treatment and the left workspace remains a readable preview
+- **THEN** the list pane has the arrangement's focused treatment and the hero pane remains a
+  readable preview
 
 #### Scenario: Track selection has focus
+
 - **WHEN** track selection is active and the Library panel is focused
-- **THEN** the left track workspace has Home's focused treatment and the right rail is visibly dimmed while retaining the selected album marker
+- **THEN** the hero pane has the arrangement's focused treatment and the list pane is visibly dimmed
+  while retaining the selected album marker
 
 #### Scenario: Queue has focus
+
 - **WHEN** the Queue panel has focus
-- **THEN** both Music panes use the existing unfocused library styling
+- **THEN** both Music panes use the arrangement's unfocused treatment
+
+#### Scenario: The focused treatment is changed
+
+- **WHEN** the hero-on-left focused treatment is changed in its single definition
+- **THEN** grouped Music, Home, and audiobooks all render the change
 
 ### Requirement: Wide track selection preserves keyboard behavior
 
