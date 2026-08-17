@@ -94,7 +94,15 @@ impl App {
         // The wide layout keeps two blank rows below the pill bar (panel
         // surface transition); the single-column layout only needs one.
         let pill_gap_rows: u16 = if two_column { 2 } else { 1 };
-        let content_offset = 1 + pill_gap_rows;
+        // Wide (hero-on-left) still pre-reserves its own pill row above
+        // `content_area` (its pills sit at the top of the right pane, a
+        // hero-on-left concern, `hero_on_left_right_pane`). Narrow
+        // (hero-on-top fallback) no longer pre-reserves anything here: its
+        // pill row now lives inside `top_hero_layout`'s own `pills_area`,
+        // below the hero, same as every other hero-on-top screen
+        // (design.md decision 6 -- pill *position* is geometry, not a
+        // per-screen declaration).
+        let content_offset = if two_column { 1 + pill_gap_rows } else { 0 };
         let content_area = Rect {
             y: area.y.saturating_add(content_offset),
             height: area.height.saturating_sub(content_offset),
@@ -171,6 +179,7 @@ impl App {
         // one exists, which is the same row the pill-gap fill owns, so the
         // shell must paint last to win that row rather than be painted over.
         let mut narrow_shell: Option<(Rect, u16)> = None;
+        let mut narrow_pills_area: Option<Rect> = None;
 
         if two_column {
             // Two-column layout: hero on left, list on right (hero-on-left,
@@ -311,10 +320,11 @@ impl App {
             } else {
                 0
             };
-            let top = hero::top_hero_layout(content_area, desired_hero_rows, false);
+            let top = hero::top_hero_layout(content_area, desired_hero_rows, true);
             if top.hero_rows > 0 {
                 narrow_shell = Some((top.hero_area, top.hero_rows));
             }
+            narrow_pills_area = Some(top.pills_area);
             let hero_content = Rect {
                 x: top.hero_area.x.saturating_add(SELECTED_BLOCK_SIDE_PADDING),
                 y: top.hero_area.y.saturating_add(2),
@@ -364,7 +374,9 @@ impl App {
             let right_area = inset_pane_vertically(list_area);
             let right_pane = hero::hero_on_left_right_pane(list_area, right_area, HOME_HERO_PAD_Y);
             (right_pane.pills_area, Some(right_pane.list_panel))
-        } else {
+        } else if two_column {
+            // Wide layout, no hero item: same top-of-area fallback the
+            // hero-on-left pane would have used.
             (
                 Rect {
                     x: area.x,
@@ -374,6 +386,11 @@ impl App {
                 },
                 None,
             )
+        } else {
+            // Narrow: pills sit below the hero, in the shared
+            // `top_hero_layout` pills slot (unified with Movies/TV's
+            // letter-range pills, see `list.rs`).
+            (narrow_pills_area.unwrap_or_default(), None)
         };
         self.render_home_section_pills_row(f, pills_area, layout);
 

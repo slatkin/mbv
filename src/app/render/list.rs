@@ -267,22 +267,33 @@ impl App {
             0
         };
 
-        // Letter-range pill row: same non-music, top-browse-level gate the
-        // caller (`mod.rs`) used to check before this renderer ran.
-        // Reserves 1 row for the pills plus 1 blank gap row below them.
-        let show_pills = self
+        // Pill row below the hero: letter-range pills for large non-music
+        // libraries, or the music-group selector while browsing a group's
+        // albums (narrow fallback -- wide grouped Music places its pills in
+        // the right rail instead, `render_wide_music_group`). Both share one
+        // slot since a library is never both at once. Reserves 1 row for the
+        // pills plus 1 blank gap row below them.
+        let show_letter_pills = self
             .tab
             .emby_library_index()
             .is_some_and(|lib_idx| self.should_show_letter_pills(lib_idx));
+        let show_music_pills = self
+            .tab
+            .emby_library_index()
+            .is_some_and(|lib_idx| self.is_music_group_view(lib_idx));
+        let show_pills = show_letter_pills || show_music_pills;
         let hero_layout = top_hero_layout(content_area, hero_rows, show_pills);
         let hero_area = hero_layout.hero_area;
         let pills_area = hero_layout.pills_area;
         let list_area = hero_layout.list_area;
         let hero_rows = hero_layout.hero_rows;
 
-        if show_pills {
+        if show_letter_pills {
             let lib_idx = self.tab.emby_library_index().unwrap();
             self.render_letter_pills_row(f, pills_area, lib_idx, layout);
+        } else if show_music_pills {
+            let lib_idx = self.tab.emby_library_index().unwrap();
+            self.render_music_group_pills_row(f, pills_area, lib_idx, layout);
         }
 
         // Gather items, cursor, stored scroll offset, and the *true* library total

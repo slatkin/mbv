@@ -64,7 +64,6 @@ use widgets::{
 use super::ui_util::natural_sort_key;
 use super::{layout::AppLayout, palette, App, PanelFocus, PanelMode, TabSelection};
 use crate::app::layout::{LayoutMain, LayoutPlayback};
-use crate::app::TWO_COLUMN_THRESHOLD;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -508,45 +507,16 @@ impl App {
         // are dropped and the library spans the panel edge-to-edge.
         let lib_area =
             right_panel_content_area(lib_area, self.effective_panel_mode() != PanelMode::Both);
-        let mut render_lib_area = lib_area;
-        // Music-group pills are carved from the top only in narrow mode.
-        // In wide mode, the wide music renderer places pills in the right rail.
-        let is_wide_music = right_visible
-            && lib_area.width >= TWO_COLUMN_THRESHOLD
-            && self
-                .tab
-                .emby_library_index()
-                .is_some_and(|lib_idx| self.is_music_group_view(lib_idx));
-        if right_visible
-            && !is_wide_music
-            && self
-                .tab
-                .emby_library_index()
-                .is_some_and(|lib_idx| self.is_music_group_view(lib_idx))
-        {
-            let lib_idx = self.tab.emby_library_index().unwrap();
-            if lib_area.height > 0 {
-                let pills_area = Rect {
-                    x: lib_area.x,
-                    y: lib_area.y,
-                    width: lib_area.width,
-                    height: 1,
-                };
-                self.render_music_group_pills_row(f, pills_area, lib_idx, layout);
-                render_lib_area = Rect {
-                    y: lib_area.y + 2,
-                    height: lib_area.height.saturating_sub(2),
-                    ..lib_area
-                };
-            } else {
-                layout.selector_tabs = Vec::new();
-            }
-        }
-        // Letter-range pills for large non-music libraries render inside
-        // `render_list` itself now, below the hero (`list.rs`), not
-        // carved out of `lib_area` here -- unlike the music-group pills
-        // above, letter pills only ever gate libraries that can show a
-        // hero, so the ordering has to live where the hero split happens.
+        let render_lib_area = lib_area;
+        // Both letter-range pills (large non-music libraries) and the
+        // narrow music-group selector render inside `render_list` itself
+        // now, below the hero (`list.rs`), unified with every other
+        // hero-on-top screen's pill placement (design.md decision 6: pill
+        // *position* is geometry, not a per-screen declaration) -- not
+        // carved out of `lib_area` here. Wide grouped Music is the one
+        // exception: its pills sit in the hero-on-left right rail instead
+        // (`render_wide_music_group`), which `list.rs` still branches to
+        // internally before reaching the hero-on-top path.
 
         if self.effective_panel_mode() != PanelMode::LibraryOnly {
             let queue_list_area = render_queue_panel_frame(f, queue_area, queue_focused);
