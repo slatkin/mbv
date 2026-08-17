@@ -104,6 +104,13 @@ pub(crate) struct LayoutMain {
     /// Bounding rect of the wide Music right pane (album browser).
     /// Populated only when the wide Music layout is active.
     pub wide_music_right_area: Rect,
+    /// Bounding rect of the grouped-album browser itself (`Self::
+    /// render_wide_right_album_browser`), the sub-rect of
+    /// `wide_music_right_area` below the pill row. `left_row_targets` is
+    /// indexed relative to this rect's top -- set by both the wide and
+    /// narrow (hero-on-top) callers of the shared browser renderer, since
+    /// they share row-target indexing but differ in outer gating rect.
+    pub wide_music_browser_area: Rect,
     /// Bounding rect of the Audiobookshelf book tab's right pane (bucket
     /// pills + book browser). Populated whenever the book tab renders, in
     /// both the wide two-column layout and the narrow hero-on-top fallback

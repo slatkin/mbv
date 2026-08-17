@@ -244,21 +244,24 @@ impl App {
                     let ra = self.layout.main.wide_music_right_area;
                     if ra.contains(pos) {
                         self.set_panel_focus(PanelFocus::Library);
-                        let click_y = (row - ra.y) as usize;
-                        let row_target = self
-                            .layout
-                            .main
-                            .left_row_targets
-                            .get(click_y)
-                            .cloned()
-                            .flatten();
-                        if let Some(LibraryRowTarget::Album(item_idx)) = row_target {
-                            let lib = &mut self.libs[lib_idx];
-                            if let Some(lvl) = lib.nav_stack.last_mut() {
-                                if item_idx < lvl.items.len() {
-                                    lib.album_track_focus = None;
-                                    lvl.cursor = item_idx;
-                                    self.save_default_library_position(lib_idx);
+                        let browser = self.layout.main.wide_music_browser_area;
+                        if browser.contains(pos) {
+                            let click_y = (row - browser.y) as usize;
+                            let row_target = self
+                                .layout
+                                .main
+                                .left_row_targets
+                                .get(click_y)
+                                .cloned()
+                                .flatten();
+                            if let Some(LibraryRowTarget::Album(item_idx)) = row_target {
+                                let lib = &mut self.libs[lib_idx];
+                                if let Some(lvl) = lib.nav_stack.last_mut() {
+                                    if item_idx < lvl.items.len() {
+                                        lib.album_track_focus = None;
+                                        lvl.cursor = item_idx;
+                                        self.save_default_library_position(lib_idx);
+                                    }
                                 }
                             }
                         }

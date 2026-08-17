@@ -1,5 +1,6 @@
-use super::album_plan::HeaderFocusCtx;
+use super::album_plan::{GroupedAlbumDisplayRow, HeaderFocusCtx};
 use super::album_rows::AlbumRowCtx;
+use super::list_rows::draw_column_selection_markers;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use ratatui::layout::*;
@@ -17,6 +18,7 @@ impl App {
         right_focused: bool,
         layout: &mut LayoutMain,
     ) {
+        layout.wide_music_browser_area = browser_area;
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
             return;
         };
@@ -109,14 +111,17 @@ impl App {
 
         for (row_idx, row) in &visible_rows {
             let screen_y = (*row_idx - offset) as u16;
-            // Album-row renderers supply their own one-cell leading gutter.
-            // Extend the row one cell left so visible text still begins at
-            // the browser area's standard two-column interior inset, while
-            // retaining two columns at the right edge.
+            // Album-row renderers supply their own one-cell leading gutter,
+            // so visible text begins one cell right of `browser_area.x` --
+            // the same convention every other hero-on-top list uses
+            // (`item_cell_spans`' leading space), matching the Movies/TV
+            // indent. The caller is responsible for any inset needed to
+            // land text where it wants (see `render_wide_music_group`'s
+            // `browser_area`).
             let row_area = Rect {
-                x: browser_area.x.saturating_sub(1),
+                x: browser_area.x,
                 y: browser_area.y + screen_y,
-                width: browser_area.width.saturating_add(1),
+                width: browser_area.width,
                 height: 1,
             };
 
@@ -171,26 +176,35 @@ impl App {
             super::render_right_scrollbar(f, browser_area, max_off, offset, palette::SCROLLBAR);
         }
 
-        // Populate left_row_targets for mouse hit-testing in the right pane.
-        // Indexed from wide_music_right_area.y so clicks on the browser's
-        // album rows resolve correctly (gap rows above the browser are None).
+        // Draw the unified edge selection marker (design.md decision 2) in
+        // the outer gutter, flush with the parent panel -- matching every
+        // other list (movies/TV, audiobooks, feeds, narrow's own plain
+        // rows) instead of a marker glyph baked into the selected row's own
+        // text flow.
+        let item_rows: Vec<Vec<usize>> = plan
+            .rows
+            .iter()
+            .map(|row| match row {
+                GroupedAlbumDisplayRow::Album(idx) => vec![*idx],
+                _ => Vec::new(),
+            })
+            .collect();
+        draw_column_selection_markers(f, browser_area, cursor, &item_rows, offset);
+
+        // Populate left_row_targets for mouse hit-testing, indexed relative
+        // to `browser_area`'s own top -- self-contained so this works
+        // identically whether the caller is the wide right pane (browser
+        // sits below the pill row) or the narrow hero-on-top fallback
+        // (browser_area == left_area, already below hero+pills).
         {
-            let right_area_top = layout.wide_music_right_area.y;
-            let right_area_h = layout.wide_music_right_area.height as usize;
-            let browser_y_offset = if browser_area.y > right_area_top {
-                (browser_area.y - right_area_top) as usize
-            } else {
-                0
-            };
-            let mut targets = vec![None; right_area_h];
+            let mut targets = vec![None; browser_area.height as usize];
             for (row_idx, row) in &visible_rows {
                 let screen_y = *row_idx as isize - offset as isize;
                 if screen_y < 0 {
                     continue;
                 }
-                let target_y = browser_y_offset + screen_y as usize;
-                if target_y < targets.len() {
-                    targets[target_y] = row.row_target();
+                if let Some(slot) = targets.get_mut(screen_y as usize) {
+                    *slot = row.row_target();
                 }
             }
             layout.left_row_targets = targets;

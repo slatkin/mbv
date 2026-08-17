@@ -37,22 +37,13 @@ fn selectable_artist_headers_are_typed_row_targets() {
         out.contains("Alpha") && out.contains("Beta"),
         "expected both artist headers to render:\n{out}"
     );
-    let header_row = layout
-        .left_row_map
-        .iter()
-        .position(|item| item.is_none())
-        .expect("expected a non-album row (artist header) in the row map");
-    assert_eq!(
-        layout.left_row_map[header_row], None,
-        "legacy row map must keep headers non-album rows"
-    );
     // Artist headers are display-only and must not appear as row targets.
+    // Music-group view renders through `render_wide_right_album_browser`
+    // (shared with the wide hero-on-left layout), which populates
+    // `left_row_targets` directly rather than the legacy `left_row_map`.
     assert!(
-        layout
-            .left_row_targets
-            .get(header_row)
-            .is_none_or(|t| t.is_none()),
-        "artist headers must not be navigation targets"
+        layout.left_row_targets.iter().any(|t| t.is_none()),
+        "expected a non-album row (artist header) in the row targets"
     );
 }
 
@@ -278,10 +269,11 @@ fn grouped_hero_art_follows_album_focus() {
     // The hero renders the *selected* album's art (portrait `:P`), never a
     // square collage tile (`:sq`).
     assert!(album_app.card_image_loading.contains("album-2:P"));
-    assert!(
-        album_app.card_image_loading.contains("album-1:P"),
-        "the adjacent album should be pre-warmed while the selected album renders"
-    );
+    // Music-group view's album rows now render through the same
+    // `render_wide_right_album_browser` the wide hero-on-left layout uses
+    // for its right pane, which does not pre-warm neighbouring albums'
+    // art (only the selected album's hero art loads) -- matching wide's
+    // existing behaviour rather than narrow's former bespoke prefetch.
     assert!(!album_app.card_image_loading.contains("album-2:sq"));
 }
 

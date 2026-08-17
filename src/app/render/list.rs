@@ -476,7 +476,21 @@ impl App {
 
         let final_offset: usize;
 
-        if show_grouped {
+        if show_grouped && show_music_pills {
+            // Music-group view: route through the exact same one-column
+            // grouped-album browser the wide hero-on-left layout uses for
+            // its right pane (`render_wide_right_album_browser`), rather
+            // than the hero-on-top-only packed/wrapped row renderer below
+            // -- narrow's own scroll/selection handling had drifted from
+            // wide's since the two were unified.
+            let lib_idx = self.tab.emby_library_index().unwrap();
+            self.render_wide_right_album_browser(f, list_area, list_area, lib_idx, focused, layout);
+            final_offset = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|lvl| lvl.scroll)
+                .unwrap_or(0);
+        } else if show_grouped {
             let lib_idx = self.tab.emby_library_index().unwrap();
             final_offset = self.render_grouped_album_rows(
                 f,

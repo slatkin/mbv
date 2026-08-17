@@ -325,10 +325,17 @@ impl App {
         }
 
         let list_panel = right_pane.list_panel;
+        // `render_wide_right_album_browser` renders text one cell right of
+        // `browser_area.x` (the row painters' own leading gutter), so inset
+        // one cell less than the panel's other padded content to land text
+        // at the panel's standard two-column interior inset.
         let browser_area = Rect {
-            x: list_panel.x.saturating_add(PANE_PAD_X),
+            x: list_panel.x.saturating_add(PANE_PAD_X).saturating_sub(1),
             y: list_panel.y.saturating_add(PANE_PAD_Y),
-            width: list_panel.width.saturating_sub(PANE_PAD_X * 2),
+            width: list_panel
+                .width
+                .saturating_sub(PANE_PAD_X * 2)
+                .saturating_add(1),
             height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
         };
         if list_panel.height > 0 {

@@ -258,17 +258,21 @@ impl App {
             },
         );
 
+        // Marker glyph lives in the outer gutter (`draw_column_selection_
+        // markers`, same as every other list), not inline here -- text
+        // starts one cell right of `row_area.x`, matching every unselected
+        // row's own leading space (`render_album_row`) so the title column
+        // never shifts when a row becomes selected.
         let suffix = if year.is_empty() {
             String::new()
         } else {
             format!("  {year}")
         };
-        let title_width = panel_area
+        let title_width = row_area
             .width
-            .saturating_sub(4 + suffix.chars().count() as u16) as usize;
+            .saturating_sub(1 + suffix.chars().count() as u16) as usize;
         let title = trunc_str(title, title_width);
         let mut spans = vec![
-            super::selection_marker(true, super::MarkerEdge::Left),
             Span::raw(" "),
             Span::styled(
                 title,
@@ -280,15 +284,7 @@ impl App {
         if !suffix.is_empty() {
             spans.push(Span::styled(suffix, Style::default().fg(palette::FOAM)));
         }
-        f.render_widget(
-            Paragraph::new(Line::from(spans)),
-            Rect {
-                x: panel_area.x,
-                y: row_area.y,
-                width: panel_area.width,
-                height: 1,
-            },
-        );
+        f.render_widget(Paragraph::new(Line::from(spans)), row_area);
     }
 
     pub(super) fn render_album_action_hint(
