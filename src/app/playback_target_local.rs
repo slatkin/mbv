@@ -178,9 +178,8 @@ impl LocalPlaybackTarget {
         let sub_id = pst.sub_id;
         let raw_sub_lang = pst.sub_lang.to_lowercase();
         drop(pst);
-        let sub_label = if sub_id == 0 {
-            "off".into()
-        } else if !raw_sub_lang.is_empty() {
+        let sub_on = sub_id != 0;
+        let sub_label = if sub_on && !raw_sub_lang.is_empty() {
             take_chars(&raw_sub_lang, 3)
         } else {
             "CC".into()
@@ -192,6 +191,7 @@ impl LocalPlaybackTarget {
             audio_dim,
             audio_only: is_audio_only,
             sub_label,
+            sub_on,
         })
     }
 }

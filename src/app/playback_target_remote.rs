@@ -141,8 +141,9 @@ impl RemotePlaybackTarget {
                 }
             })
             .unwrap_or_else(|| "---".to_string());
-        let sub_label = if remote.sub_index < 0 {
-            "off".to_string()
+        let sub_on = remote.sub_index >= 0;
+        let sub_label = if !sub_on {
+            "CC".to_string()
         } else {
             remote
                 .media_info
@@ -189,6 +190,7 @@ impl RemotePlaybackTarget {
             audio_dim: audio_label == "---",
             audio_only: remote.media_info.audio_only,
             sub_label,
+            sub_on,
         })
     }
 }

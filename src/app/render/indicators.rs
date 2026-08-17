@@ -46,8 +46,10 @@ pub struct IndicatorData {
     pub audio_label: String,
     pub audio_dim: bool,
     pub audio_only: bool,
-    /// Display label for subtitles. Empty = subs off. Non-empty = on, with this lang/label.
+    /// Display label for subtitles: the lang/CC abbreviation when on, "CC" when off.
     pub sub_label: String,
+    /// Whether a subtitle track is actually selected; drives `sub_color`.
+    pub sub_on: bool,
 }
 
 impl IndicatorData {
@@ -66,7 +68,7 @@ impl IndicatorData {
         }
     }
     fn sub_color(&self) -> Color {
-        if !self.sub_label.is_empty() {
+        if self.sub_on {
             palette::FOAM
         } else {
             palette::MUTED
@@ -121,17 +123,12 @@ fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
         out.push(Span::raw(" "));
         out.push(chip(&d.audio_label, d.audio_color()));
         out.push(Span::raw(" "));
-        let sub_display = if d.sub_label.is_empty() {
-            "CC"
-        } else {
-            &d.sub_label
-        };
-        if !d.sub_label.is_empty() {
-            out.push(chip(sub_display, d.sub_color()));
+        if d.sub_on {
+            out.push(chip(&d.sub_label, d.sub_color()));
         } else {
             // Off: hollow/dim — no fill, dim text.
             out.push(Span::styled(
-                format!(" {sub_display} "),
+                format!(" {} ", d.sub_label),
                 bold(palette::MUTED),
             ));
         }
@@ -154,12 +151,7 @@ fn brackets(d: &IndicatorData) -> Vec<Span<'static>> {
         out.push(Span::raw(" "));
         bracket_group(&d.audio_label, d.audio_color(), &mut out);
         out.push(Span::raw(" "));
-        let sub_display = if d.sub_label.is_empty() {
-            "CC"
-        } else {
-            &d.sub_label
-        };
-        bracket_group(sub_display, d.sub_color(), &mut out);
+        bracket_group(&d.sub_label, d.sub_color(), &mut out);
     }
     out
 }
@@ -179,12 +171,7 @@ fn outlined(d: &IndicatorData) -> Vec<Span<'static>> {
         out.push(Span::raw(" "));
         outlined_group(&d.audio_label, d.audio_color(), &mut out);
         out.push(Span::raw(" "));
-        let sub_display = if d.sub_label.is_empty() {
-            "CC"
-        } else {
-            &d.sub_label
-        };
-        outlined_group(sub_display, d.sub_color(), &mut out);
+        outlined_group(&d.sub_label, d.sub_color(), &mut out);
     }
     out
 }
@@ -205,17 +192,8 @@ fn dots(d: &IndicatorData) -> Vec<Span<'static>> {
         out.push(Span::raw("  "));
         dot_group("\u{25CF}", d.audio_color(), &d.audio_label, &mut out);
         out.push(Span::raw("  "));
-        let sub_display = if d.sub_label.is_empty() {
-            "CC"
-        } else {
-            &d.sub_label
-        };
-        let dot = if !d.sub_label.is_empty() {
-            "\u{25CF}"
-        } else {
-            "\u{25CB}"
-        };
-        dot_group(dot, d.sub_color(), sub_display, &mut out);
+        let dot = if d.sub_on { "\u{25CF}" } else { "\u{25CB}" };
+        dot_group(dot, d.sub_color(), &d.sub_label, &mut out);
     }
     out
 }
@@ -234,20 +212,15 @@ fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
             Style::default().fg(d.audio_color()),
         ));
         out.push(sep());
-        let sub_display = if d.sub_label.is_empty() {
-            "CC".to_string()
-        } else {
-            d.sub_label.clone()
-        };
         out.push(Span::styled(
-            sub_display,
+            d.sub_label.clone(),
             Style::default().fg(d.sub_color()),
         ));
     }
     out
 }
 
-// --- Labeled key·value: RES 720 ⧸ AUD en ⧸ SUB CC --------------------------
+// --- Labeled key·value: CODEC aac ⧸ en ⧸ CC, or 720P ⧸ en ⧸ CC -----------
 fn keyval_group(key: &str, value: &str, color: Color, out: &mut Vec<Span<'static>>) {
     out.push(Span::styled(
         format!("{key} "),
@@ -258,18 +231,23 @@ fn keyval_group(key: &str, value: &str, color: Color, out: &mut Vec<Span<'static
 
 fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
-    let res_key = if d.audio_only { "CODEC" } else { "RES" };
-    keyval_group(res_key, &d.res_label, d.res_color(), &mut out);
+    if d.audio_only {
+        keyval_group("CODEC", &d.res_label, d.res_color(), &mut out);
+    } else {
+        // No "RES" key -- the "P" suffix already reads as a resolution.
+        let res_val = if d.res_dim {
+            d.res_label.clone()
+        } else {
+            format!("{}P", d.res_label)
+        };
+        out.push(Span::styled(res_val, bold(d.res_color())));
+    }
     if !d.audio_only {
         out.push(Span::styled(" ⧸ ", Style::default().fg(palette::OVERLAY)));
-        keyval_group("AUD", &d.audio_label, d.audio_color(), &mut out);
+        out.push(Span::styled(d.audio_label.clone(), bold(d.audio_color())));
         out.push(Span::styled(" ⧸ ", Style::default().fg(palette::OVERLAY)));
-        let sub_val = if d.sub_label.is_empty() {
-            "\u{2014}".to_string()
-        } else {
-            d.sub_label.clone()
-        };
-        keyval_group("SUB", &sub_val, d.sub_color(), &mut out);
+        out.push(Span::styled(d.sub_label.clone(), bold(d.sub_color())));
+        out.push(Span::raw(" "));
     }
     out
 }
@@ -279,12 +257,7 @@ fn powerline(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut segs: Vec<(String, Color)> = vec![(d.res_label.clone(), d.res_color())];
     if !d.audio_only {
         segs.push((d.audio_label.clone(), d.audio_color()));
-        let sub_display = if d.sub_label.is_empty() {
-            "CC".to_string()
-        } else {
-            d.sub_label.clone()
-        };
-        segs.push((sub_display, d.sub_color()));
+        segs.push((d.sub_label.clone(), d.sub_color()));
     }
     let mut out = Vec::new();
     for i in 0..segs.len() {

@@ -239,7 +239,7 @@ impl App {
             ));
         }
 
-        // Left: glyph  stop  next  title  │  elapsed / total
+        // Left: glyph  stop  next  title. Right (gap-filled): elapsed / total  pills
         // A running `x` cursor tracks where each clickable glyph lands in the
         // rendered `Line`, so `layout.*_area` exactly matches what's on screen
         // rather than an estimate.
@@ -284,29 +284,26 @@ impl App {
         left.push(Span::raw(next_gap));
 
         let time_text = format!("{pos_str} / {dur_str}");
-        let post_time_gap = "  ";
+        let time_sep = " ";
+        let right = {
+            let mut r = vec![Span::styled(
+                time_text,
+                Style::default().fg(palette::PLAYBACK_META_FG),
+            )];
+            r.push(Span::raw(time_sep));
+            r.extend(right);
+            r
+        };
         let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
         let fixed_w = glyph_w as usize
             + stop_w as usize
             + stop_gap.width()
             + next_w as usize
             + next_gap.width()
-            + 2 // spaces between title and time
-            + time_text.width()
-            + post_time_gap.width()
             + right_w as usize;
         let title_w = (area.width as usize).saturating_sub(fixed_w);
 
         left.extend(self.playback_title_spans(title, title_color, title_w));
-
-        left.push(Span::raw("  "));
-
-        left.push(Span::styled(
-            time_text,
-            Style::default().fg(palette::PLAYBACK_META_FG),
-        ));
-
-        left.push(Span::raw(post_time_gap));
 
         let left_w: u16 = left.iter().map(|s| s.content.width() as u16).sum();
         let gap = area.width.saturating_sub(left_w + right_w) as usize;
