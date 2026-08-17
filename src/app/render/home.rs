@@ -485,7 +485,7 @@ impl App {
             }
             Some(HeroData::Generic(item, area)) => {
                 let overview_pad = if two_column { WIDE_OVERVIEW_PAD } else { 0 };
-                self.render_home_latest_detail(f, *area, item, overview_pad);
+                self.render_home_latest_detail(f, *area, item, focused, overview_pad);
             }
             None => {}
         }

@@ -403,6 +403,140 @@ pub(super) fn paint_hero_content(
     }
 }
 
+/// Renders Home's hero-on-top metadata shape -- wrapped yellow title,
+/// optional green subtitle row, one meta line, a blank separator, then the
+/// overview -- shared by the Keep Watching (Emby) hero and the generic
+/// Audiobookshelf/Feeds hero, which otherwise duplicated this block
+/// (including, at one point, an errant background box under the overview
+/// that `paint_hero_content`'s movie/series heroes never had). No background
+/// is painted here either: text sits directly on whatever the caller's shell
+/// already painted, same as `paint_hero_content`.
+///
+/// Doesn't reuse `paint_hero_content` itself: that component's title is a
+/// single truncated row and has no subtitle slot, while this shape wraps the
+/// title across multiple lines and always reserves a show-name row below it.
+///
+/// `overview_lines` pairs each pre-wrapped line with whether it has wrapped
+/// past a beside-the-text image and should render across `wide_area`'s full
+/// width instead of `area`'s; callers with no such image pass `wide_area ==
+/// area` (the `bool` is then irrelevant since both rects are identical).
+#[allow(clippy::too_many_arguments)]
+pub(super) fn render_home_hero_meta_block(
+    f: &mut Frame,
+    area: Rect,
+    wide_area: Rect,
+    title_lines: &[String],
+    subtitle: &str,
+    meta_spans: Vec<Span<'static>>,
+    overview_lines: &[(String, bool)],
+    overview_pad: u16,
+    focused: bool,
+) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let mut row = area.y;
+    let max_y = area.y + area.height;
+
+    for line in title_lines {
+        if row >= max_y {
+            break;
+        }
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                line.clone(),
+                Style::default()
+                    .fg(palette::YELLOW)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Rect {
+                x: area.x,
+                y: row,
+                width: area.width,
+                height: 1,
+            },
+        );
+        row += 1;
+    }
+
+    if row < max_y && !subtitle.is_empty() {
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                trunc_str(subtitle, area.width as usize),
+                Style::default().fg(palette::FOAM),
+            )),
+            Rect {
+                x: area.x,
+                y: row,
+                width: area.width,
+                height: 1,
+            },
+        );
+        row += 1;
+    }
+
+    // Always reserves one row, even with nothing to show, so the overview
+    // below lands on the same row whether or not this item has meta text.
+    if row < max_y {
+        if !meta_spans.is_empty() {
+            f.render_widget(
+                Paragraph::new(Line::from(meta_spans)),
+                Rect {
+                    x: area.x,
+                    y: row,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+        }
+        row += 1;
+    }
+
+    row += 1; // blank separator row
+
+    if !overview_lines.is_empty() && row < max_y {
+        let ov_color = if focused {
+            palette::WHITE
+        } else {
+            palette::MUTED
+        };
+        row += 1; // top pad row
+        for (line, wide) in overview_lines {
+            if row >= max_y {
+                break;
+            }
+            let r = if *wide {
+                Rect {
+                    x: wide_area.x,
+                    y: row,
+                    width: wide_area.width,
+                    height: 1,
+                }
+            } else {
+                Rect {
+                    x: area.x,
+                    y: row,
+                    width: area.width,
+                    height: 1,
+                }
+            };
+            let text_r = Rect {
+                x: r.x + overview_pad,
+                width: r.width.saturating_sub(overview_pad * 2),
+                ..r
+            };
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    line.clone(),
+                    Style::default().fg(ov_color),
+                ))),
+                text_r,
+            );
+            row += 1;
+        }
+    }
+}
+
 /// Minimum outer content-area height for the hero-on-left arrangement's
 /// two-pane split; below this the caller falls back to the shared
 /// hero-on-top narrow renderer (design.md decision 5's height floor). Moved

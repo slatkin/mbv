@@ -203,163 +203,65 @@ impl App {
         focused: bool,
         overview_pad: u16,
     ) {
-        if area.width == 0 || area.height == 0 {
-            return;
-        }
-        let text_w = area.width as usize;
-        let mut row = area.y;
-        let max_y = area.y + area.height;
-
-        for line in &layout.title_lines {
-            if row >= max_y {
-                break;
-            }
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    line.clone(),
-                    Style::default()
-                        .fg(palette::YELLOW)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Rect {
-                    x: area.x,
-                    y: row,
-                    width: area.width,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
-
-        if row < max_y && !layout.show_name.is_empty() {
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    trunc_str(&layout.show_name, text_w),
-                    Style::default().fg(palette::FOAM),
-                )),
-                Rect {
-                    x: area.x,
-                    y: row,
-                    width: area.width,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
-
-        if row < max_y {
-            let release_date = if item.premiere_date.is_empty() {
-                String::new()
+        let release_date = if item.premiere_date.is_empty() {
+            String::new()
+        } else {
+            format_release_date(&item.premiere_date)
+        };
+        let dur_str = if item.runtime_ticks > 0 {
+            fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
+        } else {
+            String::new()
+        };
+        let progress_span =
+            if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
+                let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+                Some(Span::styled(
+                    format!("{}% watched", pct),
+                    Style::default().fg(palette::BG_GREEN),
+                ))
+            } else if !item.played {
+                Some(Span::styled(
+                    "Unwatched",
+                    Style::default().fg(palette::MUTED),
+                ))
             } else {
-                format_release_date(&item.premiere_date)
+                None
             };
-            let dur_str = if item.runtime_ticks > 0 {
-                fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-            } else {
-                String::new()
-            };
-            let progress_span =
-                if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
-                    let pct =
-                        (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-                    Some(Span::styled(
-                        format!("{}% watched", pct),
-                        Style::default().fg(palette::BG_GREEN),
-                    ))
-                } else if !item.played {
-                    Some(Span::styled(
-                        "Unwatched",
-                        Style::default().fg(palette::MUTED),
-                    ))
-                } else {
-                    None
-                };
 
-            let mut spans: Vec<Span> = Vec::new();
-            if !release_date.is_empty() {
-                spans.push(Span::styled(
-                    release_date,
-                    Style::default().fg(palette::SUBTLE),
-                ));
+        let mut meta_spans: Vec<Span<'static>> = Vec::new();
+        if !release_date.is_empty() {
+            meta_spans.push(Span::styled(
+                release_date,
+                Style::default().fg(palette::SUBTLE),
+            ));
+        }
+        if !dur_str.is_empty() {
+            if !meta_spans.is_empty() {
+                meta_spans.push(Span::raw("  "));
             }
-            if !dur_str.is_empty() {
-                if !spans.is_empty() {
-                    spans.push(Span::raw("  "));
-                }
-                spans.push(Span::styled(
-                    trunc_str(&dur_str, text_w),
-                    Style::default().fg(palette::SUBTLE),
-                ));
+            meta_spans.push(Span::styled(
+                trunc_str(&dur_str, area.width as usize),
+                Style::default().fg(palette::SUBTLE),
+            ));
+        }
+        if let Some(progress_span) = progress_span {
+            if !meta_spans.is_empty() {
+                meta_spans.push(Span::raw("  "));
             }
-            if let Some(progress_span) = progress_span {
-                if !spans.is_empty() {
-                    spans.push(Span::raw("  "));
-                }
-                spans.push(progress_span);
-            }
-            if !spans.is_empty() {
-                f.render_widget(
-                    Paragraph::new(Line::from(spans)),
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-            }
-            row += 1;
+            meta_spans.push(progress_span);
         }
 
-        row += 1; // blank separator row
-
-        if !layout.overview_lines.is_empty() && row < max_y {
-            let ov_color = if focused {
-                palette::WHITE
-            } else {
-                palette::MUTED
-            };
-            // No background box here: the overview sits directly on the
-            // shell's already-painted panel surface, same as every other
-            // hero-on-top screen (e.g. `detail.rs`'s `render_compact_detail`)
-            // rather than a separately-coloured card.
-            let text_row = |wide: bool, y: u16| -> Rect {
-                if wide {
-                    Rect {
-                        x: wide_area.x,
-                        y,
-                        width: wide_area.width,
-                        height: 1,
-                    }
-                } else {
-                    Rect {
-                        x: area.x,
-                        y,
-                        width: area.width,
-                        height: 1,
-                    }
-                }
-            };
-            row += 1; // top pad row
-            for (line, wide) in &layout.overview_lines {
-                if row >= max_y {
-                    break;
-                }
-                let r = text_row(*wide, row);
-                let text_r = Rect {
-                    x: r.x + overview_pad,
-                    width: r.width.saturating_sub(overview_pad * 2),
-                    ..r
-                };
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        line.clone(),
-                        Style::default().fg(ov_color),
-                    ))),
-                    text_r,
-                );
-                row += 1;
-            }
-        }
+        super::hero::render_home_hero_meta_block(
+            f,
+            area,
+            wide_area,
+            &layout.title_lines,
+            &layout.show_name,
+            meta_spans,
+            &layout.overview_lines,
+            overview_pad,
+            focused,
+        );
     }
 }

@@ -194,21 +194,23 @@ pub(super) fn render_home_latest_row(
 }
 
 impl App {
-    /// Generic hero detail for a selected non-Emby Home item, following the
-    /// same visual structure as the Emby Keep Watching hero: yellow bold
-    /// wrapped title, a show-name line, a subtitle line, a blank separator,
-    /// and a wrapped overview block, with a 16:9 image filling the column.
-    /// Audiobookshelf covers load through the existing
-    /// `ImageSource::Audiobookshelf` path; items with no artwork degrade to no
-    /// image, not an error.
-    /// `overview_pad` insets the overview text within its background row —
-    /// the two-column (wide) hero's original 2-col padding; the
-    /// single-column hero passes 0 to stay flush with the title above it.
+    /// Generic hero detail for a selected non-Emby Home item, sharing its
+    /// title/subtitle/meta/overview shape with the Emby Keep Watching hero
+    /// via [`super::hero::render_home_hero_meta_block`], plus a 16:9 cover
+    /// image filling the column below it (unlike Keep Watching's image,
+    /// which sits beside the text -- an existing, preserved difference, not
+    /// something this shares). Audiobookshelf covers load through the
+    /// existing `ImageSource::Audiobookshelf` path; items with no artwork
+    /// degrade to no image, not an error.
+    /// `overview_pad` insets the overview text -- the two-column (wide)
+    /// hero's original 2-col padding; the single-column hero passes 0 to
+    /// stay flush with the title above it.
     pub(super) fn render_home_latest_detail(
         &mut self,
         f: &mut Frame,
         area: Rect,
         item: &QueueItem,
+        focused: bool,
         overview_pad: usize,
     ) {
         if area.width == 0 || area.height == 0 {
@@ -223,13 +225,14 @@ impl App {
         };
         let overview = item.overview().map(str::to_owned);
 
-        // Title (yellow, bold, wrapped), then one row each for show name,
-        // subtitle, blank separator, then the wrapped overview block.
         let title_lines: Vec<String> = wrap(title, text_w)
             .into_iter()
             .map(|s| s.into_owned())
             .collect();
-        let overview_lines: Vec<String> = if overview.as_deref().is_none_or(str::is_empty) {
+        // No beside-image wrap-around in this layout (the cover sits below
+        // the text, not beside it), so every overview line uses the full
+        // width and the `wide` flag is irrelevant.
+        let overview_lines: Vec<(String, bool)> = if overview.as_deref().is_none_or(str::is_empty) {
             Vec::new()
         } else {
             // Cap long descriptions, with an ellipsis, so the hero doesn't
@@ -238,12 +241,12 @@ impl App {
             let capped = trunc_str(overview.as_deref().unwrap(), 200);
             wrap(&capped, ov_w.max(1))
                 .into_iter()
-                .map(|s| s.into_owned())
+                .map(|s| (s.into_owned(), false))
                 .collect()
         };
         let meta_height = title_lines.len() as u16
             + if show_name.is_empty() { 0 } else { 1 }
-            + 1 // subtitle row
+            + 1 // meta row
             + 1 // blank separator
             + if overview_lines.is_empty() {
                 0
@@ -258,98 +261,30 @@ impl App {
             .min(area.height.saturating_sub(meta_height + 1));
         let img_w = area.width;
 
-        let mut row = area.y;
-        let max_y = area.y + area.height;
-
-        for line in &title_lines {
-            if row >= max_y {
-                break;
-            }
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    line.clone(),
-                    Style::default()
-                        .fg(palette::YELLOW)
-                        .add_modifier(Modifier::BOLD),
-                )),
-                Rect {
-                    x: area.x,
-                    y: row,
-                    width: area.width,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
-
-        if row < max_y && !show_name.is_empty() {
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    trunc_str(&show_name, text_w),
-                    Style::default().fg(palette::FOAM),
-                )),
-                Rect {
-                    x: area.x,
-                    y: row,
-                    width: area.width,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
-
-        if row < max_y {
-            let mut spans: Vec<Span> = Vec::new();
-            if let Some(ticks) = item.duration() {
-                spans.push(Span::styled(
+        let meta_spans: Vec<Span<'static>> = item
+            .duration()
+            .map(|ticks| {
+                vec![Span::styled(
                     trunc_str(
                         &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
                         text_w,
                     ),
                     Style::default().fg(palette::SUBTLE),
-                ));
-            }
-            if !spans.is_empty() {
-                f.render_widget(
-                    Paragraph::new(Line::from(spans)),
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-            }
-            row += 1;
-        }
+                )]
+            })
+            .unwrap_or_default();
 
-        row += 1; // blank separator row
-
-        if !overview_lines.is_empty() && row < max_y {
-            let block_h = 1 + overview_lines.len() as u16 + 1; // top pad + lines + bottom pad
-            let block_area = Rect {
-                x: area.x,
-                y: row,
-                width: area.width,
-                height: block_h,
-            };
-            let inner = Rect {
-                x: block_area.x + overview_pad as u16,
-                y: block_area.y + 1,
-                width: block_area.width.saturating_sub(overview_pad as u16 * 2),
-                height: block_area.height.saturating_sub(2),
-            };
-            let overview_text: Vec<Line> = overview_lines
-                .iter()
-                .map(|line| {
-                    Line::from(Span::styled(
-                        line.clone(),
-                        Style::default().fg(palette::WHITE),
-                    ))
-                })
-                .collect();
-            f.render_widget(Paragraph::new(overview_text), inner);
-        }
+        super::hero::render_home_hero_meta_block(
+            f,
+            area,
+            area,
+            &title_lines,
+            &show_name,
+            meta_spans,
+            &overview_lines,
+            overview_pad as u16,
+            focused,
+        );
 
         // Cover art: only Audiobookshelf episodes carry artwork today. The
         // cover is fetched via `fetch_audiobookshelf_cover` (which routes
@@ -487,7 +422,7 @@ mod tests {
         let backend = TestBackend::new(40, 6);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_home_latest_detail(f, Rect::new(0, 0, 40, 6), &item, 0);
+            app.render_home_latest_detail(f, Rect::new(0, 0, 40, 6), &item, true, 0);
         })
         .unwrap();
         let out = buffer_to_string(&term);
@@ -507,7 +442,7 @@ mod tests {
         let backend = TestBackend::new(40, 6);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_home_latest_detail(f, Rect::new(0, 0, 40, 6), &item, 0);
+            app.render_home_latest_detail(f, Rect::new(0, 0, 40, 6), &item, true, 0);
         })
         .unwrap();
         let out = buffer_to_string(&term);
@@ -546,7 +481,7 @@ mod tests {
         let backend = TestBackend::new(200, 40);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_home_latest_detail(f, Rect::new(0, 0, 200, 40), &item, 0);
+            app.render_home_latest_detail(f, Rect::new(0, 0, 200, 40), &item, true, 0);
         })
         .unwrap();
         let out = buffer_to_string(&term);
@@ -596,7 +531,7 @@ mod tests {
         let backend = TestBackend::new(40, 6);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_home_latest_detail(f, Rect::new(0, 0, 40, 6), &item, 0);
+            app.render_home_latest_detail(f, Rect::new(0, 0, 40, 6), &item, true, 0);
         })
         .unwrap();
         let out = buffer_to_string(&term);
