@@ -220,19 +220,11 @@ fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
     out
 }
 
-// --- Labeled key·value: CODEC aac ⧸ en ⧸ CC, or 720P ⧸ en ⧸ CC -----------
-fn keyval_group(key: &str, value: &str, color: Color, out: &mut Vec<Span<'static>>) {
-    out.push(Span::styled(
-        format!("{key} "),
-        Style::default().fg(palette::MUTED),
-    ));
-    out.push(Span::styled(value.to_string(), bold(color)));
-}
-
+// --- Labeled key·value: aac ⧸ en ⧸ CC, or 720P ⧸ en ⧸ CC ------------------
 fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
     if d.audio_only {
-        keyval_group("CODEC", &d.res_label, d.res_color(), &mut out);
+        out.push(Span::styled(d.res_label.clone(), bold(d.res_color())));
     } else {
         // No "RES" key -- the "P" suffix already reads as a resolution.
         let res_val = if d.res_dim {
