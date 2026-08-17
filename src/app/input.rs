@@ -205,9 +205,17 @@ impl App {
             self.tab_scroll = pos;
             return;
         }
-        let tab_w = self
-            .terminal_width
-            .saturating_sub(super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE);
+        // Use the width `render_tabs` actually budgeted last frame
+        // (`layout.tabs_area`), not a fresh guess from `terminal_width` --
+        // the tab bar sits in the right column alongside a left panel and
+        // has its own padding/reserve math, so re-deriving it here drifted
+        // out of sync with what actually renders.
+        let tab_w = if self.layout.tabs_area.width > 0 {
+            self.layout.tabs_area.width
+        } else {
+            self.terminal_width
+                .saturating_sub(super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE)
+        };
         loop {
             let (_, end) = self.visible_tab_range(tab_w);
             if pos < end {
