@@ -319,16 +319,11 @@ impl App {
             } else {
                 palette::MUTED
             };
-            // The overview "card" blends with the panel surface: green in the
-            // single-column layout while the whole Home panel is green
-            // (`overview_pad == 0` identifies that layout), library surface
-            // otherwise.
-            let block_bg = if overview_pad == 0 && focused {
-                palette::SURFACE_FOCUSED
-            } else {
-                palette::SURFACE_BACKDROP
-            };
-            let bg_row = |wide: bool, y: u16| -> Rect {
+            // No background box here: the overview sits directly on the
+            // shell's already-painted panel surface, same as every other
+            // hero-on-top screen (e.g. `detail.rs`'s `render_compact_detail`)
+            // rather than a separately-coloured card.
+            let text_row = |wide: bool, y: u16| -> Rect {
                 if wide {
                     Rect {
                         x: wide_area.x,
@@ -345,19 +340,12 @@ impl App {
                     }
                 }
             };
-            let first_wide = layout.overview_lines[0].1;
-            let last_wide = layout.overview_lines[layout.overview_lines.len() - 1].1;
-            f.render_widget(
-                Block::default().style(Style::default().bg(block_bg)),
-                bg_row(first_wide, row),
-            );
-            row += 1;
+            row += 1; // top pad row
             for (line, wide) in &layout.overview_lines {
                 if row >= max_y {
                     break;
                 }
-                let r = bg_row(*wide, row);
-                f.render_widget(Block::default().style(Style::default().bg(block_bg)), r);
+                let r = text_row(*wide, row);
                 let text_r = Rect {
                     x: r.x + overview_pad,
                     width: r.width.saturating_sub(overview_pad * 2),
@@ -371,12 +359,6 @@ impl App {
                     text_r,
                 );
                 row += 1;
-            }
-            if row < max_y {
-                f.render_widget(
-                    Block::default().style(Style::default().bg(block_bg)),
-                    bg_row(last_wide, row),
-                );
             }
         }
     }
