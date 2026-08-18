@@ -5,7 +5,10 @@ playback belongs to the terminal, Local daemon, or packaged `mbvd`.
 
 ## Read first
 
-- `CONTEXT.md`: domain vocabulary; *Avoid* means incorrect terminology.
+- `CONTEXT.md`: domain vocabulary; *Avoid* means incorrect terminology. When
+  a change introduces a new domain term, add it in the same PR. When a term
+  would collide with or rename an existing entry, flag it to the user instead
+  of resolving it unilaterally.
 - Current (not superseded) ADRs in `docs/adr/` before architecture changes.
 - `openspec` contains current and archived specs for major implementations.
 

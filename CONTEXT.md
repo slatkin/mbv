@@ -332,27 +332,39 @@ Panel mode.
 _Avoid_: active panel, focused panel, pane focus
 
 **Panel mode**:
-The layout mode cycled with `x`: Both (Library and Queue visible), LibraryOnly,
-or QueueOnly. LibraryOnly forces Panel focus to Library; QueueOnly forces it to
-Queue.
-_Avoid_: layout mode, view mode, panel state
-
-**Wide mode / Narrow mode**:
-The right panel's responsive width states, chosen from the width available to
-that panel. Narrow is not a distinct arrangement: it is always hero-on-top with
-a single-column list. Wide uses either Hero-on-top or Hero-on-left, fixed per
-surface. Distinct from Panel mode, which is app-wide.
-_Avoid_: responsive mode, view mode, layout mode, breakpoint mode
+The app-wide layout state, one of Mini, Normal, or Wide:
+- **Mini**: only one of Library or Queue is visible, per Panel focus. Reached
+  either by explicit `x` toggle at any terminal width, or forced when terminal
+  width is below the mini-view threshold. Both paths are the same state —
+  Mini names "only one panel is showing," not the reason it's showing.
+- **Normal**: both panels visible; the Library panel uses its single-column
+  Hero-on-top arrangement. Sometimes called "narrow," but only from the
+  Library panel's perspective — Normal is the canonical term.
+- **Wide**: both panels visible; the Library panel uses its two-column
+  arrangement, Hero-on-top or Hero-on-left depending on the surface.
+_Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
 **Hero-on-top**:
-The wide arrangement used by movies, shows, podcasts, feeds, and home videos:
-hero above the list, list in two columns.
+The two-column Wide arrangement used by movies, shows, podcasts, feeds, and
+home videos: hero above the list. Also the sole arrangement in Normal mode
+(there, single-column).
 _Avoid_: stacked, two-column mode, dual column
 
 **Hero-on-left**:
-The wide arrangement used by Home, music, and audiobooks: hero beside the list,
-list in a single column.
+The Wide arrangement used by Home, music, and audiobooks: hero beside the
+list, list in a single column. Wide-only; Normal mode has no Hero-on-left.
 _Avoid_: split, side-by-side, hero-on-side
+
+**Sidebar**:
+An anchored, full-height destination rendered at a fixed width from one edge
+of the window (code: `render_panel_shell`, whose rect is literally named
+`sidebar`) — distinct from a **popup**, a centered dimmed-backdrop overlay
+(code: `render_modal_frame`) such as the Feeds-management, multiselect,
+library-routes, save-playlist, and confirm dialogs. The four sidebars: Search
+sidebar, Settings sidebar, Sessions sidebar, Help sidebar. Feeds management is
+a popup nested inside the Settings sidebar, not a sidebar itself — it only
+exists while Settings is open.
+_Avoid_: panel (reserved for Library/Queue), screen, overlay (bare), full-window destination
 
 **Search sidebar**:
 The global cross-library search surface filtering to navigable media types
@@ -515,7 +527,7 @@ reaching a Player owner over a socket.
 **Session**:
 An Emby-tracked record that some device is playing something. Exists
 independently of mbv — including for non-mbv devices — and is what the
-Sessions panel lists. Emby Sessions may advertise private-LAN ctrl and shared-
+Sessions sidebar lists. Emby Sessions may advertise private-LAN ctrl and shared-
 data ports in `supported_commands` (`mbv-direct-tcp-port`, `mbv-shared-data-
 tcp-port`).
 _Avoid_: connection, stream, remote instance
@@ -536,7 +548,7 @@ _Avoid_: green pill, remote takeover, queue management (alone)
 **Queue scope**:
 Local or Remote — whether the queue on the controlling terminal's local side or
 the directly controlled remote Player owner's queue is currently shown in the
-queue panel. Exists during Sessions-panel Direct remote control and explicit
+queue panel. Exists during Sessions-sidebar Direct remote control and explicit
 remote daemon attachment, not Session watch or a Library route. Remote scope is
 only selectable when a direct remote queue exists; otherwise Local is forced.
 _Avoid_: split view, pill state
@@ -544,10 +556,10 @@ _Avoid_: split view, pill state
 **Library route**:
 A persistent per-library assignment sending that library's playback to a
 chosen device, set from the library-routing picker rather than the Sessions
-panel. Stored as `lowercased name -> tcp://host:port` endpoint (device name is
+sidebar. Stored as `lowercased name -> tcp://host:port` endpoint (device name is
 transient in the picker, immediately resolved to an endpoint before persisting).
 Independent of Session watch / Direct remote control — connecting via the
-Sessions panel tears down an active route first. F2 Settings manages routes;
+Sessions sidebar tears down an active route first. F2 Settings manages routes;
 hand-editing `config.toml` is supported. Malformed non-`tcp://` values are
 logged and skipped.
 _Avoid_: routing, daemon route

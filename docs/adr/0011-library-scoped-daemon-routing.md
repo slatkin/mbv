@@ -40,16 +40,16 @@ connect attempt is delegated to `App::try_daemon_route_connect` (ADR 0010,
 #222) rather than re-implemented here.
 
 Library routing (`active_route`) is tracked independently of the
-Sessions-panel direct-remote concept (`connected_session_id` /
+Sessions-sidebar direct-remote concept (`connected_session_id` /
 `direct_remote_label`); they are two separate ways to end up thin-client
 and must never be conflated in `App` state, even though both reuse the
 same suspend/restore machinery (`SuspendedLocalSession`,
 `switch_to_direct_remote`/`switch_to_library_route`,
 `restore_local_mode`). Two specific conflation hazards were identified and
 closed: (1) a play/enqueue action while already thin-client for a reason
-*other* than library routing (Sessions-panel direct-remote, local-daemon
+*other* than library routing (Sessions-sidebar direct-remote, local-daemon
 mode) must not let library routing swap the player out from under that
-other connection; (2) a Sessions-panel direct-remote upgrade while already
+other connection; (2) a Sessions-sidebar direct-remote upgrade while already
 on a library route must tear the library route down cleanly first --
 `connect_to_session` runs `restore_local_mode` at its own top whenever
 `active_route` is set, before its existing direct-upgrade attempt (itself
@@ -80,7 +80,7 @@ wildcard "route everything" case #222 introduced.
 - `App` gains `active_route: Option<String>` and a per-item
   `library_route_cache` for ancestor-lookup memoization (successes only).
 - `restore_local_mode` is the single shared "go back to local" tail for
-  both the Sessions-panel and library-route thin-client paths; it clears
+  both the Sessions-sidebar and library-route thin-client paths; it clears
   `active_route` in addition to its existing resets, and `connect_to_session`
   calls it proactively to tear down a library route before attempting its
   own direct-upgrade path.
@@ -104,7 +104,7 @@ The `[daemon_routes]` config table described above required a raw
 `tcp://`/`unix://` connection string per library. #239 replaced it with
 `[library_routes]`: library name -> **device name**, resolved against the
 live Emby session list at connect time via the same mechanism
-`App::session_direct_endpoint` already used for F3's Sessions panel
+`App::session_direct_endpoint` already used for F3's Sessions sidebar
 (`App::resolve_device_endpoint`, added in #239). No raw address is ever
 typed or displayed. The `"*"` wildcard is gone; there is no migration path
 from the old format -- it's a breaking config change. See
@@ -115,7 +115,7 @@ for the full design.
 
 #239's device-name resolution paid a blocking `GET /Sessions` call on every
 routed play/enqueue attempt -- extra synchronous work #223's original
-raw-endpoint config didn't have, and slower than the F3 Sessions-panel path,
+raw-endpoint config didn't have, and slower than the F3 Sessions-sidebar path,
 which starts from an already-discovered `SessionInfo`. #256 replaces the
 stored device name with the endpoint it resolves to: `[library_routes]`
 values become `tcp://host:port` strings again (parsed via the same
@@ -159,7 +159,7 @@ This is a deliberate, explicit trade-off, not an oversight:
   port, or an unparseable host) can no longer be *committed* the way it
   could pre-#256 (which stored the name and deferred resolution to connect
   time). Rather than silently dropping such a device from the picker list
-  -- which would leave a device visible in F3's Sessions panel mysteriously
+  -- which would leave a device visible in F3's Sessions sidebar mysteriously
   absent from F2 with no explanation -- it's shown as a greyed-out row
   suffixed `(not currently routable)`; selecting it flashes that reason
   and commits nothing.
