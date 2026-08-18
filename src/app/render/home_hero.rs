@@ -10,12 +10,14 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
 
-/// Pre-wrapped content for the Keep Watching hero panel's metadata column,
-/// plus the total row count it needs. Computed once (mirroring
-/// `compact_banner_layout`'s measure-before-render pattern) so the caller
-/// can size the panel to fit before rendering, and so the title and
-/// overview are wrapped exactly once per frame rather than once to measure
-/// and again to render.
+/// Pre-wrapped content for a hero-on-top item's metadata column, plus the
+/// total row count it needs. Computed once (mirroring `compact_banner_layout`'s
+/// measure-before-render pattern) so the caller can size the panel to fit
+/// before rendering, and so the title and overview are wrapped exactly once
+/// per frame rather than once to measure and again to render. Shared by the
+/// Emby Keep Watching hero and the generic Audiobookshelf hero -- both are
+/// beside-image, hero-on-top items and use the same wrap-around-the-image
+/// shape.
 pub(super) struct KeepWatchingHeroLayout {
     title_lines: Vec<String>,
     show_name: String,
@@ -39,16 +41,10 @@ impl App {
         }
     }
 
-    /// Builds the Keep Watching hero panel's metadata layout for `item`:
-    /// title wrap lines, then one row each for the show-name line, the
-    /// duration/progress line, and the blank separator, then the wrapped
-    /// overview. The overview wraps around the image: it wraps at `text_w`
-    /// (the meta column, beside the image) for however many of its rows
-    /// still fall within `image_rows`, then reclaims the full `wide_w` for
-    /// any remaining rows once past the image's bottom edge. `overview_pad`
-    /// is the two-column (wide) hero's original 2-col horizontal padding
-    /// around the overview block; the single-column hero passes 0 so its
-    /// overview stays flush with the title above it.
+    /// Builds the Keep Watching hero panel's metadata layout for `item`,
+    /// delegating to the shared [`hero_text_layout`] (also used by the
+    /// generic Audiobookshelf hero, so both hero-on-top items share one
+    /// wrap-around-the-image implementation).
     pub(super) fn keep_watching_hero_layout(
         item: &mbv_core::api::EmbyItem,
         text_w: usize,
@@ -56,88 +52,32 @@ impl App {
         image_rows: u16,
         overview_pad: usize,
     ) -> KeepWatchingHeroLayout {
-        if text_w == 0 {
-            return KeepWatchingHeroLayout {
-                title_lines: Vec::new(),
-                show_name: String::new(),
-                overview_lines: Vec::new(),
-                height: 0,
-            };
-        }
-        let title_lines: Vec<String> = wrap(&item.name, text_w)
-            .into_iter()
-            .map(|s| s.into_owned())
-            .collect();
         let show_name = if item.item_type == "Episode" {
             item.series_name.clone()
         } else {
             String::new()
         };
-        let header_rows = title_lines.len() as u16
-            + if show_name.is_empty() { 0 } else { 1 } // show name row (only for episodes)
-            + 1 // duration / progress row
-            + 1; // blank separator row
-        let ov_text_w = text_w.saturating_sub(overview_pad * 2);
-        let ov_wide_w = wide_w.saturating_sub(overview_pad * 2);
-        let overview_lines: Vec<(String, bool)> = if item.overview.is_empty() {
-            Vec::new()
+        let overview = if item.overview.is_empty() {
+            String::new()
         } else {
-            let cleaned = clean_overview(&item.overview);
-            let narrow_capacity = image_rows.saturating_sub(header_rows) as usize;
-            if narrow_capacity == 0 {
-                wrap(&cleaned, ov_wide_w.max(1))
-                    .into_iter()
-                    .map(|s| (s.into_owned(), true))
-                    .collect()
-            } else {
-                let narrow_all: Vec<String> = wrap(&cleaned, ov_text_w)
-                    .into_iter()
-                    .map(|s| s.into_owned())
-                    .collect();
-                if narrow_all.len() <= narrow_capacity {
-                    narrow_all.into_iter().map(|l| (l, false)).collect()
-                } else {
-                    let consumed_words: usize = narrow_all[..narrow_capacity]
-                        .iter()
-                        .map(|l| l.split_whitespace().count())
-                        .sum();
-                    let remainder: String = cleaned
-                        .split_whitespace()
-                        .skip(consumed_words)
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    let mut lines: Vec<(String, bool)> = narrow_all[..narrow_capacity]
-                        .iter()
-                        .cloned()
-                        .map(|l| (l, false))
-                        .collect();
-                    lines.extend(
-                        wrap(&remainder, ov_wide_w.max(1))
-                            .into_iter()
-                            .map(|s| (s.into_owned(), true)),
-                    );
-                    lines
-                }
-            }
+            clean_overview(&item.overview)
         };
-        let height = header_rows
-            + if overview_lines.is_empty() {
-                0
-            } else {
-                1 + overview_lines.len() as u16 + 1 // overview block: top pad + lines + bottom pad
-            };
-        KeepWatchingHeroLayout {
-            title_lines,
-            show_name,
-            overview_lines,
-            height,
-        }
+        hero_text_layout(
+            &item.name,
+            &show_name,
+            &overview,
+            text_w,
+            wide_w,
+            image_rows,
+            overview_pad,
+        )
     }
 
     /// Renders the Keep Watching hero panel's image column into `area`,
     /// top-aligned and, in wide two-column layouts, horizontally centered. The column is a fixed reserved
     /// box (unlike the queue card's growing/shrinking slot), so a dim
-    /// placeholder simply fills it while no artwork is ready yet.
+    /// placeholder simply fills it while no artwork is ready yet. Shared by
+    /// the Emby and generic Audiobookshelf heroes.
     pub(super) fn render_keep_watching_hero_image(
         &mut self,
         f: &mut Frame,
@@ -196,27 +136,14 @@ impl App {
         );
     }
 
-    /// Renders the Keep Watching hero panel's metadata column for the
-    /// focused item: episode title (yellow, wraps), show name (green), a
-    /// duration/percent-watched line, a blank separator row, then the full
-    /// overview (the caller sizes the panel via
-    /// `keep_watching_hero_meta_height` so nothing here gets clipped).
-    /// Overview rows past the image's bottom edge (`layout`'s wide lines)
-    /// render across `wide_area` instead of the narrower `area`, so the
-    /// text wraps around the image rather than staying squeezed beside it
-    /// for its full height. `overview_pad` insets the overview text within
-    /// its background row (the two-column hero's original 2-col padding);
-    /// the single-column hero passes 0 to stay flush with the title.
-    pub(super) fn render_keep_watching_hero_meta(
-        &self,
-        f: &mut Frame,
-        area: Rect,
-        wide_area: Rect,
+    /// Builds the Keep Watching hero's meta-row spans (release date, then
+    /// duration, then watched-progress/unwatched), truncated to `width`.
+    /// The Emby-specific input to `render_beside_image_hero`'s shared
+    /// `meta_spans` parameter.
+    pub(super) fn keep_watching_hero_meta_spans(
         item: &mbv_core::api::EmbyItem,
-        layout: &KeepWatchingHeroLayout,
-        focused: bool,
-        overview_pad: u16,
-    ) {
+        width: u16,
+    ) -> Vec<Span<'static>> {
         let release_date = if item.premiere_date.is_empty() {
             String::new()
         } else {
@@ -255,7 +182,7 @@ impl App {
                 meta_spans.push(Span::raw("  "));
             }
             meta_spans.push(Span::styled(
-                trunc_str(&dur_str, area.width as usize),
+                trunc_str(&dur_str, width as usize),
                 Style::default().fg(palette::SUBTLE),
             ));
         }
@@ -265,7 +192,24 @@ impl App {
             }
             meta_spans.push(progress_span);
         }
+        meta_spans
+    }
 
+    /// Renders a [`KeepWatchingHeroLayout`]'s title/show-name/meta/overview
+    /// block, shared by the Emby Keep Watching hero and the generic
+    /// Audiobookshelf hero (`home.rs`'s narrow-layout beside-image case) --
+    /// only the per-provider `meta_spans` (release date/progress for Emby,
+    /// duration alone for Audiobookshelf) differ.
+    pub(super) fn render_hero_layout_meta(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        wide_area: Rect,
+        layout: &KeepWatchingHeroLayout,
+        meta_spans: Vec<Span<'static>>,
+        overview_pad: u16,
+        focused: bool,
+    ) {
         super::hero::render_home_hero_meta_block(
             f,
             area,
@@ -277,5 +221,189 @@ impl App {
             overview_pad,
             focused,
         );
+    }
+
+    /// Renders a beside-image hero-on-top item: image column then text
+    /// column, unconditionally and in that order for every provider. The
+    /// single call site every hero-on-top item with a cover goes through
+    /// (Emby Keep Watching and the generic Audiobookshelf hero), so the two
+    /// can't drift out of sync the way two hand-written call sites can --
+    /// the image render in particular must never be skipped (not even when
+    /// there's no cache key yet), or the image column is left showing
+    /// whatever the terminal had there before, with text drawn over it.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn render_beside_image_hero(
+        &mut self,
+        f: &mut Frame,
+        meta_area: Rect,
+        wide_area: Rect,
+        img_area: Rect,
+        layout: &KeepWatchingHeroLayout,
+        meta_spans: Vec<Span<'static>>,
+        image_cache_key: &str,
+        overview_pad: u16,
+        focused: bool,
+        centered: bool,
+    ) {
+        self.render_keep_watching_hero_image(f, img_area, image_cache_key, centered);
+        self.render_hero_layout_meta(
+            f,
+            meta_area,
+            wide_area,
+            layout,
+            meta_spans,
+            overview_pad,
+            focused,
+        );
+    }
+}
+
+/// Beside-image hero-on-top dims: image width, the wrap-around text layout,
+/// and the image's row count. The single source of this geometry for every
+/// hero-on-top item with a cover -- Emby Keep Watching and the generic
+/// Audiobookshelf hero both call this so their layouts can't drift apart.
+pub(super) fn beside_image_hero_dims(
+    title: &str,
+    show_name: &str,
+    overview: &str,
+    inner_w: u16,
+    max_allowed: u16,
+) -> (u16, KeepWatchingHeroLayout, u16) {
+    let img_w = inner_w / 2;
+    let meta_w = inner_w.saturating_sub(img_w + 1) as usize;
+    let image_rows = (img_w.saturating_mul(9).saturating_add(31) / 32).min(max_allowed);
+    let layout = hero_text_layout(
+        title,
+        show_name,
+        overview,
+        meta_w,
+        inner_w as usize,
+        image_rows,
+        0,
+    );
+    (img_w, layout, image_rows)
+}
+
+/// Beside-image hero-on-top `Rect`s: the metadata column (left) and image
+/// column (right), both stretched to the taller of the two so the shorter
+/// one's background/border still spans the full row height. The single
+/// source of this geometry, shared the same way as [`beside_image_hero_dims`].
+pub(super) fn beside_image_hero_rects(
+    hero_content: Rect,
+    img_w: u16,
+    layout_height: u16,
+    image_rows: u16,
+) -> (Rect, Rect) {
+    // Clamp to `hero_content.height` -- the panel's actual granted height,
+    // which `top_hero_layout` can clamp smaller than what `image_rows`/
+    // `layout_height` asked for when the terminal doesn't have room for
+    // everything requested. Sizing the image/meta `Rect`s from the desired
+    // height alone (unclamped) lets them extend past the hero panel's real
+    // bottom edge, where the image's overflow gets drawn over by whatever
+    // renders below it (pills/list) -- looking like the image is cut off.
+    let hero_height = image_rows.max(layout_height).min(hero_content.height);
+    let meta_area = Rect {
+        x: hero_content.x,
+        y: hero_content.y,
+        width: hero_content.width.saturating_sub(img_w + 1),
+        height: hero_height,
+    };
+    let img_area = Rect {
+        x: hero_content.x + hero_content.width.saturating_sub(img_w),
+        y: hero_content.y,
+        width: img_w,
+        height: hero_height,
+    };
+    (meta_area, img_area)
+}
+
+/// Wrap-around-the-image text layout shared by every hero-on-top item with a
+/// beside-text image: title wrap lines, then one row each for the show-name
+/// line, the duration/progress line, and the blank separator, then the
+/// wrapped overview. The overview wraps around the image: it wraps at
+/// `text_w` (the meta column, beside the image) for however many of its rows
+/// still fall within `image_rows`, then reclaims the full `wide_w` for any
+/// remaining rows once past the image's bottom edge. `overview_pad` is the
+/// two-column (wide) hero's original 2-col horizontal padding around the
+/// overview block; the single-column hero passes 0 so its overview stays
+/// flush with the title above it.
+pub(super) fn hero_text_layout(
+    title: &str,
+    show_name: &str,
+    overview: &str,
+    text_w: usize,
+    wide_w: usize,
+    image_rows: u16,
+    overview_pad: usize,
+) -> KeepWatchingHeroLayout {
+    if text_w == 0 {
+        return KeepWatchingHeroLayout {
+            title_lines: Vec::new(),
+            show_name: String::new(),
+            overview_lines: Vec::new(),
+            height: 0,
+        };
+    }
+    let title_lines: Vec<String> = wrap(title, text_w)
+        .into_iter()
+        .map(|s| s.into_owned())
+        .collect();
+    let header_rows = title_lines.len() as u16
+        + if show_name.is_empty() { 0 } else { 1 } // show name row (only for episodes)
+        + 1 // duration / progress row
+        + 1; // blank separator row
+    let ov_text_w = text_w.saturating_sub(overview_pad * 2);
+    let ov_wide_w = wide_w.saturating_sub(overview_pad * 2);
+    let overview_lines: Vec<(String, bool)> = if overview.is_empty() {
+        Vec::new()
+    } else {
+        let narrow_capacity = image_rows.saturating_sub(header_rows) as usize;
+        if narrow_capacity == 0 {
+            wrap(overview, ov_wide_w.max(1))
+                .into_iter()
+                .map(|s| (s.into_owned(), true))
+                .collect()
+        } else {
+            let narrow_all: Vec<String> = wrap(overview, ov_text_w)
+                .into_iter()
+                .map(|s| s.into_owned())
+                .collect();
+            if narrow_all.len() <= narrow_capacity {
+                narrow_all.into_iter().map(|l| (l, false)).collect()
+            } else {
+                let consumed_words: usize = narrow_all[..narrow_capacity]
+                    .iter()
+                    .map(|l| l.split_whitespace().count())
+                    .sum();
+                let remainder: String = overview
+                    .split_whitespace()
+                    .skip(consumed_words)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let mut lines: Vec<(String, bool)> = narrow_all[..narrow_capacity]
+                    .iter()
+                    .cloned()
+                    .map(|l| (l, false))
+                    .collect();
+                lines.extend(
+                    wrap(&remainder, ov_wide_w.max(1))
+                        .into_iter()
+                        .map(|s| (s.into_owned(), true)),
+                );
+                lines
+            }
+        }
+    };
+    let height = header_rows
+        + if overview_lines.is_empty() {
+            0
+        } else {
+            1 + overview_lines.len() as u16 + 1 // overview block: top pad + lines + bottom pad
+        };
+    KeepWatchingHeroLayout {
+        title_lines,
+        show_name: show_name.to_string(),
+        overview_lines,
+        height,
     }
 }

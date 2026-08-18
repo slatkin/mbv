@@ -230,10 +230,13 @@ pub(super) fn home_latest_detail_text(
     let overview_lines: Vec<(String, bool)> = match item.overview() {
         None | Some("") => Vec::new(),
         Some(overview) => {
-            // Cap long descriptions, with an ellipsis, so the hero doesn't
-            // grow unboundedly. The 200-char limit is on display width and
-            // includes the ellipsis itself.
-            let capped = trunc_str(overview, 200);
+            // Strip URLs (an unbroken URL is one giant unbreakable word to
+            // the wrapper below) and cap long descriptions, with an
+            // ellipsis, matching the 600-char cap Emby's home-video/podcast
+            // library views already use (`trunc_overview`) -- podcast
+            // overviews routinely carry ad copy that would otherwise grow
+            // the hero unboundedly.
+            let capped = trunc_overview(overview);
             wrap(&capped, ov_w.max(1))
                 .into_iter()
                 .map(|s| (s.into_owned(), false))
@@ -258,6 +261,23 @@ pub(super) fn home_latest_detail_text(
 }
 
 impl App {
+    /// Triggers the Audiobookshelf cover fetch for `library_item_id` and
+    /// returns its image cache key, or `None` with no server configured.
+    /// Shared by every generic-hero cover: the two-column/Feed stacked-below
+    /// detail (`render_home_latest_detail`) and the narrow beside-image
+    /// hero (`home.rs`'s `HeroData::GenericBeside`).
+    pub(super) fn audiobookshelf_cover_key(&mut self, library_item_id: &str) -> Option<String> {
+        let setup = self.config.lock().unwrap().audiobookshelf_setup.clone()?;
+        if self.images_enabled() {
+            self.fetch_audiobookshelf_cover(setup.server_url.clone(), library_item_id.to_string());
+        }
+        Some(images::audiobookshelf_cover_cache_key(
+            &setup.server_url,
+            library_item_id,
+            self.current_protocol_suffix(),
+        ))
+    }
+
     /// Generic hero detail for a selected non-Emby Home item, sharing its
     /// title/subtitle/meta/overview shape with the Emby Keep Watching hero
     /// via [`super::hero::render_home_hero_meta_block`], plus a 16:9 cover
@@ -330,21 +350,9 @@ impl App {
         if image_height == 0 {
             return;
         }
-        let setup = self.config.lock().unwrap().audiobookshelf_setup.clone();
-        let Some(setup) = setup else {
+        let Some(image_key) = self.audiobookshelf_cover_key(&episode.library_item_id) else {
             return;
         };
-        if self.images_enabled() {
-            self.fetch_audiobookshelf_cover(
-                setup.server_url.clone(),
-                episode.library_item_id.clone(),
-            );
-        }
-        let image_key = images::audiobookshelf_cover_cache_key(
-            &setup.server_url,
-            &episode.library_item_id,
-            self.current_protocol_suffix(),
-        );
         let Some(image) = self.cached_image_protocol_mut(&image_key) else {
             return;
         };
@@ -490,7 +498,7 @@ mod tests {
         );
     }
 
-    /// Long ABS descriptions are capped at 200 display columns with an
+    /// Long ABS descriptions are capped at 600 display columns with an
     /// ellipsis so the hero doesn't grow unboundedly.
     #[test]
     fn detail_truncates_long_description_with_ellipsis() {
@@ -498,7 +506,7 @@ mod tests {
         // The truncation limit is on the description width; build a much wider
         // buffer item by item so the assertion below is about the ellipsis,
         // not about a coincidental line-wrap boundary.
-        let long = "word ".repeat(80);
+        let long = "word ".repeat(160);
         let item = QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
             library_item_id: "show-t".into(),
             episode_id: "episode-t".into(),
@@ -534,8 +542,8 @@ mod tests {
             "long description ends with an ellipsis: ...{desc_region:?}"
         );
         assert!(
-            desc_region.chars().count() <= 201,
-            "description column budget is 200 + ellipsis, got {} chars",
+            desc_region.chars().count() <= 601,
+            "description column budget is 600 + ellipsis, got {} chars",
             desc_region.chars().count()
         );
     }

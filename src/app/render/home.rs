@@ -6,6 +6,7 @@ use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
+use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -169,6 +170,7 @@ impl App {
                 Rect,
                 KeepWatchingHeroLayout,
             ),
+            GenericBeside(QueueItem, Rect, Rect, Rect, KeepWatchingHeroLayout),
             Generic(QueueItem, Rect),
         }
         let hero_data: Option<HeroData>;
@@ -188,7 +190,7 @@ impl App {
             let (mut hero_panel, right_panel) = hero::hero_on_left_panes(area);
             hero_panel.height = area.height.saturating_sub(1);
             let hero_col_width = hero_panel.width;
-            let hero_content = Rect {
+            let mut hero_content = Rect {
                 x: hero_panel.x.saturating_add(HOME_HERO_PAD_X),
                 y: hero_panel.y.saturating_add(HOME_HERO_PAD_Y),
                 width: hero_panel.width.saturating_sub(HOME_HERO_PAD_X * 2),
@@ -241,8 +243,36 @@ impl App {
                 }
                 None => current_item
                     .filter(|item| item.as_emby().is_none())
-                    .map(|item| HeroData::Generic(item, hero_content)),
+                    .map(|item| {
+                        // Size the generic hero to its actual content
+                        // (title/overview text, plus a cover for
+                        // Audiobookshelf) instead of the full column height —
+                        // otherwise short items (feeds have no cover at all)
+                        // leave a mostly-empty panel, and the cover -- placed
+                        // at the bottom of `area` by `render_home_latest_detail`
+                        // -- ends up stranded far below the text.
+                        let text_w = hero_content.width as usize;
+                        let ov_w = text_w.saturating_sub(WIDE_OVERVIEW_PAD * 2);
+                        let text =
+                            super::home_latest_row::home_latest_detail_text(&item, text_w, ov_w);
+                        let rows = if matches!(item, QueueItem::Audiobookshelf(_)) {
+                            let image_rows =
+                                hero_content.width.saturating_mul(9).saturating_add(31) / 32;
+                            text.meta_height + 1 + image_rows
+                        } else {
+                            text.meta_height
+                        };
+                        hero_content.height = rows.min(hero_col_height);
+                        HeroData::Generic(item, hero_content)
+                    }),
             };
+
+            if let Some(HeroData::Generic(_, area)) = &hero_data {
+                hero_panel.height = area
+                    .height
+                    .saturating_add(HOME_HERO_PAD_Y * 2)
+                    .min(hero_panel.height);
+            }
 
             if hero_data.is_some() {
                 f.render_widget(
@@ -271,31 +301,44 @@ impl App {
 
             enum HeroContentDims {
                 Emby(mbv_core::api::EmbyItem, u16, KeepWatchingHeroLayout, u16),
+                // Audiobookshelf: image beside the metadata column, same
+                // shape as `Emby` -- the standard hero-on-top arrangement.
+                GenericBeside(QueueItem, u16, KeepWatchingHeroLayout, u16),
+                // Feed: text-only, no image to sit beside.
                 Generic(QueueItem, u16),
                 None,
             }
             let dims = if area.width < 24 {
                 HeroContentDims::None
             } else {
+                // Every hero-on-top item with a cover -- Emby and the generic
+                // Audiobookshelf hero alike -- gets its image-beside-text
+                // dims from the same `beside_image_hero_dims` call, so the
+                // two providers' layouts cannot drift apart (image sits
+                // beside the metadata column, top-aligned; the overview
+                // wraps at the narrower meta width while still beside the
+                // image, then at the full hero width once past its bottom
+                // edge).
                 match emby_item {
                     Some(item) => {
-                        let img_w = inner_w / 2;
-                        let meta_w = inner_w.saturating_sub(img_w + 1) as usize;
-                        // Image sits beside the metadata column, top-aligned.
-                        // Compute its row extent before laying out the
-                        // overview, so overview text wraps around it: at
-                        // the narrower meta width for rows beside the
-                        // image, then at the full hero width for any rows
-                        // once past the image's bottom edge.
-                        let image_rows =
-                            (img_w.saturating_mul(9).saturating_add(31) / 32).min(max_allowed);
-                        let meta_layout = Self::keep_watching_hero_layout(
-                            &item,
-                            meta_w,
-                            inner_w as usize,
-                            image_rows,
-                            0,
-                        );
+                        let show_name = if item.item_type == "Episode" {
+                            item.series_name.clone()
+                        } else {
+                            String::new()
+                        };
+                        let overview = if item.overview.is_empty() {
+                            String::new()
+                        } else {
+                            trunc_overview(&item.overview)
+                        };
+                        let (img_w, meta_layout, image_rows) =
+                            super::home_hero::beside_image_hero_dims(
+                                &item.name,
+                                &show_name,
+                                &overview,
+                                inner_w,
+                                max_allowed,
+                            );
                         if meta_layout.height < 4 {
                             HeroContentDims::None
                         } else {
@@ -305,25 +348,37 @@ impl App {
                     None => current_item
                         .filter(|item| item.as_emby().is_none())
                         .map(|item| {
-                            let text = super::home_latest_row::home_latest_detail_text(
-                                &item,
-                                inner_w as usize,
-                                inner_w as usize,
-                            );
-                            // The generic hero's cover (only Audiobookshelf
-                            // renders one; Feeds are text-only) sits below
-                            // the text at 16:9 of the hero width, one row
-                            // below the text block (`render_home_latest_detail`'s
-                            // `meta_height + 1` gap). Size the hero to that
-                            // content instead of requesting the whole content
-                            // area.
-                            let rows = if matches!(item, QueueItem::Audiobookshelf(_)) {
-                                let image_rows = inner_w.saturating_mul(9).saturating_add(31) / 32;
-                                text.meta_height + 1 + image_rows
-                            } else {
-                                text.meta_height
+                            // Feeds have no cover to sit beside and stay
+                            // text-only at the full hero width.
+                            let QueueItem::Audiobookshelf(episode) = &item else {
+                                let text = super::home_latest_row::home_latest_detail_text(
+                                    &item,
+                                    inner_w as usize,
+                                    inner_w as usize,
+                                );
+                                return HeroContentDims::Generic(item, text.meta_height);
                             };
-                            HeroContentDims::Generic(item, rows)
+                            // Strip URLs (an unbroken URL is one giant
+                            // unbreakable word to the wrapper) and cap long
+                            // descriptions at 400 chars, matching
+                            // `home_latest_detail_text`'s Feed/two-column
+                            // overview handling and Emby's home-video/podcast
+                            // library views (`trunc_overview`) -- podcast
+                            // overviews routinely carry ad copy.
+                            let overview = episode
+                                .description
+                                .as_deref()
+                                .map(trunc_overview)
+                                .unwrap_or_default();
+                            let (img_w, layout, image_rows) =
+                                super::home_hero::beside_image_hero_dims(
+                                    item.title(),
+                                    episode.show_title.as_deref().unwrap_or(""),
+                                    &overview,
+                                    inner_w,
+                                    max_allowed,
+                                );
+                            HeroContentDims::GenericBeside(item, img_w, layout, image_rows)
                         })
                         .unwrap_or(HeroContentDims::None),
                 }
@@ -331,6 +386,9 @@ impl App {
             let content_rows = match &dims {
                 HeroContentDims::Emby(_, _, meta_layout, image_rows) => {
                     meta_layout.height.max(*image_rows)
+                }
+                HeroContentDims::GenericBeside(_, _, layout, image_rows) => {
+                    layout.height.max(*image_rows)
                 }
                 HeroContentDims::Generic(_, rows) => *rows,
                 HeroContentDims::None => 0,
@@ -356,25 +414,33 @@ impl App {
             };
             hero_data = match dims {
                 HeroContentDims::Emby(item, img_w, meta_layout, image_rows) => {
-                    let hero_height = image_rows.max(meta_layout.height);
-                    let meta_area = Rect {
-                        x: hero_content.x,
-                        y: hero_content.y,
-                        width: hero_content.width.saturating_sub(img_w + 1),
-                        height: hero_height,
-                    };
-                    let img_area = Rect {
-                        x: hero_content.x + hero_content.width.saturating_sub(img_w),
-                        y: hero_content.y,
-                        width: img_w,
-                        height: hero_height,
-                    };
+                    let (meta_area, img_area) = super::home_hero::beside_image_hero_rects(
+                        hero_content,
+                        img_w,
+                        meta_layout.height,
+                        image_rows,
+                    );
                     Some(HeroData::Emby(
                         Box::new(item),
                         meta_area,
                         hero_content,
                         img_area,
                         meta_layout,
+                    ))
+                }
+                HeroContentDims::GenericBeside(item, img_w, layout, image_rows) => {
+                    let (meta_area, img_area) = super::home_hero::beside_image_hero_rects(
+                        hero_content,
+                        img_w,
+                        layout.height,
+                        image_rows,
+                    );
+                    Some(HeroData::GenericBeside(
+                        item,
+                        meta_area,
+                        hero_content,
+                        img_area,
+                        layout,
                     ))
                 }
                 HeroContentDims::Generic(item, _) => Some(HeroData::Generic(item, hero_content)),
@@ -493,7 +559,12 @@ impl App {
             hero::hero_block_shell(f, hero_area, hero_rows, focused);
         }
 
-        // Render hero (shared between both layout modes)
+        // Render hero (shared between both layout modes). Both variants
+        // below end in the same `render_beside_image_hero` call -- the
+        // image column and text column are always drawn together, in that
+        // order, for every provider; only the per-provider cache-key/fetch
+        // and meta-spans construction differ (unavoidably -- Emby and
+        // Audiobookshelf fetch covers through different APIs).
         match &hero_data {
             Some(HeroData::Emby(item, meta_area, wide_area, img_area, meta_layout)) => {
                 let cache_key = format!("{}:pwr_kw", item.id);
@@ -506,16 +577,43 @@ impl App {
                         img_types,
                     );
                 }
-                self.render_keep_watching_hero_image(f, *img_area, &cache_key, two_column);
+                let meta_spans = Self::keep_watching_hero_meta_spans(item, meta_area.width);
                 let overview_pad = if two_column { WIDE_OVERVIEW_PAD } else { 0 };
-                self.render_keep_watching_hero_meta(
+                self.render_beside_image_hero(
                     f,
                     *meta_area,
                     *wide_area,
-                    item,
+                    *img_area,
                     meta_layout,
-                    focused,
+                    meta_spans,
+                    &cache_key,
                     overview_pad as u16,
+                    focused,
+                    two_column,
+                );
+            }
+            Some(HeroData::GenericBeside(item, meta_area, wide_area, img_area, layout)) => {
+                let cache_key = match item {
+                    QueueItem::Audiobookshelf(episode) => self
+                        .audiobookshelf_cover_key(&episode.library_item_id)
+                        .unwrap_or_default(),
+                    _ => String::new(),
+                };
+                let meta_spans: Vec<Span<'static>> = item
+                    .duration()
+                    .map(|ticks| {
+                        vec![Span::styled(
+                            trunc_str(
+                                &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
+                                meta_area.width as usize,
+                            ),
+                            Style::default().fg(palette::SUBTLE),
+                        )]
+                    })
+                    .unwrap_or_default();
+                self.render_beside_image_hero(
+                    f, *meta_area, *wide_area, *img_area, layout, meta_spans, &cache_key, 0,
+                    focused, false,
                 );
             }
             Some(HeroData::Generic(item, area)) => {

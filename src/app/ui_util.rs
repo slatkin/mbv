@@ -119,7 +119,7 @@ pub fn fmt_playback_pct(pos_ticks: i64, runtime_ticks: i64) -> String {
 
 pub fn trunc_overview(s: &str) -> String {
     let stripped = regex_strip_urls(s);
-    trunc_str(stripped.trim(), 400)
+    trunc_str(stripped.trim(), 600)
 }
 
 /// URL-stripped, trimmed overview text with no length cap. Used by the view's
