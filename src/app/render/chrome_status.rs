@@ -1,9 +1,7 @@
 #![allow(unused_imports)]
 
 use super::super::ui_util::*;
-use super::chrome::{
-    audiobookshelf_state_color, daemon_endpoint_label, emby_state_color, stay_alive_color,
-};
+use super::chrome::{daemon_endpoint_label, service_state_color};
 use super::indicators;
 use crate::app::layout::LayoutPlayback;
 use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
@@ -312,12 +310,16 @@ impl App {
         } else {
             Vec::new()
         };
-        // Stay-alive (local daemon) and shared-data are service-state glyphs
-        // too, in the right segment with Emby/Audiobookshelf, always visible:
-        // active = brand colour, stay-alive daemon lost = yellow (red already
-        // means active), otherwise grey.
-        let alive_color =
-            stay_alive_color(self.daemon_lost_modal.is_some(), self.is_local_daemon());
+        // Stay-alive (local daemon) indicator: red when the daemon is the active
+        // target (stay-alive's brand colour), yellow when the daemon is lost —
+        // the error state since red already means active, grey when not in use.
+        let alive_color = if self.daemon_lost_modal.is_some() {
+            palette::YELLOW
+        } else if self.is_local_daemon() {
+            palette::RED
+        } else {
+            palette::MUTED
+        };
         let shared_color = if self.shared_client.as_ref().is_some_and(|client| {
             matches!(
                 client.state(),
@@ -482,34 +484,36 @@ impl App {
             // always visible, coloured by state (brand colour when active,
             // grey when inactive; stay-alive daemon lost = yellow). One
             // leading space per glyph, no trailing space.
-            let mut service_spans: Vec<Span> = Vec::new();
-            service_spans.push(Span::raw(" "));
-            service_spans.push(Span::styled(
-                "\u{F06B4}",
-                Style::default().fg(emby_state_color(self.emby_runtime.state)),
-            ));
-            service_spans.push(Span::raw(" "));
-            service_spans.push(Span::styled(
-                "\u{EDE2}",
-                Style::default().fg(audiobookshelf_state_color(
-                    self.audiobookshelf_runtime.state,
-                )),
-            ));
-            service_spans.push(Span::raw(" "));
-            service_spans.push(Span::styled(
-                if self.use_nerd_fonts {
-                    "\u{f004}"
-                } else {
-                    "\u{2665}"
-                },
-                Style::default().fg(alive_color),
-            ));
-            service_spans.push(Span::raw(" "));
-            service_spans.push(Span::styled("\u{F1C0}", Style::default().fg(shared_color)));
-            // Right edge of the segment: the shared-data glyph gets its own
-            // trailing margin like a pill.
-            service_spans.push(Span::raw(" "));
-            right_spans.extend(service_spans);
+            right_spans.extend([
+                Span::raw(" "),
+                Span::styled(
+                    "\u{F06B4}",
+                    Style::default()
+                        .fg(service_state_color(self.emby_runtime.state, palette::AQUA)),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    "\u{EDE2}",
+                    Style::default().fg(service_state_color(
+                        self.audiobookshelf_runtime.state,
+                        palette::AMBER,
+                    )),
+                ),
+                Span::raw(" "),
+                Span::styled(
+                    if self.use_nerd_fonts {
+                        "\u{f004}"
+                    } else {
+                        "\u{2665}"
+                    },
+                    Style::default().fg(alive_color),
+                ),
+                Span::raw(" "),
+                Span::styled("\u{F1C0}", Style::default().fg(shared_color)),
+                // Right edge of the segment: the shared-data glyph gets its own
+                // trailing margin like a pill.
+                Span::raw(" "),
+            ]);
             // Remote queue scope is omitted here: the active queue is already
             // apparent from the queue UI.
             if !right_spans.is_empty() {

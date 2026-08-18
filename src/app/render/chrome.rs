@@ -58,33 +58,14 @@ pub(super) fn daemon_endpoint_label(endpoint: &str) -> Option<String> {
 
 /// Status-bar glyph colour for a Remote Service: `ready` when connected,
 /// red when configured but not connected, grey when not configured.
-fn service_state_color(state: mbv_core::service_runtime::ServiceState, ready: Color) -> Color {
+pub(super) fn service_state_color(
+    state: mbv_core::service_runtime::ServiceState,
+    ready: Color,
+) -> Color {
     match state {
         mbv_core::service_runtime::ServiceState::Ready => ready,
         mbv_core::service_runtime::ServiceState::NotConfigured => palette::MUTED,
         _ => palette::RED,
-    }
-}
-
-pub(super) fn emby_state_color(state: mbv_core::service_runtime::ServiceState) -> Color {
-    service_state_color(state, palette::AQUA)
-}
-
-pub(super) fn audiobookshelf_state_color(state: mbv_core::service_runtime::ServiceState) -> Color {
-    service_state_color(state, palette::AMBER)
-}
-
-/// Status-bar glyph colour for the stay-alive (local daemon) indicator.
-/// Red when the daemon is the active target (stay-alive's brand colour);
-/// yellow when the daemon is lost — the error state, since red already
-/// means active; grey when stay-alive is not in use.
-pub(super) fn stay_alive_color(daemon_lost: bool, on_local_daemon: bool) -> Color {
-    if daemon_lost {
-        palette::YELLOW
-    } else if on_local_daemon {
-        palette::RED
-    } else {
-        palette::MUTED
     }
 }
 

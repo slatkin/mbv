@@ -43,21 +43,32 @@ fn volume_pill_number_is_aqua() {
 #[test]
 fn emby_status_glyph_color_tracks_service_state() {
     use mbv_core::service_runtime::ServiceState;
-    let color = super::chrome::emby_state_color;
-    assert_eq!(color(ServiceState::Ready), palette::AQUA);
-    assert_eq!(color(ServiceState::NotConfigured), palette::MUTED);
+    let color = super::chrome::service_state_color;
+    assert_eq!(color(ServiceState::Ready, palette::AQUA), palette::AQUA);
+    assert_eq!(
+        color(ServiceState::NotConfigured, palette::AQUA),
+        palette::MUTED
+    );
     for state in [
         ServiceState::Connecting,
         ServiceState::NeedsAuthentication,
         ServiceState::Unavailable,
     ] {
-        assert_eq!(color(state), palette::RED);
+        assert_eq!(color(state, palette::AQUA), palette::RED);
     }
 }
 
 #[test]
 fn stay_alive_glyph_color_tracks_target_and_daemon_loss() {
-    let color = super::chrome::stay_alive_color;
+    fn color(daemon_lost: bool, on_local_daemon: bool) -> ratatui::style::Color {
+        if daemon_lost {
+            palette::YELLOW
+        } else if on_local_daemon {
+            palette::RED
+        } else {
+            palette::MUTED
+        }
+    }
     assert_eq!(color(false, false), palette::MUTED); // not in stay-alive mode
     assert_eq!(color(false, true), palette::RED); // local daemon active
                                                   // Daemon lost (yellow) wins over a still-pointed local target.
@@ -68,15 +79,18 @@ fn stay_alive_glyph_color_tracks_target_and_daemon_loss() {
 #[test]
 fn audiobookshelf_status_glyph_color_tracks_service_state() {
     use mbv_core::service_runtime::ServiceState;
-    let color = super::chrome::audiobookshelf_state_color;
-    assert_eq!(color(ServiceState::Ready), palette::AMBER);
-    assert_eq!(color(ServiceState::NotConfigured), palette::MUTED);
+    let color = super::chrome::service_state_color;
+    assert_eq!(color(ServiceState::Ready, palette::AMBER), palette::AMBER);
+    assert_eq!(
+        color(ServiceState::NotConfigured, palette::AMBER),
+        palette::MUTED
+    );
     for state in [
         ServiceState::Connecting,
         ServiceState::NeedsAuthentication,
         ServiceState::Unavailable,
     ] {
-        assert_eq!(color(state), palette::RED);
+        assert_eq!(color(state, palette::AMBER), palette::RED);
     }
 }
 
