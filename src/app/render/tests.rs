@@ -271,7 +271,7 @@ fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
 
     // Advance the marquee clock past its initial hold, into the scroll.
     // The "On Now: " prefix must stay put -- only the title pans.
-    app.now_playing_marquee_started_at =
+    app.marquee_started_at =
         std::time::Instant::now() - std::time::Duration::from_millis(1200 + 300 * 5);
     let mut term2 = Terminal::new(TestBackend::new(30, 5)).unwrap();
     term2
@@ -333,12 +333,71 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
     );
 
     // Advance the shared marquee clock past its initial hold.
-    app.now_playing_marquee_started_at =
+    app.marquee_started_at =
         std::time::Instant::now() - std::time::Duration::from_millis(1200 + 300 * 5);
     let later = render(&mut app, &mut layout);
     assert!(
         !later.contains('\u{2026}'),
         "should showcase, not ellipsis-truncate:\n{later}"
+    );
+    assert_ne!(first, later, "title window should have scrolled");
+}
+
+#[test]
+fn idle_feed_title_marquees_instead_of_truncating() {
+    use crate::app::types_feed::{IdleFeed, IdleFeedItem};
+    use std::sync::mpsc;
+
+    let mut app = make_app_stub();
+    let (items_tx, items_rx) = mpsc::channel();
+    app.idle_feed = Some(IdleFeed {
+        items: vec![IdleFeedItem {
+            title: "A Very Long Novara Media Episode Title That Cannot Fit".to_string(),
+            link: Some("https://example.com/ep".to_string()),
+        }],
+        current_index: 0,
+        last_rotation: std::time::Instant::now(),
+        last_fetch: std::time::Instant::now(),
+        items_tx,
+        items_rx,
+    });
+
+    let render = |app: &mut crate::app::App, layout: &mut LayoutPlayback| -> String {
+        let backend = TestBackend::new(30, 4);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_player_panel(
+                f,
+                Rect::new(0, 0, 30, 4),
+                layout,
+                4,
+                false, // !show_controls => idle state
+                &None,
+                palette::SURFACE_CHROME,
+            );
+        })
+        .unwrap();
+        buffer_to_string(&term).lines().nth(1).unwrap().to_string()
+    };
+
+    let mut layout = LayoutPlayback::default();
+    let first = render(&mut app, &mut layout);
+    assert!(
+        !first.contains('\u{2026}'),
+        "should marquee, not ellipsis-truncate:\n{first}"
+    );
+    assert!(
+        first.contains("A Very Long"),
+        "expected the start of the title at rest:\n{first}"
+    );
+
+    // Advance the shared marquee clock past its initial hold.
+    app.marquee_started_at =
+        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 300 * 5);
+    let later = render(&mut app, &mut layout);
+    assert!(
+        !later.contains('\u{2026}'),
+        "should marquee, not ellipsis-truncate:\n{later}"
     );
     assert_ne!(first, later, "title window should have scrolled");
 }

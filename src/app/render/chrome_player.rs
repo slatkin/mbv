@@ -41,10 +41,11 @@ fn marquee_col(overflow: usize, elapsed_ms: u128) -> usize {
     }
 }
 
-/// Like `width_window`, but over color-tagged text segments (e.g. a series
-/// name in one color followed by an episode name in another): slices the
-/// same `width`-wide window starting at `start_col`, emitting one `Span` per
-/// contiguous same-color run so the marquee preserves per-segment styling.
+/// Slices the `width`-wide window of `parts` starting at display column
+/// `start_col`, emitting one `Span` per contiguous same-color run so the
+/// marquee preserves per-segment styling (e.g. a series name in one color
+/// followed by an episode name in another). A trailing wide char that would
+/// overflow `width` is dropped rather than split.
 fn colored_width_window(
     parts: &[(String, Color)],
     start_col: usize,
@@ -148,17 +149,17 @@ impl App {
                 // Idle state: show feed item title if available
                 if let Some(ref idle_feed) = self.idle_feed {
                     if let Some(item) = idle_feed.items.get(idle_feed.current_index) {
-                        let truncated_title = trunc_str(&item.title, title_area.width as usize);
                         if item.link.as_deref().is_some_and(|link| !link.is_empty()) {
                             layout.idle_feed_link_area = title_area;
                         }
+                        let spans = self.marquee_spans(
+                            &[(item.title.clone(), palette::AQUA)],
+                            title_area.width as usize,
+                        );
                         f.render_widget(
-                            Paragraph::new(Span::styled(
-                                truncated_title,
-                                Style::default().fg(palette::AQUA),
-                            ))
-                            .style(Style::default().bg(panel_bg))
-                            .alignment(Alignment::Center),
+                            Paragraph::new(Line::from(spans))
+                                .style(Style::default().bg(panel_bg))
+                                .alignment(Alignment::Center),
                             title_area,
                         );
                     }
@@ -213,18 +214,12 @@ impl App {
                         )
                     } else {
                         // Only the title pans; the "On Now: " prefix stays put.
-                        self.sync_marquee_clock(title);
-                        let overflow = title.width().saturating_sub(title_avail);
-                        let col = marquee_col(
-                            overflow,
-                            self.now_playing_marquee_started_at.elapsed().as_millis(),
-                        );
-                        let scrolled =
-                            colored_width_window(&[(title.clone(), *color)], col, title_avail)
-                                .into_iter()
-                                .next()
-                                .map(|s| s.content.to_string())
-                                .unwrap_or_default();
+                        let scrolled: String = self
+                            .marquee_spans(&[(title.clone(), *color)], title_avail)
+                            .into_iter()
+                            .next()
+                            .map(|s| s.content.to_string())
+                            .unwrap_or_default();
                         (
                             Line::from(vec![
                                 Span::styled(prefix, style),
@@ -244,14 +239,28 @@ impl App {
         }
     }
 
-    /// Resets the shared marquee clock whenever the text it's tracking
-    /// changes, so a newly-scrolling title always starts from the beginning
-    /// instead of picking up mid-cycle.
-    fn sync_marquee_clock(&mut self, text: &str) {
-        if self.now_playing_marquee_text != text {
-            self.now_playing_marquee_text = text.to_string();
-            self.now_playing_marquee_started_at = std::time::Instant::now();
+    /// Returns `parts` as styled `Span`s if they fit in `max_width`, or a
+    /// slow left-right-left marquee window across them if they don't. Resets
+    /// the shared marquee clock whenever the tracked text changes so a new
+    /// string always starts from the beginning. Callers pass color-tagged
+    /// segments so per-segment styling (e.g. series vs. episode name) is
+    /// preserved while scrolling.
+    fn marquee_spans(&mut self, parts: &[(String, Color)], max_width: usize) -> Vec<Span<'static>> {
+        let total_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
+        if max_width == 0 || total_width <= max_width {
+            return parts
+                .iter()
+                .map(|(text, color)| Span::styled(text.clone(), Style::default().fg(*color)))
+                .collect();
         }
+        let key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
+        if self.marquee_text != key {
+            self.marquee_text = key;
+            self.marquee_started_at = std::time::Instant::now();
+        }
+        let overflow = total_width - max_width;
+        let col = marquee_col(overflow, self.marquee_started_at.elapsed().as_millis());
+        colored_width_window(parts, col, max_width)
     }
 
     /// One-line now-playing header: play/pause, next, title, and time on the
@@ -533,23 +542,6 @@ impl App {
             })
             .unwrap_or_else(|| vec![(title.to_string(), title_color)]);
 
-        let total_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
-        if max_width == 0 || total_width <= max_width {
-            return parts
-                .into_iter()
-                .map(|(text, color)| Span::styled(text, Style::default().fg(color)))
-                .collect();
-        }
-
-        // Too wide for the sacrifice ladder above to fully honor: showcase
-        // it (slow pan across the full text) instead of truncating with "…".
-        let marquee_key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
-        self.sync_marquee_clock(&marquee_key);
-        let overflow = total_width - max_width;
-        let col = marquee_col(
-            overflow,
-            self.now_playing_marquee_started_at.elapsed().as_millis(),
-        );
-        colored_width_window(&parts, col, max_width)
+        self.marquee_spans(&parts, max_width)
     }
 }
