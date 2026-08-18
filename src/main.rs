@@ -64,6 +64,7 @@ fn cached_emby_client(config: &config::Config) -> Option<EmbyClient> {
     let setup = config.emby_setup.as_ref()?;
     let mut client = EmbyClient::new(config.clone());
     client.config.server_url = setup.server_url.clone();
+    client.user_id = setup.user_id.clone();
     client.token = token;
     Some(client)
 }
@@ -413,6 +414,25 @@ mod tests {
             &["--audio-only=false".into(), "--audio".into()],
             "--audio-only"
         ));
+    }
+
+    /// A client missing `user_id` builds `/Users//Views`-shaped paths --
+    /// Emby throws on the empty GUID segment rather than rejecting cleanly.
+    /// `construct.rs` marks a cached client `Ready` immediately without
+    /// re-authenticating, so a blank `user_id` here reaches real requests.
+    #[test]
+    fn cached_emby_client_carries_user_id_from_setup() {
+        let _state_dir = mbv_core::config::TestStateDirGuard::new();
+        mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "tok").unwrap();
+        let config = config::Config {
+            emby_setup: Some(mbv_core::config::EmbySetup::new(
+                "http://emby.example:8096",
+                "the-user-id",
+            )),
+            ..config::Config::default()
+        };
+        let client = cached_emby_client(&config).expect("cached client");
+        assert_eq!(client.user_id, "the-user-id");
     }
 
     #[test]

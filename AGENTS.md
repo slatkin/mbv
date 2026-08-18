@@ -35,6 +35,14 @@ bypass filtering. `rtk grep` format flags (`-c/-l/-L/-o/-Z`) run raw.
   rule above `CTRL_PROTOCOL_VERSION`.
 - Replace flaky tests; do not troubleshoot them.
 - Put symbol-specific rules above the symbol.
+- Never speculatively patch a daemon/Local-daemon/Stay-Alive issue (mbvd,
+  `src/local_daemon.rs`, shared-data, ctrl protocol, Emby/ABS startup racing
+  the daemon). These bugs live across process boundaries and plausible-looking
+  fixes routinely land nowhere near the real cause. Before touching any code:
+  reproduce with real logs/instrumentation from the actual failing process,
+  capture the real response/error (not a reconstruction), and state the
+  confirmed root cause before writing a fix. A fix proposed without that
+  evidence is a guess, not a fix — say so and stop instead of shipping it.
 
 ## Project process
 
