@@ -53,6 +53,7 @@ impl App {
             TabSelection::AudiobookshelfLibrary(index) => {
                 self.set_panel_focus(PanelFocus::Library);
                 self.activate_audiobookshelf_position(index);
+                self.activate_audiobookshelf_book_position(index);
             }
             TabSelection::Feeds => {
                 self.set_panel_focus(PanelFocus::Library);
