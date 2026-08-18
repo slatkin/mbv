@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     # Same pinned base-devel snapshot as the PKGBUILD workflow, so this job has
     # a reproducible pacman/makepkg/git toolchain.
-    container: archlinux/archlinux:base-devel-20260801.0.566255
+    container: archlinux/archlinux:base-devel-20260818.0.575430
     permissions:
       contents: write
 

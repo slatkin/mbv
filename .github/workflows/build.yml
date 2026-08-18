@@ -15,7 +15,7 @@ jobs:
     # floating `base-devel` tag. Arch is rolling, so bump this periodically
     # (dated archlinux tags are retained ~18 months on Docker Hub) and keep the
     # base-devel-... literal in the cargo cache key below in sync.
-    container: archlinux/archlinux:base-devel-20260801.0.566255
+    container: archlinux/archlinux:base-devel-20260818.0.575430
     permissions:
       contents: write
       actions: write
@@ -55,7 +55,7 @@ jobs:
           # Key covers: pinned builder image + rustc toolchain (build
           # environment), the dependency lockfile, and all workspace manifests.
           # The base-devel-... literal must match the `container:` image above.
-          key: ${{ runner.os }}-cargo-${{ env.RUSTC_VER }}-base-devel-20260801.0.566255-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-${{ env.RUSTC_VER }}-base-devel-20260818.0.575430-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
