@@ -291,6 +291,8 @@ pub(crate) fn make_app_stub() -> App {
         visualizer_frame: Vec::new(),
         now_playing_throbber_index: 0,
         last_throbber_advance: std::time::Instant::now(),
+        now_playing_marquee_text: String::new(),
+        now_playing_marquee_started_at: std::time::Instant::now(),
         sessions: Vec::new(),
         sessions_cursor: 0,
         sessions_scroll: 0,

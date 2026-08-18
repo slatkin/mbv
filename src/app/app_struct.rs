@@ -328,6 +328,11 @@ pub struct App {
     pub(super) visualizer_frame: Vec<f32>,
     pub(super) now_playing_throbber_index: usize,
     pub(super) last_throbber_advance: std::time::Instant,
+    /// Text and start time of the mini-view "On Now" marquee, reset
+    /// whenever the displayed label changes so a new title always starts
+    /// its scroll from the beginning rather than mid-cycle.
+    pub(super) now_playing_marquee_text: String,
+    pub(super) now_playing_marquee_started_at: std::time::Instant,
     pub(super) last_scroll_at: Instant,
     pub(super) last_nav_at: Instant,
     pub(super) last_library_nav_at: Instant,

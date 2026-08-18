@@ -213,6 +213,137 @@ fn narrow_queue_only_panel_puts_title_on_bottom_now_playing_row() {
 }
 
 #[test]
+fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
+    let mut app = make_app_stub();
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.terminal_width = 120;
+    app.use_nerd_fonts = false;
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.queue_len = 1;
+        st.current_idx = 0;
+        st.runtime_ticks = 60 * TICKS_PER_SECOND;
+    }
+    let long_title = "A Very Long Album Title That Cannot Possibly Fit";
+
+    let backend = TestBackend::new(30, 5);
+    let mut term = Terminal::new(backend).unwrap();
+    let mut layout = LayoutPlayback::default();
+    term.draw(|f| {
+        app.render_player_panel(
+            f,
+            Rect::new(0, 0, 30, 5),
+            &mut layout,
+            4,
+            true,
+            &Some((long_title.to_string(), palette::WHITE)),
+            palette::SURFACE_CHROME,
+        );
+    })
+    .unwrap();
+
+    let text = buffer_to_string(&term);
+    let lines: Vec<&str> = text.lines().collect();
+    let bottom = lines[3];
+    // Indent: the row's first and last columns stay blank rather than
+    // butting text against the panel edges.
+    assert_eq!(
+        bottom.chars().next(),
+        Some(' '),
+        "no left indent:\n{bottom}"
+    );
+    assert_eq!(
+        bottom.chars().last(),
+        Some(' '),
+        "no right indent:\n{bottom}"
+    );
+    // Marquee: freshly opened (still in its initial hold), the window shows
+    // the start of the label rather than being hard-truncated with "...".
+    assert!(
+        bottom.contains("On Now: A Very"),
+        "expected marquee start of label:\n{bottom}"
+    );
+    assert!(
+        !bottom.contains('\u{2026}'),
+        "should not ellipsis-truncate marquee text:\n{bottom}"
+    );
+
+    // Advance the marquee clock past its initial hold, into the scroll.
+    // The "On Now: " prefix must stay put -- only the title pans.
+    app.now_playing_marquee_started_at =
+        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 300 * 5);
+    let mut term2 = Terminal::new(TestBackend::new(30, 5)).unwrap();
+    term2
+        .draw(|f| {
+            app.render_player_panel(
+                f,
+                Rect::new(0, 0, 30, 5),
+                &mut layout,
+                4,
+                true,
+                &Some((long_title.to_string(), palette::WHITE)),
+                palette::SURFACE_CHROME,
+            );
+        })
+        .unwrap();
+    let text2 = buffer_to_string(&term2);
+    let bottom2: &str = text2.lines().collect::<Vec<_>>()[3];
+    assert!(
+        bottom2.trim().starts_with("On Now:"),
+        "prefix must stay fixed while title scrolls:\n{bottom2}"
+    );
+    assert!(
+        !bottom2.contains("On Now: A Very"),
+        "title window should have scrolled past its start:\n{bottom2}"
+    );
+}
+
+#[test]
+fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
+    let mut app = make_app_stub();
+    let long_title = "A Very Long Album Title That Cannot Possibly Fit In This Row";
+    let mut layout = LayoutPlayback::default();
+
+    let render = |app: &mut crate::app::App, layout: &mut LayoutPlayback| -> String {
+        let backend = TestBackend::new(30, 1);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_title_row(
+                f,
+                Rect::new(0, 0, 30, 1),
+                long_title,
+                palette::WHITE,
+                layout,
+                palette::SURFACE_CHROME,
+            );
+        })
+        .unwrap();
+        buffer_to_string(&term).lines().next().unwrap().to_string()
+    };
+
+    let first = render(&mut app, &mut layout);
+    assert!(
+        !first.contains('\u{2026}'),
+        "should showcase, not ellipsis-truncate:\n{first}"
+    );
+    assert!(
+        first.contains("A Very Long"),
+        "expected the start of the title at rest:\n{first}"
+    );
+
+    // Advance the shared marquee clock past its initial hold.
+    app.now_playing_marquee_started_at =
+        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 300 * 5);
+    let later = render(&mut app, &mut layout);
+    assert!(
+        !later.contains('\u{2026}'),
+        "should showcase, not ellipsis-truncate:\n{later}"
+    );
+    assert_ne!(first, later, "title window should have scrolled");
+}
+
+#[test]
 fn remote_status_spans_prefers_active_route_label_over_daemon_endpoint() {
     let mut app = make_app_stub();
     app.active_route = Some("music".to_string());

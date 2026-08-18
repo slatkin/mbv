@@ -18,6 +18,95 @@ fn uppercase_playback_span(span: Span<'static>) -> Span<'static> {
     Span::styled(span.content.to_uppercase(), span.style)
 }
 
+/// The `width`-wide (in display columns) slice of `text` starting at display
+/// column `start_col`. Used by the "On Now" marquee to pull out the visible
+/// window as it scrolls; a trailing wide char that would overflow `width` is
+/// dropped rather than split.
+fn width_window(text: &str, start_col: usize, width: usize) -> String {
+    let mut out = String::new();
+    let mut col = 0usize;
+    let mut taken = 0usize;
+    for c in text.chars() {
+        let cw = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+        if col + cw <= start_col {
+            col += cw;
+            continue;
+        }
+        if taken + cw > width {
+            break;
+        }
+        out.push(c);
+        taken += cw;
+        col += cw;
+    }
+    out
+}
+
+/// Column offset for a slow left-right-left marquee pan `elapsed_ms` into
+/// its cycle, given `overflow` extra columns beyond the visible width.
+/// Holds briefly at each end before reversing.
+fn marquee_col(overflow: usize, elapsed_ms: u128) -> usize {
+    if overflow == 0 {
+        return 0;
+    }
+    const STEP_MS: u128 = 300;
+    const HOLD_MS: u128 = 1200;
+    let scroll_ms = overflow as u128 * STEP_MS;
+    let cycle = 2 * HOLD_MS + 2 * scroll_ms;
+    let t = elapsed_ms % cycle;
+    if t < HOLD_MS {
+        0
+    } else if t < HOLD_MS + scroll_ms {
+        ((t - HOLD_MS) / STEP_MS) as usize
+    } else if t < 2 * HOLD_MS + scroll_ms {
+        overflow
+    } else {
+        overflow - ((t - (2 * HOLD_MS + scroll_ms)) / STEP_MS) as usize
+    }
+}
+
+/// Like `width_window`, but over color-tagged text segments (e.g. a series
+/// name in one color followed by an episode name in another): slices the
+/// same `width`-wide window starting at `start_col`, emitting one `Span` per
+/// contiguous same-color run so the marquee preserves per-segment styling.
+fn colored_width_window(
+    parts: &[(String, Color)],
+    start_col: usize,
+    width: usize,
+) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let mut col = 0usize;
+    let mut taken = 0usize;
+    let mut current: Option<(String, Color)> = None;
+    'parts: for (text, color) in parts {
+        for c in text.chars() {
+            let cw = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+            if col + cw <= start_col {
+                col += cw;
+                continue;
+            }
+            if taken + cw > width {
+                break 'parts;
+            }
+            match &mut current {
+                Some((s, cur_color)) if cur_color == color => s.push(c),
+                _ => {
+                    if let Some((s, cur_color)) = current.take() {
+                        spans.push(Span::styled(s, Style::default().fg(cur_color)));
+                    }
+                    current = Some((c.to_string(), *color));
+                }
+            }
+            taken += cw;
+            col += cw;
+        }
+    }
+    if let Some((s, cur_color)) = current {
+        spans.push(Span::styled(s, Style::default().fg(cur_color)));
+    }
+    spans
+}
+
 impl App {
     pub(super) fn render_player_panel(
         &mut self,
@@ -132,16 +221,69 @@ impl App {
                 if let Some((ref title, color)) = now_playing_title {
                     let prefix = "On Now: ";
                     let label = format!("{prefix}{title}");
-                    let clipped = trunc_str(&label, bottom_area.width as usize);
+                    // Indent: never let the label touch the panel edges.
+                    let inset_area = Rect {
+                        x: bottom_area.x + 1,
+                        width: bottom_area.width.saturating_sub(2),
+                        ..bottom_area
+                    };
+                    let avail = inset_area.width as usize;
+                    let title_avail = avail.saturating_sub(prefix.width());
+                    let style = Style::default().fg(*color);
+                    let (line, alignment) = if label.width() <= avail || title_avail == 0 {
+                        (
+                            Line::from(Span::styled(trunc_str(&label, avail), style)),
+                            Alignment::Center,
+                        )
+                    } else {
+                        // Only the title pans; the "On Now: " prefix stays put.
+                        let scrolled = self.now_playing_marquee_window(title, title_avail);
+                        (
+                            Line::from(vec![
+                                Span::styled(prefix, style),
+                                Span::styled(scrolled, style),
+                            ]),
+                            Alignment::Left,
+                        )
+                    };
                     f.render_widget(
-                        Paragraph::new(Span::styled(clipped, Style::default().fg(*color)))
+                        Paragraph::new(line)
                             .style(Style::default().bg(palette::SURFACE_BACKDROP))
-                            .alignment(Alignment::Center),
-                        bottom_area,
+                            .alignment(alignment),
+                        inset_area,
                     );
                 }
             }
         }
+    }
+
+    /// Resets the shared marquee clock whenever the text it's tracking
+    /// changes, so a newly-scrolling title always starts from the beginning
+    /// instead of picking up mid-cycle.
+    fn sync_marquee_clock(&mut self, text: &str) {
+        if self.now_playing_marquee_text != text {
+            self.now_playing_marquee_text = text.to_string();
+            self.now_playing_marquee_started_at = std::time::Instant::now();
+        }
+    }
+
+    /// Scrolling ("marquee") window into `label` for the mini-view "On Now"
+    /// line when it's too wide for `avail` columns: slowly pans across the
+    /// full text, pausing at each end, instead of just truncating it.
+    fn now_playing_marquee_window(&mut self, label: &str, avail: usize) -> String {
+        if avail == 0 {
+            return String::new();
+        }
+        self.sync_marquee_clock(label);
+        let overflow = label.width().saturating_sub(avail);
+        if overflow == 0 {
+            return label.to_string();
+        }
+        let col = marquee_col(
+            overflow,
+            self.now_playing_marquee_started_at.elapsed().as_millis(),
+        );
+        width_window(label, col, avail)
     }
 
     /// One-line now-playing header: play/pause, next, title, and time on the
@@ -423,20 +565,23 @@ impl App {
             })
             .unwrap_or_else(|| vec![(title.to_string(), title_color)]);
 
-        let mut remaining = max_width;
-        let mut spans = Vec::new();
-        for (text, color) in parts {
-            if remaining == 0 {
-                break;
-            }
-            let clipped = trunc_str(&text, remaining);
-            let width = clipped.width();
-            spans.push(Span::styled(clipped, Style::default().fg(color)));
-            remaining = remaining.saturating_sub(width);
-            if width < text.width() {
-                break;
-            }
+        let total_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
+        if max_width == 0 || total_width <= max_width {
+            return parts
+                .into_iter()
+                .map(|(text, color)| Span::styled(text, Style::default().fg(color)))
+                .collect();
         }
-        spans
+
+        // Too wide for the sacrifice ladder above to fully honor: showcase
+        // it (slow pan across the full text) instead of truncating with "…".
+        let marquee_key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
+        self.sync_marquee_clock(&marquee_key);
+        let overflow = total_width - max_width;
+        let col = marquee_col(
+            overflow,
+            self.now_playing_marquee_started_at.elapsed().as_millis(),
+        );
+        colored_width_window(&parts, col, max_width)
     }
 }
