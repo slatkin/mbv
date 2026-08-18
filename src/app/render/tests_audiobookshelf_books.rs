@@ -14,6 +14,40 @@ fn book(id: &str, title: &str, author_surname: &str) -> AudiobookshelfBook {
         author_display: Some(author_surname.into()),
         author_sort_key: author_surname.into(),
         cover_path: None,
+        duration_seconds: 0.0,
+        narrator: None,
+        published_year: None,
+        genres: Vec::new(),
+        description: None,
+        series_name: None,
+        chapters: Vec::new(),
+        audio_files: Vec::new(),
+    }
+}
+
+/// Variant of [`book`] that populates description, narrator, year, and
+/// duration so hero-metadata render tests can assert they appear.
+fn book_with_meta(
+    id: &str,
+    title: &str,
+    author: &str,
+    description: &str,
+    narrator: Option<&str>,
+    year: Option<&str>,
+    duration: f64,
+) -> AudiobookshelfBook {
+    AudiobookshelfBook {
+        library_item_id: id.into(),
+        title: title.into(),
+        author_display: Some(author.into()),
+        author_sort_key: author.into(),
+        cover_path: None,
+        duration_seconds: duration,
+        narrator: narrator.map(str::to_string),
+        published_year: year.map(str::to_string),
+        genres: Vec::new(),
+        description: Some(description.into()),
+        series_name: None,
         chapters: Vec::new(),
         audio_files: Vec::new(),
     }
@@ -199,6 +233,61 @@ fn narrow_layout_still_renders_hero_chapters_and_browser_together() {
         layout.audiobookshelf_book_right_area.height > 0,
         "narrow layout must still populate the browser area, not just the hero"
     );
+}
+
+/// The hero must render the book's author, narrator, year, and description
+/// -- metadata the API parsing now carries (iteration 2 root-cause fix).
+/// Both the narrow and wide paths go through the shared beside-image hero,
+/// so both must show the same metadata.
+#[test]
+fn hero_renders_author_narrator_year_and_description() {
+    let mut app = make_app_stub();
+    let library = AudiobookshelfLibrary {
+        id: "abs-books".into(),
+        name: "ABS Books".into(),
+        media_type: "book".into(),
+    };
+    let mut state = AudiobookshelfBookBrowseState::new(library.clone());
+    state.append_page_books(
+        0,
+        1,
+        vec![book_with_meta(
+            "book-a",
+            "Alpha Tales",
+            "Adams",
+            "A sweeping description of alpha things.",
+            Some("Jim"),
+            Some("2024"),
+            3600.0,
+        )],
+    );
+    app.audiobookshelf_libraries.push(library);
+    app.audiobookshelf_book_browse.push(state);
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+
+    // Narrow (single-column hero-on-top) — 80 cols gives the meta row
+    // enough room for the narrator span without truncation.
+    let mut layout = LayoutMain::default();
+    let out = render_library_to_string_sized(&mut app, &mut layout, 80, 24);
+    assert!(
+        out.contains("Alpha Tales"),
+        "hero must show the title:\n{out}"
+    );
+    assert!(out.contains("Adams"), "hero must show the author:\n{out}");
+    assert!(
+        out.contains("Read by Jim"),
+        "hero must show the narrator:\n{out}"
+    );
+    assert!(
+        out.contains("2024"),
+        "hero must show the publication year:\n{out}"
+    );
+    assert!(
+        out.contains("sweeping description"),
+        "hero must show the description:\n{out}"
+    );
+    assert!(out.contains("60"), "hero must show the duration:\n{out}");
 }
 
 /// Selecting a different bucket narrows the right-pane list: a book outside

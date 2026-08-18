@@ -27,6 +27,18 @@ pub struct AudiobookshelfBook {
     /// Surname of the first-listed author; the raw credit on parse failure.
     pub author_sort_key: String,
     pub cover_path: Option<String>,
+    /// Total book duration in seconds (`media.duration`).
+    pub duration_seconds: f64,
+    /// Narrator name (`media.metadata.narratorName`).
+    pub narrator: Option<String>,
+    /// Publication year (`media.metadata.publishedYear`).
+    pub published_year: Option<String>,
+    /// Genre tags (`media.metadata.genres`).
+    pub genres: Vec<String>,
+    /// Description/synopsis (`media.metadata.description`).
+    pub description: Option<String>,
+    /// Series name (`media.metadata.seriesName`).
+    pub series_name: Option<String>,
     pub chapters: Vec<AudiobookshelfChapter>,
     pub audio_files: Vec<AudiobookshelfAudioFile>,
 }
@@ -57,14 +69,20 @@ pub fn audiobook_author_sort_key(name: &str) -> String {
     first.to_uppercase().collect::<String>() + &token[first.len_utf8()..]
 }
 
-/// The full raw author credit for display: the `authors` list joined, else the
-/// single `author` string.
+/// The full raw author credit for display: the joined `authors` list (object
+/// form from the detail endpoint), else the `author`/`authorName` string.
 pub(super) fn book_author_display(
     author: Option<&str>,
-    authors: Option<&[String]>,
+    authors: Option<&[AuthorWire]>,
 ) -> Option<String> {
     if let Some(authors) = authors.filter(|list| !list.is_empty()) {
-        return Some(authors.join(", "));
+        return Some(
+            authors
+                .iter()
+                .map(|a| a.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
     }
     author
         .map(str::trim)
@@ -83,55 +101,94 @@ pub(super) fn first_listed_author_sort_key(credit: &str) -> String {
 }
 
 #[derive(Debug, Deserialize)]
-struct BooksResponse {
-    page: usize,
-    limit: usize,
-    total: usize,
+pub(super) struct BooksResponse {
+    #[allow(dead_code)]
+    pub(super) page: usize,
+    #[allow(dead_code)]
+    pub(super) limit: usize,
+    #[allow(dead_code)]
+    pub(super) total: usize,
     #[serde(alias = "items")]
-    results: Vec<BookWire>,
+    pub(super) results: Vec<BookWire>,
 }
 #[derive(Debug, Deserialize)]
-struct BookWire {
+pub(super) struct BookWire {
     #[serde(rename = "id", alias = "libraryItemId")]
-    library_item_id: String,
+    #[allow(dead_code)]
+    pub(super) library_item_id: String,
     #[serde(default)]
-    title: Option<String>,
+    #[allow(dead_code)]
+    pub(super) title: Option<String>,
     #[serde(rename = "coverPath", default)]
-    cover_path: Option<String>,
+    #[allow(dead_code)]
+    pub(super) cover_path: Option<String>,
     #[serde(default)]
-    media: Option<BookMediaWire>,
+    pub(super) media: Option<BookMediaWire>,
 }
 #[derive(Debug, Deserialize, Default)]
-struct BookMediaWire {
+pub(super) struct BookMediaWire {
     #[serde(rename = "coverPath", default)]
-    cover_path: Option<String>,
+    #[allow(dead_code)]
+    pub(super) cover_path: Option<String>,
     #[serde(default)]
-    metadata: Option<BookMetadataWire>,
+    pub(super) duration: Option<f64>,
     #[serde(default)]
-    chapters: Option<Vec<ChapterWire>>,
+    pub(super) metadata: Option<BookMetadataWire>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub(super) chapters: Option<Vec<ChapterWire>>,
     #[serde(rename = "audioFiles", default)]
-    audio_files: Option<Vec<AudioFileWire>>,
+    #[allow(dead_code)]
+    pub(super) audio_files: Option<Vec<AudioFileWire>>,
 }
 #[derive(Debug, Deserialize)]
-struct BookMetadataWire {
-    title: Option<String>,
+pub(super) struct BookMetadataWire {
+    #[allow(dead_code)]
+    pub(super) title: Option<String>,
+    /// List endpoint uses `authorName` (string); detail endpoint uses
+    /// `author` (string) and/or `authors` (list of `{id,name}` objects).
+    /// All three resolve to the same display string via [`book_author_display`].
+    #[serde(default, alias = "authorName")]
+    pub(super) author: Option<String>,
+    #[serde(default, alias = "narratorName")]
+    pub(super) narrator: Option<String>,
+    #[serde(default, alias = "authors")]
+    pub(super) authors: Option<Vec<AuthorWire>>,
+    #[serde(default, alias = "publishedYear")]
+    pub(super) published_year: Option<String>,
     #[serde(default)]
-    author: Option<String>,
+    pub(super) genres: Option<Vec<String>>,
     #[serde(default)]
-    authors: Option<Vec<String>>,
+    pub(super) description: Option<String>,
+    #[serde(default, alias = "seriesName")]
+    #[allow(dead_code)]
+    pub(super) series_name: Option<String>,
 }
 #[derive(Debug, Deserialize)]
-struct ChapterWire {
-    id: usize,
-    start: f64,
-    end: f64,
-    title: String,
+pub(super) struct AuthorWire {
+    #[allow(dead_code)]
+    pub(super) id: Option<String>,
+    pub(super) name: String,
 }
 #[derive(Debug, Deserialize)]
-struct AudioFileWire {
-    index: usize,
-    ino: String,
-    duration: f64,
+pub(super) struct ChapterWire {
+    #[allow(dead_code)]
+    pub(super) id: usize,
+    #[allow(dead_code)]
+    pub(super) start: f64,
+    #[allow(dead_code)]
+    pub(super) end: f64,
+    #[allow(dead_code)]
+    pub(super) title: String,
+}
+#[derive(Debug, Deserialize)]
+pub(super) struct AudioFileWire {
+    #[allow(dead_code)]
+    pub(super) index: usize,
+    #[allow(dead_code)]
+    pub(super) ino: String,
+    #[allow(dead_code)]
+    pub(super) duration: f64,
 }
 #[derive(Debug, Deserialize)]
 struct BookDetailWire {
@@ -221,6 +278,19 @@ impl AudiobookshelfClient {
                         }),
                         library_item_id: x.library_item_id,
                         author_display,
+                        duration_seconds: x
+                            .media
+                            .as_ref()
+                            .and_then(|media| media.duration)
+                            .unwrap_or(0.0),
+                        narrator: metadata.and_then(|value| value.narrator.clone()),
+                        published_year: metadata.and_then(|value| value.published_year.clone()),
+                        genres: metadata
+                            .and_then(|value| value.genres.as_deref())
+                            .unwrap_or_default()
+                            .to_vec(),
+                        description: metadata.and_then(|value| value.description.clone()),
+                        series_name: metadata.and_then(|value| value.series_name.clone()),
                         chapters: Vec::new(),
                         audio_files: Vec::new(),
                     }

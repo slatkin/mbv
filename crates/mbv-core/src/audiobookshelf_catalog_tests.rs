@@ -239,7 +239,19 @@ fn multi_author_sort_uses_first_listed_surname_only() {
 #[test]
 fn author_display_prefers_authors_list_and_trims_single_author() {
     assert_eq!(
-        book_author_display(None, Some(&["a".into(), "b".into()])),
+        book_author_display(
+            None,
+            Some(&[
+                AuthorWire {
+                    id: None,
+                    name: "a".into()
+                },
+                AuthorWire {
+                    id: None,
+                    name: "b".into()
+                }
+            ])
+        ),
         Some("a, b".into())
     );
     assert_eq!(
@@ -248,4 +260,85 @@ fn author_display_prefers_authors_list_and_trims_single_author() {
     );
     assert_eq!(book_author_display(Some("   "), None), None);
     assert_eq!(book_author_display(None, Some(&[])), None);
+}
+
+#[test]
+fn book_list_page_parses_author_name_and_rich_metadata() {
+    // Mirrors the live server's `/api/libraries/{id}/items` shape: the list
+    // endpoint returns `authorName` (string), `narratorName`, `publishedYear`,
+    // `genres`, `description`, and `media.duration` -- not the `author`/
+    // `authors` fields the detail endpoint carries.
+    let json = r#"{
+        "page": 0, "limit": 1, "total": 1,
+        "results": [{
+            "id": "book-1",
+            "media": {
+                "duration": 48720.17,
+                "coverPath": "/metadata/items/book-1/cover.jpg",
+                "metadata": {
+                    "title": "Other Rivers",
+                    "authorName": "Peter Hessler",
+                    "narratorName": "Peter Hessler",
+                    "publishedYear": "2024",
+                    "genres": ["Biographies & Memoirs", "Politics & Social Sciences"],
+                    "description": "More than twenty years after teaching English..."
+                }
+            }
+        }]
+    }"#;
+    let response: BooksResponse = serde_json::from_str(json).unwrap();
+    assert_eq!(response.results.len(), 1);
+    let wire = &response.results[0];
+    let metadata = wire.media.as_ref().unwrap().metadata.as_ref().unwrap();
+    assert_eq!(
+        metadata.author.as_deref(),
+        Some("Peter Hessler"),
+        "authorName deserializes into the `author` field via the alias"
+    );
+    assert_eq!(metadata.narrator.as_deref(), Some("Peter Hessler"));
+    assert_eq!(metadata.published_year.as_deref(), Some("2024"));
+    assert_eq!(metadata.genres.as_ref().unwrap().len(), 2);
+    assert!(metadata
+        .description
+        .as_deref()
+        .unwrap()
+        .contains("teaching"));
+    assert_eq!(wire.media.as_ref().unwrap().duration, Some(48720.17));
+}
+
+#[test]
+fn book_detail_page_parses_authors_object_list() {
+    // The detail endpoint (`/api/items/{id}?expanded=1`) returns `authors` as
+    // a list of `{id, name}` objects, not strings. The deserializer must
+    // accept that shape and `book_author_display` must join the names.
+    let json = r#"{
+        "page": 0, "limit": 1, "total": 1,
+        "results": [{
+            "id": "book-1",
+            "media": {
+                "metadata": {
+                    "title": "Co-authored Book",
+                    "author": "First Author",
+                    "authors": [
+                        {"id": "a1", "name": "First Author"},
+                        {"id": "a2", "name": "Second Author"}
+                    ]
+                }
+            }
+        }]
+    }"#;
+    let response: BooksResponse = serde_json::from_str(json).unwrap();
+    let metadata = response.results[0]
+        .media
+        .as_ref()
+        .unwrap()
+        .metadata
+        .as_ref()
+        .unwrap();
+    let display = book_author_display(metadata.author.as_deref(), metadata.authors.as_deref());
+    assert_eq!(
+        display.as_deref(),
+        Some("First Author, Second Author"),
+        "authors object list is joined for display, preferred over the single author string"
+    );
 }

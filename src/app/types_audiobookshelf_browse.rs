@@ -681,6 +681,12 @@ mod tests {
             author_display: Some(author.into()),
             author_sort_key: audiobook_author_sort_key(author),
             cover_path: None,
+            duration_seconds: 0.0,
+            narrator: None,
+            published_year: None,
+            genres: Vec::new(),
+            description: None,
+            series_name: None,
             chapters: Vec::new(),
             audio_files: Vec::new(),
         }

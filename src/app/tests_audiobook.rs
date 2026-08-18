@@ -16,6 +16,12 @@ fn audiobookshelf_book_app() -> App {
         author_display: Some("Pierce".into()),
         author_sort_key: "Pierce".into(),
         cover_path: None,
+        duration_seconds: 0.0,
+        narrator: None,
+        published_year: None,
+        genres: Vec::new(),
+        description: None,
+        series_name: None,
         chapters: vec![mbv_core::audiobookshelf::AudiobookshelfChapter {
             id: 0,
             start: 0.0,

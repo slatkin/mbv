@@ -8,7 +8,7 @@ use std::time::Duration;
 mod audiobookshelf_catalog_books;
 pub use audiobookshelf_catalog_books::*;
 #[cfg(test)]
-use audiobookshelf_catalog_books::{book_author_display, first_listed_author_sort_key};
+use audiobookshelf_catalog_books::{book_author_display, first_listed_author_sort_key, AuthorWire};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AudiobookshelfLibrary {

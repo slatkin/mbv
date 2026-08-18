@@ -1,6 +1,7 @@
 use super::hero::{
     self, hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
+use super::home_hero::{beside_image_hero_dims, beside_image_hero_rects};
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::images::audiobookshelf_book_cover_cache_key;
 use crate::app::layout::LayoutMain;
@@ -10,7 +11,7 @@ use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Cell, Paragraph, Row, Table, TableState};
+use ratatui::widgets::{Block, Cell, Row, Table, TableState};
 use ratatui::Frame;
 
 /// Padding inside recessed wide-book blocks, matching Music's wide layout
@@ -233,11 +234,32 @@ impl App {
     }
 
     fn audiobookshelf_book_hero_rows(&self, state: &AudiobookshelfBookBrowseState) -> u16 {
-        let mut rows = HERO_TITLE_ROWS;
-        let book = state.selected_book();
-        rows += book.and_then(|book| book.author_display.as_ref()).is_some() as u16;
-        rows += 1; // progress row
-        rows
+        let Some(book) = state.selected_book() else {
+            return HERO_TITLE_ROWS;
+        };
+        // The hero layout is: title (wrapped), author row, meta row (duration
+        // / progress), blank separator, description (wrapped around image).
+        // `beside_image_hero_dims` computes the exact layout we render; we
+        // need the same row count it will ask for so the reserved block fits.
+        // Use a provisional width (the widest we'd get in the narrow path);
+        // the actual render clamps to the granted area, so an over-estimate
+        // just reserves a row or two more than needed -- safe.
+        let inner_w = 60u16;
+        let max_allowed = 30u16;
+        let overview = book
+            .description
+            .as_deref()
+            .filter(|d| !d.is_empty())
+            .map(super::super::ui_util::trunc_overview)
+            .unwrap_or_default();
+        let (_, layout, image_rows) = beside_image_hero_dims(
+            &book.title,
+            book.author_display.as_deref().unwrap_or(""),
+            &overview,
+            inner_w,
+            max_allowed,
+        );
+        layout.height.max(image_rows)
     }
 
     fn render_audiobookshelf_book_hero(
@@ -254,17 +276,6 @@ impl App {
         let Some(book) = state.selected_book().cloned() else {
             return;
         };
-        let max_y = area.y + area.height;
-        let mut row = area.y;
-        row = super::hero::render_hero_title_row(
-            f,
-            area.x,
-            row,
-            max_y,
-            area.width.saturating_sub(1),
-            &book.title,
-            focused,
-        );
 
         let server_url = self
             .config
@@ -280,90 +291,120 @@ impl App {
                 self.current_protocol_suffix(),
             )
         });
-        if let Some(server) = server_url {
-            self.fetch_audiobookshelf_book_cover(server, book.library_item_id.clone());
-        }
-        let image_height = image_key
-            .as_ref()
-            .and_then(|key| self.cached_image_protocol_mut(key))
-            .and_then(|image| {
-                image
-                    .size_for(
-                        ratatui_image::Resize::Scale(Some(crate::app::render::RENDER_FILTER)),
-                        ratatui::layout::Size {
-                            width: super::detail_series::SERIES_IMAGE_COLS,
-                            height: super::detail_series::SERIES_IMAGE_ROWS,
-                        },
-                    )
-                    .map(|size| size.height)
-            })
-            .unwrap_or(0);
-
-        if let Some(author) = book.author_display.as_deref().filter(|a| !a.is_empty()) {
-            if row < max_y {
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        trunc_str(author, area.width as usize),
-                        Style::default().fg(palette::FOAM),
-                    )),
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-                row += 1;
+        if self.images_enabled() {
+            if let Some(server) = server_url {
+                self.fetch_audiobookshelf_book_cover(server, book.library_item_id.clone());
             }
         }
-        if row < max_y {
-            let progress = state.progress.get(&book.library_item_id);
-            let span = match progress {
-                Some(progress) if progress.is_finished => Span::styled(
-                    "Finished",
-                    Style::default()
-                        .fg(palette::FOAM)
-                        .add_modifier(Modifier::BOLD),
+
+        // Build the metadata spans: duration, then progress (matching the
+        // podcast tab's episode-progress style: a % or Finished span).
+        let mut meta_spans: Vec<Span<'static>> = Vec::new();
+        if book.duration_seconds > 0.0 {
+            meta_spans.push(Span::styled(
+                trunc_str(
+                    &fmt_duration_approx(book.duration_seconds as i64),
+                    area.width as usize,
                 ),
-                Some(progress) if progress.current_time_seconds > 0.0 => {
-                    let total = state
+                Style::default().fg(palette::SUBTLE),
+            ));
+        }
+        let progress = state.progress.get(&book.library_item_id);
+        let progress_span = match progress {
+            Some(p) if p.is_finished => Some(Span::styled(
+                "Finished",
+                Style::default()
+                    .fg(palette::FOAM)
+                    .add_modifier(Modifier::BOLD),
+            )),
+            Some(p) if p.current_time_seconds > 0.0 => {
+                // Prefer the book's total duration for the percentage; fall
+                // back to the sum of audio-file durations from the detail
+                // cache if the list page didn't carry one.
+                let total = if book.duration_seconds > 0.0 {
+                    Some(book.duration_seconds)
+                } else {
+                    state
                         .detail_cache
                         .get(&book.library_item_id)
-                        .map(|(_, files)| files.iter().map(|file| file.duration).sum::<f64>())
-                        .filter(|t| *t > 0.0);
-                    let pct = total.map(|total| {
-                        ((progress.current_time_seconds * 100.0 / total).floor() as u8).clamp(1, 99)
-                    });
-                    Span::styled(
-                        pct.map(|pct| format!("{pct}%")).unwrap_or_default(),
-                        Style::default().fg(palette::FOAM),
-                    )
-                }
-                _ => Span::styled("Not started", Style::default().fg(palette::SUBTLE)),
-            };
-            f.render_widget(
-                Paragraph::new(Line::from(vec![span])),
-                Rect {
-                    x: area.x,
-                    y: row,
-                    width: area.width,
-                    height: 1,
-                },
-            );
-            row += 1;
+                        .map(|(_, files)| files.iter().map(|f| f.duration).sum::<f64>())
+                        .filter(|t| *t > 0.0)
+                };
+                let pct = total.map(|total| {
+                    ((p.current_time_seconds * 100.0 / total).floor() as u8).clamp(1, 99)
+                });
+                pct.map(|pct| Span::styled(format!("{pct}%"), Style::default().fg(palette::FOAM)))
+            }
+            _ => Some(Span::styled(
+                "Not started",
+                Style::default().fg(palette::SUBTLE),
+            )),
+        };
+        if let Some(span) = progress_span {
+            if !meta_spans.is_empty() {
+                meta_spans.push(Span::raw("  "));
+            }
+            meta_spans.push(span);
         }
-        if image_height > 0 {
-            let image_rect = Rect {
-                x: area.x
-                    + area
-                        .width
-                        .saturating_sub(super::detail_series::SERIES_IMAGE_COLS),
-                y: row.saturating_sub(1),
-                width: super::detail_series::SERIES_IMAGE_COLS,
-                height: image_height,
-            };
-            layout.inline_image_rect = Some(image_rect);
+        // Add narrator and year as subtle text after progress, matching the
+        // Emby hero's release-date/duration/progress ordering.
+        if let Some(narrator) = book.narrator.as_deref().filter(|n| !n.is_empty()) {
+            if !meta_spans.is_empty() {
+                meta_spans.push(Span::raw("  "));
+            }
+            meta_spans.push(Span::styled(
+                trunc_str(&format!("Read by {narrator}"), area.width as usize),
+                Style::default().fg(palette::SUBTLE),
+            ));
         }
+        if let Some(year) = book.published_year.as_deref().filter(|y| !y.is_empty()) {
+            if !meta_spans.is_empty() {
+                meta_spans.push(Span::raw("  "));
+            }
+            meta_spans.push(Span::styled(
+                year.to_string(),
+                Style::default().fg(palette::SUBTLE),
+            ));
+        }
+
+        // The overview/description, URL-stripped and capped like the
+        // podcast hero's description (`trunc_overview`).
+        let overview = book
+            .description
+            .as_deref()
+            .filter(|d| !d.is_empty())
+            .map(super::super::ui_util::trunc_overview)
+            .unwrap_or_default();
+
+        // The standard hero-on-top beside-image layout: image on the right,
+        // metadata column on the left, overview wrapping around the image.
+        // This is the same path Emby Keep Watching and the generic ABS hero
+        // use, so the book tab's hero can't drift from theirs.
+        let inner_w = area.width;
+        let max_allowed = area.height;
+        let author = book.author_display.as_deref().unwrap_or("");
+        let (img_w, meta_layout, image_rows) =
+            beside_image_hero_dims(&book.title, author, &overview, inner_w, max_allowed);
+        let (meta_area, img_area) =
+            beside_image_hero_rects(area, img_w, meta_layout.height, image_rows);
+
+        let cache_key = image_key.clone().unwrap_or_default();
+        self.render_beside_image_hero(
+            f,
+            meta_area,
+            area,
+            img_area,
+            &meta_layout,
+            meta_spans,
+            &cache_key,
+            0,
+            focused,
+            false,
+        );
+        // The shared `render_beside_image_hero` renders the image into
+        // `img_area` via the image protocol, but the context-menu / inline
+        // image tracking needs the rect too.
+        layout.inline_image_rect = (image_rows > 0).then_some(img_area);
     }
 
     /// Chapter (or audioFiles) rows for the selected book: the persistent
