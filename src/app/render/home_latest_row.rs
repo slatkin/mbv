@@ -196,6 +196,67 @@ pub(super) fn render_home_latest_row(
     f.render_widget(Paragraph::new(Line::from(spans)), row_rect);
 }
 
+/// Pre-wrapped text for the generic Home hero detail (title lines, optional
+/// show-name row, overview lines) plus the total row count the text needs.
+/// Computed once (mirroring `KeepWatchingHeroLayout`'s measure-before-render
+/// pattern) so `render_home_list` can size the narrow hero to its content
+/// instead of asking for the whole content area, and the renderer can wrap
+/// each piece exactly once per frame.
+pub(super) struct HomeLatestDetailText {
+    pub(super) title_lines: Vec<String>,
+    pub(super) show_name: String,
+    pub(super) overview_lines: Vec<(String, bool)>,
+    pub(super) meta_height: u16,
+}
+
+/// Measures/wraps the generic hero detail's text for `item` at the given
+/// content width. `text_w` is where the title wraps; `ov_w` where the
+/// overview wraps (`overview_pad` inset in the wide hero). The overview's
+/// `false` flag is irrelevant here (no beside-image wrap-around in this
+/// layout) but kept so the renderer can pass the lines straight through.
+pub(super) fn home_latest_detail_text(
+    item: &QueueItem,
+    text_w: usize,
+    ov_w: usize,
+) -> HomeLatestDetailText {
+    let title_lines: Vec<String> = wrap(item.title(), text_w)
+        .into_iter()
+        .map(|s| s.into_owned())
+        .collect();
+    let show_name = match item {
+        QueueItem::Audiobookshelf(ep) => ep.show_title.clone().unwrap_or_default(),
+        _ => String::new(),
+    };
+    let overview_lines: Vec<(String, bool)> = match item.overview() {
+        None | Some("") => Vec::new(),
+        Some(overview) => {
+            // Cap long descriptions, with an ellipsis, so the hero doesn't
+            // grow unboundedly. The 200-char limit is on display width and
+            // includes the ellipsis itself.
+            let capped = trunc_str(overview, 200);
+            wrap(&capped, ov_w.max(1))
+                .into_iter()
+                .map(|s| (s.into_owned(), false))
+                .collect()
+        }
+    };
+    let meta_height = title_lines.len() as u16
+        + if show_name.is_empty() { 0 } else { 1 }
+        + 1 // meta row
+        + 1 // blank separator
+        + if overview_lines.is_empty() {
+            0
+        } else {
+            1 + overview_lines.len() as u16 + 1 // overview block: pad + lines + pad
+        };
+    HomeLatestDetailText {
+        title_lines,
+        show_name,
+        overview_lines,
+        meta_height,
+    }
+}
+
 impl App {
     /// Generic hero detail for a selected non-Emby Home item, sharing its
     /// title/subtitle/meta/overview shape with the Emby Keep Watching hero
@@ -221,41 +282,12 @@ impl App {
         }
         let text_w = area.width as usize;
         let ov_w = text_w.saturating_sub(overview_pad * 2);
-        let title = item.title();
-        let show_name = match item {
-            QueueItem::Audiobookshelf(ep) => ep.show_title.clone().unwrap_or_default(),
-            _ => String::new(),
-        };
-        let overview = item.overview().map(str::to_owned);
-
-        let title_lines: Vec<String> = wrap(title, text_w)
-            .into_iter()
-            .map(|s| s.into_owned())
-            .collect();
-        // No beside-image wrap-around in this layout (the cover sits below
-        // the text, not beside it), so every overview line uses the full
-        // width and the `wide` flag is irrelevant.
-        let overview_lines: Vec<(String, bool)> = if overview.as_deref().is_none_or(str::is_empty) {
-            Vec::new()
-        } else {
-            // Cap long descriptions, with an ellipsis, so the hero doesn't
-            // grow unboundedly. The 200-char limit is on display width and
-            // includes the ellipsis itself.
-            let capped = trunc_str(overview.as_deref().unwrap(), 200);
-            wrap(&capped, ov_w.max(1))
-                .into_iter()
-                .map(|s| (s.into_owned(), false))
-                .collect()
-        };
-        let meta_height = title_lines.len() as u16
-            + if show_name.is_empty() { 0 } else { 1 }
-            + 1 // meta row
-            + 1 // blank separator
-            + if overview_lines.is_empty() {
-                0
-            } else {
-                1 + overview_lines.len() as u16 + 1 // overview block: pad + lines + pad
-            };
+        let HomeLatestDetailText {
+            title_lines,
+            show_name,
+            overview_lines,
+            meta_height,
+        } = home_latest_detail_text(item, text_w, ov_w);
 
         // Terminal cells are roughly twice as tall as they are wide, so a
         // 16:9 image needs 9 rows for every 32 columns, matching the Emby hero.
@@ -506,6 +538,27 @@ mod tests {
             "description column budget is 200 + ellipsis, got {} chars",
             desc_region.chars().count()
         );
+    }
+
+    /// The generic hero measure sizes the hero to its text content, not the
+    /// available area: a text-only Feed measures a few rows (title + meta
+    /// row + separator), and an ABS item with a show name adds its subtitle
+    /// row. The narrow Home layout builds the hero height from this measure
+    /// (plus the 16:9 cover slot for ABS), so a bare Feed no longer fills
+    /// the whole content area.
+    #[test]
+    fn generic_detail_measure_sizes_to_text_content() {
+        let feed = feed_item("1");
+        let text = home_latest_detail_text(&feed, 100, 100);
+        assert_eq!(text.meta_height, 3, "Feed hero = title + meta + separator");
+
+        let abs = abs_item("1", None, None);
+        let text = home_latest_detail_text(&abs, 100, 100);
+        assert_eq!(
+            text.meta_height, 4,
+            "ABS hero = title + show name + meta + separator"
+        );
+        assert_eq!(text.show_name, "Podcast");
     }
 
     /// Task 14.3: a Feed entry in the generic row renderer shows its title

@@ -3,6 +3,7 @@
 use super::super::ui_util::*;
 use super::chrome::{daemon_endpoint_label, service_state_color};
 use super::indicators;
+use super::RENDER_FILTER;
 use crate::app::layout::LayoutPlayback;
 use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -13,6 +14,48 @@ use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
 use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
+
+/// The bundled app-icon bolt (assets/icon.svg rasterized for the tray into
+/// assets/tray_icon.bin): a 24×24 raw RGBA pixmap of the bolt in magenta
+/// over transparent, with every opaque pixel at partial alpha (the source
+/// renders at ~29% opacity). Used as the status-bar Emby indicator, tinted
+/// and normalized to full opacity per connection state.
+static EMBY_BOLT_BYTES: &[u8] = include_bytes!("../../../assets/tray_icon.bin");
+const EMBY_BOLT_SIZE: u32 = 24;
+
+/// Cache-key prefix for status-bar Emby bolt protocols (one entry per tint).
+const EMBY_STATUS_BOLT_KEY_PREFIX: &str = "__emby_status_bolt__:";
+
+/// Tint the bundled bolt to `target`, normalized to full opacity.
+///
+/// The source's opaque pixels are partial-alpha (max 75/255), so alpha is
+/// rescaled to each pixel's share of that max: the bolt interior becomes
+/// solid `target` while antialiased edges stay proportionally softer.
+/// Transparent pixels are left untouched.
+pub(super) fn emby_bolt_tinted(target: Color) -> image::DynamicImage {
+    let src = image::RgbaImage::from_raw(EMBY_BOLT_SIZE, EMBY_BOLT_SIZE, EMBY_BOLT_BYTES.to_vec())
+        .expect("assets/tray_icon.bin is a 24x24 raw RGBA pixmap");
+    let max_a = src.pixels().map(|p| p[3]).max().unwrap_or(0).max(1);
+    let (tr, tg, tb) = match target {
+        Color::Rgb(r, g, b) => (r, g, b),
+        _ => (255, 255, 255),
+    };
+    let tinted = image::RgbaImage::from_fn(EMBY_BOLT_SIZE, EMBY_BOLT_SIZE, |x, y| {
+        let p = src.get_pixel(x, y);
+        if p[3] == 0 {
+            *p
+        } else {
+            let cover = p[3] as u32 * 255 / max_a as u32; // 0..=255 coverage
+            image::Rgba([
+                (tr as u32 * cover / 255) as u8,
+                (tg as u32 * cover / 255) as u8,
+                (tb as u32 * cover / 255) as u8,
+                cover as u8,
+            ])
+        }
+    });
+    image::DynamicImage::ImageRgba8(tinted)
+}
 
 impl App {
     pub(super) fn remote_status_spans(
@@ -282,6 +325,25 @@ impl App {
         }
     }
 
+    /// The status-bar Emby indicator: the bundled app-icon bolt tinted to
+    /// `color`, cached in `card_image_states` under a per-colour key.
+    /// Returns `None` when the active image protocol can't render a one-row
+    /// image (halfblocks) or no protocol is ready yet.
+    pub(super) fn emby_status_bolt_protocol_mut(
+        &mut self,
+        color: Color,
+    ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
+        if self.current_protocol_suffix() == "halfblock" {
+            return None;
+        }
+        let key = format!("{EMBY_STATUS_BOLT_KEY_PREFIX}{color:?}");
+        if !self.card_image_states.contains_key(&key) {
+            let entry = self.build_cached_image(&key, Some(emby_bolt_tinted(color)));
+            self.card_image_states.insert(key.clone(), entry);
+        }
+        self.cached_image_protocol_mut(&key)
+    }
+
     /// Persistent bottom status bar. Left side: volume, connection,
     /// and mute status groups. Right side: queue source/save-state/scope
     /// detail and the service-state glyphs (Emby, Audiobookshelf,
@@ -480,17 +542,12 @@ impl App {
                         .bg(palette::SURFACE_STATUS_PILL),
                 ));
             }
-            // Service-state glyphs — Emby, Audiobookshelf, stay-alive, shared-data —
+            // Service-state glyphs — Audiobookshelf, stay-alive, shared-data —
             // always visible, coloured by state (brand colour when active,
             // grey when inactive; stay-alive daemon lost = yellow). One
-            // leading space per glyph, no trailing space.
-            right_spans.extend([
-                Span::raw(" "),
-                Span::styled(
-                    "\u{F06B4}",
-                    Style::default()
-                        .fg(service_state_color(self.emby_runtime.state, palette::AQUA)),
-                ),
+            // leading space per glyph, no trailing space. The Emby bolt
+            // renders as a terminal image just before this group.
+            let service_spans: Vec<Span> = vec![
                 Span::raw(" "),
                 Span::styled(
                     "\u{EDE2}",
@@ -513,11 +570,37 @@ impl App {
                 // Right edge of the segment: the shared-data glyph gets its own
                 // trailing margin like a pill.
                 Span::raw(" "),
-            ]);
+            ];
+            // The Emby bolt (assets/icon.svg) tinted by connection state
+            // (green=ready, red=configured-but-down, grey=not configured).
+            // Only an image can draw it, so it appears only on terminals with
+            // a pixel-precise protocol (kitty/sixel/iterm2); halfblocks
+            // cannot shape a one-row image, so those terminals just omit it.
+            let emby_color = service_state_color(self.emby_runtime.state, palette::AQUA);
+            let emby_protocol = self.emby_status_bolt_protocol_mut(emby_color);
+            let emby_size = emby_protocol.as_ref().and_then(|state| {
+                state.size_for(
+                    ratatui_image::Resize::Scale(Some(RENDER_FILTER)),
+                    ratatui::layout::Size {
+                        width: area.width,
+                        height: 1,
+                    },
+                )
+            });
+            let emby_w = emby_size.map(|s| s.width).unwrap_or(0);
+            let left_text_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
+            let service_w: u16 = service_spans.iter().map(|s| s.content.width() as u16).sum();
+            // Gap between the username/source pill and the bolt only when both
+            // are present; the service group's own leading space doubles as
+            // the gap after the bolt.
+            let bolt_gap = u16::from(!right_spans.is_empty() && emby_w > 0);
+            let right_w = left_text_w
+                .saturating_add(bolt_gap)
+                .saturating_add(emby_w)
+                .saturating_add(service_w);
             // Remote queue scope is omitted here: the active queue is already
             // apparent from the queue UI.
-            if !right_spans.is_empty() {
-                let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
+            if right_w > 0 {
                 // Compare against `left_content_w` (pill + session label, from Task 2),
                 // not a hardcoded pill-only width -- otherwise this check passes while
                 // the right segment still overlaps a rendered session label (e.g.
@@ -525,15 +608,40 @@ impl App {
                 let left_end = area.x + left_content_w;
                 let right_x = area.x + area.width.saturating_sub(right_w);
                 if right_x > left_end {
-                    let right_rect = Rect {
-                        x: right_x,
-                        y: area.y,
-                        width: right_w,
-                        height: 1,
-                    };
+                    if !right_spans.is_empty() {
+                        f.render_widget(
+                            Paragraph::new(Line::from(right_spans)).style(bar_style),
+                            Rect {
+                                x: right_x,
+                                y: area.y,
+                                width: left_text_w,
+                                height: 1,
+                            },
+                        );
+                    }
+                    if let (Some(state), Some(size)) = (emby_protocol, emby_size) {
+                        type SImg =
+                            ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+                        f.render_stateful_widget(
+                            SImg::default()
+                                .resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
+                            Rect {
+                                x: right_x + left_text_w + bolt_gap,
+                                y: area.y,
+                                width: size.width,
+                                height: size.height,
+                            },
+                            state,
+                        );
+                    }
                     f.render_widget(
-                        Paragraph::new(Line::from(right_spans)).style(bar_style),
-                        right_rect,
+                        Paragraph::new(Line::from(service_spans)).style(bar_style),
+                        Rect {
+                            x: right_x + left_text_w + bolt_gap + emby_w,
+                            y: area.y,
+                            width: service_w,
+                            height: 1,
+                        },
                     );
                 }
                 // else: terminal too narrow for both segments -- right segment drops
@@ -542,5 +650,39 @@ impl App {
                 // segment yields first.)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::emby_bolt_tinted;
+    use ratatui::style::Color;
+
+    #[test]
+    fn emby_bolt_tinted_normalizes_and_tints() {
+        let img = emby_bolt_tinted(Color::Rgb(1, 2, 3));
+        let rgba = img.to_rgba8();
+        assert_eq!(rgba.dimensions(), (24, 24));
+        let (mut opaque, mut transparent) = (0, 0);
+        for p in rgba.pixels() {
+            if p[3] == 255 {
+                opaque += 1;
+                assert_eq!((p[0], p[1], p[2]), (1, 2, 3));
+            } else if p[3] == 0 {
+                transparent += 1;
+                assert_eq!((p[0], p[1], p[2]), (0, 0, 0));
+            }
+            // Nontransparent pixels are premultiplied toward the target.
+            if p[3] > 0 {
+                assert_eq!(p[0], (u16::from(p[3]) * 1 / 255) as u8);
+                assert_eq!(p[1], (u16::from(p[3]) * 2 / 255) as u8);
+                assert_eq!(p[2], (u16::from(p[3]) * 3 / 255) as u8);
+            }
+        }
+        assert!(
+            opaque > 0,
+            "the bolt interior is fully opaque after tinting"
+        );
+        assert!(transparent > 0, "the bolt sits on a transparent background");
     }
 }

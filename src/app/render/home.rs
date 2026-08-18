@@ -304,7 +304,27 @@ impl App {
                     }
                     None => current_item
                         .filter(|item| item.as_emby().is_none())
-                        .map(|item| HeroContentDims::Generic(item, max_allowed))
+                        .map(|item| {
+                            let text = super::home_latest_row::home_latest_detail_text(
+                                &item,
+                                inner_w as usize,
+                                inner_w as usize,
+                            );
+                            // The generic hero's cover (only Audiobookshelf
+                            // renders one; Feeds are text-only) sits below
+                            // the text at 16:9 of the hero width, one row
+                            // below the text block (`render_home_latest_detail`'s
+                            // `meta_height + 1` gap). Size the hero to that
+                            // content instead of requesting the whole content
+                            // area.
+                            let rows = if matches!(item, QueueItem::Audiobookshelf(_)) {
+                                let image_rows = inner_w.saturating_mul(9).saturating_add(31) / 32;
+                                text.meta_height + 1 + image_rows
+                            } else {
+                                text.meta_height
+                            };
+                            HeroContentDims::Generic(item, rows)
+                        })
                         .unwrap_or(HeroContentDims::None),
                 }
             };
