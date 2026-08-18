@@ -500,7 +500,6 @@ pub(super) fn render_home_hero_meta_block(
         } else {
             palette::MUTED
         };
-        row += 1; // top pad row
         for (line, wide) in overview_lines {
             if row >= max_y {
                 break;

@@ -89,11 +89,26 @@ impl App {
             return;
         }
         let img_area = area;
+        // `img_area`'s height is sometimes stretched to match the metadata
+        // column beside it (e.g. a long overview in narrow layout, home.rs's
+        // `hero_height = image_rows.max(meta_layout.height)`), so it can be
+        // taller than the image's own 16:9 row budget -- the text layout
+        // already wrapped its overview around that budget (`image_rows` in
+        // `hero_text_layout`), not around the stretched panel height. A 16:9
+        // backdrop naturally renders within the budget regardless, but a
+        // squarer cover (Audiobookshelf/podcast art) would otherwise grow
+        // into the stretched extra space and overlap the "past the image"
+        // overview text that assumed it wouldn't. Cap `avail` to the same
+        // budget the placeholder below already caps to, so the real image
+        // never renders past where the text thinks it ends.
+        let natural_h = (img_area.width.saturating_mul(9).saturating_add(31) / 32)
+            .max(1)
+            .min(img_area.height);
         if let Some(state) = self.cached_image_protocol_mut(cache_key) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             let avail = Size {
                 width: img_area.width,
-                height: img_area.height,
+                height: natural_h,
             };
             if let Some(actual) =
                 state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
@@ -116,17 +131,8 @@ impl App {
                 return;
             }
         }
-        // `img_area`'s height is sometimes stretched to match the metadata
-        // column beside it (e.g. a long overview in narrow layout, home.rs's
-        // `hero_height = image_rows.max(meta_layout.height)`), so it can be
-        // taller than the image itself will ever be -- the real image above
-        // self-corrects via `size_for`'s aspect fit, but the placeholder must
-        // do the same or it briefly renders as a too-tall block. Recompute
-        // the same 16:9 natural height both `home.rs` layouts derive the
-        // image column from, and cap the placeholder to it.
-        let natural_h = (img_area.width.saturating_mul(9).saturating_add(31) / 32)
-            .max(1)
-            .min(img_area.height);
+        // Same budget as the real-image branch above, so the placeholder
+        // never renders as a too-tall block while no artwork is ready yet.
         f.render_widget(
             Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
             Rect {
@@ -398,7 +404,7 @@ pub(super) fn hero_text_layout(
         + if overview_lines.is_empty() {
             0
         } else {
-            1 + overview_lines.len() as u16 + 1 // overview block: top pad + lines + bottom pad
+            overview_lines.len() as u16 + 1 // overview lines + bottom pad
         };
     KeepWatchingHeroLayout {
         title_lines,
