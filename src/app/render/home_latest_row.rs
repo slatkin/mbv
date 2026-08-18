@@ -49,10 +49,13 @@ pub(super) fn render_home_emby_row(
     const META_COL_W: usize = 10;
     const META_RIGHT_MARGIN: usize = 0;
     const META_INNER_PAD: usize = 1;
-    // " 100%" - space + up to 4 chars, reserved next to the title.
+    // " 100%" - space + up to 4 chars, reserved next to the title only when
+    // a percentage badge will actually be drawn (most rows have none, and
+    // reserving it unconditionally truncated titles into unused blank space).
     const PCT_COL_W: usize = 5;
+    let pct_reserve = if pct_str.is_some() { PCT_COL_W } else { 0 };
     let title_col_w =
-        avail.saturating_sub(META_COL_W + META_RIGHT_MARGIN + META_INNER_PAD * 2 + PCT_COL_W);
+        avail.saturating_sub(META_COL_W + META_RIGHT_MARGIN + META_INNER_PAD * 2 + pct_reserve);
 
     let is_episode = item.item_type == "Episode" && !item.series_name.is_empty();
     let mut title_spans: Vec<Span> = if is_episode {
