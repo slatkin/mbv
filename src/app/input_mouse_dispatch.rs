@@ -87,7 +87,7 @@ impl App {
                 } else {
                     -1
                 };
-                if self.layout.tabbar_vol_area.contains((col, row).into()) {
+                if self.layout.playback.ind_vol.contains((col, row).into()) {
                     // Same `Command` the `-`/`+` keys dispatch (issue #134);
                     // only the hit-test and the wheel-to-delta mapping are
                     // mouse-specific.

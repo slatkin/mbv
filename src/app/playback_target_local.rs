@@ -142,6 +142,11 @@ impl LocalPlaybackTarget {
             } else {
                 s.volume
             }
+        } else if app.mute_on {
+            // Idle mute (`m` key or persisted pref): read 0 so the volume
+            // indicator agrees with the mute pill instead of showing the
+            // pre-mute level.
+            0
         } else {
             app.ui_volume as i64
         }

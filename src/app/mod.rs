@@ -192,8 +192,6 @@ pub(super) const TWO_COLUMN_THRESHOLD: u16 = 82;
 /// unrelated to `TWO_COLUMN_THRESHOLD` (82), which governs the library
 /// panel's internal list-column layout (see design.md).
 pub(super) const MINI_VIEW_THRESHOLD: u16 = 80;
-/// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
-pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
 /// Left margin for the tab row. The control pill used to live here (hence
 /// the old, larger reservation); it now renders in the status bar (see
 /// `render_status_bar`) and the tabs are left-aligned flush with the left

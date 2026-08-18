@@ -10,13 +10,13 @@ pub const BG_GREEN_SOFT: Color = Color::Rgb(72, 88, 78); // softer green-grey (#
 pub const QUEUE_UNFOCUSED_FG: Color = BG_GREEN_SOFT; // queue row text
 pub const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc7f)
 pub const AQUA: Color = Color::Rgb(53, 167, 124); // emby green — folders, watched (#35a77c)
+pub const AMBER: Color = Color::Rgb(199, 152, 71); // audiobookshelf gold (#c79847)
 pub const FOAM: Color = Color::Rgb(58, 148, 197); // project blue (#3a94c5)
 pub const BG_GREEN: Color = Color::Rgb(60, 72, 65); // dark green-grey (#3c4841)
 pub const GREEN: Color = Color::Rgb(147, 178, 89); // green (#93b259)
 pub const IRIS: Color = Color::Rgb(167, 192, 128); // sage green — active tab, focused pill text (#A7C080)
 pub const FOCUSED: Color = Color::Rgb(83, 83, 83); // focused item bg (#535353)
 pub const RED: Color = Color::Rgb(229, 126, 128); // muted red (#e57e80)
-pub const STATUS_PILL_BG: Color = Color::Rgb(40, 40, 40); // status bar pill background (#282828)
 pub const SEEK_TRACK: Color = Color::Rgb(70, 84, 95); // unplayed seek track (design #46545f)
 pub const DARK_BG: Color = Color::Rgb(30, 35, 38); // tab bar (Home, etc) background (#1e2326)
 pub const LIBRARY_SIDE_BG: Color = Color::Rgb(45, 53, 59); // library-side background, reused for the queue column's unfocused/dim state (#2d353b)
@@ -55,7 +55,7 @@ pub const SURFACE_RESTING: Color = PLAYBACK_PANEL_BG; // resting-content / unfoc
 pub const SURFACE_PLAYBACK: Color = PLAYBACK_PANEL_BG; // now-playing-strip half
 pub const SURFACE_ACCENT_SOFT: Color = BG_GREEN_SOFT;
 pub const SURFACE_ITEM_FOCUSED: Color = FOCUSED;
-pub const SURFACE_STATUS_PILL: Color = STATUS_PILL_BG;
+pub const SURFACE_STATUS_PILL: Color = SURFACE_CHROME; // pills sit on the chrome status row; same bg
 
 // Accents
 pub const ACCENT: Color = AQUA; // selection marker, watched, folders

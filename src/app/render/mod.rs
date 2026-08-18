@@ -136,8 +136,8 @@ impl App {
 
         layout.playback.ind_mu = Rect::default();
         layout.playback.ind_rc = Rect::default();
+        layout.playback.ind_vol = Rect::default();
         layout.tabs_area = Rect::default();
-        layout.tabbar_vol_area = Rect::default();
 
         // Clear expired toast before any rendering so the status bar sees the latest state.
         if self.status_expires.is_some_and(|t| t <= Instant::now()) {
@@ -175,7 +175,6 @@ impl App {
             &mut layout.main,
             &mut layout.playback,
             &mut layout.tabs_area,
-            &mut layout.tabbar_vol_area,
             player_h,
             show_controls,
             &now_playing_title,
@@ -258,7 +257,6 @@ impl App {
         layout: &mut LayoutMain,
         playback: &mut LayoutPlayback,
         tabs_area_out: &mut Rect,
-        tabbar_vol_area_out: &mut Rect,
         player_h: u16,
         show_controls: bool,
         now_playing_title: &Option<(String, Color)>,
@@ -374,7 +372,7 @@ impl App {
             height: tab_h,
         };
         if right_visible {
-            self.render_tabs(f, tab_area, tabs_area_out, tabbar_vol_area_out);
+            self.render_tabs(f, tab_area, tabs_area_out);
         }
 
         // Player panel below the tab bar.

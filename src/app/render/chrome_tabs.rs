@@ -3,9 +3,7 @@
 use super::super::ui_util::*;
 use super::indicators;
 use crate::app::layout::LayoutPlayback;
-use crate::app::{
-    palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE, TABBAR_RIGHT_RESERVE,
-};
+use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -29,14 +27,8 @@ impl App {
     }
 
     /// Renders the tab bar within the given 1-row `area` and populates
-    /// `layout.tabs_area` / `layout.tabbar_vol_area` for mouse hit testing.
-    pub(super) fn render_tabs(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        tabs_area_out: &mut Rect,
-        tabbar_vol_area_out: &mut Rect,
-    ) {
+    /// `layout.tabs_area` for mouse hit testing.
+    pub(super) fn render_tabs(&mut self, f: &mut Frame, area: Rect, tabs_area_out: &mut Rect) {
         // Fill the tab bar area with the tab box's own background.
         f.render_widget(
             Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
@@ -52,40 +44,13 @@ impl App {
 
         let pb_h: u16 = 2; // 2-col padding inside the coloured box
         let tabs_x = area.x + 1;
-        let tabs_w = area
-            .width
-            .saturating_sub(2 * pb_h + TABBAR_LEFT_RESERVE + TABBAR_RIGHT_RESERVE);
+        let tabs_w = area.width.saturating_sub(2 * pb_h + TABBAR_LEFT_RESERVE);
         let tabs_area = Rect {
             x: tabs_x,
             width: tabs_w,
             ..tab_row
         };
         *tabs_area_out = tabs_area;
-
-        let volume = self.playback_display_target().displayed_volume(self);
-        let vol_color = if volume > 100 {
-            palette::RED
-        } else if volume > 60 {
-            palette::YELLOW
-        } else {
-            palette::AQUA
-        };
-        let vol_spans = vec![
-            Span::styled("VOL ", Style::default().fg(palette::PLAYBACK_META_FG)),
-            Span::styled(
-                volume.to_string(),
-                Style::default().fg(vol_color).add_modifier(Modifier::BOLD),
-            ),
-        ];
-        let vol_w: u16 = vol_spans.iter().map(|s| s.content.width() as u16).sum();
-        let vol_rect = Rect {
-            x: area.x + area.width.saturating_sub(vol_w + pb_h),
-            y: tab_row.y,
-            width: vol_w,
-            height: 1,
-        };
-        *tabbar_vol_area_out = vol_rect;
-        f.render_widget(Paragraph::new(Line::from(vol_spans)), vol_rect);
 
         let (vis_start, vis_end) = self.visible_tab_range(tabs_w);
         let has_left = vis_start > 0;

@@ -214,7 +214,7 @@ impl App {
             self.layout.tabs_area.width
         } else {
             self.terminal_width
-                .saturating_sub(super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE)
+                .saturating_sub(super::TABBAR_LEFT_RESERVE)
         };
         loop {
             let (_, end) = self.visible_tab_range(tab_w);

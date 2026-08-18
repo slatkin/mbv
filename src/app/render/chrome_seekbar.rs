@@ -3,9 +3,7 @@
 use super::super::ui_util::*;
 use super::indicators;
 use crate::app::layout::LayoutPlayback;
-use crate::app::{
-    palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE, TABBAR_RIGHT_RESERVE,
-};
+use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};

@@ -1,12 +1,12 @@
 #![allow(unused_imports)]
 
 use super::super::ui_util::*;
-use super::chrome::{daemon_endpoint_label, server_url_label};
+use super::chrome::{
+    audiobookshelf_state_color, daemon_endpoint_label, emby_state_color, stay_alive_color,
+};
 use super::indicators;
 use crate::app::layout::LayoutPlayback;
-use crate::app::{
-    palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE, TABBAR_RIGHT_RESERVE,
-};
+use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -200,6 +200,36 @@ impl App {
             })
     }
 
+    pub(super) fn volume_status_spans(&self) -> Vec<Span<'static>> {
+        let volume = self.playback_display_target().displayed_volume(self);
+        // Speaker glyph reflects the volume state (0 / low / mid / high).
+        let icon = if volume == 0 {
+            "\u{1F507}"
+        } else if volume <= 25 {
+            "\u{1F508}"
+        } else if volume <= 75 {
+            "\u{1F509}"
+        } else {
+            "\u{1F50A}"
+        };
+        vec![
+            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(
+                icon,
+                Style::default()
+                    .fg(palette::PLAYBACK_META_FG)
+                    .bg(palette::SURFACE_STATUS_PILL),
+            ),
+            Span::styled(
+                format!(" {volume}"),
+                Style::default()
+                    .fg(palette::AQUA)
+                    .bg(palette::SURFACE_STATUS_PILL)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]
+    }
+
     pub(super) fn status_width(spans: &[Span]) -> u16 {
         spans.iter().map(|s| s.content.width() as u16).sum()
     }
@@ -254,9 +284,10 @@ impl App {
         }
     }
 
-    /// Persistent bottom status bar. Left side: connection, stay-alive,
-    /// shared-state, and mute status groups. Right side: queue
-    /// source/save-state/scope detail.
+    /// Persistent bottom status bar. Left side: volume, connection,
+    /// and mute status groups. Right side: queue source/save-state/scope
+    /// detail and the service-state glyphs (Emby, Audiobookshelf,
+    /// stay-alive, shared-data).
     /// The playlist status pill renders in the left queue panel instead.
     pub(super) fn render_status_bar(
         &mut self,
@@ -271,65 +302,44 @@ impl App {
         layout.ind_mu = Rect::default();
 
         let remote_state = self.remote_slot_state();
-        let (daemon_endpoint, server_url, username) = {
+        let (daemon_endpoint, username) = {
             let config = self.config.lock().unwrap();
             let cfg = &*config;
-            (
-                cfg.daemon_client_endpoint.clone(),
-                cfg.server_url.clone(),
-                cfg.username.clone(),
-            )
+            (cfg.daemon_client_endpoint.clone(), cfg.username.clone())
         };
         let remote_status = if show_session_pill {
             self.remote_status_spans(remote_state, &daemon_endpoint)
         } else {
             Vec::new()
         };
-        let alive_status: Option<Vec<Span>> = self.is_local_daemon().then(|| {
-            vec![
-                Span::raw(" "),
-                Span::styled(
-                    if self.use_nerd_fonts {
-                        "\u{f004}"
-                    } else {
-                        "\u{2665}"
-                    },
-                    Style::default().fg(palette::RED),
-                ),
-            ]
-        });
-        let shared_status = self.shared_client.as_ref().is_some_and(|client| {
+        // Stay-alive (local daemon) and shared-data are service-state glyphs
+        // too, in the right segment with Emby/Audiobookshelf, always visible:
+        // active = brand colour, stay-alive daemon lost = yellow (red already
+        // means active), otherwise grey.
+        let alive_color =
+            stay_alive_color(self.daemon_lost_modal.is_some(), self.is_local_daemon());
+        let shared_color = if self.shared_client.as_ref().is_some_and(|client| {
             matches!(
                 client.state(),
                 mbv_core::shared_client::SharedClientState::Shared
             )
-        });
-        let client_status = match (alive_status, shared_status) {
-            (None, false) => None,
-            (alive, shared) => {
-                let mut spans = alive.unwrap_or_default();
-                if shared {
-                    spans.extend([
-                        Span::raw(" "),
-                        Span::styled("", Style::default().fg(palette::FOAM)),
-                    ]);
-                }
-                Some(spans)
-            }
+        }) {
+            palette::FOAM
+        } else {
+            palette::MUTED
         };
         let mute_status = self.mute_status_spans();
+        let vol_status = self.volume_status_spans();
 
-        // Preserve the existing left-segment overflow order: client indicators
-        // drop first, then mute, then remote.
+        // Preserve the existing left-segment overflow order: mute drops
+        // first, then the volume pill, then remote. (The service-state
+        // glyphs now live in the right segment.)
         let remote_w = Self::status_width(&remote_status);
-        let client_w: u16 = client_status
-            .as_ref()
-            .map(|spans| Self::status_width(spans))
-            .unwrap_or(0);
         let mute_w: u16 = mute_status
             .as_ref()
             .map(|spans| Self::status_width(spans))
             .unwrap_or(0);
+        let vol_w = Self::status_width(&vol_status);
         let available = area.width;
         let joined_width = |widths: &[u16]| -> u16 {
             let mut total = 0u16;
@@ -341,22 +351,30 @@ impl App {
             }
             total
         };
-        let fits_all = joined_width(&[remote_w, client_w, mute_w]) <= available;
-        let fits_without_client = !fits_all && joined_width(&[remote_w, mute_w]) <= available;
-        let fits_without_mute =
-            !fits_all && !fits_without_client && joined_width(&[remote_w, client_w]) <= available;
-        let fits_without_remote =
-            !fits_all && !fits_without_client && !fits_without_mute && client_w <= available;
+        let fits_all = joined_width(&[remote_w, mute_w, vol_w]) <= available;
+        let fits_without_mute = !fits_all && joined_width(&[remote_w, vol_w]) <= available;
+        let fits_without_volume =
+            !fits_all && !fits_without_mute && joined_width(&[remote_w, mute_w]) <= available;
+        let fits_without_remote = !fits_all
+            && !fits_without_mute
+            && !fits_without_volume
+            && joined_width(&[mute_w, vol_w]) <= available;
 
-        let show_remote = remote_w > 0 && (fits_all || fits_without_client || fits_without_mute);
-        let show_client =
-            client_status.is_some() && (fits_all || fits_without_mute || fits_without_remote);
+        let show_remote = remote_w > 0 && (fits_all || fits_without_mute || fits_without_volume);
+        let show_volume = fits_all || fits_without_mute || fits_without_remote;
 
         let mut spans: Vec<Span> = Vec::new();
-        if show_client {
-            if let Some(client) = client_status.as_ref() {
-                spans.extend(client.iter().cloned());
-            }
+        if show_volume {
+            let vol_x = area.x + Self::status_width(&spans);
+            Self::append_status(&mut spans, vol_status);
+            layout.ind_vol = Rect {
+                x: vol_x,
+                y: area.y,
+                width: vol_w,
+                height: 1,
+            };
+        } else {
+            layout.ind_vol = Rect::default();
         }
         let remote_x =
             show_remote.then(|| area.x + Self::status_width(&spans) + u16::from(!spans.is_empty()));
@@ -364,7 +382,7 @@ impl App {
             Self::append_status(&mut spans, remote_status);
         }
         self.render_remote_status_hitbox(layout, area, remote_x, remote_w);
-        if fits_all || fits_without_client {
+        if fits_all || fits_without_mute {
             if let Some(mute) = mute_status {
                 let mute_x = area.x + Self::status_width(&spans);
                 let mute_w = Self::status_width(&mute);
@@ -460,35 +478,38 @@ impl App {
                         .bg(palette::SURFACE_STATUS_PILL),
                 ));
             }
-            if let Some(server) = server_url_label(&server_url) {
+            // Service-state glyphs — Emby, Audiobookshelf, stay-alive, shared-data —
+            // always visible, coloured by state (brand colour when active,
+            // grey when inactive; stay-alive daemon lost = yellow). One
+            // leading space per glyph, no trailing space.
+            let mut service_spans: Vec<Span> = Vec::new();
+            service_spans.push(Span::raw(" "));
+            service_spans.push(Span::styled(
+                "\u{F06B4}",
+                Style::default().fg(emby_state_color(self.emby_runtime.state)),
+            ));
+            service_spans.push(Span::raw(" "));
+            service_spans.push(Span::styled(
+                "\u{EDE2}",
+                Style::default().fg(audiobookshelf_state_color(
+                    self.audiobookshelf_runtime.state,
+                )),
+            ));
+            service_spans.push(Span::raw(" "));
+            service_spans.push(Span::styled(
                 if self.use_nerd_fonts {
-                    if !right_spans.is_empty() {
-                        right_spans.push(Span::raw(" "));
-                    }
-                    right_spans.push(Span::styled(
-                        " \u{F06B4}",
-                        Style::default()
-                            .fg(palette::AQUA)
-                            .bg(palette::SURFACE_STATUS_PILL),
-                    ));
-                    right_spans.push(Span::styled(
-                        format!(" {server} "),
-                        Style::default()
-                            .fg(palette::SUBTLE)
-                            .bg(palette::SURFACE_STATUS_PILL),
-                    ));
+                    "\u{f004}"
                 } else {
-                    append_right(
-                        &mut right_spans,
-                        Span::styled(
-                            format!(" {server} "),
-                            Style::default()
-                                .fg(palette::SUBTLE)
-                                .bg(palette::SURFACE_STATUS_PILL),
-                        ),
-                    );
-                }
-            }
+                    "\u{2665}"
+                },
+                Style::default().fg(alive_color),
+            ));
+            service_spans.push(Span::raw(" "));
+            service_spans.push(Span::styled("\u{F1C0}", Style::default().fg(shared_color)));
+            // Right edge of the segment: the shared-data glyph gets its own
+            // trailing margin like a pill.
+            service_spans.push(Span::raw(" "));
+            right_spans.extend(service_spans);
             // Remote queue scope is omitted here: the active queue is already
             // apparent from the queue UI.
             if !right_spans.is_empty() {

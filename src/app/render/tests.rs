@@ -7,6 +7,80 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 #[test]
+fn volume_pill_icon_follows_volume_state() {
+    let mut app = make_app_stub();
+    // Inactive local player: displayed volume comes from `ui_volume`.
+    let mut icon_at = |vol: u8| {
+        app.ui_volume = vol;
+        app.volume_status_spans()[1].content.to_string()
+    };
+    assert_eq!(icon_at(0), "\u{1F507}"); // muted speaker
+    assert_eq!(icon_at(1), "\u{1F508}"); // low
+    assert_eq!(icon_at(25), "\u{1F508}"); // low (upper bound)
+    assert_eq!(icon_at(26), "\u{1F509}"); // mid
+    assert_eq!(icon_at(75), "\u{1F509}"); // mid (upper bound)
+    assert_eq!(icon_at(76), "\u{1F50A}"); // high
+    assert_eq!(icon_at(200), "\u{1F50A}"); // high (boosted)
+
+    // Muted (`m` key / persisted pref): the indicator reads 0 regardless
+    // of the stored level.
+    app.ui_volume = 60;
+    app.mute_on = true;
+    let spans = app.volume_status_spans();
+    assert_eq!(spans[1].content.to_string(), "\u{1F507}");
+    assert_eq!(spans[2].content.to_string(), " 0");
+}
+
+#[test]
+fn volume_pill_number_is_aqua() {
+    let mut app = make_app_stub();
+    app.ui_volume = 60;
+    let spans = app.volume_status_spans();
+    assert_eq!(spans[2].content.to_string(), " 60");
+    assert_eq!(spans[2].style.fg, Some(palette::AQUA));
+}
+
+#[test]
+fn emby_status_glyph_color_tracks_service_state() {
+    use mbv_core::service_runtime::ServiceState;
+    let color = super::chrome::emby_state_color;
+    assert_eq!(color(ServiceState::Ready), palette::AQUA);
+    assert_eq!(color(ServiceState::NotConfigured), palette::MUTED);
+    for state in [
+        ServiceState::Connecting,
+        ServiceState::NeedsAuthentication,
+        ServiceState::Unavailable,
+    ] {
+        assert_eq!(color(state), palette::RED);
+    }
+}
+
+#[test]
+fn stay_alive_glyph_color_tracks_target_and_daemon_loss() {
+    let color = super::chrome::stay_alive_color;
+    assert_eq!(color(false, false), palette::MUTED); // not in stay-alive mode
+    assert_eq!(color(false, true), palette::RED); // local daemon active
+                                                  // Daemon lost (yellow) wins over a still-pointed local target.
+    assert_eq!(color(true, true), palette::YELLOW);
+    assert_eq!(color(true, false), palette::YELLOW);
+}
+
+#[test]
+fn audiobookshelf_status_glyph_color_tracks_service_state() {
+    use mbv_core::service_runtime::ServiceState;
+    let color = super::chrome::audiobookshelf_state_color;
+    assert_eq!(color(ServiceState::Ready), palette::AMBER);
+    assert_eq!(color(ServiceState::NotConfigured), palette::MUTED);
+    for state in [
+        ServiceState::Connecting,
+        ServiceState::NeedsAuthentication,
+        ServiceState::Unavailable,
+    ] {
+        assert_eq!(color(state), palette::RED);
+    }
+}
+
+#[test]
 fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
     let mut app = make_app_stub();
     app.use_nerd_fonts = false;

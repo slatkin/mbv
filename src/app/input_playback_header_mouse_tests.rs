@@ -158,7 +158,7 @@ fn scroll_wheel_on_volume_pill_dispatches_the_same_command_as_the_keys() {
     use crossterm::event::MouseEventKind;
 
     let mut app = make_app_stub();
-    app.layout.tabbar_vol_area = Rect {
+    app.layout.playback.ind_vol = Rect {
         x: 0,
         y: 0,
         width: 5,

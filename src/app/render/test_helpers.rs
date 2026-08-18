@@ -158,7 +158,6 @@ pub fn render_view_to_terminal(
             &mut layout,
             &mut LayoutPlayback::default(),
             &mut Rect::default(),
-            &mut Rect::default(),
             0,
             false,
             &None,

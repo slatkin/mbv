@@ -22,8 +22,9 @@ use super::types_tab_selection::TabSelection;
 use ratatui::layout::Rect;
 
 /// Seekbar rect, the two divider status indicators that still have a click
-/// target (remote-session and mute), and the mouse hit targets for the
-/// one-row playback header's transport controls (play/pause glyph and next).
+/// target (remote-session and mute), the volume pill's scroll target, and
+/// the mouse hit targets for the one-row playback header's transport
+/// controls (play/pause glyph and next).
 /// The button/track/volume/subtitle/audio rects this used to hold were
 /// removed with the expanded playback view; see the "Tab bar restyle" commit
 /// that zeroed them out.
@@ -32,6 +33,8 @@ pub(crate) struct LayoutPlayback {
     pub seekbar_area: Rect,
     pub ind_rc: Rect,
     pub ind_mu: Rect,
+    /// Status-bar volume pill; scroll-wheel hit test.
+    pub ind_vol: Rect,
     /// Playback header play/pause glyph; always clickable when the row renders.
     pub play_pause_area: Rect,
     /// Playback header stop glyph; only wired to the action when
@@ -163,7 +166,6 @@ pub(crate) struct AppLayout {
     pub playback: LayoutPlayback,
     pub main: LayoutMain,
     pub tabs_area: Rect,
-    pub tabbar_vol_area: Rect,
     pub settings_area: Rect,
     /// Inset content bounds used by the Settings renderer and mouse hit-testing.
     pub settings_content_area: Rect,
