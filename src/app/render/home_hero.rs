@@ -3,12 +3,18 @@ use super::home_video::format_release_date;
 use super::RENDER_FILTER;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
+
+/// The two-column (wide) hero's original 2-col horizontal padding around
+/// the overview text block. The single-column hero has none (flush with
+/// the title above it).
+pub(super) const WIDE_OVERVIEW_PAD: usize = 2;
 
 /// Pre-wrapped content for a hero-on-top item's metadata column, plus the
 /// total row count it needs. Computed once (mirroring `compact_banner_layout`'s
@@ -27,6 +33,18 @@ pub(super) struct KeepWatchingHeroLayout {
     /// the image at the narrower meta-column width.
     overview_lines: Vec<(String, bool)>,
     pub(super) height: u16,
+}
+
+pub(super) enum HeroData {
+    Emby(
+        Box<mbv_core::api::EmbyItem>,
+        Rect,
+        Rect,
+        Rect,
+        KeepWatchingHeroLayout,
+    ),
+    GenericBeside(QueueItem, Rect, Rect, Rect, KeepWatchingHeroLayout),
+    Generic(QueueItem, Rect),
 }
 
 impl App {
@@ -261,6 +279,82 @@ impl App {
             overview_pad,
             focused,
         );
+    }
+
+    pub(super) fn render_home_hero_data(
+        &mut self,
+        f: &mut Frame,
+        hero_data: &HeroData,
+        two_column: bool,
+        focused: bool,
+    ) {
+        let overview_pad = if two_column {
+            WIDE_OVERVIEW_PAD as u16
+        } else {
+            0
+        };
+        match hero_data {
+            HeroData::Emby(item, meta_area, wide_area, img_area, meta_layout) => {
+                let cache_key = format!("{}:pwr_kw", item.id);
+                if self.images_enabled() {
+                    let img_types = Self::keep_watching_hero_image_types(item);
+                    self.fetch_card_image(
+                        cache_key.clone(),
+                        item.id.clone(),
+                        item.series_id.clone(),
+                        img_types,
+                    );
+                }
+                let meta_spans = Self::keep_watching_hero_meta_spans(item, meta_area.width);
+                self.render_beside_image_hero(
+                    f,
+                    *meta_area,
+                    *wide_area,
+                    *img_area,
+                    meta_layout,
+                    meta_spans,
+                    &cache_key,
+                    overview_pad,
+                    focused,
+                    two_column,
+                );
+            }
+            HeroData::GenericBeside(item, meta_area, wide_area, img_area, meta_layout) => {
+                let cache_key = match item {
+                    QueueItem::Audiobookshelf(episode) => self
+                        .audiobookshelf_cover_key(&episode.library_item_id)
+                        .unwrap_or_default(),
+                    _ => String::new(),
+                };
+                let meta_spans: Vec<Span<'static>> = item
+                    .duration()
+                    .map(|ticks| {
+                        vec![Span::styled(
+                            trunc_str(
+                                &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
+                                meta_area.width as usize,
+                            ),
+                            Style::default().fg(palette::SUBTLE),
+                        )]
+                    })
+                    .unwrap_or_default();
+                self.render_beside_image_hero(
+                    f,
+                    *meta_area,
+                    *wide_area,
+                    *img_area,
+                    meta_layout,
+                    meta_spans,
+                    &cache_key,
+                    0,
+                    focused,
+                    false,
+                );
+            }
+            HeroData::Generic(item, area) => {
+                self.render_home_latest_detail(f, *area, item, focused, overview_pad as usize);
+            }
+        }
     }
 }
 

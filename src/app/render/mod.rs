@@ -22,6 +22,8 @@ mod home;
 mod home_feed;
 mod home_hero;
 mod home_latest_row;
+mod home_list_rows;
+mod home_pills;
 mod home_video;
 pub mod indicators;
 mod list;

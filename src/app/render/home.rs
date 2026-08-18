@@ -1,16 +1,14 @@
 use super::super::ui_util::*;
 use super::hero::{self, HERO_BLOCK_EXTRA_ROWS};
-use super::home_hero::KeepWatchingHeroLayout;
-use super::home_video::home_panel_scroll;
+use super::home_hero::{HeroData, KeepWatchingHeroLayout, WIDE_OVERVIEW_PAD};
+use super::home_list_rows::{render_home_list_rows, DisplayRow};
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
-use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::*;
 use ratatui::style::*;
-use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 
@@ -19,10 +17,6 @@ use ratatui::Frame;
 /// (`music_wide.rs`, `audiobookshelf_books.rs`).
 const HOME_HERO_PAD_X: u16 = 2;
 const HOME_HERO_PAD_Y: u16 = 1;
-/// The two-column (wide) hero's original 2-col horizontal padding around
-/// the overview text block. The single-column hero has none (flush with
-/// the title above it).
-const WIDE_OVERVIEW_PAD: usize = 2;
 
 fn inset_pane_vertically(area: Rect) -> Rect {
     Rect {
@@ -52,10 +46,6 @@ impl App {
         // Cross-provider home row. Emby rows keep the full two-column/hero
         // treatment; non-Emby rows (Audiobookshelf today, Feeds in Part 3) use
         // the generic `render_home_latest_row`/`render_home_latest_detail`.
-        enum DisplayRow {
-            Empty,
-            Item(usize, Box<QueueItem>),
-        }
 
         let continue_items = self.home.continue_items.clone();
         let latest = self.home.latest.clone();
@@ -162,17 +152,6 @@ impl App {
         // meta_layout) — `wide_area` is where overview lines past the
         // image's bottom edge render at full width; the generic detail
         // block renders into a single content area.
-        enum HeroData {
-            Emby(
-                Box<mbv_core::api::EmbyItem>,
-                Rect,
-                Rect,
-                Rect,
-                KeepWatchingHeroLayout,
-            ),
-            GenericBeside(QueueItem, Rect, Rect, Rect, KeepWatchingHeroLayout),
-            Generic(QueueItem, Rect),
-        }
         let hero_data: Option<HeroData>;
         let list_area: Rect;
         // Narrow layout's hero shell (area, row count), painted after the
@@ -559,276 +538,27 @@ impl App {
             hero::hero_block_shell(f, hero_area, hero_rows, focused);
         }
 
-        // Render hero (shared between both layout modes). Both variants
-        // below end in the same `render_beside_image_hero` call -- the
-        // image column and text column are always drawn together, in that
-        // order, for every provider; only the per-provider cache-key/fetch
-        // and meta-spans construction differ (unavoidably -- Emby and
-        // Audiobookshelf fetch covers through different APIs).
-        match &hero_data {
-            Some(HeroData::Emby(item, meta_area, wide_area, img_area, meta_layout)) => {
-                let cache_key = format!("{}:pwr_kw", item.id);
-                if self.images_enabled() {
-                    let img_types = Self::keep_watching_hero_image_types(item);
-                    self.fetch_card_image(
-                        cache_key.clone(),
-                        item.id.clone(),
-                        item.series_id.clone(),
-                        img_types,
-                    );
-                }
-                let meta_spans = Self::keep_watching_hero_meta_spans(item, meta_area.width);
-                let overview_pad = if two_column { WIDE_OVERVIEW_PAD } else { 0 };
-                self.render_beside_image_hero(
-                    f,
-                    *meta_area,
-                    *wide_area,
-                    *img_area,
-                    meta_layout,
-                    meta_spans,
-                    &cache_key,
-                    overview_pad as u16,
-                    focused,
-                    two_column,
-                );
-            }
-            Some(HeroData::GenericBeside(item, meta_area, wide_area, img_area, layout)) => {
-                let cache_key = match item {
-                    QueueItem::Audiobookshelf(episode) => self
-                        .audiobookshelf_cover_key(&episode.library_item_id)
-                        .unwrap_or_default(),
-                    _ => String::new(),
-                };
-                let meta_spans: Vec<Span<'static>> = item
-                    .duration()
-                    .map(|ticks| {
-                        vec![Span::styled(
-                            trunc_str(
-                                &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
-                                meta_area.width as usize,
-                            ),
-                            Style::default().fg(palette::SUBTLE),
-                        )]
-                    })
-                    .unwrap_or_default();
-                self.render_beside_image_hero(
-                    f, *meta_area, *wide_area, *img_area, layout, meta_spans, &cache_key, 0,
-                    focused, false,
-                );
-            }
-            Some(HeroData::Generic(item, area)) => {
-                let overview_pad = if two_column { WIDE_OVERVIEW_PAD } else { 0 };
-                self.render_home_latest_detail(f, *area, item, focused, overview_pad);
-            }
-            None => {}
+        // Render hero (shared between both layout modes).
+        if let Some(hero_data) = &hero_data {
+            self.render_home_hero_data(f, hero_data, two_column, focused);
         }
 
-        let needs_scrollbar = content_h > list_area.height;
-        let list_w = super::content_width(list_area.width, needs_scrollbar) as u16;
-        let cursor_row = rows
-            .iter()
-            .position(|row| matches!(row, DisplayRow::Item(flat_idx, _) if *flat_idx == cursor))
-            .unwrap_or(0) as u16;
-        let scroll_y = home_panel_scroll(
-            self.home.home_scroll as u16,
-            cursor_row,
-            cursor_row + 1,
+        render_home_list_rows(
+            self,
+            f,
+            &rows,
+            list_area,
+            selection_bg_full,
+            selection_bg,
+            cursor,
             content_h,
-            list_area.height,
+            focused,
+            layout,
         );
-        self.home.home_scroll = scroll_y as usize;
-
-        let mut hitmap: Vec<(Rect, usize)> = Vec::new();
-
-        let visible = list_area.height.min(content_h.saturating_sub(scroll_y));
-        for k in 0..visible {
-            let row_idx = scroll_y as usize + k as usize;
-            let sy = list_area.y + k;
-            let row_x = selection_bg_full.x;
-            let row_rect = Rect {
-                x: row_x,
-                y: sy,
-                width: list_w.saturating_add(list_area.x.saturating_sub(row_x)),
-                height: 1,
-            };
-            if row_idx >= rows.len() {
-                continue;
-            }
-            match &rows[row_idx] {
-                DisplayRow::Empty => {
-                    f.render_widget(
-                        Paragraph::new(Line::from(vec![
-                            Span::raw(" "),
-                            Span::styled("(empty)", Style::default().fg(palette::MUTED)),
-                        ])),
-                        row_rect,
-                    );
-                }
-                DisplayRow::Item(flat_idx, item) => {
-                    let selected_row = *flat_idx == cursor;
-                    if selected_row {
-                        layout.cursor_screen_y = Some(sy);
-                    }
-
-                    // Selected row's full-width background fill, shared by
-                    // every row kind (Emby and the generic ABS/Feed
-                    // renderer) so the highlight always spans the whole
-                    // panel, matching the wide layout's selected-row style.
-                    // The marker always draws in a 2-col gutter left of the
-                    // text (design.md decision 2: a thin edge marker, no
-                    // inline glyph, the same convention every other list
-                    // uses), whether that gutter is inside the row's own
-                    // background fill (wide, where `list_area` is already
-                    // inset from the panel edge) or borrowed from the
-                    // chrome margin outside `list_area` (single-column,
-                    // which has no such inset).
-                    if selected_row && focused {
-                        f.render_widget(
-                            Block::default().style(Style::default().bg(selection_bg)),
-                            Rect {
-                                x: selection_bg_full.x,
-                                y: sy,
-                                width: selection_bg_full.width,
-                                height: 1,
-                            },
-                        );
-                        let gutter_x = if list_area.x > row_x {
-                            row_x
-                        } else {
-                            row_x.saturating_sub(2)
-                        };
-                        f.render_widget(
-                            Block::default().style(Style::default().bg(selection_bg)),
-                            Rect {
-                                x: gutter_x,
-                                y: sy,
-                                width: 2,
-                                height: 1,
-                            },
-                        );
-                        f.render_widget(
-                            Paragraph::new(super::selection_marker(true, super::MarkerEdge::Left)),
-                            Rect {
-                                x: gutter_x,
-                                y: sy,
-                                width: 1,
-                                height: 1,
-                            },
-                        );
-                    }
-
-                    let text_rect = Rect {
-                        x: row_x + 2,
-                        width: row_rect.width.saturating_sub(2),
-                        ..row_rect
-                    };
-
-                    // Non-Emby rows (Audiobookshelf today, Feeds in Part 3) use
-                    // the generic single-line renderer.
-                    let Some(emby) = item.as_emby() else {
-                        super::home_latest_row::render_home_latest_row(
-                            f,
-                            text_rect,
-                            item,
-                            selected_row,
-                            focused,
-                        );
-                        hitmap.push((row_rect, *flat_idx));
-                        continue;
-                    };
-                    super::home_latest_row::render_home_emby_row(
-                        f,
-                        text_rect,
-                        emby,
-                        selected_row,
-                        focused,
-                    );
-                    hitmap.push((row_rect, *flat_idx));
-                }
-            }
-        }
-
-        layout.home.hitmap = hitmap;
-
-        if needs_scrollbar && focused {
-            let max_off = content_h.saturating_sub(list_area.height) as usize;
-            super::render_right_scrollbar(
-                f,
-                list_area,
-                max_off,
-                scroll_y as usize,
-                palette::SCROLLBAR,
-            );
-        }
 
         if let Some(panel) = green_panel_full {
             hero::hero_on_left_list_panel_border(f, panel, focused);
         }
-    }
-
-    pub(super) fn render_home_section_pills_row(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        layout: &mut LayoutMain,
-    ) {
-        if area.width == 0 || area.height == 0 {
-            layout.selector_tabs = Vec::new();
-            return;
-        }
-
-        let mut labels: Vec<(usize, String)> = vec![(0, "Continue".to_string())];
-        for (idx, (title, _lib, _items, _cur)) in self.home.latest.iter().enumerate() {
-            // Every section in `home.latest` is a real pill (an ABS library,
-            // an Emby view, or Feeds). Match the Continue Watching convention:
-            // the pill always renders even when its section is empty (which
-            // shows an "(empty)" row), so a bare section is still discoverable.
-            labels.push((idx + 1, title.clone()));
-        }
-        // Restore the last-selected Home pill from prefs once a section with
-        // that source identity exists (sections arrive asynchronously across
-        // providers). Keep it pending until the section appears.
-        if let Some(pending) = self.home_section_pending.as_ref() {
-            if let Some((idx, _)) = self
-                .home
-                .latest
-                .iter()
-                .enumerate()
-                .find(|(_, (_, source, _, _))| source == pending)
-            {
-                self.home.section = idx + 1;
-                self.home_section_pending = None;
-            }
-        }
-        if !labels
-            .iter()
-            .any(|(section_idx, _)| *section_idx == self.home.section)
-        {
-            self.home.section = labels[0].0;
-        }
-
-        const MAX_LABEL: usize = 18;
-        let selected_pos = labels
-            .iter()
-            .position(|(section_idx, _)| *section_idx == self.home.section)
-            .unwrap_or(0);
-        // Pre-truncated pill labels; ids are the section indices (idx+1) used
-        // as click targets, distinct from the pill's display position.
-        let label_strs: Vec<String> = labels
-            .iter()
-            .map(|(_, label)| trunc_str(label, MAX_LABEL).to_string())
-            .collect();
-        let ids: Vec<usize> = labels.iter().map(|(section_idx, _)| *section_idx).collect();
-        layout.selector_tabs = super::render_pill_bar(
-            f,
-            area,
-            super::PillBar {
-                labels: &label_strs,
-                ids: &ids,
-                selected_pos,
-                prefix: Some(" ⌘ "),
-            },
-        );
     }
 }
 
