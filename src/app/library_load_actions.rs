@@ -521,10 +521,9 @@ impl App {
             None => return,
         };
 
-        if query.is_empty() {
+        if query.chars().count() < 2 {
             if let Some(s) = self.libs[lib_idx].search.as_mut() {
-                let n = s.items.len();
-                s.results = (0..n).collect();
+                s.results.clear();
                 s.cursor = 0;
             }
             return;

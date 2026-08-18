@@ -80,10 +80,13 @@ pub(super) fn build_album_index_with(
     ) -> Result<(), String> {
         let items = fetch_all_album_index_items(parent_id, fetch)?;
         if depth + 1 == levels.len() {
-            for album in items
-                .into_iter()
-                .filter(|item| item.item_type == "MusicAlbum")
-            {
+            // The terminal configured level is "album" by position, not by
+            // Emby's `Type` field: unidentified/unmatched album folders come
+            // back as plain "Folder" items rather than "MusicAlbum", so
+            // filtering on the type string silently dropped them from the
+            // index. `is_folder` is the same criterion the intermediate
+            // levels above already use.
+            for album in items.into_iter().filter(|item| item.is_folder) {
                 let mut labels: Vec<String> =
                     ancestors.iter().map(|part| part.name.clone()).collect();
                 labels.push(album.display_name());

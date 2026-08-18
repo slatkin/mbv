@@ -318,11 +318,10 @@ impl App {
                         })
                         .unwrap_or_default()
                 };
-                let n = items.len();
                 self.libs[lib_idx].search = Some(LibSearch {
                     query: String::new(),
                     items,
-                    results: (0..n).collect(),
+                    results: Vec::new(),
                     cursor: 0,
                     scroll: 0,
                     loading: needs_full_load,
