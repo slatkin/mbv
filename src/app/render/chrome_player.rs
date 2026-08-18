@@ -18,30 +18,6 @@ fn uppercase_playback_span(span: Span<'static>) -> Span<'static> {
     Span::styled(span.content.to_uppercase(), span.style)
 }
 
-/// The `width`-wide (in display columns) slice of `text` starting at display
-/// column `start_col`. Used by the "On Now" marquee to pull out the visible
-/// window as it scrolls; a trailing wide char that would overflow `width` is
-/// dropped rather than split.
-fn width_window(text: &str, start_col: usize, width: usize) -> String {
-    let mut out = String::new();
-    let mut col = 0usize;
-    let mut taken = 0usize;
-    for c in text.chars() {
-        let cw = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
-        if col + cw <= start_col {
-            col += cw;
-            continue;
-        }
-        if taken + cw > width {
-            break;
-        }
-        out.push(c);
-        taken += cw;
-        col += cw;
-    }
-    out
-}
-
 /// Column offset for a slow left-right-left marquee pan `elapsed_ms` into
 /// its cycle, given `overflow` extra columns beyond the visible width.
 /// Holds briefly at each end before reversing.
@@ -237,7 +213,18 @@ impl App {
                         )
                     } else {
                         // Only the title pans; the "On Now: " prefix stays put.
-                        let scrolled = self.now_playing_marquee_window(title, title_avail);
+                        self.sync_marquee_clock(title);
+                        let overflow = title.width().saturating_sub(title_avail);
+                        let col = marquee_col(
+                            overflow,
+                            self.now_playing_marquee_started_at.elapsed().as_millis(),
+                        );
+                        let scrolled =
+                            colored_width_window(&[(title.clone(), *color)], col, title_avail)
+                                .into_iter()
+                                .next()
+                                .map(|s| s.content.to_string())
+                                .unwrap_or_default();
                         (
                             Line::from(vec![
                                 Span::styled(prefix, style),
@@ -265,25 +252,6 @@ impl App {
             self.now_playing_marquee_text = text.to_string();
             self.now_playing_marquee_started_at = std::time::Instant::now();
         }
-    }
-
-    /// Scrolling ("marquee") window into `label` for the mini-view "On Now"
-    /// line when it's too wide for `avail` columns: slowly pans across the
-    /// full text, pausing at each end, instead of just truncating it.
-    fn now_playing_marquee_window(&mut self, label: &str, avail: usize) -> String {
-        if avail == 0 {
-            return String::new();
-        }
-        self.sync_marquee_clock(label);
-        let overflow = label.width().saturating_sub(avail);
-        if overflow == 0 {
-            return label.to_string();
-        }
-        let col = marquee_col(
-            overflow,
-            self.now_playing_marquee_started_at.elapsed().as_millis(),
-        );
-        width_window(label, col, avail)
     }
 
     /// One-line now-playing header: play/pause, next, title, and time on the
