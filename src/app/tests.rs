@@ -334,6 +334,7 @@ pub(crate) fn make_app_stub() -> App {
         remote_pos_s: 0,
         remote_pos_at: std::time::Instant::now(),
         remote_api_pos_advanced_at: std::time::Instant::now() - Duration::from_secs(60),
+        remote_stalled_while_paused: false,
         remote_seek_pending_until: std::time::Instant::now() - Duration::from_secs(1),
         runtime_zero_since: None,
         suspended_local: None,

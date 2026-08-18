@@ -219,6 +219,7 @@ impl App {
             remote_pos_s: 0,
             remote_pos_at: Instant::now(),
             remote_api_pos_advanced_at: Instant::now() - Duration::from_secs(60),
+            remote_stalled_while_paused: false,
             remote_seek_pending_until: Instant::now() - Duration::from_secs(1),
             runtime_zero_since: None,
             suspended_local: None,

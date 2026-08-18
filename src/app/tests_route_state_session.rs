@@ -468,3 +468,60 @@ fn displayed_queue_playback_state_is_inactive_for_non_playback_scope() {
         PlaybackState::default()
     );
 }
+
+#[test]
+fn throbber_advances_when_session_reports_paused_but_position_advances() {
+    // Some Emby clients always report IsPaused=true even while the
+    // transport is actively playing. The run loop bumps
+    // `remote_stalled_while_paused` based on position observations, so when
+    // position keeps advancing each poll the throttle is cleared and the
+    // throbber keeps ticking.
+
+    let mut app = make_remote_app_stub(make_items(2), make_items(2));
+    app.connected_session_state = Some({
+        let mut s = make_session("remote-host", "Emby");
+        s.now_playing = Some("Item 0".into());
+        s.now_playing_item_id = Some("id0".into());
+        s.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
+        s.is_paused = true;
+        s
+    });
+    // Run loop saw a position advance this poll -> not stalled.
+    app.remote_stalled_while_paused = false;
+
+    let playback = app.effective_playback_state();
+    assert!(
+        playback.active,
+        "remote with now_playing + matching id must be active (so the playback panel is in a now-playing state)"
+    );
+
+    assert!(
+        !app.playback_transport_paused(),
+        "throbber must keep ticking when the latest API poll observed a position advance"
+    );
+}
+
+#[test]
+fn throbber_freezes_when_remote_pause_is_observed() {
+    // After the user pauses remotely, the next API poll sees IsPaused=true
+    // with no position advance; the run loop latches
+    // `remote_stalled_while_paused` so the throbber freezes immediately
+    // rather than waiting out the 22s extrapolate window.
+
+    let mut app = make_remote_app_stub(make_items(2), make_items(2));
+    app.connected_session_state = Some({
+        let mut s = make_session("remote-host", "Emby");
+        s.now_playing = Some("Item 0".into());
+        s.now_playing_item_id = Some("id0".into());
+        s.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
+        s.is_paused = true;
+        s
+    });
+    // Run loop saw IsPaused=true with no position advance this poll.
+    app.remote_stalled_while_paused = true;
+
+    assert!(
+        app.playback_transport_paused(),
+        "throbber must freeze once a single API poll observes IsPaused=true with no position advance"
+    );
+}

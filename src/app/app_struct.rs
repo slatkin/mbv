@@ -294,6 +294,7 @@ pub struct App {
     pub(super) remote_pos_s: i64,      // monotonic position estimate for the connected remote
     pub(super) remote_pos_at: Instant, // when remote_pos_s was last anchored
     pub(super) remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
+    pub(super) remote_stalled_while_paused: bool, // last API poll observed IsPaused=true with no position advance
     pub(super) remote_seek_pending_until: Instant,  // suppress poll pos-reconcile after a seek
     pub(super) runtime_zero_since: Option<Instant>, // when runtime_s first became 0 for the current item (fast-poll cap)
     pub(super) suspended_local: Option<SuspendedLocalSession>,

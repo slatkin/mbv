@@ -583,7 +583,7 @@ impl App {
             if self.wants_terminal_render(had_events, last_render, render_interval) {
                 if self.last_throbber_advance.elapsed() >= std::time::Duration::from_millis(300) {
                     let playback = self.effective_playback_state();
-                    if playback.active && !playback.paused {
+                    if playback.active && !self.playback_transport_paused() {
                         self.now_playing_throbber_index =
                             self.now_playing_throbber_index.wrapping_add(1);
                     }

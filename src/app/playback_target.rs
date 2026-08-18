@@ -95,6 +95,19 @@ impl PlaybackTarget {
 }
 
 impl App {
+    /// Whether the connected transport is currently paused. For remote
+    /// sessions, returns true once a single API poll has observed
+    /// `IsPaused=true` without a position advance (typically within one
+    /// poll after the user pauses remotely). For pos-advancing clients that
+    /// always report `IsPaused=true` (some Emby Web builds), the
+    /// position-advance observation each poll keeps this returning false.
+    pub(super) fn playback_transport_paused(&self) -> bool {
+        if self.connected_session_state.is_some() {
+            return self.remote_stalled_while_paused;
+        }
+        self.player.status.lock().unwrap().paused
+    }
+
     /// Returns playback state for rendering, consuming an optimistic active
     /// index only after the player status matches the locally edited queue.
     /// The mutable receiver is intentional: reconciliation clears the pending

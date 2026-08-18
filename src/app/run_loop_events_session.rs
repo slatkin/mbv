@@ -83,6 +83,14 @@ impl App {
                             .map_or(0, |p| p.position_s);
                         if s.position_s > prev_api_pos {
                             self.remote_api_pos_advanced_at = now;
+                            self.remote_stalled_while_paused = false;
+                        } else if s.is_paused {
+                            // Position not advancing AND the session says paused:
+                            // the transport is genuinely paused. Buggy clients
+                            // that report IsPaused=true while playing still
+                            // advance the position each poll, so this branch
+                            // won't latch on for them.
+                            self.remote_stalled_while_paused = true;
                         }
                         // Extrapolate if API advanced recently (within 2× the ~11s report
                         // interval). After that window lapses we treat it as paused/stopped.
