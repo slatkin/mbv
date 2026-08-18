@@ -247,12 +247,13 @@ impl App {
             .emby_library_index()
             .is_some_and(|lib_idx| self.is_music_group_view(lib_idx));
         // The pill row and the search box occupy the same slot directly below
-        // the hero; the search box just takes precedence while filtering.
-        let show_pills = show_letter_pills || show_music_pills;
+        // the hero; the search box just takes precedence while filtering, but
+        // still needs that slot reserved.
+        let show_pills = show_letter_pills || show_music_pills || search_active;
         let hero_layout = top_hero_layout(content_area, hero_rows, show_pills);
         let hero_area = hero_layout.hero_area;
         let pills_area = hero_layout.pills_area;
-        let mut list_area = hero_layout.list_area;
+        let list_area = hero_layout.list_area;
         let hero_rows = hero_layout.hero_rows;
 
         if show_letter_pills && !search_active {
@@ -263,30 +264,14 @@ impl App {
             self.render_music_group_pills_row(f, pills_area, lib_idx, layout);
         }
 
-        // The search input box replaces the pill row, occupying the exact
-        // slot the pill bar would sit in: flush below the hero with no blank
-        // gap. It is one row taller than the pill+gap reservation, so the
-        // list recomputes from the search box's bottom to the content bottom.
-        if search_active && hero_area.y + hero_rows <= content_area.y + content_area.height {
+        // The search box occupies the exact one-row slot the pill bar would
+        // sit in (`pills_area`); the gap row and list below it are already
+        // reserved by `top_hero_layout` regardless of which one is drawn, so
+        // `list_area` needs no override here.
+        if search_active {
             let lib_idx = self.tab.emby_library_index().unwrap();
-            let search_top = hero_area.y + hero_rows;
-            let search_area = Rect {
-                x: content_area.x,
-                y: search_top,
-                width: content_area.width,
-                height: 3,
-            };
             let s = self.libs[lib_idx].search.as_ref().unwrap();
-            super::hero::render_search_box(f, search_area, &s.query, s.loading);
-            list_area = Rect {
-                x: content_area.x,
-                y: search_top + 3,
-                width: content_area.width,
-                height: content_area
-                    .y
-                    .saturating_add(content_area.height)
-                    .saturating_sub(search_top.saturating_add(3)),
-            };
+            super::hero::render_search_box(f, pills_area, &s.query, s.loading);
         }
 
         // Gather items, cursor, stored scroll offset, and the *true* library total

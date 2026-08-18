@@ -653,31 +653,36 @@ pub(super) fn hero_on_left_list_panel_border(f: &mut Frame, list_panel: Rect, fo
     );
 }
 
-/// Renders the fuzzy-search input box (query text plus a `[loading…]`
-/// suffix while a search is in flight) into `area`.
+/// Renders the fuzzy-search input (query text plus a `[loading…]` suffix
+/// while a search is in flight) into `area`. A single-row control that
+/// resumes the pill bar row it replaces: same `PILL_ROW_BG` background and
+/// leading `⌘` glyph as `render_pill_bar`'s prefix, so swapping between pills
+/// and search doesn't shift the row's look, just its content.
 pub(super) fn render_search_box(f: &mut Frame, area: Rect, query: &str, loading: bool) {
-    use ratatui::widgets::{Block, BorderType, Borders};
+    use ratatui::widgets::Block;
 
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    f.render_widget(
+        Block::default().style(Style::default().bg(palette::PILL_ROW_BG)),
+        area,
+    );
+    let bg = Style::default().bg(palette::PILL_ROW_BG);
     let input_text = if loading {
         format!("{query}█ [loading…]")
     } else {
         format!("{query}█")
     };
     f.render_widget(
-        Paragraph::new(Span::styled(
-            input_text,
-            Style::default().fg(palette::BG_GREEN),
-        ))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(palette::IRIS))
-                .title(Span::styled(
-                    " Search ",
-                    Style::default().fg(palette::YELLOW),
-                )),
-        ),
+        Paragraph::new(Line::from(vec![
+            Span::styled(" \u{2318} ", bg.fg(palette::FOAM)),
+            Span::styled(
+                "SEARCH: ",
+                bg.fg(palette::FOAM).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(input_text, bg.fg(palette::SOFT_WHITE)),
+        ])),
         area,
     );
 }

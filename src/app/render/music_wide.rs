@@ -21,9 +21,6 @@ use ratatui::Frame;
 /// Padding inside recessed wide-music blocks, matching the Home overview block.
 const PANE_PAD_X: u16 = 2;
 const PANE_PAD_Y: u16 = 1;
-/// Height of the fuzzy-search box shown in the right rail's pill row slot
-/// while search is active (replaces the pill bar).
-const HERO_ON_LEFT_SEARCH_ROWS: u16 = 3;
 /// Minimum left-pane height needed to draw a hero/track separator row.
 const MIN_LEFT_HEIGHT_FOR_SEPARATOR: u16 = 6;
 /// Minimum width for the hero metadata column to remain beside the artwork.
@@ -326,31 +323,17 @@ impl App {
         let search_active = self.libs[lib_idx].search.is_some();
 
         // The fuzzy search box replaces the pill bar at the top of the right
-        // rail while search is active (never pills and filtering at once).
+        // rail while search is active (never pills and filtering at once),
+        // occupying the exact one-row pill slot -- the gap row and browser
+        // panel below it are already reserved either way.
         if search_active {
             let s = self.libs[lib_idx].search.as_ref().unwrap();
-            let search_area = Rect {
-                x: pills_area.x,
-                y: pills_area.y,
-                width: pills_area.width,
-                height: HERO_ON_LEFT_SEARCH_ROWS,
-            };
-            super::hero::render_search_box(f, search_area, &s.query, s.loading);
+            super::hero::render_search_box(f, pills_area, &s.query, s.loading);
         } else if pills_area.y + pills_area.height <= right_area.bottom() {
             self.render_music_group_pills_row(f, pills_area, lib_idx, layout);
         }
 
-        // A 3-row search box replaces the pill row (1) plus its blank gap row
-        // (1), so the browser panel shifts down one row while searching.
-        let list_panel = if search_active {
-            Rect {
-                y: right_pane.list_panel.y.saturating_add(1),
-                height: right_pane.list_panel.height.saturating_sub(1),
-                ..right_pane.list_panel
-            }
-        } else {
-            right_pane.list_panel
-        };
+        let list_panel = right_pane.list_panel;
         // `render_wide_right_album_browser` renders text one cell right of
         // `browser_area.x` (the row painters' own leading gutter), so inset
         // one cell less than the panel's other padded content to land text
