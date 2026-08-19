@@ -1,6 +1,5 @@
-use super::hero::{
-    self, hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
-};
+use super::hero::{hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS};
+use super::hero_left;
 use super::home_hero::{beside_image_hero_dims, beside_image_hero_rects};
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::images::audiobookshelf_book_cover_cache_key;
@@ -23,7 +22,7 @@ pub(super) const PANE_PAD_Y: u16 = 1;
 /// Blank row separating the hero from the chapter list in the wide left pane.
 const LEFT_SEPARATOR_ROWS: u16 = 1;
 /// Height of the bucket-pill row inside the narrow right pane. The wide right
-/// pane's pill row height comes from `hero::hero_on_left_right_pane` instead
+/// pane's pill row height comes from `hero_left::hero_on_left_right_pane` instead
 /// (phase 6, "Adopt: Home and audiobooks").
 pub(super) const PILLS_ROW_HEIGHT: u16 = 1;
 /// Blank rows below the pills before the book list starts, narrow-pane only
@@ -72,7 +71,7 @@ impl App {
         let right_focused = focused && !chapters_focused;
 
         if area.width >= TWO_COLUMN_THRESHOLD
-            && area.height.saturating_sub(1) >= hero::HERO_ON_LEFT_MIN_AREA_HEIGHT
+            && area.height.saturating_sub(1) >= hero_left::HERO_ON_LEFT_MIN_AREA_HEIGHT
         {
             self.render_wide_audiobookshelf_books(
                 f,
@@ -110,7 +109,7 @@ impl App {
             height: area.height.saturating_sub(1),
             ..area
         };
-        let (mut left_panel, right_panel) = hero::hero_on_left_panes(area);
+        let (mut left_panel, right_panel) = hero_left::hero_on_left_panes(area);
         left_panel.height = content_area.height;
 
         // Library-side separator row below the left pane, matching Music.

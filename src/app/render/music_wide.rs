@@ -9,7 +9,7 @@
 //! remaining dependency on this file's local constants.
 
 use super::album_art::INLINE_ALBUM_ART_RESERVED;
-use super::hero::{self, WrappedHeroLine};
+use super::hero_left::{self, WrappedHeroLine};
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, PanelFocus, TWO_COLUMN_THRESHOLD};
 use ratatui::layout::*;
@@ -210,14 +210,14 @@ impl App {
             ..area
         };
         if area.width < TWO_COLUMN_THRESHOLD
-            || left_content_area.height < hero::HERO_ON_LEFT_MIN_AREA_HEIGHT
+            || left_content_area.height < hero_left::HERO_ON_LEFT_MIN_AREA_HEIGHT
         {
             // Too narrow for wide mode — fall back to narrow rendering.
             self.render_list(f, area, focused, layout);
             return;
         }
 
-        let (mut left_panel, right_panel) = hero::hero_on_left_panes(area);
+        let (mut left_panel, right_panel) = hero_left::hero_on_left_panes(area);
         left_panel.height = left_content_area.height;
 
         // Keep a library-side separator row below the left pane, while the
@@ -318,7 +318,7 @@ impl App {
         // list panel uses the same one-row padding and upper/lower
         // three-quarter borders as Home's wide list panel; the browser
         // itself is inset inside it.
-        let right_pane = hero::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
+        let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
         let pills_area = right_pane.pills_area;
         let search_active = self.libs[lib_idx].search.is_some();
 
@@ -397,7 +397,7 @@ impl App {
                 );
             }
         }
-        hero::hero_on_left_list_panel_border(f, list_panel, right_focused);
+        hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     }
 
     /// Renders the wide left pane's hero: album title, metadata, and
@@ -439,7 +439,7 @@ impl App {
                 style: Style::default().fg(palette::SUBTLE),
             });
         }
-        hero::paint_hero_on_left_text(f, *text, &hero_lines);
+        hero_left::paint_hero_on_left_text(f, *text, &hero_lines);
 
         // ── Artwork ──
         if left_layout.art_area.width > 0 && left_layout.art_area.height > 0 {
@@ -468,29 +468,17 @@ impl App {
             return;
         }
 
-        // Match the recessed overview block used on Home: two columns of
-        // outer inset, one row of vertical padding, and two cells of internal
-        // horizontal padding around the track list.
-        let track_panel = Rect {
-            x: track_area.x.saturating_add(PANE_PAD_X),
-            width: track_area.width.saturating_sub(PANE_PAD_X * 2),
-            ..*track_area
-        };
-        let track_panel_bg = if left_focused {
-            palette::SURFACE_ACCENT_SOFT
-        } else {
-            palette::SURFACE_BACKDROP
-        };
-        f.render_widget(
-            Block::default().style(Style::default().bg(track_panel_bg)),
-            track_panel,
-        );
-        let track_content = Rect {
-            x: track_panel.x.saturating_add(PANE_PAD_X),
-            y: track_panel.y.saturating_add(PANE_PAD_Y),
-            width: track_panel.width.saturating_sub(PANE_PAD_X * 2),
-            height: track_panel.height.saturating_sub(PANE_PAD_Y * 2),
-        };
+        // Standard hero-on-left recessed content block: same pattern as
+        // Home's overview block, using the shared `hero_on_left_recessed_box`.
+        let recessed =
+            hero_left::hero_on_left_recessed_box(
+                f,
+                *track_area,
+                PANE_PAD_X,
+                PANE_PAD_Y,
+            );
+        let track_panel = recessed.panel;
+        let track_content = recessed.content;
         if track_content.height == 0 || track_content.width == 0 {
             return;
         }

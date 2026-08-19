@@ -1,5 +1,6 @@
 use super::super::ui_util::*;
 use super::hero::{self, HERO_BLOCK_EXTRA_ROWS};
+use super::hero_left;
 use super::home_hero::{HeroData, KeepWatchingHeroLayout, WIDE_OVERVIEW_PAD};
 use super::home_list_rows::{render_home_list_rows, DisplayRow};
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
@@ -166,7 +167,7 @@ impl App {
             // Two-column layout: hero on left, list on right (hero-on-left,
             // design.md decision 4/5: the pane split and its minimum pane
             // width are the shared arrangement's, not a Home-local ratio).
-            let (mut hero_panel, right_panel) = hero::hero_on_left_panes(area);
+            let (mut hero_panel, right_panel) = hero_left::hero_on_left_panes(area);
             hero_panel.height = area.height.saturating_sub(1);
             let hero_col_width = hero_panel.width;
             let mut hero_content = Rect {
@@ -431,13 +432,13 @@ impl App {
 
         // Hero-on-left's right pane: pill row at the pane's top, then the
         // list panel below it (design.md decision 6, shared with Music and
-        // audiobooks via `hero::hero_on_left_right_pane`). With no hero item
+        // audiobooks via `hero_left::hero_on_left_right_pane`). With no hero item
         // there is no right pane at all -- pills span the full row and the
         // list takes the full width, same as the single-column layout.
         let wide_pill_section = two_column && hero_data.is_some();
         let (pills_area, green_panel_full): (Rect, Option<Rect>) = if wide_pill_section {
             let right_area = inset_pane_vertically(list_area);
-            let right_pane = hero::hero_on_left_right_pane(list_area, right_area, HOME_HERO_PAD_Y);
+            let right_pane = hero_left::hero_on_left_right_pane(list_area, right_area, HOME_HERO_PAD_Y);
             (right_pane.pills_area, Some(right_pane.list_panel))
         } else if two_column {
             // Wide layout, no hero item: same top-of-area fallback the
@@ -557,7 +558,7 @@ impl App {
         );
 
         if let Some(panel) = green_panel_full {
-            hero::hero_on_left_list_panel_border(f, panel, focused);
+            hero_left::hero_on_left_list_panel_border(f, panel, focused);
         }
     }
 }

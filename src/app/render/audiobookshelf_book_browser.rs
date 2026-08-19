@@ -1,5 +1,5 @@
 use super::audiobookshelf_books::{PANE_PAD_X, PANE_PAD_Y, PILLS_GAP_ROWS, PILLS_ROW_HEIGHT};
-use super::hero;
+use super::hero_left;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::ui_util::trunc_str;
 use crate::app::{palette, App};
@@ -31,7 +31,7 @@ impl App {
             right_panel,
         );
 
-        let right_pane = hero::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
+        let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
         let pills_area = right_pane.pills_area;
         if pills_area.y + pills_area.height <= right_area.bottom() {
             self.render_audiobookshelf_book_bucket_pills(f, pills_area, index, layout);
@@ -60,7 +60,7 @@ impl App {
                 layout,
             );
         }
-        hero::hero_on_left_list_panel_border(f, list_panel, right_focused);
+        hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     }
 
     /// The narrow hero-on-top fallback's right pane: no recessed panel

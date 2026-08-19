@@ -18,6 +18,7 @@ mod detail_series;
 mod detail_series_view;
 mod feeds;
 mod hero;
+mod hero_left;
 mod home;
 mod home_feed;
 mod home_hero;
