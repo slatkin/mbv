@@ -9,6 +9,7 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::io::{Read, Write};
+use std::time::Duration;
 #[test]
 fn enter_at_album_folder_listing_enters_track_mode_without_nav_push() {
     let mut app = make_music_album_app();
@@ -40,6 +41,9 @@ fn mouse_click_on_selected_album_folder_row_does_not_open_track_mode() {
     let handled = app_key.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(!handled);
 
+    // Arm focus and wait past the grace window so the click dispatches.
+    app_mouse.note_focus_gained();
+    std::thread::sleep(Duration::from_millis(200));
     app_mouse.layout.main.left_area = Rect::new(10, 5, 29, 4);
     app_mouse.layout.main.left_row_map = vec![Some(0)];
     app_mouse.handle_mouse(MouseEvent {
@@ -70,12 +74,16 @@ fn refocus_click_after_focus_gained_is_suppressed() {
     });
 
     assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
-    assert!(app.refocus_at.is_none());
+    // refocus_at is still Some (not consumed) -- the grace window check
+    // only suppresses, it doesn't take the field.
+    assert!(app.refocus_at.is_some());
 }
 
 #[test]
-fn click_without_focus_event_dispatches_normally() {
+fn click_while_unfocused_is_suppressed() {
     let mut app = make_music_album_app();
+    // Simulate an unfocused terminal.
+    app.refocus_at = None;
     assert!(app.refocus_at.is_none());
     app.layout.main.left_area = Rect::new(10, 5, 29, 4);
     app.layout.main.left_row_map = vec![Some(1)];
@@ -87,12 +95,14 @@ fn click_without_focus_event_dispatches_normally() {
         modifiers: KeyModifiers::NONE,
     });
 
-    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+    // Suppressed: cursor did not move.
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
 }
 
 #[test]
 fn click_outside_refocus_window_dispatches_normally() {
     let mut app = make_music_album_app();
+    // Simulate having been focused long ago (past the grace window).
     app.refocus_at = Some(Instant::now() - Duration::from_millis(500));
     app.layout.main.left_area = Rect::new(10, 5, 29, 4);
     app.layout.main.left_row_map = vec![Some(1)];
@@ -120,28 +130,44 @@ fn second_click_after_refocus_dispatches() {
         row: 5,
         modifiers: KeyModifiers::NONE,
     };
+    // First click: within grace window -- suppressed.
     app.handle_mouse(click);
     assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
 
+    // Simulate time passing past the grace window.
+    app.refocus_at = Some(Instant::now() - Duration::from_millis(500));
     app.handle_mouse(click);
     assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
 }
 
 #[test]
-fn focus_lost_clears_pending_refocus() {
+fn focus_lost_then_regained_suppresses_until_focus_gained() {
     let mut app = make_music_album_app();
     app.note_focus_gained();
+    std::thread::sleep(Duration::from_millis(200));
     app.note_focus_lost();
     app.layout.main.left_area = Rect::new(10, 5, 29, 4);
     app.layout.main.left_row_map = vec![Some(1)];
 
-    app.handle_mouse(MouseEvent {
+    let click = MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column: 11,
         row: 5,
         modifiers: KeyModifiers::NONE,
-    });
+    };
 
+    // After focus lost: click is suppressed.
+    app.handle_mouse(click);
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
+
+    // Regain focus: first click is the refocusing click (suppressed).
+    app.note_focus_gained();
+    app.handle_mouse(click);
+    assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
+
+    // After grace window: click dispatches.
+    app.refocus_at = Some(Instant::now() - Duration::from_millis(500));
+    app.handle_mouse(click);
     assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
 }
 

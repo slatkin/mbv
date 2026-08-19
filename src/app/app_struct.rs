@@ -344,10 +344,18 @@ pub struct App {
     /// `save_default_library_position`'s doc comment.
     pub(super) library_position_dirty: bool,
     pub(super) library_position_dirty_at: Instant,
-    /// Set when the terminal reports FocusGained; used to swallow the
-    /// single click that merely refocused the window. `None` until the
-    /// first focus event is ever seen (terminals that never report focus
-    /// never suppress).
+    /// Tracks terminal focus and arms a grace window to swallow the
+    /// click that merely brings the window into focus.
+    ///
+    /// State transitions:
+    /// - `None`: terminal is unfocused (or never reported focus).
+    ///   All mouse button/scroll events are suppressed.
+    /// - `Some(Instant)`: terminal is focused; the Instant records
+    ///   when `FocusGained` was seen.  A click within `REFOCUS_WINDOW`
+    ///   of that Instant is the refocusing click and is suppressed;
+    ///   after the window expires the field stays `Some` so
+    ///   subsequent clicks dispatch normally until the next
+    ///   `FocusLost`.
     pub(super) refocus_at: Option<Instant>,
     pub(super) album_artist_cache: std::collections::HashMap<String, String>,
     pub(super) album_artist_loading: std::collections::HashSet<String>,

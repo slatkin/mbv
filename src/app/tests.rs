@@ -345,7 +345,11 @@ pub(crate) fn make_app_stub() -> App {
         last_library_nav_at: Instant::now() - Duration::from_secs(1),
         library_position_dirty: false,
         library_position_dirty_at: Instant::now() - Duration::from_secs(1),
-        refocus_at: None,
+        // Default to "focused, past grace window" so existing mouse
+        // tests dispatch without arming focus explicitly.  The refocus
+        // guard itself is tested directly in
+        // input_music_track_focus_tests.
+        refocus_at: Some(Instant::now() - Duration::from_secs(5)),
         album_artist_cache: std::collections::HashMap::new(),
         album_artist_loading: std::collections::HashSet::new(),
         pending_album_artist_fetches: std::collections::VecDeque::new(),
@@ -572,6 +576,8 @@ pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec
     app.player_tab
         .set_items(local_items, app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 0;
+    // Default to "focused, past grace window" for mouse tests.
+    app.refocus_at = Some(Instant::now() - Duration::from_secs(5));
     app
 }
 
@@ -599,6 +605,8 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
     // prefs to the freshly attached daemon before returning; drain that so
     // callers see only commands their own test actions send.
     while cmd_rx.try_recv().is_ok() {}
+    // Default to "focused, past grace window" for mouse tests.
+    app.refocus_at = Some(Instant::now() - Duration::from_secs(5));
     (app, cmd_rx)
 }
 

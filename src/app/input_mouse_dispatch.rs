@@ -23,22 +23,35 @@ impl App {
             return;
         }
 
-        // Swallow the single click that merely refocused the window (e.g.
-        // alt-tab back in by clicking): if a FocusGained landed within the
-        // last 150ms, this Down(Left)/Down(Right) is that click, not a UI
-        // action. `.take()` makes this strictly one-shot -- it clears
-        // `refocus_at` whether or not the click was in the window, so a
-        // second click right after a suppressed one dispatches normally.
-        if matches!(
-            mouse.kind,
-            MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Down(MouseButton::Right)
-        ) {
-            if let Some(t) = self.refocus_at.take() {
-                if t.elapsed() < Duration::from_millis(150) {
+        // Suppress all mouse actions while the terminal does not have
+        // focus.  `refocus_at` is `None` when unfocused (or never yet
+        // focused); `Some` when focused.  When transitioning from
+        // unfocused to focused the first click within `REFOCUS_WINDOW`
+        // is the click that merely brought the window into focus and is
+        // swallowed.  After the grace window expires, `refocus_at`
+        // remains `Some` so subsequent clicks dispatch normally until
+        // the next `FocusLost`.
+        const REFOCUS_WINDOW: Duration = Duration::from_millis(150);
+        match self.refocus_at {
+            None => {
+                // Terminal is not focused -- suppress everything.
+                return;
+            }
+            Some(ref t) if t.elapsed() < REFOCUS_WINDOW => {
+                // Within the grace window after FocusGained: swallow
+                // button-down events (the refocusing click).  Track
+                // mouse position so hover rendering stays current, but
+                // take no action.
+                if matches!(
+                    mouse.kind,
+                    MouseEventKind::Down(MouseButton::Left)
+                        | MouseEventKind::Down(MouseButton::Right)
+                ) {
                     log::debug!(target: "input", "suppressed refocus click at ({col}, {row})");
                     return;
                 }
             }
+            _ => {}
         }
 
         if matches!(
