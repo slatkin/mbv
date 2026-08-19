@@ -142,6 +142,7 @@ impl ksni::Tray for MbvTray {
                 label: "Quit".into(),
                 icon_name: "application-exit".into(),
                 activate: Box::new(|tray: &mut Self| {
+                    log::info!(target: "tray", "Quit requested from system tray");
                     let _ = tray.shutdown_tx.try_send(());
                 }),
                 ..Default::default()

@@ -238,21 +238,12 @@ impl App {
     /// hold window during which background events must not snap the
     /// cursor to the now-playing item.
     pub(super) fn mark_queue_cursor_user_active(&mut self) {
-        self.queue_cursor_user_active = true;
         self.last_nav_at = Instant::now();
     }
 
     /// Whether a recent user navigation gesture should prevent a
     /// background event from overwriting `queue_cursor`.
     pub(super) fn queue_cursor_held_by_user(&self) -> bool {
-        self.queue_cursor_user_active && self.last_nav_at.elapsed() < QUEUE_NAV_CURSOR_HOLD
-    }
-
-    /// Clear the user-navigation hold if the window has expired.
-    /// Called once per event-loop tick so stale holds don't persist.
-    pub(super) fn expire_queue_cursor_user_hold(&mut self) {
-        if self.queue_cursor_user_active && self.last_nav_at.elapsed() >= QUEUE_NAV_CURSOR_HOLD {
-            self.queue_cursor_user_active = false;
-        }
+        self.last_nav_at.elapsed() < QUEUE_NAV_CURSOR_HOLD
     }
 }

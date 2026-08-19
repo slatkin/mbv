@@ -185,12 +185,6 @@ pub struct App {
     /// state tracks *playback* position, not the UI selection — see
     /// `remove_from_queue` and `PlayerEvent::UnifiedQueueUpdated`.
     pub(super) pending_queue_edit_cursor: Option<usize>,
-    /// True while the user is actively navigating the queue (set by
-    /// Up/Down/PageUp/PageDown/Home/End/mouse-click, cleared by the
-    /// background cursor-override paths once the navigation window
-    /// expires). Prevents `TrackChanged`, `UnifiedQueueUpdated`, and
-    /// session-poll item-change from clobbering a user-held selection.
-    pub(super) queue_cursor_user_active: bool,
     pub(super) pending_active_idx: Option<usize>,
     pub(super) skip_intro_end_ticks: Option<i64>,
     pub(super) next_up_item: Option<EmbyItem>,

@@ -255,12 +255,11 @@ impl App {
         focused: bool,
     ) {
         let (_, year, title) = &album_info[idx];
-        let bg = palette::SURFACE_RESTING;
 
         // Full-width background highlight for the selected row,
         // matching every other list's selected-row treatment.
         f.render_widget(
-            Block::default().style(Style::default().bg(bg)),
+            Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
             Rect {
                 x: panel_area.x,
                 y: row_area.y,

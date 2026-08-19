@@ -32,6 +32,7 @@ pub fn run_with_options(
                 libc::sigaddset(&mut mask, libc::SIGTERM);
                 libc::sigwait(&mask, &mut sig);
             }
+            log::info!(target: "daemon", "received signal {sig} (SIGTERM), initiating graceful shutdown");
             let _ = tx.try_send(());
         });
     }

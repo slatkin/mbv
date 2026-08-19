@@ -199,6 +199,15 @@ pub(super) const MINI_VIEW_THRESHOLD: u16 = 80;
 pub(super) const TABBAR_LEFT_RESERVE: u16 = 0;
 
 extern "C" fn handle_quit_signal(signum: i32) {
+    let name = match signum {
+        1 => "SIGHUP",
+        15 => "SIGTERM",
+        _ => "unknown",
+    };
+    // SAFETY: log::info is not async-signal-safe, but we only reach this
+    // from SIGTERM/SIGHUP where the process is about to exit anyway;
+    // a worst-case torn write is acceptable for diagnostics.
+    eprintln!("mbv: received {name} (signal {signum}), requesting quit");
     QUIT_REQUESTED.store(true, Ordering::Relaxed);
     if signum == 1 {
         // SIGHUP — terminal closed
@@ -523,11 +532,6 @@ impl App {
                 }
                 self.last_capabilities = Instant::now();
             }
-
-            // Release the user-navigation cursor hold if the window
-            // expired, so background events can resume snapping the
-            // cursor to the now-playing item.
-            self.expire_queue_cursor_user_hold();
 
             // Break instead of propagating I/O errors: when the terminal closes
             // (SIGHUP), poll/read fail because the fd is gone. Breaking lets the

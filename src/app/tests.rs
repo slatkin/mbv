@@ -232,7 +232,6 @@ pub(crate) fn make_app_stub() -> App {
         remote_queue_undo_stack: Vec::new(),
         pending_remote_move_cursor: None,
         pending_queue_edit_cursor: None,
-        queue_cursor_user_active: false,
         pending_active_idx: None,
         skip_intro_end_ticks: None,
         next_up_item: None,

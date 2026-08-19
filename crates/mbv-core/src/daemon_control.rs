@@ -61,6 +61,7 @@ fn handle_ctrl(
 ) {
     let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {
+        log::info!(target: "daemon", "RequestShutdown received from ctrl client {client_id}");
         let is_local = ctrl_clients.lock().unwrap().is_local_client(client_id);
         if !is_local {
             send_to(
@@ -527,7 +528,7 @@ fn owner_admin_transport_allowed(
     kind: crate::config::ServiceKind,
     transport: Option<CtrlTransport>,
 ) -> bool {
-    let role_allowed =
-        role == crate::daemon::DaemonRole::Packaged || kind == crate::config::ServiceKind::Audiobookshelf;
+    let role_allowed = role == crate::daemon::DaemonRole::Packaged
+        || kind == crate::config::ServiceKind::Audiobookshelf;
     role_allowed && transport == Some(CtrlTransport::Local)
 }
