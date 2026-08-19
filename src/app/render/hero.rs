@@ -492,8 +492,14 @@ pub(super) fn render_home_hero_meta_block(
     }
 
     row += 1; // blank separator row
-    if overview_pad > 0 && row < max_y {
-        row += 1; // extra blank row for hero-on-left
+
+    // Hero-on-left (the recessed-box path): the box's own top padding row
+    // doubles as the separator above, leaving the metadata flush against the
+    // box's top edge. Reserve one more row so the gap above the box is
+    // visible. The narrow hero-on-top path (overview_pad == 0) renders no
+    // box and keeps its single separator row.
+    if overview_pad > 0 && !overview_lines.is_empty() {
+        row += 1;
     }
 
     if !overview_lines.is_empty() && row < max_y {
@@ -502,17 +508,9 @@ pub(super) fn render_home_hero_meta_block(
         } else {
             palette::MUTED
         };
-        // Hero-on-left (overview_pad > 0): paint the standard recessed
-        // content block behind the overview, matching Music's track-panel
-        // treatment.  The box's outer inset equals `overview_pad`; text
-        // sits inside with the same `pad_x`/`pad_y` padding the track
-        // panel uses.
+        // hero-on-left: paint recessed box behind overview.
         let recessed = if overview_pad > 0 {
-            let ov_height = overview_lines
-                .len()
-                .min((max_y - row) as usize)
-                as u16
-                + 2; // top and bottom padding rows
+            let ov_height = overview_lines.len().min((max_y - row) as usize) as u16 + 2; // top and bottom padding rows
             let ov_area = Rect {
                 x: area.x,
                 y: row.saturating_sub(1), // start 1 row earlier for top padding
@@ -520,7 +518,10 @@ pub(super) fn render_home_hero_meta_block(
                 height: ov_height,
             };
             Some(super::hero_left::hero_on_left_recessed_box(
-                f, ov_area, overview_pad, 1,
+                f,
+                ov_area,
+                overview_pad,
+                1,
             ))
         } else {
             None
@@ -529,36 +530,20 @@ pub(super) fn render_home_hero_meta_block(
             if row >= max_y {
                 break;
             }
-            let r = if let Some(ref box_rects) = recessed {
-                Rect {
-                    x: box_rects.content.x,
+            let base = if *wide { wide_area } else { area };
+            let text_r = match &recessed {
+                Some((_, content)) => Rect {
+                    x: content.x,
                     y: row,
-                    width: box_rects.content.width,
+                    width: content.width,
                     height: 1,
-                }
-            } else if *wide {
-                Rect {
-                    x: wide_area.x,
+                },
+                None => Rect {
+                    x: base.x + overview_pad,
                     y: row,
-                    width: wide_area.width,
+                    width: base.width.saturating_sub(overview_pad * 2),
                     height: 1,
-                }
-            } else {
-                Rect {
-                    x: area.x,
-                    y: row,
-                    width: area.width,
-                    height: 1,
-                }
-            };
-            let text_r = if recessed.is_some() {
-                r
-            } else {
-                Rect {
-                    x: r.x + overview_pad,
-                    width: r.width.saturating_sub(overview_pad * 2),
-                    ..r
-                }
+                },
             };
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(

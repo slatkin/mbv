@@ -12,12 +12,10 @@ use textwrap::wrap;
 
 /// Minimum outer content-area height for the hero-on-left arrangement's
 /// two-pane split; below this the caller falls back to the shared
-/// hero-on-top narrow renderer (design.md decision 5's height floor). Moved
-/// unchanged from grouped Music's former `MIN_WIDE_AREA_HEIGHT`.
+/// hero-on-top narrow renderer (design.md decision 5's height floor).
 pub(super) const HERO_ON_LEFT_MIN_AREA_HEIGHT: u16 = 6;
 /// Minimum width either hero-on-left pane may shrink to (decision 5's
-/// minimum pane width). Moved unchanged from grouped Music's former
-/// `MIN_PANE_WIDTH`.
+/// minimum pane width).
 const HERO_ON_LEFT_MIN_PANE_WIDTH: u16 = 40;
 /// Empty columns separating the hero-on-left arrangement's two panes.
 const HERO_ON_LEFT_PANE_GAP: u16 = 2;
@@ -30,8 +28,7 @@ const HERO_ON_LEFT_PILLS_GAP_ROWS: u16 = 1;
 /// Returns `(left_pane, right_pane)` for the hero-on-left arrangement's
 /// horizontal split: a `HERO_ON_LEFT_PANE_GAP`-column gutter between a
 /// ~40%-width left (hero) pane and the remaining right (list) pane, each
-/// floored at `HERO_ON_LEFT_MIN_PANE_WIDTH`. Extracted unchanged from grouped
-/// Music's former `wide_music_panes`.
+/// floored at `HERO_ON_LEFT_MIN_PANE_WIDTH`.
 pub(super) fn hero_on_left_panes(content_area: Rect) -> (Rect, Rect) {
     let left_w = ((content_area.width as u32 * 2 / 5) as u16)
         .max(HERO_ON_LEFT_MIN_PANE_WIDTH)
@@ -68,7 +65,6 @@ pub(super) fn hero_on_left_panes(content_area: Rect) -> (Rect, Rect) {
 /// x/width. `bottom_pad` is the caller's own trailing padding reserve
 /// (grouped Music's `PANE_PAD_Y`), kept as a parameter rather than a second
 /// constant here so the two files do not each own a copy of the same value.
-/// Extracted unchanged from grouped Music's former `render_wide_music_group`.
 pub(super) struct HeroOnLeftRightPane {
     pub pills_area: Rect,
     pub list_panel: Rect,
@@ -126,17 +122,6 @@ pub(super) fn hero_on_left_list_panel_border(f: &mut Frame, list_panel: Rect, fo
     );
 }
 
-/// Outer-panel / inner-content rects returned by
-/// [`hero_on_left_recessed_box`].
-pub(super) struct RecessedBox {
-    /// The recessed background rect (filled with `SURFACE_BACKDROP` or
-    /// `SURFACE_ACCENT_SOFT`).  Use for full-bleed row highlights.
-    pub panel: Rect,
-    /// The inner content rect, inset by `pad_x`/`pad_y` from `panel`.
-    /// Use for text layout and scroll bounds.
-    pub content: Rect,
-}
-
 /// Paints the hero-on-left component's standard recessed content block:
 /// a [`palette::SURFACE_BACKDROP`] rect inset by `pad_x` from `area`'s
 /// horizontal edges, with an inner content rect further inset by
@@ -149,7 +134,7 @@ pub(super) fn hero_on_left_recessed_box(
     area: Rect,
     pad_x: u16,
     pad_y: u16,
-) -> RecessedBox {
+) -> (Rect, Rect) {
     use ratatui::widgets::Block;
 
     let panel = Rect {
@@ -167,7 +152,7 @@ pub(super) fn hero_on_left_recessed_box(
         width: panel.width.saturating_sub(pad_x * 2),
         height: panel.height.saturating_sub(pad_y * 2),
     };
-    RecessedBox { panel, content }
+    (panel, content)
 }
 
 /// One line of the `Hero` component's hero-on-left text block. Unlike
@@ -184,8 +169,7 @@ pub(super) struct WrappedHeroLine<'a> {
 
 /// Paints `lines` wrapped to `area`'s width, top to bottom, stopping at
 /// `area`'s bottom edge; empty line text is skipped. Returns the first
-/// unpainted row. Extracted unchanged from grouped Music's former
-/// `render_wide_left_hero`/`render_wrapped_text`.
+/// unpainted row.
 pub(super) fn paint_hero_on_left_text(f: &mut Frame, area: Rect, lines: &[WrappedHeroLine]) -> u16 {
     if area.height == 0 || area.width < 3 {
         return area.y;

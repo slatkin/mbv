@@ -169,7 +169,6 @@ impl App {
             // width are the shared arrangement's, not a Home-local ratio).
             let (mut hero_panel, right_panel) = hero_left::hero_on_left_panes(area);
             hero_panel.height = area.height.saturating_sub(1);
-            let hero_col_width = hero_panel.width;
             let mut hero_content = Rect {
                 x: hero_panel.x.saturating_add(HOME_HERO_PAD_X),
                 y: hero_panel.y.saturating_add(HOME_HERO_PAD_Y),
@@ -192,11 +191,14 @@ impl App {
                         WIDE_OVERVIEW_PAD,
                     );
                     // Terminal cells are roughly twice as tall as they are wide, so a
-                    // 16:9 image needs 9 rows for every 32 columns. Keep the artwork
-                    // at its natural display height, then leave one row before metadata.
-                    let image_height = (hero_col_width.saturating_mul(9).saturating_add(31) / 32)
+                    // 16:9 image needs 9 rows for every 32 columns. Ceiling (matching
+                    // `render_keep_watching_hero_image`'s own budget) so the reserved
+                    // box never ends above where the image actually draws — a smaller
+                    // box would let the image's last row overlap the title's first row.
+                    let image_height = (hero_content.width.saturating_mul(9).saturating_add(31)
+                        / 32)
                         .max(1)
-                        .min(hero_col_height.saturating_sub(meta_layout.height + 1));
+                        .min(hero_col_height.saturating_sub(meta_layout.height));
                     if meta_layout.height < 4 || image_height == 0 {
                         None
                     } else {
@@ -438,7 +440,8 @@ impl App {
         let wide_pill_section = two_column && hero_data.is_some();
         let (pills_area, green_panel_full): (Rect, Option<Rect>) = if wide_pill_section {
             let right_area = inset_pane_vertically(list_area);
-            let right_pane = hero_left::hero_on_left_right_pane(list_area, right_area, HOME_HERO_PAD_Y);
+            let right_pane =
+                hero_left::hero_on_left_right_pane(list_area, right_area, HOME_HERO_PAD_Y);
             (right_pane.pills_area, Some(right_pane.list_panel))
         } else if two_column {
             // Wide layout, no hero item: same top-of-area fallback the

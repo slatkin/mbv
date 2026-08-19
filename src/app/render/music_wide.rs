@@ -470,15 +470,8 @@ impl App {
 
         // Standard hero-on-left recessed content block: same pattern as
         // Home's overview block, using the shared `hero_on_left_recessed_box`.
-        let recessed =
-            hero_left::hero_on_left_recessed_box(
-                f,
-                *track_area,
-                PANE_PAD_X,
-                PANE_PAD_Y,
-            );
-        let track_panel = recessed.panel;
-        let track_content = recessed.content;
+        let (track_panel, track_content) =
+            hero_left::hero_on_left_recessed_box(f, *track_area, PANE_PAD_X, PANE_PAD_Y);
         if track_content.height == 0 || track_content.width == 0 {
             return;
         }

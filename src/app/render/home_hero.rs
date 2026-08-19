@@ -451,8 +451,7 @@ pub(super) fn hero_text_layout(
     let header_rows = title_lines.len() as u16
         + if show_name.is_empty() { 0 } else { 1 } // show name row (only for episodes)
         + 1 // duration / progress row
-        + 1 // blank separator row
-        + if overview_pad > 0 { 1 } else { 0 }; // extra blank row for hero-on-left
+        + 1; // blank separator row
     let ov_text_w = text_w.saturating_sub(overview_pad * 2);
     let ov_wide_w = wide_w.saturating_sub(overview_pad * 2);
     let overview_lines: Vec<(String, bool)> = if overview.is_empty() {
@@ -499,7 +498,13 @@ pub(super) fn hero_text_layout(
         + if overview_lines.is_empty() {
             0
         } else {
-            overview_lines.len() as u16 + 1 // overview lines + bottom pad
+            overview_lines.len() as u16
+                + 1 // overview lines + bottom pad
+                + if overview_pad > 0 {
+                    1 // gap row above the hero-on-left overview box
+                } else {
+                    0
+                }
         };
     KeepWatchingHeroLayout {
         title_lines,
