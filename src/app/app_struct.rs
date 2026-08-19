@@ -185,6 +185,12 @@ pub struct App {
     /// state tracks *playback* position, not the UI selection — see
     /// `remove_from_queue` and `PlayerEvent::UnifiedQueueUpdated`.
     pub(super) pending_queue_edit_cursor: Option<usize>,
+    /// True while the user is actively navigating the queue (set by
+    /// Up/Down/PageUp/PageDown/Home/End/mouse-click, cleared by the
+    /// background cursor-override paths once the navigation window
+    /// expires). Prevents `TrackChanged`, `UnifiedQueueUpdated`, and
+    /// session-poll item-change from clobbering a user-held selection.
+    pub(super) queue_cursor_user_active: bool,
     pub(super) pending_active_idx: Option<usize>,
     pub(super) skip_intro_end_ticks: Option<i64>,
     pub(super) next_up_item: Option<EmbyItem>,
@@ -295,7 +301,7 @@ pub struct App {
     pub(super) remote_pos_at: Instant, // when remote_pos_s was last anchored
     pub(super) remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
     pub(super) remote_stalled_while_paused: bool, // last API poll observed IsPaused=true with no position advance
-    pub(super) remote_seek_pending_until: Instant,  // suppress poll pos-reconcile after a seek
+    pub(super) remote_seek_pending_until: Instant, // suppress poll pos-reconcile after a seek
     pub(super) runtime_zero_since: Option<Instant>, // when runtime_s first became 0 for the current item (fast-poll cap)
     pub(super) suspended_local: Option<SuspendedLocalSession>,
     /// The library route currently driving playback, if any (#223):

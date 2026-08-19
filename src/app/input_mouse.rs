@@ -172,6 +172,7 @@ impl App {
             self.set_panel_focus(PanelFocus::Queue);
             let content_y = (row - qa.y) as usize;
             if let Some(&Some(item_idx)) = self.layout.main.queue_row_map.get(content_y) {
+                self.mark_queue_cursor_user_active();
                 self.displayed_queue_mut().queue_cursor = item_idx;
             }
             return true;

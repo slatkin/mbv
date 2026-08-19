@@ -4,7 +4,11 @@ use super::{
     LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+/// How long a queue navigation gesture (Up/Down/click) holds the cursor
+/// against background events that would snap it to the now-playing item.
+const QUEUE_NAV_CURSOR_HOLD: Duration = Duration::from_millis(500);
 
 impl App {
     pub(super) fn handle_key_queue_column_width(&mut self, key: KeyEvent) -> Option<bool> {
@@ -86,13 +90,13 @@ impl App {
             let page = self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize;
             match key.code {
                 KeyCode::PageUp => {
-                    self.last_nav_at = Instant::now();
+                    self.mark_queue_cursor_user_active();
                     let queue = self.displayed_queue_mut();
                     queue.queue_cursor = queue.queue_cursor.saturating_sub(page);
                     return false;
                 }
                 KeyCode::PageDown => {
-                    self.last_nav_at = Instant::now();
+                    self.mark_queue_cursor_user_active();
                     let queue = self.displayed_queue_mut();
                     let n = queue.total_queue_len();
                     queue.queue_cursor = (queue.queue_cursor + page).min(n.saturating_sub(1));
@@ -124,31 +128,35 @@ impl App {
                 self.move_queue_item_down();
             }
             KeyCode::Up if self.displayed_queue().queue_cursor > 0 => {
-                self.last_nav_at = Instant::now();
+                self.mark_queue_cursor_user_active();
                 self.displayed_queue_mut().queue_cursor -= 1;
             }
             KeyCode::Down
                 if self.displayed_queue().queue_cursor + 1
                     < self.displayed_queue().total_queue_len() =>
             {
-                self.last_nav_at = Instant::now();
+                self.mark_queue_cursor_user_active();
                 self.displayed_queue_mut().queue_cursor += 1;
             }
             KeyCode::PageUp => {
+                self.mark_queue_cursor_user_active();
                 let p = self.queue_page_size();
                 let queue = self.displayed_queue_mut();
                 queue.queue_cursor = queue.queue_cursor.saturating_sub(p);
             }
             KeyCode::PageDown => {
+                self.mark_queue_cursor_user_active();
                 let p = self.queue_page_size();
                 let queue = self.displayed_queue_mut();
                 let n = queue.total_queue_len();
                 queue.queue_cursor = (queue.queue_cursor + p).min(n.saturating_sub(1));
             }
             KeyCode::Home => {
+                self.mark_queue_cursor_user_active();
                 self.displayed_queue_mut().queue_cursor = 0;
             }
             KeyCode::End => {
+                self.mark_queue_cursor_user_active();
                 let n = self.displayed_queue().total_queue_len();
                 if n > 0 {
                     self.displayed_queue_mut().queue_cursor = n - 1;
@@ -224,5 +232,27 @@ impl App {
             _ => {}
         }
         false
+    }
+
+    /// Record that the user just navigated the queue, arming a short
+    /// hold window during which background events must not snap the
+    /// cursor to the now-playing item.
+    pub(super) fn mark_queue_cursor_user_active(&mut self) {
+        self.queue_cursor_user_active = true;
+        self.last_nav_at = Instant::now();
+    }
+
+    /// Whether a recent user navigation gesture should prevent a
+    /// background event from overwriting `queue_cursor`.
+    pub(super) fn queue_cursor_held_by_user(&self) -> bool {
+        self.queue_cursor_user_active && self.last_nav_at.elapsed() < QUEUE_NAV_CURSOR_HOLD
+    }
+
+    /// Clear the user-navigation hold if the window has expired.
+    /// Called once per event-loop tick so stale holds don't persist.
+    pub(super) fn expire_queue_cursor_user_hold(&mut self) {
+        if self.queue_cursor_user_active && self.last_nav_at.elapsed() >= QUEUE_NAV_CURSOR_HOLD {
+            self.queue_cursor_user_active = false;
+        }
     }
 }

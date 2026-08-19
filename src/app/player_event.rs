@@ -271,7 +271,9 @@ impl App {
                     }
                 };
                 self.player.status.lock().unwrap().current_idx = adjusted;
-                self.playback_queue_mut().queue_cursor = adjusted;
+                if !self.queue_cursor_held_by_user() {
+                    self.playback_queue_mut().queue_cursor = adjusted;
+                }
                 if !self.has_direct_remote_queue() {
                     if let Some(item) = self.playback_queue().emby_item_at(adjusted) {
                         self.last_played_item_id = Some(item.id.clone());
@@ -350,6 +352,11 @@ impl App {
                         .take()
                         .filter(|pc| *pc < total)
                         .unwrap_or(active_cursor)
+                } else if self.queue_cursor_held_by_user() {
+                    // User is actively navigating — preserve their
+                    // selection cursor, but still replace the queue
+                    // contents so slot data stays current.
+                    self.playback_queue().queue_cursor
                 } else {
                     pending_local_cursor
                         .filter(|pc| *pc < total)

@@ -131,14 +131,18 @@ impl App {
                             self.remote_pos_at = now;
                         }
                         if item_changed {
-                            if let Some(new_idx) = s.now_playing_item_id.as_ref().and_then(|id| {
-                                self.player_tab
-                                    .queue
-                                    .slots()
-                                    .iter()
-                                    .position(|slot| slot.item.id() == id)
-                            }) {
-                                self.player_tab.queue_cursor = new_idx;
+                            if !self.queue_cursor_held_by_user() {
+                                if let Some(new_idx) =
+                                    s.now_playing_item_id.as_ref().and_then(|id| {
+                                        self.player_tab
+                                            .queue
+                                            .slots()
+                                            .iter()
+                                            .position(|slot| slot.item.id() == id)
+                                    })
+                                {
+                                    self.player_tab.queue_cursor = new_idx;
+                                }
                             }
                             self.runtime_zero_since = None;
                         }

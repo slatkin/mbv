@@ -524,6 +524,11 @@ impl App {
                 self.last_capabilities = Instant::now();
             }
 
+            // Release the user-navigation cursor hold if the window
+            // expired, so background events can resume snapping the
+            // cursor to the now-playing item.
+            self.expire_queue_cursor_user_hold();
+
             // Break instead of propagating I/O errors: when the terminal closes
             // (SIGHUP), poll/read fail because the fd is gone. Breaking lets the
             // post-loop cleanup run (player.stop + join) so the mpv window closes.
