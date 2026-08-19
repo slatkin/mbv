@@ -147,6 +147,7 @@ impl App {
                             panel_area,
                             *idx,
                             &album_info,
+                            right_focused,
                         );
                     } else {
                         self.render_album_row(

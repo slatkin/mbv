@@ -21,10 +21,10 @@ use ratatui::Frame;
 /// Standard inset for every selected detail block.
 pub(super) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
 
-/// Returns `palette::WHITE` when `focused`, `palette::SUBTLE` otherwise.
+/// Returns `palette::SOFT_WHITE` when `focused`, `palette::SUBTLE` otherwise.
 pub(super) fn focused_or_subtle(focused: bool) -> Color {
     if focused {
-        palette::WHITE
+        palette::SOFT_WHITE
     } else {
         palette::SUBTLE
     }

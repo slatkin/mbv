@@ -97,7 +97,7 @@ impl App {
             let suffix = if year_str.is_empty() {
                 String::new()
             } else {
-                format!("  {year_str}")
+                format!(" {year_str}")
             };
             let suffix_width = suffix.chars().count() as u16;
             let title_width = content_width.saturating_sub(suffix_width).max(1);
@@ -127,7 +127,7 @@ impl App {
                     spans.push(Span::styled(line.into_owned(), title_style));
                     if line_idx + 1 == wrapped_len && !suffix.is_empty() {
                         spans.push(Span::styled(
-                            "  ",
+                            " ",
                             Style::default().fg(focused_or_muted(focused)),
                         ));
                         spans.push(Span::styled(
@@ -161,7 +161,7 @@ impl App {
             let suffix = if year_str.is_empty() {
                 String::new()
             } else {
-                format!("  {year_str}")
+                format!(" {year_str}")
             };
             let suffix_width = suffix.chars().count();
             let title_lines: Vec<Line> = wrap(
@@ -190,7 +190,7 @@ impl App {
                     && !suffix.is_empty()
                 {
                     spans.push(Span::styled(
-                        "  ",
+                        " ",
                         Style::default().fg(focused_or_muted(focused)),
                     ));
                     spans.push(Span::styled(
@@ -226,7 +226,7 @@ impl App {
         spans.push(Span::styled(trunc_name, title_style));
         if !year_str.is_empty() {
             spans.push(Span::styled(
-                "  ",
+                " ",
                 Style::default().fg(focused_or_muted(focused)),
             ));
             spans.push(Span::styled(
@@ -239,6 +239,12 @@ impl App {
         f.render_widget(Paragraph::new(Line::from(spans)), album_area);
     }
 
+    /// Renders the selected album row in the wide right-pane music
+    /// browser. Uses the shared `build_list_row_spans` for consistent
+    /// selected-row styling (yellow title, `SURFACE_RESTING` background,
+    /// edge marker drawn separately by `draw_column_selection_markers`).
+    /// The background rect fills `panel_area.width` so the highlight
+    /// extends to the panel edge regardless of content length.
     pub(super) fn render_wide_selected_album_row(
         &self,
         f: &mut Frame,
@@ -246,10 +252,15 @@ impl App {
         panel_area: Rect,
         idx: usize,
         album_info: &[(String, String, String)],
+        focused: bool,
     ) {
         let (_, year, title) = &album_info[idx];
+        let bg = palette::SURFACE_RESTING;
+
+        // Full-width background highlight for the selected row,
+        // matching every other list's selected-row treatment.
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+            Block::default().style(Style::default().bg(bg)),
             Rect {
                 x: panel_area.x,
                 y: row_area.y,
@@ -258,32 +269,27 @@ impl App {
             },
         );
 
-        // Marker glyph lives in the outer gutter (`draw_column_selection_
-        // markers`, same as every other list), not inline here -- text
-        // starts one cell right of `row_area.x`, matching every unselected
-        // row's own leading space (`render_album_row`) so the title column
-        // never shifts when a row becomes selected.
-        let suffix = if year.is_empty() {
+        let suffix_w = if year.is_empty() {
+            0
+        } else {
+            year.chars().count() + 2
+        };
+        let name_w = (row_area.width as usize)
+            .saturating_sub(2) // leading space + at least 1 char
+            .saturating_sub(suffix_w);
+        let title = trunc_str(title, name_w);
+        let dur_str = if year.is_empty() {
             String::new()
         } else {
-            format!("  {year}")
+            format!(" {year}")
         };
-        let title_width = row_area
-            .width
-            .saturating_sub(1 + suffix.chars().count() as u16) as usize;
-        let title = trunc_str(title, title_width);
-        let mut spans = vec![
-            Span::raw(" "),
-            Span::styled(
-                title,
-                Style::default()
-                    .fg(palette::WHITE)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ];
-        if !suffix.is_empty() {
-            spans.push(Span::styled(suffix, Style::default().fg(palette::FOAM)));
-        }
+        let fg = focused_or_subtle(focused);
+        let spans = super::list_rows::build_list_row_spans(
+            title.to_string(),
+            dur_str,
+            true, // selected
+            fg,
+        );
         f.render_widget(Paragraph::new(Line::from(spans)), row_area);
     }
 

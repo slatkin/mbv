@@ -6,7 +6,6 @@ use super::{effective_sort_str, letter_bucket, LetterFilter};
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::{palette, App};
-use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
@@ -180,15 +179,12 @@ impl App {
                             };
                             (name, String::new())
                         } else {
-                            let dur = if item.runtime_ticks > 0 {
-                                format!(
-                                    " {}",
-                                    fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-                                )
+                            let year = if item.production_year > 0 {
+                                format!(" {}", item.production_year)
                             } else {
                                 String::new()
                             };
-                            (item.display_name(), dur)
+                            (item.display_name(), year)
                         };
                         // Same width budget for every row (selected or not)
                         // so titles align across the row; the selected

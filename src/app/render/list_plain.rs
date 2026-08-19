@@ -5,7 +5,6 @@ use super::list_rows::{
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::{palette, App};
-use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
@@ -90,15 +89,12 @@ impl App {
                             };
                             (name, String::new())
                         } else {
-                            let dur = if item.runtime_ticks > 0 {
-                                format!(
-                                    " {}",
-                                    fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-                                )
+                            let year = if item.production_year > 0 {
+                                format!(" {}", item.production_year)
                             } else {
                                 String::new()
                             };
-                            (item.display_name(), dur)
+                            (item.display_name(), year)
                         };
 
                         // Every cell starts with a 1-column leading
