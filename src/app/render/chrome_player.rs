@@ -484,7 +484,7 @@ impl App {
 
         let fixed_w =
             glyph_w as usize + right_w as usize + if show_buttons { buttons_w } else { 0 };
-        let title_w = av.saturating_sub(fixed_w);
+        let title_w = av.saturating_sub(fixed_w + 1);
 
         left.extend(self.playback_title_spans(title, title_color, title_w));
 
