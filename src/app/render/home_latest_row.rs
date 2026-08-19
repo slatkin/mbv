@@ -69,10 +69,7 @@ pub(super) fn render_home_emby_row(
             Modifier::empty()
         };
         vec![
-            Span::styled(
-                show,
-                Style::default().fg(palette::YELLOW).add_modifier(bold),
-            ),
+            Span::styled(show, Style::default().fg(palette::FOAM).add_modifier(bold)),
             Span::raw(" "),
             Span::styled(
                 ep_title,

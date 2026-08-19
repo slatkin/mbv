@@ -99,6 +99,7 @@ fn replace_queue_succeeds_unconditionally() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     // Queue was replaced — Feed slot is gone, Emby item is present.
@@ -142,6 +143,7 @@ fn queue_append_succeeds_unconditionally() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     // Feed slot remains, Emby item appended.
@@ -186,6 +188,7 @@ fn queue_move_succeeds_unconditionally() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     assert_eq!(

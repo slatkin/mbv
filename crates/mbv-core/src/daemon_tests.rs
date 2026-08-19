@@ -272,6 +272,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     assert!(registry.lock().unwrap().has_driver());
@@ -311,6 +312,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     assert_eq!(queue.len(), 1);
@@ -353,6 +355,7 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     assert_eq!(queue.len(), 1);
@@ -414,6 +417,7 @@ fn ctrl_queue_move_updates_authoritative_queue_and_broadcasts_state() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     assert!(matches!(
@@ -488,6 +492,7 @@ fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     assert_eq!(
@@ -549,6 +554,7 @@ fn ctrl_queue_remove_updates_authoritative_queue_and_broadcasts_state() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     assert!(matches!(
@@ -613,6 +619,7 @@ fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     // Queue unchanged.

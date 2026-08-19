@@ -58,10 +58,21 @@ fn handle_ctrl(
     playback_intents: &mut PlaybackIntentState,
     has_audiobookshelf: bool,
     merged_tx: &mpsc::Sender<DaemonEvent>,
+    stay_alive: bool,
 ) {
     let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {
         log::info!(target: "daemon", "RequestShutdown received from ctrl client {client_id}");
+        if stay_alive {
+            log::info!(target: "daemon", "RequestShutdown rejected: daemon is in stay-alive mode");
+            send_to(
+                request.reply_tx,
+                &CtrlEvent::ShutdownRejected {
+                    reason: "daemon is in stay-alive mode".to_string(),
+                },
+            );
+            return;
+        }
         let is_local = ctrl_clients.lock().unwrap().is_local_client(client_id);
         if !is_local {
             send_to(

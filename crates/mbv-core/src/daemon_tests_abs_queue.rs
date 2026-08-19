@@ -148,6 +148,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     let capable_data = recv_unified_queue(&capable_rx);
@@ -199,6 +200,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     assert!(
@@ -259,6 +261,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     // Transport gate passed (peer is capable), but the canonical queue must
@@ -311,6 +314,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
         &mut PlaybackIntentState::default(),
         false,
         &dummy_merged_tx,
+        false,
     );
 
     // Transport gate passed. If a CommandRejected arrives, it must not name
@@ -364,6 +368,7 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
         &mut PlaybackIntentState::default(),
         true,
         &dummy_merged_tx,
+        false,
     );
 
     assert_eq!(

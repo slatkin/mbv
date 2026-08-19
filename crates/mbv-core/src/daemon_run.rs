@@ -656,6 +656,7 @@ pub fn run_with_options(
                     &mut playback_intents,
                     audiobookshelf_runtime.is_some(),
                     &merged_tx,
+                    config.stay_alive,
                 );
             }
             DaemonEvent::PlaybackResolved {
