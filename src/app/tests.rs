@@ -615,7 +615,10 @@ pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<EmbyItem>) -> App {
     use mbv_core::api::EmbyClient;
 
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    let config = Config::default();
+    let mut config = Config::default();
+    // A local-daemon stub is always stay-alive: tests that model this
+    // path must never send RequestShutdown to the real daemon socket.
+    config.stay_alive = true;
     App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,

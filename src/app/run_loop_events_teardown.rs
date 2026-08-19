@@ -173,6 +173,11 @@ impl App {
             config.stay_alive
         };
         let should_request_shutdown = self.home_is_local_daemon && !stay_alive;
+        log::info!(
+            target: "daemon_shutdown",
+            "teardown: home_is_local_daemon={} stay_alive={} should_request_shutdown={}",
+            self.home_is_local_daemon, stay_alive, should_request_shutdown
+        );
         let mut shutdown_response: Option<mbv_core::remote_player::ShutdownResponse> = None;
         if should_request_shutdown {
             let current_is_local = matches!(

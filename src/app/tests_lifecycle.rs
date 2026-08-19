@@ -162,6 +162,7 @@ fn teardown_persists_a_reconnected_target_for_a_local_daemon_launch_that_moved_r
     app.config.lock().unwrap().auto_reconnect = true;
     app.launched_as_remote = true;
     app.home_is_local_daemon = true;
+    app.config.lock().unwrap().stay_alive = true;
     app.player_endpoint = Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
         "127.0.0.1:0".parse().unwrap(),
     ));
