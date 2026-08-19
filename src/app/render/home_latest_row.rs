@@ -12,6 +12,16 @@ use ratatui::Frame;
 use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
+fn home_title_color(selected: bool, focused: bool) -> Color {
+    if selected {
+        palette::YELLOW
+    } else if focused {
+        palette::WHITE
+    } else {
+        palette::MUTED
+    }
+}
+
 /// Single-line Home row for an Emby item: title (episode rows also show the
 /// series name), a playback-progress percent, and a right-aligned duration.
 /// The caller always draws the selected-row background and marker outside
@@ -63,40 +73,19 @@ pub(super) fn render_home_emby_row(
         let show = trunc_str(&item.series_name, show_w);
         let show_actual_w = show.width();
         let ep_title = trunc_str(&item.name, title_col_w.saturating_sub(show_actual_w + 1));
-        let bold = if selected_row && focused {
-            Modifier::BOLD
-        } else {
-            Modifier::empty()
-        };
         vec![
-            Span::styled(show, Style::default().fg(palette::FOAM).add_modifier(bold)),
+            Span::styled(show, Style::default().fg(palette::FOAM)),
             Span::raw(" "),
             Span::styled(
                 ep_title,
-                Style::default()
-                    .fg(if focused {
-                        palette::WHITE
-                    } else {
-                        palette::MUTED
-                    })
-                    .add_modifier(bold),
+                Style::default().fg(home_title_color(selected_row, focused)),
             ),
         ]
     } else {
         let title = trunc_str(&item.display_name(), title_col_w);
         vec![Span::styled(
             title,
-            Style::default()
-                .fg(if focused {
-                    palette::WHITE
-                } else {
-                    palette::MUTED
-                })
-                .add_modifier(if selected_row && focused {
-                    Modifier::BOLD
-                } else {
-                    Modifier::empty()
-                }),
+            Style::default().fg(home_title_color(selected_row, focused)),
         )]
     };
 
@@ -156,20 +145,9 @@ pub(super) fn render_home_latest_row(
     const META_INNER_PAD: usize = 1;
     let title_col_w = avail.saturating_sub(META_COL_W + META_INNER_PAD * 2);
 
-    let bold = selected && focused;
     let mut spans: Vec<Span> = vec![Span::styled(
         trunc_str(&item.display_name(), title_col_w),
-        Style::default()
-            .fg(if focused {
-                palette::WHITE
-            } else {
-                palette::MUTED
-            })
-            .add_modifier(if bold {
-                Modifier::BOLD
-            } else {
-                Modifier::empty()
-            }),
+        Style::default().fg(home_title_color(selected, focused)),
     )];
     let actual_title_w: usize = spans.iter().map(|s| s.content.width()).sum();
 
@@ -313,26 +291,24 @@ impl App {
             .min(area.height.saturating_sub(meta_height + 1));
         let img_w = area.width;
 
-        let meta_spans: Vec<Span<'static>> = item
-            .duration()
-            .map(|ticks| {
-                vec![Span::styled(
-                    trunc_str(
-                        &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
-                        text_w,
-                    ),
-                    Style::default().fg(palette::SUBTLE),
-                )]
-            })
-            .unwrap_or_default();
-
         super::hero::render_home_hero_meta_block(
             f,
             area,
             area,
             &title_lines,
             &show_name,
-            meta_spans,
+            None,
+            item.duration()
+                .map(|ticks| {
+                    vec![vec![Span::styled(
+                        trunc_str(
+                            &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
+                            text_w,
+                        ),
+                        Style::default().fg(palette::SUBTLE),
+                    )]]
+                })
+                .unwrap_or_default(),
             &overview_lines,
             overview_pad as u16,
             focused,

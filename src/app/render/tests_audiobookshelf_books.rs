@@ -287,7 +287,7 @@ fn hero_renders_author_narrator_year_and_description() {
         out.contains("sweeping description"),
         "hero must show the description:\n{out}"
     );
-    assert!(out.contains("60"), "hero must show the duration:\n{out}");
+    assert!(out.contains("1h"), "hero must show the duration:\n{out}");
 }
 
 /// Selecting a different bucket narrows the right-pane list: a book outside

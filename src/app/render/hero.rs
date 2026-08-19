@@ -419,6 +419,10 @@ pub(super) fn paint_hero_content(
 /// past a beside-the-text image and should render across `wide_area`'s full
 /// width instead of `area`'s; callers with no such image pass `wide_area ==
 /// area` (the `bool` is then irrelevant since both rects are identical).
+///
+/// `title_suffix` is drawn one space after the last title line, on the same
+/// row (Emby's watch-state glyph — the only user today; other heroes pass
+/// `None`).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn render_home_hero_meta_block(
     f: &mut Frame,
@@ -426,7 +430,8 @@ pub(super) fn render_home_hero_meta_block(
     wide_area: Rect,
     title_lines: &[String],
     subtitle: &str,
-    meta_spans: Vec<Span<'static>>,
+    title_suffix: Option<Span<'static>>,
+    meta_rows: Vec<Vec<Span<'static>>>,
     overview_lines: &[(String, bool)],
     overview_pad: u16,
     focused: bool,
@@ -437,17 +442,24 @@ pub(super) fn render_home_hero_meta_block(
     let mut row = area.y;
     let max_y = area.y + area.height;
 
-    for line in title_lines {
+    for (idx, line) in title_lines.iter().enumerate() {
         if row >= max_y {
             break;
         }
+        let mut spans = vec![Span::styled(
+            line.clone(),
+            Style::default()
+                .fg(palette::YELLOW)
+                .add_modifier(Modifier::BOLD),
+        )];
+        if idx + 1 == title_lines.len() {
+            if let Some(suffix) = &title_suffix {
+                spans.push(Span::raw(" "));
+                spans.push(suffix.clone());
+            }
+        }
         f.render_widget(
-            Paragraph::new(Span::styled(
-                line.clone(),
-                Style::default()
-                    .fg(palette::YELLOW)
-                    .add_modifier(Modifier::BOLD),
-            )),
+            Paragraph::new(Line::from(spans)),
             Rect {
                 x: area.x,
                 y: row,
@@ -474,12 +486,15 @@ pub(super) fn render_home_hero_meta_block(
         row += 1;
     }
 
-    // Always reserves one row, even with nothing to show, so the overview
-    // below lands on the same row whether or not this item has meta text.
-    if row < max_y {
+    // One reserved row per meta row. `meta_rows` is empty only for heroes
+    // with nothing to show; render each non-empty row.
+    for meta_spans in meta_rows.iter() {
+        if row >= max_y {
+            break;
+        }
         if !meta_spans.is_empty() {
             f.render_widget(
-                Paragraph::new(Line::from(meta_spans)),
+                Paragraph::new(Line::from(meta_spans.clone())),
                 Rect {
                     x: area.x,
                     y: row,

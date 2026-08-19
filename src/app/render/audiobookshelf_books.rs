@@ -1,6 +1,6 @@
 use super::hero::{hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS};
 use super::hero_left;
-use super::home_hero::{beside_image_hero_dims, beside_image_hero_rects};
+use super::home_hero::{beside_image_hero_dims, beside_image_hero_rects, HeroMetaBlock};
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::images::audiobookshelf_book_cover_cache_key;
 use crate::app::layout::LayoutMain;
@@ -257,6 +257,7 @@ impl App {
             &overview,
             inner_w,
             max_allowed,
+            1,
         );
         layout.height.max(image_rows)
     }
@@ -383,7 +384,7 @@ impl App {
         let max_allowed = area.height;
         let author = book.author_display.as_deref().unwrap_or("");
         let (img_w, meta_layout, image_rows) =
-            beside_image_hero_dims(&book.title, author, &overview, inner_w, max_allowed);
+            beside_image_hero_dims(&book.title, author, &overview, inner_w, max_allowed, 1);
         let (meta_area, img_area) =
             beside_image_hero_rects(area, img_w, meta_layout.height, image_rows);
 
@@ -394,7 +395,10 @@ impl App {
             area,
             img_area,
             &meta_layout,
-            meta_spans,
+            HeroMetaBlock {
+                title_suffix: None,
+                meta_rows: vec![meta_spans],
+            },
             &cache_key,
             0,
             focused,

@@ -86,16 +86,24 @@ pub fn fmt_duration_short(s: i64) -> String {
     }
 }
 
-/// Format duration without seconds — for video items in the queue.
-/// Examples: "<1′", "37′", "125′".
+/// Format duration without seconds — for video items in the queue and the
+/// hero meta row.
+/// Examples: "<1m", "37m", "1h12m", "2h15m".
 pub fn fmt_duration_approx(s: i64) -> String {
-    let total_mins = s / 60;
-    if total_mins > 0 {
-        format!("{}′", total_mins)
+    let h = s / 3600;
+    let m = (s % 3600) / 60;
+    if h > 0 {
+        if m > 0 {
+            format!("{}h{}m", h, m)
+        } else {
+            format!("{}h", h)
+        }
+    } else if m > 0 {
+        format!("{}m", m)
     } else if s > 0 {
-        "<1′".to_string()
+        "<1m".to_string()
     } else {
-        "0′".to_string()
+        "0m".to_string()
     }
 }
 

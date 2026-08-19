@@ -320,6 +320,7 @@ impl App {
                                 &overview,
                                 inner_w,
                                 max_allowed,
+                                2, // release-date row + duration row
                             );
                         if meta_layout.height < 4 {
                             HeroContentDims::None
@@ -359,6 +360,7 @@ impl App {
                                     &overview,
                                     inner_w,
                                     max_allowed,
+                                    1,
                                 );
                             HeroContentDims::GenericBeside(item, img_w, layout, image_rows)
                         })

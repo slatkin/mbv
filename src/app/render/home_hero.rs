@@ -35,6 +35,14 @@ pub(super) struct KeepWatchingHeroLayout {
     pub(super) height: u16,
 }
 
+/// Per-provider metadata for the shared hero-on-top meta block: an optional
+/// glyph drawn one space after the last title line (Emby's watch-state icon),
+/// plus the metadata rows below the subtitle (release date, duration, ...).
+pub(super) struct HeroMetaBlock {
+    pub title_suffix: Option<Span<'static>>,
+    pub meta_rows: Vec<Vec<Span<'static>>>,
+}
+
 pub(super) enum HeroData {
     Emby(
         Box<mbv_core::api::EmbyItem>,
@@ -88,6 +96,7 @@ impl App {
             wide_w,
             image_rows,
             overview_pad,
+            2, // release-date row + duration row
         )
     }
 
@@ -160,14 +169,15 @@ impl App {
         );
     }
 
-    /// Builds the Keep Watching hero's meta-row spans (release date, then
-    /// duration, then watched-progress/unwatched), truncated to `width`.
-    /// The Emby-specific input to `render_beside_image_hero`'s shared
-    /// `meta_spans` parameter.
-    pub(super) fn keep_watching_hero_meta_spans(
+    /// Builds the Keep Watching hero's meta content: the watch-state glyph to
+    /// render one space after the title, plus the metadata rows (release
+    /// date, then the duration on its own row in green). Emby-specific input
+    /// to `render_beside_image_hero`'s shared `meta_block` parameter.
+    pub(super) fn keep_watching_hero_meta_block(
         item: &mbv_core::api::EmbyItem,
         width: u16,
-    ) -> Vec<Span<'static>> {
+        use_nerd_fonts: bool,
+    ) -> HeroMetaBlock {
         let release_date = if item.premiere_date.is_empty() {
             String::new()
         } else {
@@ -178,45 +188,39 @@ impl App {
         } else {
             String::new()
         };
-        let progress_span =
-            if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
-                let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-                Some(Span::styled(
-                    format!("{}% watched", pct),
-                    Style::default().fg(palette::BG_GREEN),
-                ))
-            } else if !item.played {
-                Some(Span::styled(
-                    "Unwatched",
-                    Style::default().fg(palette::MUTED),
-                ))
-            } else {
-                None
-            };
+        // Watch-state glyph: watched, in-progress, or unwatched. Icons are
+        // Nerd Font codepoints (watched e001, in-progress e004, unwatched
+        // e002); without Nerd Fonts, fall back to Unicode symbols that render
+        // in ordinary terminal fonts.
+        let (glyph, color) = if item.played {
+            (if use_nerd_fonts { "\u{e001}" } else { "●" }, palette::AQUA)
+        } else if item.playback_position_ticks > 0 {
+            (
+                if use_nerd_fonts { "\u{e004}" } else { "◐" },
+                palette::YELLOW,
+            )
+        } else {
+            (if use_nerd_fonts { "\u{e002}" } else { "○" }, palette::RED)
+        };
+        let title_suffix = Some(Span::styled(glyph, Style::default().fg(color)));
 
-        let mut meta_spans: Vec<Span<'static>> = Vec::new();
+        let mut meta_rows: Vec<Vec<Span<'static>>> = Vec::new();
         if !release_date.is_empty() {
-            meta_spans.push(Span::styled(
+            meta_rows.push(vec![Span::styled(
                 release_date,
                 Style::default().fg(palette::SUBTLE),
-            ));
+            )]);
         }
         if !dur_str.is_empty() {
-            if !meta_spans.is_empty() {
-                meta_spans.push(Span::raw("  "));
-            }
-            meta_spans.push(Span::styled(
+            meta_rows.push(vec![Span::styled(
                 trunc_str(&dur_str, width as usize),
-                Style::default().fg(palette::SUBTLE),
-            ));
+                Style::default().fg(palette::GREEN),
+            )]);
         }
-        if let Some(progress_span) = progress_span {
-            if !meta_spans.is_empty() {
-                meta_spans.push(Span::raw("  "));
-            }
-            meta_spans.push(progress_span);
+        HeroMetaBlock {
+            title_suffix,
+            meta_rows,
         }
-        meta_spans
     }
 
     /// Renders a [`KeepWatchingHeroLayout`]'s title/show-name/meta/overview
@@ -230,7 +234,7 @@ impl App {
         area: Rect,
         wide_area: Rect,
         layout: &KeepWatchingHeroLayout,
-        meta_spans: Vec<Span<'static>>,
+        meta_block: HeroMetaBlock,
         overview_pad: u16,
         focused: bool,
     ) {
@@ -240,7 +244,8 @@ impl App {
             wide_area,
             &layout.title_lines,
             &layout.show_name,
-            meta_spans,
+            meta_block.title_suffix,
+            meta_block.meta_rows,
             &layout.overview_lines,
             overview_pad,
             focused,
@@ -263,7 +268,7 @@ impl App {
         wide_area: Rect,
         img_area: Rect,
         layout: &KeepWatchingHeroLayout,
-        meta_spans: Vec<Span<'static>>,
+        meta_block: HeroMetaBlock,
         image_cache_key: &str,
         overview_pad: u16,
         focused: bool,
@@ -275,7 +280,7 @@ impl App {
             meta_area,
             wide_area,
             layout,
-            meta_spans,
+            meta_block,
             overview_pad,
             focused,
         );
@@ -305,14 +310,15 @@ impl App {
                         img_types,
                     );
                 }
-                let meta_spans = Self::keep_watching_hero_meta_spans(item, meta_area.width);
+                let meta_block =
+                    Self::keep_watching_hero_meta_block(item, meta_area.width, self.use_nerd_fonts);
                 self.render_beside_image_hero(
                     f,
                     *meta_area,
                     *wide_area,
                     *img_area,
                     meta_layout,
-                    meta_spans,
+                    meta_block,
                     &cache_key,
                     overview_pad,
                     focused,
@@ -326,25 +332,28 @@ impl App {
                         .unwrap_or_default(),
                     _ => String::new(),
                 };
-                let meta_spans: Vec<Span<'static>> = item
-                    .duration()
-                    .map(|ticks| {
-                        vec![Span::styled(
-                            trunc_str(
-                                &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
-                                meta_area.width as usize,
-                            ),
-                            Style::default().fg(palette::SUBTLE),
-                        )]
-                    })
-                    .unwrap_or_default();
+                let meta_block = HeroMetaBlock {
+                    title_suffix: None,
+                    meta_rows: item
+                        .duration()
+                        .map(|ticks| {
+                            vec![vec![Span::styled(
+                                trunc_str(
+                                    &fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64),
+                                    meta_area.width as usize,
+                                ),
+                                Style::default().fg(palette::SUBTLE),
+                            )]]
+                        })
+                        .unwrap_or_default(),
+                };
                 self.render_beside_image_hero(
                     f,
                     *meta_area,
                     *wide_area,
                     *img_area,
                     meta_layout,
-                    meta_spans,
+                    meta_block,
                     &cache_key,
                     0,
                     focused,
@@ -368,6 +377,7 @@ pub(super) fn beside_image_hero_dims(
     overview: &str,
     inner_w: u16,
     max_allowed: u16,
+    meta_row_count: u16,
 ) -> (u16, KeepWatchingHeroLayout, u16) {
     let img_w = inner_w / 2;
     let meta_w = inner_w.saturating_sub(img_w + 1) as usize;
@@ -380,6 +390,7 @@ pub(super) fn beside_image_hero_dims(
         inner_w as usize,
         image_rows,
         0,
+        meta_row_count,
     );
     (img_w, layout, image_rows)
 }
@@ -426,7 +437,9 @@ pub(super) fn beside_image_hero_rects(
 /// remaining rows once past the image's bottom edge. `overview_pad` is the
 /// two-column (wide) hero's original 2-col horizontal padding around the
 /// overview block; the single-column hero passes 0 so its overview stays
-/// flush with the title above it.
+/// flush with the title above it. `meta_row_count` is the number of reserved
+/// metadata rows below the title/show-name (Emby's hero now uses 2: one for
+/// the release date, one for the duration; other heroes use 1).
 pub(super) fn hero_text_layout(
     title: &str,
     show_name: &str,
@@ -435,6 +448,7 @@ pub(super) fn hero_text_layout(
     wide_w: usize,
     image_rows: u16,
     overview_pad: usize,
+    meta_row_count: u16,
 ) -> KeepWatchingHeroLayout {
     if text_w == 0 {
         return KeepWatchingHeroLayout {
@@ -450,7 +464,7 @@ pub(super) fn hero_text_layout(
         .collect();
     let header_rows = title_lines.len() as u16
         + if show_name.is_empty() { 0 } else { 1 } // show name row (only for episodes)
-        + 1 // duration / progress row
+        + meta_row_count // metadata rows (release date, duration, ...)
         + 1; // blank separator row
     let ov_text_w = text_w.saturating_sub(overview_pad * 2);
     let ov_wide_w = wide_w.saturating_sub(overview_pad * 2);
