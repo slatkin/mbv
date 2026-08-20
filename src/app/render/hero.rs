@@ -1,6 +1,6 @@
 //! The `Hero` component (design.md "Component catalogue"): the reserved
 //! panel that shows the selected item's artwork, metadata and overview
-//! above (hero-on-top) or beside (hero-on-left) its list.
+//! above (hero-on-top), beside (hero-on-left), or inline with its list.
 //!
 //! This file holds the hero-on-top geometry and outer shell, extracted from
 //! movies/TV (`list.rs`'s former `top_hero_layout` path, hero-on-top's

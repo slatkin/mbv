@@ -130,25 +130,6 @@ impl App {
         Some(item)
     }
 
-    pub(crate) fn selected_album_hero_item(
-        &self,
-        lib_idx: usize,
-    ) -> Option<mbv_core::api::EmbyItem> {
-        let lib = self.libs.get(lib_idx)?;
-        if lib.library.collection_type != "music" {
-            return None;
-        }
-        if !self.is_viewing_album_folders(lib_idx) {
-            return None;
-        }
-        if !self.is_music_group_view(lib_idx) {
-            return None;
-        }
-
-        let level = lib.nav_stack.last()?;
-        Some(level.items.get(level.cursor)?.clone())
-    }
-
     /// Computes the compact banner's content for `item`, given the panel
     /// width it will render into (i.e. the eventual `area.width` passed to
     /// `render_compact_detail`). Pure function of `item` + width aside
@@ -362,12 +343,9 @@ impl App {
         let content =
             self.compact_banner_layout_with_overview(&item, area.width, truncate_overview);
 
-        // — Title (two-column lists only) —
-        // The selected item's name on the hero's top row, in yellow (bold
-        // when focused), mirroring the album-detail title block. Skipped for
-        // one-column lists, where the full-width list-row title directly
-        // above the hero already shows the name (and reserving the row there
-        // would not have been budgeted for).
+        // — Title —
+        // The caller decides whether the selected item's name belongs in the
+        // hero or remains in the ordinary list row.
         let title = item.display_name();
 
         // — Overview + Director (#204, #263) —

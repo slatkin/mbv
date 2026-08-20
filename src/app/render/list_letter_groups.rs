@@ -6,6 +6,7 @@ use super::{effective_sort_str, letter_bucket, LetterFilter};
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::{palette, App};
+use ratatui::layout::Rect;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
@@ -31,6 +32,7 @@ impl App {
             stored_scroll,
             cols,
             focused,
+            hero_rows,
         } = ctx;
         let n = items.len();
         let visible = content_area.height as usize;
@@ -94,11 +96,16 @@ impl App {
             .position(|r| matches!(r, DisplayRow::Item(idxs) if idxs.contains(&cursor)))
             .unwrap_or(0);
 
+        if hero_rows > 0 {
+            let at = display_cursor + 1;
+            display_rows.splice(at..at, (0..hero_rows).map(|_| DisplayRow::Hero));
+        }
+
         let total_display = display_rows.len();
 
         // Keep the cursor row visible: never scroll it above the viewport's
         // top.
-        let lower_bound = (display_cursor + 1)
+        let lower_bound = (display_cursor + hero_rows as usize + 1)
             .saturating_sub(visible)
             .min(display_cursor);
         let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
@@ -123,7 +130,7 @@ impl App {
         // cell via `left_item_rows`).
         for row in display_rows.iter().skip(offset).take(visible) {
             layout.left_row_map.push(match row {
-                DisplayRow::Spacer | DisplayRow::LetterHeader(_) => None,
+                DisplayRow::Spacer | DisplayRow::LetterHeader(_) | DisplayRow::Hero => None,
                 DisplayRow::Item(idxs) => idxs.first().copied(),
             });
         }
@@ -149,7 +156,7 @@ impl App {
             .skip(offset)
             .take(visible)
             .map(|(_abs_idx, row)| match row {
-                DisplayRow::Spacer => ListItem::new(Line::default()),
+                DisplayRow::Spacer | DisplayRow::Hero => ListItem::new(Line::default()),
                 DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                     Span::raw(" "),
                     Span::styled(
@@ -192,7 +199,11 @@ impl App {
                         // highlight background rather than adding an indent.
                         let avail = normal_avail;
                         let name_w = avail.saturating_sub(dur_str.width());
-                        let title = trunc_str(&item_name, name_w);
+                        let (title, dur_str) = if selected && hero_rows > 0 {
+                            (String::new(), String::new())
+                        } else {
+                            (trunc_str(&item_name, name_w), dur_str)
+                        };
                         let fg = focused_or_subtle(focused);
                         let pad_to = if cell_idx + 1 == idxs.len() {
                             cell_w
@@ -210,6 +221,15 @@ impl App {
         state.select(Some(display_cursor.saturating_sub(offset)));
         layout.cursor_screen_y =
             Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
+
+        if hero_rows > 0 {
+            layout.hero_area = Rect {
+                x: content_area.x,
+                y: content_area.y + (display_cursor + 1 - offset) as u16,
+                width: content_area.width,
+                height: hero_rows,
+            };
+        }
         f.render_stateful_widget(
             List::new(list_items).highlight_style(Style::default()),
             content_area,
