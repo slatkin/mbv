@@ -43,6 +43,49 @@ pub(super) struct HeroMetaBlock {
     pub meta_rows: Vec<Vec<Span<'static>>>,
 }
 
+/// Prepares a wide (hero-on-left) selected-Emby hero card from `item`,
+/// sized into the given content area (the left pane's inner rect after
+/// padding). Returns the data needed to build `HeroData::Emby`, or `None`
+/// when the area is too small for a usable card (image and metadata).
+/// Shared by Home's wide branch and the wide Movies arrangement so the two
+/// render the exact same 16:9-artwork-above-metadata card: image occupies
+/// the top of the content area at 16:9, metadata (title, show name,
+/// release date, duration, overview) below it. The metadata layout uses the
+/// full content width for both narrow and wide wrapping (no wrap-around
+/// split — the image sits above text, not beside it), matching Home's wide
+/// hero-on-left presentation.
+pub(super) fn prepare_wide_emby_hero_card(
+    item: &mbv_core::api::EmbyItem,
+    content_area: Rect,
+) -> Option<(KeepWatchingHeroLayout, Rect, Rect)> {
+    let meta_w = content_area.width as usize;
+    let meta_layout = App::keep_watching_hero_layout(item, meta_w, meta_w, 0, WIDE_OVERVIEW_PAD);
+    // Terminal cells are roughly twice as tall as they are wide, so a
+    // 16:9 image needs 9 rows for every 32 columns. Ceiling (matching
+    // `render_keep_watching_hero_image`'s own budget) so the reserved
+    // box never ends above where the image actually draws -- a smaller
+    // box would let the image's last row overlap the title's first row.
+    let image_height = (content_area.width.saturating_mul(9).saturating_add(31) / 32)
+        .max(1)
+        .min(content_area.height.saturating_sub(meta_layout.height));
+    if meta_layout.height < 4 || image_height == 0 {
+        return None;
+    }
+    let img_area = Rect {
+        x: content_area.x,
+        y: content_area.y,
+        width: content_area.width,
+        height: image_height,
+    };
+    let meta_area = Rect {
+        x: content_area.x,
+        y: content_area.y + img_area.height + 1,
+        width: content_area.width,
+        height: meta_layout.height,
+    };
+    Some((meta_layout, meta_area, img_area))
+}
+
 pub(super) enum HeroData {
     Emby(
         Box<mbv_core::api::EmbyItem>,

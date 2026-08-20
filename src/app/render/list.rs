@@ -47,6 +47,22 @@ impl App {
             }
         }
 
+        // Wide Movies: the dedicated Movies library renders hero-on-left
+        // (right-panel-arrangements spec) at or above the shared breakpoint:
+        // read-only shared selected-Emby hero card on the left, letter pills
+        // and one-column list in the right rail. Below the breakpoint the
+        // hero-on-top fallback below runs unchanged. Height floor mirrors
+        // the other hero-on-left screens.
+        if let Some(lib_idx) = self.tab.emby_library_index() {
+            if self.is_wide_movies_library(lib_idx)
+                && area.width >= TWO_COLUMN_THRESHOLD
+                && area.height.saturating_sub(1) >= super::hero_left::HERO_ON_LEFT_MIN_AREA_HEIGHT
+            {
+                self.render_wide_movies(f, area, lib_idx, focused, layout);
+                return;
+            }
+        }
+
         let mut content_area = area;
 
         // Search is active for the focused Emby library. Its 3-row input box

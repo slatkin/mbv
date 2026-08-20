@@ -16,6 +16,12 @@ impl App {
     /// even inside a music library at the album-folder level.
     pub(super) fn current_library_columns(&self, lib_idx: usize) -> usize {
         use crate::app::library_column_width::library_column_count;
+        if self.layout.main.is_wide_movies_active() {
+            // The wide Movies right rail always renders the list as one
+            // column (right-panel-arrangements spec), regardless of how
+            // wide the rail gets.
+            return 1;
+        }
         if self.libs[lib_idx].search.is_some() {
             return library_column_count(self.layout.main.left_area.width);
         }

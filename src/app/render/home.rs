@@ -179,49 +179,22 @@ impl App {
 
             hero_data = match emby_item {
                 Some(item) => {
-                    let meta_w = hero_content.width as usize;
-                    // Image sits above metadata in this layout (not beside
-                    // it), so the overview always wraps at the full meta
-                    // width — no wrap-around split needed.
-                    let meta_layout = Self::keep_watching_hero_layout(
-                        &item,
-                        meta_w,
-                        meta_w,
-                        0,
-                        WIDE_OVERVIEW_PAD,
-                    );
-                    // Terminal cells are roughly twice as tall as they are wide, so a
-                    // 16:9 image needs 9 rows for every 32 columns. Ceiling (matching
-                    // `render_keep_watching_hero_image`'s own budget) so the reserved
-                    // box never ends above where the image actually draws — a smaller
-                    // box would let the image's last row overlap the title's first row.
-                    let image_height = (hero_content.width.saturating_mul(9).saturating_add(31)
-                        / 32)
-                        .max(1)
-                        .min(hero_col_height.saturating_sub(meta_layout.height));
-                    if meta_layout.height < 4 || image_height == 0 {
-                        None
-                    } else {
-                        let img_area = Rect {
-                            x: hero_content.x,
-                            y: hero_content.y,
-                            width: hero_content.width,
-                            height: image_height,
-                        };
-                        let meta_area = Rect {
-                            x: hero_content.x,
-                            y: hero_content.y + img_area.height + 1,
-                            width: hero_content.width,
-                            height: meta_layout.height,
-                        };
-                        Some(HeroData::Emby(
-                            Box::new(item),
-                            meta_area,
-                            meta_area,
-                            img_area,
-                            meta_layout,
-                        ))
-                    }
+                    // Shared wide hero-on-left card preparation (design.md
+                    // decision 1): the exact same 16:9-artwork-above-metadata
+                    // card the wide Movies arrangement renders, so the two
+                    // cannot drift in image sizing, metadata order, or
+                    // overview treatment.
+                    super::home_hero::prepare_wide_emby_hero_card(&item, hero_content).map(
+                        |(meta_layout, meta_area, img_area)| {
+                            HeroData::Emby(
+                                Box::new(item),
+                                meta_area,
+                                meta_area, // wide_area same as meta_area in hero-on-left
+                                img_area,
+                                meta_layout,
+                            )
+                        },
+                    )
                 }
                 None => current_item
                     .filter(|item| item.as_emby().is_none())

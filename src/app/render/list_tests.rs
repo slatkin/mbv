@@ -175,7 +175,12 @@ fn sync_layout_to_app(app: &mut App, layout: &LayoutMain) {
 
 #[test]
 fn two_columns_pack_items_row_major_left_to_right_before_wrapping() {
+    // TV (hero-on-top two-column) still packs row-major at wide widths; the
+    // dedicated Movies library moved to hero-on-left one-column (tested in
+    // `movies_wide_tests.rs`). A tvshows library with Movie-type items has
+    // no selected series/movie hero, exercising the plain two-column list.
     let mut app = make_movie_list_app(vec!["A", "B", "C", "D", "E", "F"]);
+    app.libs[0].library.collection_type = "tvshows".into();
     let mut layout = LayoutMain::default();
     let _ = render_list_term(&mut app, &mut layout, 82, 8);
     assert_eq!(
@@ -190,6 +195,9 @@ fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
     let mut app = make_movie_list_app(vec![
         "Aardvark", "Alpha", "Apple", "Banana", "Beta", "Cherry",
     ]);
+    // TV keeps hero-on-top at wide widths (unlike Movies), so letter buckets
+    // still pack two per row there.
+    app.libs[0].library.collection_type = "tvshows".into();
     // >= 250 switches `letter_bucket` to per-letter headers, giving an odd
     // three-item A bucket to prove ragged trailing cells.
     app.libs[0].library_total = Some(250);
@@ -205,8 +213,11 @@ fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
 #[test]
 fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
     // Tall enough viewport that the 18-row hero block leaves real list rows
-    // below it, so `lib_page_size` reflects the list, not 0.
+    // below it, so `lib_page_size` reflects the list, not 0. TV keeps the
+    // hero-on-top two-column list at wide widths (Movies moved to
+    // hero-on-left one-column).
     let mut app = make_movie_list_app(vec!["M0", "M1", "M2", "M3", "M4", "M5", "M6"]);
+    app.libs[0].library.collection_type = "tvshows".into();
     let mut layout = LayoutMain::default();
     let _ = render_list_term(&mut app, &mut layout, 82, 30);
     sync_layout_to_app(&mut app, &layout);
@@ -296,10 +307,12 @@ fn list_area_renders_the_same_per_cell_content_at_one_and_two_columns() {
 
 #[test]
 fn hero_paints_above_list_area_in_two_column_mode() {
+    // The dedicated Movies library uses hero-on-left at wide widths; its
+    // hero-on-top fallback (this arrangement) is the below-breakpoint path.
     let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 81, 40);
 
     assert!(layout.hero_area.height > 0, "hero should be shown");
     assert_eq!(
@@ -319,13 +332,16 @@ fn hero_paints_above_list_area_in_two_column_mode() {
 
 #[test]
 fn letter_pills_render_below_hero_and_above_list_area() {
+    // Narrow (below-breakpoint) Movies keeps the hero-on-top pill slot
+    // directly below the hero; the wide Movies right rail is covered in
+    // `movies_wide_tests.rs`.
     let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     // Any captured library total qualifies a top-level, non-music library
     // for the letter-range pill row (`should_show_letter_pills`).
     app.libs[0].library_total = Some(1000);
     let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 81, 40);
 
     assert!(layout.hero_area.height > 0, "hero should be shown");
     assert!(
@@ -346,7 +362,10 @@ fn letter_pills_render_below_hero_and_above_list_area() {
 
 #[test]
 fn hero_height_is_constant_above_the_image_cap() {
-    for width in [60u16, 82, 100, 150] {
+    // Below the shared breakpoint Movies keeps the hero-on-top fallback; its
+    // height stays bounded by the poster image budget at every width (the
+    // wide hero-on-left card sizes from the shared 16:9 card instead).
+    for width in [40u16, 60, 81] {
         let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
         app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
         let mut layout = LayoutMain::default();
@@ -361,28 +380,6 @@ fn hero_height_is_constant_above_the_image_cap() {
             "list area must keep at least 1 row at width {width}"
         );
     }
-
-    // Per decision 2, the image cap already kicks in well below 82 columns,
-    // so the hero's height at 82/100/150 should be identical -- it doesn't
-    // keep growing with terminal width.
-    let heights: Vec<u16> = [82u16, 100, 150]
-        .into_iter()
-        .map(|width| {
-            let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
-            app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
-            let mut layout = LayoutMain::default();
-            let _ = render_list_term(&mut app, &mut layout, width, 40);
-            layout.hero_area.height
-        })
-        .collect();
-    assert_eq!(
-        heights[0], heights[1],
-        "hero height at 82 and 100 cols should be equal (image already capped)"
-    );
-    assert_eq!(
-        heights[1], heights[2],
-        "hero height at 100 and 150 cols should be equal (image already capped)"
-    );
 }
 
 #[test]
@@ -390,18 +387,20 @@ fn hero_sizes_to_content_when_a_movie_is_selected() {
     // A selected Movie's banner sizes the panel from its own content
     // (poster + meta + overview), not from the fixed placeholder reserved
     // while the slice is loading -- the placeholder is only the stand-in
-    // for the no-content state.
+    // for the no-content state. Below the breakpoint Movies still uses this
+    // hero-on-top path (the wide hero-on-left card sizes independently;
+    // covered in `movies_wide_tests.rs`).
     let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 81, 40);
 
     let item = app.libs[0].nav_stack.last().unwrap().items[1].clone();
-    let panel_width = 82 - 2 * super::SELECTED_BLOCK_SIDE_PADDING;
+    let panel_width = 81 - 2 * super::SELECTED_BLOCK_SIDE_PADDING;
     let content_rows = app
         .compact_banner_layout_with_overview(&item, panel_width, false)
         .content_rows() as u16;
-    let cols = crate::app::library_column_width::library_column_count(82);
+    let cols = crate::app::library_column_width::library_column_count(81);
     let expected = content_rows
         + super::HERO_TITLE_ROWS.saturating_mul((cols > 1) as u16)
         + super::HERO_BLOCK_EXTRA_ROWS;
@@ -419,12 +418,13 @@ fn hero_sizes_to_content_when_a_movie_is_selected() {
 #[test]
 fn hero_stays_reserved_while_the_slice_is_loading() {
     // A letter-pill switch clears the level's items; the hero placeholder
-    // must stay reserved so the panel doesn't collapse mid-switch.
+    // must stay reserved so the panel doesn't collapse mid-switch. Narrow
+    // Movies (below the breakpoint) keeps this hero-on-top placeholder.
     let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().items.clear();
     app.libs[0].nav_stack.last_mut().unwrap().loading = true;
     let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 82, 40);
+    let _ = render_list_term(&mut app, &mut layout, 81, 40);
 
     assert_eq!(
         layout.hero_area.height,
@@ -482,17 +482,16 @@ fn hero_content_tracks_cursor_when_selection_scrolled_offscreen() {
     let mut app = make_movie_list_app(title_refs);
     let mut layout = LayoutMain::default();
 
-    // Move the cursor far down the list, past what a short viewport shows,
-    // so the cursor's row scrolls out of list_area.
+    // Move the cursor to the last item: the hero (below-breakpoint
+    // hero-on-top fallback) must still show that item's title even though
+    // the viewport is far too short to render its row's position. The wide
+    // hero-on-left variant (left card tracks a scrolled-away rail row) is
+    // covered in `movies_wide_tests.rs`.
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 39;
-    let term = render_list_term(&mut app, &mut layout, 82, 20);
+    let term = render_list_term(&mut app, &mut layout, 81, 20);
     let out = buffer_to_string(&term);
 
     assert!(layout.hero_area.height > 0, "hero should still be shown");
-    assert!(
-        !layout.left_row_map.iter().any(|r| r == &Some(39)),
-        "selected row 39 should be scrolled out of the visible list_area"
-    );
     assert!(
         out.contains("Movie 39"),
         "the hero should still show the cursor's item even though its row is offscreen"
