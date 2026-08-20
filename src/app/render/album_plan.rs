@@ -24,34 +24,6 @@ pub(crate) fn sorted_group_album_order(album_info: &[(String, String, String)]) 
     order
 }
 
-/// Total content rows the album hero needs: the larger of the right-side art
-/// and the left-side metadata/track content. A sizing estimate, not
-/// pixel-perfect -- the renderer fills the allocated space. The caller adds
-/// the hero block's own chrome rows (`HERO_BLOCK_EXTRA_ROWS` in list.rs) on
-/// top of this.
-pub(super) fn album_hero_content_rows(
-    track_count: usize,
-    art_rows: u16,
-    panel_width: u16,
-    images_enabled: bool,
-) -> u16 {
-    // Metadata: a title row plus an action-hint row.
-    let meta_rows = 2u16;
-    // Album art block, when images are enabled.
-    let art = if images_enabled { art_rows } else { 0 };
-    // Track names run ~TRACK_NAME_ESTIMATE_CHARS chars and wrap at
-    // `panel_width` columns, so each track contributes one row at reasonable
-    // panel widths. Art and this text share the hero horizontally, so their
-    // row requirements must not be added together.
-    const TRACK_NAME_ESTIMATE_CHARS: usize = 60;
-    let cols_per_track = TRACK_NAME_ESTIMATE_CHARS;
-    let cols_per_line = panel_width.max(1) as usize;
-    let track_rows = track_count
-        .saturating_mul(cols_per_track)
-        .div_ceil(cols_per_line);
-    (meta_rows + track_rows as u16).max(art)
-}
-
 #[derive(Clone)]
 pub(super) enum GroupedAlbumDisplayRow {
     ArtistHeader(ArtistGroupHeader),

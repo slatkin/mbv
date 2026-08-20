@@ -76,11 +76,13 @@ pub(crate) struct LayoutMain {
     pub left_row_targets: Vec<Option<LibraryRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
-    /// The selected item's hero banner, pinned to the top of the content
-    /// area above `left_area`, when the library list shows one; zero rect
-    /// otherwise. A click here is an Enter equivalent — it opens the
-    /// selected item (see `App::click_set_cursor`).
+    /// The selected item's hero geometry. Wide hero-on-top screens place it
+    /// above `left_area`; narrow inline screens place it inside the list and
+    /// keep it inert for mouse activation.
     pub hero_area: Rect,
+    /// True when the hero is part of the narrow scrolling list. Inline hero
+    /// space is intentionally inert; media rows own all activation targets.
+    pub inline_hero: bool,
     /// Geometry for the Home sub-tab grid. Distinct from
     /// `AppLayout::home` (`LayoutHome`), which is the regular Home-tab.
     pub home: LayoutHome,

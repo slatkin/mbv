@@ -260,7 +260,7 @@ fn wide_movies_pills_in_right_rail_and_one_column_list() {
 }
 
 #[test]
-fn narrow_movies_keeps_hero_on_top() {
+fn narrow_movies_uses_inline_hero() {
     let mut app = make_movie_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     let mut layout = LayoutMain::default();
@@ -268,7 +268,7 @@ fn narrow_movies_keeps_hero_on_top() {
 
     assert!(
         layout.hero_area.height > 0,
-        "narrow Movies keeps the hero-on-top banner"
+        "narrow Movies keeps the inline hero banner"
     );
     assert_eq!(
         layout.movies_wide_right_area,
@@ -276,8 +276,10 @@ fn narrow_movies_keeps_hero_on_top() {
         "narrow Movies must not publish the wide right rail"
     );
     assert!(
-        layout.left_area.y > layout.hero_area.y + layout.hero_area.height,
-        "narrow Movies list sits below the hero (hero-on-top)"
+        layout.hero_area.y >= layout.left_area.y
+            && layout.hero_area.y + layout.hero_area.height
+                <= layout.left_area.y + layout.left_area.height,
+        "narrow Movies hero stays inside the list flow"
     );
 }
 

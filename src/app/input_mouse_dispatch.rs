@@ -262,8 +262,12 @@ impl App {
                                 return;
                             }
                         }
-                        let in_left = self.layout.main.left_area.contains((col, row).into())
-                            || self.layout.main.hero_area.contains((col, row).into());
+                        let pos = (col, row).into();
+                        let in_inline_hero = self.layout.main.inline_hero
+                            && self.layout.main.hero_area.contains(pos);
+                        let in_left = !in_inline_hero
+                            && (self.layout.main.left_area.contains(pos)
+                                || self.layout.main.hero_area.contains(pos));
                         match self.tab {
                             TabSelection::Home => self.home_play(),
                             TabSelection::Feeds => {
