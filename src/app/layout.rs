@@ -107,6 +107,9 @@ pub(crate) struct LayoutMain {
     /// Bounding rect of the wide Music right pane (album browser).
     /// Populated only when the wide Music layout is active.
     pub wide_music_right_area: Rect,
+    /// Bounding rect of the wide Movies right rail (pills + list).
+    /// Populated only when the wide Movies hero-on-left layout is active.
+    pub movies_wide_right_area: Rect,
     /// Bounding rect of the grouped-album browser itself (`Self::
     /// render_wide_right_album_browser`), the sub-rect of
     /// `wide_music_right_area` below the pill row. `left_row_targets` is
@@ -139,6 +142,14 @@ impl LayoutMain {
     /// or album has no tracks).
     pub(crate) fn is_wide_music_active(&self) -> bool {
         self.wide_music_right_area.width > 0 && self.wide_music_right_area.height > 0
+    }
+
+    /// Whether the wide Movies hero-on-left layout rendered this frame.
+    /// The right rail is only set by the wide Movies renderer, so it is a
+    /// reliable signal that cursor movement should stride the one-column
+    /// right-rail list (see `App::current_library_columns`).
+    pub(crate) fn is_wide_movies_active(&self) -> bool {
+        self.movies_wide_right_area.width > 0 && self.movies_wide_right_area.height > 0
     }
 
     /// Returns the track index whose hit target contains `pos`, if any.

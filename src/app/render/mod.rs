@@ -31,6 +31,7 @@ mod list;
 mod list_letter_groups;
 mod list_plain;
 mod list_rows;
+mod movies_wide;
 mod music;
 mod music_wide;
 mod music_wide_browser;
