@@ -31,6 +31,7 @@ pub(super) enum GroupedAlbumDisplayRow {
     AlbumDetailRule,
     AlbumWrappedContinuation,
     Album(usize),
+    AlbumInlineDetailStart(usize),
     /// Action-hint row shown directly under the selected album's title when
     /// it is *not* expanded into full track-selection mode (`AlbumDetailStart`
     /// covers the hint once expanded) outside the music-group view.
@@ -62,7 +63,9 @@ pub(super) struct GroupedAlbumDisplayPlan {
 impl GroupedAlbumDisplayRow {
     pub(super) fn row_target(&self) -> Option<LibraryRowTarget> {
         match self {
-            Self::Album(idx) => Some(LibraryRowTarget::Album(*idx)),
+            Self::Album(idx) | Self::AlbumInlineDetailStart(idx) => {
+                Some(LibraryRowTarget::Album(*idx))
+            }
             _ => None,
         }
     }
@@ -245,27 +248,17 @@ impl App {
                 ));
 
                 for &idx in &group_indices {
-                    rows.push(GroupedAlbumDisplayRow::Album(idx));
-                    rows.extend(std::iter::repeat_n(
-                        GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                        selected_title_lines(idx).saturating_sub(1),
-                    ));
-                    if expand_selected && idx == cursor {
+                    if !hero_handles_detail && idx == cursor {
+                        rows.push(GroupedAlbumDisplayRow::AlbumInlineDetailStart(idx));
                         match self.album_tracks_cache.get(&albums[idx].id) {
                             Some(tracks) if !tracks.is_empty() => {
                                 let detail_rows = selected_detail_rows(tracks, false);
-                                let track_start = rows.len();
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
                                 rows.extend(
                                     std::iter::repeat_with(|| {
                                         GroupedAlbumDisplayRow::AlbumDetailContinuation
                                     })
-                                    .take(detail_rows.saturating_sub(1)),
+                                    .take(detail_rows),
                                 );
-                                rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
-                                let track_end = rows.len();
-                                track_detail_bounds = Some((track_start, track_end));
                             }
                             Some(_) => {}
                             None => {
@@ -273,16 +266,48 @@ impl App {
                                     self.fetch_album_tracks(albums[idx].id.clone());
                                 }
                                 rows.push(GroupedAlbumDisplayRow::AlbumLoading);
-                                rows.extend(std::iter::repeat_n(
-                                    GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                                    selected_hint_lines("Loading…").saturating_sub(1),
-                                ));
-                                rows.extend(
-                                    std::iter::repeat_with(|| {
-                                        GroupedAlbumDisplayRow::AlbumDetailContinuation
-                                    })
-                                    .take(inline_art_rows_after_album.saturating_sub(1)),
-                                );
+                            }
+                        }
+                    } else {
+                        rows.push(GroupedAlbumDisplayRow::Album(idx));
+                        rows.extend(std::iter::repeat_n(
+                            GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                            selected_title_lines(idx).saturating_sub(1),
+                        ));
+                        if expand_selected && idx == cursor {
+                            match self.album_tracks_cache.get(&albums[idx].id) {
+                                Some(tracks) if !tracks.is_empty() => {
+                                    let detail_rows = selected_detail_rows(tracks, false);
+                                    let track_start = rows.len();
+                                    rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
+                                    rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
+                                    rows.extend(
+                                        std::iter::repeat_with(|| {
+                                            GroupedAlbumDisplayRow::AlbumDetailContinuation
+                                        })
+                                        .take(detail_rows.saturating_sub(1)),
+                                    );
+                                    rows.push(GroupedAlbumDisplayRow::AlbumDetailContinuation);
+                                    let track_end = rows.len();
+                                    track_detail_bounds = Some((track_start, track_end));
+                                }
+                                Some(_) => {}
+                                None => {
+                                    if fetch_missing_tracks {
+                                        self.fetch_album_tracks(albums[idx].id.clone());
+                                    }
+                                    rows.push(GroupedAlbumDisplayRow::AlbumLoading);
+                                    rows.extend(std::iter::repeat_n(
+                                        GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                                        selected_hint_lines("Loading…").saturating_sub(1),
+                                    ));
+                                    rows.extend(
+                                        std::iter::repeat_with(|| {
+                                            GroupedAlbumDisplayRow::AlbumDetailContinuation
+                                        })
+                                        .take(inline_art_rows_after_album.saturating_sub(1)),
+                                    );
+                                }
                             }
                         }
                     }
@@ -399,7 +424,7 @@ impl App {
 
         let find_display_cursor = |rows: &[GroupedAlbumDisplayRow]| -> usize {
             rows.iter()
-                .position(|row| matches!(row, GroupedAlbumDisplayRow::Album(i) if *i == cursor))
+                .position(|row| row.row_target() == Some(LibraryRowTarget::Album(cursor)))
                 .unwrap_or(0)
         };
         let display_cursor = find_display_cursor(&rows);
@@ -411,6 +436,7 @@ impl App {
                 !matches!(
                     row,
                     GroupedAlbumDisplayRow::AlbumDetailStart(_)
+                        | GroupedAlbumDisplayRow::AlbumInlineDetailStart(_)
                         | GroupedAlbumDisplayRow::AlbumDetailContinuation
                         | GroupedAlbumDisplayRow::AlbumDetailRule
                         | GroupedAlbumDisplayRow::AlbumLoading

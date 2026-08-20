@@ -23,7 +23,7 @@ fn wide_podcasts_use_a_left_hero_and_right_show_workspace() {
 }
 
 #[test]
-fn narrow_podcasts_insert_selected_show_detail_into_the_show_flow() {
+fn narrow_podcasts_replace_selected_show_row_with_detail() {
     let mut app = audiobookshelf_app();
     app.audiobookshelf_browse[0].shows[0].author = Some("Author A".into());
     let mut layout = LayoutMain::default();
@@ -35,7 +35,7 @@ fn narrow_podcasts_insert_selected_show_detail_into_the_show_flow() {
     );
     assert!(
         layout.hero_area.y >= layout.left_area.y,
-        "narrow selected detail must follow the show list: hero={:?}, list={:?}",
+        "narrow selected detail must own the show list row: hero={:?}, list={:?}",
         layout.hero_area,
         layout.left_area
     );
@@ -71,13 +71,13 @@ fn narrow_podcasts_insert_selected_show_detail_into_the_show_flow() {
 fn narrow_podcast_detail_is_suppressed_when_the_viewport_is_too_short() {
     let mut app = audiobookshelf_app();
     let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 4);
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 3);
 
     assert_eq!(layout.hero_area.height, 0);
 }
 
 #[test]
-fn narrow_podcast_detail_rows_remain_inert_between_show_rows() {
+fn narrow_podcast_replacement_owns_one_parent_target() {
     let mut app = audiobookshelf_app();
     let state = &mut app.audiobookshelf_browse[0];
     state.shows.extend((0..5).map(|index| AudiobookshelfShow {
@@ -91,18 +91,18 @@ fn narrow_podcast_detail_rows_remain_inert_between_show_rows() {
     let mut layout = LayoutMain::default();
     let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 20);
 
-    let detail_row = layout
+    let selected_row = layout
         .left_item_rows
         .iter()
-        .position(Vec::is_empty)
-        .expect("selected detail row should be reserved");
+        .position(|row| row == &vec![2])
+        .expect("selected replacement row should be mapped");
     assert_eq!(
-        layout.left_item_rows[detail_row..]
+        layout.left_item_rows[selected_row + 1..]
             .iter()
             .find_map(|row| row.first()),
         Some(&3)
     );
-    assert!(layout.hero_area.y > 0);
+    assert_eq!(layout.hero_area.y as usize, selected_row);
 }
 
 #[test]

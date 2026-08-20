@@ -207,6 +207,49 @@ impl App {
                     }
                 }
             }
+            if let TabSelection::AudiobookshelfLibrary(index) = self.tab {
+                let pos = (col, row).into();
+                if let Some(chapter_index) = self
+                    .layout
+                    .main
+                    .audiobookshelf_book_chapter_rows
+                    .iter()
+                    .find(|(rect, _)| rect.contains(pos))
+                    .map(|(_, index)| *index)
+                {
+                    if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
+                        state.chapter_selection = Some(chapter_index);
+                        self.set_panel_focus(PanelFocus::Library);
+                        return true;
+                    }
+                }
+            }
+            if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
+                let pos = (col, row).into();
+                if self.layout.main.is_wide_tv_active()
+                    || self.libs[lib_idx].library.collection_type == "tvshows"
+                {
+                    if let Some(episode) = self
+                        .layout
+                        .main
+                        .tv_wide_episode_rows
+                        .iter()
+                        .find(|(rect, _)| rect.contains(pos))
+                        .map(|(_, episode)| *episode)
+                    {
+                        self.set_panel_focus(PanelFocus::Library);
+                        self.libs[lib_idx].series_selection = Some(episode);
+                        return true;
+                    }
+                }
+                if self.is_music_group_view(lib_idx) {
+                    if let Some(track) = self.layout.main.wide_music_track_at(pos) {
+                        self.set_panel_focus(PanelFocus::Library);
+                        self.libs[lib_idx].album_track_focus = Some(track);
+                        return true;
+                    }
+                }
+            }
             // Click on the inline hero: same as clicking anywhere else in
             // the library pane -- a single click only focuses (the cursor
             // is already on the selected item, so there's nothing else to
@@ -216,8 +259,11 @@ impl App {
             // library-row activation, so it can't drift from Enter's
             // behavior or from the app-wide "single click only focuses"
             // convention.
-            if !self.layout.main.inline_hero
-                && self.layout.main.hero_area.contains((col, row).into())
+            if self
+                .layout
+                .main
+                .inline_hero_area
+                .contains((col, row).into())
             {
                 // The hero is a browse surface for the two Services that can
                 // publish it (Emby and Audiobookshelf); match positively

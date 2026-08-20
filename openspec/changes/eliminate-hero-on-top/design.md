@@ -6,12 +6,12 @@ See `proposal.md` for motivation. Recent changes added a shared inline selected-
 |---|---|---|
 | Movies, TV, grouped Music | inline | hero-on-left |
 | Emby podcasts and home videos | inline | generic inline/two-column fallthrough |
-| Audiobookshelf podcasts | hero-on-top | hero-on-top |
-| Audiobookshelf books | hero-on-top | hero-on-left |
-| Feeds | hero-on-top | hero-on-top |
-| Home | hero-on-top | hero-on-left |
+| Audiobookshelf podcasts | separate detail block | hero-on-left |
+| Audiobookshelf books | separate detail block | hero-on-left |
+| Feeds | separate detail block | separate detail block |
+| Home | separate detail block | hero-on-left |
 
-The generic inline implementation inserts inert hero rows after the selected display row and publishes their geometry through `LayoutMain`. The remaining top paths reserve a separate rect through `top_hero_layout`. Visual framing is also coupled to the obsolete placement: inline renderers still reach `SelectedBlockBorderStyle::HeroOnTop` through `hero_block_shell`, so deleting only top-layout callers would leave the old concept embedded in the component vocabulary.
+The generic inline implementation currently inserts placeholder detail rows after the selected display row and leaves the selected ordinary row behind. That creates a blank legacy row, double-counts the replacement in scrolling, and gives the wrong pointer owner. The replacement must be one flow segment: an ordinary row when unselected, or one variable-height hero block at the selected row. The hero block owns the selected item's row geometry and parent activation target; explicit episode, track, chapter, and selector targets remain more specific child targets. Visual framing is also coupled to the obsolete placement through placement-named vocabulary, so deleting only layout callers would leave the old concept embedded in the component API.
 
 The pending `enforce-mbv-ui-design-system` change is deliberately paused until this behavior is settled. This change establishes the baseline but does not implement that later change's full component/arrangement ownership model.
 
@@ -48,7 +48,7 @@ meets width breakpoint and minimum-height guard
        right rail      browser flow
 ```
 
-The existing minimum-height guard remains. Failing it selects inline detail even when width meets the breakpoint. It never selects hero-on-top.
+The existing minimum-height guard remains. Failing it selects selected-row replacement even when width meets the breakpoint. It never selects a separate detail block.
 
 Surface code may choose content and whether child detail is interactive, but it may not choose placement or define another responsive threshold.
 
@@ -56,9 +56,9 @@ Surface code may choose content and whether child detail is interactive, but it 
 
 ### 2. Treat inline detail as one selected-row flow segment
 
-The active media row followed by its variable-height detail is one display-flow segment. Cursor identity remains media-item based. Hero-only rows are inert and represented as non-item rows in hit geometry. Existing child targets inside Series, podcast, album, or book detail remain interactive; blank framing, artwork, and metadata do not become duplicate activation targets.
+The selected media item is one variable-height display-flow segment: unselected items are ordinary rows, while the selected item is replaced by its hero block. Cursor identity remains media-item based. The replacement block owns the selected item's row geometry and parent activation target. A single click focuses and a double click performs normal item activation; explicit episode, track, chapter, and selector targets take precedence. Framing, artwork, and metadata use the parent target rather than creating duplicate targets.
 
-Each custom browser—Home sections, Feeds groups, Audiobookshelf shows, and Audiobookshelf books—must adopt the same flow invariants as the current generic Emby row renderers: insertion after the active row, scrolling that keeps the segment addressable, and suppression only when minimum row plus detail cannot fit.
+Each custom browser—Home sections, Feeds groups, Audiobookshelf shows, and Audiobookshelf books—must adopt the same flow invariants as the current generic Emby row renderers: replacement at the active row, scrolling that keeps the variable-height segment addressable, and suppression only when the replacement cannot fit.
 
 **Alternative rejected:** Overlay detail or keep a pinned narrow block. Both bypass list scrolling and retain the interaction ambiguity this change removes.
 
@@ -69,7 +69,7 @@ Wide surfaces compose the existing pane split, left surface treatment, right-rai
 - Home, Movies, home videos, and Feeds use read-only left heroes.
 - TV, grouped Music, Emby podcasts, Audiobookshelf podcasts, and Audiobookshelf books retain their existing episode, track, or chapter interaction state in the left workspace.
 
-Only the smallest common geometry needed to prevent duplicated breakpoint, pane, inline insertion, scroll, or hit-target arithmetic should be shared. A universal screen model, renderer callbacks, component registry, or new crate belongs to #563, not this prerequisite.
+Only the smallest common row-flow geometry needed to prevent duplicated breakpoint, pane, replacement, scroll, or hit-target arithmetic should be shared. A universal screen model, renderer callbacks, component registry, or new crate belongs to #563, not this prerequisite.
 
 **Alternative rejected:** Patch each top call site independently. That would remove the visible symptom while preserving duplicated arrangement and hit geometry.
 
@@ -77,7 +77,7 @@ Only the smallest common geometry needed to prevent duplicated breakpoint, pane,
 
 ### 4. Separate selected-detail framing from placement names
 
-The existing selected-detail shell may remain visually unchanged, but its API and style vocabulary must describe framing or selection state, not hero position. Inline code must not call a `HeroOnTop` variant. Once all callers use hero-on-left or inline flow, remove the top layout structure, helper, border variant, top-specific activation path, and stale comments/tests.
+The existing selected-detail shell may remain visually unchanged, but its API and style vocabulary must describe framing or selection state, not hero position. Inline code must not call a placement-specific border variant. Once all callers use hero-on-left or selected-row replacement, remove the separate layout structure, helper, border variant, separate activation path, and stale comments/tests.
 
 The `hero` component/module may remain; only the top arrangement is deleted.
 
@@ -85,11 +85,11 @@ The `hero` component/module may remain; only the top arrangement is deleted.
 
 ### 5. Record removal as an architectural decision and domain migration
 
-Add a presentation ADR stating that hero-on-left and inline detail are the only supported placements, that short-height degradation selects inline or suppresses detail, and that hero-on-top is not a fallback. It should reject retaining top placement as compatibility behavior, paralleling ADR 0013's deletion of a redundant UI path.
+Add a presentation ADR stating that hero-on-left and selected-row replacement are the only supported placements, that short-height degradation selects replacement or restores the ordinary row, and that a separate top block is not a fallback. It should reject retaining the retired placement as compatibility behavior, paralleling ADR 0013's deletion of a redundant UI path.
 
 Update `CONTEXT.md` in the same implementation change:
 
-- Remove **Hero-on-top**.
+- Remove the retired separate-placement term.
 - Define **Inline hero** as selected detail in narrow browser flow.
 - Update **Hero-on-left** so it is the sole wide hero arrangement.
 - Update **Panel mode** descriptions that currently permit top placement.
@@ -101,9 +101,9 @@ This is an explicit removal/rename of established domain vocabulary, approved by
 Completion requires both positive and negative checks:
 
 - Representative render tests for every surface family at wide, narrow, and width-wide/height-short dimensions.
-- Row-map, scroll, selected-row, suppression, focus, and child-target checks for custom inline browsers.
+- Row-map, replacement geometry, scroll, suppression, focus, parent activation, and child-target checks for custom browsers.
 - Wide right-rail one-column and left-workspace checks.
-- A repository search proving no production, test, live-spec, glossary, or current-ADR reference retains hero-on-top terminology or symbols, excluding archived OpenSpec history.
+- A repository search proving no production, test, live-spec, glossary, or current-ADR reference retains retired-placement terminology or symbols, excluding archived OpenSpec history.
 
 Temporary visual captures may supplement focused `TestBackend` assertions but are not committed snapshots.
 

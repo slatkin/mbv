@@ -2,13 +2,13 @@
 
 ### Requirement: Grouped Music uses responsive compositions
 
-The grouped Music album view SHALL use hero-on-left when it meets the shared wide geometry conditions. Its left pane SHALL contain album detail and tracks, and its right rail SHALL contain a single-column album browser. Otherwise the selected album detail and tracks SHALL render inline at the active album row in a single-column browser. Grouped Music SHALL NOT evaluate the breakpoint or minimum-height guard itself and SHALL NOT use a pinned top fallback.
+The grouped Music album view SHALL use hero-on-left when it meets the shared wide geometry conditions. Its left pane SHALL contain album detail and tracks, and its right rail SHALL contain a single-column album browser. Otherwise the selected album detail and tracks SHALL replace the active album row in a single-column browser. Grouped Music SHALL NOT evaluate the breakpoint or minimum-height guard itself and SHALL NOT use a separate fallback.
 
 #### Scenario: Grouped Music below the breakpoint
 - **WHEN** grouped Music does not meet the shared wide geometry conditions
 - **THEN** group pills span the content width
 - **AND** albums render one per row
-- **AND** the selected album's hero and track detail render inline at its active row
+- **AND** the selected album's hero and track detail replace its active row
 
 #### Scenario: Grouped Music at the breakpoint
 - **WHEN** grouped Music meets the shared wide geometry conditions

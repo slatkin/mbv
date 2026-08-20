@@ -51,7 +51,6 @@ pub(super) fn focused_or_muted_soft_white(focused: bool) -> Color {
 pub(super) enum DisplayRow {
     Spacer,
     LetterHeader(String),
-    Hero,
     /// One display row: the item indices occupying it, in column order. In
     /// one-column mode every such row carries exactly one index, so both
     /// modes share a single rendering path with no `cols == 1` branch.
@@ -63,8 +62,8 @@ pub(super) enum DisplayRow {
 /// prelude values both kinds' bodies read, factored out so each callee takes
 /// one struct instead of the same six-plus positional arguments.
 pub(super) struct ListRenderCtx<'a> {
-    /// The list's scrolling area. Narrow callers include the active hero as
-    /// inert `DisplayRow::Hero` entries in this same flow.
+    /// The list's scrolling area. Narrow callers replace the active source row
+    /// in this same flow.
     pub(super) content_area: Rect,
     pub(super) items: &'a [mbv_core::api::EmbyItem],
     pub(super) cursor: usize,

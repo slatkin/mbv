@@ -49,7 +49,7 @@ impl App {
     /// Renders the wide Movies library: read-only shared selected-Emby hero
     /// card on the left, letter pills (or the active search box) plus the
     /// one-column Movies list in the right rail. Below the shared
-    /// breakpoint the caller keeps the existing legacy top placement path.
+    /// breakpoint the caller keeps the existing inline presentation.
     pub(super) fn render_wide_movies(
         &mut self,
         f: &mut Frame,
@@ -63,7 +63,9 @@ impl App {
             ..area
         };
 
-        let (mut left_panel, right_panel) = hero_left::hero_on_left_panes(area);
+        let Some((mut left_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
+            return;
+        };
         left_panel.height = left_content_area.height;
 
         // Library-side separator row below the left pane, matching Music and

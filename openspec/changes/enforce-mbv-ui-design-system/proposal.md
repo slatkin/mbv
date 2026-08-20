@@ -1,14 +1,14 @@
 ## Why
 
 PR #552 extracted shared painters and colour roles, and #560–#562 began replacing
-hero-on-top across library surfaces. That work exposed that the arrangement
+separate detail blocks across library surfaces. That work exposed that the arrangement
 boundary is convention-only: screens still bypass shared geometry, call raw
 Ratatui APIs, duplicate hit-target arithmetic, and select raw palette values
 independently.
 
 Issue #584 is the prerequisite that completes the user-facing arrangement change:
-every hero-bearing browse surface uses hero-on-left in wide mode and an inline
-hero in narrow mode, with no hero-on-top convention. This change starts from that
+every hero-bearing browse surface uses hero-on-left in wide mode and selected-row
+replacement in narrow mode. This change starts from that
 settled baseline and enforces the ownership boundary so later screens cannot
 regress it.
 
@@ -43,7 +43,7 @@ regress it.
 ### Modified Capabilities
 
 - `right-panel-arrangements`: Tightens the arrangement-ownership boundary after
-  #584 establishes hero-on-left wide and inline-hero narrow as the only hero
+  #584 establishes hero-on-left wide and selected-row replacement narrow as the only hero
   arrangement.
 - `library-list-hero`: Extends the hero-ownership and hit-target model so
   components derive their hit geometry and arrangements aggregate it.
@@ -77,7 +77,7 @@ regress it.
 ## Planning Status
 
 The #584 prerequisite is complete. This proposal now starts from the settled
-hero-on-left-wide / inline-narrow baseline and covers only the remaining
+hero-on-left-wide / selected-row-replacement-narrow baseline and covers only the remaining
 design-system ownership and enforcement work.
 
 Decisions established in the current exploration:

@@ -74,7 +74,7 @@ pub const PILL_SELECTED_BG: Color = PILL_SELECTOR_SELECTED_BG;
 ///
 /// `focused` is the caller's two-input focus model already collapsed to one
 /// bool: the existing `PanelFocus` (which panel is focused) for
-/// legacy top placement screens with one focusable region, or `PanelFocus` combined
+/// inline screens with one focusable region, or `PanelFocus` combined
 /// with a pane bit (`left_focused`) for hero-on-left screens with two.
 pub fn resolve_surface_focus(focused: bool) -> Color {
     if focused {

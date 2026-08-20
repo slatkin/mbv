@@ -63,8 +63,8 @@ mbv SHALL list podcast shows from the selected Audiobookshelf library using boun
 - **WHEN** the show list refreshes and the selected `libraryItemId` is no longer present
 - **THEN** mbv SHALL select the nearest valid show or the library's empty state
 
-### Requirement: Podcast libraries use the TV Shows tab composition
-An Audiobookshelf podcast library SHALL use the same outer composition as the TV Shows tab at the same terminal dimensions and image setting. The selected podcast hero SHALL occupy the dedicated full-width area pinned above the podcast show list. The podcast show list SHALL occupy the remaining area below the hero and SHALL NOT appear beside the hero or detail content at any terminal width.
+### Requirement: Podcast libraries use the shared responsive hero presentation
+An Audiobookshelf podcast library SHALL use hero-on-left when the shared wide geometry conditions fit and selected-row replacement otherwise. Wide detail occupies the left workspace beside a single-column show browser; inline detail replaces the selected show row in one scrolling column. The podcast tab SHALL not reserve a separate detail block or define a surface-specific geometry rule.
 
 The following substitutions SHALL be the only domain changes to that composition:
 
@@ -75,31 +75,30 @@ The following substitutions SHALL be the only domain changes to that composition
 | Season selector | `All` / `Played` / `Unplayed` filter selector |
 | Episodes in the selected season | Downloaded episodes matching the selected filter |
 
-All other observable layout behavior SHALL match the TV Shows tab, including the hero shell and placement, list-below-hero ordering, content padding, image slot, row budgeting, list column count, selected-cell treatment, focus styling, scrolling, narrow-terminal fallback, and loading placeholder stability.
+All other observable layout behavior SHALL match the TV Shows tab, including the hero shell and content padding, image slot, row budgeting, list column count, selected-cell treatment, focus styling, scrolling, and loading placeholder stability.
 
 #### Scenario: Podcast library is displayed
 - **WHEN** an Audiobookshelf podcast library and a TV Shows library are displayed at the same terminal dimensions and image setting
-- **THEN** both tabs SHALL divide the content area into the same top hero and lower list geometry
-- **THEN** the podcast tab SHALL render podcast shows in the lower list positions occupied by Series rows in the TV Shows tab
-- **THEN** the podcast tab SHALL NOT render a left catalog column beside a right detail column
+- **THEN** both tabs SHALL use the same shared wide or inline presentation for their available geometry
+- **THEN** the podcast tab SHALL render podcast shows in the browser positions occupied by Series rows in the TV Shows tab
+- **THEN** wide podcast detail SHALL occupy the left workspace beside the single-column browser
 
 #### Scenario: Podcast selection changes
 - **WHEN** the user moves selection between podcast shows
-- **THEN** the fixed hero SHALL update to the newly selected podcast without changing its screen position
+- **THEN** the hero or replacement detail SHALL update to the newly selected podcast
 - **THEN** the show list SHALL retain provider-native selection identity across loaded-page changes
 
 #### Scenario: Selected show scrolls outside the visible list rows
 - **WHEN** the selected podcast's row is outside the visible portion of the lower show list
-- **THEN** the pinned hero SHALL continue to display that selected podcast in the same fixed position
+- **THEN** inline scrolling SHALL keep the selected show and its replacement detail addressable together
 
 #### Scenario: Terminal width crosses the TV list column breakpoint
 - **WHEN** the podcast tab crosses a width at which the TV Shows tab changes between one and two list columns
-- **THEN** the podcast show list SHALL change column count at the same breakpoint
-- **THEN** the hero SHALL remain full-width above the list and SHALL NOT move to the side
+- **THEN** the podcast tab SHALL switch between hero-on-left and selected-row replacement at the shared boundary
 
 #### Scenario: Terminal height cannot fit the hero
 - **WHEN** the TV Shows tab would suppress its hero because the available height cannot fit the minimum hero and a usable list
-- **THEN** the podcast tab SHALL suppress its hero under the same condition and give the show list the corresponding area
+- **THEN** the podcast tab SHALL use selected-row replacement and restore the ordinary selected row if detail cannot fit
 
 ### Requirement: The selected podcast hero uses Audiobookshelf cover artwork
 The selected podcast hero SHALL place the selected podcast's Audiobookshelf cover in the same right-aligned image slot, with the same dimensions, scaling, text wrapping, loading treatment, and images-disabled behavior as the selected Series Primary image in the TV Shows hero. The cover SHALL be fetched from the configured Audiobookshelf Service using the selected podcast's provider-native library item identity.
@@ -108,8 +107,8 @@ Podcast title and available author metadata SHALL occupy the corresponding TV he
 
 #### Scenario: Selected podcast has a cover
 - **WHEN** images are enabled and the selected podcast has an Audiobookshelf cover
-- **THEN** that cover SHALL be fetched and rendered in the TV Series image position within the top hero
-- **THEN** the cover SHALL NOT be rendered as a thumbnail in the lower show list or in a separate side panel
+- **THEN** that cover SHALL be fetched and rendered in the TV Series image position within selected detail
+- **THEN** the cover SHALL NOT be rendered as a thumbnail in the lower show list
 
 #### Scenario: Selected podcast cover is loading
 - **WHEN** images are enabled and the selected podcast cover request is pending

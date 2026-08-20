@@ -31,7 +31,9 @@ impl App {
         layout.tv_wide_episode_rows.clear();
         layout.tv_wide_season_tabs.clear();
 
-        let (mut left_panel, right_panel) = hero_left::hero_on_left_panes(area);
+        let Some((mut left_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
+            return;
+        };
         left_panel.height = area.height.saturating_sub(1);
         let left_area = Rect {
             x: left_panel.x.saturating_add(PANE_PAD_X),

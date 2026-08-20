@@ -66,7 +66,7 @@ impl App {
         hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     }
 
-    /// The narrow legacy top placement fallback's right pane: no recessed panel
+    /// The narrow inline presentation's right pane: no recessed panel
     /// chrome (the pre-redesign narrow book renderer had none either), just
     /// the pill row directly above the single-column book list.
     pub(super) fn render_audiobookshelf_book_right_pane_narrow(
@@ -175,6 +175,7 @@ impl App {
                 super::hero::inline_detail_flow(cursor_pos, detail_rows, area.height, state.scroll)
             })
             .flatten();
+        let detail_rows = flow.as_ref().map(|_| detail_rows).unwrap_or(0);
         let scroll = flow.map(|flow| flow.offset).unwrap_or_else(|| {
             state.scroll.clamp(
                 cursor_pos.saturating_sub(area.height as usize - 1),
@@ -184,7 +185,7 @@ impl App {
         state.scroll = scroll;
         self.audiobookshelf_book_browse[index].scroll = scroll;
 
-        let total_rows = count + detail_rows as usize;
+        let total_rows = count.saturating_sub((detail_rows > 0) as usize) + detail_rows as usize;
         let right_area = layout.audiobookshelf_book_right_area;
         let row_offset = area.y.saturating_sub(right_area.y) as usize;
         let mut row_targets = vec![None; right_area.height as usize];
@@ -196,45 +197,6 @@ impl App {
             let book_idx = bucket.start + book_offset;
             let book = &state.books[book_idx];
             let selected = book_idx == cursor;
-            let row_area = Rect {
-                x: area.x,
-                y: area.y + screen_y,
-                width: area.width,
-                height: 1,
-            };
-            let style = if selected && right_focused {
-                Style::default().fg(palette::YELLOW)
-            } else if right_focused {
-                Style::default().fg(palette::WHITE)
-            } else {
-                Style::default().fg(palette::SUBTLE)
-            };
-            if selected && right_focused {
-                let row_bg = if detail_rows > 0 {
-                    palette::SURFACE_RESTING
-                } else {
-                    palette::SURFACE_FOCUSED
-                };
-                f.render_widget(
-                    Block::default().style(Style::default().bg(row_bg)),
-                    row_area,
-                );
-            }
-            let marker = super::selection_marker(selected, super::MarkerEdge::Left);
-            let title = if selected && detail_rows > 0 {
-                String::new()
-            } else {
-                trunc_str(&book.title, area.width.saturating_sub(2) as usize)
-            };
-            f.render_widget(
-                Paragraph::new(Line::from(vec![marker, Span::raw(title)])).style(style),
-                row_area,
-            );
-            if let Some(target) = row_targets.get_mut(row_offset + screen_y as usize) {
-                *target = Some(LibraryRowTarget::Book(book_idx));
-            }
-            screen_y += 1;
-
             if selected && detail_rows > 0 {
                 let detail_y = area.y + screen_y;
                 if detail_y >= area.bottom() {
@@ -247,6 +209,14 @@ impl App {
                     width: area.width,
                     height: detail_height,
                 };
+                layout.selected_item_rect = Some(layout.hero_area);
+                for offset in 0..detail_height as usize {
+                    if let Some(target) =
+                        row_targets.get_mut(row_offset + screen_y as usize + offset)
+                    {
+                        *target = Some(LibraryRowTarget::Book(book_idx));
+                    }
+                }
                 selected_detail_shell(f, layout.hero_area, detail_height, right_focused);
                 let hero_rows = self.audiobookshelf_book_hero_rows(&state) + HERO_BLOCK_EXTRA_ROWS;
                 let hero_height = hero_rows.min(detail_height);
@@ -281,7 +251,42 @@ impl App {
                     }
                 }
                 screen_y += detail_rows;
+                continue;
             }
+            let row_area = Rect {
+                x: area.x,
+                y: area.y + screen_y,
+                width: area.width,
+                height: 1,
+            };
+            let style = if selected && right_focused {
+                Style::default().fg(palette::YELLOW)
+            } else if right_focused {
+                Style::default().fg(palette::WHITE)
+            } else {
+                Style::default().fg(palette::SUBTLE)
+            };
+            if selected && right_focused {
+                let row_bg = if detail_rows > 0 {
+                    palette::SURFACE_RESTING
+                } else {
+                    palette::SURFACE_FOCUSED
+                };
+                f.render_widget(
+                    Block::default().style(Style::default().bg(row_bg)),
+                    row_area,
+                );
+            }
+            let marker = super::selection_marker(selected, super::MarkerEdge::Left);
+            let title = trunc_str(&book.title, area.width.saturating_sub(2) as usize);
+            f.render_widget(
+                Paragraph::new(Line::from(vec![marker, Span::raw(title)])).style(style),
+                row_area,
+            );
+            if let Some(target) = row_targets.get_mut(row_offset + screen_y as usize) {
+                *target = Some(LibraryRowTarget::Book(book_idx));
+            }
+            screen_y += 1;
         }
         layout.left_row_targets = row_targets;
         if total_rows > area.height as usize && right_focused {

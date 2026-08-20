@@ -1,7 +1,7 @@
 ## Context
 
 PR #552 extracted shared painters and colour roles. The completed #584 migration
-now provides the settled hero-on-left-wide / inline-narrow baseline across the
+now provides the settled hero-on-left-wide / selected-row-replacement-narrow baseline across the
 hero-bearing surfaces. The remaining design-system problem is ownership:
 screens still bypass shared geometry, call raw Ratatui APIs, duplicate hit-target
 arithmetic, and select raw palette values directly.
@@ -15,9 +15,9 @@ change extends and tightens them rather than superseding them.
 
 **Goals:**
 
-- Preserve the completed inline / hero-on-left arrangement while enforcing its
+- Preserve the completed selected-row replacement / hero-on-left arrangement while enforcing its
   ownership boundaries.
-- Keep the live arrangement specs aligned with the shipped inline-narrow
+- Keep the live arrangement specs aligned with the shipped selected-row-replacement-narrow
   presentation.
 - Make canonical components and arrangements the owners of geometry, painting,
   styling, and interaction geometry.
@@ -94,11 +94,11 @@ mechanical checks alone cannot judge every legitimate exception.
 
 The work will establish the boundary with the hero-on-left arrangement and one
 interactive component before migrating every remaining surface. The remaining
-hero-on-top surfaces (`feeds`, `audiobookshelf`, `audiobookshelf_books`,
+provider-specific surfaces (`feeds`, `audiobookshelf`, `audiobookshelf_books`,
 `home_video`, `album`) are migrated incrementally behind the shared arrangement
-boundary; the `top_hero_layout` function and `SelectedBlockBorderStyle::HeroOnTop`
-variant are removed once no screen references them. New UI work must follow the
-boundary immediately after the guidance and initial checks land.
+boundary, with selected-row replacement and parent/child hit ownership as the
+baseline. New UI work must follow the boundary immediately after the guidance and
+initial checks land.
 
 ## Risks / Trade-offs
 

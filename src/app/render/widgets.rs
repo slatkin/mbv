@@ -158,14 +158,11 @@ pub(super) fn render_selected_block_background(
     }
 }
 
-/// The declared per-arrangement variant for [`render_selected_block_borders`]
-/// (design.md decision 6: differences are declared in one block, not
-/// expressed by forking the painter). `Framed` and `HeroOnLeft` are
-/// separate match arms in the function body, so editing one arrangement's
-/// glyphs/background can never reach the other's.
+/// The declared framing variants for [`render_selected_block_borders`].
+/// Differences stay in one painter rather than being forked by callers.
 pub(super) enum SelectedBlockBorderStyle {
     Framed,
-    HeroOnLeft { focused: bool },
+    FocusedRail { focused: bool },
 }
 
 /// Paints the ▁/▔ border rows on the reserved rows one position outside
@@ -183,7 +180,7 @@ pub(super) fn render_selected_block_borders(
 ) {
     let (top_glyph, bottom_glyph, bg) = match style {
         SelectedBlockBorderStyle::Framed => ("\u{2581}", "\u{2594}", None),
-        SelectedBlockBorderStyle::HeroOnLeft { focused } => (
+        SelectedBlockBorderStyle::FocusedRail { focused } => (
             "\u{2594}",
             "\u{2581}",
             Some(palette::resolve_surface_focus(focused)),

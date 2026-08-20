@@ -102,7 +102,7 @@ impl App {
         if let Some(lib_idx) = self.tab.emby_library_index() {
             if self.is_music_group_view(lib_idx)
                 && self.is_viewing_album_folders(lib_idx)
-                && super::hero_left::can_use_hero_on_left(area)
+                && super::hero_left::shared_hero_presentation(area).is_some()
             {
                 self.render_wide_music_group(f, area, lib_idx, focused, layout);
                 return;
@@ -113,11 +113,11 @@ impl App {
         // (right-panel-arrangements spec) at or above the shared breakpoint:
         // read-only shared selected-Emby hero card on the left, letter pills
         // and one-column list in the right rail. Below the breakpoint the
-        // legacy top placement fallback below runs unchanged. Height floor mirrors
+        // inline presentation below runs unchanged. Height floor mirrors
         // the other hero-on-left screens.
         if let Some(lib_idx) = self.tab.emby_library_index() {
             if (self.is_wide_movies_library(lib_idx) || self.is_home_video_view(lib_idx))
-                && super::hero_left::can_use_hero_on_left(area)
+                && super::hero_left::shared_hero_presentation(area).is_some()
             {
                 self.render_wide_movies(f, area, lib_idx, focused, layout);
                 return;
@@ -126,7 +126,7 @@ impl App {
 
         if let Some(lib_idx) = self.tab.emby_library_index() {
             if (self.is_wide_tv_library(lib_idx) || self.is_podcast_library(lib_idx))
-                && super::hero_left::can_use_hero_on_left(area)
+                && super::hero_left::shared_hero_presentation(area).is_some()
             {
                 self.render_wide_tv(f, area, lib_idx, focused, layout);
                 return;
@@ -136,7 +136,7 @@ impl App {
         let mut content_area = area;
 
         // Search is active for the focused Emby library. Its 3-row input box
-        // is placed *below* the hero in legacy top placement view (see the block after
+        // is placed outside the selected replacement in inline view (see the block after
         // `placement-neutral geometry`), so here we only record that it's on.
         let search_active = focused
             && self.tab.emby_library_index().is_some()
@@ -146,7 +146,7 @@ impl App {
 
         // Home videos' declared element-presence difference (design.md
         // decision 6): a count label row instead of the letter-pill row
-        // every other legacy top placement screen may show (`should_show_letter_pills`
+        // every other inline browser may show (`should_show_letter_pills`
         // already excludes home videos, so the two never both show).
         if focused
             && content_area.height > 0
@@ -204,20 +204,9 @@ impl App {
             crate::app::library_column_width::library_column_count(content_area.width)
         };
 
-        // ── Fixed hero area pinned to the top of content_area, letter pills
-        //    below it ──────────────────────────────────────────────────────
-        // The selected item's banner (poster + meta + overview, or -- for a
-        // selected Series -- the season pills + episode table) is painted
-        // into a fixed-height rect at the top of the content area, followed
-        // by a blank separator row. Below that, the letter-range pill row
-        // (large non-music libraries' top browse level) gets its own row
-        // plus a blank gap -- the same reservation `mod.rs` used to carve
-        // out of `lib_area` before calling into this renderer; it lives
-        // here now so the pills land below the hero, not above it. The
-        // list below everything (`list_area`) is a plain grid that never
-        // reflows as the cursor moves. No hero when the level has no
-        // hero-capable content (folders, music, non-hero collections) --
-        // the list then takes the whole remaining area.
+        // Size selected detail from the same content declarations used by the
+        // painters. Inline callers replace the selected source row in flow;
+        // wide callers return before this branch and paint the detail pane.
         //
         let inline_hero_rows: u16 = if self.tab.emby_library_index().is_some() {
             let lib_idx = self.tab.emby_library_index().unwrap();
@@ -259,7 +248,7 @@ impl App {
                 // this keeps the slot from jumping away and back. The
                 // placeholder size is just the stand-in; once content lands
                 // the block sizes to it.
-                let top_hero_level = self.libs[lib_idx].nav_stack.len() == 1
+                let hero_placeholder_level = self.libs[lib_idx].nav_stack.len() == 1
                     && matches!(
                         self.libs[lib_idx].library.collection_type.as_str(),
                         "movies" | "homevideos" | "podcasts" | "tvshows" | "music"
@@ -274,7 +263,7 @@ impl App {
                         .last()
                         .map(|l| l.items.is_empty())
                         .unwrap_or(false);
-                if top_hero_level || music_hero_placeholder {
+                if hero_placeholder_level || music_hero_placeholder {
                     HERO_PLACEHOLDER_ROWS
                 } else {
                     0
@@ -284,16 +273,14 @@ impl App {
             0
         };
         let inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
-            && inline_hero_rows + 1 <= content_area.height)
+            && inline_hero_rows < content_area.height)
             .then_some(inline_hero_rows)
             .unwrap_or(0);
 
-        // Pill row below the hero: letter-range pills for large non-music
-        // libraries, or the music-group selector while browsing a group's
-        // albums (narrow fallback -- wide grouped Music places its pills in
-        // the right rail instead, `render_wide_music_group`). Both share one
-        // slot since a library is never both at once. Reserves 1 row for the
-        // pills plus 1 blank gap row below them.
+        // Browser-level pills and search controls stay outside the selected
+        // replacement: letter-range pills for large non-music libraries, or
+        // the music-group selector while browsing a group's albums. Both share
+        // one slot since a library is never both at once.
         let show_letter_pills = self
             .tab
             .emby_library_index()
@@ -302,12 +289,11 @@ impl App {
             .tab
             .emby_library_index()
             .is_some_and(|lib_idx| self.is_music_group_view(lib_idx));
-        // The pill row and the search box occupy the same slot directly below
-        // the hero; the search box just takes precedence while filtering, but
-        // still needs that slot reserved.
+        // The pill row and search box occupy the same browser-control slot;
+        // search takes precedence while filtering.
         let show_pills = show_letter_pills || show_music_pills || search_active;
         // Narrow library heroes belong to the scrolling list. Keep the shared
-        // pill geometry, but reserve no separate top hero area.
+        // pill geometry without reserving an additional detail region.
         let pills_reserved = if show_pills { 2 } else { 0 };
         let pills_area = Rect {
             height: show_pills as u16,
@@ -319,7 +305,7 @@ impl App {
             ..content_area
         };
         let inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
-            && inline_hero_rows + 1 <= list_area.height)
+            && inline_hero_rows < list_area.height)
             .then_some(inline_hero_rows)
             .unwrap_or(0);
 
@@ -510,8 +496,6 @@ impl App {
         }
 
         layout.hero_area = Rect::default();
-        layout.inline_hero = inline_hero_rows > 0;
-
         let final_offset: usize;
 
         if show_grouped && show_music_pills {
@@ -579,9 +563,8 @@ impl App {
             final_offset = self.render_plain_rows(f, ctx, layout);
         }
 
-        // Paint the hero into its fixed top-edge rect, after the list has
-        // rendered: the outer shell (colored bg + `▁`/`▔` borders), then the
-        // content offset 2 rows down past the top border + top padding.
+        // Paint the selected replacement after the list has established its
+        // flow geometry: shell first, then content inset past its framing.
         if inline_hero_rows > 0 {
             selected_detail_shell(f, layout.hero_area, inline_hero_rows, focused);
             // Content, offset 2 rows down past the top border + top

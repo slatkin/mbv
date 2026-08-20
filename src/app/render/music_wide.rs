@@ -1,6 +1,6 @@
 //! Grouped Music's wide (hero-on-left) rendering: `compute_wide_left_layout`
 //! below is design.md's hero-on-left geometry source (component catalogue,
-//! decision 4), the counterpart to `hero.rs`'s legacy top placement
+//! decision 4), the counterpart to `hero.rs`'s inline presentation
 //! `placement-neutral geometry`. It stays in this file rather than moving into
 //! `hero.rs` because its sizing constants (`PANE_PAD_X`, `PANE_PAD_Y`, ...)
 //! are shared with this file's non-hero list-pane layout below; the pane
@@ -209,13 +209,11 @@ impl App {
             height: area.height.saturating_sub(1),
             ..area
         };
-        if !hero_left::can_use_hero_on_left(area) {
+        let Some((mut left_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
             // Too narrow for wide mode — fall back to narrow rendering.
             self.render_list(f, area, focused, layout);
             return;
-        }
-
-        let (mut left_panel, right_panel) = hero_left::hero_on_left_panes(area);
+        };
         left_panel.height = left_content_area.height;
 
         // Keep a library-side separator row below the left pane, while the

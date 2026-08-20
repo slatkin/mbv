@@ -86,8 +86,14 @@ fn selected_group_has_block_bounds() {
             .iter()
             .filter(|row| matches!(row, GroupedAlbumDisplayRow::Album(_)))
             .count(),
-        24,
-        "the selected group should emit the complete discography"
+        23,
+        "the selected album row is replaced while the rest of the discography remains"
+    );
+    assert!(
+        plan.rows
+            .iter()
+            .any(|row| matches!(row, GroupedAlbumDisplayRow::AlbumInlineDetailStart(0))),
+        "the selected album should own the inline detail block"
     );
 }
 
@@ -204,6 +210,59 @@ fn hero_handles_detail_suppresses_all_inline_detail_rows() {
     assert!(
         plan_with.track_detail_bounds.is_none(),
         "track_detail_bounds should be None when hero_handles_detail is true"
+    );
+}
+
+#[test]
+fn narrow_grouped_music_replaces_selected_album_row_with_detail() {
+    let mut app = make_music_group_app();
+    let tracks: Vec<mbv_core::api::EmbyItem> = (0..2)
+        .map(|i| {
+            let mut track = make_item(&format!("Track {}", i + 1), "Audio");
+            track.id = format!("track-{}", i + 1);
+            track.index_number = (i + 1) as i64;
+            track
+        })
+        .collect();
+    app.album_tracks_cache.insert("album-1".into(), tracks);
+    let mut layout = LayoutMain::default();
+    let output = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
+
+    assert!(
+        output.contains("Track 1"),
+        "selected album detail must render"
+    );
+    assert_eq!(
+        layout
+            .left_row_targets
+            .iter()
+            .filter(|target| {
+                matches!(target, Some(crate::app::layout::LibraryRowTarget::Album(0)))
+            })
+            .count(),
+        1,
+        "the selected album must publish one replacement parent target"
+    );
+}
+
+#[test]
+fn short_grouped_music_restores_the_ordinary_selected_album_row() {
+    let mut app = make_music_group_app();
+    let tracks: Vec<mbv_core::api::EmbyItem> = (0..2)
+        .map(|i| {
+            let mut track = make_item(&format!("Track {}", i + 1), "Audio");
+            track.id = format!("track-{}", i + 1);
+            track
+        })
+        .collect();
+    app.album_tracks_cache.insert("album-1".into(), tracks);
+    let mut layout = LayoutMain::default();
+    let output = render_library_to_string_sized(&mut app, &mut layout, 60, 8);
+
+    assert!(output.contains("First Album"));
+    assert!(
+        !output.contains("Track 1"),
+        "detail must be suppressed when it cannot fit"
     );
 }
 

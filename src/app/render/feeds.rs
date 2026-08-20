@@ -1,6 +1,6 @@
 use super::hero::{
-    inline_detail_flow, paint_hero_content, selected_detail_shell, HeroContent,
-    HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
+    inline_detail_flow, inline_display_row, inline_display_row_count, paint_hero_content,
+    selected_detail_shell, HeroContent, InlineDisplayRow, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
 use super::hero_left;
 use super::list_rows::{draw_column_selection_markers, SELECTED_BLOCK_SIDE_PADDING};
@@ -172,7 +172,6 @@ fn feed_entry_meta_line(entry: &FeedEntry) -> String {
 /// spacer boundary (same rule `list_letter_groups.rs`'s `push_item_row`
 /// uses for the Emby library list).
 enum PackedFeedRow {
-    Hero,
     Spacer,
     Heading(FeedAgeGroup),
     Items(Vec<usize>),
@@ -320,7 +319,7 @@ impl App {
 
         // Whether this frame will show a hero (has entries to select from):
         // if so, the selector rows move below it, unified with the
-        // Movies/TV legacy top placement arrangement; otherwise (no subs / no
+        // Movies/TV inline browser arrangement; otherwise (no subs / no
         // entries yet) they stay above the placeholder message, since
         // there's no hero to be below.
         let will_show_hero = has_subs && !self.feed_tab.visible_entries().is_empty();
@@ -384,10 +383,10 @@ impl App {
         let cursor = self.feed_tab.cursor.min(n.saturating_sub(1));
         let display_rows = feed_display_rows(self.feed_tab.visible_entries(), current_time_secs());
         let cols = library_column_count(list_area.width);
-        let mut packed = pack_feed_rows(&display_rows, cols);
+        let packed = pack_feed_rows(&display_rows, cols);
 
         // Hero: the cursor-selected entry's title + metadata, painted above
-        // the (now packed) list -- feeds' legacy top placement arrangement
+        // the (now packed) list -- feeds' inline presentation
         // (design.md decision 6: no image, since feed entries carry none).
         // The group pill bar + watched-filter row render below the hero
         // (unified with Movies/TV's letter-range pills), so they're carved
@@ -395,11 +394,14 @@ impl App {
         // built-in single-pill-row slot, which is too short for both rows.
         let selected_entry = self.feed_tab.visible_entries()[cursor].clone();
         let show_title = cols > 1;
-        let wide = hero_left::can_use_hero_on_left(area);
+        let wide_panes = hero_left::shared_hero_presentation(area);
+        let wide = wide_panes.is_some();
         let hero_rows_desired =
             feed_hero_content_rows(if wide { show_title } else { true }) + HERO_BLOCK_EXTRA_ROWS;
         let (hero_area, post_hero_area, hero_rows) = if wide {
-            let (hero_panel, right_panel) = hero_left::hero_on_left_panes(area);
+            let Some((hero_panel, right_panel)) = wide_panes else {
+                unreachable!("wide_panes is present when wide is true");
+            };
             (
                 hero_panel,
                 right_panel,
@@ -409,8 +411,6 @@ impl App {
             (Rect::default(), list_area, hero_rows_desired)
         };
         layout.hero_area = hero_area;
-        layout.inline_hero = !wide && hero_rows > 0;
-
         if wide && hero_rows > 0 {
             selected_detail_shell(f, hero_area, hero_rows, focused);
             let content_rect = Rect {
@@ -450,16 +450,16 @@ impl App {
         let hero_rows = if wide {
             hero_rows
         } else {
-            let rows = hero_rows.min(list_area.height.saturating_sub(1));
-            (rows >= HERO_BLOCK_EXTRA_ROWS).then_some(rows).unwrap_or(0)
+            (hero_rows >= HERO_BLOCK_EXTRA_ROWS && hero_rows < list_area.height)
+                .then_some(hero_rows)
+                .unwrap_or(0)
         };
-        layout.inline_hero = !wide && hero_rows > 0;
-
         let visible = list_area.height as usize;
         let packed_cursor_row = packed
             .iter()
             .position(|row| matches!(row, PackedFeedRow::Items(idxs) if idxs.contains(&cursor)))
             .unwrap_or(0);
+        let total_display = inline_display_row_count(packed.len(), packed_cursor_row, hero_rows);
         let (scroll, detail_screen_row) = if !wide && hero_rows > 0 {
             let flow = inline_detail_flow(
                 packed_cursor_row,
@@ -471,107 +471,120 @@ impl App {
             (flow.offset, Some(flow.detail_screen_row))
         } else {
             let lower_bound = packed_cursor_row.saturating_add(1).saturating_sub(visible);
-            let upper_bound = packed_cursor_row.min(packed.len().saturating_sub(visible));
+            let upper_bound = packed_cursor_row.min(total_display.saturating_sub(visible));
             (self.feed_tab.scroll.clamp(lower_bound, upper_bound), None)
         };
         self.feed_tab.scroll = scroll;
-        if !wide && hero_rows > 0 {
-            packed.splice(
-                packed_cursor_row + 1..packed_cursor_row + 1,
-                (0..hero_rows).map(|_| PackedFeedRow::Hero),
-            );
-        }
         let cell_w = library_cell_width(list_area, cols);
         let row_w = list_area.width.saturating_sub(1);
-        let visible_count = packed.len().saturating_sub(scroll).min(visible);
+        let visible_count = total_display.saturating_sub(scroll).min(visible);
         let mut row_map: Vec<Option<usize>> = Vec::with_capacity(list_area.height as usize);
         let entries = self.feed_tab.visible_entries();
         let mut row_y = list_area.y;
 
-        for packed_row in packed.iter().skip(scroll).take(visible) {
+        for display_row in (scroll..total_display).take(visible) {
             if row_y >= list_area.y + list_area.height {
                 break;
             }
-            match packed_row {
-                PackedFeedRow::Hero => row_map.push(None),
-                PackedFeedRow::Spacer => {
-                    f.render_widget(
-                        Paragraph::new(Line::default())
-                            .style(Style::default().bg(palette::SURFACE_BACKDROP)),
-                        Rect {
-                            x: list_area.x,
-                            y: row_y,
-                            width: row_w,
-                            height: 1,
-                        },
-                    );
-                    row_map.push(None);
+            match inline_display_row(packed.len(), packed_cursor_row, hero_rows, display_row)
+                .expect("visible row is within the replacement flow")
+            {
+                InlineDisplayRow::Replacement => {
+                    row_map.push((display_row == packed_cursor_row).then_some(cursor));
                 }
-                PackedFeedRow::Heading(group) => {
-                    f.render_widget(
-                        Paragraph::new(Line::from(vec![
-                            Span::raw(" "),
-                            Span::styled(
-                                group.label(),
-                                Style::default()
-                                    .fg(palette::YELLOW)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                        ]))
-                        .style(Style::default().bg(palette::SURFACE_BACKDROP)),
-                        Rect {
-                            x: list_area.x,
-                            y: row_y,
-                            width: row_w,
-                            height: 1,
-                        },
-                    );
-                    row_map.push(None);
-                }
-                PackedFeedRow::Items(idxs) => {
-                    for (cell_idx, &i) in idxs.iter().enumerate() {
-                        let entry = &entries[i];
-                        let selected = i == cursor;
-                        let cell_x = list_area.x + cell_idx as u16 * (cell_w + LIBRARY_COLUMN_GAP);
-                        render_feed_entry_cell(
-                            f,
-                            entry,
-                            cell_x,
-                            row_y,
-                            cell_w,
-                            selected,
-                            focused,
-                            !selected || wide,
+                InlineDisplayRow::Source(source_row) => match &packed[source_row] {
+                    PackedFeedRow::Spacer => {
+                        f.render_widget(
+                            Paragraph::new(Line::default())
+                                .style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                            Rect {
+                                x: list_area.x,
+                                y: row_y,
+                                width: row_w,
+                                height: 1,
+                            },
                         );
+                        row_map.push(None);
                     }
-                    row_map.push(idxs.first().copied());
-                }
+                    PackedFeedRow::Heading(group) => {
+                        f.render_widget(
+                            Paragraph::new(Line::from(vec![
+                                Span::raw(" "),
+                                Span::styled(
+                                    group.label(),
+                                    Style::default()
+                                        .fg(palette::YELLOW)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
+                            ]))
+                            .style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                            Rect {
+                                x: list_area.x,
+                                y: row_y,
+                                width: row_w,
+                                height: 1,
+                            },
+                        );
+                        row_map.push(None);
+                    }
+                    PackedFeedRow::Items(idxs) => {
+                        for (cell_idx, &i) in idxs.iter().enumerate() {
+                            let entry = &entries[i];
+                            let selected = i == cursor;
+                            let cell_x =
+                                list_area.x + cell_idx as u16 * (cell_w + LIBRARY_COLUMN_GAP);
+                            render_feed_entry_cell(
+                                f,
+                                entry,
+                                cell_x,
+                                row_y,
+                                cell_w,
+                                selected,
+                                focused,
+                                !selected || wide,
+                            );
+                        }
+                        row_map.push(idxs.first().copied());
+                    }
+                },
             }
             row_y += 1;
         }
         row_map.resize(list_area.height as usize, None);
         layout.left_row_map = row_map;
-        layout.left_item_rows = packed
-            .iter()
-            .map(|row| match row {
-                PackedFeedRow::Items(idxs) => idxs.clone(),
-                PackedFeedRow::Hero | PackedFeedRow::Spacer | PackedFeedRow::Heading(_) => {
-                    Vec::new()
+        layout.left_item_rows = (0..total_display)
+            .map(|display_row| {
+                match inline_display_row(packed.len(), packed_cursor_row, hero_rows, display_row)
+                    .expect("display row is within the replacement flow")
+                {
+                    InlineDisplayRow::Replacement => {
+                        if display_row == packed_cursor_row {
+                            vec![cursor]
+                        } else {
+                            Vec::new()
+                        }
+                    }
+                    InlineDisplayRow::Source(source_row) => match &packed[source_row] {
+                        PackedFeedRow::Items(idxs) => idxs.clone(),
+                        PackedFeedRow::Spacer | PackedFeedRow::Heading(_) => Vec::new(),
+                    },
                 }
             })
             .collect();
 
-        if visible_count > 0 && visible_count < packed.len() {
+        if visible_count > 0 && visible_count < total_display {
             render_right_scrollbar_with_viewport(
                 f,
                 list_area,
-                packed.len(),
+                total_display,
                 visible_count,
                 scroll,
                 palette::SCROLLBAR,
             );
         }
-        draw_column_selection_markers(f, list_area, cursor, &layout.left_item_rows, scroll);
+        if wide {
+            draw_column_selection_markers(f, list_area, cursor, &layout.left_item_rows, scroll);
+        }
         if !wide {
             if let Some(detail_screen_row) = detail_screen_row {
                 layout.hero_area = Rect {
@@ -580,6 +593,8 @@ impl App {
                     width: list_area.width,
                     height: hero_rows,
                 };
+                layout.inline_hero_area = layout.hero_area;
+                layout.selected_item_rect = Some(layout.hero_area);
                 selected_detail_shell(f, layout.hero_area, hero_rows, focused);
                 let meta = feed_entry_meta_line(&selected_entry);
                 paint_hero_content(

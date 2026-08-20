@@ -16,7 +16,7 @@ The library list SHALL choose its column count from the width available to the l
 #### Scenario: Inline hero browser
 - **WHEN** a hero-bearing browse surface uses the inline presentation
 - **THEN** its browser SHALL render one column
-- **AND** the selected hero SHALL occupy full-width flow rows below the active item row
+- **AND** the selected hero SHALL replace the active item row as one full-width flow segment
 
 #### Scenario: Wide non-hero list pane
 - **WHEN** a non-hero library list pane reaches the shared breakpoint
@@ -44,7 +44,7 @@ The library list SHALL choose its column count from the width available to the l
 
 ### Requirement: Items flow row-major across columns
 
-The library list SHALL place items in row-major order, so that consecutive items occupy consecutive cells left to right before wrapping to the next row. An item's position SHALL NOT depend on the viewport height.
+The library list SHALL place items in row-major order, so that consecutive items occupy consecutive cells left to right before wrapping to the next row. An item's position SHALL NOT depend on the viewport height. A selected-row replacement SHALL occupy the selected item's flow position and SHALL be budgeted once.
 
 #### Scenario: Row-major placement
 
@@ -77,12 +77,12 @@ The library list SHALL continue to scroll by display rows using a stored scroll 
 
 ### Requirement: Full-width rows span all columns
 
-Letter headers, the inline movie banner, and inline series detail SHALL render as full-width rows spanning every column. Detail fillers SHALL be inserted below the item row that contains the cursor, and SHALL NOT displace the item sharing that row.
+Letter headers, the inline movie banner, and inline series detail SHALL render as full-width rows spanning every column. Selected detail SHALL replace the item row that contains the cursor and SHALL NOT leave a duplicate or blank selected row before the detail.
 
 #### Scenario: Selected item with inline banner
 
 - **WHEN** an item with an inline banner is selected in two-column mode
-- **THEN** the banner SHALL render as full-width rows immediately below the row containing that item, and the other item on that row SHALL remain in place
+- **THEN** the banner SHALL render as full-width rows at the selected item's flow position, and the other item on a packed row SHALL remain in place
 
 #### Scenario: Cursor moved to an adjacent item
 

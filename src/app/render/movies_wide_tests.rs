@@ -228,7 +228,7 @@ fn shared_hero_card_keeps_169_artwork_and_empty_field_handling() {
 }
 
 /// Wide Movies renders the pill row at the top of the right rail and a
-/// one-column list below it; narrow Movies keeps legacy top placement.
+/// one-column list below it; narrow Movies uses selected-row replacement.
 #[test]
 fn wide_movies_pills_in_right_rail_and_one_column_list() {
     let mut app = make_movie_app(vec!["Movie 0", "Movie 1", "Movie 2"]);

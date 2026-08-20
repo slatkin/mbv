@@ -346,19 +346,27 @@ The app-wide layout state, one of Mini, Normal, or Wide:
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
 **Inline hero**:
-The selected item's detail rendered immediately after its active media row in
-Normal or otherwise non-wide geometry. It is part of the single-column scrolling
-browser; hero-only rows are inert, while existing explicit child targets remain
-interactive. If the minimum row and minimum detail cannot fit, detail is
-suppressed.
-_Avoid_: pinned top placement, stacked hero
+The selected item's detail replacing its ordinary active media row in Normal or
+otherwise non-wide geometry. It is one variable-height segment of the
+single-column scrolling browser and owns the selected parent geometry: a single
+click focuses it and a double click performs normal item activation. Existing
+explicit child targets take precedence. If the replacement cannot fit, the
+ordinary selected row and its normal interaction are restored.
+_Avoid_: separate detail block, stacked hero
+
+**Selected-row replacement**:
+The inline presentation rule in which an item's selected ordinary row is replaced
+by its variable-height detail block, without a blank legacy row before the block.
+Scrolling budgets the replacement once and hit geometry has one parent target plus
+any explicit child targets.
+_Avoid_: detached detail, repeated row
 
 **Hero-on-left**:
 The sole Wide arrangement for hero-bearing browse surfaces: selected detail
 beside a single-column browser in the right rail. It applies only when the
 shared width breakpoint and minimum-height guard are satisfied; otherwise the
 surface uses Inline hero.
-_Avoid_: pinned top placement, split, side-by-side, hero-on-side
+_Avoid_: separate detail block, split, side-by-side, hero-on-side
 
 **Sidebar**:
 An anchored, full-height destination rendered at a fixed width from one edge

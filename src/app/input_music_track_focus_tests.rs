@@ -60,6 +60,18 @@ fn mouse_click_on_selected_album_folder_row_does_not_open_track_mode() {
 }
 
 #[test]
+fn narrow_music_track_target_precedes_parent_hero() {
+    let mut app = make_music_album_app();
+    push_tracks(&mut app, "album-1", 2);
+    app.layout.main.browse_destination = Some(TabSelection::EmbyLibrary(0));
+    app.layout.main.hero_area = Rect::new(10, 5, 29, 8);
+    app.layout.main.wide_music_track_hitmap = vec![(Rect::new(12, 8, 20, 1), 1)];
+
+    assert!(app.click_set_cursor(13, 8));
+    assert_eq!(app.libs[0].album_track_focus, Some(1));
+}
+
+#[test]
 fn refocus_click_after_focus_gained_is_suppressed() {
     let mut app = make_music_album_app();
     app.note_focus_gained();
