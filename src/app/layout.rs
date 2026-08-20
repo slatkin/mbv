@@ -96,6 +96,12 @@ pub(crate) struct LayoutMain {
     pub audiobookshelf_episode_rows: Vec<(Rect, usize)>,
     pub cursor_screen_y: Option<u16>,
     pub queue_cursor_screen_y: Option<u16>,
+    /// Screen rect of the selected row/cell in the library panel. The outer
+    /// selectable renderer owns this; nested detail/hero renderers never
+    /// overwrite it. Consumed by the context menu's keyboard anchor.
+    pub selected_item_rect: Option<Rect>,
+    /// Screen rect of the selected queue row. Owned by the queue renderer.
+    pub queue_selected_item_rect: Option<Rect>,
     pub selector_tabs: Vec<(Rect, usize)>,
     pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
     /// Per-track hit targets for the wide Music left pane. Each entry is

@@ -339,8 +339,6 @@ impl App {
             return;
         }
 
-        layout.cursor_screen_y = Some(area.y);
-
         let truncate_overview =
             self.is_home_video_view(lib_idx) || self.is_podcast_library(lib_idx);
         let content =

@@ -1,6 +1,7 @@
 use super::super::ui_util::*;
 use super::list_rows::{
-    draw_column_selection_markers, focused_or_subtle, item_cell_spans, DisplayRow, ListRenderCtx,
+    draw_column_selection_markers, focused_or_subtle, item_cell_spans, selected_cell_rect,
+    DisplayRow, ListRenderCtx,
 };
 use super::{effective_sort_str, letter_bucket, LetterFilter};
 use crate::app::layout::LayoutMain;
@@ -221,6 +222,15 @@ impl App {
         state.select(Some(display_cursor.saturating_sub(offset)));
         layout.cursor_screen_y =
             Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
+        layout.selected_item_rect = selected_cell_rect(
+            content_area,
+            cursor,
+            &layout.left_item_rows,
+            offset,
+            cols,
+            cell_w as u16,
+            LIBRARY_COLUMN_GAP,
+        );
 
         if hero_rows > 0 {
             layout.hero_area = Rect {

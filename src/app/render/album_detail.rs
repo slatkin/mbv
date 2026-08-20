@@ -91,7 +91,7 @@ impl App {
         flush_left: bool,
         show_hint: bool,
         art_reserved_w: u16,
-        layout: &mut LayoutMain,
+        _layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;
@@ -345,8 +345,6 @@ impl App {
         .column_spacing(1)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);
-        layout.cursor_screen_y =
-            Some(table_area.y + (cursor.saturating_sub(state.offset())) as u16);
 
         let visible_rows = table_area.height as usize;
         if !selected_region_gutter && n > visible_rows {

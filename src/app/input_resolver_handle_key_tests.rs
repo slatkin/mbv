@@ -189,8 +189,7 @@ fn next_up_confirm_no_dismisses_via_handle_key() {
 
 fn test_empty_context_menu() -> crate::app::ContextMenu {
     crate::app::ContextMenu {
-        x: 0,
-        y: 0,
+        anchor: crate::app::ContextMenuAnchor::Pointer { x: 0, y: 0 },
         entries: Vec::new(),
         cursor: 0,
     }

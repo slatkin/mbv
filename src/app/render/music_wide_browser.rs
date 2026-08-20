@@ -139,6 +139,12 @@ impl App {
                     let selected = *idx == cursor;
                     if selected {
                         layout.cursor_screen_y = Some(browser_area.y + screen_y);
+                        layout.selected_item_rect = Some(Rect {
+                            x: browser_area.x,
+                            y: browser_area.y + screen_y,
+                            width: browser_area.width,
+                            height: 1,
+                        });
                     }
                     if selected && right_focused {
                         self.render_wide_selected_album_row(

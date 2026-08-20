@@ -1,4 +1,6 @@
-use crate::app::{App, ContextAction, ContextMenu, ContextMenuEntry, PanelFocus, TabSelection};
+use crate::app::{
+    App, ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry, PanelFocus, TabSelection,
+};
 
 impl App {
     fn push_context_action(
@@ -172,10 +174,12 @@ impl App {
             return;
         }
 
-        let (x, y) = self.context_menu_spawn_point();
+        let anchor = match self.effective_panel_focus() {
+            PanelFocus::Library => ContextMenuAnchor::SelectedItem(PanelFocus::Library),
+            PanelFocus::Queue => ContextMenuAnchor::SelectedItem(PanelFocus::Queue),
+        };
         self.context_menu = Some(ContextMenu {
-            x,
-            y,
+            anchor,
             cursor: ContextMenu::first_selectable(&entries),
             entries,
         });
@@ -184,38 +188,7 @@ impl App {
     pub(super) fn open_context_menu_at(&mut self, x: u16, y: u16) {
         self.open_context_menu();
         if let Some(ref mut menu) = self.context_menu {
-            menu.x = x;
-            menu.y = y;
+            menu.anchor = ContextMenuAnchor::Pointer { x, y };
         }
-    }
-
-    fn context_menu_spawn_point(&self) -> (u16, u16) {
-        match self.effective_panel_focus() {
-            PanelFocus::Library => {
-                let area = self.layout.main.left_area;
-                if area.width > 0 {
-                    let y = self.layout.main.cursor_screen_y.unwrap_or(area.y);
-                    let x = area.x + 2;
-                    // Avoid inline image overlap (detail/episode poster).
-                    if let Some(img) = self.layout.main.inline_image_rect {
-                        if y >= img.y && y < img.y + img.height {
-                            let below = img.y + img.height;
-                            if below < area.y + area.height {
-                                return (x, below);
-                            }
-                        }
-                    }
-                    return (x, y);
-                }
-            }
-            PanelFocus::Queue => {
-                let area = self.layout.main.queue_area;
-                if area.width > 0 {
-                    let y = self.layout.main.queue_cursor_screen_y.unwrap_or(area.y);
-                    return (area.x + 2, y);
-                }
-            }
-        }
-        (4, 4)
     }
 }

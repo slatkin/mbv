@@ -279,6 +279,7 @@ impl App {
         layout: &mut LayoutMain,
     ) {
         layout.queue_cursor_screen_y = None;
+        layout.queue_selected_item_rect = None;
         layout.queue_area = area;
 
         if area.height < 1 {
@@ -326,6 +327,12 @@ impl App {
         let offset = self.queue_scroll;
         layout.queue_cursor_screen_y =
             Some(area.y + (cursor_row.saturating_sub(self.queue_scroll)) as u16);
+        layout.queue_selected_item_rect = Some(Rect {
+            x: area.x,
+            y: area.y + (cursor_row.saturating_sub(self.queue_scroll)) as u16,
+            width: area.width,
+            height: 1,
+        });
 
         let has_sb = total > visible; // column always reserved when scrollbar would appear
         let need_sb = has_sb && focused; // scrollbar only drawn when focused

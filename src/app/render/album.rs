@@ -1,7 +1,7 @@
 use super::album_art::{INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS};
 use super::album_plan::{GroupedAlbumDisplayRow, HeaderFocusCtx};
 use super::album_rows::AlbumRowCtx;
-use super::list_rows::draw_column_selection_markers;
+use super::list_rows::{draw_column_selection_markers, selected_cell_rect};
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use ratatui::layout::*;
@@ -220,6 +220,19 @@ impl App {
                     layout.cursor_screen_y = Some(area.y + (cursor_screen - screen_offset) as u16);
                 }
             }
+            // Authoritative selected-cell rect (two-column packed cells use
+            // `cell_w = area.width / cols`; the last column takes the rest).
+            let cn = cols.max(1) as usize;
+            let cw = area.width / cn as u16;
+            layout.selected_item_rect = selected_cell_rect(
+                area,
+                cursor,
+                &layout.left_item_rows,
+                screen_offset,
+                cn,
+                cw,
+                0,
+            );
         }
         // Visible-slice row map and targets indexed by screen row
         let vs = visible.min(sr.len().saturating_sub(screen_offset));

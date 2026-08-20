@@ -10,34 +10,65 @@ of one another and a new screen inherits a known arrangement without being indiv
 
 ### Requirement: The right panel has exactly two arrangements
 
-The right panel SHALL present its content in one of two arrangements. Hero-on-top places the hero
+The right panel SHALL assign each screen one of two wide arrangements. Hero-on-top places the hero
 above the list. Hero-on-left places the hero beside the list, with the list in a single column.
-Narrow presentation SHALL be hero-on-top with a single list column; it SHALL NOT be a third
-arrangement. These arrangements are a property of the right panel and are independent of Panel mode.
+Below the shared breakpoint, every library browse screen SHALL use the standard narrow one-column
+presentation: the selected item's hero SHALL be rendered inline in the scrolling list at its active
+row. Narrow library presentation SHALL NOT pin the hero in a separate area above the list, and SHALL
+NOT be a per-library arrangement exception. Non-library screens retain their existing narrow
+presentation.
+
+#### Scenario: A library enters the narrow presentation
+
+- **WHEN** a library browse screen's available width falls below the shared breakpoint
+- **THEN** it renders one list column
+- **AND** the selected item's hero renders inline in the list at the active row
+- **AND** the hero does not reserve a separate area above the list
+
+#### Scenario: A wide hero-on-top screen crosses the breakpoint
+
+- **WHEN** a hero-on-top library screen's available width crosses below the breakpoint
+- **THEN** its wide arrangement assignment remains hero-on-top
+- **AND** its narrow presentation is the shared inline-hero one-column presentation
 
 #### Scenario: A hero-on-top screen crosses the breakpoint
 
 - **WHEN** a hero-on-top screen's available width crosses the breakpoint
-- **THEN** its arrangement does not change
-- **AND** only its list column count changes between one and two
+- **THEN** its wide arrangement does not change
+- **AND** its narrow library presentation uses one inline-hero column when it is a library browse
+  screen
+
+#### Scenario: A wide hero-on-left screen falls below the breakpoint
+
+- **WHEN** a hero-on-left library screen's available width falls below the breakpoint
+- **THEN** its wide arrangement assignment remains hero-on-left
+- **AND** it renders the shared inline-hero one-column presentation
 
 #### Scenario: A hero-on-left screen falls below the breakpoint
 
 - **WHEN** a hero-on-left screen's available width falls below the breakpoint
-- **THEN** it renders as hero-on-top with a single list column
+- **THEN** a library browse screen renders the shared inline-hero presentation with a single list
+  column
 
 #### Scenario: Panel mode changes
 
 - **WHEN** the user cycles Panel mode
-- **THEN** the arrangement is recomputed from the width the right panel is left with, and is
-  otherwise unaffected by which Panel mode is active
+- **THEN** the presentation is recomputed from the width the right panel is left with
+- **AND** the selected wide arrangement or standard narrow presentation is otherwise unaffected
 
 ### Requirement: Each screen is assigned one wide arrangement
 
-Every right-panel screen SHALL be assigned exactly one wide arrangement. Movies, TV shows, podcasts,
-feeds, and home videos SHALL use hero-on-top except that the dedicated Movies library SHALL use
-hero-on-left. Home, music, and audiobooks SHALL use hero-on-left. No right-panel screen SHALL be
-without an assignment.
+Every right-panel screen SHALL be assigned exactly one wide arrangement. TV shows and the dedicated
+Movies library SHALL use hero-on-left. Podcasts, feeds, and home videos SHALL use hero-on-top.
+Home, music, and audiobooks SHALL use hero-on-left. No right-panel screen SHALL be without an
+assignment.
+
+#### Scenario: Wide TV shows has an interactive left hero
+
+- **WHEN** the TV shows library is displayed at or above the shared breakpoint
+- **THEN** it renders the hero-on-left arrangement
+- **AND** the selected Series detail, season pills, and persistent episode preview are on the left
+- **AND** TV letter-range pills and the one-column Series list are in the right rail
 
 #### Scenario: Movies is displayed at a wide width
 
@@ -46,6 +77,18 @@ without an assignment.
 - **AND** the selected-media hero is on the left
 - **AND** the letter-range pills and one-column Movies list are in the right rail
 
+#### Scenario: Wide Movies has its selected-media hero
+
+- **WHEN** the dedicated Movies library is displayed at or above the shared breakpoint
+- **THEN** it renders the hero-on-left arrangement
+- **AND** the selected-media hero is on the left
+- **AND** the letter-range pills and one-column Movies list are in the right rail
+
+#### Scenario: TV shows falls below the breakpoint
+
+- **WHEN** the TV shows library's available width falls below the shared breakpoint
+- **THEN** it falls back to hero-on-top with a single list column
+
 #### Scenario: Movies falls below the shared breakpoint
 
 - **WHEN** the Movies library's available width falls below the shared breakpoint
@@ -53,12 +96,12 @@ without an assignment.
 
 #### Scenario: Feeds is displayed at a wide width
 
-- **WHEN** the feeds screen is displayed at or above the breakpoint
+- **WHEN** the feeds screen is displayed at or above the shared breakpoint
 - **THEN** it renders the hero-on-top arrangement with a two-column list
 
 #### Scenario: Home videos is displayed at a wide width
 
-- **WHEN** the home videos screen is displayed at or above the breakpoint
+- **WHEN** the home videos screen is displayed at or above the shared breakpoint
 - **THEN** it renders the hero-on-top arrangement with a two-column list
 
 #### Scenario: Audiobooks is displayed at a wide width
@@ -88,14 +131,28 @@ part of that screen's arrangement.
 
 The hero-on-left arrangement SHALL present up to two panes, of which at most one is focused, and
 only while the right panel itself is focused. A screen with a read-only hero pane, such as Home or
-the wide Movies library, SHALL expose only its right-hand list as focusable content. Its hero SHALL
-remain a projection of the selected list item and SHALL NOT receive keyboard focus or activation.
+the wide Movies library, SHALL expose only its right-hand list as focusable content. The wide TV
+shows library SHALL expose the right-hand Series list and the left-hand episode workspace as
+focusable content. While Series browsing is active, the left pane SHALL remain a projection of the
+selected Series; when episode selection is active, the left pane SHALL receive focus.
 
 #### Scenario: Wide Movies has Library focus
 
 - **WHEN** the wide Movies library is displayed and the Library panel has focus
 - **THEN** the right-hand Movies list is the focused pane
 - **AND** the left selected-media hero remains read-only and does not become a second focus target
+
+#### Scenario: Wide TV shows has Series-list focus
+
+- **WHEN** the wide TV shows library is displayed and episode selection is inactive
+- **THEN** the right-hand Series list is the focused pane
+- **AND** the left Series and episode workspace renders as an unfocused preview
+
+#### Scenario: Wide TV shows has episode focus
+
+- **WHEN** episode selection is active in the wide TV shows library
+- **THEN** the left-hand episode workspace is the focused pane
+- **AND** the right-hand Series list renders its unfocused treatment
 
 #### Scenario: Focus moves between panes
 

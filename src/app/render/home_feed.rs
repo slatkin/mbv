@@ -154,6 +154,12 @@ impl App {
             let selected = item_idx == current_pos;
             if selected {
                 layout.cursor_screen_y = Some(row_y);
+                layout.selected_item_rect = Some(Rect {
+                    x: list_area.x,
+                    y: row_y,
+                    width: text_w as u16,
+                    height: item_h,
+                });
             }
             render_home_video_item(f, item, row_y, item_h, list_area, text_w, selected, focused);
             if selected {

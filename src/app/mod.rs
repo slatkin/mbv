@@ -106,8 +106,8 @@ use self::types_browse::{
 };
 use self::types_confirm::{ConfirmAction, ConfirmModal};
 use self::types_context_menu::{
-    ContextAction, ContextMenu, ContextMenuEntry, LibraryRoutePopup, LibraryRouteStage,
-    MultiSelectKind, MultiSelectPopup,
+    ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
+    LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
 };
 use self::types_daemon_lost::DaemonLostModal;
 use self::types_events::{LibEvent, ReconciliationCommand, SessionEvent};

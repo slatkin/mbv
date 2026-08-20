@@ -197,7 +197,6 @@ impl App {
                     Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
                     row_area,
                 );
-                layout.cursor_screen_y = Some(row_area.y);
             }
             let marker = super::selection_marker(selected, super::MarkerEdge::Left);
             let title = trunc_str(&book.title, area.width.saturating_sub(2) as usize);

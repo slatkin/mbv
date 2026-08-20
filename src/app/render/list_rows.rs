@@ -168,6 +168,38 @@ pub(super) fn selection_marker(active: bool, edge: MarkerEdge) -> Span<'static> 
     Span::styled(glyph, Style::default().fg(palette::ACCENT))
 }
 
+/// The screen rect of the selected cell in a column-aware list, derived from
+/// the same `item_rows`/`row_offset` inputs `draw_column_selection_markers`
+/// consumes plus the cell-width/column-gap geometry the renderer already
+/// computed. Returns `None` when the cursor isn't on screen (e.g. it sits in
+/// a filtered-out bucket).
+pub(super) fn selected_cell_rect(
+    content_area: Rect,
+    cursor: usize,
+    item_rows: &[Vec<usize>],
+    row_offset: usize,
+    cols: usize,
+    cell_width: u16,
+    column_gap: u16,
+) -> Option<Rect> {
+    let cursor_row = item_rows.iter().position(|row| row.contains(&cursor))?;
+    let row_idx = cursor_row.checked_sub(row_offset)?;
+    let col_in_row = item_rows[cursor_row]
+        .iter()
+        .position(|&idx| idx == cursor)
+        .unwrap_or(0);
+    let col = col_in_row.min(cols.saturating_sub(1));
+    let cell_x = content_area
+        .x
+        .saturating_add(col as u16 * cell_width.saturating_add(column_gap));
+    Some(Rect {
+        x: cell_x,
+        y: content_area.y + row_idx as u16,
+        width: cell_width,
+        height: 1,
+    })
+}
+
 /// Draws the library list's column selection marker after the list has
 /// rendered, at the panel's outer edge: the left edge in single-column
 /// mode or for a left-column selection, the right edge for a right-column

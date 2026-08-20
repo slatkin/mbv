@@ -610,7 +610,14 @@ impl App {
                 // Update cursor_screen_y for the focused track.
                 if let Some(cursor) = track_cursor {
                     if cursor >= scroll && cursor < scroll + visible {
-                        layout.cursor_screen_y = Some(list_area.y + (cursor - scroll) as u16);
+                        let cy = list_area.y + (cursor - scroll) as u16;
+                        layout.cursor_screen_y = Some(cy);
+                        layout.selected_item_rect = Some(Rect {
+                            x: list_area.x,
+                            y: cy,
+                            width: list_area.width,
+                            height: 1,
+                        });
                     }
                 }
             }

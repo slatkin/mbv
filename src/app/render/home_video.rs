@@ -185,6 +185,5 @@ impl App {
             false,
             layout,
         );
-        layout.cursor_screen_y = Some(row_y + 1);
     }
 }

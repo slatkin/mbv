@@ -593,7 +593,6 @@ impl App {
             .collect();
         layout.left_item_rows = rows;
         layout.left_screen_offset = scroll;
-        layout.cursor_screen_y = Some(area.y + cursor_row.saturating_sub(scroll) as u16);
         f.render_widget(List::new(items), area);
         if focused && layout.left_item_rows.len() > visible {
             super::render_right_scrollbar(

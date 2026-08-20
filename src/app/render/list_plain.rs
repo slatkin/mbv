@@ -1,6 +1,7 @@
 use super::super::ui_util::*;
 use super::list_rows::{
-    draw_column_selection_markers, focused_or_subtle, item_cell_spans, DisplayRow, ListRenderCtx,
+    draw_column_selection_markers, focused_or_subtle, item_cell_spans, selected_cell_rect,
+    DisplayRow, ListRenderCtx,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
@@ -163,6 +164,15 @@ impl App {
         state.select(Some(display_cursor.saturating_sub(offset)));
         layout.cursor_screen_y =
             Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
+        layout.selected_item_rect = selected_cell_rect(
+            content_area,
+            cursor,
+            &layout.left_item_rows,
+            offset,
+            cols,
+            cell_w as u16,
+            LIBRARY_COLUMN_GAP,
+        );
         f.render_stateful_widget(
             List::new(list_items).highlight_style(Style::default()),
             content_area,

@@ -70,6 +70,7 @@ pub(super) fn render_home_list_rows(
                 let selected_row = *flat_idx == cursor;
                 if selected_row {
                     layout.cursor_screen_y = Some(sy);
+                    layout.selected_item_rect = Some(row_rect);
                 }
 
                 if selected_row && focused {
