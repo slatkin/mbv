@@ -38,6 +38,17 @@ impl App {
             }
             ContextMenuAnchor::Pointer { .. } => {
                 let panel = match self.effective_panel_focus() {
+                    PanelFocus::Library if layout.main.is_wide_tv_active() => {
+                        let pos = match &menu.anchor {
+                            ContextMenuAnchor::Pointer { x, y } => (*x, *y).into(),
+                            ContextMenuAnchor::SelectedItem(_) => unreachable!(),
+                        };
+                        if layout.main.tv_wide_left_area.contains(pos) {
+                            layout.main.tv_wide_left_area
+                        } else {
+                            layout.main.tv_wide_right_area
+                        }
+                    }
                     PanelFocus::Library => layout.main.left_area,
                     PanelFocus::Queue => layout.main.queue_area,
                 };
@@ -79,9 +90,9 @@ impl App {
             .collect();
         let inner = Rect {
             x,
-            y,
+            y: y.saturating_add(1),
             width,
-            height,
+            height: menu.entries.len() as u16,
         };
         f.render_widget(List::new(list_items), inner);
     }

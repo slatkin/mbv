@@ -77,3 +77,16 @@ fn pointer_placement_stays_click_anchored_not_following_selection() {
         "pointer placement must stay click-anchored and ignore the selected item: {a:?} != {b:?}"
     );
 }
+
+#[test]
+fn context_menu_entries_render_below_the_reserved_top_row() {
+    let mut app = library_app();
+    app.open_context_menu();
+    let backend = TestBackend::new(100, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| app.render(f)).unwrap();
+
+    let rect = app.layout.context_menu_rect.unwrap();
+    let first_label = terminal.backend().buffer().get(rect.x + 1, rect.y + 1);
+    assert_eq!(first_label.symbol(), "P");
+}
