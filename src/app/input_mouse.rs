@@ -216,7 +216,9 @@ impl App {
             // library-row activation, so it can't drift from Enter's
             // behavior or from the app-wide "single click only focuses"
             // convention.
-            if self.layout.main.hero_area.contains((col, row).into()) {
+            if !self.layout.main.inline_hero
+                && self.layout.main.hero_area.contains((col, row).into())
+            {
                 // The hero is a browse surface for the two Services that can
                 // publish it (Emby and Audiobookshelf); match positively
                 // rather than excluding Home/Feeds.

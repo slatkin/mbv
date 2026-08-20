@@ -202,6 +202,7 @@ impl App {
                 stored_scroll,
                 cols: 1,
                 focused,
+                hero_rows: 0,
             };
             if use_letter_groups {
                 self.render_letter_grouped_rows(

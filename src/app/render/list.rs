@@ -118,13 +118,9 @@ impl App {
         } else {
             None
         };
-        let selected_album_item = if selected_series_item.is_none() {
-            self.tab
-                .emby_library_index()
-                .and_then(|lib_idx| self.selected_album_hero_item(lib_idx))
-        } else {
-            None
-        };
+        // Grouped album browsing renders its own inline detail block; it does
+        // not use the generic movie/Series hero painter below.
+        let selected_album_item: Option<mbv_core::api::EmbyItem> = None;
 
         // Column count for the two-column list layout, derived from the list
         // pane width -- the content area this renderer already receives,
@@ -157,7 +153,7 @@ impl App {
         // hero-capable content (folders, music, non-hero collections) --
         // the list then takes the whole remaining area.
         //
-        let hero_rows: u16 = if self.tab.emby_library_index().is_some() {
+        let inline_hero_rows: u16 = if self.tab.emby_library_index().is_some() {
             let lib_idx = self.tab.emby_library_index().unwrap();
             if let Some(item) = &selected_movie_item {
                 // Actual content rows the banner will paint (meta line,
@@ -247,6 +243,10 @@ impl App {
         } else {
             0
         };
+        let inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
+            && inline_hero_rows + 1 <= content_area.height)
+            .then_some(inline_hero_rows)
+            .unwrap_or(0);
 
         // Pill row below the hero: letter-range pills for large non-music
         // libraries, or the music-group selector while browsing a group's
@@ -266,11 +266,12 @@ impl App {
         // the hero; the search box just takes precedence while filtering, but
         // still needs that slot reserved.
         let show_pills = show_letter_pills || show_music_pills || search_active;
-        let hero_layout = top_hero_layout(content_area, hero_rows, show_pills);
+        // Narrow library heroes belong to the scrolling list. Keep the shared
+        // pill geometry, but reserve no separate top hero area.
+        let hero_layout = top_hero_layout(content_area, 0, show_pills);
         let hero_area = hero_layout.hero_area;
         let pills_area = hero_layout.pills_area;
         let list_area = hero_layout.list_area;
-        let hero_rows = hero_layout.hero_rows;
 
         if show_letter_pills && !search_active {
             let lib_idx = self.tab.emby_library_index().unwrap();
@@ -408,7 +409,7 @@ impl App {
         layout.left_area = list_area;
 
         if n == 0 {
-            layout.hero_area = hero_area;
+            layout.hero_area = Rect::default();
             let msg = if self.tab.emby_library_index().is_some() {
                 let lib_idx = self.tab.emby_library_index().unwrap();
                 if self.is_music_group_view(lib_idx) {
@@ -459,31 +460,37 @@ impl App {
             // stays put even while a letter-pill switch has the slice
             // cleared and loading (see `top_hero_level` above), then show
             // the status message in the list area below it.
-            if hero_rows > 0 {
-                hero_block_shell(f, hero_area, hero_rows, focused);
+            if inline_hero_rows > 0 {
+                hero_block_shell(f, hero_area, inline_hero_rows, focused);
             }
             super::render_placeholder(f, list_area, msg);
             return;
         }
 
-        layout.hero_area = hero_area;
+        layout.hero_area = Rect::default();
+        layout.inline_hero = inline_hero_rows > 0;
 
         let final_offset: usize;
 
         if show_grouped && show_music_pills {
-            // Music-group view: route through the exact same one-column
-            // grouped-album browser the wide hero-on-left layout uses for
-            // its right pane (`render_wide_right_album_browser`), rather
-            // than the hero-on-top-only packed/wrapped row renderer below
-            // -- narrow's own scroll/selection handling had drifted from
-            // wide's since the two were unified.
+            // Narrow music groups use the grouped renderer's existing inline
+            // album detail. The wide right-rail browser deliberately has no
+            // detail block and must not be reused here.
             let lib_idx = self.tab.emby_library_index().unwrap();
-            self.render_wide_right_album_browser(f, list_area, list_area, lib_idx, focused, layout);
-            final_offset = self.libs[lib_idx]
-                .nav_stack
-                .last()
-                .map(|lvl| lvl.scroll)
-                .unwrap_or(0);
+            final_offset = self.render_grouped_album_rows(
+                f,
+                list_area,
+                lib_idx,
+                &items,
+                AlbumRowsCursorCtx {
+                    cursor,
+                    stored_scroll,
+                },
+                focused,
+                false,
+                1,
+                layout,
+            )
         } else if show_grouped {
             let lib_idx = self.tab.emby_library_index().unwrap();
             final_offset = self.render_grouped_album_rows(
@@ -496,7 +503,7 @@ impl App {
                     stored_scroll,
                 },
                 focused,
-                true, // hero_handles_detail: the hero panel renders the detail
+                false, // render the selected album detail inline in narrow mode
                 cols as u16,
                 layout,
             );
@@ -508,6 +515,7 @@ impl App {
                 stored_scroll,
                 cols,
                 focused,
+                hero_rows: inline_hero_rows,
             };
             final_offset = self.render_letter_grouped_rows(
                 f,
@@ -524,6 +532,7 @@ impl App {
                 stored_scroll,
                 cols,
                 focused,
+                hero_rows: inline_hero_rows,
             };
             final_offset = self.render_plain_rows(f, ctx, layout);
         }
@@ -533,19 +542,21 @@ impl App {
         // content offset 2 rows down past the top border + top padding. The
         // row renderer set `cursor_screen_y` to the selected list row; the
         // hero paint doesn't touch it.
-        if hero_rows > 0 {
-            hero_block_shell(f, hero_area, hero_rows, focused);
+        if inline_hero_rows > 0 {
+            let saved_cursor_y = layout.cursor_screen_y;
+            hero_block_shell(f, layout.hero_area, inline_hero_rows, focused);
             // Content, offset 2 rows down past the top border + top
             // padding, and inset 2 cols on each side like music/homevideo's
             // selected blocks; the banner layout is a pure function of the
             // panel width, so this paints the same content as before.
             let content_rect = Rect {
-                x: hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                y: hero_area.y + 2,
-                width: hero_area
+                x: layout.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
+                y: layout.hero_area.y + 2,
+                width: layout
+                    .hero_area
                     .width
                     .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-                height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
+                height: inline_hero_rows - HERO_BLOCK_EXTRA_ROWS,
             };
             let lib_idx = self.tab.emby_library_index().unwrap();
             // Same movie/Series branch as the row spacing above: a selected
@@ -554,16 +565,9 @@ impl App {
             // letter-pill switch has the slice loading), the panel stays as
             // its empty placeholder -- reserved but not painted over.
             if selected_movie_item.is_some() {
-                self.render_compact_detail(f, content_rect, lib_idx, focused, cols > 1, layout);
+                self.render_compact_detail(f, content_rect, lib_idx, focused, true, layout);
             } else if selected_series_item.is_some() {
-                self.render_series_inline_detail(
-                    f,
-                    content_rect,
-                    lib_idx,
-                    focused,
-                    cols > 1,
-                    layout,
-                );
+                self.render_series_inline_detail(f, content_rect, lib_idx, focused, true, layout);
             } else if let Some(item) = &selected_album_item {
                 // Album hero: art + optional tracks + metadata, mirroring the
                 // movie/series branch -- reserved and painted here instead of
@@ -677,6 +681,7 @@ impl App {
                     self.render_inline_album_art(f, art_rect, item, layout);
                 }
             }
+            layout.cursor_screen_y = saved_cursor_y;
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.

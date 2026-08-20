@@ -46,6 +46,8 @@ fn make_movie_list_app(titles: Vec<&str>) -> App {
             m.id = format!("movie-{i}");
             if title.contains("Selected") {
                 m.overview = "This is the compact movie banner overview text.".into();
+                m.production_year = 2024;
+                m.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
             }
             m
         })
@@ -306,35 +308,51 @@ fn list_area_renders_the_same_per_cell_content_at_one_and_two_columns() {
 }
 
 #[test]
-fn hero_paints_above_list_area_in_two_column_mode() {
-    // The dedicated Movies library uses hero-on-left at wide widths; its
-    // hero-on-top fallback (this arrangement) is the below-breakpoint path.
+fn hero_paints_inline_in_two_column_mode() {
     let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 81, 40);
+    let term = render_list_term(&mut app, &mut layout, 81, 40);
+    let output = buffer_to_string(&term);
 
     assert!(layout.hero_area.height > 0, "hero should be shown");
-    assert_eq!(
-        layout.hero_area.y, 0,
-        "hero_area starts at the top of the content area"
+    assert!(
+        layout.hero_area.y > layout.left_area.y,
+        "inline hero follows the active media row"
     );
     assert!(
-        layout.left_area.y > layout.hero_area.y + layout.hero_area.height,
-        "list_area sits below hero_area, separated by at least one blank row"
+        layout.hero_area.y + layout.hero_area.height <= 40,
+        "inline hero remains inside the scrolling list"
+    );
+    let active_row = layout.cursor_screen_y.unwrap() as usize;
+    assert!(
+        !output
+            .lines()
+            .nth(active_row)
+            .unwrap()
+            .contains("Movie 1 Selected")
+            && !output.lines().nth(active_row).unwrap().contains("2024")
+            && !output.lines().nth(active_row).unwrap().contains("1h"),
+        "the active row content belongs to the inline hero: row={active_row} line={:?}",
+        output.lines().nth(active_row).unwrap()
+    );
+    assert!(
+        output
+            .lines()
+            .skip(layout.hero_area.y as usize)
+            .take(layout.hero_area.height as usize)
+            .any(|line| line.contains("Movie 1 Selected")),
+        "the inline hero contains the selected title"
     );
     assert_eq!(
         layout.left_area.y + layout.left_area.height,
         40,
-        "hero_area, the separator, and list_area together fill the content area"
+        "list area retains the full content height"
     );
 }
 
 #[test]
-fn letter_pills_render_below_hero_and_above_list_area() {
-    // Narrow (below-breakpoint) Movies keeps the hero-on-top pill slot
-    // directly below the hero; the wide Movies right rail is covered in
-    // `movies_wide_tests.rs`.
+fn letter_pills_render_above_inline_list_hero() {
     let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
     // Any captured library total qualifies a top-level, non-music library
@@ -350,21 +368,19 @@ fn letter_pills_render_below_hero_and_above_list_area() {
     );
     let pills_y = layout.selector_tabs[0].0.y;
     assert_eq!(
-        pills_y,
-        layout.hero_area.y + layout.hero_area.height,
-        "pill row sits immediately below the hero's own bottom border, no extra gap"
+        layout.left_area.y,
+        pills_y + 2,
+        "pill row sits above the scrolling list"
     );
     assert!(
-        layout.left_area.y > pills_y,
+        layout.hero_area.y > pills_y,
         "list_area must sit below the pill row"
     );
 }
 
 #[test]
 fn hero_height_is_constant_above_the_image_cap() {
-    // Below the shared breakpoint Movies keeps the hero-on-top fallback; its
-    // height stays bounded by the poster image budget at every width (the
-    // wide hero-on-left card sizes from the shared 16:9 card instead).
+    // The inline hero stays bounded and leaves usable list space.
     for width in [40u16, 60, 81] {
         let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
         app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
@@ -417,9 +433,7 @@ fn hero_sizes_to_content_when_a_movie_is_selected() {
 
 #[test]
 fn hero_stays_reserved_while_the_slice_is_loading() {
-    // A letter-pill switch clears the level's items; the hero placeholder
-    // must stay reserved so the panel doesn't collapse mid-switch. Narrow
-    // Movies (below the breakpoint) keeps this hero-on-top placeholder.
+    // No active media row means there is no inline hero to reserve.
     let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().items.clear();
     app.libs[0].nav_stack.last_mut().unwrap().loading = true;
@@ -427,9 +441,8 @@ fn hero_stays_reserved_while_the_slice_is_loading() {
     let _ = render_list_term(&mut app, &mut layout, 81, 40);
 
     assert_eq!(
-        layout.hero_area.height,
-        super::HERO_PLACEHOLDER_ROWS,
-        "hero stays reserved with empty, loading items"
+        layout.hero_area.height, 0,
+        "hero is suppressed with empty, loading items"
     );
     assert!(
         layout.left_area.height >= 1,

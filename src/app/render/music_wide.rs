@@ -380,6 +380,7 @@ impl App {
                         stored_scroll: s.scroll,
                         cols,
                         focused: right_focused,
+                        hero_rows: 0,
                     },
                     layout,
                 );
