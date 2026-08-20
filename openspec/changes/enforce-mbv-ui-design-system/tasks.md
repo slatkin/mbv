@@ -1,3 +1,8 @@
+> **Prerequisite:** [#584](https://github.com/slatkin/mbv/issues/584) must land
+> before implementation of this change begins. Once it lands, rebase this plan
+> on its all-hero-on-left wide / inline-hero narrow baseline and remove or revise
+> tasks already completed by that prerequisite.
+
 ## 1. Establish The UI Boundary
 
 - [ ] 1.1 Map the current render modules into screen, arrangement, component, theme, and bespoke responsibilities without changing behaviour. Record which surfaces still call `top_hero_layout` or `SelectedBlockBorderStyle::HeroOnTop` directly.
