@@ -135,7 +135,7 @@ impl App {
         let hero_content = HeroContent {
             title: show_title.then_some(title.as_str()),
             meta_line: (!ser_meta.is_empty()).then_some(ser_meta.as_str()),
-            meta_color: palette::SUBTLE,
+            meta_color: palette::MUTED_GREEN,
             show_playing: false,
             unconditional_spacer_after_meta: true,
             lines: &hero_lines,
@@ -296,7 +296,7 @@ impl App {
                         .saturating_sub(SERIES_DETAIL_TRAILING_BLANK_ROWS as u16),
                 };
                 if table_area.height > 0 {
-                    let show_length = table_area.width > 40;
+                    let show_length = table_area.width > 30;
                     let dur_col_w: usize = if show_length { 7 } else { 0 };
                     let title_col_w = (table_area.width as usize)
                         .saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
@@ -310,91 +310,83 @@ impl App {
                     } else {
                         0
                     };
-                    for (i, row) in
-                        episodes
-                            .iter()
-                            .enumerate()
-                            .skip(start)
-                            .take(visible)
-                            .map(|(i, ep)| {
-                                (i, {
-                                    let is_cursor = ep_cursor == Some(i);
-                                    let row_style = if is_cursor && focused {
-                                        Style::default().fg(palette::YELLOW)
-                                    } else if focused {
-                                        Style::default().fg(palette::WHITE)
-                                    } else {
-                                        Style::default().fg(palette::SUBTLE)
-                                    };
-                                    let marker =
-                                        super::selection_marker(is_cursor, super::MarkerEdge::Left);
-                                    let ep_num_w = episodes.len().to_string().len();
-                                    let ep_label = if ep.index_number > 0 {
-                                        format!("{:>ep_num_w$}. ", ep.index_number)
-                                    } else {
-                                        format!("{:>ep_num_w$}. ", i + 1)
-                                    };
-                                    let label_w = ep_label.chars().count();
-                                    let title =
-                                        trunc_str(&ep.name, title_col_w.saturating_sub(label_w));
-                                    let mut title_spans = vec![marker];
-                                    title_spans.push(Span::styled(
-                                        ep_label,
-                                        Style::default().fg(palette::MUTED),
-                                    ));
-                                    title_spans.push(Span::raw(title));
+                    let rows: Vec<Row> = episodes
+                        .iter()
+                        .enumerate()
+                        .skip(start)
+                        .take(visible)
+                        .map(|(i, ep)| {
+                            let is_cursor = ep_cursor == Some(i);
+                            let row_style = if is_cursor && focused {
+                                Style::default().fg(palette::YELLOW)
+                            } else if focused {
+                                Style::default().fg(palette::WHITE)
+                            } else {
+                                Style::default().fg(palette::SUBTLE)
+                            };
+                            let marker =
+                                super::selection_marker(is_cursor, super::MarkerEdge::Left);
+                            let ep_num_w = episodes.len().to_string().len();
+                            let ep_label = if ep.index_number > 0 {
+                                format!("{:>ep_num_w$}. ", ep.index_number)
+                            } else {
+                                format!("{:>ep_num_w$}. ", i + 1)
+                            };
+                            let label_w = ep_label.chars().count();
+                            let title = trunc_str(&ep.name, title_col_w.saturating_sub(label_w));
+                            let mut title_spans = vec![marker];
+                            title_spans
+                                .push(Span::styled(ep_label, Style::default().fg(palette::MUTED)));
+                            title_spans.push(Span::raw(title));
 
-                                    let title_cell = Cell::from(Line::from(title_spans));
-                                    let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
-                                    let length = if len_secs > 0 {
-                                        fmt_duration_approx(len_secs)
-                                    } else {
-                                        "\u{2014}".to_string()
-                                    };
-                                    if show_length {
-                                        Row::new([
-                                            title_cell,
-                                            Cell::from(
-                                                Line::from(length).alignment(Alignment::Right),
-                                            )
-                                            .style(Style::default().fg(palette::MUTED)),
-                                            Cell::from(""),
-                                        ])
-                                        .style(row_style)
-                                    } else {
-                                        Row::new([title_cell, Cell::from(""), Cell::from("")])
-                                            .style(row_style)
-                                    }
-                                })
-                            })
+                            let title_cell = Cell::from(Line::from(title_spans));
+                            let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
+                            let length = if len_secs > 0 {
+                                fmt_duration_approx(len_secs)
+                            } else {
+                                "\u{2014}".to_string()
+                            };
+                            if show_length {
+                                Row::new([
+                                    title_cell,
+                                    Cell::from(Line::from(length).alignment(Alignment::Right))
+                                        .style(Style::default().fg(palette::MUTED)),
+                                    Cell::from(""),
+                                ])
+                                .style(row_style)
+                            } else {
+                                Row::new([title_cell, Cell::from(""), Cell::from("")])
+                                    .style(row_style)
+                            }
+                        })
+                        .collect();
+                    for (visible_idx, (i, _)) in episodes
+                        .iter()
+                        .enumerate()
+                        .skip(start)
+                        .take(visible)
+                        .enumerate()
                     {
                         let row_rect = Rect {
                             x: table_area.x,
-                            y: table_area.y + (i - start) as u16,
+                            y: table_area.y + visible_idx as u16,
                             width: table_area.width,
                             height: 1,
                         };
                         layout.tv_wide_episode_rows.push((row_rect, i));
-                        f.render_widget(
-                            Table::new(
-                                vec![row],
-                                [
-                                    Constraint::Min(10),
-                                    Constraint::Length(if show_length {
-                                        dur_col_w as u16
-                                    } else {
-                                        0
-                                    }),
-                                    Constraint::Length(1),
-                                ],
-                            )
-                            .column_spacing(1),
-                            row_rect,
-                        );
                     }
-
-                    // Rows are painted individually so hit targets follow the
-                    // bounded viewport and selected-episode scroll offset.
+                    f.render_widget(
+                        Table::new(
+                            rows,
+                            [
+                                Constraint::Min(10),
+                                Constraint::Length(if show_length { dur_col_w as u16 } else { 0 }),
+                                Constraint::Length(1),
+                            ],
+                        )
+                        .column_spacing(1),
+                        table_area,
+                    );
                 }
             }
         } else if row < max_y {

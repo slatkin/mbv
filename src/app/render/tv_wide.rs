@@ -1,5 +1,4 @@
 use super::hero_left;
-use super::list_rows::ListRenderCtx;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, PanelFocus};
 use ratatui::layout::Rect;
@@ -64,7 +63,7 @@ impl App {
                 left_area,
                 lib_idx,
                 episode_focused,
-                false,
+                true,
                 true,
                 layout,
             );
@@ -86,7 +85,6 @@ impl App {
             width: list_panel.width.saturating_sub(PANE_PAD_X * 2),
             height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
         };
-        layout.left_area = list_area;
         if list_panel.height > 0 {
             f.render_widget(
                 Block::default().style(palette::resolve_surface_focus(right_focused)),
@@ -94,78 +92,7 @@ impl App {
             );
         }
 
-        let lib = &self.libs[lib_idx];
-        let (items, cursor, scroll, total) = if let Some(search) = &lib.search {
-            let items = search
-                .results
-                .iter()
-                .filter_map(|&idx| search.items.get(idx).cloned())
-                .collect::<Vec<_>>();
-            let total = items.len();
-            (items, search.cursor, search.scroll, total)
-        } else {
-            match lib.nav_stack.last() {
-                Some(level) => (
-                    level.items.clone(),
-                    level.cursor,
-                    level.scroll,
-                    level.total_count,
-                ),
-                None => (Vec::new(), 0, 0, 0),
-            }
-        };
-
-        if items.is_empty() {
-            super::render_placeholder(f, list_area, " (empty)");
-        } else if lib.search.is_none()
-            && (lib.library_total.unwrap_or(total) >= 50
-                || lib
-                    .nav_stack
-                    .last()
-                    .and_then(|level| level.letter_filter.as_ref())
-                    .is_some())
-        {
-            let filter = lib
-                .nav_stack
-                .last()
-                .and_then(|level| level.letter_filter.as_ref())
-                .cloned();
-            let final_scroll = self.render_letter_grouped_rows(
-                f,
-                ListRenderCtx {
-                    content_area: list_area,
-                    items: &items,
-                    cursor,
-                    stored_scroll: scroll,
-                    cols: 1,
-                    focused: right_focused,
-                },
-                filter,
-                lib.library_total.unwrap_or(total),
-                layout,
-            );
-            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                level.scroll = final_scroll;
-            }
-        } else {
-            let final_scroll = self.render_plain_rows(
-                f,
-                ListRenderCtx {
-                    content_area: list_area,
-                    items: &items,
-                    cursor,
-                    stored_scroll: scroll,
-                    cols: 1,
-                    focused: right_focused,
-                },
-                layout,
-            );
-            if let Some(search) = self.libs[lib_idx].search.as_mut() {
-                search.scroll = final_scroll;
-            } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                level.scroll = final_scroll;
-            }
-        }
+        self.render_wide_library_rows(f, list_area, lib_idx, right_focused, layout);
 
         hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     }

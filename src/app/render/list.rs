@@ -15,6 +15,80 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 
 impl App {
+    pub(super) fn render_wide_library_rows(
+        &mut self,
+        f: &mut Frame,
+        list_area: Rect,
+        lib_idx: usize,
+        focused: bool,
+        layout: &mut LayoutMain,
+    ) {
+        layout.left_area = list_area;
+        let lib = &self.libs[lib_idx];
+        let (items, cursor, stored_scroll, total_count) = if let Some(search) = &lib.search {
+            let items = search
+                .results
+                .iter()
+                .filter_map(|&idx| search.items.get(idx).cloned())
+                .collect::<Vec<_>>();
+            let total = items.len();
+            (items, search.cursor, search.scroll, total)
+        } else {
+            match lib.nav_stack.last() {
+                Some(level) => (
+                    level.items.clone(),
+                    level.cursor,
+                    level.scroll,
+                    level.total_count,
+                ),
+                None => (Vec::new(), 0, 0, 0),
+            }
+        };
+
+        let final_scroll = if items.is_empty() {
+            let loading = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .is_some_and(|level| level.loading);
+            super::render_placeholder(
+                f,
+                list_area,
+                if loading {
+                    " Loading\u{2026}"
+                } else {
+                    " (empty)"
+                },
+            );
+            0
+        } else {
+            let filter = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .and_then(|level| level.letter_filter.as_ref())
+                .cloned();
+            let total = self.libs[lib_idx].library_total.unwrap_or(total_count);
+            let ctx = ListRenderCtx {
+                content_area: list_area,
+                items: &items,
+                cursor,
+                stored_scroll,
+                cols: 1,
+                focused,
+            };
+            if self.libs[lib_idx].search.is_none() && (total >= 50 || filter.is_some()) {
+                self.render_letter_grouped_rows(f, ctx, filter, total, layout)
+            } else {
+                self.render_plain_rows(f, ctx, layout)
+            }
+        };
+
+        if let Some(search) = &mut self.libs[lib_idx].search {
+            search.scroll = final_scroll;
+        } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            level.scroll = final_scroll;
+        }
+    }
+
     /// Renders the Continue/library list items into `area`.
     /// The title header is now drawn in the top-of-screen FOAM bar.
     pub(super) fn render_list(

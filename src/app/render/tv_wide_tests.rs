@@ -4,6 +4,8 @@ use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, SeriesDetail, TabSelection};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
 use ratatui::Terminal;
 use std::collections::HashMap;
 
@@ -23,6 +25,7 @@ fn tv_app() -> App {
     let mut episode = make_item("Pilot", "Episode");
     episode.id = "episode".into();
     episode.index_number = 1;
+    episode.runtime_ticks = 3600 * mbv_core::api::TICKS_PER_SECOND;
 
     app.libs.push(LibraryTab {
         library,
@@ -73,6 +76,7 @@ fn wide_tv_persists_series_workspace_and_separate_targets() {
     assert_eq!(app.current_library_columns(0), 1);
     assert!(output.contains("The Series"));
     assert!(output.contains("Pilot"));
+    assert!(output.contains("1h"));
 }
 
 #[test]
@@ -99,7 +103,13 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
     let mut terminal = Terminal::new(backend).unwrap();
     let mut layout = crate::app::layout::LayoutMain::default();
     terminal
-        .draw(|f| app.render_library(f, Rect::new(0, 0, 100, 30), true, &mut layout))
+        .draw(|f| {
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                Rect::new(0, 0, 100, 30),
+            );
+            app.render_library(f, Rect::new(0, 0, 100, 30), true, &mut layout);
+        })
         .unwrap();
 
     let pos = (

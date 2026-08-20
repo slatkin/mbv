@@ -4,7 +4,7 @@
 
 use crate::app::palette;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -115,9 +115,7 @@ pub(super) fn hero_on_left_list_panel_border(f: &mut Frame, list_panel: Rect, fo
     for y in list_panel.y..list_panel.bottom() {
         for x in list_panel.x..list_panel.right() {
             let cell = f.buffer_mut().cell_mut((x, y)).expect("panel cell exists");
-            if cell.bg == Color::Reset {
-                cell.set_bg(background);
-            }
+            cell.set_bg(background);
         }
     }
     super::render_selected_block_borders(
