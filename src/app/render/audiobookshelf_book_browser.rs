@@ -210,13 +210,22 @@ impl App {
                 Style::default().fg(palette::SUBTLE)
             };
             if selected && right_focused {
+                let row_bg = if detail_rows > 0 {
+                    palette::SURFACE_RESTING
+                } else {
+                    palette::SURFACE_FOCUSED
+                };
                 f.render_widget(
-                    Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
+                    Block::default().style(Style::default().bg(row_bg)),
                     row_area,
                 );
             }
             let marker = super::selection_marker(selected, super::MarkerEdge::Left);
-            let title = trunc_str(&book.title, area.width.saturating_sub(2) as usize);
+            let title = if selected && detail_rows > 0 {
+                String::new()
+            } else {
+                trunc_str(&book.title, area.width.saturating_sub(2) as usize)
+            };
             f.render_widget(
                 Paragraph::new(Line::from(vec![marker, Span::raw(title)])).style(style),
                 row_area,

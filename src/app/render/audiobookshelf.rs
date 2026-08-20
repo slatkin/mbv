@@ -178,7 +178,7 @@ impl App {
             selected_detail_shell(f, layout.hero_area, hero_rows, focused);
             let content = Rect {
                 x: area.x + SELECTED_BLOCK_SIDE_PADDING,
-                y: layout.hero_area.y + 3,
+                y: layout.hero_area.y + 2,
                 width: area.width.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
                 height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
             };

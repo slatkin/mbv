@@ -1,5 +1,6 @@
 use super::test_helpers::*;
 use super::*;
+use crate::app::render::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::tests_podcast::audiobookshelf_app;
 use crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use mbv_core::audiobookshelf::AudiobookshelfProgress;
@@ -24,8 +25,9 @@ fn wide_podcasts_use_a_left_hero_and_right_show_workspace() {
 #[test]
 fn narrow_podcasts_insert_selected_show_detail_into_the_show_flow() {
     let mut app = audiobookshelf_app();
+    app.audiobookshelf_browse[0].shows[0].author = Some("Author A".into());
     let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 20);
+    let terminal = render_library_to_terminal_focused(&mut app, &mut layout, true);
 
     assert!(
         layout.hero_area.height > 0,
@@ -36,6 +38,32 @@ fn narrow_podcasts_insert_selected_show_detail_into_the_show_flow() {
         "narrow selected detail must follow the show list: hero={:?}, list={:?}",
         layout.hero_area,
         layout.left_area
+    );
+
+    let buffer = terminal.backend().buffer();
+    let hero = layout.hero_area;
+    assert_eq!(buffer[(hero.x, hero.y)].symbol(), "▁");
+    assert_eq!(
+        buffer[(hero.x, hero.y)].style().fg,
+        Some(palette::SEEK_TRACK)
+    );
+    assert_eq!(
+        buffer[(hero.x, hero.y + 1)].style().bg,
+        Some(palette::resolve_surface_focus(true))
+    );
+    assert_eq!(
+        buffer[(hero.x + SELECTED_BLOCK_SIDE_PADDING, hero.y + 2)].symbol(),
+        "A",
+        "podcast hero content must start two rows below the top border"
+    );
+    assert_eq!(
+        buffer[(hero.x, hero.bottom() - 1)].symbol(),
+        "▔",
+        "podcast hero bottom border must remain below the content"
+    );
+    assert_eq!(
+        buffer[(hero.x, hero.bottom() - 1)].style().fg,
+        Some(palette::SEEK_TRACK)
     );
 }
 
