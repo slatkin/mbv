@@ -267,13 +267,8 @@ impl App {
                 Style::default().fg(palette::SUBTLE)
             };
             if selected && right_focused {
-                let row_bg = if detail_rows > 0 {
-                    palette::SURFACE_RESTING
-                } else {
-                    palette::SURFACE_FOCUSED
-                };
                 f.render_widget(
-                    Block::default().style(Style::default().bg(row_bg)),
+                    Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
                     row_area,
                 );
             }

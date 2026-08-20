@@ -295,18 +295,6 @@ impl App {
                         self.select_series_season(lib_idx, season);
                         return true;
                     }
-                    if let Some(episode) = self
-                        .layout
-                        .main
-                        .tv_wide_episode_rows
-                        .iter()
-                        .find(|(rect, _)| rect.contains(pos))
-                        .map(|(_, episode)| *episode)
-                    {
-                        self.set_panel_focus(PanelFocus::Library);
-                        self.libs[lib_idx].series_selection = Some(episode);
-                        return true;
-                    }
                     if self.layout.main.tv_wide_left_area.contains(pos) {
                         return true;
                     }
