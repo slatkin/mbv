@@ -1,61 +1,74 @@
 ## Why
 
+Tracking issue: [#583](https://github.com/slatkin/mbv/issues/583)
+
 Context menus opened via the keyboard shortcut appear at inconsistent, often
-unrelated screen positions because each view independently reports the
-selected row's y-coordinate into a shared layout field (`cursor_screen_y`),
-and any view that omits this falls back to a hardcoded corner. There is no
-dim backdrop to set the menu apart from the content behind it, unlike every
-other modal overlay in the app. And once a context menu is open, the
-keyboard cannot navigate or dismiss it at all — no `CONTEXT_STACK` entry
-handles Up/Down/Enter/Esc for it, so the only way to act on an open menu is
-the mouse.
+unrelated screen positions because renderers independently publish only the
+selected row's y-coordinate into shared layout fields. Multi-column lists now
+make that insufficient: the menu also needs the selected cell's horizontal
+position and width. Missing geometry falls back to a hardcoded terminal corner.
+
+The menu also lacks the dimmed backdrop and input ownership used by the app's
+other modal surfaces. Images remain in their normal rendering mode, and the
+keyboard cannot navigate or dismiss the menu. Ad hoc guards stop only selected
+underlying handlers, so input behavior depends on stack order instead of the
+menu owning interaction while it is open.
 
 ## What Changes
 
-- Every view that supports opening a context menu exposes a `Rect` for its
-  currently selected item (row or grid cell), replacing the scattered,
-  y-only `cursor_screen_y` / `queue_cursor_screen_y` layout fields with a
-  single geometric fact per panel.
-- The keyboard-triggered context menu is positioned deterministically from
-  that rect: right edge aligned to the selected item's right edge; opens
-  downward from the item's top edge if the menu fits below, otherwise
-  upward from the item's bottom edge. Mouse-triggered (`open_context_menu_at`)
-  positioning is unchanged.
-- A dim backdrop renders behind the open context menu, reusing the existing
-  `dim_backdrop` mechanism already used by every other modal overlay.
-- The open context menu becomes keyboard-navigable: Up/Down move the
-  selection, Enter executes the highlighted entry, Esc closes the menu
-  without acting — via a new `context_menu` entry in `CONTEXT_STACK`,
-  replacing the ad hoc `context_menu_open()` guards scattered across other
-  key handlers.
+- Current context-menu surfaces (Home, Emby browse views, and the queue) publish
+  the screen `Rect` of their selected row or grid cell. The outer selectable
+  renderer is the sole owner of this geometry; nested hero/detail renderers do
+  not overwrite it.
+- A keyboard-opened menu retains a selected-item anchor and is positioned each
+  frame from fresh layout geometry and the rendered menu size. Its right edge
+  aligns with the selected item; it opens downward when it fits, otherwise
+  upward, then clamps inside the containing panel when exact alignment is not
+  possible.
+- A mouse-opened menu retains its click-point anchor. Its existing click-based
+  placement remains independent of selected-item geometry and is clamped only
+  to keep the menu visible.
+- The context menu uses the existing dim-backdrop path, including the existing
+  half-block image rendering used while modal content is active.
+- The open menu becomes the exclusive keyboard context. Up/Down navigate
+  selectable entries, Enter executes, and Esc dismisses; every other key is
+  swallowed, including sidebar, tab, and global-overlay shortcuts.
+- Only one modal surface is active at a time. A context menu cannot open over an
+  existing overlay; a mandatory asynchronously activated modal closes and
+  replaces an open context menu.
+
+Audiobookshelf and Feeds continue not to expose context menus. Their obsolete
+y-coordinate writes are removed rather than replaced with unused anchor state.
 
 ## Capabilities
 
 ### New Capabilities
-- `context-menu`: keyboard-triggered context menu positioning (anchored to
-  the selected item, flips to fit on screen), backdrop dimming while open,
-  and keyboard interaction (navigate/execute/dismiss) for the open menu.
+- `context-menu`: deterministic selected-item and pointer positioning, bounded
+  panel placement, modal backdrop/image treatment, exclusive keyboard
+  interaction, and one-modal-at-a-time behavior.
 
 ### Modified Capabilities
 (none — no existing spec currently describes context menu behavior)
 
 ## Impact
 
-- `src/app/types_context_menu.rs`: `ContextMenu` gains an anchor
-  representation tied to a selected-item rect instead of bare `x`/`y`.
-- `src/app/input_context_menu.rs`: `context_menu_spawn_point` replaced with
-  rect-based anchor + flip logic; `open_context_menu_at` (mouse path)
-  untouched.
-- `src/app/render/overlays/context_menu.rs`: calls `dim_backdrop`.
-- `src/app/render/mod.rs`: `any_dim_modal_open` includes
-  `context_menu.is_some()`.
-- `src/app/input_resolver.rs`: new `context_menu` `CONTEXT_STACK` entry with
-  its own handler for Up/Down/Enter/Esc.
-- Render call sites that currently set `cursor_screen_y` /
-  `queue_cursor_screen_y` (list, list_plain, list_letter_groups, home,
-  home_feed, home_video, album, album_detail, detail, music_wide,
-  music_wide_browser, audiobookshelf, audiobookshelf_book_browser, queue):
-  each updated to report a selected-item `Rect` instead of a bare `y`.
-- Existing `context_menu_open()` guards in `input_lib_keys.rs`,
-  `input_queue_keys.rs`, `input_confirm_keys.rs` are superseded by the new
-  stack entry's precedence and can be reviewed for removal.
+- `src/app/types_context_menu.rs`: `ContextMenu` gains an anchor kind and shared
+  rendered-size calculation instead of storing only resolved `x`/`y`.
+- `src/app/layout.rs`: y-only cursor fields are replaced by selected-item rects
+  for the library and queue panels.
+- `src/app/input_context_menu.rs`: menu construction records anchor intent;
+  positioning moves to one size-aware bounded-placement function.
+- `src/app/render/overlays/context_menu.rs`: resolves the anchor from the fresh
+  frame layout, calls `dim_backdrop`, and renders at the bounded position.
+- `src/app/render/mod.rs`: context-menu state participates in
+  `any_dim_modal_open` and the one-modal invariant.
+- `src/app/render/list_rows.rs` and current Emby/Home/queue renderers: shared
+  one/two-column cell geometry publishes one authoritative selected rect.
+  Nested detail writers and unsupported Audiobookshelf writers are removed.
+- `src/app/input_resolver.rs`: a highest-priority `context_menu` stack entry
+  owns all keyboard input while active; redundant per-handler guards are
+  removed.
+- Mouse dispatch preserves menu click behavior and prevents non-menu mouse
+  events from reaching the obscured view while the menu is open.
+- `docs/adr/0002-centralized-input-handling.md`: records the new explicit
+  context-menu precedence and replacement invariant.

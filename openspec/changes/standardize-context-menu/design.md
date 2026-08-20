@@ -1,112 +1,152 @@
 ## Context
 
-See proposal.md - Why. Today `AppLayout` carries `cursor_screen_y: Option<u16>`
-(library panel) and `queue_cursor_screen_y: Option<u16>` (queue panel), each
-independently written by ~13 render call sites, one per view. Positioning code
-(`context_menu_spawn_point`) reads whichever one applies and falls back to a
-hardcoded corner if it was never set for the current frame. Multi-column views
-(e.g. `album.rs`'s two-column track packing) already compute a row→column
-mapping for drawing the selection marker (`left_item_rows`,
-`draw_column_selection_markers` in `list_rows.rs`) but don't expose it as a
-rectangle anywhere.
+`AppLayout` currently carries `cursor_screen_y: Option<u16>` for the library
+panel and `queue_cursor_screen_y: Option<u16>` for the queue. The current tree
+has fourteen writers, including nested detail renderers and renderers for
+Audiobookshelf views where `open_context_menu` explicitly refuses to open a
+menu. Some parent renderers already save and restore the y-coordinate around a
+nested renderer, demonstrating that write ownership is ambiguous.
 
-Separately, `context_menu.is_some()` is checked ad hoc inside several
-`CONTEXT_STACK` handlers (`input_lib_keys.rs`, `input_queue_keys.rs`,
-`input_confirm_keys.rs`) purely to stop those handlers from acting while a
-menu is open — there is no handler that lets the keyboard act *on* the menu.
+The original plan also drifted behind the rendering model. `list_plain.rs` and
+`list_letter_groups.rs`, not only `album.rs`, now pack one or two columns through
+`left_item_rows`. `home.rs` no longer writes cursor geometry directly;
+`home_list_rows.rs` does. Existing tests have two direct y-coordinate assertions,
+not one positioning characterization test per view.
+
+Menu dimensions are currently computed only in `render_context_menu`. Therefore
+a placement function taking only an item rect and panel rect cannot implement
+right alignment or test whether the full menu fits vertically. Positioning must
+share the rendered menu size.
+
+Separately, `context_menu.is_some()` is checked ad hoc by selected
+`CONTEXT_STACK` handlers. There is no context-menu stack entry, despite stale
+comments in input tests referring to one. The render pass draws the context menu
+before other overlays, so allowing two modal surfaces to coexist would also
+allow double dimming or dimming the menu itself.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- One geometric fact per panel ("here is the selected item's rect") that
-  every view is responsible for keeping current, replacing the y-only field.
-- Deterministic anchor + flip positioning built from that rect.
-- The context menu becomes a normal `CONTEXT_STACK` context with its own key
-  handler, so its keyboard behavior is explicit and testable the same way
-  every other modal context already is (confirm_modal, daemon_lost_modal, etc.).
+- One authoritative selected row/cell rect per supported panel.
+- Size-aware, deterministic placement recalculated from each fresh frame.
+- One shared geometry rule for one- and two-column Emby lists.
+- Existing modal backdrop and half-block image behavior while a menu is open.
+- Exclusive menu input ownership and an explicit one-modal-at-a-time invariant.
 
 **Non-Goals:**
-- Changing what appears in the context menu (entries/actions) — unaffected.
-- Changing mouse click-to-open positioning (`open_context_menu_at`) — unaffected.
-- Submenus, mouse hover-to-highlight, or any interaction beyond
-  navigate/execute/dismiss.
-- Reworking `left_item_rows` / `draw_column_selection_markers` themselves —
-  only exposing the rect they already imply.
+- Changing menu entries or actions.
+- Adding context menus to Audiobookshelf or Feeds.
+- Submenus, type-to-select, hover-to-highlight, or configurable bindings.
+- Preserving the old inline-image avoidance special case; deterministic item
+  anchoring replaces it.
 
 ## Decisions
 
-**Replace `cursor_screen_y: Option<u16>` / `queue_cursor_screen_y: Option<u16>`
-with `selected_item_rect: Option<Rect>` / `queue_selected_item_rect: Option<Rect>`.**
-Keeping two fields (one per panel) mirrors the existing split — both panels
-can render simultaneously regardless of which has focus, so collapsing them
-into one field would require tagging which panel it belongs to for no benefit.
-Widening `u16` to `Rect` is the minimal change that makes right-alignment and
-the fits-below/fits-above test possible, since both need width and height, not
-just a y-coordinate. Every render call site that currently sets the y-only
-field is updated to set the rect instead, in the same place — this doesn't
-remove the "one call site per view" convention (still a manual step per view),
-but it does mean a view that forgets it gets an absent rect the anchor logic
-can detect and clamp rather than a stale/wrong `y` from a previous frame.
+### Retain anchor intent and resolve it during rendering
 
-**Grid/column views (album.rs) compute the rect from the same `left_item_rows`
-mapping already used by `draw_column_selection_markers`, at the render call
-site that already draws the marker.** Alternative considered: give every
-column-aware view its own from-scratch geometry pass for the anchor. Rejected
-— `left_item_rows` already encodes exactly "which row and column is the
-selected item in," so deriving the rect there is a few lines against existing
-data, not a new mapping to keep in sync with the one `draw_column_selection_markers`
-uses.
+`ContextMenu` stores an anchor kind rather than a resolved `(x, y)`:
 
-**Anchor and flip logic lives in one function taking a `Rect` (selected item)
-and the containing area, returning the menu's `(x, y)`.** Keeps the
-right-align/flip rule in exactly one place regardless of how many panels feed
-it, so it can't drift between panels the way position computation has
-drifted between views historically.
+- `SelectedItem(PanelFocus)` for keyboard opening.
+- `Pointer { x, y }` for mouse opening.
 
-**Context menu keyboard handling becomes a new `CONTEXT_STACK` entry
-(`context_menu`), positioned above the entries whose ad hoc
-`context_menu_open()` guards exist solely to avoid double-handling a key
-while the menu is open.** Once the new entry exists and sits above them in
-the stack, it claims Up/Down/Enter/Esc and any other key while the menu is
-open (matching how `confirm_modal` and other modal contexts already claim
-all input while active), making those scattered guards redundant — they're
-removed as part of this change rather than left as dead defense-in-depth,
-since the whole point is to have one authoritative place instead of many.
-`'.'` opening the menu again while already open becomes a no-op via the new
-entry's ownership of all input while active, rather than reopening.
+`render_context_menu` runs after `render_main`, so it can resolve a keyboard
+anchor from the fresh local `AppLayout` being built for that same frame. This
+avoids stale placement after terminal resize or layout changes while the menu is
+open. Pointer anchoring remains independent of selected-item geometry.
 
-**Non-selectable entries (separators) are skipped by Up/Down, matching
-`ContextMenu::first_selectable`'s existing skip-to-first-actionable
-behavior used when the menu opens.**
+Menu construction remains independent of anchor availability so the mouse path
+cannot fail merely because no selected-item rect exists. A missing keyboard
+rect falls back to the containing panel's origin and is covered by a regression
+test; supported renderers are expected to publish a rect.
+
+### Share menu size and bounded placement
+
+One menu-size calculation is used by both placement and rendering. A pure
+function takes the anchor rect or pointer, containing panel rect, and rendered
+menu size. For a selected item it:
+
+1. right-aligns the menu to the selected rect;
+2. opens from the selected rect's top when the full menu fits below;
+3. otherwise aligns the menu bottom to the selected rect's bottom;
+4. clamps the result inside the containing panel.
+
+Exact anchor alignment wins when compatible with visibility; panel bounds win
+otherwise. If a menu is itself larger than a panel dimension, the origin is
+pinned to that panel edge and unavoidable overflow may be clipped. Saturating
+arithmetic is used for all `u16` geometry.
+
+### The outer selectable renderer owns the rect
+
+The rect means “the row or cell the user selected,” not nested detail or hero
+content. Only the outer renderer that maps the cursor to that selectable unit
+writes it. `render_compact_detail`, `render_selected_home_video_detail`, and
+other nested renderers stop writing cursor geometry.
+
+Column-aware Emby lists derive the selected cell rect from the same
+`left_item_rows`, area, offset, column-gap, and cell-width calculation already
+used for drawing and mouse hit-testing. A helper beside
+`draw_column_selection_markers` keeps marker, hit target, and context anchor in
+sync. Existing concrete row rects/hitmaps are reused where available rather
+than recomputed.
+
+Audiobookshelf and Feeds remain unsupported by `open_context_menu`; their old
+y-coordinate writes are deleted without replacement.
+
+### The menu is the highest-priority keyboard context
+
+A `context_menu` entry is first in `CONTEXT_STACK`. When active it handles
+Up/Down/Enter/Esc and returns claimed for every other key. Up/Down wrap among
+actionable entries and skip separators. Enter clones the selected action,
+closes the menu and clears its layout hit target, then executes the action,
+matching the existing mouse ordering.
+
+Because all other keys are swallowed, F1-F4, Ctrl+/, tab switching, playback,
+refresh, and view actions cannot replace or mutate content beneath the menu.
+The user must press Esc or choose an action first.
+
+### One modal surface at a time
+
+Opening a context menu is refused while another modal or sidebar surface is
+active. Any mandatory modal that may become active asynchronously closes the
+context menu first. Context-menu actions close the menu before they may open a
+follow-on modal. A render-time debug assertion protects the no-coexistence
+invariant.
+
+The context menu is added to `any_dim_modal_open` before main content renders,
+selecting the existing half-block image path. `render_context_menu` calls
+`dim_backdrop` after main content and before drawing the menu. Since modal
+surfaces cannot coexist, the backdrop is applied exactly once and never dims
+the menu itself.
+
+Mouse click behavior is preserved. While a menu is open, non-menu mouse events
+are swallowed so scrolling cannot move the target beneath a modal menu.
 
 ## Risks / Trade-offs
 
-- [Every render call site must still remember to set the new rect field,
-  same as today] → An absent rect degrades to a safe, visible fallback
-  (e.g. top-left of the panel) rather than the current top-left-of-terminal
-  `(4, 4)`, and existing test coverage patterns (one characterization test
-  per view, as already used for `cursor_screen_y`) extend naturally to the
-  rect.
-- [Removing the scattered `context_menu_open()` guards changes behavior for
-  any key not already covered by a characterization test] → The new
-  `context_menu` stack entry is written to swallow (not fall through) any
-  key it doesn't bind, which is a strictly more defensive default than the
-  guards it replaces; existing regression tests for those guards (e.g. `c`
-  not leaking through) are re-pointed at the new entry rather than deleted.
+- A supported renderer can still omit its authoritative rect. The visible
+  panel-origin fallback prevents an off-screen menu, while focused renderer
+  tests make omissions detectable.
+- Pointer coordinates are absolute; resizing after a mouse-opened menu may move
+  the panel relative to that point. Per-frame clamping keeps the menu visible
+  without inventing a relative pointer model.
+- Extremely small panels can be smaller than the menu. Clipping is preferable
+  to geometry underflow or escaping into another panel; current menus are short
+  enough that this is only a degraded-terminal case.
+- Changing `CONTEXT_STACK` order is intentional architecture behavior and must
+  update ADR 0002 and its pinned order test together.
 
 ## Migration Plan
 
-Single-PR, behavior-preserving until the last step (no intermediate broken
-state to roll forward/back through):
-1. Add `Rect`-based fields alongside the existing `u16` fields; positioning
-   logic still reads the old fields.
-2. Switch positioning logic to the new rect-based anchor/flip function; keep
-   old fields until every view sets the new one.
-3. Update each view's render call site to set the new rect field; remove the
-   old `u16` fields once all call sites are migrated.
-4. Add the `context_menu` `CONTEXT_STACK` entry; wire dim backdrop; remove
-   the now-redundant `context_menu_open()` guards one at a time, re-pointing
-   their regression tests at the new entry.
+Single PR with each commit kept buildable:
 
-Rollback is a revert of the PR; no persisted state or protocol changes are
-involved.
+1. Add the anchor kind, shared size calculation, pure placement helper, and
+   focused geometry tests without switching the current renderer.
+2. Add selected rect fields and migrate supported authoritative renderers while
+   the old y fields remain available.
+3. Switch context-menu rendering to fresh-frame anchor resolution, then remove
+   the old y fields and obsolete/nested/unsupported writes.
+4. Add dim/half-block participation and enforce the one-modal invariant.
+5. Add the highest-priority keyboard context and mouse swallowing, remove
+   redundant guards, and update ADR 0002 plus precedence tests.
+
+Rollback is a revert; no persisted state or protocol changes are involved.
