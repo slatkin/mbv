@@ -30,7 +30,7 @@
       they cannot overwrite the outer selectable anchor.
 - [x] 2.6 Remove obsolete y-coordinate writes from Audiobookshelf renderers
       without adding rect writes; Audiobookshelf and Feeds remain unsupported.
-- [ ] 2.7 Add focused renderer tests for the shared one-column path, shared
+- [x] 2.7 Add focused renderer tests for the shared one-column path, shared
       two-column left/right cells, grouped album, expanded item, wide Music,
       Home, and queue. Do not claim nonexistent per-view legacy coverage.
 
@@ -82,7 +82,7 @@
       mouse, dim-image, and modal-invariant tests above.
 - [x] 6.2 `cargo clippy --workspace --all-targets`.
 - [x] 6.3 `make check-code-file-lines`.
-- [ ] 6.4 Manual pass: keyboard-open from one-column, two-column left/right,
+- [x] 6.4 Manual pass: keyboard-open from one-column, two-column left/right,
       grouped album, expanded item, wide Music, Home, and queue selections near
       each panel edge; resize while open; confirm flip/clamp, half-block images,
       exclusive keys, pointer anchoring, and Esc dismissal.
