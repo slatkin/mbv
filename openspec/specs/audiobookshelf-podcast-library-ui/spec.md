@@ -6,72 +6,6 @@ Provides an Audiobookshelf podcast browsing experience whose presentation and in
 
 ## Requirements
 
-### Requirement: Podcast libraries use the hero-on-top arrangement
-
-An Audiobookshelf podcast library SHALL use the hero-on-top arrangement, the same arrangement the TV
-Shows tab uses. The selected podcast hero SHALL occupy the dedicated full-width area pinned above the
-podcast show list. The podcast show list SHALL occupy the remaining area below the hero and SHALL NOT
-appear beside the hero or detail content at any terminal width. The podcast tab SHALL obtain this
-composition from the shared arrangement rather than by reproducing the TV Shows tab's implementation.
-
-The following substitutions SHALL be the only domain changes to that arrangement. They are DATA
-the podcast tab supplies — the arrangement renders whatever hero content, list rows, and pills the
-screen hands it — so they are not presentation declarations. The podcast tab's single declaration
-of differences SHALL cover only the presentation fields (image shape, metadata lines and order,
-colour variant, element presence, and the `image source` for the cover):
-
-| Hero-on-top default | Audiobookshelf podcast tab |
-|---|---|
-| Series | Podcast show |
-| Series Primary image | Audiobookshelf podcast cover |
-| Season selector | `All` / `Played` / `Unplayed` filter selector |
-| Episodes in the selected season | Downloaded episodes matching the selected filter |
-
-All other observable layout behavior SHALL be that of the hero-on-top arrangement, including the hero
-shell and placement, list-below-hero ordering, content padding, image slot, row budgeting, list
-column count, selected-cell treatment, focus styling, scrolling, narrow-terminal fallback, and
-loading placeholder stability.
-
-#### Scenario: Podcast library is displayed
-
-- **WHEN** an Audiobookshelf podcast library and a TV Shows library are displayed at the same
-  terminal dimensions and image setting
-- **THEN** both tabs SHALL divide the content area into the same top hero and lower list geometry
-- **THEN** the podcast tab SHALL render podcast shows in the lower list positions occupied by Series
-  rows in the TV Shows tab
-- **THEN** the podcast tab SHALL NOT render a left catalog column beside a right detail column
-
-#### Scenario: Podcast selection changes
-
-- **WHEN** the user moves selection between podcast shows
-- **THEN** the fixed hero SHALL update to the newly selected podcast without changing its screen
-  position
-- **THEN** the show list SHALL retain provider-native selection identity across loaded-page changes
-
-#### Scenario: Selected show scrolls outside the visible list rows
-
-- **WHEN** the selected podcast's row is outside the visible portion of the lower show list
-- **THEN** the pinned hero SHALL continue to display that selected podcast in the same fixed position
-
-#### Scenario: Terminal width crosses the TV list column breakpoint
-
-- **WHEN** the podcast tab crosses the shared breakpoint
-- **THEN** the podcast show list SHALL change column count at that breakpoint, as every hero-on-top
-  screen does
-- **THEN** the hero SHALL remain full-width above the list and SHALL NOT move to the side
-
-#### Scenario: Terminal height cannot fit the hero
-
-- **WHEN** the hero-on-top arrangement would suppress its hero because the available height cannot
-  fit the minimum hero and a usable list
-- **THEN** the podcast tab SHALL suppress its hero under the same condition and give the show list
-  the corresponding area
-
-#### Scenario: The hero-on-top arrangement changes
-
-- **WHEN** the hero-on-top arrangement's presentation is changed
-- **THEN** the podcast tab renders the change without an individual edit
-
 ### Requirement: The selected podcast hero uses Audiobookshelf cover artwork
 The selected podcast hero SHALL place the selected podcast's Audiobookshelf cover in the same right-aligned image slot, with the same dimensions, scaling, text wrapping, loading treatment, and images-disabled behavior as the selected Series Primary image in the TV Shows hero. The cover SHALL be fetched from the configured Audiobookshelf Service using the selected podcast's provider-native library item identity.
 
@@ -141,3 +75,59 @@ Activating a podcast show SHALL only enter episode-selection mode. Activating a 
 #### Scenario: User activates a podcast episode
 - **WHEN** the user activates a selected podcast episode
 - **THEN** mbv SHALL retain selection without playback, queue, Session, or progress side effects
+
+### Requirement: Podcast libraries use responsive hero presentations
+
+An Audiobookshelf podcast library SHALL use the shared hero-on-left presentation when it meets the wide geometry conditions and the shared inline presentation otherwise. In hero-on-left, the selected podcast's cover, metadata, played-state filter, and downloaded-episode workspace SHALL occupy the left pane while the single-column podcast-show browser occupies the right rail. In the inline presentation, the same selected-show detail SHALL render in list flow at the active podcast-show row. The podcast tab SHALL obtain placement from the shared arrangement and SHALL NOT define a pinned top fallback.
+
+The podcast tab SHALL supply podcast-native data without changing the shared placement rule: Podcast show for Series, Audiobookshelf cover for Series Primary image, `All` / `Played` / `Unplayed` for season selector, and matching downloaded episodes for season episodes. Image shape, metadata lines and order, colour variant, element presence, and image source MAY remain podcast-specific declarations.
+
+#### Scenario: Podcast library is displayed wide
+- **WHEN** an Audiobookshelf podcast library meets the shared wide geometry conditions
+- **THEN** selected-show detail and downloaded episodes render in the left pane
+- **AND** podcast shows render in the single-column right rail
+
+#### Scenario: Podcast library is displayed narrow
+- **WHEN** an Audiobookshelf podcast library does not meet the shared wide geometry conditions
+- **THEN** podcast shows render in one scrolling column
+- **AND** selected-show detail renders inline at the active show row
+- **AND** no hero area is pinned above the show browser
+
+#### Scenario: Podcast selection changes
+- **WHEN** the user moves selection between podcast shows
+- **THEN** the hero or detail workspace updates to the newly selected podcast
+- **AND** the show list retains provider-native selection identity across loaded-page changes
+
+#### Scenario: Selected show scrolls in the inline presentation
+- **WHEN** the active podcast show moves through the narrow browser
+- **THEN** scrolling keeps its media row and inline detail addressable together
+- **AND** hero-only rows do not activate another show
+
+#### Scenario: Terminal height cannot fit hero-on-left
+- **WHEN** the width meets the shared breakpoint but the minimum-height guard fails
+- **THEN** the podcast tab uses inline selected-show detail
+- **AND** it does not use a top-pinned fallback
+
+#### Scenario: Shared placement changes
+- **WHEN** the shared hero-on-left or inline presentation changes
+- **THEN** the podcast tab renders the placement change without an individual geometry edit
+
+#### Scenario: Podcast library is displayed
+- **WHEN** an Audiobookshelf podcast library is displayed
+- **THEN** it uses hero-on-left when wide geometry fits and inline selected-show detail otherwise
+
+#### Scenario: Selected show scrolls outside the visible list rows
+- **WHEN** the selected show scrolls outside visible right-rail rows in hero-on-left
+- **THEN** the left workspace continues projecting that selected show
+
+#### Scenario: Terminal width crosses the TV list column breakpoint
+- **WHEN** the podcast tab crosses the shared width breakpoint
+- **THEN** it recomputes hero-on-left versus inline placement rather than changing a top-layout column count
+
+#### Scenario: Terminal height cannot fit the hero
+- **WHEN** selected detail cannot fit with a usable active row
+- **THEN** detail is suppressed and the browser retains the available area
+
+#### Scenario: The legacy top placement arrangement changes
+- **WHEN** the obsolete top arrangement is removed
+- **THEN** Audiobookshelf podcasts continue through only hero-on-left and inline presentations

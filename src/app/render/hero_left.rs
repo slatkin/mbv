@@ -11,8 +11,7 @@ use ratatui::Frame;
 use textwrap::wrap;
 
 /// Minimum outer content-area height for the hero-on-left arrangement's
-/// two-pane split; below this the caller falls back to the shared
-/// hero-on-top narrow renderer (design.md decision 5's height floor).
+/// two-pane split.
 pub(super) const HERO_ON_LEFT_MIN_AREA_HEIGHT: u16 = 6;
 /// Minimum width either hero-on-left pane may shrink to (decision 5's
 /// minimum pane width).
@@ -24,6 +23,14 @@ const HERO_ON_LEFT_PANE_GAP: u16 = 2;
 const HERO_ON_LEFT_PILLS_ROW_HEIGHT: u16 = 1;
 /// Blank rows below the pill row before the list starts.
 const HERO_ON_LEFT_PILLS_GAP_ROWS: u16 = 1;
+
+/// Whether `content_area` can use the shared hero-on-left composition.
+/// Callers reserve the separator row before asking, so the height check is
+/// deliberately centralized here rather than repeated by each surface.
+pub(super) fn can_use_hero_on_left(content_area: Rect) -> bool {
+    content_area.width >= crate::app::TWO_COLUMN_THRESHOLD
+        && content_area.height.saturating_sub(1) >= HERO_ON_LEFT_MIN_AREA_HEIGHT
+}
 
 /// Returns `(left_pane, right_pane)` for the hero-on-left arrangement's
 /// horizontal split: a `HERO_ON_LEFT_PANE_GAP`-column gutter between a
@@ -102,11 +109,11 @@ pub(super) fn hero_on_left_right_pane(
 /// focus-resolved background, one row inside `list_panel`'s own top/bottom
 /// edge. The variant is a separate match arm in `render_selected_block_borders`
 /// (`SelectedBlockBorderStyle::HeroOnLeft`), so a hero-on-left-only change
-/// here can never reach the `HeroOnTop` arm hero-on-top's `hero_block_shell`
+/// here can never reach the `legacy top placement` arm legacy top placement's `hero_block_shell`
 /// uses. hero-on-left's own fixed window mirrors `hero_block_shell`'s
 /// (`offset = 0`, fully visible, padding rows `[1, height - 2]`); this is
 /// hero-on-left's thin shell entry point, the same role `hero_block_shell`
-/// plays for hero-on-top.
+/// plays for legacy top placement.
 pub(super) fn hero_on_left_list_panel_border(f: &mut Frame, list_panel: Rect, focused: bool) {
     if list_panel.height == 0 {
         return;
@@ -163,11 +170,11 @@ pub(super) fn hero_on_left_recessed_box(
 }
 
 /// One line of the `Hero` component's hero-on-left text block. Unlike
-/// hero-on-top's single-row, truncated [`super::hero::HeroLine`], hero-on-left
+/// legacy top placement's single-row, truncated [`super::hero::HeroLine`], hero-on-left
 /// text wraps across as many rows as it needs (design.md decision 2's
 /// "Consequence": text wrapping moves into `Hero`, screens hand over
 /// unwrapped strings). Style is screen-chosen (e.g. focus-derived bold),
-/// matching how `HeroContent::meta_color` lets a hero-on-top screen pick its
+/// matching how `HeroContent::meta_color` lets a legacy top placement screen pick its
 /// own colour.
 pub(super) struct WrappedHeroLine<'a> {
     pub text: &'a str,

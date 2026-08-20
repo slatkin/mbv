@@ -1,12 +1,11 @@
 use super::album::AlbumRowsCursorCtx;
 use super::detail::compact_banner_image_cache_key;
 use super::hero::{
-    hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS,
-    HERO_TITLE_ROWS,
+    selected_detail_shell, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS, HERO_TITLE_ROWS,
 };
 use super::list_rows::{ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING};
 use crate::app::layout::LayoutMain;
-use crate::app::{App, TWO_COLUMN_THRESHOLD};
+use crate::app::App;
 use ratatui::layout::*;
 use ratatui::Frame;
 
@@ -103,7 +102,7 @@ impl App {
         if let Some(lib_idx) = self.tab.emby_library_index() {
             if self.is_music_group_view(lib_idx)
                 && self.is_viewing_album_folders(lib_idx)
-                && area.width >= TWO_COLUMN_THRESHOLD
+                && super::hero_left::can_use_hero_on_left(area)
             {
                 self.render_wide_music_group(f, area, lib_idx, focused, layout);
                 return;
@@ -114,12 +113,11 @@ impl App {
         // (right-panel-arrangements spec) at or above the shared breakpoint:
         // read-only shared selected-Emby hero card on the left, letter pills
         // and one-column list in the right rail. Below the breakpoint the
-        // hero-on-top fallback below runs unchanged. Height floor mirrors
+        // legacy top placement fallback below runs unchanged. Height floor mirrors
         // the other hero-on-left screens.
         if let Some(lib_idx) = self.tab.emby_library_index() {
-            if self.is_wide_movies_library(lib_idx)
-                && area.width >= TWO_COLUMN_THRESHOLD
-                && area.height.saturating_sub(1) >= super::hero_left::HERO_ON_LEFT_MIN_AREA_HEIGHT
+            if (self.is_wide_movies_library(lib_idx) || self.is_home_video_view(lib_idx))
+                && super::hero_left::can_use_hero_on_left(area)
             {
                 self.render_wide_movies(f, area, lib_idx, focused, layout);
                 return;
@@ -127,9 +125,8 @@ impl App {
         }
 
         if let Some(lib_idx) = self.tab.emby_library_index() {
-            if self.is_wide_tv_library(lib_idx)
-                && area.width >= TWO_COLUMN_THRESHOLD
-                && area.height.saturating_sub(1) >= super::hero_left::HERO_ON_LEFT_MIN_AREA_HEIGHT
+            if (self.is_wide_tv_library(lib_idx) || self.is_podcast_library(lib_idx))
+                && super::hero_left::can_use_hero_on_left(area)
             {
                 self.render_wide_tv(f, area, lib_idx, focused, layout);
                 return;
@@ -139,8 +136,8 @@ impl App {
         let mut content_area = area;
 
         // Search is active for the focused Emby library. Its 3-row input box
-        // is placed *below* the hero in hero-on-top view (see the block after
-        // `top_hero_layout`), so here we only record that it's on.
+        // is placed *below* the hero in legacy top placement view (see the block after
+        // `placement-neutral geometry`), so here we only record that it's on.
         let search_active = focused
             && self.tab.emby_library_index().is_some()
             && self.libs[self.tab.emby_library_index().unwrap()]
@@ -149,7 +146,7 @@ impl App {
 
         // Home videos' declared element-presence difference (design.md
         // decision 6): a count label row instead of the letter-pill row
-        // every other hero-on-top screen may show (`should_show_letter_pills`
+        // every other legacy top placement screen may show (`should_show_letter_pills`
         // already excludes home videos, so the two never both show).
         if focused
             && content_area.height > 0
@@ -165,7 +162,7 @@ impl App {
                 .map(|l| l.total_count)
                 .unwrap_or(0);
             content_area = super::render_count_label(f, content_area, total);
-            // Leave the blank gap row `top_hero_layout`'s `hero_shift`
+            // Leave the blank gap row `placement-neutral geometry`'s `hero_shift`
             // expects directly above `content_area`, so the hero's top
             // border reclaims that row instead of overwriting the label.
             content_area = Rect {
@@ -311,10 +308,20 @@ impl App {
         let show_pills = show_letter_pills || show_music_pills || search_active;
         // Narrow library heroes belong to the scrolling list. Keep the shared
         // pill geometry, but reserve no separate top hero area.
-        let hero_layout = top_hero_layout(content_area, 0, show_pills);
-        let hero_area = hero_layout.hero_area;
-        let pills_area = hero_layout.pills_area;
-        let list_area = hero_layout.list_area;
+        let pills_reserved = if show_pills { 2 } else { 0 };
+        let pills_area = Rect {
+            height: show_pills as u16,
+            ..content_area
+        };
+        let list_area = Rect {
+            y: content_area.y + pills_reserved,
+            height: content_area.height.saturating_sub(pills_reserved),
+            ..content_area
+        };
+        let inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
+            && inline_hero_rows + 1 <= list_area.height)
+            .then_some(inline_hero_rows)
+            .unwrap_or(0);
 
         if show_letter_pills && !search_active {
             let lib_idx = self.tab.emby_library_index().unwrap();
@@ -325,9 +332,8 @@ impl App {
         }
 
         // The search box occupies the exact one-row slot the pill bar would
-        // sit in (`pills_area`); the gap row and list below it are already
-        // reserved by `top_hero_layout` regardless of which one is drawn, so
-        // `list_area` needs no override here.
+        // sit in (`pills_area`); the gap row and list below it are reserved
+        // together with the pill row.
         if search_active {
             let lib_idx = self.tab.emby_library_index().unwrap();
             let s = self.libs[lib_idx].search.as_ref().unwrap();
@@ -499,13 +505,6 @@ impl App {
             } else {
                 "(empty)"
             };
-            // Reserve and paint the hero's placeholder panel so the block
-            // stays put even while a letter-pill switch has the slice
-            // cleared and loading (see `top_hero_level` above), then show
-            // the status message in the list area below it.
-            if inline_hero_rows > 0 {
-                hero_block_shell(f, hero_area, inline_hero_rows, focused);
-            }
             super::render_placeholder(f, list_area, msg);
             return;
         }
@@ -584,7 +583,7 @@ impl App {
         // rendered: the outer shell (colored bg + `▁`/`▔` borders), then the
         // content offset 2 rows down past the top border + top padding.
         if inline_hero_rows > 0 {
-            hero_block_shell(f, layout.hero_area, inline_hero_rows, focused);
+            selected_detail_shell(f, layout.hero_area, inline_hero_rows, focused);
             // Content, offset 2 rows down past the top border + top
             // padding, and inset 2 cols on each side like music/homevideo's
             // selected blocks; the banner layout is a pure function of the

@@ -1,12 +1,11 @@
-use super::hero::{hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS};
+use super::hero::{HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS};
 use super::hero_left;
 use super::home_hero::{beside_image_hero_dims, beside_image_hero_rects, HeroMetaBlock};
-use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::images::audiobookshelf_book_cover_cache_key;
 use crate::app::layout::LayoutMain;
 use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use crate::app::ui_util::{fmt_duration_approx, trunc_str};
-use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
+use crate::app::{palette, App};
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -70,9 +69,7 @@ impl App {
         let left_focused = focused && chapters_focused;
         let right_focused = focused && !chapters_focused;
 
-        if area.width >= TWO_COLUMN_THRESHOLD
-            && area.height.saturating_sub(1) >= hero_left::HERO_ON_LEFT_MIN_AREA_HEIGHT
-        {
+        if hero_left::can_use_hero_on_left(area) {
             self.render_wide_audiobookshelf_books(
                 f,
                 area,
@@ -180,59 +177,48 @@ impl App {
         area: Rect,
         index: usize,
         state: &AudiobookshelfBookBrowseState,
-        left_focused: bool,
+        _left_focused: bool,
         right_focused: bool,
         layout: &mut LayoutMain,
     ) {
-        let desired_rows = self.audiobookshelf_book_hero_rows(state) + HERO_BLOCK_EXTRA_ROWS;
-        let top = top_hero_layout(area, desired_rows, false);
-        layout.hero_area = top.hero_area;
-        if top.hero_rows > 0 {
-            hero_block_shell(f, top.hero_area, top.hero_rows, left_focused);
-            let content = Rect {
-                x: top.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                y: top.hero_area.y + 2,
-                width: top
-                    .hero_area
-                    .width
-                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-                height: top.hero_rows - HERO_BLOCK_EXTRA_ROWS,
-            };
-            self.render_audiobookshelf_book_hero(f, content, index, left_focused, layout);
-        }
-
-        // The remaining area below the hero stacks the chapter list (the
-        // left pane's persistent list) above the bucket-pill row and the
-        // book browser (the right pane), since a narrow terminal has no
-        // room for a horizontal split -- both stay rendered per the
-        // book-browsing spec's narrow-terminal fallback.
-        let remaining = top.list_area;
-        let chapters_h = (remaining.height as u32 * 2 / 5) as u16;
-        let chapters_area = Rect {
-            height: chapters_h,
-            ..remaining
+        // Narrow books use one scrolling browser. Selected detail, including
+        // chapters, is inserted immediately after the active book row.
+        let pills_area = Rect {
+            height: PILLS_ROW_HEIGHT.min(area.height),
+            ..area
         };
+        self.render_audiobookshelf_book_bucket_pills(f, pills_area, index, layout);
         let browser_area = Rect {
-            y: remaining.y + chapters_h,
-            height: remaining.height.saturating_sub(chapters_h),
-            ..remaining
+            y: area.y + PILLS_ROW_HEIGHT + PILLS_GAP_ROWS,
+            height: area
+                .height
+                .saturating_sub(PILLS_ROW_HEIGHT + PILLS_GAP_ROWS),
+            ..area
         };
-        layout.left_area = chapters_area;
-        if chapters_area.height > 0 {
-            self.render_audiobookshelf_book_rows(f, chapters_area, state, left_focused, layout);
-        }
-
+        layout.left_area = browser_area;
         layout.audiobookshelf_book_right_area = browser_area;
+
+        let chapter_rows = state
+            .selected_id
+            .as_deref()
+            .map(|id| state.visible_rows(id).len() as u16 + LEFT_SEPARATOR_ROWS)
+            .unwrap_or(0);
+        let detail_rows =
+            self.audiobookshelf_book_hero_rows(state) + HERO_BLOCK_EXTRA_ROWS + chapter_rows;
         self.render_audiobookshelf_book_right_pane_narrow(
             f,
             browser_area,
             index,
             right_focused,
             layout,
+            detail_rows,
         );
     }
 
-    fn audiobookshelf_book_hero_rows(&self, state: &AudiobookshelfBookBrowseState) -> u16 {
+    pub(super) fn audiobookshelf_book_hero_rows(
+        &self,
+        state: &AudiobookshelfBookBrowseState,
+    ) -> u16 {
         let Some(book) = state.selected_book() else {
             return HERO_TITLE_ROWS;
         };
@@ -262,7 +248,7 @@ impl App {
         layout.height.max(image_rows)
     }
 
-    fn render_audiobookshelf_book_hero(
+    pub(super) fn render_audiobookshelf_book_hero(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -376,7 +362,7 @@ impl App {
             .map(super::super::ui_util::trunc_overview)
             .unwrap_or_default();
 
-        // The standard hero-on-top beside-image layout: image on the right,
+        // The standard legacy top placement beside-image layout: image on the right,
         // metadata column on the left, overview wrapping around the image.
         // This is the same path Emby Keep Watching and the generic ABS hero
         // use, so the book tab's hero can't drift from theirs.
@@ -412,7 +398,7 @@ impl App {
     /// list area's provider-native content, always rendered below the hero
     /// (Music's track-list analog; book-browsing spec: "Chapters render as
     /// first-class rows in the persistent list").
-    fn render_audiobookshelf_book_rows(
+    pub(super) fn render_audiobookshelf_book_rows(
         &self,
         f: &mut Frame,
         area: Rect,

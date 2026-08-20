@@ -76,7 +76,7 @@ pub(crate) struct LayoutMain {
     pub left_row_targets: Vec<Option<LibraryRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
-    /// The selected item's hero geometry. Wide hero-on-top screens place it
+    /// The selected item's hero geometry. Wide legacy top placement screens place it
     /// above `left_area`; narrow inline screens place it inside the list and
     /// keep it inert for mouse activation.
     pub hero_area: Rect,
@@ -123,12 +123,12 @@ pub(crate) struct LayoutMain {
     /// render_wide_right_album_browser`), the sub-rect of
     /// `wide_music_right_area` below the pill row. `left_row_targets` is
     /// indexed relative to this rect's top -- set by both the wide and
-    /// narrow (hero-on-top) callers of the shared browser renderer, since
+    /// narrow (legacy top placement) callers of the shared browser renderer, since
     /// they share row-target indexing but differ in outer gating rect.
     pub wide_music_browser_area: Rect,
     /// Bounding rect of the Audiobookshelf book tab's right pane (bucket
     /// pills + book browser). Populated whenever the book tab renders, in
-    /// both the wide two-column layout and the narrow hero-on-top fallback
+    /// both the wide two-column layout and the narrow legacy top placement fallback
     /// -- unlike `wide_music_right_area`, both book panes are always
     /// visible (book-browsing spec).
     pub audiobookshelf_book_right_area: Rect,

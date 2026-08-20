@@ -1,0 +1,96 @@
+use super::test_helpers::*;
+use super::*;
+use crate::app::tests_podcast::audiobookshelf_app;
+use crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
+use mbv_core::audiobookshelf::AudiobookshelfProgress;
+use mbv_core::audiobookshelf::AudiobookshelfShow;
+
+#[test]
+fn wide_podcasts_use_a_left_hero_and_right_show_workspace() {
+    let mut app = audiobookshelf_app();
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 100, 30);
+
+    assert!(
+        layout.hero_area.width < 100,
+        "wide hero must own a left pane"
+    );
+    assert!(
+        layout.left_area.x > layout.hero_area.x,
+        "show workspace belongs in the right pane"
+    );
+}
+
+#[test]
+fn narrow_podcasts_insert_selected_show_detail_into_the_show_flow() {
+    let mut app = audiobookshelf_app();
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 20);
+
+    assert!(
+        layout.hero_area.height > 0,
+        "selected show detail should render"
+    );
+    assert!(
+        layout.hero_area.y >= layout.left_area.y,
+        "narrow selected detail must follow the show list: hero={:?}, list={:?}",
+        layout.hero_area,
+        layout.left_area
+    );
+}
+
+#[test]
+fn narrow_podcast_detail_is_suppressed_when_the_viewport_is_too_short() {
+    let mut app = audiobookshelf_app();
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 4);
+
+    assert_eq!(layout.hero_area.height, 0);
+}
+
+#[test]
+fn narrow_podcast_detail_rows_remain_inert_between_show_rows() {
+    let mut app = audiobookshelf_app();
+    let state = &mut app.audiobookshelf_browse[0];
+    state.shows.extend((0..5).map(|index| AudiobookshelfShow {
+        library_item_id: format!("show-{index}"),
+        title: format!("Show {index}"),
+        author: None,
+        description: None,
+        cover_path: None,
+    }));
+    state.select(2);
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 20);
+
+    let detail_row = layout
+        .left_item_rows
+        .iter()
+        .position(Vec::is_empty)
+        .expect("selected detail row should be reserved");
+    assert_eq!(layout.left_item_rows[detail_row + 1].first(), Some(&3));
+    assert!(layout.hero_area.y > 0);
+}
+
+#[test]
+fn wide_podcast_detail_preserves_episode_rows_and_played_filtering() {
+    let mut app = audiobookshelf_app();
+    let state = &mut app.audiobookshelf_browse[0];
+    state.episode_selection = Some(0);
+    state.episode_filter = AudiobookshelfEpisodeFilter::Played;
+    state.progress.insert(
+        ("show-a".into(), "episode-a".into()),
+        AudiobookshelfProgress {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            current_time_seconds: 0.0,
+            is_finished: true,
+        },
+    );
+    let mut layout = LayoutMain::default();
+    let out = render_library_to_string_sized(&mut app, &mut layout, 100, 30);
+
+    assert!(layout.hero_area.x < layout.left_area.x);
+    assert!(!layout.audiobookshelf_episode_rows.is_empty());
+    assert!(out.contains("Episode A"));
+}

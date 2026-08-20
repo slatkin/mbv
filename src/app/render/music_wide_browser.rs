@@ -113,7 +113,7 @@ impl App {
             let screen_y = (*row_idx - offset) as u16;
             // Album-row renderers supply their own one-cell leading gutter,
             // so visible text begins one cell right of `browser_area.x` --
-            // the same convention every other hero-on-top list uses
+            // the same convention every other legacy top placement list uses
             // (`item_cell_spans`' leading space), matching the Movies/TV
             // indent. The caller is responsible for any inset needed to
             // land text where it wants (see `render_wide_music_group`'s
@@ -200,7 +200,7 @@ impl App {
         // Populate left_row_targets for mouse hit-testing, indexed relative
         // to `browser_area`'s own top -- self-contained so this works
         // identically whether the caller is the wide right pane (browser
-        // sits below the pill row) or the narrow hero-on-top fallback
+        // sits below the pill row) or the narrow legacy top placement fallback
         // (browser_area == left_area, already below hero+pills).
         {
             let mut targets = vec![None; browser_area.height as usize];

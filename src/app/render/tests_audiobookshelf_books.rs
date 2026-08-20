@@ -230,9 +230,36 @@ fn narrow_layout_still_renders_hero_chapters_and_browser_together() {
         "narrow layout must still render the bucket-pill row:\n{out}"
     );
     assert!(
+        out.contains("Chapter One"),
+        "narrow layout must keep chapter rows alongside the browser:\n{out}"
+    );
+    assert!(
         layout.audiobookshelf_book_right_area.height > 0,
         "narrow layout must still populate the browser area, not just the hero"
     );
+}
+
+#[test]
+fn narrow_book_detail_is_not_pinned_above_the_browser() {
+    let mut app = make_audiobookshelf_book_app();
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 20);
+
+    assert!(
+        layout.hero_area.y >= layout.audiobookshelf_book_right_area.y,
+        "narrow book detail must enter browser flow instead of remaining pinned above it: hero={:?}, browser={:?}",
+        layout.hero_area,
+        layout.audiobookshelf_book_right_area
+    );
+}
+
+#[test]
+fn narrow_book_detail_is_suppressed_in_a_short_viewport() {
+    let mut app = make_audiobookshelf_book_app();
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 4);
+
+    assert_eq!(layout.hero_area.height, 0);
 }
 
 /// The hero must render the book's author, narrator, year, and description
@@ -266,7 +293,7 @@ fn hero_renders_author_narrator_year_and_description() {
     app.tab = TabSelection::AudiobookshelfLibrary(0);
     app.panel_focus = PanelFocus::Library;
 
-    // Narrow (single-column hero-on-top) — 80 cols gives the meta row
+    // Narrow (single-column legacy top placement) — 80 cols gives the meta row
     // enough room for the narrator span without truncation.
     let mut layout = LayoutMain::default();
     let out = render_library_to_string_sized(&mut app, &mut layout, 80, 24);

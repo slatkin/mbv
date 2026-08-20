@@ -1,5 +1,7 @@
 use super::audiobookshelf_books::{PANE_PAD_X, PANE_PAD_Y, PILLS_GAP_ROWS, PILLS_ROW_HEIGHT};
+use super::hero::{selected_detail_shell, HERO_BLOCK_EXTRA_ROWS};
 use super::hero_left;
+use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::ui_util::trunc_str;
 use crate::app::{palette, App};
@@ -58,12 +60,13 @@ impl App {
                 index,
                 right_focused,
                 layout,
+                0,
             );
         }
         hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     }
 
-    /// The narrow hero-on-top fallback's right pane: no recessed panel
+    /// The narrow legacy top placement fallback's right pane: no recessed panel
     /// chrome (the pre-redesign narrow book renderer had none either), just
     /// the pill row directly above the single-column book list.
     pub(super) fn render_audiobookshelf_book_right_pane_narrow(
@@ -73,6 +76,7 @@ impl App {
         index: usize,
         right_focused: bool,
         layout: &mut LayoutMain,
+        detail_rows: u16,
     ) {
         if area.height == 0 {
             return;
@@ -96,6 +100,7 @@ impl App {
                 index,
                 right_focused,
                 layout,
+                detail_rows,
             );
         }
     }
@@ -103,7 +108,7 @@ impl App {
     /// Renders the alphabetical author-surname-bucket pills (labels from
     /// `state.buckets`, omitting any empty range -- see
     /// `types_audiobookshelf_browse::build_surname_buckets`).
-    fn render_audiobookshelf_book_bucket_pills(
+    pub(super) fn render_audiobookshelf_book_bucket_pills(
         &mut self,
         f: &mut Frame,
         row_area: Rect,
@@ -139,10 +144,6 @@ impl App {
         );
     }
 
-    /// The persistent, single-column, bucket-filtered book list (Music's
-    /// album-list-within-artist-filter analog, `render_wide_right_album_browser`
-    /// shape without header rows -- bucket grouping is already expressed by
-    /// the pill row, not by in-list headers).
     fn render_audiobookshelf_book_browser_rows(
         &mut self,
         f: &mut Frame,
@@ -150,8 +151,9 @@ impl App {
         index: usize,
         right_focused: bool,
         layout: &mut LayoutMain,
+        detail_rows: u16,
     ) {
-        let Some(state) = self.audiobookshelf_book_browse.get(index) else {
+        let Some(mut state) = self.audiobookshelf_book_browse.get(index).cloned() else {
             return;
         };
         let Some(bucket) = state.buckets.get(state.selected_bucket).copied() else {
@@ -165,23 +167,38 @@ impl App {
         let cursor = state.cursor();
         let count = bucket.end - bucket.start;
         let cursor_pos = cursor.saturating_sub(bucket.start).min(count - 1);
-        let visible = area.height as usize;
+        let detail_rows = (detail_rows >= HERO_BLOCK_EXTRA_ROWS + 1)
+            .then_some(detail_rows)
+            .unwrap_or(0);
+        let flow = (detail_rows > 0)
+            .then(|| {
+                super::hero::inline_detail_flow(cursor_pos, detail_rows, area.height, state.scroll)
+            })
+            .flatten();
+        let scroll = flow.map(|flow| flow.offset).unwrap_or_else(|| {
+            state.scroll.clamp(
+                cursor_pos.saturating_sub(area.height as usize - 1),
+                cursor_pos,
+            )
+        });
+        state.scroll = scroll;
+        self.audiobookshelf_book_browse[index].scroll = scroll;
 
-        let state = &mut self.audiobookshelf_book_browse[index];
-        let lower = (cursor_pos + 1).saturating_sub(visible).min(cursor_pos);
-        state.scroll = state.scroll.clamp(lower, cursor_pos);
-        let scroll = state.scroll;
-
+        let total_rows = count + detail_rows as usize;
         let right_area = layout.audiobookshelf_book_right_area;
         let row_offset = area.y.saturating_sub(right_area.y) as usize;
         let mut row_targets = vec![None; right_area.height as usize];
-        for screen_y in 0..visible.min(count.saturating_sub(scroll)) {
-            let book_idx = bucket.start + scroll + screen_y;
+        let mut screen_y = 0u16;
+        for book_offset in scroll..count {
+            if screen_y >= area.height {
+                break;
+            }
+            let book_idx = bucket.start + book_offset;
             let book = &state.books[book_idx];
             let selected = book_idx == cursor;
             let row_area = Rect {
                 x: area.x,
-                y: area.y + screen_y as u16,
+                y: area.y + screen_y,
                 width: area.width,
                 height: 1,
             };
@@ -204,15 +221,68 @@ impl App {
                 Paragraph::new(Line::from(vec![marker, Span::raw(title)])).style(style),
                 row_area,
             );
-            if let Some(target) = row_targets.get_mut(row_offset + screen_y) {
+            if let Some(target) = row_targets.get_mut(row_offset + screen_y as usize) {
                 *target = Some(LibraryRowTarget::Book(book_idx));
+            }
+            screen_y += 1;
+
+            if selected && detail_rows > 0 {
+                let detail_y = area.y + screen_y;
+                if detail_y >= area.bottom() {
+                    break;
+                }
+                let detail_height = detail_rows.min(area.bottom().saturating_sub(detail_y));
+                layout.hero_area = Rect {
+                    x: area.x,
+                    y: detail_y,
+                    width: area.width,
+                    height: detail_height,
+                };
+                selected_detail_shell(f, layout.hero_area, detail_height, right_focused);
+                let hero_rows = self.audiobookshelf_book_hero_rows(&state) + HERO_BLOCK_EXTRA_ROWS;
+                let hero_height = hero_rows.min(detail_height);
+                if hero_height >= HERO_BLOCK_EXTRA_ROWS {
+                    self.render_audiobookshelf_book_hero(
+                        f,
+                        Rect {
+                            x: area.x + SELECTED_BLOCK_SIDE_PADDING,
+                            y: detail_y + 2,
+                            width: area.width.saturating_sub(SELECTED_BLOCK_SIDE_PADDING * 2),
+                            height: hero_height.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
+                        },
+                        index,
+                        right_focused,
+                        layout,
+                    );
+                    let chapters_y = detail_y + hero_height;
+                    let chapters_height = detail_height.saturating_sub(hero_height);
+                    if chapters_height > 0 {
+                        self.render_audiobookshelf_book_rows(
+                            f,
+                            Rect {
+                                x: area.x,
+                                y: chapters_y,
+                                width: area.width,
+                                height: chapters_height,
+                            },
+                            &state,
+                            right_focused,
+                            layout,
+                        );
+                    }
+                }
+                screen_y += detail_rows;
             }
         }
         layout.left_row_targets = row_targets;
-
-        if count > visible && right_focused {
-            let max_offset = count.saturating_sub(visible);
-            super::render_right_scrollbar(f, area, max_offset, scroll, palette::SCROLLBAR);
+        if total_rows > area.height as usize && right_focused {
+            super::render_right_scrollbar(
+                f,
+                area,
+                total_rows.saturating_sub(area.height as usize),
+                scroll,
+                palette::SCROLLBAR,
+            );
         }
     }
 }

@@ -1,7 +1,7 @@
 use super::hero::{
-    hero_block_shell, paint_hero_content, top_hero_layout, HeroContent, HERO_BLOCK_EXTRA_ROWS,
-    HERO_TITLE_ROWS,
+    paint_hero_content, selected_detail_shell, HeroContent, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
+use super::hero_left;
 use super::list_rows::{draw_column_selection_markers, SELECTED_BLOCK_SIDE_PADDING};
 use super::widgets::{
     render_pill_bar, render_placeholder, render_right_scrollbar_with_viewport, PillBar,
@@ -228,96 +228,97 @@ impl App {
         // free row after them (plus its trailing gap). Called either above
         // the list (no hero to show) or below the hero (unified with
         // Movies/TV's letter-range pills -- see `list.rs`/`hero.rs`).
-        let render_selector_rows = |f: &mut Frame, start_y: u16| -> (Vec<(Rect, usize)>, u16) {
-            let max_y = area.y + area.height;
-            let mut row = start_y;
-            let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
+        let render_selector_rows =
+            |f: &mut Frame, pane: Rect, start_y: u16| -> (Vec<(Rect, usize)>, u16) {
+                let max_y = pane.y + pane.height;
+                let mut row = start_y;
+                let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
 
-            // Pill bar: "All" + one per subscription.
-            if row < max_y && has_subs {
-                const MAX_LABEL: usize = 12;
-                let mut labels: Vec<String> = vec!["All".to_string()];
-                for sub in subscriptions {
-                    let name = if sub.name.len() > MAX_LABEL {
-                        format!("{}…", &sub.name[..MAX_LABEL])
-                    } else {
-                        sub.name.clone()
-                    };
-                    labels.push(name);
-                }
-                let ids: Vec<usize> = (0..labels.len()).collect();
-                selector_tabs = render_pill_bar(
-                    f,
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: area.width,
-                        height: 1,
-                    },
-                    PillBar {
-                        labels: &labels,
-                        ids: &ids,
-                        selected_pos: state.selected_group,
-                        prefix: Some(" ⌘ "),
-                    },
-                );
-            }
-            if row < max_y {
-                row += 1;
-            }
-            // Keep the playback-state filter visually separated from the group
-            // pill bar.
-            if row < max_y {
-                row += 1;
-            }
-            // Watched filter indicator line.
-            if row < max_y && has_subs {
-                let filter = state.watched_filter;
-                let mut spans = Vec::new();
-                for (i, f_variant) in [
-                    super::super::types_feed_tab::WatchedFilter::All,
-                    super::super::types_feed_tab::WatchedFilter::Watched,
-                    super::super::types_feed_tab::WatchedFilter::Unwatched,
-                ]
-                .iter()
-                .enumerate()
-                {
-                    if i > 0 {
-                        spans.push(Span::styled(" · ", Style::default().fg(palette::MUTED)));
-                    }
-                    let active = *f_variant == filter;
-                    spans.push(Span::styled(
-                        f_variant.label().to_string(),
-                        if active {
-                            Style::default()
-                                .fg(palette::AQUA)
-                                .add_modifier(Modifier::BOLD)
+                // Pill bar: "All" + one per subscription.
+                if row < max_y && has_subs {
+                    const MAX_LABEL: usize = 12;
+                    let mut labels: Vec<String> = vec!["All".to_string()];
+                    for sub in subscriptions {
+                        let name = if sub.name.len() > MAX_LABEL {
+                            format!("{}…", &sub.name[..MAX_LABEL])
                         } else {
-                            Style::default().fg(palette::MUTED)
+                            sub.name.clone()
+                        };
+                        labels.push(name);
+                    }
+                    let ids: Vec<usize> = (0..labels.len()).collect();
+                    selector_tabs = render_pill_bar(
+                        f,
+                        Rect {
+                            x: pane.x,
+                            y: row,
+                            width: pane.width,
+                            height: 1,
                         },
-                    ));
+                        PillBar {
+                            labels: &labels,
+                            ids: &ids,
+                            selected_pos: state.selected_group,
+                            prefix: Some(" ⌘ "),
+                        },
+                    );
                 }
-                f.render_widget(
-                    Paragraph::new(Line::from(spans))
-                        .style(Style::default().bg(palette::SURFACE_BACKDROP)),
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-                row += 1;
-            }
-            if row < max_y {
-                row += 1;
-            }
-            (selector_tabs, row)
-        };
+                if row < max_y {
+                    row += 1;
+                }
+                // Keep the playback-state filter visually separated from the group
+                // pill bar.
+                if row < max_y {
+                    row += 1;
+                }
+                // Watched filter indicator line.
+                if row < max_y && has_subs {
+                    let filter = state.watched_filter;
+                    let mut spans = Vec::new();
+                    for (i, f_variant) in [
+                        super::super::types_feed_tab::WatchedFilter::All,
+                        super::super::types_feed_tab::WatchedFilter::Watched,
+                        super::super::types_feed_tab::WatchedFilter::Unwatched,
+                    ]
+                    .iter()
+                    .enumerate()
+                    {
+                        if i > 0 {
+                            spans.push(Span::styled(" · ", Style::default().fg(palette::MUTED)));
+                        }
+                        let active = *f_variant == filter;
+                        spans.push(Span::styled(
+                            f_variant.label().to_string(),
+                            if active {
+                                Style::default()
+                                    .fg(palette::AQUA)
+                                    .add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(palette::MUTED)
+                            },
+                        ));
+                    }
+                    f.render_widget(
+                        Paragraph::new(Line::from(spans))
+                            .style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                        Rect {
+                            x: pane.x,
+                            y: row,
+                            width: pane.width,
+                            height: 1,
+                        },
+                    );
+                    row += 1;
+                }
+                if row < max_y {
+                    row += 1;
+                }
+                (selector_tabs, row)
+            };
 
         // Whether this frame will show a hero (has entries to select from):
         // if so, the selector rows move below it, unified with the
-        // Movies/TV hero-on-top arrangement; otherwise (no subs / no
+        // Movies/TV legacy top placement arrangement; otherwise (no subs / no
         // entries yet) they stay above the placeholder message, since
         // there's no hero to be below.
         let will_show_hero = has_subs && !self.feed_tab.visible_entries().is_empty();
@@ -325,7 +326,7 @@ impl App {
         let (selector_tabs, list_area) = if will_show_hero {
             (Vec::new(), area)
         } else {
-            let (selector_tabs, row) = render_selector_rows(f, area.y);
+            let (selector_tabs, row) = render_selector_rows(f, area, area.y);
             let max_y = area.y + area.height;
             let list_area = Rect {
                 x: area.x,
@@ -385,23 +386,30 @@ impl App {
         let packed = pack_feed_rows(&display_rows, cols);
 
         // Hero: the cursor-selected entry's title + metadata, painted above
-        // the (now packed) list -- feeds' hero-on-top arrangement
+        // the (now packed) list -- feeds' legacy top placement arrangement
         // (design.md decision 6: no image, since feed entries carry none).
         // The group pill bar + watched-filter row render below the hero
         // (unified with Movies/TV's letter-range pills), so they're carved
-        // out of the hero's own leftover space rather than `top_hero_layout`'s
+        // out of the hero's own leftover space rather than `placement-neutral geometry`'s
         // built-in single-pill-row slot, which is too short for both rows.
         let selected_entry = self.feed_tab.visible_entries()[cursor].clone();
         let show_title = cols > 1;
         let hero_rows_desired = feed_hero_content_rows(show_title) + HERO_BLOCK_EXTRA_ROWS;
-        let hero_layout = top_hero_layout(list_area, hero_rows_desired, false);
-        let hero_area = hero_layout.hero_area;
-        let post_hero_area = hero_layout.list_area;
-        let hero_rows = hero_layout.hero_rows;
+        let wide = hero_left::can_use_hero_on_left(area);
+        let (hero_area, post_hero_area, hero_rows) = if wide {
+            let (hero_panel, right_panel) = hero_left::hero_on_left_panes(area);
+            (
+                hero_panel,
+                right_panel,
+                hero_rows_desired.min(hero_panel.height),
+            )
+        } else {
+            (Rect::default(), list_area, hero_rows_desired)
+        };
         layout.hero_area = hero_area;
 
-        if hero_rows > 0 {
-            hero_block_shell(f, hero_area, hero_rows, focused);
+        if wide && hero_rows > 0 {
+            selected_detail_shell(f, hero_area, hero_rows, focused);
             let content_rect = Rect {
                 x: hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
                 y: hero_area.y + 2,
@@ -423,7 +431,7 @@ impl App {
             paint_hero_content(f, content_rect, &hero_content, focused);
         }
 
-        let (selector_tabs, row) = render_selector_rows(f, post_hero_area.y);
+        let (selector_tabs, row) = render_selector_rows(f, post_hero_area, post_hero_area.y);
         layout.selector_tabs = selector_tabs;
         let list_area = Rect {
             x: post_hero_area.x,
@@ -525,6 +533,41 @@ impl App {
             );
         }
         draw_column_selection_markers(f, list_area, cursor, &layout.left_item_rows, scroll);
+        if !wide {
+            let hero_rows = hero_rows.min(list_area.height.saturating_sub(1));
+            if hero_rows >= HERO_BLOCK_EXTRA_ROWS {
+                layout.hero_area = Rect {
+                    x: list_area.x,
+                    y: list_area.y + 1,
+                    width: list_area.width,
+                    height: hero_rows,
+                };
+                selected_detail_shell(f, layout.hero_area, hero_rows, focused);
+                let meta = feed_entry_meta_line(&selected_entry);
+                paint_hero_content(
+                    f,
+                    Rect {
+                        x: layout.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
+                        y: layout.hero_area.y + 2,
+                        width: layout
+                            .hero_area
+                            .width
+                            .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
+                        height: hero_rows.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
+                    },
+                    &HeroContent {
+                        title: show_title.then_some(selected_entry.title.as_str()),
+                        meta_line: Some(meta.as_str()),
+                        meta_color: palette::PLAYBACK_META_FG,
+                        show_playing: false,
+                        unconditional_spacer_after_meta: false,
+                        lines: &[],
+                        image: None,
+                    },
+                    focused,
+                );
+            }
+        }
     }
 }
 
