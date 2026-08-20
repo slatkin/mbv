@@ -220,6 +220,71 @@ fn x_does_not_cycle_panel_mode_while_context_menu_is_open_via_handle_key() {
 }
 
 #[test]
+fn context_menu_owns_keyboard_navigation_and_dismissal() {
+    let mut app = make_app_stub();
+    app.context_menu = Some(crate::app::ContextMenu {
+        anchor: crate::app::ContextMenuAnchor::Pointer { x: 0, y: 0 },
+        entries: vec![
+            crate::app::ContextMenuEntry {
+                label: "first",
+                action: Some(crate::app::ContextAction::Play),
+            },
+            crate::app::ContextMenuEntry {
+                label: "separator",
+                action: None,
+            },
+            crate::app::ContextMenuEntry {
+                label: "last",
+                action: Some(crate::app::ContextAction::Play),
+            },
+        ],
+        cursor: 0,
+    });
+
+    app.handle_key(ev(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(app.context_menu.as_ref().unwrap().cursor, 2);
+    app.handle_key(ev(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(app.context_menu.as_ref().unwrap().cursor, 0);
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert!(app.context_menu.is_some(), "unrelated keys are swallowed");
+    app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(app.context_menu.is_none());
+}
+
+#[test]
+fn context_menu_open_is_refused_over_sidebar_surface() {
+    let mut app = make_app_stub();
+    app.show_help = true;
+    app.open_context_menu();
+    assert!(app.context_menu.is_none());
+}
+
+#[test]
+fn context_menu_swallow_regression_shortcuts() {
+    let mut app = make_app_stub();
+    app.context_menu = Some(test_empty_context_menu());
+    let keys = [
+        ev(KeyCode::F(1), KeyModifiers::NONE),
+        ev(KeyCode::F(2), KeyModifiers::NONE),
+        ev(KeyCode::F(3), KeyModifiers::NONE),
+        ev(KeyCode::F(4), KeyModifiers::NONE),
+        ev(KeyCode::Char('/'), KeyModifiers::CONTROL),
+        ev(KeyCode::Tab, KeyModifiers::NONE),
+        ev(KeyCode::BackTab, KeyModifiers::SHIFT),
+        ev(KeyCode::Char('1'), KeyModifiers::NONE),
+        ev(KeyCode::Char('9'), KeyModifiers::NONE),
+        ev(KeyCode::F(5), KeyModifiers::NONE),
+        ev(KeyCode::Char('c'), KeyModifiers::NONE),
+        ev(KeyCode::Char('x'), KeyModifiers::NONE),
+    ];
+    for key in keys {
+        app.handle_key(key);
+        assert!(app.context_menu.is_some(), "{key:?} must be swallowed");
+        assert!(!app.show_help && !app.show_settings && !app.show_sessions);
+    }
+}
+
+#[test]
 fn x_moves_queue_focus_to_library_when_entering_library_only() {
     let mut app = make_app_stub();
     app.panel_focus = crate::app::PanelFocus::Queue;
@@ -421,12 +486,13 @@ fn context_stack_order_is_pinned() {
     // inline `lib_search` entry per library tab (restoring the pre-modal
     // in-list search box) and a `search_sidebar` entry for the global
     // `Ctrl+/` panel. Both sit where `search_modal` used to, and the
-    // context menu's keys (`Esc` and friends) are still caught by the
-    // modal layers above them.
+    // The context menu owns every key while open and therefore precedes all
+    // other modal and view contexts.
     let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
     assert_eq!(
         names,
         vec![
+            "context_menu",
             "daemon_lost_modal",
             "confirm_modal",
             "remote_reanchor",

@@ -24,8 +24,7 @@ impl App {
     }
 
     fn handle_queue_column_width_key(&mut self, key: KeyEvent) -> bool {
-        if self.context_menu_open()
-            || self.effective_panel_mode() != PanelMode::Both
+        if self.effective_panel_mode() != PanelMode::Both
             || !Self::is_queue_column_width_resize_key(key)
         {
             return false;

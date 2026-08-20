@@ -326,10 +326,9 @@ fn two_column_grouped_rows_keep_absolute_columns_after_scroll() {
     let lines: Vec<&str> = rendered.lines().collect();
     assert!(
         lines[1].contains("Album 02"),
-        "the row containing the selected album should render after the scrolled packed row:\n{rendered}\noffset={} rows={:?} cursor_y={:?}",
+        "the row containing the selected album should render after the scrolled packed row:\n{rendered}\noffset={} rows={:?}",
         layout.left_screen_offset,
         layout.left_item_rows,
-        layout.cursor_screen_y,
     );
     assert!(
         lines[1].starts_with('▎'),
@@ -338,5 +337,4 @@ fn two_column_grouped_rows_keep_absolute_columns_after_scroll() {
     assert_eq!(layout.left_screen_offset, 1);
     assert_eq!(layout.left_item_rows[1], vec![0, 1]);
     assert_eq!(layout.left_item_rows[2], vec![2, 3]);
-    assert_eq!(layout.cursor_screen_y, Some(1));
 }

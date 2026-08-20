@@ -187,6 +187,22 @@ impl App {
 
         self.render_context_menu(f, &mut layout);
 
+        debug_assert!(
+            self.context_menu.is_none()
+                || (!self.confirm_modal.is_some()
+                    && !self.daemon_lost_modal.is_some()
+                    && !self.remote_reanchor_popup.is_some()
+                    && !self.save_playlist_dialog.is_some()
+                    && !self.multiselect_popup.is_some()
+                    && !self.library_routes_popup.is_some()
+                    && !self.show_help
+                    && !self.show_settings
+                    && !self.show_sessions
+                    && !self.show_playlists
+                    && self.search_sidebar.is_none()),
+            "context menu must be the only modal or sidebar surface"
+        );
+
         let panel_area = (layout.main.panel_area.width > 0).then_some(layout.main.panel_area);
         if self.show_sessions {
             self.render_sessions_overlay(f, panel_area);
@@ -245,7 +261,8 @@ impl App {
     }
 
     fn any_dim_modal_open(&self) -> bool {
-        self.confirm_modal.is_some()
+        self.context_menu.is_some()
+            || self.confirm_modal.is_some()
             || self.daemon_lost_modal.is_some()
             || self.remote_reanchor_popup.is_some()
             || self.multiselect_popup.is_some()

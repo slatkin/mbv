@@ -278,7 +278,6 @@ impl App {
         focused: bool,
         layout: &mut LayoutMain,
     ) {
-        layout.queue_cursor_screen_y = None;
         layout.queue_selected_item_rect = None;
         layout.queue_area = area;
 
@@ -325,8 +324,6 @@ impl App {
             self.queue_scroll = cursor_row.saturating_sub(visible.saturating_sub(1));
         }
         let offset = self.queue_scroll;
-        layout.queue_cursor_screen_y =
-            Some(area.y + (cursor_row.saturating_sub(self.queue_scroll)) as u16);
         layout.queue_selected_item_rect = Some(Rect {
             x: area.x,
             y: area.y + (cursor_row.saturating_sub(self.queue_scroll)) as u16,

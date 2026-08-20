@@ -3,6 +3,58 @@ use crate::app::{
 };
 
 impl App {
+    pub(super) fn handle_key_context_menu(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> Option<bool> {
+        let Some(menu) = self.context_menu.as_mut() else {
+            return None;
+        };
+
+        match key.code {
+            crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Down => {
+                let selectable: Vec<usize> = menu
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, entry)| entry.action.is_some().then_some(i))
+                    .collect();
+                if !selectable.is_empty() {
+                    let pos = selectable.iter().position(|&i| i == menu.cursor);
+                    let next = match (key.code, pos) {
+                        (crossterm::event::KeyCode::Up, Some(pos)) => {
+                            pos.checked_sub(1).unwrap_or(selectable.len() - 1)
+                        }
+                        (crossterm::event::KeyCode::Down, Some(pos)) => {
+                            (pos + 1) % selectable.len()
+                        }
+                        (crossterm::event::KeyCode::Up, None) => selectable.len() - 1,
+                        (crossterm::event::KeyCode::Down, None) => 0,
+                        _ => unreachable!(),
+                    };
+                    menu.cursor = selectable[next];
+                }
+            }
+            crossterm::event::KeyCode::Enter => {
+                let action = menu
+                    .entries
+                    .get(menu.cursor)
+                    .and_then(|entry| entry.action.clone());
+                self.context_menu = None;
+                self.layout.context_menu_rect = None;
+                self.force_clear = true;
+                self.execute_context_action(action);
+            }
+            crossterm::event::KeyCode::Esc => {
+                self.context_menu = None;
+                self.layout.context_menu_rect = None;
+                self.force_clear = true;
+            }
+            _ => {}
+        }
+        Some(false)
+    }
+
     fn push_context_action(
         entries: &mut Vec<ContextMenuEntry>,
         label: &'static str,
@@ -22,6 +74,20 @@ impl App {
     }
 
     pub(super) fn open_context_menu(&mut self) {
+        if self.confirm_modal.is_some()
+            || self.daemon_lost_modal.is_some()
+            || self.remote_reanchor_popup.is_some()
+            || self.save_playlist_dialog.is_some()
+            || self.multiselect_popup.is_some()
+            || self.library_routes_popup.is_some()
+            || self.show_help
+            || self.show_settings
+            || self.show_sessions
+            || self.show_playlists
+            || self.search_sidebar.is_some()
+        {
+            return;
+        }
         let mut entries: Vec<ContextMenuEntry> = vec![];
 
         let cw_focused =

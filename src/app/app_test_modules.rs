@@ -75,6 +75,10 @@ mod tests_feed_tab_guard;
 mod tests_feeds_manage;
 
 #[cfg(test)]
+#[path = "tests_context_menu_placement.rs"]
+mod tests_context_menu_placement;
+
+#[cfg(test)]
 #[path = "tests_services_settings.rs"]
 mod tests_services_settings;
 

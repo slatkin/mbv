@@ -138,7 +138,6 @@ impl App {
                 super::album_plan::GroupedAlbumDisplayRow::Album(idx) => {
                     let selected = *idx == cursor;
                     if selected {
-                        layout.cursor_screen_y = Some(browser_area.y + screen_y);
                         layout.selected_item_rect = Some(Rect {
                             x: browser_area.x,
                             y: browser_area.y + screen_y,

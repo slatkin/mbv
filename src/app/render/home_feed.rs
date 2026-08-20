@@ -153,7 +153,6 @@ impl App {
             let item_h = item_heights[item_idx];
             let selected = item_idx == current_pos;
             if selected {
-                layout.cursor_screen_y = Some(row_y);
                 layout.selected_item_rect = Some(Rect {
                     x: list_area.x,
                     y: row_y,

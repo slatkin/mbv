@@ -27,7 +27,6 @@ impl App {
     pub(super) fn handle_key_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
         if key.modifiers.contains(KeyModifiers::ALT)
             || key.modifiers.contains(KeyModifiers::CONTROL)
-            || self.context_menu_open()
             || !matches!(self.effective_panel_focus(), PanelFocus::Library)
         {
             return None;
@@ -109,7 +108,7 @@ impl App {
     }
 
     pub(super) fn handle_key_panel_mode_cycle(&mut self, key: KeyEvent) -> Option<bool> {
-        if key.code != KeyCode::Char('x') || !key.modifiers.is_empty() || self.context_menu_open() {
+        if key.code != KeyCode::Char('x') || !key.modifiers.is_empty() {
             return None;
         }
         Some(self.dispatch(Command::CyclePanelMode))

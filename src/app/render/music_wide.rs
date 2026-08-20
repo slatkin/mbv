@@ -607,11 +607,10 @@ impl App {
                     );
                 }
 
-                // Update cursor_screen_y for the focused track.
+                // Publish the selected track rect as the keyboard anchor.
                 if let Some(cursor) = track_cursor {
                     if cursor >= scroll && cursor < scroll + visible {
                         let cy = list_area.y + (cursor - scroll) as u16;
-                        layout.cursor_screen_y = Some(cy);
                         layout.selected_item_rect = Some(Rect {
                             x: list_area.x,
                             y: cy,

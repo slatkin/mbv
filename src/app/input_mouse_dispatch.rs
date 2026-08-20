@@ -23,6 +23,52 @@ impl App {
             return;
         }
 
+        if self.context_menu.is_some() {
+            if !matches!(
+                mouse.kind,
+                crossterm::event::MouseEventKind::Down(MouseButton::Left)
+            ) {
+                return;
+            }
+            if let Some(rect) = self.layout.context_menu_rect {
+                if rect.contains((col, row).into()) {
+                    let inner_y = rect.y + 1;
+                    if row >= inner_y
+                        && (row - inner_y)
+                            < self.context_menu.as_ref().unwrap().entries.len() as u16
+                    {
+                        let idx = (row - inner_y) as usize;
+                        let action = self
+                            .context_menu
+                            .as_ref()
+                            .unwrap()
+                            .entries
+                            .get(idx)
+                            .and_then(|entry| entry.action.clone());
+                        if action.is_some() {
+                            self.execute_context_action(action);
+                        } else {
+                            self.context_menu = None;
+                            self.layout.context_menu_rect = None;
+                            self.force_clear = true;
+                        }
+                    } else {
+                        self.context_menu = None;
+                        self.layout.context_menu_rect = None;
+                        self.force_clear = true;
+                    }
+                } else {
+                    self.context_menu = None;
+                    self.layout.context_menu_rect = None;
+                    self.force_clear = true;
+                }
+            } else {
+                self.context_menu = None;
+                self.force_clear = true;
+            }
+            return;
+        }
+
         // Suppress all mouse actions while the terminal does not have
         // focus.  `refocus_at` is `None` when unfocused (or never yet
         // focused); `Some` when focused.  When transitioning from
@@ -136,40 +182,6 @@ impl App {
                 }
             }
             MouseEventKind::Down(MouseButton::Left) => {
-                if self.context_menu.is_some() {
-                    if let Some(rect) = self.layout.context_menu_rect {
-                        if rect.contains((col, row).into()) {
-                            let inner_y = rect.y + 1;
-                            if row >= inner_y
-                                && (row - inner_y)
-                                    < self.context_menu.as_ref().unwrap().entries.len() as u16
-                            {
-                                let idx = (row - inner_y) as usize;
-                                let action = self
-                                    .context_menu
-                                    .as_ref()
-                                    .unwrap()
-                                    .entries
-                                    .get(idx)
-                                    .and_then(|entry| entry.action.clone());
-                                if action.is_some() {
-                                    self.context_menu = None;
-                                    self.layout.context_menu_rect = None;
-                                    self.force_clear = true;
-                                    self.execute_context_action(action);
-                                }
-                            } else {
-                                self.context_menu = None;
-                                self.force_clear = true;
-                            }
-                            return;
-                        }
-                    }
-                    self.context_menu = None;
-                    self.force_clear = true;
-                    return;
-                }
-
                 let now = Instant::now();
 
                 let is_double = now.duration_since(self.last_click_time)

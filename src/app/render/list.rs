@@ -582,11 +582,8 @@ impl App {
 
         // Paint the hero into its fixed top-edge rect, after the list has
         // rendered: the outer shell (colored bg + `▁`/`▔` borders), then the
-        // content offset 2 rows down past the top border + top padding. The
-        // row renderer set `cursor_screen_y` to the selected list row; the
-        // hero paint doesn't touch it.
+        // content offset 2 rows down past the top border + top padding.
         if inline_hero_rows > 0 {
-            let saved_cursor_y = layout.cursor_screen_y;
             hero_block_shell(f, layout.hero_area, inline_hero_rows, focused);
             // Content, offset 2 rows down past the top border + top
             // padding, and inset 2 cols on each side like music/homevideo's
@@ -620,7 +617,6 @@ impl App {
                     layout,
                 );
             }
-            layout.cursor_screen_y = saved_cursor_y;
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.

@@ -71,7 +71,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         album: &mbv_core::api::EmbyItem,
-        layout: &mut LayoutMain,
+        _layout: &mut LayoutMain,
     ) {
         if !self.images_enabled() || area.width < 4 || area.height < 2 {
             return;
@@ -79,7 +79,7 @@ impl App {
 
         let box_rect = inline_art_box_rect(area);
         let nav_gate_open = self.right_panel_image_renders_allowed();
-        let img_rect = self.render_inline_art_cell(
+        self.render_inline_art_cell(
             f,
             box_rect,
             album,
@@ -88,7 +88,6 @@ impl App {
             false,
             (ArtAnchorX::Right, ArtAnchorY::Top),
         );
-        layout.inline_image_rect = Some(img_rect);
     }
 
     pub(super) fn render_inline_album_art_centered(
@@ -96,7 +95,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         album: &mbv_core::api::EmbyItem,
-        layout: &mut LayoutMain,
+        _layout: &mut LayoutMain,
     ) {
         if !self.images_enabled() || area.width < 4 || area.height < 2 {
             return;
@@ -113,7 +112,7 @@ impl App {
             ..box_rect
         };
         let nav_gate_open = self.right_panel_image_renders_allowed();
-        let img_rect = self.render_inline_art_cell(
+        self.render_inline_art_cell(
             f,
             box_rect,
             album,
@@ -122,7 +121,6 @@ impl App {
             false,
             (ArtAnchorX::Center, ArtAnchorY::Top),
         );
-        layout.inline_image_rect = Some(img_rect);
     }
 
     /// Fetches + renders a single album cover into `cell`, falling back to the

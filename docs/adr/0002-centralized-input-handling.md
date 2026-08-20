@@ -81,7 +81,11 @@ Tracked as separate issues under a GitHub Project.
    a separate, labeled behavior change: `c`/`h` reaching past an open context menu,
    each gated with its own `context_menu.is_some()` check and a dedicated regression
    test (matching the guard `home_search` already used).
-7. **Done (#136). Guardrail docs** — no raw shortcut handling outside the
+7. **Done (#583). Context-menu modal priority** — `context_menu` is the first
+   `CONTEXT_STACK` entry and claims every key while open. Opening is refused over
+   another modal/sidebar, and mandatory daemon-loss activation clears the menu before
+   rendering so exactly one modal surface remains active.
+8. **Done (#136). Guardrail docs** — no raw shortcut handling outside the
    registry except text-entry state machines. `src/app/input_resolver.rs` owns
    the `CONTEXT_STACK`; `src/app/input_browse_dispatch.rs` is the final
    destination-specific browse rendezvous beneath it.

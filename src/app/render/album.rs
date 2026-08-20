@@ -98,8 +98,6 @@ impl App {
             }
         }
 
-        layout.inline_image_rect = None;
-
         let in_music_group_view = self.is_music_group_view(lib_idx);
         // Inline track expansion for the selected album: in the music-group
         // (pill selector) view, only expand once the user has pressed Enter
@@ -213,13 +211,7 @@ impl App {
             sr.pop();
         }
         let screen_offset = display_screen_rows.get(offset).copied().unwrap_or(0);
-        // Cursor screen Y from the packed mapping
         if self.libs[lib_idx].album_track_focus.is_none() {
-            if let Some(&cursor_screen) = display_screen_rows.get(display_cursor) {
-                if cursor_screen >= screen_offset {
-                    layout.cursor_screen_y = Some(area.y + (cursor_screen - screen_offset) as u16);
-                }
-            }
             // Authoritative selected-cell rect (two-column packed cells use
             // `cell_w = area.width / cols`; the last column takes the rest).
             let cn = cols.max(1) as usize;

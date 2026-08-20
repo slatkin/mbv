@@ -268,7 +268,7 @@ impl App {
         area: Rect,
         index: usize,
         focused: bool,
-        layout: &mut LayoutMain,
+        _layout: &mut LayoutMain,
     ) {
         let Some(state) = self.audiobookshelf_book_browse.get(index).cloned() else {
             return;
@@ -405,9 +405,7 @@ impl App {
             false,
         );
         // The shared `render_beside_image_hero` renders the image into
-        // `img_area` via the image protocol, but the context-menu / inline
-        // image tracking needs the rect too.
-        layout.inline_image_rect = (image_rows > 0).then_some(img_area);
+        // `img_area` via the image protocol.
     }
 
     /// Chapter (or audioFiles) rows for the selected book: the persistent

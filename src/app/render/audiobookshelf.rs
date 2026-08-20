@@ -331,7 +331,6 @@ impl App {
                 width: image_width,
                 height: image_height,
             };
-            layout.inline_image_rect = Some(image_rect);
             if placeholder {
                 f.render_widget(
                     Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),

@@ -90,12 +90,9 @@ pub(crate) struct LayoutMain {
     pub queue_area: Rect,
     pub queue_scope_local_area: Rect,
     pub queue_scope_remote_area: Rect,
-    pub inline_image_rect: Option<Rect>,
     /// Visible Audiobookshelf episode rows and their filtered episode indices.
     /// Populated by the podcast hero renderer for mouse selection.
     pub audiobookshelf_episode_rows: Vec<(Rect, usize)>,
-    pub cursor_screen_y: Option<u16>,
-    pub queue_cursor_screen_y: Option<u16>,
     /// Screen rect of the selected row/cell in the library panel. The outer
     /// selectable renderer owns this; nested detail/hero renderers never
     /// overwrite it. Consumed by the context menu's keyboard anchor.

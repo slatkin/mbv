@@ -12,18 +12,9 @@ use mbv_core::player::PlayerCommand;
 #[cfg(test)]
 use ratatui::layout::Rect;
 #[cfg(test)]
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 impl App {
-    /// Whether a context menu is currently open. Shared by every
-    /// CONTEXT_STACK layer above it that must yield to it
-    /// (`panel_mode_cycle_x`, `search_sidebar`, `lib_search`, `clear_queue_prompt_c`,
-    /// `queue_column_width`) — see
-    /// docs/adr/0002-centralized-input-handling.md phase 6 (#135).
-    pub(super) fn context_menu_open(&self) -> bool {
-        self.context_menu.is_some()
-    }
-
     pub(super) fn context_menu_play_state(&self, item: &EmbyItem) -> bool {
         if item.is_folder {
             item.unplayed_item_count == 0

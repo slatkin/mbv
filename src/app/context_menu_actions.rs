@@ -3,6 +3,8 @@ use super::{App, ContextAction, PanelFocus};
 
 impl App {
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
+        self.context_menu = None;
+        self.layout.context_menu_rect = None;
         // The menu can only have opened on a matched Emby library, Home, or
         // the queue; `context_menu_lib_idx()` resolves the explicitly matched
         // Emby library (positive match, `None` on Home/queue) that every

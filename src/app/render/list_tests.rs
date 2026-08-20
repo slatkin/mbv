@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::layout::LayoutMain;
+use crate::app::render::list_rows::selected_cell_rect;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, TabSelection};
 use ratatui::backend::TestBackend;
@@ -17,6 +18,21 @@ fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
         out.push('\n');
     }
     out
+}
+
+#[test]
+fn selected_cell_rect_matches_one_and_two_column_geometry() {
+    let area = Rect::new(10, 4, 30, 8);
+    let rows = vec![vec![0], vec![1, 2], vec![3, 4]];
+    assert_eq!(
+        selected_cell_rect(area, 0, &rows, 0, 1, 30, 0),
+        Some(Rect::new(10, 4, 30, 1))
+    );
+    assert_eq!(
+        selected_cell_rect(area, 2, &rows, 0, 2, 14, 2),
+        Some(Rect::new(26, 5, 14, 1))
+    );
+    assert_eq!(selected_cell_rect(area, 4, &rows, 3, 2, 14, 2), None);
 }
 
 fn render_list_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
@@ -324,7 +340,7 @@ fn hero_paints_inline_in_two_column_mode() {
         layout.hero_area.y + layout.hero_area.height <= 40,
         "inline hero remains inside the scrolling list"
     );
-    let active_row = layout.cursor_screen_y.unwrap() as usize;
+    let active_row = layout.selected_item_rect.unwrap().y as usize;
     assert!(
         !output
             .lines()

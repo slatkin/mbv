@@ -162,8 +162,6 @@ impl App {
 
         let mut state = ListState::default();
         state.select(Some(display_cursor.saturating_sub(offset)));
-        layout.cursor_screen_y =
-            Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
         layout.selected_item_rect = selected_cell_rect(
             content_area,
             cursor,

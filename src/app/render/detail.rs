@@ -323,7 +323,7 @@ impl App {
         lib_idx: usize,
         focused: bool,
         show_title: bool,
-        layout: &mut LayoutMain,
+        _layout: &mut LayoutMain,
     ) {
         // The hero shows the selected leaf movie (movies/homevideos/podcasts)
         // or, on a tvshows library, the selected Series — the compact banner
@@ -393,7 +393,6 @@ impl App {
             }),
         };
         let result = super::hero::paint_hero_content(f, area, &hero_content, focused);
-        layout.inline_image_rect = result.img_rect;
 
         if let Some(img_rect) = result.img_rect {
             if content.img_is_placeholder {

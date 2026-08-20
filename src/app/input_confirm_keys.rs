@@ -252,10 +252,7 @@ impl App {
         // open silently opened the clear-queue confirmation instead of being
         // swallowed by the menu (which has no 'c' binding of its own). See
         // docs/adr/0002-centralized-input-handling.md phase 6.
-        if key.code != KeyCode::Char('c')
-            || key.modifiers.contains(KeyModifiers::ALT)
-            || self.context_menu_open()
-        {
+        if key.code != KeyCode::Char('c') || key.modifiers.contains(KeyModifiers::ALT) {
             return None;
         }
         if matches!(self.effective_panel_focus(), PanelFocus::Queue)

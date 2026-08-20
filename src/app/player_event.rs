@@ -546,6 +546,8 @@ impl App {
     /// Raises the blocking daemon-lost modal (task 7.1), replacing whatever
     /// other blocking overlay was showing -- only one is ever active.
     fn raise_daemon_lost_modal(&mut self) {
+        self.context_menu = None;
+        self.layout.context_menu_rect = None;
         self.confirm_modal = None;
         self.save_playlist_dialog = None;
         let last_playing_title = {
