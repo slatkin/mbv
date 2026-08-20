@@ -118,7 +118,10 @@ impl App {
             return None;
         }
 
-        let item = {
+        let item = if let Some(search) = &lib.search {
+            let item_idx = *search.results.get(search.cursor)?;
+            search.items.get(item_idx)?.clone()
+        } else {
             let level = lib.nav_stack.last()?;
             level.items.get(level.cursor)?.clone()
         };

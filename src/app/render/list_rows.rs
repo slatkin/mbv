@@ -191,12 +191,11 @@ pub(super) fn draw_column_selection_markers(
         .position(|&idx| idx == cursor)
         .unwrap_or(0);
 
-    let bg = palette::SURFACE_RESTING;
     let row_y = content_area.y + row_idx as u16;
 
     if col_in_row == 0 {
         f.render_widget(
-            Block::default().style(Style::default().bg(bg)),
+            Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
             Rect {
                 x: content_area.x.saturating_sub(2),
                 y: row_y,
@@ -215,7 +214,7 @@ pub(super) fn draw_column_selection_markers(
         );
     } else {
         f.render_widget(
-            Block::default().style(Style::default().bg(bg)),
+            Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
             Rect {
                 x: content_area.x + content_area.width,
                 y: row_y,

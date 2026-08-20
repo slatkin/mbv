@@ -30,7 +30,8 @@ impl App {
         lib_idx: usize,
         focused: bool,
         show_title: bool,
-        _layout: &mut LayoutMain,
+        persistent: bool,
+        layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;
@@ -40,6 +41,7 @@ impl App {
             return;
         };
         let (in_selection, _) = self.series_selection_state(lib_idx, &item.id);
+        let show_episodes = persistent || in_selection;
 
         // Fetch series detail if not cached
         if !item.id.is_empty() {
@@ -113,7 +115,7 @@ impl App {
             // shares SERIES_DETAIL_* constants with `series_inline_detail_rows`
             // so the reserved space and what's actually drawn stay in sync.
             let reserved_for_below = (SERIES_DETAIL_DIVIDER_ROWS
-                + if in_selection {
+                + if show_episodes {
                     SERIES_DETAIL_EPISODE_ROWS_ESTIMATE
                 } else {
                     0
@@ -196,7 +198,7 @@ impl App {
             if !detail.seasons.is_empty() && row < max_y {
                 let (_, season_w16) = text_dims(row);
                 let prefix_w = "Series: ".width();
-                if in_selection {
+                if persistent || in_selection {
                     let tab_labels: Vec<String> = detail
                         .seasons
                         .iter()
@@ -232,7 +234,7 @@ impl App {
                             height: 1,
                         },
                     );
-                    super::render_pill_bar(
+                    let season_tabs = super::render_pill_bar(
                         f,
                         Rect {
                             x: area.x + prefix_w as u16,
@@ -247,6 +249,9 @@ impl App {
                             prefix: Some(" ⌘ "),
                         },
                     );
+                    if persistent {
+                        layout.tv_wide_season_tabs = season_tabs;
+                    }
                     row += 1;
                 } else {
                     let spans: Vec<Span> = vec![
@@ -280,7 +285,7 @@ impl App {
                 .and_then(|s| detail.episodes.get(&s.id))
                 .map(|eps| eps.as_slice())
                 .unwrap_or(&[]);
-            if in_selection && !episodes.is_empty() && row < max_y {
+            if show_episodes && !episodes.is_empty() && row < max_y {
                 let (_, table_width) = text_dims(row);
                 let table_area = Rect {
                     x: area.x,
@@ -296,68 +301,100 @@ impl App {
                     let title_col_w = (table_area.width as usize)
                         .saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
 
-                    let rows: Vec<Row> = episodes
-                        .iter()
-                        .enumerate()
-                        .map(|(i, ep)| {
-                            let is_cursor = ep_cursor == Some(i);
-                            let row_style = if is_cursor && focused {
-                                Style::default().fg(palette::YELLOW)
-                            } else if focused {
-                                Style::default().fg(palette::WHITE)
-                            } else {
-                                Style::default().fg(palette::SUBTLE)
-                            };
-                            let marker =
-                                super::selection_marker(is_cursor, super::MarkerEdge::Left);
-                            let ep_num_w = episodes.len().to_string().len();
-                            let ep_label = if ep.index_number > 0 {
-                                format!("{:>ep_num_w$}. ", ep.index_number)
-                            } else {
-                                format!("{:>ep_num_w$}. ", i + 1)
-                            };
-                            let label_w = ep_label.chars().count();
-                            let title = trunc_str(&ep.name, title_col_w.saturating_sub(label_w));
-                            let mut title_spans = vec![marker];
-                            title_spans
-                                .push(Span::styled(ep_label, Style::default().fg(palette::MUTED)));
-                            title_spans.push(Span::raw(title));
+                    let visible = table_area.height as usize;
+                    let start = if persistent {
+                        ep_cursor
+                            .map(|cursor| cursor.saturating_sub(visible.saturating_sub(1)))
+                            .unwrap_or(0)
+                            .min(episodes.len().saturating_sub(visible))
+                    } else {
+                        0
+                    };
+                    for (i, row) in
+                        episodes
+                            .iter()
+                            .enumerate()
+                            .skip(start)
+                            .take(visible)
+                            .map(|(i, ep)| {
+                                (i, {
+                                    let is_cursor = ep_cursor == Some(i);
+                                    let row_style = if is_cursor && focused {
+                                        Style::default().fg(palette::YELLOW)
+                                    } else if focused {
+                                        Style::default().fg(palette::WHITE)
+                                    } else {
+                                        Style::default().fg(palette::SUBTLE)
+                                    };
+                                    let marker =
+                                        super::selection_marker(is_cursor, super::MarkerEdge::Left);
+                                    let ep_num_w = episodes.len().to_string().len();
+                                    let ep_label = if ep.index_number > 0 {
+                                        format!("{:>ep_num_w$}. ", ep.index_number)
+                                    } else {
+                                        format!("{:>ep_num_w$}. ", i + 1)
+                                    };
+                                    let label_w = ep_label.chars().count();
+                                    let title =
+                                        trunc_str(&ep.name, title_col_w.saturating_sub(label_w));
+                                    let mut title_spans = vec![marker];
+                                    title_spans.push(Span::styled(
+                                        ep_label,
+                                        Style::default().fg(palette::MUTED),
+                                    ));
+                                    title_spans.push(Span::raw(title));
 
-                            let title_cell = Cell::from(Line::from(title_spans));
-                            let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
-                            let length = if len_secs > 0 {
-                                fmt_duration_approx(len_secs)
-                            } else {
-                                "\u{2014}".to_string()
-                            };
-                            if show_length {
-                                Row::new([
-                                    title_cell,
-                                    Cell::from(Line::from(length).alignment(Alignment::Right))
-                                        .style(Style::default().fg(palette::MUTED)),
-                                    Cell::from(""),
-                                ])
-                                .style(row_style)
-                            } else {
-                                Row::new([title_cell, Cell::from(""), Cell::from("")])
-                                    .style(row_style)
-                            }
-                        })
-                        .collect();
+                                    let title_cell = Cell::from(Line::from(title_spans));
+                                    let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
+                                    let length = if len_secs > 0 {
+                                        fmt_duration_approx(len_secs)
+                                    } else {
+                                        "\u{2014}".to_string()
+                                    };
+                                    if show_length {
+                                        Row::new([
+                                            title_cell,
+                                            Cell::from(
+                                                Line::from(length).alignment(Alignment::Right),
+                                            )
+                                            .style(Style::default().fg(palette::MUTED)),
+                                            Cell::from(""),
+                                        ])
+                                        .style(row_style)
+                                    } else {
+                                        Row::new([title_cell, Cell::from(""), Cell::from("")])
+                                            .style(row_style)
+                                    }
+                                })
+                            })
+                    {
+                        let row_rect = Rect {
+                            x: table_area.x,
+                            y: table_area.y + (i - start) as u16,
+                            width: table_area.width,
+                            height: 1,
+                        };
+                        layout.tv_wide_episode_rows.push((row_rect, i));
+                        f.render_widget(
+                            Table::new(
+                                vec![row],
+                                [
+                                    Constraint::Min(10),
+                                    Constraint::Length(if show_length {
+                                        dur_col_w as u16
+                                    } else {
+                                        0
+                                    }),
+                                    Constraint::Length(1),
+                                ],
+                            )
+                            .column_spacing(1),
+                            row_rect,
+                        );
+                    }
 
-                    let mut state = TableState::default();
-                    state.select(ep_cursor);
-                    let table = Table::new(
-                        rows,
-                        [
-                            Constraint::Min(10),
-                            Constraint::Length(if show_length { dur_col_w as u16 } else { 0 }),
-                            Constraint::Length(1),
-                        ],
-                    )
-                    .column_spacing(1)
-                    .row_highlight_style(Style::default());
-                    f.render_stateful_widget(table, table_area, &mut state);
+                    // Rows are painted individually so hit targets follow the
+                    // bounded viewport and selected-episode scroll offset.
                 }
             }
         } else if row < max_y {

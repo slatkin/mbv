@@ -63,6 +63,16 @@ impl App {
             }
         }
 
+        if let Some(lib_idx) = self.tab.emby_library_index() {
+            if self.is_wide_tv_library(lib_idx)
+                && area.width >= TWO_COLUMN_THRESHOLD
+                && area.height.saturating_sub(1) >= super::hero_left::HERO_ON_LEFT_MIN_AREA_HEIGHT
+            {
+                self.render_wide_tv(f, area, lib_idx, focused, layout);
+                return;
+            }
+        }
+
         let mut content_area = area;
 
         // Search is active for the focused Emby library. Its 3-row input box
@@ -562,6 +572,7 @@ impl App {
                     lib_idx,
                     focused,
                     cols > 1,
+                    false,
                     layout,
                 );
             } else if let Some(item) = &selected_album_item {

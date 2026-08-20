@@ -520,6 +520,8 @@ impl App {
             Some(s) => s.query.clone(),
             None => return,
         };
+        self.libs[lib_idx].series_selection = None;
+        self.libs[lib_idx].series_season_cursor = 0;
 
         if query.chars().count() < 2 {
             if let Some(s) = self.libs[lib_idx].search.as_mut() {
