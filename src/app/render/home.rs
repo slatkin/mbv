@@ -539,6 +539,7 @@ impl App {
         }
 
         layout.left_area = list_area;
+        layout.inline_hero = narrow_hero_rows > 0;
 
         // Render hero (shared between both layout modes).
         if narrow_hero_rows > 0 {

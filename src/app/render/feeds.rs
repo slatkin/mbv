@@ -1,5 +1,6 @@
 use super::hero::{
-    paint_hero_content, selected_detail_shell, HeroContent, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
+    inline_detail_flow, paint_hero_content, selected_detail_shell, HeroContent,
+    HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
 use super::hero_left;
 use super::list_rows::{draw_column_selection_markers, SELECTED_BLOCK_SIDE_PADDING};
@@ -171,6 +172,7 @@ fn feed_entry_meta_line(entry: &FeedEntry) -> String {
 /// spacer boundary (same rule `list_letter_groups.rs`'s `push_item_row`
 /// uses for the Emby library list).
 enum PackedFeedRow {
+    Hero,
     Spacer,
     Heading(FeedAgeGroup),
     Items(Vec<usize>),
@@ -341,7 +343,6 @@ impl App {
         if list_area.height == 0 {
             return;
         }
-
         // Empty / help state.
         if !has_subs {
             render_placeholder(
@@ -383,7 +384,7 @@ impl App {
         let cursor = self.feed_tab.cursor.min(n.saturating_sub(1));
         let display_rows = feed_display_rows(self.feed_tab.visible_entries(), current_time_secs());
         let cols = library_column_count(list_area.width);
-        let packed = pack_feed_rows(&display_rows, cols);
+        let mut packed = pack_feed_rows(&display_rows, cols);
 
         // Hero: the cursor-selected entry's title + metadata, painted above
         // the (now packed) list -- feeds' legacy top placement arrangement
@@ -394,8 +395,9 @@ impl App {
         // built-in single-pill-row slot, which is too short for both rows.
         let selected_entry = self.feed_tab.visible_entries()[cursor].clone();
         let show_title = cols > 1;
-        let hero_rows_desired = feed_hero_content_rows(show_title) + HERO_BLOCK_EXTRA_ROWS;
         let wide = hero_left::can_use_hero_on_left(area);
+        let hero_rows_desired =
+            feed_hero_content_rows(if wide { show_title } else { true }) + HERO_BLOCK_EXTRA_ROWS;
         let (hero_area, post_hero_area, hero_rows) = if wide {
             let (hero_panel, right_panel) = hero_left::hero_on_left_panes(area);
             (
@@ -407,6 +409,7 @@ impl App {
             (Rect::default(), list_area, hero_rows_desired)
         };
         layout.hero_area = hero_area;
+        layout.inline_hero = !wide && hero_rows > 0;
 
         if wide && hero_rows > 0 {
             selected_detail_shell(f, hero_area, hero_rows, focused);
@@ -444,16 +447,40 @@ impl App {
         if list_area.height == 0 {
             return;
         }
+        let hero_rows = if wide {
+            hero_rows
+        } else {
+            let rows = hero_rows.min(list_area.height.saturating_sub(1));
+            (rows >= HERO_BLOCK_EXTRA_ROWS).then_some(rows).unwrap_or(0)
+        };
+        layout.inline_hero = !wide && hero_rows > 0;
 
         let visible = list_area.height as usize;
         let packed_cursor_row = packed
             .iter()
             .position(|row| matches!(row, PackedFeedRow::Items(idxs) if idxs.contains(&cursor)))
             .unwrap_or(0);
-        let lower_bound = packed_cursor_row.saturating_add(1).saturating_sub(visible);
-        let upper_bound = packed_cursor_row.min(packed.len().saturating_sub(visible));
-        let scroll = self.feed_tab.scroll.clamp(lower_bound, upper_bound);
+        let (scroll, detail_screen_row) = if !wide && hero_rows > 0 {
+            let flow = inline_detail_flow(
+                packed_cursor_row,
+                hero_rows,
+                list_area.height,
+                self.feed_tab.scroll,
+            )
+            .expect("admitted inline detail must fit");
+            (flow.offset, Some(flow.detail_screen_row))
+        } else {
+            let lower_bound = packed_cursor_row.saturating_add(1).saturating_sub(visible);
+            let upper_bound = packed_cursor_row.min(packed.len().saturating_sub(visible));
+            (self.feed_tab.scroll.clamp(lower_bound, upper_bound), None)
+        };
         self.feed_tab.scroll = scroll;
+        if !wide && hero_rows > 0 {
+            packed.splice(
+                packed_cursor_row + 1..packed_cursor_row + 1,
+                (0..hero_rows).map(|_| PackedFeedRow::Hero),
+            );
+        }
         let cell_w = library_cell_width(list_area, cols);
         let row_w = list_area.width.saturating_sub(1);
         let visible_count = packed.len().saturating_sub(scroll).min(visible);
@@ -466,6 +493,7 @@ impl App {
                 break;
             }
             match packed_row {
+                PackedFeedRow::Hero => row_map.push(None),
                 PackedFeedRow::Spacer => {
                     f.render_widget(
                         Paragraph::new(Line::default())
@@ -505,7 +533,16 @@ impl App {
                         let entry = &entries[i];
                         let selected = i == cursor;
                         let cell_x = list_area.x + cell_idx as u16 * (cell_w + LIBRARY_COLUMN_GAP);
-                        render_feed_entry_cell(f, entry, cell_x, row_y, cell_w, selected, focused);
+                        render_feed_entry_cell(
+                            f,
+                            entry,
+                            cell_x,
+                            row_y,
+                            cell_w,
+                            selected,
+                            focused,
+                            !selected || wide,
+                        );
                     }
                     row_map.push(idxs.first().copied());
                 }
@@ -518,7 +555,9 @@ impl App {
             .iter()
             .map(|row| match row {
                 PackedFeedRow::Items(idxs) => idxs.clone(),
-                _ => Vec::new(),
+                PackedFeedRow::Hero | PackedFeedRow::Spacer | PackedFeedRow::Heading(_) => {
+                    Vec::new()
+                }
             })
             .collect();
 
@@ -534,11 +573,10 @@ impl App {
         }
         draw_column_selection_markers(f, list_area, cursor, &layout.left_item_rows, scroll);
         if !wide {
-            let hero_rows = hero_rows.min(list_area.height.saturating_sub(1));
-            if hero_rows >= HERO_BLOCK_EXTRA_ROWS {
+            if let Some(detail_screen_row) = detail_screen_row {
                 layout.hero_area = Rect {
                     x: list_area.x,
-                    y: list_area.y + 1,
+                    y: list_area.y + detail_screen_row as u16,
                     width: list_area.width,
                     height: hero_rows,
                 };
@@ -556,7 +594,7 @@ impl App {
                         height: hero_rows.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
                     },
                     &HeroContent {
-                        title: show_title.then_some(selected_entry.title.as_str()),
+                        title: Some(selected_entry.title.as_str()),
                         meta_line: Some(meta.as_str()),
                         meta_color: palette::PLAYBACK_META_FG,
                         show_playing: false,
@@ -585,6 +623,7 @@ fn render_feed_entry_cell(
     cell_w: u16,
     selected: bool,
     focused: bool,
+    show_title: bool,
 ) {
     if cell_w == 0 {
         return;
@@ -620,7 +659,9 @@ fn render_feed_entry_cell(
     } else {
         Span::styled(" ", Style::default().bg(bg))
     });
-    let title = super::super::ui_util::trunc_str(&entry.title, title_w);
+    let title = show_title
+        .then(|| super::super::ui_util::trunc_str(&entry.title, title_w))
+        .unwrap_or_default();
     spans.push(Span::styled(
         format!(" {title}"),
         Style::default().fg(fg).bg(bg).add_modifier(if selected {

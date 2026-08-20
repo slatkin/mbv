@@ -144,6 +144,7 @@ pub(super) fn render_home_list_rows(
                         item,
                         selected_row,
                         focused,
+                        !(selected_row && hero_rows > 0),
                     );
                     hitmap.push((row_rect, *flat_idx));
                     continue;
@@ -154,6 +155,7 @@ pub(super) fn render_home_list_rows(
                     emby,
                     selected_row,
                     focused,
+                    !(selected_row && hero_rows > 0),
                 );
                 hitmap.push((row_rect, *flat_idx));
             }

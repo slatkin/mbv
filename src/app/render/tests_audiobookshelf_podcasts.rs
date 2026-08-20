@@ -68,7 +68,12 @@ fn narrow_podcast_detail_rows_remain_inert_between_show_rows() {
         .iter()
         .position(Vec::is_empty)
         .expect("selected detail row should be reserved");
-    assert_eq!(layout.left_item_rows[detail_row + 1].first(), Some(&3));
+    assert_eq!(
+        layout.left_item_rows[detail_row..]
+            .iter()
+            .find_map(|row| row.first()),
+        Some(&3)
+    );
     assert!(layout.hero_area.y > 0);
 }
 

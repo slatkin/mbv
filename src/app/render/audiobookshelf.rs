@@ -156,22 +156,19 @@ impl App {
 
         layout.left_area = area;
         let desired_rows =
-            self.audiobookshelf_hero_content_rows(index, cols > 1) + HERO_BLOCK_EXTRA_ROWS;
+            self.audiobookshelf_hero_content_rows(index, true) + HERO_BLOCK_EXTRA_ROWS;
         let hero_rows = desired_rows.min(area.height.saturating_sub(1));
         let hero_rows = (hero_rows >= HERO_BLOCK_EXTRA_ROWS)
             .then_some(hero_rows)
             .unwrap_or(0);
+        layout.inline_hero = hero_rows > 0;
         self.render_audiobookshelf_show_rows(f, area, index, focused, cols, hero_rows, layout);
         if hero_rows > 0 {
             let cursor_row = self.audiobookshelf_browse[index].cursor() / cols.max(1);
-            let detail_screen_row = inline_detail_flow(
-                cursor_row,
-                hero_rows,
-                area.height,
-                layout.left_screen_offset,
-            )
-            .expect("admitted inline detail must fit")
-            .detail_screen_row;
+            let detail_screen_row =
+                inline_detail_flow(cursor_row, hero_rows, area.height, state.scroll)
+                    .expect("admitted inline detail must fit")
+                    .detail_screen_row;
             layout.hero_area = Rect {
                 x: area.x,
                 y: area.y + detail_screen_row as u16,
@@ -181,7 +178,7 @@ impl App {
             selected_detail_shell(f, layout.hero_area, hero_rows, focused);
             let content = Rect {
                 x: area.x + SELECTED_BLOCK_SIDE_PADDING,
-                y: area.y + 3,
+                y: layout.hero_area.y + 3,
                 width: area.width.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
                 height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
             };
@@ -595,15 +592,21 @@ impl App {
             .unwrap_or(0);
         let mut display_rows = rows.clone();
         if hero_rows > 0 {
-            display_rows.insert(cursor_row + 1, Vec::new());
+            display_rows.splice(
+                cursor_row + 1..cursor_row + 1,
+                (0..hero_rows).map(|_| Vec::new()),
+            );
         }
         let visible = area.height as usize;
-        let display_cursor_row = cursor_row + usize::from(hero_rows > 0);
-        let lower = (display_cursor_row + 1)
-            .saturating_sub(visible)
-            .min(display_cursor_row);
-        state.scroll = state.scroll.clamp(lower, cursor_row);
-        let scroll = state.scroll;
+        let scroll = if hero_rows > 0 {
+            inline_detail_flow(cursor_row, hero_rows, area.height, state.scroll)
+                .expect("admitted inline detail must fit")
+                .offset
+        } else {
+            let lower = cursor_row.saturating_add(1).saturating_sub(visible);
+            state.scroll.clamp(lower, cursor_row)
+        };
+        state.scroll = scroll;
         let cell_width = library_cell_width(area, cols) as usize;
         let items = display_rows
             .iter()
@@ -613,7 +616,11 @@ impl App {
                 let mut spans = Vec::new();
                 for (cell, index) in indices.iter().enumerate() {
                     let selected = *index == cursor;
-                    let title = trunc_str(&state.shows[*index].title, cell_width.saturating_sub(2));
+                    let title = if selected && hero_rows > 0 {
+                        String::new()
+                    } else {
+                        trunc_str(&state.shows[*index].title, cell_width.saturating_sub(2))
+                    };
                     let pad_to = if cell + 1 == indices.len() {
                         cell_width
                     } else {
