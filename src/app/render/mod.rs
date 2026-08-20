@@ -40,6 +40,7 @@ mod pills;
 mod queue;
 mod search_sidebar;
 mod sort_filter;
+mod tv_wide;
 mod visualizer;
 mod widgets;
 

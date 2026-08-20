@@ -243,6 +243,25 @@ impl App {
                         // Service-local geometry (design §4). Each Service
                         // reads only its own hit targets / index space; there
                         // is no default-to-Emby branch.
+                        if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
+                            if self.layout.main.is_wide_tv_active() {
+                                let pos = (col, row).into();
+                                if self
+                                    .layout
+                                    .main
+                                    .tv_wide_episode_rows
+                                    .iter()
+                                    .any(|(rect, _)| rect.contains(pos))
+                                {
+                                    self.activate_series_selection_episode(lib_idx);
+                                } else if self.layout.main.tv_wide_right_area.contains(pos) {
+                                    if let Some(item) = self.selected_series_item(lib_idx) {
+                                        self.enter_series_selection(lib_idx, &item);
+                                    }
+                                }
+                                return;
+                            }
+                        }
                         let pos = (col, row).into();
                         let in_inline_hero = self.layout.main.inline_hero
                             && self.layout.main.hero_area.contains(pos);

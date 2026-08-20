@@ -235,6 +235,60 @@ impl App {
             // separate rect. Track hits in the left pane flow through the
             // existing left_area block (wide left pane IS left_area).
             if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
+                if self.layout.main.is_wide_tv_active() {
+                    let pos = (col, row).into();
+                    if let Some(season) = self
+                        .layout
+                        .main
+                        .tv_wide_season_tabs
+                        .iter()
+                        .find(|(rect, _)| rect.contains(pos))
+                        .map(|(_, season)| *season)
+                    {
+                        self.set_panel_focus(PanelFocus::Library);
+                        self.select_series_season(lib_idx, season);
+                        return true;
+                    }
+                    if let Some(episode) = self
+                        .layout
+                        .main
+                        .tv_wide_episode_rows
+                        .iter()
+                        .find(|(rect, _)| rect.contains(pos))
+                        .map(|(_, episode)| *episode)
+                    {
+                        self.set_panel_focus(PanelFocus::Library);
+                        self.libs[lib_idx].series_selection = Some(episode);
+                        return true;
+                    }
+                    if self.layout.main.tv_wide_left_area.contains(pos) {
+                        return true;
+                    }
+                    let right = self.layout.main.tv_wide_right_area;
+                    if right.contains(pos) {
+                        let click_y = (row.saturating_sub(self.layout.main.left_area.y)) as usize;
+                        let target = self
+                            .layout
+                            .main
+                            .left_row_map
+                            .get(click_y)
+                            .copied()
+                            .flatten();
+                        if let Some(target) = target {
+                            let before = self.selected_series_item(lib_idx).map(|item| item.id);
+                            if let Some(search) = self.libs[lib_idx].search.as_mut() {
+                                search.cursor = target;
+                            } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                                level.cursor = target;
+                            }
+                            if before != self.selected_series_item(lib_idx).map(|item| item.id) {
+                                self.libs[lib_idx].series_selection = None;
+                                self.libs[lib_idx].series_season_cursor = 0;
+                            }
+                        }
+                        return true;
+                    }
+                }
                 if self.is_music_group_view(lib_idx) && self.layout.main.is_wide_music_active() {
                     let pos = (col, row).into();
                     for (rect, target) in self.layout.main.selector_tabs.clone() {

@@ -30,7 +30,8 @@ impl App {
         lib_idx: usize,
         focused: bool,
         show_title: bool,
-        _layout: &mut LayoutMain,
+        persistent: bool,
+        layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;
@@ -40,6 +41,7 @@ impl App {
             return;
         };
         let (in_selection, _) = self.series_selection_state(lib_idx, &item.id);
+        let show_episodes = persistent || in_selection;
 
         // Fetch series detail if not cached
         if !item.id.is_empty() {
@@ -113,7 +115,7 @@ impl App {
             // shares SERIES_DETAIL_* constants with `series_inline_detail_rows`
             // so the reserved space and what's actually drawn stay in sync.
             let reserved_for_below = (SERIES_DETAIL_DIVIDER_ROWS
-                + if in_selection {
+                + if show_episodes {
                     SERIES_DETAIL_EPISODE_ROWS_ESTIMATE
                 } else {
                     0
@@ -133,7 +135,7 @@ impl App {
         let hero_content = HeroContent {
             title: show_title.then_some(title.as_str()),
             meta_line: (!ser_meta.is_empty()).then_some(ser_meta.as_str()),
-            meta_color: palette::SUBTLE,
+            meta_color: palette::MUTED_GREEN,
             show_playing: false,
             unconditional_spacer_after_meta: true,
             lines: &hero_lines,
@@ -196,7 +198,7 @@ impl App {
             if !detail.seasons.is_empty() && row < max_y {
                 let (_, season_w16) = text_dims(row);
                 let prefix_w = "Series: ".width();
-                if in_selection {
+                if persistent || in_selection {
                     let tab_labels: Vec<String> = detail
                         .seasons
                         .iter()
@@ -232,7 +234,7 @@ impl App {
                             height: 1,
                         },
                     );
-                    super::render_pill_bar(
+                    let season_tabs = super::render_pill_bar(
                         f,
                         Rect {
                             x: area.x + prefix_w as u16,
@@ -247,6 +249,9 @@ impl App {
                             prefix: Some(" ⌘ "),
                         },
                     );
+                    if persistent {
+                        layout.tv_wide_season_tabs = season_tabs;
+                    }
                     row += 1;
                 } else {
                     let spans: Vec<Span> = vec![
@@ -280,7 +285,7 @@ impl App {
                 .and_then(|s| detail.episodes.get(&s.id))
                 .map(|eps| eps.as_slice())
                 .unwrap_or(&[]);
-            if in_selection && !episodes.is_empty() && row < max_y {
+            if show_episodes && !episodes.is_empty() && row < max_y {
                 let (_, table_width) = text_dims(row);
                 let table_area = Rect {
                     x: area.x,
@@ -291,14 +296,25 @@ impl App {
                         .saturating_sub(SERIES_DETAIL_TRAILING_BLANK_ROWS as u16),
                 };
                 if table_area.height > 0 {
-                    let show_length = table_area.width > 40;
+                    let show_length = table_area.width > 30;
                     let dur_col_w: usize = if show_length { 7 } else { 0 };
                     let title_col_w = (table_area.width as usize)
                         .saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
 
+                    let visible = table_area.height as usize;
+                    let start = if persistent {
+                        ep_cursor
+                            .map(|cursor| cursor.saturating_sub(visible.saturating_sub(1)))
+                            .unwrap_or(0)
+                            .min(episodes.len().saturating_sub(visible))
+                    } else {
+                        0
+                    };
                     let rows: Vec<Row> = episodes
                         .iter()
                         .enumerate()
+                        .skip(start)
+                        .take(visible)
                         .map(|(i, ep)| {
                             let is_cursor = ep_cursor == Some(i);
                             let row_style = if is_cursor && focused {
@@ -344,20 +360,33 @@ impl App {
                             }
                         })
                         .collect();
-
-                    let mut state = TableState::default();
-                    state.select(ep_cursor);
-                    let table = Table::new(
-                        rows,
-                        [
-                            Constraint::Min(10),
-                            Constraint::Length(if show_length { dur_col_w as u16 } else { 0 }),
-                            Constraint::Length(1),
-                        ],
-                    )
-                    .column_spacing(1)
-                    .row_highlight_style(Style::default());
-                    f.render_stateful_widget(table, table_area, &mut state);
+                    for (visible_idx, (i, _)) in episodes
+                        .iter()
+                        .enumerate()
+                        .skip(start)
+                        .take(visible)
+                        .enumerate()
+                    {
+                        let row_rect = Rect {
+                            x: table_area.x,
+                            y: table_area.y + visible_idx as u16,
+                            width: table_area.width,
+                            height: 1,
+                        };
+                        layout.tv_wide_episode_rows.push((row_rect, i));
+                    }
+                    f.render_widget(
+                        Table::new(
+                            rows,
+                            [
+                                Constraint::Min(10),
+                                Constraint::Length(if show_length { dur_col_w as u16 } else { 0 }),
+                                Constraint::Length(1),
+                            ],
+                        )
+                        .column_spacing(1),
+                        table_area,
+                    );
                 }
             }
         } else if row < max_y {

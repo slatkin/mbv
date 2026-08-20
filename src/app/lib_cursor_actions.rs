@@ -22,6 +22,9 @@ impl App {
             // wide the rail gets.
             return 1;
         }
+        if self.layout.main.is_wide_tv_active() {
+            return 1;
+        }
         if self.libs[lib_idx].search.is_some() {
             return library_column_count(self.layout.main.left_area.width);
         }
@@ -385,6 +388,47 @@ impl App {
         }
         self.libs[lib_idx].series_season_cursor = new_cur;
         // Reset episode cursor to first episode.
+        self.libs[lib_idx].series_selection = Some(0);
+    }
+
+    pub(super) fn select_series_season(&mut self, lib_idx: usize, season: usize) {
+        let Some(item) = self.selected_series_item(lib_idx) else {
+            return;
+        };
+        let Some(detail) = self.series_detail_cache.get(&item.id).cloned() else {
+            return;
+        };
+        let Some(selected) = detail.seasons.get(season) else {
+            return;
+        };
+        if !detail.episodes.contains_key(&selected.id) {
+            let Some(client) = self.emby_snapshot() else {
+                return;
+            };
+            let tx = self.lib_tx.clone();
+            let series_id = item.id.clone();
+            let season_id = selected.id.clone();
+            std::thread::spawn(move || {
+                let episodes = client
+                    .get_items_sorted(
+                        &season_id,
+                        None,
+                        false,
+                        0,
+                        super::PAGE_SIZE,
+                        "IndexNumber",
+                        "Ascending",
+                    )
+                    .map(|(items, _)| items)
+                    .unwrap_or_default();
+                let _ = tx.send(LibEvent::SeriesSeasonEpisodesFetched {
+                    series_id,
+                    season_id,
+                    episodes,
+                });
+            });
+        }
+        self.libs[lib_idx].series_season_cursor = season;
         self.libs[lib_idx].series_selection = Some(0);
     }
 

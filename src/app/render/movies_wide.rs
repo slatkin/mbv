@@ -11,7 +11,6 @@
 
 use super::hero_left;
 use super::home_hero::{prepare_wide_emby_hero_card, HeroData};
-use super::list_rows::ListRenderCtx;
 use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use ratatui::layout::*;
@@ -126,7 +125,6 @@ impl App {
         let pills_area = right_pane.pills_area;
         let list_panel = right_pane.list_panel;
 
-        let search_active = self.libs[lib_idx].search.is_some();
         if let Some(s) = self.libs[lib_idx].search.as_ref() {
             super::hero::render_search_box(f, pills_area, &s.query, s.loading);
         } else if self.should_show_letter_pills(lib_idx) {
@@ -147,82 +145,7 @@ impl App {
             height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
         };
 
-        // Gather items/cursor/scroll from the active list source (search or
-        // nav_stack), the same construction `render_list` uses.
-        let lib = &self.libs[lib_idx];
-        let (items, cursor, stored_scroll, total_count) = if let Some(s) = &lib.search {
-            let items: Vec<mbv_core::api::EmbyItem> = s
-                .results
-                .iter()
-                .filter_map(|&i| s.items.get(i).cloned())
-                .collect();
-            let total = items.len();
-            (items, s.cursor, s.scroll, total)
-        } else {
-            match lib.nav_stack.last() {
-                Some(lvl) => (lvl.items.clone(), lvl.cursor, lvl.scroll, lvl.total_count),
-                None => (vec![], 0, 0, 0),
-            }
-        };
-
-        // The wide Movies list is always one column (right-panel-arrangements
-        // spec) even when the rail itself crosses the two-column threshold.
-        // Keep the right-rail list as the only keyboard-focusable content
-        // pane: `left_area` drives cursor movement, paging, and activation.
-        layout.left_area = list_area;
-
-        let final_offset = if items.is_empty() {
-            let msg = if self.libs[lib_idx]
-                .nav_stack
-                .last()
-                .map(|l| l.loading)
-                .unwrap_or(false)
-            {
-                " Loading\u{2026}"
-            } else {
-                " (empty)"
-            };
-            super::render_placeholder(f, list_area, msg);
-            0
-        } else {
-            let active_letter_filter = self.libs[lib_idx]
-                .nav_stack
-                .last()
-                .and_then(|l| l.letter_filter.as_ref())
-                .cloned();
-            let ungrouped_total = self.libs[lib_idx].library_total.unwrap_or(total_count);
-            // Same gate as `render_list`'s letter grouping: 50+ items (or an
-            // active letter-range filter), non-music, search off.
-            let use_letter_groups =
-                !search_active && (ungrouped_total >= 50 || active_letter_filter.is_some());
-            let ctx = ListRenderCtx {
-                content_area: list_area,
-                items: &items,
-                cursor,
-                stored_scroll,
-                cols: 1,
-                focused,
-                hero_rows: 0,
-            };
-            if use_letter_groups {
-                self.render_letter_grouped_rows(
-                    f,
-                    ctx,
-                    active_letter_filter,
-                    ungrouped_total,
-                    layout,
-                )
-            } else {
-                self.render_plain_rows(f, ctx, layout)
-            }
-        };
-
-        // Persist the scroll offset (mirrors `render_list`'s tail).
-        if let Some(s) = &mut self.libs[lib_idx].search {
-            s.scroll = final_offset;
-        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-            lvl.scroll = final_offset;
-        }
+        self.render_wide_library_rows(f, list_area, lib_idx, focused, layout);
 
         // Paint the shared hero card last (after the list, mirroring
         // `render_list`'s hero-after-list order). The exact Home wide

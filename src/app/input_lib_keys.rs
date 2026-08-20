@@ -326,6 +326,8 @@ impl App {
                     scroll: 0,
                     loading: needs_full_load,
                 });
+                self.libs[lib_idx].series_selection = None;
+                self.libs[lib_idx].series_season_cursor = 0;
                 if needs_full_load {
                     self.spawn_search_items_load(lib_idx);
                 }

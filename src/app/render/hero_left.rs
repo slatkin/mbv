@@ -111,6 +111,13 @@ pub(super) fn hero_on_left_list_panel_border(f: &mut Frame, list_panel: Rect, fo
     if list_panel.height == 0 {
         return;
     }
+    let background = palette::resolve_surface_focus(focused);
+    for y in list_panel.y..list_panel.bottom() {
+        for x in list_panel.x..list_panel.right() {
+            let cell = f.buffer_mut().cell_mut((x, y)).expect("panel cell exists");
+            cell.set_bg(background);
+        }
+    }
     super::render_selected_block_borders(
         f,
         list_panel,
