@@ -221,16 +221,6 @@ while artwork and non-interactive blank space SHALL not activate playback.
 - **WHEN** a user double-clicks inside a hero-on-top hero area
 - **THEN** the selected item is activated the same as a double-click on its list row
 
-#### Scenario: Single click on a hero-on-top hero
-
-- **WHEN** a user single-clicks inside a hero-on-top hero area
-- **THEN** the Library panel gains focus and no item is activated
-
-#### Scenario: Double click on a hero-on-top hero
-
-- **WHEN** a user double-clicks inside a hero-on-top hero area
-- **THEN** the selected item is activated the same as a double-click on its list row
-
 #### Scenario: Hero-on-top activation remains unchanged
 
 - **WHEN** a user clicks a hero-on-top Movie or Series hero
@@ -280,5 +270,4 @@ not require changing that fallback.
 
 - **WHEN** the shared Home selected-media card presentation changes
 - **THEN** the wide Movies hero renders that change without a second Movies-card edit
-
 

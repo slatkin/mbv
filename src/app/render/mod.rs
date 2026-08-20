@@ -188,18 +188,7 @@ impl App {
         self.render_context_menu(f, &mut layout);
 
         debug_assert!(
-            self.context_menu.is_none()
-                || (!self.confirm_modal.is_some()
-                    && !self.daemon_lost_modal.is_some()
-                    && !self.remote_reanchor_popup.is_some()
-                    && !self.save_playlist_dialog.is_some()
-                    && !self.multiselect_popup.is_some()
-                    && !self.library_routes_popup.is_some()
-                    && !self.show_help
-                    && !self.show_settings
-                    && !self.show_sessions
-                    && !self.show_playlists
-                    && self.search_sidebar.is_none()),
+            self.context_menu.is_none() || !self.any_other_modal_open(),
             "context menu must be the only modal or sidebar surface"
         );
 
@@ -268,6 +257,20 @@ impl App {
             || self.multiselect_popup.is_some()
             || self.save_playlist_dialog.is_some()
             || self.library_routes_popup.is_some()
+    }
+
+    pub(super) fn any_other_modal_open(&self) -> bool {
+        self.confirm_modal.is_some()
+            || self.daemon_lost_modal.is_some()
+            || self.remote_reanchor_popup.is_some()
+            || self.save_playlist_dialog.is_some()
+            || self.multiselect_popup.is_some()
+            || self.library_routes_popup.is_some()
+            || self.show_help
+            || self.show_settings
+            || self.show_sessions
+            || self.show_playlists
+            || self.search_sidebar.is_some()
     }
 }
 

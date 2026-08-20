@@ -74,18 +74,7 @@ impl App {
     }
 
     pub(super) fn open_context_menu(&mut self) {
-        if self.confirm_modal.is_some()
-            || self.daemon_lost_modal.is_some()
-            || self.remote_reanchor_popup.is_some()
-            || self.save_playlist_dialog.is_some()
-            || self.multiselect_popup.is_some()
-            || self.library_routes_popup.is_some()
-            || self.show_help
-            || self.show_settings
-            || self.show_sessions
-            || self.show_playlists
-            || self.search_sidebar.is_some()
-        {
+        if self.any_other_modal_open() {
             return;
         }
         let mut entries: Vec<ContextMenuEntry> = vec![];
