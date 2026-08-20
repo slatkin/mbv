@@ -59,12 +59,6 @@ content required for the active row.
 - **THEN** the selected Movie uses the shared narrow inline-hero presentation
 - **AND** the list renders as one column
 
-#### Scenario: Movies falls back below the breakpoint
-
-- **WHEN** the Movies library is below the shared breakpoint
-- **THEN** the selected Movie uses the shared narrow inline-hero presentation
-- **AND** the list renders as one column
-
 #### Scenario: Narrow grouped Music uses the pinned hero
 
 - **WHEN** grouped Music is below the shared wide-layout breakpoint
@@ -74,12 +68,6 @@ content required for the active row.
 
 - **WHEN** grouped Music reaches the shared wide-layout breakpoint
 - **THEN** its selected album hero renders to the left of its one-column album browser
-
-#### Scenario: Hero suppressed when too little space remains
-
-- **WHEN** the active narrow presentation cannot fit the minimum active row and hero content
-- **THEN** the hero area is suppressed
-- **AND** the list uses the available content area
 
 #### Scenario: Wide Movies pills sit in the right rail
 

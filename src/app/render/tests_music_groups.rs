@@ -208,47 +208,6 @@ fn hero_handles_detail_suppresses_all_inline_detail_rows() {
 }
 
 #[test]
-fn collapsed_album_hero_does_not_stack_metadata_below_art() {
-    assert_eq!(
-        super::album_plan::album_hero_content_rows(
-            0,
-            super::album_art::INLINE_ALBUM_ART_ROWS,
-            60,
-            true,
-        ),
-        super::album_art::INLINE_ALBUM_ART_ROWS,
-        "collapsed album art should reach the hero's bottom border without extra rows"
-    );
-}
-
-#[test]
-fn album_hero_sizing_grows_with_track_count() {
-    let art_rows = super::album_art::INLINE_ALBUM_ART_ROWS;
-    let panel_width = 40u16;
-    let zero_tracks = super::album_plan::album_hero_content_rows(0, art_rows, panel_width, true);
-    let twenty_tracks = super::album_plan::album_hero_content_rows(20, art_rows, panel_width, true);
-    assert!(
-        twenty_tracks > zero_tracks,
-        "hero with 20 tracks ({twenty_tracks}) should be taller than with 0 ({zero_tracks})"
-    );
-    // Metadata rows (title + hint) are always included.
-    assert!(
-        zero_tracks >= 2,
-        "even with no tracks, hero should include metadata rows"
-    );
-}
-
-#[test]
-fn album_hero_sizing_without_images_ignores_art() {
-    let with_images = super::album_plan::album_hero_content_rows(3, 8, 60, true);
-    let without_images = super::album_plan::album_hero_content_rows(3, 8, 60, false);
-    assert!(
-        without_images <= with_images,
-        "without images, hero should not be taller"
-    );
-}
-
-#[test]
 fn grouped_hero_art_follows_album_focus() {
     let mut album_app = make_music_group_app();
     let mut second = make_item("Second Album", "MusicAlbum");

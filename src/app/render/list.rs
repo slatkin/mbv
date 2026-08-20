@@ -1,5 +1,4 @@
 use super::album::AlbumRowsCursorCtx;
-use super::album_art::INLINE_ALBUM_ART_RESERVED;
 use super::detail::compact_banner_image_cache_key;
 use super::hero::{
     hero_block_shell, top_hero_layout, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS,
@@ -7,11 +6,8 @@ use super::hero::{
 };
 use super::list_rows::{ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING};
 use crate::app::layout::LayoutMain;
-use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
+use crate::app::{App, TWO_COLUMN_THRESHOLD};
 use ratatui::layout::*;
-use ratatui::style::*;
-use ratatui::text::*;
-use ratatui::widgets::*;
 use ratatui::Frame;
 
 impl App {
@@ -118,10 +114,6 @@ impl App {
         } else {
             None
         };
-        // Grouped album browsing renders its own inline detail block; it does
-        // not use the generic movie/Series hero painter below.
-        let selected_album_item: Option<mbv_core::api::EmbyItem> = None;
-
         // Column count for the two-column list layout, derived from the list
         // pane width -- the content area this renderer already receives,
         // which excludes the queue column and widens when the panel mode is
@@ -184,32 +176,6 @@ impl App {
                     episode_count,
                 ) as u16
                     + HERO_BLOCK_EXTRA_ROWS
-            } else if let Some(item) = &selected_album_item {
-                // Album hero: art + optional tracks + metadata + block chrome.
-                // Only include tracks when track-selection mode is active.
-                let in_track_mode = self.libs[lib_idx].album_track_focus.is_some();
-                let track_count = if in_track_mode {
-                    self.album_tracks_cache
-                        .get(&item.id)
-                        .map(|t| t.len())
-                        .unwrap_or(0)
-                } else {
-                    0
-                };
-                let art_rows = if self.images_enabled() {
-                    super::album_art::INLINE_ALBUM_ART_ROWS
-                } else {
-                    0
-                };
-                let panel_width = content_area
-                    .width
-                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
-                super::album_plan::album_hero_content_rows(
-                    track_count,
-                    art_rows,
-                    panel_width,
-                    self.images_enabled(),
-                ) + HERO_BLOCK_EXTRA_ROWS
             } else {
                 // No banner content to size to. If we're at the top browse
                 // level of a hero-capable collection (movies/homevideos/
@@ -568,118 +534,6 @@ impl App {
                 self.render_compact_detail(f, content_rect, lib_idx, focused, true, layout);
             } else if selected_series_item.is_some() {
                 self.render_series_inline_detail(f, content_rect, lib_idx, focused, true, layout);
-            } else if let Some(item) = &selected_album_item {
-                // Album hero: art + optional tracks + metadata, mirroring the
-                // movie/series branch -- reserved and painted here instead of
-                // in `render_power_grouped_album_rows`' inline block. Art
-                // sits right-aligned in `content_rect`; the detail reserves
-                // its width so the track table never overlaps it.
-                // Tracks are only shown when track-selection mode is active.
-                let art_reserved_w = if self.images_enabled()
-                    && content_rect.width >= INLINE_ALBUM_ART_RESERVED + 20
-                {
-                    INLINE_ALBUM_ART_RESERVED
-                } else {
-                    0
-                };
-                let in_track_mode = self.libs[lib_idx].album_track_focus.is_some();
-                // The hero title belongs to the selected album, not to the
-                // fetched track records (which may not carry an Album field).
-                // Render it before either mode's content so it remains visible
-                // when track-selection mode is entered.
-                let inner_w = content_rect.width.saturating_sub(art_reserved_w);
-                if inner_w >= 3 {
-                    let title = item.display_name();
-                    let title_trunc = super::super::ui_util::trunc_str(
-                        &title,
-                        (inner_w as usize).saturating_sub(1),
-                    );
-                    if content_rect.height > 0 {
-                        f.render_widget(
-                            Paragraph::new(Line::from(Span::styled(
-                                format!(" {title_trunc}"),
-                                Style::default()
-                                    .fg(palette::YELLOW)
-                                    .add_modifier(Modifier::BOLD),
-                            ))),
-                            Rect {
-                                x: content_rect.x,
-                                y: content_rect.y,
-                                width: inner_w,
-                                height: 1,
-                            },
-                        );
-                    }
-                    let detail_area = Rect {
-                        y: content_rect.y.saturating_add(1),
-                        height: content_rect.height.saturating_sub(1),
-                        ..content_rect
-                    };
-                    if in_track_mode {
-                        let track_cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
-                        if let Some(tracks) = self.album_tracks_cache.get(&item.id).cloned() {
-                            self.render_album_detail(
-                                f,
-                                detail_area,
-                                &tracks,
-                                track_cursor,
-                                true,  // focused: track-selection mode is active
-                                false, // show_title: rendered above from the album item
-                                true,  // selected_region_gutter: hero block context
-                                false, // flush_left
-                                true,  // show_hint: show the action hint
-                                art_reserved_w,
-                                layout,
-                            );
-                        } else {
-                            // Tracks not fetched yet: kick off the fetch and show a
-                            // loading stand-in (art still reserved on the right).
-                            self.fetch_album_tracks(item.id.clone());
-                            let loading_rect = Rect {
-                                width: detail_area.width.saturating_sub(art_reserved_w),
-                                ..detail_area
-                            };
-                            super::render_placeholder(f, loading_rect, " Loading…");
-                        }
-                    } else {
-                        // Not in track-selection mode: show the action hint only;
-                        // the track list is entered with ENTER.
-                        let row = detail_area.y;
-                        // Hint row
-                        if detail_area.height > 0 {
-                            let hint_w = (inner_w as usize).saturating_sub(2).max(1);
-                            let hint = super::super::ui_util::trunc_str(
-                                "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks",
-                                hint_w,
-                            );
-                            f.render_widget(
-                                Paragraph::new(Line::from(vec![
-                                    super::selection_marker(false, super::MarkerEdge::Left),
-                                    Span::raw(" "),
-                                    Span::styled(
-                                        hint.to_string(),
-                                        Style::default().fg(palette::MUTED),
-                                    ),
-                                ])),
-                                Rect {
-                                    x: content_rect.x,
-                                    y: row,
-                                    width: inner_w,
-                                    height: 1,
-                                },
-                            );
-                        }
-                    }
-                }
-                if art_reserved_w > 0 {
-                    let art_rect = Rect {
-                        x: content_rect.x + content_rect.width.saturating_sub(art_reserved_w),
-                        y: content_rect.y,
-                        width: art_reserved_w,
-                        height: content_rect.height,
-                    };
-                    self.render_inline_album_art(f, art_rect, item, layout);
-                }
             }
             layout.cursor_screen_y = saved_cursor_y;
         }
