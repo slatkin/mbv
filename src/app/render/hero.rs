@@ -1,13 +1,6 @@
 //! The `Hero` component (design.md "Component catalogue"): the reserved
 //! panel that shows the selected item's artwork, metadata and overview
-//! above (legacy top placement), beside (hero-on-left), or inline with its list.
-//!
-//! This file holds the legacy top placement geometry and outer shell, extracted from
-//! movies/TV (`list.rs`'s former `placement-neutral geometry` path, legacy top placement's
-//! source per design.md decision 4): the fixed-height block reservation
-//! (`placement-neutral geometry`) and its `▁`/`▔` bordered shell (`selected_detail_shell`),
-//! shared today by every legacy top placement content kind (movie, series, album)
-//! that `list.rs` paints into the block this module reserves.
+//! beside (hero-on-left) or inline with its list.
 //!
 //! Grouped Music's hero-on-left arrangement (`music_wide.rs`, hero-on-left's
 //! source per design.md decision 4) supplies this module's hero-on-left
@@ -52,7 +45,6 @@ pub(super) const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
 /// The shared display-flow accounting for an inline selected-detail block.
 /// `offset` is the first display row in the viewport and
 /// `detail_screen_row` is the detail block's row relative to that viewport.
-#[derive(Debug, Eq, PartialEq)]
 pub(super) struct InlineDetailFlow {
     pub offset: usize,
     pub detail_screen_row: usize,
