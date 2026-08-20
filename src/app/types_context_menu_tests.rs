@@ -10,37 +10,38 @@ const SIZE: (u16, u16) = (40, 8);
 
 #[test]
 fn down_placement_aligns_top_right_to_selected_item() {
-    // Item at (60, 2, 30, 1): menu (40 wide) right-aligns to x=90, opens
-    // down from y=2 (fits: 2+8 <= 30).
+    // Item at (60, 2, 30, 1): menu (40 wide) right-aligns its right edge to
+    // the item's right edge (90) -> x = 90-40 = 50, and opens down from y=2
+    // (fits: 2+8 <= 30).
     let anchor = Rect::new(60, 2, 30, 1);
     assert_eq!(
         ContextMenu::place(PANEL, SIZE, Some(&anchor), None),
-        (60, 2)
+        (50, 2)
     );
 }
 
 #[test]
 fn up_placement_aligns_bottom_right_to_selected_item() {
-    // Item at (60, 26, 30, 1): down would end at 34 > 30, so opens up with
-    // its bottom at 27 -> y=19.
+    // Item at (60, 26, 30, 1): down would end at 35 > 30, so opens up with
+    // its bottom at 27 -> y = 27-8 = 19; right edge 90 -> x = 90-40 = 50.
     let anchor = Rect::new(60, 26, 30, 1);
     assert_eq!(
         ContextMenu::place(PANEL, SIZE, Some(&anchor), None),
-        (60, 19)
+        (50, 19)
     );
 }
 
 #[test]
 fn horizontal_clamp_keeps_menu_inside_panel() {
-    // Item hugs the right edge: (80, 5, 20, 1). Right-align would put x=100
-    // (outside), so clamp to 100-40=60.
+    // Item hugs the right edge: (80, 5, 20, 1). Right-align would put the
+    // menu at x=60 (right edge 100), still inside.
     let anchor = Rect::new(80, 5, 20, 1);
     assert_eq!(
         ContextMenu::place(PANEL, SIZE, Some(&anchor), None),
         (60, 5)
     );
-    // Item hugs the left edge (anchor right = 10): menu would start at
-    // -30, clamps to panel.x=0.
+    // Item hugs the left edge (anchor right = 10): right-align would start
+    // the menu at x=-30, so clamp to panel.x=0.
     let anchor = Rect::new(0, 5, 10, 1);
     assert_eq!(ContextMenu::place(PANEL, SIZE, Some(&anchor), None), (0, 5));
 }
