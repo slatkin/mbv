@@ -35,8 +35,21 @@ arrangement. These arrangements are a property of the right panel and are indepe
 ### Requirement: Each screen is assigned one wide arrangement
 
 Every right-panel screen SHALL be assigned exactly one wide arrangement. Movies, TV shows, podcasts,
-feeds, and home videos SHALL use hero-on-top. Home, music, and audiobooks SHALL use hero-on-left. No
-right-panel screen SHALL be without an assignment.
+feeds, and home videos SHALL use hero-on-top except that the dedicated Movies library SHALL use
+hero-on-left. Home, music, and audiobooks SHALL use hero-on-left. No right-panel screen SHALL be
+without an assignment.
+
+#### Scenario: Movies is displayed at a wide width
+
+- **WHEN** the dedicated Movies library is displayed at or above the shared breakpoint
+- **THEN** it renders the hero-on-left arrangement
+- **AND** the selected-media hero is on the left
+- **AND** the letter-range pills and one-column Movies list are in the right rail
+
+#### Scenario: Movies falls below the shared breakpoint
+
+- **WHEN** the Movies library's available width falls below the shared breakpoint
+- **THEN** it falls back to hero-on-top with a single list column
 
 #### Scenario: Feeds is displayed at a wide width
 
@@ -50,7 +63,7 @@ right-panel screen SHALL be without an assignment.
 
 #### Scenario: Audiobooks is displayed at a wide width
 
-- **WHEN** the audiobooks screen is displayed at or above the breakpoint
+- **WHEN** an Audiobookshelf book library is displayed at or above the shared breakpoint
 - **THEN** it renders the hero-on-left arrangement, matching music at the same dimensions
 
 ### Requirement: Screens do not determine their own arrangement
@@ -74,9 +87,15 @@ part of that screen's arrangement.
 ### Requirement: Hero-on-left presents up to two focusable panes
 
 The hero-on-left arrangement SHALL present up to two panes, of which at most one is focused, and
-only while the right panel itself is focused. A screen with no focusable content in its hero pane
-(such as Home, whose hero is a non-focusable preview) SHALL be treated as having that content
-unimplemented rather than as a different arrangement.
+only while the right panel itself is focused. A screen with a read-only hero pane, such as Home or
+the wide Movies library, SHALL expose only its right-hand list as focusable content. Its hero SHALL
+remain a projection of the selected list item and SHALL NOT receive keyboard focus or activation.
+
+#### Scenario: Wide Movies has Library focus
+
+- **WHEN** the wide Movies library is displayed and the Library panel has focus
+- **THEN** the right-hand Movies list is the focused pane
+- **AND** the left selected-media hero remains read-only and does not become a second focus target
 
 #### Scenario: Focus moves between panes
 

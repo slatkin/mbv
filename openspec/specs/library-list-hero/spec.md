@@ -8,35 +8,70 @@ splicing detail rows inline with the scrolling list content.
 ## Requirements
 ### Requirement: Hero area pinned above the list
 
-The library list SHALL render the selected item's compact banner in a dedicated area pinned to the top of the content area, not inline with the list cells. The list area SHALL occupy the remaining space below the hero (and below the letter-pill row, when shown), and SHALL NOT scroll the hero out of view.
+The selected item's hero SHALL be positioned by the right-panel arrangement rather than being
+intrinsically pinned above the list. Hero-on-top SHALL place the hero above the list and reserve the
+remaining area for the list. Hero-on-left SHALL place the hero beside a single-column list, with the
+list's pills and rows in the right rail. The selected hero SHALL remain visible while the list
+scrolls.
 
-The hero area's height SHALL be derived from the banner's actual content (meta line, overview/director text, poster height), not a width-derived aspect-ratio guess, capped at a maximum that leaves at least 1 row for the list. Below that minimum the hero SHALL be suppressed entirely (zero height) rather than painted malformed.
+For the wide Movies library, the left hero SHALL use the exact selected-media card already used by
+Home's wide hero-on-left Movies Latest presentation. The card SHALL use its existing image shape,
+metadata order, watch-state indicator, overview treatment, and artwork behavior. The right rail
+SHALL contain the Movies letter-range pills when eligible and the one-column Movies list.
 
-For grouped Music below the shared wide-layout breakpoint, the selected album hero SHALL use this same pinned-above-list composition. At or above the breakpoint, grouped Music SHALL instead use the side hero and right-rail browser defined by `music-library-hero`; this is a Music-specific responsive exception and SHALL NOT affect other library types.
+Below the shared breakpoint, Movies SHALL use the hero-on-top single-column fallback and its existing
+narrow arrangement. A hero SHALL be suppressed when the active arrangement cannot fit a valid hero
+and usable list area.
 
-When the letter-pill row is shown (per `tv-letter-filtering`), it SHALL occupy a dedicated row directly below the hero, with no additional gap between them. When the pill row is not shown, the hero and list SHALL be separated by a single blank row.
+#### Scenario: Wide Movies renders the Home selected-media card
 
-The list renderer SHALL receive the resulting `list_area` (below the hero and pill row) as its content area, not the full content area. The column count is derived from `list_area`'s width using the same column-count threshold as before, except that wide grouped Music uses its capability-specific one-column right rail.
+- **WHEN** a Movie is selected in the wide Movies list
+- **THEN** the left pane renders the same selected-media card that Home renders for that Movie
+- **AND** the right rail renders the letter-range pills when eligible
+- **AND** the right rail renders the Movies list as one column
 
 #### Scenario: Hero renders above the list
-- **WHEN** a movie library's top-level view has a selected item
-- **THEN** the hero banner for that item renders in a fixed-height area at the top of the content area, and the list renders below it
+
+- **WHEN** a hero-on-top library view has a selected item
+- **THEN** the hero banner for that item renders in a fixed-height area at the top of the content
+  area
+- **AND** the list renders below it
+
+#### Scenario: Movies falls back below the breakpoint
+
+- **WHEN** the Movies library is below the shared breakpoint
+- **THEN** the selected hero renders above the list using the existing hero-on-top fallback
+- **AND** the list renders as one column
 
 #### Scenario: Narrow grouped Music uses the pinned hero
+
 - **WHEN** grouped Music is below the shared wide-layout breakpoint
 - **THEN** its selected album hero renders above its one-column album list
 
 #### Scenario: Wide grouped Music uses its side hero
+
 - **WHEN** grouped Music reaches the shared wide-layout breakpoint
-- **THEN** its selected album hero moves to the left of its one-column album browser as defined by `music-library-hero`
+- **THEN** its selected album hero moves to the left of its one-column album browser as defined by
+  `music-library-hero`
 
 #### Scenario: Hero suppressed when too little space remains
-- **WHEN** the content area is too short to fit even the hero's own minimum block size
-- **THEN** the hero area collapses to zero height and the list uses the full content area
+
+- **WHEN** the active arrangement cannot fit the hero's minimum block and at least one usable list
+  row
+- **THEN** the hero area collapses to zero height
+- **AND** the list uses the available content area
+
+#### Scenario: Wide Movies pills sit in the right rail
+
+- **WHEN** the wide Movies view is eligible for letter-range pills
+- **THEN** the pill row renders at the top of the right-hand list rail
+- **AND** the list renders below that pill row rather than below the left hero
 
 #### Scenario: Letter pills sit between hero and list
-- **WHEN** the letter-pill row is shown for the current library view
-- **THEN** the pill row renders directly below the hero with no gap, and the list renders below the pill row
+
+- **WHEN** a hero-on-top library view shows a letter-pill row
+- **THEN** the pill row renders directly below the hero with no additional gap
+- **AND** the list renders below the pill row
 
 ### Requirement: Selected cell indicator
 
@@ -56,37 +91,44 @@ hero.
 
 ### Requirement: Hero tracks the current selection independent of scroll position
 
-The hero SHALL always reflect the currently selected (cursor) item,
-regardless of whether that item's row is scrolled into view within
-the list area. The hero's own screen position SHALL NOT change when
-the cursor moves — only its content.
+The hero SHALL always reflect the currently selected item, regardless of whether that item's row is
+scrolled into view within the list area. The hero's own screen position SHALL NOT change when the
+cursor moves; only its content changes. For wide Movies, the right-hand list cursor SHALL be the
+sole source of the selected item projected into the left hero.
 
 #### Scenario: Selection scrolled out of view
 
-- **WHEN** the cursor moves to an item whose row is scrolled off
-  screen in the list area
-- **THEN** the hero still updates to show that item's banner, in the
-  same fixed screen position as before
+- **WHEN** the Movies cursor moves to an item whose row is scrolled off screen in the right rail
+- **THEN** the left hero still updates to show that item
+- **AND** the hero remains in the same left-pane position
 
 ### Requirement: Hero click focuses without activating
 
-A single click inside the hero area SHALL behave the same as a click
-anywhere else in the library pane: it focuses the Library panel only,
-since the cursor is already on the selected item and there is nothing
-else to move. Activation (playing a movie, entering a Series' season
-selection) SHALL remain a double-click gesture, handled the same way
-as any other library-row activation.
+For hero-on-top library views, a single click inside the hero area SHALL focus the Library panel only,
+and a double click SHALL retain the existing activation behavior. A read-only hero-on-left preview,
+including the wide Movies hero, SHALL not receive focus or activation from a pointer gesture; the
+right-hand list remains the interaction surface.
+
+#### Scenario: Wide Movies hero remains read-only
+
+- **WHEN** the wide Movies hero is displayed
+- **THEN** it has no keyboard focus state and no activation action
+- **AND** activating the selected Movie is performed from the right-hand list
 
 #### Scenario: Single click on the hero
 
-- **WHEN** the user single-clicks inside the hero area
+- **WHEN** a user single-clicks inside a hero-on-top hero area
 - **THEN** the Library panel gains focus and no item is activated
 
 #### Scenario: Double click on the hero
 
-- **WHEN** the user double-clicks inside the hero area
-- **THEN** the selected item is activated the same as a double-click
-  on its list row would be
+- **WHEN** a user double-clicks inside a hero-on-top hero area
+- **THEN** the selected item is activated the same as a double-click on its list row
+
+#### Scenario: Hero-on-top activation remains unchanged
+
+- **WHEN** a user clicks a hero-on-top Movie or Series hero
+- **THEN** the existing single-click focus and double-click activation behavior remains in effect
 
 ### Requirement: Column-count invariant preserved
 
@@ -104,40 +146,33 @@ truncation and the right cell's trailing-column absorption.
 
 ### Requirement: Independence from top-hero design
 
-Hero placement is a property of the right panel's arrangement, not of the list renderer. The
-hero's content — image, metadata, and overview — SHALL be identical regardless of where the
-arrangement places it. Only the position changes. The two placements SHALL NOT be maintained as
-parallel branches within the list renderer for comparison; the arrangement selects one.
+Hero presentation SHALL be defined by the selected screen and its assigned arrangement. The wide
+Movies hero-on-left presentation SHALL reuse the exact Home wide selected-media card rather than
+maintaining a second Movies-specific left-card implementation. The existing narrow Movies
+hero-on-top fallback may retain its arrangement-specific presentation; changing the wide card SHALL
+not require changing that fallback.
 
-The positional variant MUST preserve the same hero content as the top-hero design.
+#### Scenario: Home and wide Movies use one selected-media card
+
+- **WHEN** the same Movie is selected in Home's Movies Latest section and in the wide Movies library
+- **THEN** the hero card uses the same image selection, layout, metadata, watch-state indicator,
+  overview treatment, and image cache behavior
 
 #### Scenario: Hero content remains consistent
 
-- **WHEN** an item is shown in the inline hero
-- **THEN** its image, metadata, and overview SHALL match the top-hero content
+- **WHEN** an item is shown in the hero-on-top hero
+- **THEN** its image, metadata, and overview match the content declared for that screen and
+  arrangement
 
 #### Scenario: Placement changes
 
 - **WHEN** the arrangement places the hero differently
-- **THEN** the hero's content is unchanged and only its position differs
+- **THEN** the hero content remains the declared content for the selected screen
+- **AND** only its position and arrangement-specific placement change
 
-### Requirement: Hero area above the list
+#### Scenario: Wide Movies card changes centrally
 
-The library list MUST render the selected item's compact banner in a
-dedicated area at the top of the content area, not inline with the
-list cells.
+- **WHEN** the shared Home selected-media card presentation changes
+- **THEN** the wide Movies hero renders that change without a second Movies-card edit
 
-The hero area's height MUST be derived from the image's natural aspect
-ratio (16:9 in terminal cells), capped at a maximum that leaves at
-least 1 row for the list. The list area MUST contain all of the list
-rows; the row renderer no longer reserves space for an inline banner.
-
-The list renderer MUST receive the `list_area` (below the hero) as its
-content area, not the full `content_area`. The column count is derived
-from `list_area.width` using the same `library_column_count` helper and
-`POWER_TWO_COLUMN_THRESHOLD` as before.
-
-#### Scenario: Hero renders above list
-- **WHEN** a library item is selected
-- **THEN** its hero SHALL occupy the dedicated area above the list and the list SHALL render below it
 

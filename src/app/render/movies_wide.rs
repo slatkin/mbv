@@ -13,7 +13,7 @@ use super::hero_left;
 use super::home_hero::{prepare_wide_emby_hero_card, HeroData};
 use super::list_rows::ListRenderCtx;
 use crate::app::layout::LayoutMain;
-use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
+use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::widgets::*;
@@ -63,14 +63,6 @@ impl App {
             height: area.height.saturating_sub(1),
             ..area
         };
-        if area.width < TWO_COLUMN_THRESHOLD
-            || left_content_area.height < hero_left::HERO_ON_LEFT_MIN_AREA_HEIGHT
-        {
-            // Too narrow/short for the wide arrangement — fall back to the
-            // hero-on-top path (narrow Movies fallback).
-            self.render_list(f, area, focused, layout);
-            return;
-        }
 
         let (mut left_panel, right_panel) = hero_left::hero_on_left_panes(area);
         left_panel.height = left_content_area.height;
@@ -135,8 +127,7 @@ impl App {
         let list_panel = right_pane.list_panel;
 
         let search_active = self.libs[lib_idx].search.is_some();
-        if search_active {
-            let s = self.libs[lib_idx].search.as_ref().unwrap();
+        if let Some(s) = self.libs[lib_idx].search.as_ref() {
             super::hero::render_search_box(f, pills_area, &s.query, s.loading);
         } else if self.should_show_letter_pills(lib_idx) {
             self.render_letter_pills_row(f, pills_area, lib_idx, layout);
@@ -176,8 +167,6 @@ impl App {
 
         // The wide Movies list is always one column (right-panel-arrangements
         // spec) even when the rail itself crosses the two-column threshold.
-        let cols = 1usize;
-
         // Keep the right-rail list as the only keyboard-focusable content
         // pane: `left_area` drives cursor movement, paging, and activation.
         layout.left_area = list_area;
@@ -211,7 +200,7 @@ impl App {
                 items: &items,
                 cursor,
                 stored_scroll,
-                cols,
+                cols: 1,
                 focused,
             };
             if use_letter_groups {
