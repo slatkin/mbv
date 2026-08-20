@@ -534,12 +534,12 @@ impl App {
         // Both letter-range pills (large non-music libraries) and the
         // narrow music-group selector render inside `render_list` itself
         // now, below the hero (`list.rs`), unified with every other
-        // hero-on-top screen's pill placement (design.md decision 6: pill
+        // legacy top placement screen's pill placement (design.md decision 6: pill
         // *position* is geometry, not a per-screen declaration) -- not
         // carved out of `lib_area` here. Wide grouped Music is the one
         // exception: its pills sit in the hero-on-left right rail instead
         // (`render_wide_music_group`), which `list.rs` still branches to
-        // internally before reaching the hero-on-top path.
+        // internally before reaching the legacy top placement path.
 
         if self.effective_panel_mode() != PanelMode::LibraryOnly {
             let queue_list_area = render_queue_panel_frame(f, queue_area, queue_focused);
@@ -701,3 +701,9 @@ mod test_helpers;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+#[cfg(test)]
+mod tests_audiobookshelf_podcasts;
+#[cfg(test)]
+mod tests_feeds;
+#[cfg(test)]
+mod tests_home_inline;

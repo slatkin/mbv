@@ -1,7 +1,7 @@
 //! Grouped Music's wide (hero-on-left) rendering: `compute_wide_left_layout`
 //! below is design.md's hero-on-left geometry source (component catalogue,
-//! decision 4), the counterpart to `hero.rs`'s hero-on-top
-//! `top_hero_layout`. It stays in this file rather than moving into
+//! decision 4), the counterpart to `hero.rs`'s legacy top placement
+//! `placement-neutral geometry`. It stays in this file rather than moving into
 //! `hero.rs` because its sizing constants (`PANE_PAD_X`, `PANE_PAD_Y`, ...)
 //! are shared with this file's non-hero list-pane layout below; the pane
 //! split, right-pane pill/list geometry, and hero text paint moved into
@@ -11,7 +11,7 @@
 use super::album_art::INLINE_ALBUM_ART_RESERVED;
 use super::hero_left::{self, WrappedHeroLine};
 use crate::app::layout::LayoutMain;
-use crate::app::{palette, App, PanelFocus, TWO_COLUMN_THRESHOLD};
+use crate::app::{palette, App, PanelFocus};
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -209,9 +209,7 @@ impl App {
             height: area.height.saturating_sub(1),
             ..area
         };
-        if area.width < TWO_COLUMN_THRESHOLD
-            || left_content_area.height < hero_left::HERO_ON_LEFT_MIN_AREA_HEIGHT
-        {
+        if !hero_left::can_use_hero_on_left(area) {
             // Too narrow for wide mode — fall back to narrow rendering.
             self.render_list(f, area, focused, layout);
             return;

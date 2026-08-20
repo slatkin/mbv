@@ -193,7 +193,7 @@ fn sync_layout_to_app(app: &mut App, layout: &LayoutMain) {
 
 #[test]
 fn two_columns_pack_items_row_major_left_to_right_before_wrapping() {
-    // TV (hero-on-top two-column) still packs row-major at wide widths; the
+    // TV (legacy top placement two-column) still packs row-major at wide widths; the
     // dedicated Movies library moved to hero-on-left one-column (tested in
     // `movies_wide_tests.rs`). A tvshows library with Movie-type items has
     // no selected series/movie hero, exercising the plain two-column list.
@@ -213,7 +213,7 @@ fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
     let mut app = make_movie_list_app(vec![
         "Aardvark", "Alpha", "Apple", "Banana", "Beta", "Cherry",
     ]);
-    // TV keeps hero-on-top at wide widths (unlike Movies), so letter buckets
+    // TV keeps legacy top placement at wide widths (unlike Movies), so letter buckets
     // still pack two per row there.
     app.libs[0].library.collection_type = "tvshows".into();
     // >= 250 switches `letter_bucket` to per-letter headers, giving an odd
@@ -232,7 +232,7 @@ fn letter_buckets_pack_independently_with_an_odd_sized_bucket() {
 fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
     // Tall enough viewport that the 18-row hero block leaves real list rows
     // below it, so `lib_page_size` reflects the list, not 0. TV keeps the
-    // hero-on-top two-column list at wide widths (Movies moved to
+    // legacy top placement two-column list at wide widths (Movies moved to
     // hero-on-left one-column).
     let mut app = make_movie_list_app(vec!["M0", "M1", "M2", "M3", "M4", "M5", "M6"]);
     app.libs[0].library.collection_type = "tvshows".into();
@@ -283,7 +283,7 @@ fn two_column_cursor_deltas_wrap_rows_and_clamp_at_list_end() {
     );
 }
 
-// ── Top hero area (hero-on-top) ─────────────────────────────────────────
+// ── Top hero area (legacy top placement) ─────────────────────────────────────────
 
 #[test]
 fn left_area_is_set_for_an_empty_library_list() {
@@ -420,7 +420,7 @@ fn hero_sizes_to_content_when_a_movie_is_selected() {
     // (poster + meta + overview), not from the fixed placeholder reserved
     // while the slice is loading -- the placeholder is only the stand-in
     // for the no-content state. Below the breakpoint Movies still uses this
-    // hero-on-top path (the wide hero-on-left card sizes independently;
+    // legacy top placement path (the wide hero-on-left card sizes independently;
     // covered in `movies_wide_tests.rs`).
     let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
@@ -484,6 +484,121 @@ fn music_library_top_level_reserves_hero_placeholder() {
 }
 
 #[test]
+fn inline_detail_flow_accounts_for_detail_rows_and_scroll() {
+    let flow = super::super::hero::inline_detail_flow(7, 4, 8, 0)
+        .expect("a detail block plus its active row should fit");
+
+    assert_eq!(flow.offset, 4);
+    assert_eq!(flow.detail_screen_row, 4);
+}
+
+#[test]
+fn inline_detail_is_inserted_after_the_selected_media_row() {
+    let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected", "Movie 2"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    let mut layout = LayoutMain::default();
+    let _ = render_list_term(&mut app, &mut layout, 81, 40);
+
+    let selected = layout.selected_item_rect.expect("selected row is visible");
+    assert!(
+        layout.hero_area.height > 0,
+        "selected detail should be rendered"
+    );
+    assert!(
+        layout.hero_area.y >= selected.y + selected.height,
+        "inline detail must follow the selected media row: selected={selected:?}, detail={:?}",
+        layout.hero_area
+    );
+}
+
+#[test]
+fn inline_detail_height_tracks_variable_selected_content() {
+    let mut short = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    short.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    short.libs[0].nav_stack.last_mut().unwrap().items[1].overview = "Short".into();
+    let mut short_layout = LayoutMain::default();
+    let _ = render_list_term(&mut short, &mut short_layout, 81, 40);
+
+    let mut long = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    long.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    long.libs[0].nav_stack.last_mut().unwrap().items[1].overview =
+        "A long overview that must occupy additional wrapped rows in the selected detail block."
+            .into();
+    let mut long_layout = LayoutMain::default();
+    let _ = render_list_term(&mut long, &mut long_layout, 81, 40);
+
+    assert!(
+        long_layout.hero_area.height > short_layout.hero_area.height,
+        "inline detail height must follow content: short={}, long={}",
+        short_layout.hero_area.height,
+        long_layout.hero_area.height
+    );
+}
+
+#[test]
+fn inline_detail_is_suppressed_when_the_active_row_cannot_fit_with_it() {
+    let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    let mut layout = LayoutMain::default();
+    let _ = render_list_term(&mut app, &mut layout, 81, 4);
+
+    assert_eq!(
+        layout.hero_area.height, 0,
+        "detail must be suppressed in a tiny viewport"
+    );
+    assert!(
+        layout.selected_item_rect.is_some(),
+        "the active media row must retain the available viewport"
+    );
+}
+
+#[test]
+fn inline_detail_scroll_keeps_selected_row_and_detail_in_the_viewport() {
+    let titles: Vec<&str> = (0..12).map(|_| "Movie").collect();
+    let mut app = make_movie_list_app(titles);
+    app.libs[0].nav_stack.last_mut().unwrap().items[8].name = "Movie 8 Selected".into();
+    app.libs[0].nav_stack.last_mut().unwrap().items[8].overview = "Selected detail".into();
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 8;
+    let mut layout = LayoutMain::default();
+    let _ = render_list_term(&mut app, &mut layout, 81, 16);
+
+    let selected = layout.selected_item_rect.expect("selected row is visible");
+    assert!(
+        layout.hero_area.height > 0,
+        "selected detail should remain addressable"
+    );
+    assert!(layout.hero_area.y >= selected.y + selected.height);
+    assert!(layout.hero_area.y + layout.hero_area.height <= 16);
+}
+
+#[test]
+fn inline_hero_rows_are_inert_and_do_not_add_media_targets() {
+    let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected", "Movie 2"]);
+    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+    let mut layout = LayoutMain::default();
+    let _ = render_list_term(&mut app, &mut layout, 81, 40);
+
+    let selected_row = layout
+        .left_row_map
+        .iter()
+        .position(|row| *row == Some(1))
+        .expect("selected media row should be mapped");
+    let following_row = layout
+        .left_row_map
+        .iter()
+        .skip(selected_row + 1)
+        .position(|row| row == &Some(2))
+        .map(|offset| selected_row + 1 + offset)
+        .expect("following media row should be mapped");
+    assert!(
+        layout.left_row_map[selected_row + 1..following_row]
+            .iter()
+            .all(Option::is_none),
+        "hero-only rows must remain inert"
+    );
+}
+
+#[test]
 fn selected_cell_uses_carat_no_double_hash_in_two_column_mode() {
     let mut app = make_no_banner_list_app(vec!["Alpha", "Beta", "Gamma", "Delta"]);
     let mut layout = LayoutMain::default();
@@ -512,7 +627,7 @@ fn hero_content_tracks_cursor_when_selection_scrolled_offscreen() {
     let mut layout = LayoutMain::default();
 
     // Move the cursor to the last item: the hero (below-breakpoint
-    // hero-on-top fallback) must still show that item's title even though
+    // legacy top placement fallback) must still show that item's title even though
     // the viewport is far too short to render its row's position. The wide
     // hero-on-left variant (left card tracks a scrolled-away rail row) is
     // covered in `movies_wide_tests.rs`.

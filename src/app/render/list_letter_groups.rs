@@ -106,10 +106,19 @@ impl App {
 
         // Keep the cursor row visible: never scroll it above the viewport's
         // top.
-        let lower_bound = (display_cursor + hero_rows as usize + 1)
-            .saturating_sub(visible)
-            .min(display_cursor);
-        let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
+        let (mut offset, detail_screen_row) = if hero_rows > 0 {
+            let flow = super::hero::inline_detail_flow(
+                display_cursor,
+                hero_rows,
+                content_area.height,
+                stored_scroll,
+            )
+            .expect("inline detail was admitted only when its active row fits");
+            (flow.offset, Some(flow.detail_screen_row))
+        } else {
+            let lower_bound = display_cursor.saturating_sub(visible.saturating_sub(1));
+            (stored_scroll.clamp(lower_bound, display_cursor), None)
+        };
         // If stale scroll state would put the first item of a bucket at the
         // top of the viewport, back up so its letter header remains visible.
         if visible > 1 && offset > 0 {
@@ -230,10 +239,10 @@ impl App {
             LIBRARY_COLUMN_GAP,
         );
 
-        if hero_rows > 0 {
+        if let Some(detail_screen_row) = detail_screen_row {
             layout.hero_area = Rect {
                 x: content_area.x,
-                y: content_area.y + (display_cursor + 1 - offset) as u16,
+                y: content_area.y + detail_screen_row as u16,
                 width: content_area.width,
                 height: hero_rows,
             };

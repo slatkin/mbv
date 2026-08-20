@@ -149,7 +149,7 @@ pub(super) fn render_home_video_item(
             item_h as usize,
             1,
             item_h.saturating_sub(2) as usize,
-            super::SelectedBlockBorderStyle::HeroOnTop,
+            super::SelectedBlockBorderStyle::Framed,
         );
     }
 }

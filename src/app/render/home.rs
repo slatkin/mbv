@@ -6,7 +6,7 @@ use super::home_list_rows::{render_home_list_rows, DisplayRow};
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 
 use crate::app::layout::LayoutMain;
-use crate::app::{palette, App, TWO_COLUMN_THRESHOLD};
+use crate::app::{palette, App};
 use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -79,7 +79,7 @@ impl App {
 
         // Same threshold the library list uses to switch to two columns, so
         // Home's hero/list split and the library list cross over together.
-        let two_column = area.width >= TWO_COLUMN_THRESHOLD;
+        let two_column = hero_left::can_use_hero_on_left(area);
         // Single-column Home's whole panel (content plus the shared tab
         // gutters) is painted green while focused in `render_main`, before
         // this function runs.
@@ -89,12 +89,12 @@ impl App {
         // Wide (hero-on-left) still pre-reserves its own pill row above
         // `content_area` (its pills sit at the top of the right pane, a
         // hero-on-left concern, `hero_on_left_right_pane`). Narrow
-        // (hero-on-top fallback) no longer pre-reserves anything here: its
-        // pill row now lives inside `top_hero_layout`'s own `pills_area`,
-        // below the hero, same as every other hero-on-top screen
+        // (legacy top placement fallback) no longer pre-reserves anything here: its
+        // pill row now lives inside `placement-neutral geometry`'s own `pills_area`,
+        // below the hero, same as every other legacy top placement screen
         // (design.md decision 6 -- pill *position* is geometry, not a
         // per-screen declaration).
-        let content_offset = if two_column { 1 + pill_gap_rows } else { 0 };
+        let content_offset = if two_column { 1 + pill_gap_rows } else { 2 };
         let content_area = Rect {
             y: area.y.saturating_add(content_offset),
             height: area.height.saturating_sub(content_offset),
@@ -120,8 +120,6 @@ impl App {
         if rows.is_empty() {
             rows.push(DisplayRow::Empty);
         }
-
-        let content_h = rows.len().max(1) as u16;
 
         let visible_flat_indices: Vec<usize> = rows
             .iter()
@@ -156,12 +154,12 @@ impl App {
         let hero_data: Option<HeroData>;
         let list_area: Rect;
         // Narrow layout's hero shell (area, row count), painted after the
-        // pill-gap fill below rather than inline here: `top_hero_layout`
+        // pill-gap fill below rather than inline here: `placement-neutral geometry`
         // shifts the hero up into the blank row above `content_area` when
         // one exists, which is the same row the pill-gap fill owns, so the
         // shell must paint last to win that row rather than be painted over.
-        let mut narrow_shell: Option<(Rect, u16)> = None;
         let mut narrow_pills_area: Option<Rect> = None;
+        let mut narrow_hero_rows = 0;
 
         if two_column {
             // Two-column layout: hero on left, list on right (hero-on-left,
@@ -169,6 +167,7 @@ impl App {
             // width are the shared arrangement's, not a Home-local ratio).
             let (mut hero_panel, right_panel) = hero_left::hero_on_left_panes(area);
             hero_panel.height = area.height.saturating_sub(1);
+            layout.hero_area = hero_panel;
             let mut hero_content = Rect {
                 x: hero_panel.x.saturating_add(HOME_HERO_PAD_X),
                 y: hero_panel.y.saturating_add(HOME_HERO_PAD_Y),
@@ -243,9 +242,9 @@ impl App {
                 content_area
             };
         } else {
-            // Vertical layout: hero-on-top fallback (design.md decision 1),
+            // Vertical layout: legacy top placement fallback (design.md decision 1),
             // reusing the shared reserved-block geometry and the HeroShell
-            // (`▁`/`▔`) border every other hero-on-top screen already has
+            // (`▁`/`▔`) border every other legacy top placement screen already has
             // (decision 2's "Narrow hero shell is uniform" -- Home was the
             // one screen missing it). The image-beside-metadata content wrap
             // itself is unchanged; it already matches the shared shape.
@@ -257,7 +256,7 @@ impl App {
             enum HeroContentDims {
                 Emby(mbv_core::api::EmbyItem, u16, KeepWatchingHeroLayout, u16),
                 // Audiobookshelf: image beside the metadata column, same
-                // shape as `Emby` -- the standard hero-on-top arrangement.
+                // shape as `Emby` -- the standard legacy top placement arrangement.
                 GenericBeside(QueueItem, u16, KeepWatchingHeroLayout, u16),
                 // Feed: text-only, no image to sit beside.
                 Generic(QueueItem, u16),
@@ -266,7 +265,7 @@ impl App {
             let dims = if area.width < 24 {
                 HeroContentDims::None
             } else {
-                // Every hero-on-top item with a cover -- Emby and the generic
+                // Every legacy top placement item with a cover -- Emby and the generic
                 // Audiobookshelf hero alike -- gets its image-beside-text
                 // dims from the same `beside_image_hero_dims` call, so the
                 // two providers' layouts cannot drift apart (image sits
@@ -355,22 +354,44 @@ impl App {
             } else {
                 0
             };
-            let top = hero::top_hero_layout(content_area, desired_hero_rows, true);
-            if top.hero_rows > 0 {
-                narrow_shell = Some((top.hero_area, top.hero_rows));
+            let cursor_row = rows
+                .iter()
+                .position(|row| matches!(row, DisplayRow::Item(flat_idx, _) if *flat_idx == cursor))
+                .unwrap_or(0);
+            let flow = (desired_hero_rows > 0)
+                .then(|| {
+                    hero::inline_detail_flow(
+                        cursor_row,
+                        desired_hero_rows,
+                        content_area.height,
+                        self.home.home_scroll,
+                    )
+                })
+                .flatten();
+            let hero_rows = flow.as_ref().map(|_| desired_hero_rows).unwrap_or(0);
+            narrow_hero_rows = hero_rows;
+            let hero_area = flow.map(|flow| Rect {
+                x: content_area.x,
+                y: content_area.y + flow.detail_screen_row as u16,
+                width: content_area.width,
+                height: hero_rows,
+            });
+            if let Some(hero_area) = hero_area {
+                layout.hero_area = hero_area;
             }
-            narrow_pills_area = Some(top.pills_area);
-            let hero_content = Rect {
-                x: top.hero_area.x.saturating_add(SELECTED_BLOCK_SIDE_PADDING),
-                y: top.hero_area.y.saturating_add(2),
-                width: top
-                    .hero_area
+            let hero_content = hero_area.map(|hero_area| Rect {
+                x: hero_area.x.saturating_add(SELECTED_BLOCK_SIDE_PADDING),
+                y: hero_area.y.saturating_add(2),
+                width: hero_area
                     .width
                     .saturating_sub(SELECTED_BLOCK_SIDE_PADDING * 2),
-                height: top.hero_rows.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
-            };
-            hero_data = match dims {
-                HeroContentDims::Emby(item, img_w, meta_layout, image_rows) => {
+                height: hero_rows.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
+            });
+            hero_data = match (dims, hero_content) {
+                (
+                    HeroContentDims::Emby(item, img_w, meta_layout, image_rows),
+                    Some(hero_content),
+                ) => {
                     let (meta_area, img_area) = super::home_hero::beside_image_hero_rects(
                         hero_content,
                         img_w,
@@ -385,7 +406,10 @@ impl App {
                         meta_layout,
                     ))
                 }
-                HeroContentDims::GenericBeside(item, img_w, layout, image_rows) => {
+                (
+                    HeroContentDims::GenericBeside(item, img_w, layout, image_rows),
+                    Some(hero_content),
+                ) => {
                     let (meta_area, img_area) = super::home_hero::beside_image_hero_rects(
                         hero_content,
                         img_w,
@@ -400,11 +424,18 @@ impl App {
                         layout,
                     ))
                 }
-                HeroContentDims::Generic(item, _) => Some(HeroData::Generic(item, hero_content)),
-                HeroContentDims::None => None,
+                (HeroContentDims::Generic(item, _), Some(hero_content)) => {
+                    Some(HeroData::Generic(item, hero_content))
+                }
+                _ => None,
             };
-
-            list_area = top.list_area;
+            narrow_pills_area = Some(Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            });
+            list_area = content_area;
         }
 
         // Hero-on-left's right pane: pill row at the pane's top, then the
@@ -431,9 +462,7 @@ impl App {
                 None,
             )
         } else {
-            // Narrow: pills sit below the hero, in the shared
-            // `top_hero_layout` pills slot (unified with Movies/TV's
-            // letter-range pills, see `list.rs`).
+            // Narrow: section pills stay outside the selected detail flow.
             (narrow_pills_area.unwrap_or_default(), None)
         };
         self.render_home_section_pills_row(f, pills_area, layout);
@@ -466,7 +495,7 @@ impl App {
         // itself green while focused, so the dark `SURFACE_BACKDROP` bar
         // reads against it. The single-column layout has no such green
         // panel (its surrounding surface is the ordinary `SURFACE_BACKDROP`
-        // library background, same as every other hero-on-top tab), so it
+        // library background, same as every other legacy top placement tab), so it
         // uses the same lighter `SURFACE_RESTING` highlight movies/TV lists
         // use (`list_rows.rs`'s `build_list_row_spans`) to stay visible
         // against that darker backdrop.
@@ -480,7 +509,7 @@ impl App {
         // The wide layout uses the list panel surface; the single-column
         // layout inherits the ordinary library panel surface (no green
         // focus fill -- Home's panel background matches every other
-        // hero-on-top tab's regardless of focus).
+        // legacy top placement tab's regardless of focus).
         let pill_gap = Rect {
             x: pills_area.x,
             y: pills_area.y.saturating_add(1),
@@ -510,14 +539,12 @@ impl App {
         }
 
         layout.left_area = list_area;
-
-        // Painted last so it wins the row it shares with the pill-gap fill
-        // above (see `narrow_shell`'s doc comment).
-        if let Some((hero_area, hero_rows)) = narrow_shell {
-            hero::hero_block_shell(f, hero_area, hero_rows, focused);
-        }
+        layout.inline_hero = narrow_hero_rows > 0;
 
         // Render hero (shared between both layout modes).
+        if narrow_hero_rows > 0 {
+            hero::selected_detail_shell(f, layout.hero_area, narrow_hero_rows, focused);
+        }
         if let Some(hero_data) = &hero_data {
             self.render_home_hero_data(f, hero_data, two_column, focused);
         }
@@ -530,9 +557,9 @@ impl App {
             selection_bg_full,
             selection_bg,
             cursor,
-            content_h,
             focused,
             layout,
+            narrow_hero_rows,
         );
 
         if let Some(panel) = green_panel_full {

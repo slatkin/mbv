@@ -49,7 +49,7 @@ impl App {
     /// Renders the wide Movies library: read-only shared selected-Emby hero
     /// card on the left, letter pills (or the active search box) plus the
     /// one-column Movies list in the right rail. Below the shared
-    /// breakpoint the caller keeps the existing hero-on-top path.
+    /// breakpoint the caller keeps the existing legacy top placement path.
     pub(super) fn render_wide_movies(
         &mut self,
         f: &mut Frame,
@@ -127,6 +127,13 @@ impl App {
 
         if let Some(s) = self.libs[lib_idx].search.as_ref() {
             super::hero::render_search_box(f, pills_area, &s.query, s.loading);
+        } else if self.is_home_video_view(lib_idx) {
+            let total = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|level| level.total_count)
+                .unwrap_or(0);
+            super::render_count_label(f, pills_area, total);
         } else if self.should_show_letter_pills(lib_idx) {
             self.render_letter_pills_row(f, pills_area, lib_idx, layout);
         }

@@ -337,23 +337,28 @@ The app-wide layout state, one of Mini, Normal, or Wide:
   either by explicit `x` toggle at any terminal width, or forced when terminal
   width is below the mini-view threshold. Both paths are the same state —
   Mini names "only one panel is showing," not the reason it's showing.
-- **Normal**: both panels visible; the Library panel uses its single-column
-  Hero-on-top arrangement. Sometimes called "narrow," but only from the
-  Library panel's perspective — Normal is the canonical term.
-- **Wide**: both panels visible; the Library panel uses its two-column
-  arrangement, Hero-on-top or Hero-on-left depending on the surface.
+- **Normal**: both panels visible; a hero-bearing Library panel uses the
+  single-column inline hero presentation. Sometimes called "narrow," but only
+  from the Library panel's perspective — Normal is the canonical term.
+- **Wide**: both panels visible; a hero-bearing Library panel uses hero-on-left
+  when the shared width and minimum-height conditions are met. Non-hero lists
+  retain their existing two-column arrangement.
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
-**Hero-on-top**:
-The two-column Wide arrangement used by movies, shows, podcasts, feeds, and
-home videos: hero above the list. Also the sole arrangement in Normal mode
-(there, single-column).
-_Avoid_: stacked, two-column mode, dual column
+**Inline hero**:
+The selected item's detail rendered immediately after its active media row in
+Normal or otherwise non-wide geometry. It is part of the single-column scrolling
+browser; hero-only rows are inert, while existing explicit child targets remain
+interactive. If the minimum row and minimum detail cannot fit, detail is
+suppressed.
+_Avoid_: pinned top placement, stacked hero
 
 **Hero-on-left**:
-The Wide arrangement used by Home, music, and audiobooks: hero beside the
-list, list in a single column. Wide-only; Normal mode has no Hero-on-left.
-_Avoid_: split, side-by-side, hero-on-side
+The sole Wide arrangement for hero-bearing browse surfaces: selected detail
+beside a single-column browser in the right rail. It applies only when the
+shared width breakpoint and minimum-height guard are satisfied; otherwise the
+surface uses Inline hero.
+_Avoid_: pinned top placement, split, side-by-side, hero-on-side
 
 **Sidebar**:
 An anchored, full-height destination rendered at a fixed width from one edge

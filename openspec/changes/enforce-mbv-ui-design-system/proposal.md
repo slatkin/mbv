@@ -76,8 +76,9 @@ regress it.
 
 ## Planning Status
 
-Planning is paused until #584 lands. The existing design and tasks still contain
-pre-#584 migration assumptions and are not ready for implementation.
+The #584 prerequisite is complete. This proposal now starts from the settled
+hero-on-left-wide / inline-narrow baseline and covers only the remaining
+design-system ownership and enforcement work.
 
 Decisions established in the current exploration:
 
@@ -89,14 +90,11 @@ Decisions established in the current exploration:
   arrangements place components and aggregate their typed targets; screens consume
   the aggregate map.
 
-The next exploration session should begin after #584 lands by:
+The next exploration session should begin by:
 
-- Re-reading the resulting render tree and live UI specs instead of carrying
-  forward the current transition-state inventory.
+- Re-reading the resulting render tree and live UI specs as the baseline.
 - Defining the exact surface, screen-model, arrangement, component, theme, and
   bespoke module boundaries against the real post-#584 code.
-- Reconciling `design.md`, the delta specs, and `tasks.md`; removing completed
-  hero-migration and stale-spec work and adding any missing modified-capability
-  deltas.
+- Reconciling `design.md`, the delta specs, and `tasks.md` against that baseline.
 - Choosing a whole-tree enforcement strategy and explicit approved-painting
   boundary that can pass against the existing tree when this change completes.

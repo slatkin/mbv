@@ -34,6 +34,42 @@ fn home_video_library_is_never_album_folders_and_renders_via_original_list_path(
 }
 
 #[test]
+fn wide_home_video_uses_a_left_detail_and_right_rail() {
+    let mut app = make_home_video_app();
+    let layout = render_view(&mut app, 200, 40);
+
+    assert!(layout.movies_wide_right_area.width > 0);
+    assert!(layout.movies_wide_right_area.height > 0);
+}
+
+#[test]
+fn wide_emby_podcast_uses_the_series_workspace_and_right_rail() {
+    let mut app = make_movie_app();
+    app.libs[0].library.collection_type = "podcasts".into();
+    for item in &mut app.libs[0].nav_stack[0].items {
+        item.item_type = "Series".into();
+        item.is_folder = true;
+    }
+
+    let layout = render_view(&mut app, 200, 40);
+
+    assert!(layout.tv_wide_left_area.width > 0);
+    assert!(layout.tv_wide_right_area.width > 0);
+}
+
+#[test]
+fn podcast_and_home_video_use_inline_when_wide_height_is_unavailable() {
+    let mut podcast = make_movie_app();
+    podcast.libs[0].library.collection_type = "podcasts".into();
+    let podcast_layout = render_view(&mut podcast, 200, 8);
+    assert_eq!(podcast_layout.tv_wide_left_area.width, 0);
+
+    let mut home_video = make_home_video_app();
+    let home_video_layout = render_view(&mut home_video, 200, 8);
+    assert_eq!(home_video_layout.movies_wide_right_area.width, 0);
+}
+
+#[test]
 fn letter_filter_buckets_match_emby_name_range_bounds() {
     let ac = LetterFilter::for_index(0).unwrap();
     assert_eq!(ac.label, "A\u{2013}C");

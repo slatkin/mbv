@@ -1,11 +1,14 @@
 use super::test_helpers::*;
 use super::*;
+use crate::app::layout::LibraryRowTarget;
 use crate::app::tests::make_app_stub;
 use crate::app::types_audiobookshelf_browse::{
     build_surname_buckets, AudiobookshelfBookBrowseState,
 };
 use crate::app::TabSelection;
 use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfLibrary};
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
 
 fn book(id: &str, title: &str, author_surname: &str) -> AudiobookshelfBook {
     AudiobookshelfBook {
@@ -211,6 +214,25 @@ fn wide_layout_renders_hero_chapters_and_browser_together() {
             && layout.audiobookshelf_book_right_area.height > 0,
         "the right-pane browser area must be populated in wide mode"
     );
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|f| app.render_library(f, Rect::new(0, 0, 100, 20), true, &mut layout))
+        .unwrap();
+    let browser = layout.audiobookshelf_book_right_area;
+    let selected_row = browser.y
+        + layout
+            .left_row_targets
+            .iter()
+            .position(|target| *target == Some(LibraryRowTarget::Book(0)))
+            .expect("wide selected book row should be mapped") as u16;
+    assert_eq!(
+        terminal.backend().buffer()[(browser.x, selected_row)]
+            .style()
+            .bg,
+        Some(palette::SURFACE_FOCUSED),
+        "wide selected book row must keep its focused background"
+    );
 }
 
 /// Task 2.4: the narrow-terminal fallback must still render both the
@@ -219,7 +241,8 @@ fn wide_layout_renders_hero_chapters_and_browser_together() {
 fn narrow_layout_still_renders_hero_chapters_and_browser_together() {
     let mut app = make_audiobookshelf_book_app();
     let mut layout = LayoutMain::default();
-    let out = render_library_to_string(&mut app, &mut layout); // 60x20, below TWO_COLUMN_THRESHOLD
+    let terminal = render_library_to_terminal_focused(&mut app, &mut layout, true);
+    let out = buffer_to_string(&terminal); // 60x20, below TWO_COLUMN_THRESHOLD
 
     assert!(
         out.contains("Alpha Tales"),
@@ -230,9 +253,57 @@ fn narrow_layout_still_renders_hero_chapters_and_browser_together() {
         "narrow layout must still render the bucket-pill row:\n{out}"
     );
     assert!(
+        out.contains("Chapter One"),
+        "narrow layout must keep chapter rows alongside the browser:\n{out}"
+    );
+    assert!(
         layout.audiobookshelf_book_right_area.height > 0,
         "narrow layout must still populate the browser area, not just the hero"
     );
+
+    let browser = layout.audiobookshelf_book_right_area;
+    let buffer = terminal.backend().buffer();
+    let selected_row = browser.y
+        + layout
+            .left_row_targets
+            .iter()
+            .position(|target| *target == Some(LibraryRowTarget::Book(0)))
+            .expect("narrow selected book row should be mapped") as u16;
+    assert_eq!(
+        buffer[(browser.x, selected_row)].style().bg,
+        Some(palette::SURFACE_RESTING),
+        "inline selected book row must use the resting background"
+    );
+    let row_text = (browser.x..browser.right())
+        .map(|x| buffer[(x, selected_row)].symbol())
+        .collect::<String>();
+    assert!(
+        !row_text.contains("Alpha Tales"),
+        "inline selected book row must not repeat the hero title: {row_text:?}"
+    );
+}
+
+#[test]
+fn narrow_book_detail_is_not_pinned_above_the_browser() {
+    let mut app = make_audiobookshelf_book_app();
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 20);
+
+    assert!(
+        layout.hero_area.y >= layout.audiobookshelf_book_right_area.y,
+        "narrow book detail must enter browser flow instead of remaining pinned above it: hero={:?}, browser={:?}",
+        layout.hero_area,
+        layout.audiobookshelf_book_right_area
+    );
+}
+
+#[test]
+fn narrow_book_detail_is_suppressed_in_a_short_viewport() {
+    let mut app = make_audiobookshelf_book_app();
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 4);
+
+    assert_eq!(layout.hero_area.height, 0);
 }
 
 /// The hero must render the book's author, narrator, year, and description
@@ -266,7 +337,7 @@ fn hero_renders_author_narrator_year_and_description() {
     app.tab = TabSelection::AudiobookshelfLibrary(0);
     app.panel_focus = PanelFocus::Library;
 
-    // Narrow (single-column hero-on-top) — 80 cols gives the meta row
+    // Narrow (single-column legacy top placement) — 80 cols gives the meta row
     // enough room for the narrator span without truncation.
     let mut layout = LayoutMain::default();
     let out = render_library_to_string_sized(&mut app, &mut layout, 80, 24);

@@ -5,7 +5,7 @@
 
 ## 1. Establish The UI Boundary
 
-- [ ] 1.1 Map the current render modules into screen, arrangement, component, theme, and bespoke responsibilities without changing behaviour. Record which surfaces still call `top_hero_layout` or `SelectedBlockBorderStyle::HeroOnTop` directly.
+- [ ] 1.1 Map the current render modules into screen, arrangement, component, theme, and bespoke responsibilities without changing behaviour. Record the settled hero-on-left-wide / inline-narrow baseline.
 - [ ] 1.2 Define the approved component and arrangement module boundaries and document which modules may perform direct Ratatui painting.
 - [ ] 1.3 Narrow theme access so screen code consumes semantic roles or component policies rather than raw palette primitives. This is a large cross-cutting diff (100+ call sites across `queue.rs`, `detail_series_view.rs`, `music_wide.rs`, `home_hero.rs`, `indicators.rs`, `album_rows.rs`, etc.); scope it to the pilot surfaces first and track the remainder explicitly rather than hedging with "wherever the existing migration allows."
 - [ ] 1.4 Define typed, centrally owned policy and variant representations for the pilot arrangement, using private fields or sealed implementations where appropriate.
@@ -18,10 +18,7 @@
 - [ ] 2.3 Update the pilot screen and input handling to consume component hit targets instead of reconstructing coordinates.
 - [ ] 2.4 Add focused Ratatui `TestBackend` coverage for the pilot component's visual states and hit-target geometry.
 
-## 3. Eliminate Hero-On-Top And Pilot The Closed Arrangement Model
-
-- [ ] 3.1 Migrate the remaining hero-on-top surfaces (`feeds`, `audiobookshelf`, `audiobookshelf_books`, `home_video`, `album`) to the shared inline-hero (narrow) or hero-on-left (wide) arrangement. Do not enshrine hero-on-top behind a boundary; eliminate it.
-- [ ] 3.2 Remove `top_hero_layout` and `SelectedBlockBorderStyle::HeroOnTop` once no screen references them.
+## 3. Pilot The Closed Arrangement Model
 - [ ] 3.3 Move the shared hero-on-left geometry and component composition behind the arrangement boundary while preserving current output.
 - [ ] 3.4 Represent legitimate screen differences as content models or named central policies, not screen-local painter branches.
 - [ ] 3.5 Add narrow-width, focus-state, and selected/unselected visual regression coverage for the pilot arrangement.
@@ -29,7 +26,7 @@
 
 ## 4. Sync Stale Specs
 
-- [ ] 4.1 Sync `openspec/specs/right-panel-arrangements/spec.md`: the live spec still says "Narrow presentation SHALL be hero-on-top," contradicting the inline-hero behaviour shipped in #561. Replace with the inline-hero narrow presentation.
+- [ ] 4.1 Sync the live arrangement specs with the completed inline-narrow / hero-on-left-wide baseline.
 - [ ] 4.2 Sync the `library-list-hero` and `ui-design-language` live specs with the tightened component-ownership and role-narrowing requirements this change adds.
 
 ## 5. Guide Agents And Developers
@@ -41,7 +38,7 @@
 
 ## 6. Detect Common Bypasses
 
-- [ ] 6.1 Add a practical repository check (ast-grep rule scoped to screen modules, matching the repo's existing tool routing) for direct `top_hero_layout` / `SelectedBlockBorderStyle::HeroOnTop` / `f.render_widget` usage outside approved UI modules.
+- [ ] 6.1 Add a practical repository check (ast-grep rule scoped to screen modules, matching the repo's existing tool routing) for direct arrangement bypasses and unapproved painting outside approved UI modules.
 - [ ] 6.2 Add a check or lint for raw `palette::` primitive access in screen modules outside the theme layer.
 - [ ] 6.3 Make exceptions explicit and reviewable rather than silently excluding whole render areas from the checks.
 - [ ] 6.4 Add a check or documented test convention for interactive components that do not expose their hit geometry.

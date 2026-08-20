@@ -33,6 +33,7 @@ pub(super) fn render_home_emby_row(
     item: &mbv_core::api::EmbyItem,
     selected_row: bool,
     focused: bool,
+    show_title: bool,
 ) {
     let avail = row_rect.width as usize;
 
@@ -68,7 +69,9 @@ pub(super) fn render_home_emby_row(
         avail.saturating_sub(META_COL_W + META_RIGHT_MARGIN + META_INNER_PAD * 2 + pct_reserve);
 
     let is_episode = item.item_type == "Episode" && !item.series_name.is_empty();
-    let mut title_spans: Vec<Span> = if is_episode {
+    let mut title_spans: Vec<Span> = if !show_title {
+        Vec::new()
+    } else if is_episode {
         let show_w = title_col_w * 2 / 5;
         let show = trunc_str(&item.series_name, show_w);
         let show_actual_w = show.width();
@@ -139,6 +142,7 @@ pub(super) fn render_home_latest_row(
     item: &QueueItem,
     selected: bool,
     focused: bool,
+    show_title: bool,
 ) {
     let avail = row_rect.width as usize;
     const META_COL_W: usize = 10;
@@ -146,7 +150,9 @@ pub(super) fn render_home_latest_row(
     let title_col_w = avail.saturating_sub(META_COL_W + META_INNER_PAD * 2);
 
     let mut spans: Vec<Span> = vec![Span::styled(
-        trunc_str(&item.display_name(), title_col_w),
+        show_title
+            .then(|| trunc_str(&item.display_name(), title_col_w))
+            .unwrap_or_default(),
         Style::default().fg(home_title_color(selected, focused)),
     )];
     let actual_title_w: usize = spans.iter().map(|s| s.content.width()).sum();
@@ -390,7 +396,7 @@ mod tests {
         let backend = TestBackend::new(row_w, 1);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            render_home_latest_row(f, Rect::new(0, 0, row_w, 1), item, selected, focused);
+            render_home_latest_row(f, Rect::new(0, 0, row_w, 1), item, selected, focused, true);
         })
         .unwrap();
         buffer_to_string(&term)

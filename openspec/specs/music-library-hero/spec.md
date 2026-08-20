@@ -2,30 +2,31 @@
 
 ## Purpose
 Provides a responsive grouped Music layout that preserves the current narrow hero and presents a persistent album-and-track workspace beside a one-column album browser at wide widths.
+
 ## Requirements
+
 ### Requirement: Grouped Music uses responsive compositions
 
-The grouped Music album view SHALL use the hero-on-left arrangement. Below the shared breakpoint it
-SHALL fall back to hero-on-top with a single list column. At or above the breakpoint it SHALL render
-hero-on-left, with album detail and tracks in the hero pane and album browsing in the list pane. The
-grouped Music view SHALL NOT evaluate the breakpoint itself. Screens assigned hero-on-top SHALL NOT
-change arrangement because of this requirement.
+The grouped Music album view SHALL use hero-on-left when it meets the shared wide geometry conditions. Its left pane SHALL contain album detail and tracks, and its right rail SHALL contain a single-column album browser. Otherwise the selected album detail and tracks SHALL render inline at the active album row in a single-column browser. Grouped Music SHALL NOT evaluate the breakpoint or minimum-height guard itself and SHALL NOT use a pinned top fallback.
 
 #### Scenario: Grouped Music below the breakpoint
-
-- **WHEN** the grouped Music content area is narrower than the shared breakpoint
-- **THEN** group pills span the content width, the album hero renders above the list, and albums
-  render one per row
+- **WHEN** grouped Music does not meet the shared wide geometry conditions
+- **THEN** group pills span the content width
+- **AND** albums render one per row
+- **AND** the selected album's hero and track detail render inline at its active row
 
 #### Scenario: Grouped Music at the breakpoint
+- **WHEN** grouped Music meets the shared wide geometry conditions
+- **THEN** it renders hero-on-left
 
-- **WHEN** the grouped Music content area reaches the shared breakpoint
-- **THEN** it renders the hero-on-left arrangement
+#### Scenario: Grouped Music lacks sufficient height
+- **WHEN** grouped Music meets the width breakpoint but fails the existing minimum-height guard
+- **THEN** it renders the inline presentation
+- **AND** it does not pin album detail above the browser
 
 #### Scenario: Non-Music library at wide width
-
-- **WHEN** a library assigned hero-on-top is rendered at or above the breakpoint
-- **THEN** it renders hero-on-top with a two-column list and does not adopt hero-on-left
+- **WHEN** another hero-bearing library meets the shared wide geometry conditions
+- **THEN** it also renders hero-on-left with a one-column right-rail browser
 
 ### Requirement: Wide left pane persistently shows album detail and tracks
 
@@ -128,4 +129,3 @@ Each visible wide-mode track SHALL have a logical mouse target covering all of i
 #### Scenario: Click artwork
 - **WHEN** the user clicks album artwork or blank space in the wide left hero
 - **THEN** no track is selected and no playback action is invoked
-

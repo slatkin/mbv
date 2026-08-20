@@ -1,13 +1,6 @@
 //! The `Hero` component (design.md "Component catalogue"): the reserved
 //! panel that shows the selected item's artwork, metadata and overview
-//! above (hero-on-top), beside (hero-on-left), or inline with its list.
-//!
-//! This file holds the hero-on-top geometry and outer shell, extracted from
-//! movies/TV (`list.rs`'s former `top_hero_layout` path, hero-on-top's
-//! source per design.md decision 4): the fixed-height block reservation
-//! (`top_hero_layout`) and its `▁`/`▔` bordered shell (`hero_block_shell`),
-//! shared today by every hero-on-top content kind (movie, series, album)
-//! that `list.rs` paints into the block this module reserves.
+//! beside (hero-on-left) or inline with its list.
 //!
 //! Grouped Music's hero-on-left arrangement (`music_wide.rs`, hero-on-left's
 //! source per design.md decision 4) supplies this module's hero-on-left
@@ -49,63 +42,34 @@ pub(super) const HERO_TITLE_ROWS: u16 = 1;
 /// the hero block's reserved rows (the list makes room), not painted over
 /// list content like `render_selected_block_borders` does.
 pub(super) const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
-/// Blank row separating the hero block from the list below it.
-const HERO_SEPARATOR_ROWS: u16 = 1;
-
-pub(super) struct TopHeroLayout {
-    pub hero_area: Rect,
-    pub pills_area: Rect,
-    pub list_area: Rect,
-    pub hero_rows: u16,
+/// The shared display-flow accounting for an inline selected-detail block.
+/// `offset` is the first display row in the viewport and
+/// `detail_screen_row` is the detail block's row relative to that viewport.
+pub(super) struct InlineDetailFlow {
+    pub offset: usize,
+    pub detail_screen_row: usize,
 }
 
-pub(super) fn top_hero_layout(
-    content_area: Rect,
-    desired_hero_rows: u16,
-    show_pills: bool,
-) -> TopHeroLayout {
-    let pills_reserved = if show_pills {
-        2.min(content_area.height)
-    } else {
-        0
-    };
-    let separator_reserve = if show_pills { 0 } else { HERO_SEPARATOR_ROWS };
-    let hero_rows = match desired_hero_rows.min(
-        content_area
-            .height
-            .saturating_sub(1 + separator_reserve + pills_reserved),
-    ) {
-        r if r < HERO_BLOCK_EXTRA_ROWS => 0,
-        r => r,
-    };
-    let separator_rows = if hero_rows > 0 { separator_reserve } else { 0 };
-    let hero_shift = if hero_rows > 0 && content_area.y > 0 {
-        1
-    } else {
-        0
-    };
-    let hero_area = Rect {
-        y: content_area.y.saturating_sub(hero_shift),
-        height: hero_rows,
-        ..content_area
-    };
-    let pills_area = Rect {
-        y: content_area.y.saturating_sub(hero_shift) + hero_rows + separator_rows,
-        height: if show_pills { 1 } else { 0 },
-        ..content_area
-    };
-    let list_area = Rect {
-        y: content_area.y.saturating_sub(hero_shift) + hero_rows + separator_rows + pills_reserved,
-        height: (content_area.height + hero_shift)
-            .saturating_sub(hero_rows + separator_rows + pills_reserved),
-        ..content_area
-    };
-    TopHeroLayout {
-        hero_area,
-        pills_area,
-        list_area,
-        hero_rows,
+pub(super) fn inline_detail_flow(
+    cursor_row: usize,
+    detail_rows: u16,
+    visible_rows: u16,
+    stored_offset: usize,
+) -> Option<InlineDetailFlow> {
+    let detail_rows = detail_rows as usize;
+    let visible_rows = visible_rows as usize;
+    if detail_rows == 0 || detail_rows + 1 > visible_rows {
+        return None;
     }
+
+    let lower_bound = (cursor_row + detail_rows + 1)
+        .saturating_sub(visible_rows)
+        .min(cursor_row);
+    let offset = stored_offset.clamp(lower_bound, cursor_row);
+    Some(InlineDetailFlow {
+        offset,
+        detail_screen_row: cursor_row + 1 - offset,
+    })
 }
 
 /// Paints the hero block's outer shell -- the colored bg (focused/unfocused
@@ -120,7 +84,7 @@ pub(super) fn top_hero_layout(
 /// hero's own fixed window (`offset = 0`, fully visible, padding rows
 /// `[1, hero_rows - 2]`), so there is exactly one implementation of the ▁/▔
 /// shell rather than two near-identical ones.
-pub(super) fn hero_block_shell(f: &mut Frame, hero_area: Rect, hero_rows: u16, focused: bool) {
+pub(super) fn selected_detail_shell(f: &mut Frame, hero_area: Rect, hero_rows: u16, focused: bool) {
     let bg = palette::resolve_surface_focus(focused);
     let visible = hero_rows as usize;
     let top_pad_abs = 1usize;
@@ -141,7 +105,7 @@ pub(super) fn hero_block_shell(f: &mut Frame, hero_area: Rect, hero_rows: u16, f
         visible,
         top_pad_abs,
         bottom_pad_abs,
-        super::SelectedBlockBorderStyle::HeroOnTop,
+        super::SelectedBlockBorderStyle::Framed,
     );
 }
 
@@ -195,7 +159,7 @@ pub(super) enum HeroLine {
 }
 
 /// Where the `Hero` component's right-aligned image starts, relative to
-/// `area`. The two hero-on-top content kinds place it differently: the
+/// `area`. The two legacy top placement content kinds place it differently: the
 /// movie hero pins the image to `area`'s own top row, sharing that row with
 /// the title when one is shown; the Series hero starts its image on the row
 /// *after* the title, one row lower. This is an existing, preserved
@@ -221,7 +185,7 @@ pub(super) struct HeroImage {
 pub(super) struct HeroContent<'a> {
     pub title: Option<&'a str>,
     pub meta_line: Option<&'a str>,
-    /// Role colour for `meta_line` -- the one place today's two hero-on-top
+    /// Role colour for `meta_line` -- the one place today's two legacy top placement
     /// content kinds disagree (movie: `MUTED_GREEN`, series: `SUBTLE`), so
     /// it is the declaration's colour-variant field (design.md decision 6)
     /// rather than a value this component picks itself.
@@ -247,7 +211,7 @@ pub(super) struct HeroPaintResult {
 /// Paints the `Hero` component's text content -- title row, meta line,
 /// "Playing" indicator, and overview/detail lines wrapped around the
 /// right-aligned image reservation -- into `area`. Extracted unchanged from
-/// `detail.rs`'s `render_compact_detail` (the movie hero, hero-on-top's
+/// `detail.rs`'s `render_compact_detail` (the movie hero, legacy top placement's
 /// source per design.md decision 4); `detail_series_view.rs`'s Series hero
 /// shares the same shape and now calls this too.
 pub(super) fn paint_hero_content(
@@ -402,7 +366,7 @@ pub(super) fn paint_hero_content(
     }
 }
 
-/// Renders Home's hero-on-top metadata shape -- wrapped yellow title,
+/// Renders Home's legacy top placement metadata shape -- wrapped yellow title,
 /// optional green subtitle row, one meta line, a blank separator, then the
 /// overview -- shared by the Keep Watching (Emby) hero and the generic
 /// Audiobookshelf/Feeds hero, which otherwise duplicated this block
@@ -511,7 +475,7 @@ pub(super) fn render_home_hero_meta_block(
     // Hero-on-left (the recessed-box path): the box's own top padding row
     // doubles as the separator above, leaving the metadata flush against the
     // box's top edge. Reserve one more row so the gap above the box is
-    // visible. The narrow hero-on-top path (overview_pad == 0) renders no
+    // visible. The narrow legacy top placement path (overview_pad == 0) renders no
     // box and keeps its single separator row.
     if overview_pad > 0 && !overview_lines.is_empty() {
         row += 1;

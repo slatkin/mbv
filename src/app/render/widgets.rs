@@ -160,11 +160,11 @@ pub(super) fn render_selected_block_background(
 
 /// The declared per-arrangement variant for [`render_selected_block_borders`]
 /// (design.md decision 6: differences are declared in one block, not
-/// expressed by forking the painter). `HeroOnTop` and `HeroOnLeft` are
+/// expressed by forking the painter). `Framed` and `HeroOnLeft` are
 /// separate match arms in the function body, so editing one arrangement's
 /// glyphs/background can never reach the other's.
 pub(super) enum SelectedBlockBorderStyle {
-    HeroOnTop,
+    Framed,
     HeroOnLeft { focused: bool },
 }
 
@@ -182,7 +182,7 @@ pub(super) fn render_selected_block_borders(
     style: SelectedBlockBorderStyle,
 ) {
     let (top_glyph, bottom_glyph, bg) = match style {
-        SelectedBlockBorderStyle::HeroOnTop => ("\u{2581}", "\u{2594}", None),
+        SelectedBlockBorderStyle::Framed => ("\u{2581}", "\u{2594}", None),
         SelectedBlockBorderStyle::HeroOnLeft { focused } => (
             "\u{2594}",
             "\u{2581}",

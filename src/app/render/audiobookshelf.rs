@@ -4,9 +4,10 @@ use super::detail_series::{
     SERIES_IMAGE_ROWS,
 };
 use super::hero::{
-    hero_block_shell, top_hero_layout, HeroContent, HeroImage, ImageTop, HERO_BLOCK_EXTRA_ROWS,
-    HERO_PLACEHOLDER_ROWS, HERO_TITLE_ROWS,
+    inline_detail_flow, selected_detail_shell, HeroContent, HeroImage, ImageTop,
+    HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
+use super::hero_left;
 use super::list_rows::{
     draw_column_selection_markers, focused_or_subtle, item_cell_spans, SELECTED_BLOCK_SIDE_PADDING,
 };
@@ -112,32 +113,35 @@ impl App {
         };
 
         let cols = library_column_count(area.width);
-        let desired_rows = state
-            .selected_show()
-            .map(|_| self.audiobookshelf_hero_content_rows(index, cols > 1) + HERO_BLOCK_EXTRA_ROWS)
-            .unwrap_or(HERO_PLACEHOLDER_ROWS);
-        let top = top_hero_layout(area, desired_rows, false);
-        layout.hero_area = top.hero_area;
-        layout.left_area = top.list_area;
-
-        if top.hero_rows > 0 {
-            hero_block_shell(f, top.hero_area, top.hero_rows, focused);
+        if hero_left::can_use_hero_on_left(area) {
+            let (hero_panel, right_panel) = hero_left::hero_on_left_panes(area);
+            layout.hero_area = hero_panel;
+            layout.left_area = right_panel;
             let content = Rect {
-                x: top.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                y: top.hero_area.y + 2,
-                width: top
-                    .hero_area
+                x: hero_panel.x + SELECTED_BLOCK_SIDE_PADDING,
+                y: hero_panel.y + SELECTED_BLOCK_SIDE_PADDING,
+                width: hero_panel
                     .width
                     .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-                height: top.hero_rows - HERO_BLOCK_EXTRA_ROWS,
+                height: hero_panel
+                    .height
+                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
             };
-            self.render_audiobookshelf_hero(f, content, index, focused, cols > 1, layout);
+            if content.width > 0 && content.height > 0 {
+                self.render_audiobookshelf_hero(f, content, index, focused, false, layout);
+            }
+            if state.shows.is_empty() {
+                render_placeholder(f, right_panel, "No podcast shows");
+            } else {
+                self.render_audiobookshelf_show_rows(f, right_panel, index, focused, 1, 0, layout);
+            }
+            return;
         }
-
         if state.shows.is_empty() {
+            layout.left_area = area;
             render_placeholder(
                 f,
-                top.list_area,
+                area,
                 state
                     .error
                     .as_deref()
@@ -150,7 +154,38 @@ impl App {
             return;
         }
 
-        self.render_audiobookshelf_show_rows(f, top.list_area, index, focused, cols, layout);
+        layout.left_area = area;
+        let desired_rows =
+            self.audiobookshelf_hero_content_rows(index, true) + HERO_BLOCK_EXTRA_ROWS;
+        let hero_rows = desired_rows.min(area.height.saturating_sub(1));
+        let hero_rows = (hero_rows >= HERO_BLOCK_EXTRA_ROWS)
+            .then_some(hero_rows)
+            .unwrap_or(0);
+        layout.inline_hero = hero_rows > 0;
+        self.render_audiobookshelf_show_rows(f, area, index, focused, cols, hero_rows, layout);
+        if hero_rows > 0 {
+            let cursor_row = self.audiobookshelf_browse[index].cursor() / cols.max(1);
+            let detail_screen_row =
+                inline_detail_flow(cursor_row, hero_rows, area.height, state.scroll)
+                    .expect("admitted inline detail must fit")
+                    .detail_screen_row;
+            layout.hero_area = Rect {
+                x: area.x,
+                y: area.y + detail_screen_row as u16,
+                width: area.width,
+                height: hero_rows,
+            };
+            selected_detail_shell(f, layout.hero_area, hero_rows, focused);
+            let content = Rect {
+                x: area.x + SELECTED_BLOCK_SIDE_PADDING,
+                y: layout.hero_area.y + 2,
+                width: area.width.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
+                height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
+            };
+            self.render_audiobookshelf_hero(f, content, index, focused, cols > 1, layout);
+        } else {
+            layout.hero_area = Rect::default();
+        }
     }
 
     fn audiobookshelf_hero_content_rows(&self, index: usize, show_title: bool) -> u16 {
@@ -538,6 +573,7 @@ impl App {
         index: usize,
         focused: bool,
         cols: usize,
+        hero_rows: u16,
         layout: &mut LayoutMain,
     ) {
         let state = &mut self.audiobookshelf_browse[index];
@@ -554,12 +590,25 @@ impl App {
             .iter()
             .position(|row| row.contains(&cursor))
             .unwrap_or(0);
+        let mut display_rows = rows.clone();
+        if hero_rows > 0 {
+            display_rows.splice(
+                cursor_row + 1..cursor_row + 1,
+                (0..hero_rows).map(|_| Vec::new()),
+            );
+        }
         let visible = area.height as usize;
-        let lower = (cursor_row + 1).saturating_sub(visible).min(cursor_row);
-        state.scroll = state.scroll.clamp(lower, cursor_row);
-        let scroll = state.scroll;
+        let scroll = if hero_rows > 0 {
+            inline_detail_flow(cursor_row, hero_rows, area.height, state.scroll)
+                .expect("admitted inline detail must fit")
+                .offset
+        } else {
+            let lower = cursor_row.saturating_add(1).saturating_sub(visible);
+            state.scroll.clamp(lower, cursor_row)
+        };
+        state.scroll = scroll;
         let cell_width = library_cell_width(area, cols) as usize;
-        let items = rows
+        let items = display_rows
             .iter()
             .skip(scroll)
             .take(visible)
@@ -567,7 +616,11 @@ impl App {
                 let mut spans = Vec::new();
                 for (cell, index) in indices.iter().enumerate() {
                     let selected = *index == cursor;
-                    let title = trunc_str(&state.shows[*index].title, cell_width.saturating_sub(2));
+                    let title = if selected && hero_rows > 0 {
+                        String::new()
+                    } else {
+                        trunc_str(&state.shows[*index].title, cell_width.saturating_sub(2))
+                    };
                     let pad_to = if cell + 1 == indices.len() {
                         cell_width
                     } else {
@@ -584,13 +637,13 @@ impl App {
                 ListItem::new(Line::from(spans))
             })
             .collect::<Vec<_>>();
-        layout.left_row_map = rows
+        layout.left_row_map = display_rows
             .iter()
             .skip(scroll)
             .take(visible)
             .map(|row| row.first().copied())
             .collect();
-        layout.left_item_rows = rows;
+        layout.left_item_rows = display_rows;
         layout.left_screen_offset = scroll;
         f.render_widget(List::new(items), area);
         if focused && layout.left_item_rows.len() > visible {

@@ -42,60 +42,48 @@ mbv SHALL list books from the selected Audiobookshelf book library using bounded
 
 ### Requirement: Book libraries use the hero-on-left arrangement
 
-An Audiobookshelf book library SHALL use the hero-on-left arrangement, the same arrangement grouped
-Music uses: a persistent hero pane with chapters below, beside a persistent single-column book
-browser with surname-bucket pills, at or above the shared breakpoint; falling back to hero-on-top
-with a single list column below it. Both panes SHALL remain visible at all times. The book tab SHALL
-obtain this arrangement from the shared definition rather than by reproducing the Music tab's
-implementation, and SHALL NOT evaluate the breakpoint itself.
+An Audiobookshelf book library SHALL use hero-on-left when it meets the shared wide geometry conditions, matching grouped Music: a persistent book hero and chapters pane beside a persistent single-column book browser with surname-bucket pills. Otherwise the selected book's hero and chapter detail SHALL render inline at the active book row in the single-column browser. Both the selected book and browser SHALL remain available in either presentation. The book tab SHALL obtain responsive placement from the shared arrangement and SHALL NOT evaluate the breakpoint, minimum-height guard, or a top fallback itself.
 
-The following substitutions SHALL be the only domain changes to that arrangement. They are DATA
-the book tab supplies — the arrangement renders whatever hero content, list rows, and pills the
-screen hands it — so they are not presentation declarations. The book tab's single declaration of
-differences SHALL cover only the presentation fields (image shape, metadata lines and order, colour
-variant, element presence, and the `image source` for the cover):
+The book tab SHALL supply book-native content and interaction state without defining placement geometry: Audiobookshelf cover, metadata and progress, chapter rows, surname-bucket pills, and existing pane-focus behavior.
 
-| Hero-on-left default | Audiobookshelf book tab |
-|---|---|
-| Album | Book |
-| Album cover | Audiobookshelf book cover |
-| Track list (persistent hero pane) | Chapter list (persistent hero pane) |
-| Artist grouping pills and filter drill | Author-surname bucket pills and filter drill |
-| Album list within artist filter | Book list within surname-bucket filter |
-| Left/right arrow toggles pane focus | Left/right arrow toggles pane focus |
+#### Scenario: Terminal geometry crosses the wide boundary
+- **WHEN** the book tab starts or stops meeting the shared wide geometry conditions
+- **THEN** it switches between hero-on-left and inline selected-book detail at the same boundary as every other hero-bearing browse surface
 
-All other observable layout behavior SHALL be that of the hero-on-left arrangement, including hero
-placement, content padding, image slot, row budgeting, selected-cell treatment, focus styling,
-scrolling, and narrow fallback.
-
-#### Scenario: Terminal width crosses the two-column threshold
-
-- **WHEN** the book tab crosses the shared breakpoint
-- **THEN** the layout SHALL switch between hero-on-left and hero-on-top at the same width every other
-  hero-on-left screen does
+#### Scenario: Narrow selected book
+- **WHEN** a book is selected in the inline presentation
+- **THEN** that book's hero and chapter detail render in list flow at its active row
+- **AND** other book rows remain part of the same single-column browser
 
 #### Scenario: Hero follows the browser cursor
-
 - **WHEN** the book browser cursor moves to another book
-- **THEN** the hero SHALL update to that book without an Enter/open action
-- **THEN** the right-pane browser SHALL remain visible
+- **THEN** the hero and chapter detail update to that book without an Enter or open action
+- **AND** the book browser remains visible
 
 #### Scenario: A surname pill filters the browser
-
 - **WHEN** the user selects an author-surname bucket pill
-- **THEN** the right-pane book list SHALL contain only books in that bucket until another bucket is
-  selected
+- **THEN** the browser contains only books in that bucket until another bucket is selected
+
+#### Scenario: Arrow focus in wide presentation
+- **WHEN** the user presses left or right while the wide book tab is focused
+- **THEN** focus toggles between the chapter list and right-rail browser
+- **AND** neither pane is hidden or replaced
+
+#### Scenario: Shared hero-on-left presentation changes
+- **WHEN** the hero-on-left presentation changes
+- **THEN** the wide book tab renders the change identically to grouped Music without an individual placement edit
+
+#### Scenario: Terminal width crosses the two-column threshold
+- **WHEN** the book tab crosses the shared width threshold
+- **THEN** it recomputes hero-on-left versus inline placement using the shared minimum-height guard
 
 #### Scenario: Arrow focus leaves both panes visible
-
-- **WHEN** the user presses left or right while the book tab is focused
-- **THEN** focus SHALL toggle between the chapter list and right-pane browser
-- **THEN** neither pane SHALL be hidden or replaced
+- **WHEN** the user changes pane focus in wide Audiobookshelf book browsing
+- **THEN** the chapter workspace and book browser both remain visible
 
 #### Scenario: The hero-on-left arrangement changes
-
-- **WHEN** the hero-on-left arrangement's presentation is changed
-- **THEN** the book tab renders the change identically to grouped Music, without an individual edit
+- **WHEN** shared hero-on-left geometry or styling changes
+- **THEN** wide Audiobookshelf books inherit the change without local placement geometry
 
 ### Requirement: The selected book hero shows an inline progress percentage
 The selected book hero SHALL place the selected book's Audiobookshelf cover in the same image slot as the Music hero's album cover, and SHALL show the book's listening progress as an inline `%` or `Finished` span in the hero meta, in the same style the podcast tab uses for episode progress. A resume-emphasizing hero treatment is out of scope for this capability.

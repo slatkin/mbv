@@ -1,77 +1,13 @@
-# library-list-hero Specification
+## RENAMED Requirements
 
-## Purpose
+- FROM: `### Requirement: Hero area pinned above the list`
+  TO: `### Requirement: Hero placement follows the responsive presentation`
+- FROM: `### Requirement: Hero click focuses without activating`
+  TO: `### Requirement: Hero pointer behavior follows placement`
+- FROM: `### Requirement: Independence from top-hero design`
+  TO: `### Requirement: Hero content is independent of placement`
 
-Gives the library list a persistent, always-visible detail view of the
-selected item — a compact banner pinned above the list — instead of
-splicing detail rows inline with the scrolling list content.
-
-## Requirements
-
-### Requirement: Selected cell indicator
-
-The selected cell in any list SHALL be identified by the unified selection marker — a thin AQUA
-block at the list's outer edge, directional in two-column mode (`▎` at the left column's left edge,
-`▏` at the right column's right edge) — rather than by a `▌` left-edge mark and a `##` title prefix.
-The `▌` mark and `##` prefix SHALL NOT appear on any selected cell. The cell's background SHALL use
-the ordinary list background, not the media-selected background — that treatment is reserved for the
-hero.
-
-#### Scenario: Selected cell marked without a background change
-
-- **WHEN** a cell in a list is the current selection
-- **THEN** it shows the thin AQUA edge marker at its list edge, with the list's ordinary
-  (non-selected) background
-- **AND** it does NOT show a `▌` mark or a `##` title prefix
-
-### Requirement: Hero tracks the current selection independent of scroll position
-
-The hero SHALL always reflect the selected item. In hero-on-left, its screen position SHALL remain fixed while the browser cursor moves. In the inline presentation, its position SHALL follow the active row in scrolling list flow, and scrolling SHALL keep the active row and its selected detail addressable together. Wide read-only heroes SHALL derive selection solely from the right-hand browser. Interactive left workspaces SHALL continue deriving their parent item from the right-hand browser while their child cursor is active.
-
-#### Scenario: Wide selection scrolls out of view
-- **WHEN** the browser cursor moves to an item whose row is scrolled outside the visible right rail
-- **THEN** the left hero or workspace updates to that item
-- **AND** the left pane remains in the same position
-
-#### Scenario: Child selection does not change the projected parent
-- **WHEN** an episode, track, or chapter is selected in the left workspace
-- **THEN** the left workspace continues showing the parent selected by the right-hand browser
-- **AND** the right-hand browser cursor remains unchanged
-
-#### Scenario: Inline selection is scrolled
-- **WHEN** the active row crosses the visible inline browser area
-- **THEN** scrolling keeps the active row and inline selected detail in navigable flow
-- **AND** selected detail follows the active row rather than remaining pinned to a screen edge
-
-#### Scenario: TV selection scrolled out of view
-- **WHEN** the wide TV Series cursor moves outside visible right-rail rows
-- **THEN** the left Series workspace updates and remains fixed in the left pane
-
-#### Scenario: Selection scrolled out of view
-- **WHEN** a wide read-only browser selection scrolls outside visible right-rail rows
-- **THEN** the left hero continues projecting the selected item
-
-#### Scenario: Episode selection does not change the projected Series
-- **WHEN** an episode is selected in the left TV workspace
-- **THEN** the workspace continues projecting the Series selected by the right-hand browser
-
-#### Scenario: Narrow selection is scrolled
-- **WHEN** the cursor crosses the visible inline browser area
-- **THEN** scrolling keeps the active row and inline detail addressable together
-
-### Requirement: Column-count invariant preserved
-
-The library list SHALL remain one renderer parameterized by column
-count: the list area at a 1-column width and the equivalent 2-column
-width SHALL render the same per-cell content, modulo cell-width
-truncation and the right cell's trailing-column absorption.
-
-#### Scenario: Same content at the 1-col/2-col boundary
-
-- **WHEN** the list area is rendered once at a width just below the
-  two-column threshold and once at a width just above it
-- **THEN** each cell's content matches between the two renders, aside
-  from truncation and trailing-column absorption differences
+## MODIFIED Requirements
 
 ### Requirement: Hero placement follows the responsive presentation
 
@@ -182,6 +118,41 @@ For wide Movies, the left hero SHALL continue using Home's selected-media card. 
 - **THEN** hero-on-left places them in the right rail and inline presentation places them before browser flow
 - **AND** they are never attached to a top-pinned hero
 
+### Requirement: Hero tracks the current selection independent of scroll position
+
+The hero SHALL always reflect the selected item. In hero-on-left, its screen position SHALL remain fixed while the browser cursor moves. In the inline presentation, its position SHALL follow the active row in scrolling list flow, and scrolling SHALL keep the active row and its selected detail addressable together. Wide read-only heroes SHALL derive selection solely from the right-hand browser. Interactive left workspaces SHALL continue deriving their parent item from the right-hand browser while their child cursor is active.
+
+#### Scenario: Wide selection scrolls out of view
+- **WHEN** the browser cursor moves to an item whose row is scrolled outside the visible right rail
+- **THEN** the left hero or workspace updates to that item
+- **AND** the left pane remains in the same position
+
+#### Scenario: Child selection does not change the projected parent
+- **WHEN** an episode, track, or chapter is selected in the left workspace
+- **THEN** the left workspace continues showing the parent selected by the right-hand browser
+- **AND** the right-hand browser cursor remains unchanged
+
+#### Scenario: Inline selection is scrolled
+- **WHEN** the active row crosses the visible inline browser area
+- **THEN** scrolling keeps the active row and inline selected detail in navigable flow
+- **AND** selected detail follows the active row rather than remaining pinned to a screen edge
+
+#### Scenario: TV selection scrolled out of view
+- **WHEN** the wide TV Series cursor moves outside visible right-rail rows
+- **THEN** the left Series workspace updates and remains fixed in the left pane
+
+#### Scenario: Selection scrolled out of view
+- **WHEN** a wide read-only browser selection scrolls outside visible right-rail rows
+- **THEN** the left hero continues projecting the selected item
+
+#### Scenario: Episode selection does not change the projected Series
+- **WHEN** an episode is selected in the left TV workspace
+- **THEN** the workspace continues projecting the Series selected by the right-hand browser
+
+#### Scenario: Narrow selection is scrolled
+- **WHEN** the cursor crosses the visible inline browser area
+- **THEN** scrolling keeps the active row and inline detail addressable together
+
 ### Requirement: Hero pointer behavior follows placement
 
 A read-only hero-on-left preview SHALL not receive focus or activation from pointer gestures. Interactive child rows and selectors in a hero-on-left workspace SHALL expose their existing navigation targets, while artwork and blank hero space remain inert. In the inline presentation, hero-only rows SHALL be inert; activation remains on the active media row, while explicit episode, track, chapter, or selector targets retain their existing behavior.
@@ -227,14 +198,14 @@ A read-only hero-on-left preview SHALL not receive focus or activation from poin
 - **WHEN** a user double-clicks non-interactive hero framing or metadata
 - **THEN** no item is activated and activation remains owned by media or child rows
 
-#### Scenario: legacy top placement activation remains unchanged
+#### Scenario: Hero-on-top activation remains unchanged
 - **WHEN** a formerly top-pinned surface adopts inline or hero-on-left placement
 - **THEN** media-row and explicit child-target activation remain unchanged
 - **AND** the removed top hero is not retained as a duplicate target
 
 ### Requirement: Hero content is independent of placement
 
-Hero content SHALL be independent of responsive placement. The same surface declaration SHALL supply content to hero-on-left and inline presentations, with only arrangement-specific composition changing. Wide Movies SHALL continue reusing Home's selected-media card rather than maintaining a second Movies-specific left card. No hero content implementation SHALL depend on a legacy top placement fallback.
+Hero content SHALL be independent of responsive placement. The same surface declaration SHALL supply content to hero-on-left and inline presentations, with only arrangement-specific composition changing. Wide Movies SHALL continue reusing Home's selected-media card rather than maintaining a second Movies-specific left card. No hero content implementation SHALL depend on a hero-on-top fallback.
 
 #### Scenario: Placement changes
 - **WHEN** terminal geometry switches between hero-on-left and inline presentation

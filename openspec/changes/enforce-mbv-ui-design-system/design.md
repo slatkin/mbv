@@ -1,19 +1,10 @@
 ## Context
 
-PR #552 extracted shared painters and colour roles. PRs #560–#562 then began
-replacing hero-on-top with inline-hero (narrow) and hero-on-left (wide): #561
-restored the narrow inline hero for Emby library browse screens, #560 moved
-Movies to hero-on-left, and #562 (in flight) moves wide TV to hero-on-left. That
-work exposed that the arrangement boundary is convention-only: screens still
-bypass shared geometry, call raw Ratatui APIs, duplicate hit-target arithmetic,
-and select raw palette values directly.
-
-The remaining hero-on-top surfaces are `feeds`, `audiobookshelf`,
-`audiobookshelf_books`, `home_video`, and `album`; each calls `top_hero_layout`
-or selects `SelectedBlockBorderStyle::HeroOnTop` instead of going through the
-shared inline-hero / hero-on-left arrangement. The live
-`right-panel-arrangements` spec is also stale: it still says "Narrow presentation
-SHALL be hero-on-top," contradicting the inline-hero behaviour #561 shipped.
+PR #552 extracted shared painters and colour roles. The completed #584 migration
+now provides the settled hero-on-left-wide / inline-narrow baseline across the
+hero-bearing surfaces. The remaining design-system problem is ownership:
+screens still bypass shared geometry, call raw Ratatui APIs, duplicate hit-target
+arithmetic, and select raw palette values directly.
 
 The UI is a single Rust application using Ratatui 0.30.2 and `TestBackend`; no
 separate UI crate or plugin system exists. The existing arrangement specs are
@@ -24,11 +15,10 @@ change extends and tightens them rather than superseding them.
 
 **Goals:**
 
-- Finish the hero-on-top elimination: migrate the remaining surfaces to the
-  shared inline-hero / hero-on-left arrangement so no screen calls
-  `top_hero_layout` or `SelectedBlockBorderStyle::HeroOnTop` directly.
-- Sync the stale `right-panel-arrangements` spec with the shipped inline-hero
-  narrow presentation.
+- Preserve the completed inline / hero-on-left arrangement while enforcing its
+  ownership boundaries.
+- Keep the live arrangement specs aligned with the shipped inline-narrow
+  presentation.
 - Make canonical components and arrangements the owners of geometry, painting,
   styling, and interaction geometry.
 - Allow screen-specific content and a closed vocabulary of typed visual policies.
