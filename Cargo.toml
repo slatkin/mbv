@@ -58,6 +58,7 @@ libc.workspace = true
 nix.workspace = true
 tui-scrollbar = "0.2.7"
 time = { version = "0.3", features = ["parsing"] }
+pipewire.workspace = true
 
 [dev-dependencies]
 uuid.workspace = true

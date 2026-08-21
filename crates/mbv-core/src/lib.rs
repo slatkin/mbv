@@ -21,8 +21,6 @@ pub mod shared_state;
 pub mod shared_store;
 pub mod shared_worker;
 pub(crate) mod stream;
-#[cfg(unix)]
-pub mod visualizer;
 pub mod ws;
 
 /// Characters outside RFC 3986's unreserved set (`ALPHA / DIGIT / "-" / "." /

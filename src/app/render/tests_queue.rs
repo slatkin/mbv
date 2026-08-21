@@ -213,7 +213,7 @@ fn wide_queue_only_leftover_rows_stay_dark_bg_without_duplicate_visualizer() {
     let mut app = make_queue_app(5);
     app.panel_mode = crate::app::PanelMode::QueueOnly;
     app.visualizer_enabled = true;
-    app.visualizer_window.samples = vec![mbv_core::visualizer::StereoSample {
+    app.visualizer_window.samples = vec![crate::app::visualizer_worker::StereoSample {
         left: 1.0,
         right: 1.0,
     }];
