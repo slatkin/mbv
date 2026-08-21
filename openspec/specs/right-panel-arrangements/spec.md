@@ -50,7 +50,7 @@ Every hero-bearing right-panel browse surface SHALL use hero-on-left for its wid
 #### Scenario: Hero-bearing surface leaves wide geometry
 - **WHEN** any hero-bearing browse surface no longer meets the shared wide geometry conditions
 - **THEN** it renders its selected detail inline in a single-column browser
-- **AND** no separate detail fallback is used
+- **AND** no separate fallback is used
 
 #### Scenario: Wide TV shows has an interactive left hero
 - **WHEN** TV shows meets the wide geometry conditions
@@ -62,11 +62,11 @@ Every hero-bearing right-panel browse surface SHALL use hero-on-left for its wid
 
 #### Scenario: TV shows falls below the breakpoint
 - **WHEN** TV shows does not meet the wide geometry conditions
-- **THEN** selected Series detail renders inline in its one-column browser
+- **THEN** selected Series detail replaces its ordinary row in its one-column browser
 
 #### Scenario: Movies falls below the shared breakpoint
 - **WHEN** Movies does not meet the wide geometry conditions
-- **THEN** selected Movie detail renders inline in its one-column browser
+- **THEN** selected Movie detail replaces its ordinary row in its one-column browser
 
 #### Scenario: Home videos is displayed at a wide width
 - **WHEN** an Emby home-video library meets the wide geometry conditions
@@ -175,19 +175,19 @@ branch.
 
 ### Requirement: The right panel has exactly two hero presentations
 
-The right panel SHALL provide exactly two responsive hero presentations for every hero-bearing browse surface. At or above the shared breakpoint, when the existing minimum-height guard is satisfied, the surface SHALL use hero-on-left: the selected hero or detail workspace occupies the left pane and a single-column browser occupies the right rail. Otherwise the surface SHALL use selected-row replacement: the selected item's ordinary row is replaced by its variable-height detail block in the single-column scrolling browser. The replacement SHALL own the selected parent geometry and activation target, while explicit child targets take precedence; if detail cannot fit, the ordinary selected row SHALL be restored.
+The right panel SHALL provide exactly two responsive hero presentations for every hero-bearing browse surface. At or above the shared breakpoint, when the existing minimum-height guard is satisfied, the surface SHALL use hero-on-left: the selected hero or detail workspace occupies the left pane and a single-column browser occupies the right rail. Otherwise the surface SHALL use selected-row replacement: the selected item's ordinary row is replaced by its variable-height detail block in the single-column scrolling browser.
 
 A separate detail block SHALL NOT be an arrangement or fallback. A surface SHALL NOT reserve a hero in a separate full-width area above its browser. Non-hero screens retain their existing presentation.
 
 #### Scenario: A browse surface enters the narrow presentation
 - **WHEN** a hero-bearing browse surface's available width falls below the shared breakpoint
 - **THEN** it renders one browser column
-- **AND** the selected item's hero renders inline at the active row
-- **AND** no separate detail area is reserved above the browser
+- **AND** the selected item's ordinary row is replaced by inline detail at the same flow position
+- **AND** no separate hero area is reserved above the browser
 
 #### Scenario: Wide geometry has insufficient height
 - **WHEN** a hero-bearing browse surface meets the shared width breakpoint but fails the existing minimum-height guard
-- **THEN** it uses the inline presentation
+- **THEN** it uses selected-row replacement
 - **AND** it restores the ordinary selected row if detail cannot fit
 
 #### Scenario: A browse surface enters the wide presentation
@@ -214,8 +214,8 @@ A separate detail block SHALL NOT be an arrangement or fallback. A surface SHALL
 
 #### Scenario: A wide hero-on-left screen falls below the breakpoint
 - **WHEN** a hero-on-left surface crosses below the shared breakpoint
-- **THEN** it renders the shared inline presentation with one browser column
+- **THEN** it renders selected-row replacement with one browser column
 
 #### Scenario: A hero-on-left screen falls below the breakpoint
 - **WHEN** a hero-on-left surface no longer meets either wide geometry condition
-- **THEN** it renders the shared inline presentation
+- **THEN** it renders selected-row replacement

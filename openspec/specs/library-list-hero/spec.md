@@ -24,9 +24,9 @@ hero.
   (non-selected) background
 - **AND** it does NOT show a `▌` mark or a `##` title prefix
 
-### Requirement: Hero tracks the current selection independent of scroll position
+### Requirement: Inline replacement tracks the current selection independent of scroll position
 
-The hero SHALL always reflect the selected item. In hero-on-left, its screen position SHALL remain fixed while the browser cursor moves. In the inline presentation, its position SHALL follow the active row in scrolling list flow, and scrolling SHALL keep the active row and its selected detail addressable together. Wide read-only heroes SHALL derive selection solely from the right-hand browser. Interactive left workspaces SHALL continue deriving their parent item from the right-hand browser while their child cursor is active.
+The hero SHALL always reflect the selected item. In hero-on-left, its screen position SHALL remain fixed while the browser cursor moves. In the inline presentation, its replacement position SHALL follow the active row in scrolling list flow, and scrolling SHALL keep the selected replacement addressable together. Wide read-only heroes SHALL derive selection solely from the right-hand browser. Interactive left workspaces SHALL continue deriving their parent item from the right-hand browser while their child cursor is active.
 
 #### Scenario: Wide selection scrolls out of view
 - **WHEN** the browser cursor moves to an item whose row is scrolled outside the visible right rail
@@ -77,7 +77,7 @@ truncation and the right cell's trailing-column absorption.
 
 The selected item's hero or detail workspace SHALL be positioned by the shared right-panel presentation rather than a surface-specific renderer. When wide geometry is available, hero-on-left SHALL place selected detail beside a single-column browser. Otherwise the selected ordinary browser row SHALL be replaced by the variable-height inline detail block in the single-column scrolling browser. No presentation SHALL reserve a separate full-width area above the browser.
 
-The inline hero SHALL remain one variable-height flow segment at the selected item's position, budgeted once. It SHALL own the selected parent geometry and activation target; single click SHALL focus and double click SHALL perform normal parent activation. Existing explicitly interactive subcomponents such as episode, track, chapter, or selector targets take precedence. If the replacement cannot fit, the ordinary selected row SHALL be restored with its normal appearance and interaction.
+The inline hero SHALL remain part of list flow as the selected row's replacement. Its variable height SHALL be budgeted once, its block SHALL own the selected item's geometry and parent activation target, and single click SHALL focus while double click performs normal item activation. Existing explicitly interactive subcomponents such as episode, track, chapter, or selector targets take precedence. If the replacement cannot fit, the ordinary selected row SHALL be restored with its normal selected appearance and interaction.
 
 For wide Movies, the left hero SHALL continue using Home's selected-media card. For wide TV, the left workspace SHALL continue showing Series artwork, metadata, overview, season pills, and episodes. Other surfaces SHALL retain their declared content and interaction behavior while adopting the same placement rule.
 
@@ -88,13 +88,13 @@ For wide Movies, the left hero SHALL continue using Home's selected-media card. 
 
 #### Scenario: Narrow library renders an inline hero
 - **WHEN** a hero-bearing browse surface does not meet the shared wide geometry conditions and has a selected item
-- **THEN** the selected item's ordinary row is replaced by its hero at the same flow position
+- **THEN** the selected item's ordinary row is replaced by its inline hero block at the same flow position
 - **AND** the browser remains a single scrolling column
 - **AND** the hero uses the content, artwork, metadata, loading behavior, and detail rows declared for that surface
 
 #### Scenario: Narrow selection changes
 - **WHEN** the cursor moves to another item in the inline presentation
-- **THEN** the newly active row is replaced by inline detail
+- **THEN** the previous row returns to its ordinary presentation and the new selected row is replaced by inline detail
 - **AND** the previous row returns to its ordinary presentation
 
 #### Scenario: Narrow list has insufficient space
@@ -104,23 +104,23 @@ For wide Movies, the left hero SHALL continue using Home's selected-media card. 
 
 #### Scenario: Narrow grouped Music
 - **WHEN** grouped Music uses the inline presentation
-- **THEN** selected album and track detail render at the active album row
+- **THEN** selected album and track detail replace the active album row
 
 #### Scenario: Narrow Audiobookshelf podcast
 - **WHEN** an Audiobookshelf podcast library uses the inline presentation
-- **THEN** selected-show metadata, filters, and downloaded episodes render at the active show row
+- **THEN** selected-show metadata, filters, and downloaded episodes replace the active show row
 
 #### Scenario: Narrow Audiobookshelf book
 - **WHEN** an Audiobookshelf book library uses the inline presentation
-- **THEN** selected-book metadata and chapter detail render at the active book row
+- **THEN** selected-book metadata and chapter detail replace the active book row
 
 #### Scenario: Narrow Feeds
 - **WHEN** Feeds uses the inline presentation
-- **THEN** selected-entry detail renders at the active entry row
+- **THEN** selected-entry detail replaces the active entry row
 
 #### Scenario: Narrow Home
 - **WHEN** Home uses the inline presentation and its selected section has an item
-- **THEN** selected-item detail renders in the selected section's list flow at the active row
+- **THEN** selected-item detail replaces the active row in the selected section's list flow
 - **AND** the section pills remain outside selected-item detail
 
 #### Scenario: Wide TV pills sit in separate rails
@@ -175,7 +175,7 @@ For wide Movies, the left hero SHALL continue using Home's selected-media card. 
 
 #### Scenario: Hero suppressed when too little space remains
 - **WHEN** the active presentation cannot fit minimum selected detail and a usable active row
-- **THEN** selected detail collapses and the browser uses the available area
+- **THEN** the ordinary selected row is restored and the browser uses the available area
 
 #### Scenario: Letter pills sit between hero and list
 - **WHEN** a surface uses browser-level letter pills
@@ -184,7 +184,7 @@ For wide Movies, the left hero SHALL continue using Home's selected-media card. 
 
 ### Requirement: Selected replacement owns parent pointer behavior
 
-A read-only hero-on-left preview SHALL remain inert. In the inline presentation, the replacement block SHALL own the selected parent geometry: a single click focuses it and a double click performs normal item activation. Interactive child rows and selectors SHALL expose their existing navigation targets and take precedence over the parent target.
+A read-only hero-on-left preview SHALL remain inert. In the inline presentation, the replacement block SHALL own the selected parent geometry: a single click focuses it and a double click performs normal item activation. Interactive child rows and selectors SHALL expose their existing navigation targets and take precedence over the parent target; no duplicate ordinary row or marker remains.
 
 #### Scenario: Wide read-only hero remains inert
 - **WHEN** a user clicks artwork or blank space in a read-only left hero
@@ -197,7 +197,8 @@ A read-only hero-on-left preview SHALL remain inert. In the inline presentation,
 
 #### Scenario: Inline replacement parent target
 - **WHEN** a user single-clicks inline hero framing or metadata that is not an explicit child or selector target
-- **THEN** the selected parent receives focus without activation
+- **THEN** the selected parent item receives focus
+- **AND** a double click performs normal parent activation
 
 #### Scenario: Inline replacement child target
 - **WHEN** a user clicks an explicit episode, track, chapter, or selector target inside inline detail
@@ -219,13 +220,21 @@ A read-only hero-on-left preview SHALL remain inert. In the inline presentation,
 - **WHEN** a user clicks Series artwork or blank space in the wide TV left workspace
 - **THEN** no episode is selected or played
 
+#### Scenario: Single click on the replacement
+- **WHEN** a user single-clicks non-interactive replacement framing or metadata
+- **THEN** the selected parent is focused without activation
+
 #### Scenario: Single click on the hero
 - **WHEN** a user single-clicks non-interactive hero framing or metadata
 - **THEN** the selected parent receives focus without activation
 
 #### Scenario: Double click on the replacement
-- **WHEN** a user double-clicks non-interactive hero framing or metadata
+- **WHEN** a user double-clicks non-interactive replacement framing or metadata
 - **THEN** the selected parent performs normal item activation
+
+#### Scenario: Suppressed replacement restores the ordinary row
+- **WHEN** selected detail is suppressed by available height
+- **THEN** the ordinary selected row owns focus and normal activation
 
 #### Scenario: Retired separate placement is not retained
 - **WHEN** a formerly separate-detail surface adopts inline or hero-on-left placement
@@ -234,7 +243,7 @@ A read-only hero-on-left preview SHALL remain inert. In the inline presentation,
 
 ### Requirement: Hero content is independent of placement
 
-Hero content SHALL be independent of responsive placement. The same surface declaration SHALL supply content to hero-on-left and inline presentations, with only arrangement-specific composition changing. Wide Movies SHALL continue reusing Home's selected-media card rather than maintaining a second Movies-specific left card. No hero content implementation SHALL depend on a separate detail fallback.
+Hero content SHALL be independent of responsive placement. The same surface declaration SHALL supply content to hero-on-left and inline presentations, with only arrangement-specific composition changing. Wide Movies SHALL continue reusing Home's selected-media card rather than maintaining a second Movies-specific left card. No hero content implementation SHALL depend on a separate placement fallback.
 
 #### Scenario: Placement changes
 - **WHEN** terminal geometry switches between hero-on-left and inline presentation

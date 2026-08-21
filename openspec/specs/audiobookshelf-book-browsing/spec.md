@@ -42,7 +42,7 @@ mbv SHALL list books from the selected Audiobookshelf book library using bounded
 
 ### Requirement: Book libraries use the hero-on-left arrangement
 
-An Audiobookshelf book library SHALL use hero-on-left when it meets the shared wide geometry conditions, matching grouped Music: a persistent book hero and chapters pane beside a persistent single-column book browser with surname-bucket pills. Otherwise the selected book's hero and chapter detail SHALL replace the active book row in the single-column browser. Both the selected book and browser SHALL remain available in either presentation. The book tab SHALL obtain responsive placement from the shared arrangement and SHALL NOT evaluate the breakpoint, minimum-height guard, or a separate detail fallback itself.
+An Audiobookshelf book library SHALL use hero-on-left when it meets the shared wide geometry conditions, matching grouped Music: a persistent book hero and chapters pane beside a persistent single-column book browser with surname-bucket pills. Otherwise the selected book's hero and chapter detail SHALL replace the active book row in the single-column browser. Both the selected book and browser SHALL remain available in either presentation. The book tab SHALL obtain responsive placement from the shared arrangement and SHALL NOT evaluate the breakpoint, minimum-height guard, or a separate fallback itself.
 
 The book tab SHALL supply book-native content and interaction state without defining placement geometry: Audiobookshelf cover, metadata and progress, chapter rows, surname-bucket pills, and existing pane-focus behavior.
 
@@ -52,7 +52,7 @@ The book tab SHALL supply book-native content and interaction state without defi
 
 #### Scenario: Narrow selected book
 - **WHEN** a book is selected in the inline presentation
-- **THEN** that book's hero and chapter detail render in list flow at its active row
+- **THEN** that book's hero and chapter detail replace its active row in list flow
 - **AND** other book rows remain part of the same single-column browser
 
 #### Scenario: Hero follows the browser cursor

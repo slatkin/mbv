@@ -78,7 +78,7 @@ Activating a podcast show SHALL only enter episode-selection mode. Activating a 
 
 ### Requirement: Podcast libraries use responsive hero presentations
 
-An Audiobookshelf podcast library SHALL use the shared hero-on-left presentation when it meets the wide geometry conditions and selected-row replacement otherwise. In hero-on-left, the selected podcast's cover, metadata, played-state filter, and downloaded-episode workspace SHALL occupy the left pane while the single-column podcast-show browser occupies the right rail. In the replacement presentation, the same selected-show detail SHALL replace the active podcast-show row in list flow. The podcast tab SHALL obtain placement from the shared arrangement and SHALL NOT define a separate detail fallback.
+An Audiobookshelf podcast library SHALL use the shared hero-on-left presentation when it meets the wide geometry conditions and selected-row replacement otherwise. In hero-on-left, the selected podcast's cover, metadata, played-state filter, and downloaded-episode workspace SHALL occupy the left pane while the single-column podcast-show browser occupies the right rail. In the replacement presentation, the same selected-show detail SHALL replace the active podcast-show row in list flow. The podcast tab SHALL obtain placement from the shared arrangement and SHALL NOT define a separate fallback.
 
 The podcast tab SHALL supply podcast-native data without changing the shared placement rule: Podcast show for Series, Audiobookshelf cover for Series Primary image, `All` / `Played` / `Unplayed` for season selector, and matching downloaded episodes for season episodes. Image shape, metadata lines and order, colour variant, element presence, and image source MAY remain podcast-specific declarations.
 
@@ -91,7 +91,7 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 - **WHEN** an Audiobookshelf podcast library does not meet the shared wide geometry conditions
 - **THEN** podcast shows render in one scrolling column
 - **AND** selected-show detail replaces the active show row
-- **AND** no separate detail area is reserved above the show browser
+- **AND** no separate hero area is reserved above the show browser
 
 #### Scenario: Podcast selection changes
 - **WHEN** the user moves selection between podcast shows
@@ -105,7 +105,7 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 
 #### Scenario: Terminal height cannot fit hero-on-left
 - **WHEN** the width meets the shared breakpoint but the minimum-height guard fails
-- **THEN** the podcast tab uses inline selected-show detail
+- **THEN** the podcast tab uses selected-row replacement
 - **AND** it restores the ordinary selected row if detail cannot fit
 
 #### Scenario: Shared placement changes
@@ -129,5 +129,5 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 - **THEN** detail is suppressed and the browser retains the available area
 
 #### Scenario: The retired separate placement changes
-- **WHEN** the obsolete top arrangement is removed
+- **WHEN** the obsolete separate placement is removed
 - **THEN** Audiobookshelf podcasts continue through only hero-on-left and selected-row replacement
