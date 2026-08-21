@@ -1,3 +1,4 @@
+use super::padded_rect;
 use crate::app::render::components::album_art::{INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS};
 use ratatui::layout::Rect;
 
@@ -104,13 +105,5 @@ pub(in crate::app::render) fn wide_music_left_layout(
 }
 
 pub(in crate::app::render) fn wide_music_browser_area(list_panel: Rect) -> Rect {
-    Rect {
-        x: list_panel.x.saturating_add(PANE_PAD_X).saturating_sub(1),
-        y: list_panel.y.saturating_add(PANE_PAD_Y),
-        width: list_panel
-            .width
-            .saturating_sub(PANE_PAD_X * 2)
-            .saturating_add(1),
-        height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
-    }
+    padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y)
 }

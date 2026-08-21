@@ -180,10 +180,11 @@ impl App {
         }
 
         let list_panel = right_pane.list_panel;
-        // `render_wide_right_album_browser` renders text one cell right of
-        // `browser_area.x` (the row painters' own leading gutter), so inset
-        // one cell less than the panel's other padded content to land text
-        // at the panel's standard two-column interior inset.
+        // Standard panel padding: the album-row painters supply their own
+        // one-cell leading gutter (see `render_album_row`), so text lands at
+        // the panel's standard interior inset and `draw_column_selection_markers`
+        // draws the edge marker flush with the bg_green panel edge, matching
+        // every other list.
         let browser_area = music_arrangement::wide_music_browser_area(list_panel);
         if list_panel.height > 0 {
             let list_bg = palette::resolve_surface_focus(right_focused);
