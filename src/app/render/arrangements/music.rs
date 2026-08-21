@@ -1,4 +1,5 @@
 use super::hero_left::{PANE_PAD_X, PANE_PAD_Y};
+use super::padded_rect;
 use crate::app::render::components::album_art::{INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS};
 use ratatui::layout::Rect;
 
@@ -19,11 +20,7 @@ pub(in crate::app::render) fn wide_music_left_layout(
     track_count: usize,
 ) -> WideMusicLeftLayout {
     let total_h = left_area.height;
-    let hero_content_area = Rect {
-        x: left_area.x.saturating_add(PANE_PAD_X),
-        width: left_area.width.saturating_sub(PANE_PAD_X * 2),
-        ..left_area
-    };
+    let hero_content_area = padded_rect(left_area, PANE_PAD_X, 0);
     let art_available = images_enabled && hero_content_area.width >= INLINE_ALBUM_ART_RESERVED;
     let side_metadata_width = hero_content_area
         .width

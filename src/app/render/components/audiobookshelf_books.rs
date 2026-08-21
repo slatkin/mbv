@@ -1,6 +1,7 @@
 use crate::app::images::audiobookshelf_book_cover_cache_key;
 use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
+use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::hero::{HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS};
 use crate::app::render::components::home_hero::{
     beside_image_hero_dims, beside_image_hero_rects, HeroMetaBlock,
@@ -127,11 +128,7 @@ impl App {
             left_panel,
         );
 
-        let hero_content_area = Rect {
-            x: left_area.x.saturating_add(PANE_PAD_X),
-            width: left_area.width.saturating_sub(PANE_PAD_X * 2),
-            ..left_area
-        };
+        let hero_content_area = padded_rect(left_area, PANE_PAD_X, 0);
         let hero_rows_wanted = self.audiobookshelf_book_hero_rows(state) + 1; // +1 trailing blank
         let sep = if hero_content_area.height > hero_rows_wanted + LEFT_SEPARATOR_ROWS {
             LEFT_SEPARATOR_ROWS
