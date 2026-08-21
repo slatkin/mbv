@@ -25,6 +25,11 @@ pub struct Config {
     /// writing PCM to the pipe. This is deliberately not a downstream
     /// consumer setting: mbv never queries or controls that consumer.
     pub audio_pipe_playout_delay_ms: Option<u64>,
+    /// mpv's complete ALSA device identifier for packaged-daemon clocked
+    /// output: `alsa` for the default endpoint, or `alsa/<device>` for an
+    /// exact one. Restart-required and owner-local; bare mode and the Local
+    /// daemon never apply it. An absent value resolves to `alsa`.
+    pub audio_device: String,
     pub always_play_next: bool,
     pub consume_videos: bool,
     pub consume_audio: bool,
@@ -214,6 +219,7 @@ impl Default for Config {
             audio_pipe_samplerate: 192_000,
             audio_pipe_bitdepth: 32,
             audio_pipe_playout_delay_ms: None,
+            audio_device: "alsa".to_string(),
             always_play_next: false,
             consume_videos: false,
             consume_audio: false,
@@ -262,6 +268,12 @@ impl Config {
             None
         }
     }
+}
+
+/// True when `value` is a valid `audio_device` identifier: exactly `alsa`,
+/// or `alsa/<device>` naming an exact ALSA endpoint.
+pub fn is_valid_audio_device(value: &str) -> bool {
+    value == "alsa" || value.starts_with("alsa/")
 }
 
 /// Resolves the configured endpoint for a library name (#256). Matches
