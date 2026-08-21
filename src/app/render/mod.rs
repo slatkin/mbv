@@ -110,6 +110,11 @@ impl App {
             self.card_image_states.clear();
             self.card_image_loading.clear();
         }
+        if self.terminal_width >= super::MINI_VIEW_THRESHOLD
+            && area.width < super::MINI_VIEW_THRESHOLD
+        {
+            self.mini_view_focus = PanelFocus::Queue;
+        }
         self.terminal_width = area.width;
         self.terminal_height = area.height;
         if self.clamp_queue_column_width() {
