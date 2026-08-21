@@ -91,12 +91,7 @@ impl App {
             Block::default().style(Style::default().bg(palette::SURFACE_RESTING)),
             left_panel,
         );
-        let hero_content = Rect {
-            x: left_area.x.saturating_add(PANE_PAD_X),
-            y: left_area.y,
-            width: left_area.width.saturating_sub(PANE_PAD_X * 2),
-            height: left_area.height,
-        };
+        let hero_content = padded_rect(left_area, PANE_PAD_X, 0);
         let hero_data = self.selected_wide_movie(lib_idx).and_then(|item| {
             prepare_wide_emby_hero_card(&item, hero_content).map(
                 |(meta_layout, meta_area, img_area)| {
