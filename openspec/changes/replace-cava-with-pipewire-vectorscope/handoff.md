@@ -9,7 +9,7 @@ Implementation is complete at `22/22` tasks.
 ## Implemented
 
 - Added `pipewire = "0.10.1"` to the workspace and `mbv-core`, plus PipeWire package dependencies in Debian metadata, `PKGBUILD`, and CI.
-- Replaced the Cava child/FIFO parser with `PipeWireWorker`, a PipeWire main-loop capture stream, interleaved stereo F32LE parsing, non-blocking bounded sample publication, generation tracking, failure reporting, explicit disconnect, join, and cleanup.
+- Replaced the Cava child/FIFO parser with `PipeWireWorker`, a PipeWire main-loop capture stream, interleaved stereo F32LE parsing, non-blocking bounded sample publication, failure reporting, explicit disconnect, bounded join, and cleanup.
 - Added bounded-buffer tests for newest complete stereo pairs and worker lifecycle behavior.
 - Replaced app Cava state with PipeWire state while preserving local, same-host Local daemon, remote, and audio-pipe eligibility rules.
 - Added persisted `[display].visualizer_glyph` validation with default `●`, fallback for empty/control/wide values, and config tests.
@@ -37,7 +37,7 @@ Fresh final checks passed:
 - `rtk git diff --check`: passed.
 - `pw-dump --no-colors` confirmed a live PipeWire 1.6.8 session with stereo default-output monitor ports.
 - The independent review's capture and packaging findings were addressed; focused `mbv-core` clippy reports no issues.
-- A live PipeWire 1.6.8 probe captured 1,584-pair windows with nonzero unrelated audio and published 618 fresh generations in 10 seconds on the 48 kHz default graph.
+- A live PipeWire 1.6.8 probe captured 1,584-pair windows with nonzero unrelated audio for 10 seconds on the 48 kHz default graph.
 - `pw-link -l` showed the probe connected only to the default FiiO sink monitor and showed both links removed after stop.
 - A real unavailable-server probe reported `failed to connect to PipeWire: Creation failed` without hanging worker shutdown.
 

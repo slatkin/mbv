@@ -64,9 +64,9 @@ The two-character ncmpcpp `visualizer_look` contract was rejected because only t
 
 ### Measure freshness at the render boundary
 
-The active visualizer will target a 16 ms render interval. Each render snapshots current PCM immediately before drawing, so delayed iterations skip history rather than replay it. Development-only measurement will count terminal frames that consumed a newer sample generation and verify at least 50 fresh frames per second under steady synthetic or looped-back audio on a capable terminal.
+The active visualizer will target a 16 ms render interval. Each render snapshots current PCM immediately before drawing, so delayed iterations skip history rather than replay it.
 
-Configured timers alone are not acceptance evidence. The old assumption that a `poll` timeout caps reads was incorrect because readiness wakes `poll` immediately; measurement must cover capture callback generation, sample publication, app-loop wakeup, and terminal draw completion.
+Configured timers alone are not acceptance evidence. The old assumption that a `poll` timeout caps reads was incorrect because readiness wakes `poll` immediately; measurement must cover capture callback publication, app-loop wakeup, and terminal draw completion.
 
 ## Risks / Trade-offs
 

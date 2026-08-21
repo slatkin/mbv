@@ -12,6 +12,7 @@ use pw::spa::param::format::{MediaSubtype, MediaType};
 use pw::spa::pod::Pod;
 
 const STARTUP_TIMEOUT: Duration = Duration::from_millis(500);
+const SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
 const SAMPLE_WINDOW_MS: usize = 33;
 const MAX_SAMPLE_PAIRS: usize = 4096;
 
@@ -23,7 +24,6 @@ pub struct StereoSample {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct StereoSampleWindow {
-    pub generation: u64,
     pub samples: Vec<StereoSample>,
 }
 
@@ -31,7 +31,6 @@ pub struct StereoSampleWindow {
 pub(crate) struct StereoSampleBuffer {
     samples: VecDeque<StereoSample>,
     capacity: usize,
-    generation: u64,
 }
 
 impl StereoSampleBuffer {
@@ -40,7 +39,6 @@ impl StereoSampleBuffer {
         Self {
             samples: VecDeque::with_capacity(capacity),
             capacity,
-            generation: 0,
         }
     }
 
@@ -49,29 +47,10 @@ impl StereoSampleBuffer {
         Self::with_capacity(capacity)
     }
 
-    #[cfg(test)]
-    pub(crate) fn push_interleaved(&mut self, values: &[f32]) {
-        let mut appended = false;
-        for pair in values.chunks_exact(2) {
-            if !pair[0].is_finite() || !pair[1].is_finite() {
-                continue;
-            }
-            self.push_pair(StereoSample {
-                left: pair[0],
-                right: pair[1],
-            });
-            appended = true;
-        }
-        if appended {
-            self.generation = self.generation.wrapping_add(1);
-        }
-    }
-
     fn push_pcm_bytes(&mut self, bytes: &[u8], channels: u32) {
         if channels != 2 {
             return;
         }
-        let mut appended = false;
         for pair in bytes.chunks_exact(8) {
             let left = f32::from_le_bytes(pair[0..4].try_into().unwrap());
             let right = f32::from_le_bytes(pair[4..8].try_into().unwrap());
@@ -79,10 +58,6 @@ impl StereoSampleBuffer {
                 continue;
             }
             self.push_pair(StereoSample { left, right });
-            appended = true;
-        }
-        if appended {
-            self.generation = self.generation.wrapping_add(1);
         }
     }
 
@@ -95,14 +70,12 @@ impl StereoSampleBuffer {
 
     pub(crate) fn snapshot(&self) -> StereoSampleWindow {
         StereoSampleWindow {
-            generation: self.generation,
             samples: self.samples.iter().copied().collect(),
         }
     }
 
     fn clear(&mut self) {
         self.samples.clear();
-        self.generation = self.generation.wrapping_add(1);
     }
 }
 
@@ -461,8 +434,19 @@ fn run_worker(
 }
 
 fn join_worker(handle: JoinHandle<()>) {
-    if handle.join().is_err() {
-        log::warn!(target: "visualizer", "PipeWire worker thread panicked");
+    let (done_tx, done_rx) = mpsc::channel();
+    thread::spawn(move || {
+        if handle.join().is_err() {
+            log::warn!(target: "visualizer", "PipeWire worker thread panicked");
+        }
+        let _ = done_tx.send(());
+    });
+    if done_rx.recv_timeout(SHUTDOWN_TIMEOUT).is_err() {
+        log::warn!(
+            target: "visualizer",
+            "PipeWire worker did not join within {}ms; detaching",
+            SHUTDOWN_TIMEOUT.as_millis()
+        );
     }
 }
 
@@ -475,8 +459,12 @@ mod tests {
     #[test]
     fn overwrite_buffer_keeps_newest_complete_stereo_pairs() {
         let mut buffer = StereoSampleBuffer::with_capacity(2);
+        let bytes = [0.1_f32, 0.2, 0.3, 0.4, 0.5, 0.6]
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect::<Vec<_>>();
 
-        buffer.push_interleaved(&[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]);
+        buffer.push_pcm_bytes(&bytes, 2);
 
         let window = buffer.snapshot();
         assert_eq!(
@@ -497,8 +485,12 @@ mod tests {
     #[test]
     fn overwrite_buffer_discards_incomplete_channel_pair() {
         let mut buffer = StereoSampleBuffer::with_capacity(2);
+        let bytes = [0.1_f32, 0.2, 0.3]
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect::<Vec<_>>();
 
-        buffer.push_interleaved(&[0.1, 0.2, 0.3]);
+        buffer.push_pcm_bytes(&bytes, 2);
 
         assert_eq!(
             buffer.snapshot().samples,
@@ -567,5 +559,15 @@ mod tests {
             }
             Err(error) => assert!(!error.is_empty()),
         }
+    }
+
+    #[test]
+    fn joining_a_stuck_worker_returns_within_shutdown_timeout() {
+        let handle = std::thread::spawn(|| std::thread::sleep(Duration::from_secs(2)));
+        let started = Instant::now();
+
+        super::join_worker(handle);
+
+        assert!(started.elapsed() < super::SHUTDOWN_TIMEOUT + Duration::from_millis(500));
     }
 }
