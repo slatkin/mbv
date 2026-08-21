@@ -3,7 +3,7 @@ members = ["crates/mbv-core", "crates/mbvd"]
 default-members = [".", "crates/mbv-core", "crates/mbvd"]
 
 [workspace.package]
-version = "0.17.12"
+version = "0.17.15"
 edition = "2021"
 
 [workspace.dependencies]
@@ -58,6 +58,7 @@ libc.workspace = true
 nix.workspace = true
 tui-scrollbar = "0.2.7"
 time = { version = "0.3", features = ["parsing"] }
+pipewire.workspace = true
 
 [dev-dependencies]
 uuid.workspace = true

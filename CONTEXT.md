@@ -129,6 +129,13 @@ active file (active-file projection is used once a lifecycle-backed source such
 as an Audiobookshelf episode or book enters the run).
 _Avoid_: session, playback session
 
+**Clocked audio output**:
+Packaged mbvd's inherited Playback-run output: mpv's `audio-device` property is
+bound to a real ALSA endpoint, so hardware paces playback. Distinct from
+selecting the legacy PCM pipe output, which writes untimed PCM through mpv's
+`ao=pcm` file writer into a FIFO for an external consumer such as Snapserver.
+_Avoid_: ALSA mode, direct audio, hardware output
+
 ## Processes
 
 **Local daemon**:

@@ -65,6 +65,10 @@ pub fn run_with_options(
     // always_play_next, always_skip_intro, and subtitle/audio-lang prefs are
     // controlling-client preferences, not daemon config — mbvd never reads
     // them from its own host config.toml, regardless of what's in it.
+    // Clocked ALSA output is a packaged-mbvd default; the Local daemon
+    // keeps its current (unforced) output regardless of `audio_device`.
+    let audio_device =
+        (role == DaemonRole::Packaged).then(|| client_locked.config.audio_device.clone());
     let player = Player::new(
         client_locked.config.server_url.clone(),
         client_locked.token.clone(),
@@ -75,7 +79,8 @@ pub fn run_with_options(
         crate::player::SubtitlePrefs::default(),
         player_tx,
         ws_send_tx.clone(),
-    );
+    )
+    .with_audio_device(audio_device);
 
     player.pre_warm(
         client_locked.config.audio_pipe_target(),

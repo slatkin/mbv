@@ -1,5 +1,5 @@
+use super::visualizer_worker::PipeWireWorker;
 use super::App;
-use mbv_core::visualizer::PipeWireWorker;
 
 impl App {
     pub(super) fn sync_visualizer(&mut self) {
@@ -131,7 +131,7 @@ mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;
-        app.visualizer_window.samples = vec![mbv_core::visualizer::StereoSample {
+        app.visualizer_window.samples = vec![crate::app::visualizer_worker::StereoSample {
             left: 1.0,
             right: 1.0,
         }];

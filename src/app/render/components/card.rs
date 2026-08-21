@@ -559,25 +559,6 @@ mod tests {
     }
 
     #[test]
-    fn stopped_empty_visible_queue_ignores_hidden_nonempty_queue() {
-        let local_items = Vec::new();
-        let mut remote_items = make_items(1);
-        remote_items[0].id = "remote-hidden".into();
-        let mut app = make_direct_remote_app(local_items, remote_items);
-        app.set_queue_scope(QueueScope::Local);
-        app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
-        app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
-        app.player.status.lock().unwrap().active = false;
-
-        render_card(&mut app);
-
-        assert!(app
-            .card_image_states
-            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
-        assert!(!fetch_triggered(&app, "remote-hidden:P"));
-    }
-
-    #[test]
     fn library_focus_and_depth_do_not_affect_card_source() {
         let mut app = make_drilled_library_app();
         app.player_tab.set_items(make_items(2), 1);

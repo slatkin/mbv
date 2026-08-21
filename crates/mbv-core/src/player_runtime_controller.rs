@@ -63,6 +63,10 @@ pub struct Player {
     show_audio_window: bool,
     use_mpv_config: bool,
     no_scripts: bool,
+    /// Fixed for this Player's lifetime; `Some` only for packaged-daemon
+    /// clocked output (see `with_audio_device`). `None` for bare mode and
+    /// the Local daemon, and for any run where pipe output is selected.
+    audio_device: Option<String>,
     pub always_skip_intro: bool,
     pub subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     origin: Mutex<PlaybackOrigin>,
@@ -98,6 +102,7 @@ impl Player {
             show_audio_window,
             use_mpv_config,
             no_scripts,
+            audio_device: None,
             always_skip_intro,
             subtitle_prefs: Arc::new(Mutex::new(subtitle_prefs)),
             origin: Mutex::new(PlaybackOrigin::Standalone),
@@ -114,6 +119,15 @@ impl Player {
         }
     }
 
+    /// Sets the fixed ALSA device identifier packaged-daemon clocked output
+    /// projects on every run for the remainder of this Player's lifetime
+    /// (restart-required, matching `audio_device`'s owner-local semantics).
+    /// Bare mode and the Local daemon must never call this.
+    pub fn with_audio_device(mut self, audio_device: Option<String>) -> Self {
+        self.audio_device = audio_device;
+        self
+    }
+
     pub fn pre_warm(&self, pipe_path: Option<String>, samplerate: u32, bitdepth: u8) {
         if pipe_path.is_none() {
             return;
@@ -126,6 +140,7 @@ impl Player {
             audio_pipe_path: pipe_path,
             audio_pipe_samplerate: samplerate,
             audio_pipe_bitdepth: bitdepth,
+            audio_device: None,
         };
         match init_mpv(&config) {
             Ok(warmed) => {
@@ -376,6 +391,14 @@ impl Player {
             } else {
                 (None, 0, 0, false)
             };
+        // Mutually exclusive output target: pipe output wins when selected
+        // for this run, and clocked ALSA projection applies only when it is
+        // not.
+        let (audio_pipe_path, audio_device) = if audio_pipe_path.is_some() {
+            (audio_pipe_path, None)
+        } else {
+            (None, self.audio_device.clone())
+        };
 
         let config = MpvRunConfig {
             headless,
@@ -385,6 +408,7 @@ impl Player {
             audio_pipe_path,
             audio_pipe_samplerate,
             audio_pipe_bitdepth,
+            audio_device,
         };
         let status = self.status.clone();
         let event_tx = self.event_tx.clone();

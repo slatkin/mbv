@@ -277,7 +277,9 @@ impl PlaybackRun {
                             return;
                         }
                         Err(e) => {
-                            log::warn!(target: "player", "event error: {}", mpv_err_str(&e));
+                            if self.on_mpv_error(e, &mut progress) {
+                                return;
+                            }
                         }
                         _ => {}
                     }

@@ -50,6 +50,7 @@ fn make_feed_session() -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
             audio_pipe_path: None,
             audio_pipe_samplerate: 0,
             audio_pipe_bitdepth: 0,
+            audio_device: None,
         },
         false,
         status.clone(),

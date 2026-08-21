@@ -91,6 +91,7 @@ mod types_settings;
 mod types_tab_selection;
 pub(crate) mod ui_util;
 mod visualizer;
+mod visualizer_worker;
 mod ws_event_actions;
 
 pub use self::app_struct::App;
