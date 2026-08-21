@@ -9,7 +9,7 @@ license=('MIT')
 depends=('mpv' 'openssl')
 optdepends=('cava: audio visualizer support')
 source=("${pkgname}-${pkgver}-linux-x86_64.tar.gz::https://github.com/slatkin/${pkgname}/releases/download/v${pkgver}/${pkgname}-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('8be87e11822b151cb59b57c6bd6e620fdacacdac7ce9088ffa1796b64998b0e7')
 
 package() {
     cd "${pkgname}-${pkgver}"
