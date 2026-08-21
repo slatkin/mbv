@@ -1,8 +1,3 @@
-> **Prerequisite:** [#584](https://github.com/slatkin/mbv/issues/584) must land
-> before implementation of this change begins. Once it lands, rebase this plan
-> on its hero-on-left wide / selected-row-replacement narrow baseline and remove or revise
-> tasks already completed by that prerequisite.
-
 ## 1. Establish The UI Boundary
 
 - [ ] 1.1 Map every current render module and independently rendered surface into canonical screen, arrangement, component, or theme responsibilities without changing behaviour. Record the settled hero-on-left-wide / selected-row-replacement-narrow baseline, make the normative no-grandfathering scope explicit, and confirm that no current surface is classified as bespoke.
