@@ -200,11 +200,14 @@ fn x_cycles_panel_mode_via_handle_key() {
     let mut app = make_app_stub();
     assert_eq!(app.panel_mode, crate::app::PanelMode::Both);
     app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
-    assert_eq!(app.panel_mode, crate::app::PanelMode::LibraryOnly);
-    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(app.panel_mode, crate::app::PanelMode::QueueOnly);
+    assert_eq!(app.panel_focus, crate::app::PanelFocus::Queue);
+    app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert_eq!(app.panel_mode, crate::app::PanelMode::LibraryOnly);
+    assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
     app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(app.panel_mode, crate::app::PanelMode::Both);
+    assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
 }
 
 #[test]
@@ -293,29 +296,29 @@ fn x_moves_queue_focus_to_library_when_entering_library_only() {
 
     assert_eq!(
         app.panel_mode,
-        crate::app::PanelMode::LibraryOnly,
-        "first x from Both enters LibraryOnly"
+        crate::app::PanelMode::QueueOnly,
+        "first x from Both enters QueueOnly"
     );
-    assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
+    assert_eq!(app.panel_focus, crate::app::PanelFocus::Queue);
 
     app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
 
-    assert_eq!(app.panel_mode, crate::app::PanelMode::QueueOnly);
-    assert_eq!(app.panel_focus, crate::app::PanelFocus::Queue);
+    assert_eq!(app.panel_mode, crate::app::PanelMode::LibraryOnly);
+    assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
 }
 
 #[test]
 fn x_entering_both_leaves_focus_alone() {
     let mut app = make_app_stub();
-    app.panel_focus = crate::app::PanelFocus::Queue;
-    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
 
     app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
 
     assert_eq!(app.panel_mode, crate::app::PanelMode::Both);
     assert_eq!(
         app.panel_focus,
-        crate::app::PanelFocus::Queue,
+        crate::app::PanelFocus::Library,
         "returning to Both must not move focus"
     );
 }
@@ -331,6 +334,7 @@ fn mini_view_x_toggles_library_only_and_queue_only_only() {
     app.terminal_width = crate::app::MINI_VIEW_THRESHOLD - 1;
     app.panel_mode = crate::app::PanelMode::Both;
     app.panel_focus = crate::app::PanelFocus::Library;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
 
     app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(

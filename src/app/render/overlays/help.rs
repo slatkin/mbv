@@ -164,7 +164,7 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
         help_line(
             key_w,
             "x",
-            "Cycle panel layout (both / library / queue; library / queue under 80 cols)",
+            "Cycle panel layout (both / queue / library; queue / library under 80 cols)",
         ),
         help_line(key_w, "Shift+← / →", "Resize queue column"),
         help_line(key_w, "Ctrl+S", "Save playlist"),

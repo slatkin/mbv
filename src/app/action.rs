@@ -95,8 +95,9 @@ pub(super) enum Command {
         delta: i64,
     },
 
-    /// `x`: cycle the  View layout between both panels, library-only, and
-    /// queue-only (see `PanelMode`).
+    /// `x`: cycle the Power View layout through both, queue-only, and
+    /// library-only (see `PanelMode`); below the mini-view threshold it
+    /// toggles queue-only and library-only.
     CyclePanelMode,
 }
 
@@ -691,9 +692,9 @@ impl App {
                     }
                 } else {
                     self.panel_mode = match self.panel_mode {
-                        super::PanelMode::Both => super::PanelMode::LibraryOnly,
-                        super::PanelMode::LibraryOnly => super::PanelMode::QueueOnly,
-                        super::PanelMode::QueueOnly => super::PanelMode::Both,
+                        super::PanelMode::Both => super::PanelMode::QueueOnly,
+                        super::PanelMode::QueueOnly => super::PanelMode::LibraryOnly,
+                        super::PanelMode::LibraryOnly => super::PanelMode::Both,
                     };
                     match self.panel_mode {
                         super::PanelMode::LibraryOnly => {
