@@ -15,16 +15,7 @@ impl App {
             }
         }
 
-        // PipeWire captures system audio, not mpv directly, so it works equally
-        // whether playback is in-process or hosted by a same-host local
-        // daemon -- only a genuinely remote daemon or an attached Emby
-        // session make this machine's audio the wrong thing to capture.
-        let is_local =
-            self.player_owner_is_on_this_machine() && self.connected_session_id.is_none();
-        let audio_pipe_enabled = self.config.lock().unwrap().audio_pipe_enabled;
-        let active = self.player.status.lock().unwrap().active;
-
-        let should_run = self.visualizer_enabled && is_local && active && !audio_pipe_enabled;
+        let should_run = self.visualizer_should_run();
         if !should_run {
             self.stop_visualizer_worker();
             return;
@@ -41,6 +32,15 @@ impl App {
                 }
             }
         }
+    }
+
+    fn visualizer_should_run(&self) -> bool {
+        let audio_pipe_enabled = self.config.lock().unwrap().audio_pipe_enabled;
+        let active = self.player.status.lock().unwrap().active;
+        self.visualizer_enabled
+            && self.connected_session_id.is_none()
+            && active
+            && !audio_pipe_enabled
     }
 
     pub(super) fn stop_visualizer_worker(&mut self) {
@@ -75,11 +75,12 @@ mod tests {
     }
 
     #[test]
-    fn remote_playback_does_not_start_local_pipewire() {
+    fn direct_remote_playback_allows_local_pipewire() {
         let mut app = crate::app::tests::make_remote_app_stub(Vec::new(), Vec::new());
         app.visualizer_enabled = true;
-        app.sync_visualizer();
-        assert!(app.visualizer.is_none());
+        app.player.status.lock().unwrap().active = true;
+
+        assert!(app.visualizer_should_run());
     }
 
     #[test]

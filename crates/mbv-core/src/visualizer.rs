@@ -14,7 +14,6 @@ use pw::spa::pod::Pod;
 const STARTUP_TIMEOUT: Duration = Duration::from_millis(500);
 const SAMPLE_WINDOW_MS: usize = 33;
 const MAX_SAMPLE_PAIRS: usize = 4096;
-const DEFAULT_SAMPLE_RATE: u32 = 48_000;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StereoSample {
@@ -58,8 +57,8 @@ impl StereoSampleBuffer {
                 continue;
             }
             self.push_pair(StereoSample {
-                left: pair[0].clamp(-1.0, 1.0),
-                right: pair[1].clamp(-1.0, 1.0),
+                left: pair[0],
+                right: pair[1],
             });
             appended = true;
         }
@@ -79,10 +78,7 @@ impl StereoSampleBuffer {
             if !left.is_finite() || !right.is_finite() {
                 continue;
             }
-            self.push_pair(StereoSample {
-                left: left.clamp(-1.0, 1.0),
-                right: right.clamp(-1.0, 1.0),
-            });
+            self.push_pair(StereoSample { left, right });
             appended = true;
         }
         if appended {
@@ -121,6 +117,7 @@ enum Control {
 
 struct WorkerData {
     format: AudioInfoRaw,
+    streaming: bool,
     buffer: Arc<Mutex<StereoSampleBuffer>>,
     startup_tx: Option<Sender<Startup>>,
     failure_tx: Sender<String>,
@@ -138,9 +135,7 @@ impl PipeWireWorker {
         let (stop_tx, stop_rx) = pw::channel::channel();
         let (startup_tx, startup_rx) = mpsc::channel();
         let (failure_tx, failure_rx) = mpsc::channel();
-        let buffer = Arc::new(Mutex::new(StereoSampleBuffer::with_sample_rate(
-            DEFAULT_SAMPLE_RATE,
-        )));
+        let buffer = Arc::new(Mutex::new(StereoSampleBuffer::with_capacity(1)));
         let worker_buffer = buffer.clone();
         let handle = thread::Builder::new()
             .name("mbv-pipewire-visualizer".into())
@@ -198,6 +193,30 @@ impl Drop for PipeWireWorker {
     fn drop(&mut self) {
         self.stop();
     }
+}
+
+fn capture_frame_bytes<'a>(
+    format: &AudioInfoRaw,
+    bytes: &'a [u8],
+    offset: usize,
+    size: usize,
+    stride: i32,
+    corrupted: bool,
+) -> Result<&'a [u8], &'static str> {
+    if format.format() != AudioFormat::F32LE || format.channels() != 2 || format.rate() == 0 {
+        return Err("negotiated format is not interleaved stereo F32LE");
+    }
+    if corrupted {
+        return Err("PipeWire supplied a corrupted capture chunk");
+    }
+    if stride != 8 || !size.is_multiple_of(8) {
+        return Err("PipeWire supplied an invalid stereo frame layout");
+    }
+    let end = offset
+        .checked_add(size)
+        .filter(|end| *end <= bytes.len())
+        .ok_or("PipeWire capture chunk exceeds its buffer")?;
+    Ok(&bytes[offset..end])
 }
 
 fn run_worker(
@@ -264,6 +283,7 @@ fn run_worker(
     let listener = stream
         .add_local_listener_with_user_data(WorkerData {
             format: AudioInfoRaw::new(),
+            streaming: false,
             buffer,
             startup_tx: Some(startup_tx),
             failure_tx,
@@ -272,8 +292,14 @@ fn run_worker(
             let mainloop = mainloop.clone();
             move |_, data, _, new| match new {
                 pw::stream::StreamState::Streaming => {
-                    if let Some(startup_tx) = data.startup_tx.take() {
-                        let _ = startup_tx.send(Startup::Ready);
+                    data.streaming = true;
+                    if data.format.format() == AudioFormat::F32LE
+                        && data.format.channels() == 2
+                        && data.format.rate() != 0
+                    {
+                        if let Some(startup_tx) = data.startup_tx.take() {
+                            let _ = startup_tx.send(Startup::Ready);
+                        }
                     }
                 }
                 pw::stream::StreamState::Error(error) => {
@@ -291,42 +317,89 @@ fn run_worker(
                 _ => {}
             }
         })
-        .param_changed(|_, data, id, param| {
-            let Some(param) = param else {
-                return;
-            };
-            if id != pw::spa::param::ParamType::Format.as_raw() {
-                return;
+        .param_changed({
+            let mainloop = mainloop.clone();
+            move |_, data, id, param| {
+                let Some(param) = param else {
+                    return;
+                };
+                if id != pw::spa::param::ParamType::Format.as_raw() {
+                    return;
+                }
+                let result = (|| {
+                    let (media_type, media_subtype) =
+                        pw::spa::param::format_utils::parse_format(param).map_err(|error| {
+                            format!("failed to parse PipeWire media format: {error}")
+                        })?;
+                    if media_type != MediaType::Audio || media_subtype != MediaSubtype::Raw {
+                        return Err("PipeWire negotiated a non-raw-audio format".to_string());
+                    }
+                    let mut format = AudioInfoRaw::new();
+                    format.parse(param).map_err(|error| {
+                        format!("failed to parse PipeWire audio format: {error}")
+                    })?;
+                    if format.format() != AudioFormat::F32LE
+                        || format.channels() != 2
+                        || format.rate() == 0
+                    {
+                        return Err(format!("unsupported PipeWire capture format: {format:?}"));
+                    }
+                    let mut buffer = data
+                        .buffer
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    *buffer = StereoSampleBuffer::with_sample_rate(format.rate());
+                    data.format = format;
+                    if data.streaming {
+                        if let Some(startup_tx) = data.startup_tx.take() {
+                            let _ = startup_tx.send(Startup::Ready);
+                        }
+                    }
+                    Ok(())
+                })();
+                if let Err(message) = result {
+                    if let Some(startup_tx) = data.startup_tx.take() {
+                        let _ = startup_tx.send(Startup::Failed(message));
+                    } else {
+                        let _ = data.failure_tx.send(message);
+                    }
+                    mainloop.quit();
+                }
             }
-            let Ok((media_type, media_subtype)) = pw::spa::param::format_utils::parse_format(param)
-            else {
-                return;
-            };
-            if media_type != MediaType::Audio || media_subtype != MediaSubtype::Raw {
-                return;
-            }
-            let _ = data.format.parse(param);
         })
-        .process(|stream, data| {
-            let Some(mut buffer) = stream.dequeue_buffer() else {
-                return;
-            };
-            let Some(raw) = buffer.datas_mut().first_mut() else {
-                return;
-            };
-            let offset = raw.chunk().offset() as usize;
-            let size = raw.chunk().size() as usize;
-            let Some(bytes) = raw.data() else {
-                return;
-            };
-            let Some(end) = offset.checked_add(size) else {
-                return;
-            };
-            if end > bytes.len() {
-                return;
-            }
-            if let Ok(mut sample_buffer) = data.buffer.try_lock() {
-                sample_buffer.push_pcm_bytes(&bytes[offset..end], data.format.channels());
+        .process({
+            let mainloop = mainloop.clone();
+            move |stream, data| {
+                let Some(mut buffer) = stream.dequeue_buffer() else {
+                    return;
+                };
+                let Some(raw) = buffer.datas_mut().first_mut() else {
+                    return;
+                };
+                let offset = raw.chunk().offset() as usize;
+                let size = raw.chunk().size() as usize;
+                let stride = raw.chunk().stride();
+                let corrupted = raw
+                    .chunk()
+                    .flags()
+                    .contains(pw::spa::buffer::ChunkFlags::CORRUPTED);
+                let Some(bytes) = raw.data() else {
+                    return;
+                };
+                match capture_frame_bytes(&data.format, bytes, offset, size, stride, corrupted) {
+                    Ok(frame) => {
+                        if let Ok(mut sample_buffer) = data.buffer.try_lock() {
+                            sample_buffer.push_pcm_bytes(frame, data.format.channels());
+                        }
+                    }
+                    Err(error) => {
+                        if let Ok(mut sample_buffer) = data.buffer.try_lock() {
+                            sample_buffer.clear();
+                        }
+                        let _ = data.failure_tx.send(error.into());
+                        mainloop.quit();
+                    }
+                }
             }
         })
         .register();
@@ -395,7 +468,8 @@ fn join_worker(handle: JoinHandle<()>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{PipeWireWorker, StereoSample, StereoSampleBuffer};
+    use super::{capture_frame_bytes, PipeWireWorker, StereoSample, StereoSampleBuffer};
+    use pipewire::spa::param::audio::{AudioFormat, AudioInfoRaw};
     use std::time::{Duration, Instant};
 
     #[test]
@@ -433,6 +507,54 @@ mod tests {
                 right: 0.2,
             }]
         );
+    }
+
+    #[test]
+    fn pcm_buffer_preserves_finite_sample_amplitudes() {
+        let mut buffer = StereoSampleBuffer::with_capacity(2);
+        let mut bytes = Vec::new();
+        for value in [1.5_f32, -1.5] {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+
+        buffer.push_pcm_bytes(&bytes, 2);
+
+        assert_eq!(
+            buffer.snapshot().samples,
+            vec![StereoSample {
+                left: 1.5,
+                right: -1.5,
+            }]
+        );
+    }
+
+    #[test]
+    fn capture_frame_requires_interleaved_stereo_f32le_frames() {
+        let mut format = AudioInfoRaw::new();
+        format.set_format(AudioFormat::F32LE);
+        format.set_channels(2);
+        format.set_rate(48_000);
+        let bytes = [0u8; 8];
+        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 8, false).is_ok());
+
+        format.set_format(AudioFormat::S16LE);
+        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 8, false).is_err());
+        format.set_format(AudioFormat::F32LE);
+        format.set_channels(1);
+        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 8, false).is_err());
+        format.set_channels(2);
+        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 16, false).is_err());
+        assert!(capture_frame_bytes(&format, &bytes, 0, 7, 8, false).is_err());
+        assert!(capture_frame_bytes(&format, &bytes, 1, 8, 8, false).is_err());
+        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 8, true).is_err());
+        format.set_rate(0);
+        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 8, false).is_err());
+    }
+
+    #[test]
+    fn sample_window_capacity_uses_negotiated_rate() {
+        assert_eq!(StereoSampleBuffer::with_sample_rate(44_100).capacity, 1_455);
+        assert_eq!(StereoSampleBuffer::with_sample_rate(48_000).capacity, 1_584);
     }
 
     #[test]

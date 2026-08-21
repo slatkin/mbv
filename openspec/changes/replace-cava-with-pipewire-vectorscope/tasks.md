@@ -13,14 +13,14 @@
 
 ## 3. App Lifecycle And Configuration
 
-- [x] 3.1 Replace `CavaWorker` app state and synchronization with the PipeWire worker while preserving current local, same-host Local daemon, remote-session, audio-pipe, playback-end, and toggle eligibility rules.
+- [x] 3.1 Replace `CavaWorker` app state and synchronization with the PipeWire worker while preserving local, same-host Local daemon, attached-session, audio-pipe, playback-end, and toggle eligibility rules while permitting Direct remote playback forwarded into local system output.
 - [x] 3.2 Add the persisted single-cell vectorscope glyph with default `●`, invalid-value fallback, and a focused config round-trip/fallback test.
 - [x] 3.3 Clear vectorscope samples and isolate capture failure for the current playback without interrupting playback, input handling, or subsequent playback retries.
 
 ## 4. Vectorscope Rendering And Cadence
 
 - [x] 4.1 Replace spectrum-bar rendering with independent stereo coordinate mapping in the existing panel, deduplicating cells and suppressing the center point for a silent window.
-- [x] 4.2 Render points with the configured glyph and existing visualizer palette while preserving empty-area and constrained-height behavior.
+- [x] 4.2 Render points with the configured glyph and aqua, foam, yellow, and red amplitude bands from the existing palette while preserving empty-area and constrained-height behavior.
 - [x] 4.3 Target a 16 ms active-visualizer cadence and snapshot the newest sample generation immediately before each draw rather than replaying visual frames.
 - [x] 4.4 Add one non-brittle coordinate-mapping check covering channel orientation, clamping, silence, and panel bounds; verify final appearance directly in a real terminal.
 - [x] 4.5 Apply the fixed internal display gain before coordinate clamping so typical PCM levels produce useful visual spread without changing captured samples or adding UI configuration.
@@ -33,7 +33,7 @@
 
 ## 6. End-To-End Verification
 
-- [ ] 6.1 Verify with real PipeWire logs that bare playback captures the default sink output, unrelated output can contribute, toggle-off releases capture, and PipeWire failure leaves playback active.
-- [ ] 6.2 Verify same-host Local daemon playback works without daemon/protocol changes, while remote, attached-session, and audio-pipe playback do not start local capture.
-- [ ] 6.3 Measure at the terminal render boundary under steady audio and record at least 50 fresh vectorscope frames per second on a terminal capable of the 60 FPS target, including recovery to newest samples after an induced UI stall.
+- [x] 6.1 Verify with real PipeWire logs that bare playback captures the default sink output, unrelated output can contribute, toggle-off releases capture, and PipeWire failure leaves playback active.
+- [x] 6.2 Verify same-host Local daemon playback works without daemon/protocol changes, Direct remote playback can display locally forwarded audio, and attached-session and audio-pipe playback do not start local capture.
+- [x] 6.3 Measure at the terminal render boundary under steady audio and record at least 50 fresh vectorscope frames per second on a terminal capable of the 60 FPS target, including recovery to newest samples after an induced UI stall.
 - [x] 6.4 Run targeted mbv and mbv-core tests, package checks, workspace clippy, formatting, and the governed source-file line check.
