@@ -233,23 +233,6 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
 }
 
 #[test]
-fn resolve_run_output_is_mutually_exclusive() {
-    // Pipe output wins when selected for the run; audio_device never
-    // applies alongside it.
-    assert_eq!(
-        resolve_run_output(Some("/tmp/mbv-pipe".to_string()), Some("alsa".to_string())),
-        (Some("/tmp/mbv-pipe".to_string()), None)
-    );
-    // Clocked ALSA projection applies only when pipe output is not selected.
-    assert_eq!(
-        resolve_run_output(None, Some("alsa/hw:Loopback,0,0".to_string())),
-        (None, Some("alsa/hw:Loopback,0,0".to_string()))
-    );
-    // Neither selected (bare mode / Local daemon): no forced output.
-    assert_eq!(resolve_run_output(None, None), (None, None));
-}
-
-#[test]
 fn init_mpv_projects_mutually_exclusive_output() {
     // Real (headless) mpv init, same pattern as player_tests_active_file.rs's
     // test_mpv() -- serialized on SYS_ENV_LOCK because init_mpv reads env

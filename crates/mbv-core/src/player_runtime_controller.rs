@@ -55,20 +55,6 @@ impl QuitHandle {
     }
 }
 
-/// Resolves the mutually exclusive output target for one Playback run: pipe
-/// output wins when selected for this run, and clocked ALSA projection
-/// applies only when it is not.
-fn resolve_run_output(
-    audio_pipe_path: Option<String>,
-    audio_device: Option<String>,
-) -> (Option<String>, Option<String>) {
-    if audio_pipe_path.is_some() {
-        (audio_pipe_path, None)
-    } else {
-        (None, audio_device)
-    }
-}
-
 // ── Player ────────────────────────────────────────────────────────────────────
 
 pub struct Player {
@@ -405,8 +391,14 @@ impl Player {
             } else {
                 (None, 0, 0, false)
             };
-        let (audio_pipe_path, audio_device) =
-            resolve_run_output(audio_pipe_path, self.audio_device.clone());
+        // Mutually exclusive output target: pipe output wins when selected
+        // for this run, and clocked ALSA projection applies only when it is
+        // not.
+        let (audio_pipe_path, audio_device) = if audio_pipe_path.is_some() {
+            (audio_pipe_path, None)
+        } else {
+            (None, self.audio_device.clone())
+        };
 
         let config = MpvRunConfig {
             headless,
