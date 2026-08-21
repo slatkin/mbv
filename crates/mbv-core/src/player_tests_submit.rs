@@ -233,6 +233,83 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
 }
 
 #[test]
+fn resolve_run_output_is_mutually_exclusive() {
+    // Pipe output wins when selected for the run; audio_device never
+    // applies alongside it.
+    assert_eq!(
+        resolve_run_output(Some("/tmp/mbv-pipe".to_string()), Some("alsa".to_string())),
+        (Some("/tmp/mbv-pipe".to_string()), None)
+    );
+    // Clocked ALSA projection applies only when pipe output is not selected.
+    assert_eq!(
+        resolve_run_output(None, Some("alsa/hw:Loopback,0,0".to_string())),
+        (None, Some("alsa/hw:Loopback,0,0".to_string()))
+    );
+    // Neither selected (bare mode / Local daemon): no forced output.
+    assert_eq!(resolve_run_output(None, None), (None, None));
+}
+
+#[test]
+fn init_mpv_projects_mutually_exclusive_output() {
+    // Real (headless) mpv init, same pattern as player_tests_active_file.rs's
+    // test_mpv() -- serialized on SYS_ENV_LOCK because init_mpv reads env
+    // vars for its config/ipc paths.
+    let env_lock = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
+
+    // ALSA mode: only the selected device is projected; the pipe startup
+    // guard never arms.
+    let (mpv, startup_pause_armed) = init_mpv(&MpvRunConfig {
+        headless: true,
+        use_mpv_config: false,
+        no_scripts: true,
+        always_skip_intro: false,
+        audio_pipe_path: None,
+        audio_pipe_samplerate: 0,
+        audio_pipe_bitdepth: 0,
+        audio_device: Some("alsa".to_string()),
+    })
+    .unwrap();
+    assert!(
+        !startup_pause_armed,
+        "clocked ALSA output must not arm the pipe startup guard"
+    );
+    assert_eq!(mpv.get_property::<String>("audio-device").unwrap(), "alsa");
+    mpv.set_property("ao", "null").unwrap(); // avoid opening real hardware for the rest of the suite
+    drop(mpv);
+
+    // Explicit pipe mode: existing pipe properties are preserved and
+    // audio_device is ignored.
+    let pipe_path = std::env::temp_dir()
+        .join(format!("mbv-test-init-mpv-pipe-{}", uuid::Uuid::new_v4()))
+        .display()
+        .to_string();
+    let (mpv, startup_pause_armed) = init_mpv(&MpvRunConfig {
+        headless: true,
+        use_mpv_config: false,
+        no_scripts: true,
+        always_skip_intro: false,
+        audio_pipe_path: Some(pipe_path.clone()),
+        audio_pipe_samplerate: 48_000,
+        audio_pipe_bitdepth: 16,
+        audio_device: Some("alsa/hw:Loopback,0,0".to_string()),
+    })
+    .unwrap();
+    assert!(
+        startup_pause_armed,
+        "explicit pipe output must still arm the startup guard"
+    );
+    assert_eq!(mpv.get_property::<String>("ao").unwrap(), "pcm");
+    assert_ne!(
+        mpv.get_property::<String>("audio-device").unwrap(),
+        "alsa/hw:Loopback,0,0",
+        "audio_device must be ignored while pipe output is selected"
+    );
+    let _ = std::fs::remove_file(&pipe_path);
+
+    drop(env_lock);
+}
+
+#[test]
 fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
     let (event_tx, _event_rx) = mpsc::channel();
     let player = Player::new(

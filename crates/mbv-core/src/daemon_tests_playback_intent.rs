@@ -165,3 +165,37 @@ fn unconfigured_pipe_delay_settles_at_output_started_and_old_deadline_cannot_set
     state.accept(7, replacement, true);
     assert!(state.settle_buffering_if_due().is_none());
 }
+
+#[test]
+fn clocked_output_intent_never_enters_pipe_guard() {
+    // pipe_output=false is what a PlaybackIntent carries whenever
+    // audio_pipe_enabled is off -- the clocked-ALSA/default selection.
+    let mut state = PlaybackIntentState::default();
+    let play = PlaybackIntent {
+        request_id: 1,
+        generation: 1,
+        action: PlaybackIntentAction::Play {
+            item_ids: vec!["a".into()],
+            start_idx: 0,
+            start_ticks: 0,
+            source: QueueSource::Album,
+        },
+    };
+    state.accept(7, play.clone(), false);
+    state.mark_resolving(play.request_id);
+    state.mark_starting(play.request_id);
+
+    // No pipe-guard status ever surfaces for this intent, at any phase.
+    assert!(state.pipe_status().is_none());
+    // A configured playout-delay estimate never applies to clocked output.
+    assert!(state
+        .output_started_if_current(Some(Duration::from_secs(2)))
+        .is_none());
+    assert!(state.output_started_if_current(None).is_none());
+
+    // Startup/pause/resume acknowledgment (the generic applied_if_current
+    // path used by PausedChanged handling) is unaffected by pipe_output.
+    assert!(state
+        .applied_if_current(7, play.request_id, play.generation)
+        .is_some());
+}

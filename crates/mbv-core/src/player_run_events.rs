@@ -264,6 +264,29 @@ impl PlaybackRun {
             });
             return false;
         }
+        if reason == mpv_end_file_reason::Error
+            && !self.tracks_initialized
+            && self.config.audio_device.is_some()
+        {
+            // Clocked ALSA output failed to open before this run ever
+            // reached PlaybackRestart. Terminal for the run: no fallback to
+            // another device or the legacy pipe (see pipe-playout-latency
+            // spec, "Clocked output fails").
+            let device = self.config.audio_device.clone().unwrap_or_default();
+            self.close_prepared_source();
+            progress.stop_and_join(self.progress_join_budget());
+            self.close_prepared_source_at(self.last_valid_pos);
+            self.status.lock().unwrap().active = false;
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                idx: self.current_idx,
+                position_ticks: 0,
+                played: false,
+                consume: false,
+                progress_report_accepted: false,
+                error: Some(format!("audio output failed to start (device: {device})")),
+            });
+            return false;
+        }
 
         if reason == mpv_end_file_reason::Error {
             log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");

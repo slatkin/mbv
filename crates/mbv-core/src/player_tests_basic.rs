@@ -251,6 +251,7 @@ fn make_queue_session_for_pos_tests_with_events(
             audio_pipe_path: Some("/tmp/mbv-test-pipe".into()),
             audio_pipe_samplerate: 48_000,
             audio_pipe_bitdepth: 16,
+            audio_device: None,
         },
         false,
         status.clone(),

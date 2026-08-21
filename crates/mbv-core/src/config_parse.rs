@@ -100,6 +100,19 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         None => None,
     };
 
+    let audio_device = match misc
+        .and_then(|m| m.get("audio_device"))
+        .and_then(|v| v.as_str())
+    {
+        Some(value) if is_valid_audio_device(value) => value.to_string(),
+        Some(other) => {
+            return Err(format!(
+                "mpv.audio_device must be \"alsa\" or start with \"alsa/\", got {other:?}"
+            ))
+        }
+        None => "alsa".to_string(),
+    };
+
     let always_play_next = queue
         .and_then(|q| q.get("always_play_next"))
         .and_then(|v| v.as_bool())
@@ -341,6 +354,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         audio_pipe_samplerate,
         audio_pipe_bitdepth,
         audio_pipe_playout_delay_ms,
+        audio_device,
         always_play_next,
         consume_videos,
         consume_audio,
