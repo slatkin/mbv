@@ -1,4 +1,3 @@
-use super::padded_rect;
 use ratatui::layout::Rect;
 
 pub(in crate::app::render) fn content_area(area: Rect, offset: u16) -> Rect {
@@ -15,10 +14,6 @@ pub(in crate::app::render) fn pills_area(area: Rect) -> Rect {
         height: 1.min(area.height),
         ..area
     }
-}
-
-pub(in crate::app::render) fn panel_content(area: Rect, pad_x: u16, pad_y: u16) -> Rect {
-    padded_rect(area, pad_x, pad_y)
 }
 
 pub(in crate::app::render) fn inline_hero_area(

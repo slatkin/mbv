@@ -1,6 +1,6 @@
 use crate::app::images::audiobookshelf_book_cover_cache_key;
 use crate::app::layout::LayoutMain;
-use crate::app::render::arrangements::hero_left;
+use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::components::hero::{HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS};
 use crate::app::render::components::home_hero::{
     beside_image_hero_dims, beside_image_hero_rects, HeroMetaBlock,
@@ -14,12 +14,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Cell, Row, Table, TableState};
 use ratatui::Frame;
 
-/// Padding inside recessed wide-book blocks, matching Music's wide layout.
-/// (`music_wide.rs::PANE_PAD_X`/`PANE_PAD_Y`) -- duplicated rather than
-/// shared per this change's design (two consumers isn't yet a strong case
-/// for extraction).
-pub(in crate::app::render) const PANE_PAD_X: u16 = 2;
-pub(in crate::app::render) const PANE_PAD_Y: u16 = 1;
 /// Blank row separating the hero from the chapter list in the wide left pane.
 const LEFT_SEPARATOR_ROWS: u16 = 1;
 /// Height of the bucket-pill row inside the narrow right pane. The wide right

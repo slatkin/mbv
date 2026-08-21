@@ -1,14 +1,12 @@
 use crate::app::layout::LayoutMain;
-use crate::app::render::arrangements::hero_left;
+use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
+use crate::app::render::arrangements::padded_rect;
 use crate::app::{palette, App, PanelFocus};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::Frame;
-
-const PANE_PAD_X: u16 = 2;
-const PANE_PAD_Y: u16 = 1;
 
 impl App {
     pub(in crate::app::render) fn is_wide_tv_library(&self, lib_idx: usize) -> bool {
@@ -80,7 +78,7 @@ impl App {
         }
 
         let list_panel = right_pane.list_panel;
-        let list_area = library_arrangement::wide_list_area(list_panel, PANE_PAD_X, PANE_PAD_Y);
+        let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
         if list_panel.height > 0 {
             f.render_widget(
                 Block::default().style(palette::resolve_surface_focus(right_focused)),

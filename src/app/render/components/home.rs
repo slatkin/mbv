@@ -1,7 +1,8 @@
 use crate::app::layout::LayoutMain;
-use crate::app::render::arrangements::hero_left;
+use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::home as home_arrangement;
 use crate::app::render::arrangements::library as library_arrangement;
+use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::hero::{self, HERO_BLOCK_EXTRA_ROWS};
 use crate::app::render::components::home_hero::{
     HeroData, KeepWatchingHeroLayout, WIDE_OVERVIEW_PAD,
@@ -15,12 +16,6 @@ use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
-
-/// Padding around the wide (hero-on-left) hero column's content, matching
-/// the hero-on-left arrangement's shared `PANE_PAD_X`/`PANE_PAD_Y` convention
-/// (`music_wide.rs`, `audiobookshelf_books.rs`).
-const HOME_HERO_PAD_X: u16 = 2;
-const HOME_HERO_PAD_Y: u16 = 1;
 
 impl App {
     pub(in crate::app::render) fn render_home_list(
@@ -162,8 +157,7 @@ impl App {
             };
             hero_panel.height = area.height.saturating_sub(1);
             layout.hero_area = hero_panel;
-            let mut hero_content =
-                home_arrangement::panel_content(hero_panel, HOME_HERO_PAD_X, HOME_HERO_PAD_Y);
+            let mut hero_content = padded_rect(hero_panel, PANE_PAD_X, PANE_PAD_Y);
             let hero_col_height = hero_content.height;
 
             hero_data = match emby_item {
@@ -214,7 +208,7 @@ impl App {
             if let Some(HeroData::Generic(_, area)) = &hero_data {
                 hero_panel.height = area
                     .height
-                    .saturating_add(HOME_HERO_PAD_Y * 2)
+                    .saturating_add(PANE_PAD_Y * 2)
                     .min(hero_panel.height);
             }
 
@@ -428,9 +422,8 @@ impl App {
         // list takes the full width, same as the single-column layout.
         let wide_pill_section = two_column && hero_data.is_some();
         let (pills_area, green_panel_full): (Rect, Option<Rect>) = if wide_pill_section {
-            let right_area = library_arrangement::wide_list_area(list_area, 0, HOME_HERO_PAD_Y);
-            let right_pane =
-                hero_left::hero_on_left_right_pane(list_area, right_area, HOME_HERO_PAD_Y);
+            let right_area = padded_rect(list_area, 0, PANE_PAD_Y);
+            let right_pane = hero_left::hero_on_left_right_pane(list_area, right_area, PANE_PAD_Y);
             (right_pane.pills_area, Some(right_pane.list_panel))
         } else if two_column {
             // Wide layout, no hero item: same top-of-area fallback the
@@ -448,7 +441,7 @@ impl App {
                 Block::default().style(Style::default().bg(panel_bg)),
                 list_panel,
             );
-            home_arrangement::panel_content(list_panel, HOME_HERO_PAD_X, HOME_HERO_PAD_Y)
+            padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y)
         } else {
             list_area
         };

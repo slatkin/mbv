@@ -24,6 +24,13 @@ const HERO_ON_LEFT_PILLS_ROW_HEIGHT: u16 = 1;
 /// Blank rows below the pill row before the list starts.
 const HERO_ON_LEFT_PILLS_GAP_ROWS: u16 = 1;
 
+/// Symmetric interior padding shared by every hero-on-left surface's panes
+/// (hero content, list panel, recessed boxes). One definition; surfaces that
+/// previously carried their own `PANE_PAD_X`/`PANE_PAD_Y` (or `HOME_HERO_PAD_*`)
+/// copy now import these.
+pub(in crate::app::render) const PANE_PAD_X: u16 = 2;
+pub(in crate::app::render) const PANE_PAD_Y: u16 = 1;
+
 /// Resolves the only shared responsive decision for hero-bearing browsers and
 /// returns the pane geometry when the wide presentation fits. Callers provide
 /// content; they do not own a breakpoint or a height threshold.

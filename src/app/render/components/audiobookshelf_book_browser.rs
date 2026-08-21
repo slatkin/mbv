@@ -1,8 +1,7 @@
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
-use crate::app::render::arrangements::hero_left;
-use crate::app::render::components::audiobookshelf_books::{
-    PANE_PAD_X, PANE_PAD_Y, PILLS_GAP_ROWS, PILLS_ROW_HEIGHT,
-};
+use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
+use crate::app::render::arrangements::padded_rect;
+use crate::app::render::components::audiobookshelf_books::{PILLS_GAP_ROWS, PILLS_ROW_HEIGHT};
 use crate::app::render::components::hero::{selected_detail_shell, HERO_BLOCK_EXTRA_ROWS};
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::ui_util::trunc_str;
@@ -42,12 +41,7 @@ impl App {
         }
 
         let list_panel = right_pane.list_panel;
-        let browser_area = Rect {
-            x: list_panel.x.saturating_add(PANE_PAD_X),
-            y: list_panel.y.saturating_add(PANE_PAD_Y),
-            width: list_panel.width.saturating_sub(PANE_PAD_X * 2),
-            height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
-        };
+        let browser_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
         if list_panel.height > 0 {
             let list_bg = palette::resolve_surface_focus(right_focused);
             f.render_widget(
