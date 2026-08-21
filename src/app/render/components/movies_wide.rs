@@ -10,19 +10,15 @@
 //! wide selected-media card, per library-list-hero spec).
 
 use crate::app::layout::LayoutMain;
-use crate::app::render::arrangements::hero_left;
+use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
+use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::home_hero::{prepare_wide_emby_hero_card, HeroData};
 use crate::app::{palette, App};
 use ratatui::layout::Rect;
 use ratatui::style::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
-
-/// Padding inside the wide Movies hero and list panels, matching Home's
-/// wide hero column (`home.rs::HOME_HERO_PAD_X/Y`).
-const PANE_PAD_X: u16 = 2;
-const PANE_PAD_Y: u16 = 1;
 
 impl App {
     /// Whether `lib_idx` is the dedicated Movies library (a `collection_type
@@ -145,7 +141,7 @@ impl App {
                 list_panel,
             );
         }
-        let list_area = library_arrangement::wide_list_area(list_panel, PANE_PAD_X, PANE_PAD_Y);
+        let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
 
         self.render_wide_library_rows(f, list_area, lib_idx, focused, layout);
 

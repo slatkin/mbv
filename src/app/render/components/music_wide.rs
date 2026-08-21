@@ -1,11 +1,10 @@
 //! Grouped Music's wide hero-on-left component.
 
 use crate::app::layout::LayoutMain;
-use crate::app::render::arrangements::hero_left::{self, WrappedHeroLine};
+use crate::app::render::arrangements::hero_left::{self, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
-use crate::app::render::arrangements::music::{
-    self as music_arrangement, WideMusicLeftLayout, PANE_PAD_X, PANE_PAD_Y,
-};
+use crate::app::render::arrangements::music::{self as music_arrangement, WideMusicLeftLayout};
+use crate::app::render::arrangements::padded_rect;
 use crate::app::{palette, App, PanelFocus};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -185,7 +184,7 @@ impl App {
         // the panel's standard interior inset and `draw_column_selection_markers`
         // draws the edge marker flush with the bg_green panel edge, matching
         // every other list.
-        let browser_area = music_arrangement::wide_music_browser_area(list_panel);
+        let browser_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
         if list_panel.height > 0 {
             let list_bg = palette::resolve_surface_focus(right_focused);
             f.render_widget(

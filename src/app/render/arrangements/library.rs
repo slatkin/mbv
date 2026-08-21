@@ -31,10 +31,6 @@ pub(in crate::app::render) fn wide_library_panes(
     })
 }
 
-pub(in crate::app::render) fn wide_list_area(panel: Rect, pad_x: u16, pad_y: u16) -> Rect {
-    padded_rect(panel, pad_x, pad_y)
-}
-
 pub(in crate::app::render) fn inline_library_areas(area: Rect, controls_rows: u16) -> (Rect, Rect) {
     (
         Rect {

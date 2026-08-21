@@ -1,9 +1,7 @@
-use super::padded_rect;
+use super::hero_left::{PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::components::album_art::{INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS};
 use ratatui::layout::Rect;
 
-pub(in crate::app::render) const PANE_PAD_X: u16 = 2;
-pub(in crate::app::render) const PANE_PAD_Y: u16 = 1;
 pub(in crate::app::render) const MIN_LEFT_HEIGHT_FOR_SEPARATOR: u16 = 6;
 pub(in crate::app::render) const MIN_HERO_METADATA_SIDE_WIDTH: u16 = 15;
 
@@ -102,8 +100,4 @@ pub(in crate::app::render) fn wide_music_left_layout(
         text_area,
         stack_metadata,
     }
-}
-
-pub(in crate::app::render) fn wide_music_browser_area(list_panel: Rect) -> Rect {
-    padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y)
 }
