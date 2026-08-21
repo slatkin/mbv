@@ -571,7 +571,10 @@ fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
         // Clocked ALSA output: the device identifier alone selects the
         // backend, so `ao` is left to mpv's own negotiation.
         if let Err(e) = mpv.set_property("audio-device", device.as_str()) {
-            log::warn!(target: "player", "clocked audio output: failed to set audio-device '{device}': {}", mpv_err_str(&e));
+            return Err(format!(
+                "clocked audio output: failed to set audio-device '{device}': {}",
+                mpv_err_str(&e)
+            ));
         } else {
             log::info!(target: "player", "clocked audio output: using ALSA device {device}");
         }

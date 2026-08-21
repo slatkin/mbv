@@ -100,17 +100,16 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         None => None,
     };
 
-    let audio_device = match misc
-        .and_then(|m| m.get("audio_device"))
-        .and_then(|v| v.as_str())
-    {
-        Some(value) if is_valid_audio_device(value) => value.to_string(),
-        Some(other) => {
-            return Err(format!(
-                "mpv.audio_device must be \"alsa\" or start with \"alsa/\", got {other:?}"
-            ))
-        }
+    let audio_device = match misc.and_then(|m| m.get("audio_device")) {
         None => "alsa".to_string(),
+        Some(value) => match value.as_str() {
+            Some(value) if is_valid_audio_device(value) => value.to_string(),
+            _ => {
+                return Err(format!(
+                    "mpv.audio_device must be \"alsa\" or start with \"alsa/\", got {value:?}"
+                ))
+            }
+        },
     };
 
     let always_play_next = queue

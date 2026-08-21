@@ -209,6 +209,10 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         toml::Value::Boolean(cfg.no_scripts),
     );
     mpv.insert("autoload".to_string(), toml::Value::Boolean(cfg.autoload));
+    mpv.insert(
+        "audio_device".to_string(),
+        toml::Value::String(cfg.audio_device.clone()),
+    );
 
     let idle_feed = section!("idle_feed");
     idle_feed.insert(
@@ -290,10 +294,6 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
             mbvd.remove("audio_pipe_playout_delay_ms");
         }
     }
-    mbvd.insert(
-        "audio_device".to_string(),
-        toml::Value::String(cfg.audio_device.clone()),
-    );
     let mbvd_client = mbvd
         .entry("client".to_string())
         .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))

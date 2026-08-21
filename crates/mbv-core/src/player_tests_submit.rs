@@ -293,6 +293,61 @@ fn init_mpv_projects_mutually_exclusive_output() {
 }
 
 #[test]
+fn mpv_audio_errors_only_classify_alsa_initialization_failures() {
+    assert!(is_clocked_audio_error(
+        &libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
+        true,
+    ));
+    assert!(!is_clocked_audio_error(
+        &libmpv2::Error::Raw(libmpv2::mpv_error::LoadingFailed),
+        true,
+    ));
+    assert!(!is_clocked_audio_error(
+        &libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
+        false,
+    ));
+}
+
+#[test]
+fn alsa_initialization_error_stops_run_with_output_error() {
+    let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
+    run.config.audio_pipe_path = None;
+    run.config.audio_device = Some("alsa/hw:Loopback,0,0".into());
+    run.reporter.clear_session();
+    let mut progress = noop_progress();
+
+    assert!(run.on_mpv_error(
+        libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
+        &mut progress,
+    ));
+    assert!(!status.lock().unwrap().active);
+    let PlayerEvent::Stopped { error, .. } = events.recv().unwrap() else {
+        panic!("expected stopped event");
+    };
+    assert_eq!(
+        error.as_deref(),
+        Some("audio output failed to start (device: alsa/hw:Loopback,0,0)")
+    );
+}
+
+#[test]
+fn media_end_file_error_is_not_reported_as_alsa_failure() {
+    let (mut run, _status, events) = make_queue_session_for_pos_tests_with_events(0);
+    run.origin = PlaybackOrigin::Standalone;
+    run.config.audio_pipe_path = None;
+    run.config.audio_device = Some("alsa".into());
+    run.reporter.clear_session();
+    let mpv = test_mpv();
+    let mut progress = noop_progress();
+
+    assert!(!run.on_end_file(mpv_end_file_reason::Error, &mpv, &mut progress));
+    let PlayerEvent::Stopped { error, .. } = events.recv().unwrap() else {
+        panic!("expected stopped event");
+    };
+    assert!(error.is_none());
+}
+
+#[test]
 fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
     let (event_tx, _event_rx) = mpsc::channel();
     let player = Player::new(

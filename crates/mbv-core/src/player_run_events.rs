@@ -1,3 +1,11 @@
+fn is_clocked_audio_error(error: &libmpv2::Error, audio_device_configured: bool) -> bool {
+    audio_device_configured
+        && matches!(
+            error,
+            libmpv2::Error::Raw(code) if *code == libmpv2::mpv_error::AoInitFailed
+        )
+}
+
 impl PlaybackRun {
     fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
         let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
@@ -227,6 +235,30 @@ impl PlaybackRun {
         }
     }
 
+    // libmpv2 returns MPV_EVENT_END_FILE failures as Err(Error::Raw(...)),
+    // so classify the output-specific error before the generic event logging.
+    fn on_mpv_error(&mut self, error: libmpv2::Error, progress: &mut ProgressGuard) -> bool {
+        if !is_clocked_audio_error(&error, self.config.audio_device.is_some()) {
+            log::warn!(target: "player", "event error: {}", mpv_err_str(&error));
+            return false;
+        }
+
+        let device = self.config.audio_device.clone().unwrap_or_default();
+        self.close_prepared_source();
+        progress.stop_and_join(self.progress_join_budget());
+        self.close_prepared_source_at(self.last_valid_pos);
+        self.status.lock().unwrap().active = false;
+        let _ = self.event_tx.send(PlayerEvent::Stopped {
+            idx: self.current_idx,
+            position_ticks: 0,
+            played: false,
+            consume: false,
+            progress_report_accepted: false,
+            error: Some(format!("audio output failed to start (device: {device})")),
+        });
+        true
+    }
+
     // Returns true if the event loop should `continue`.
     fn on_end_file(
         &mut self,
@@ -264,30 +296,6 @@ impl PlaybackRun {
             });
             return false;
         }
-        if reason == mpv_end_file_reason::Error
-            && !self.tracks_initialized
-            && self.config.audio_device.is_some()
-        {
-            // Clocked ALSA output failed to open before this run ever
-            // reached PlaybackRestart. Terminal for the run: no fallback to
-            // another device or the legacy pipe (see pipe-playout-latency
-            // spec, "Clocked output fails").
-            let device = self.config.audio_device.clone().unwrap_or_default();
-            self.close_prepared_source();
-            progress.stop_and_join(self.progress_join_budget());
-            self.close_prepared_source_at(self.last_valid_pos);
-            self.status.lock().unwrap().active = false;
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: self.current_idx,
-                position_ticks: 0,
-                played: false,
-                consume: false,
-                progress_report_accepted: false,
-                error: Some(format!("audio output failed to start (device: {device})")),
-            });
-            return false;
-        }
-
         if reason == mpv_end_file_reason::Error {
             log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");
         }

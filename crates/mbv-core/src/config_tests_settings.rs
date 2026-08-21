@@ -82,6 +82,7 @@ fn audio_device_configuration_table() {
         ), // exact endpoint
         ("audio_device = \"\"\n", Err("audio_device")), // empty identifier
         ("audio_device = \"pipewire\"\n", Err("audio_device")), // non-alsa output
+        ("audio_device = true\n", Err("audio_device")), // non-string value
     ];
     for (mpv_body, expected) in cases {
         let toml = format!("[server]\nurl = \"http://localhost\"\n[mpv]\n{mpv_body}");
@@ -203,6 +204,7 @@ fn save_config_settings_round_trips_consume_audio_flags() {
     cfg.consume_audio = true;
     cfg.save_playlist_on_consume_audio = true;
     cfg.quit_timeout_secs = 7;
+    cfg.audio_device = "alsa/hw:Loopback,0,0".into();
     save_config_settings(&cfg).unwrap();
 
     let saved = std::fs::read_to_string(config_path()).unwrap();
@@ -210,6 +212,7 @@ fn save_config_settings_round_trips_consume_audio_flags() {
     assert!(reparsed.consume_audio);
     assert!(reparsed.save_playlist_on_consume_audio);
     assert_eq!(reparsed.quit_timeout_secs, 7);
+    assert_eq!(reparsed.audio_device, "alsa/hw:Loopback,0,0");
 
     std::env::remove_var("XDG_CONFIG_HOME");
     std::fs::remove_dir_all(&dir).ok();
