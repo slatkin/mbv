@@ -1,11 +1,11 @@
 > **Prerequisite:** [#584](https://github.com/slatkin/mbv/issues/584) must land
 > before implementation of this change begins. Once it lands, rebase this plan
-> on its all-hero-on-left wide / inline-hero narrow baseline and remove or revise
+> on its hero-on-left wide / selected-row-replacement narrow baseline and remove or revise
 > tasks already completed by that prerequisite.
 
 ## 1. Establish The UI Boundary
 
-- [ ] 1.1 Map the current render modules into screen, arrangement, component, theme, and bespoke responsibilities without changing behaviour. Record the settled hero-on-left-wide / inline-narrow baseline.
+- [ ] 1.1 Map the current render modules into screen, arrangement, component, theme, and bespoke responsibilities without changing behaviour. Record the settled hero-on-left-wide / selected-row-replacement-narrow baseline.
 - [ ] 1.2 Define the approved component and arrangement module boundaries and document which modules may perform direct Ratatui painting.
 - [ ] 1.3 Narrow theme access so screen code consumes semantic roles or component policies rather than raw palette primitives. This is a large cross-cutting diff (100+ call sites across `queue.rs`, `detail_series_view.rs`, `music_wide.rs`, `home_hero.rs`, `indicators.rs`, `album_rows.rs`, etc.); scope it to the pilot surfaces first and track the remainder explicitly rather than hedging with "wherever the existing migration allows."
 - [ ] 1.4 Define typed, centrally owned policy and variant representations for the pilot arrangement, using private fields or sealed implementations where appropriate.
@@ -26,7 +26,7 @@
 
 ## 4. Sync Stale Specs
 
-- [ ] 4.1 Sync the live arrangement specs with the completed inline-narrow / hero-on-left-wide baseline.
+- [ ] 4.1 Sync the live arrangement specs with the completed selected-row-replacement-narrow / hero-on-left-wide baseline.
 - [ ] 4.2 Sync the `library-list-hero` and `ui-design-language` live specs with the tightened component-ownership and role-narrowing requirements this change adds.
 
 ## 5. Guide Agents And Developers

@@ -79,7 +79,8 @@ impl App {
 
         // Same threshold the library list uses to switch to two columns, so
         // Home's hero/list split and the library list cross over together.
-        let two_column = hero_left::can_use_hero_on_left(area);
+        let wide_panes = hero_left::shared_hero_presentation(area);
+        let two_column = wide_panes.is_some();
         // Single-column Home's whole panel (content plus the shared tab
         // gutters) is painted green while focused in `render_main`, before
         // this function runs.
@@ -89,9 +90,9 @@ impl App {
         // Wide (hero-on-left) still pre-reserves its own pill row above
         // `content_area` (its pills sit at the top of the right pane, a
         // hero-on-left concern, `hero_on_left_right_pane`). Narrow
-        // (legacy top placement fallback) no longer pre-reserves anything here: its
+        // inline presentation no longer pre-reserves anything here: its
         // pill row now lives inside `placement-neutral geometry`'s own `pills_area`,
-        // below the hero, same as every other legacy top placement screen
+        // outside the selected replacement, same as every other inline browser
         // (design.md decision 6 -- pill *position* is geometry, not a
         // per-screen declaration).
         let content_offset = if two_column { 1 + pill_gap_rows } else { 2 };
@@ -165,7 +166,9 @@ impl App {
             // Two-column layout: hero on left, list on right (hero-on-left,
             // design.md decision 4/5: the pane split and its minimum pane
             // width are the shared arrangement's, not a Home-local ratio).
-            let (mut hero_panel, right_panel) = hero_left::hero_on_left_panes(area);
+            let Some((mut hero_panel, right_panel)) = wide_panes else {
+                unreachable!("wide_panes is present when two_column is true");
+            };
             hero_panel.height = area.height.saturating_sub(1);
             layout.hero_area = hero_panel;
             let mut hero_content = Rect {
@@ -242,9 +245,9 @@ impl App {
                 content_area
             };
         } else {
-            // Vertical layout: legacy top placement fallback (design.md decision 1),
+            // Vertical layout: inline presentation (design.md decision 1),
             // reusing the shared reserved-block geometry and the HeroShell
-            // (`▁`/`▔`) border every other legacy top placement screen already has
+            // (`▁`/`▔`) border every other inline browser already has
             // (decision 2's "Narrow hero shell is uniform" -- Home was the
             // one screen missing it). The image-beside-metadata content wrap
             // itself is unchanged; it already matches the shared shape.
@@ -256,7 +259,7 @@ impl App {
             enum HeroContentDims {
                 Emby(mbv_core::api::EmbyItem, u16, KeepWatchingHeroLayout, u16),
                 // Audiobookshelf: image beside the metadata column, same
-                // shape as `Emby` -- the standard legacy top placement arrangement.
+                // shape as `Emby` -- the standard inline arrangement.
                 GenericBeside(QueueItem, u16, KeepWatchingHeroLayout, u16),
                 // Feed: text-only, no image to sit beside.
                 Generic(QueueItem, u16),
@@ -265,7 +268,7 @@ impl App {
             let dims = if area.width < 24 {
                 HeroContentDims::None
             } else {
-                // Every legacy top placement item with a cover -- Emby and the generic
+                // Every inline item with a cover -- Emby and the generic
                 // Audiobookshelf hero alike -- gets its image-beside-text
                 // dims from the same `beside_image_hero_dims` call, so the
                 // two providers' layouts cannot drift apart (image sits
@@ -495,7 +498,7 @@ impl App {
         // itself green while focused, so the dark `SURFACE_BACKDROP` bar
         // reads against it. The single-column layout has no such green
         // panel (its surrounding surface is the ordinary `SURFACE_BACKDROP`
-        // library background, same as every other legacy top placement tab), so it
+        // library background, same as every other inline browser), so it
         // uses the same lighter `SURFACE_RESTING` highlight movies/TV lists
         // use (`list_rows.rs`'s `build_list_row_spans`) to stay visible
         // against that darker backdrop.
@@ -509,7 +512,7 @@ impl App {
         // The wide layout uses the list panel surface; the single-column
         // layout inherits the ordinary library panel surface (no green
         // focus fill -- Home's panel background matches every other
-        // legacy top placement tab's regardless of focus).
+        // inline browser's regardless of focus).
         let pill_gap = Rect {
             x: pills_area.x,
             y: pills_area.y.saturating_add(1),
@@ -539,8 +542,6 @@ impl App {
         }
 
         layout.left_area = list_area;
-        layout.inline_hero = narrow_hero_rows > 0;
-
         // Render hero (shared between both layout modes).
         if narrow_hero_rows > 0 {
             hero::selected_detail_shell(f, layout.hero_area, narrow_hero_rows, focused);

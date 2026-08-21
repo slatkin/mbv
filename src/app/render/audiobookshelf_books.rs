@@ -69,7 +69,7 @@ impl App {
         let left_focused = focused && chapters_focused;
         let right_focused = focused && !chapters_focused;
 
-        if hero_left::can_use_hero_on_left(area) {
+        if hero_left::shared_hero_presentation(area).is_some() {
             self.render_wide_audiobookshelf_books(
                 f,
                 area,
@@ -106,7 +106,9 @@ impl App {
             height: area.height.saturating_sub(1),
             ..area
         };
-        let (mut left_panel, right_panel) = hero_left::hero_on_left_panes(area);
+        let Some((mut left_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
+            return;
+        };
         left_panel.height = content_area.height;
 
         // Library-side separator row below the left pane, matching Music.
@@ -182,7 +184,7 @@ impl App {
         layout: &mut LayoutMain,
     ) {
         // Narrow books use one scrolling browser. Selected detail, including
-        // chapters, is inserted immediately after the active book row.
+        // chapters, replaces the active book row.
         let pills_area = Rect {
             height: PILLS_ROW_HEIGHT.min(area.height),
             ..area
@@ -213,6 +215,9 @@ impl App {
             layout,
             detail_rows,
         );
+        if layout.hero_area.width > 0 && layout.hero_area.height > 0 {
+            layout.inline_hero_area = layout.hero_area;
+        }
     }
 
     pub(super) fn audiobookshelf_book_hero_rows(
@@ -362,7 +367,7 @@ impl App {
             .map(super::super::ui_util::trunc_overview)
             .unwrap_or_default();
 
-        // The standard legacy top placement beside-image layout: image on the right,
+        // The standard inline beside-image layout: image on the right,
         // metadata column on the left, overview wrapping around the image.
         // This is the same path Emby Keep Watching and the generic ABS hero
         // use, so the book tab's hero can't drift from theirs.
@@ -404,7 +409,7 @@ impl App {
         area: Rect,
         state: &AudiobookshelfBookBrowseState,
         focused: bool,
-        _layout: &mut LayoutMain,
+        layout: &mut LayoutMain,
     ) {
         let Some(id) = state.selected_id.as_deref() else {
             return;
@@ -465,7 +470,7 @@ impl App {
         table_state.select(state.chapter_selection);
         f.render_stateful_widget(
             Table::new(
-                table_rows,
+                table_rows.clone(),
                 [
                     Constraint::Min(10),
                     Constraint::Length(duration_width as u16),
@@ -476,6 +481,23 @@ impl App {
             area,
             &mut table_state,
         );
+        layout.audiobookshelf_book_chapter_rows = table_rows
+            .iter()
+            .enumerate()
+            .skip(table_state.offset())
+            .take(area.height as usize)
+            .enumerate()
+            .map(|(screen_row, _)| {
+                (
+                    Rect {
+                        y: area.y + screen_row as u16,
+                        height: 1,
+                        ..area
+                    },
+                    table_state.offset() + screen_row,
+                )
+            })
+            .collect();
     }
 }
 

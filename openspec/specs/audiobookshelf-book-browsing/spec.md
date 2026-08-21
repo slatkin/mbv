@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines read-only discovery and browsing of Audiobookshelf book libraries — library-to-tab exposure, author-surname grouping, the Music-style hero-on-left composition, chapter display, and read-only progress — distinct from the podcast tab's TV-style browsing.
+Defines read-only discovery and browsing of Audiobookshelf book libraries — library-to-tab exposure, author-surname grouping, responsive hero presentation, chapter display, and read-only progress — distinct from the podcast tab's TV-style browsing.
 
 ## Requirements
 
@@ -42,7 +42,7 @@ mbv SHALL list books from the selected Audiobookshelf book library using bounded
 
 ### Requirement: Book libraries use the hero-on-left arrangement
 
-An Audiobookshelf book library SHALL use hero-on-left when it meets the shared wide geometry conditions, matching grouped Music: a persistent book hero and chapters pane beside a persistent single-column book browser with surname-bucket pills. Otherwise the selected book's hero and chapter detail SHALL render inline at the active book row in the single-column browser. Both the selected book and browser SHALL remain available in either presentation. The book tab SHALL obtain responsive placement from the shared arrangement and SHALL NOT evaluate the breakpoint, minimum-height guard, or a top fallback itself.
+An Audiobookshelf book library SHALL use hero-on-left when it meets the shared wide geometry conditions, matching grouped Music: a persistent book hero and chapters pane beside a persistent single-column book browser with surname-bucket pills. Otherwise the selected book's hero and chapter detail SHALL replace the active book row in the single-column browser. Both the selected book and browser SHALL remain available in either presentation. The book tab SHALL obtain responsive placement from the shared arrangement and SHALL NOT evaluate the breakpoint, minimum-height guard, or a separate detail fallback itself.
 
 The book tab SHALL supply book-native content and interaction state without defining placement geometry: Audiobookshelf cover, metadata and progress, chapter rows, surname-bucket pills, and existing pane-focus behavior.
 

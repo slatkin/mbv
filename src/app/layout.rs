@@ -76,13 +76,13 @@ pub(crate) struct LayoutMain {
     pub left_row_targets: Vec<Option<LibraryRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
-    /// The selected item's hero geometry. Wide legacy top placement screens place it
-    /// above `left_area`; narrow inline screens place it inside the list and
-    /// keep it inert for mouse activation.
+    /// The selected item's hero geometry. Wide screens place it beside `left_area`;
+    /// inline screens place the replacement inside the list and use it as the
+    /// selected parent's activation geometry.
     pub hero_area: Rect,
-    /// True when the hero is part of the narrow scrolling list. Inline hero
-    /// space is intentionally inert; media rows own all activation targets.
-    pub inline_hero: bool,
+    /// Selected-parent geometry only for inline replacement. Wide hero areas
+    /// remain render bookkeeping and are intentionally not interactive.
+    pub inline_hero_area: Rect,
     /// Geometry for the Home sub-tab grid. Distinct from
     /// `AppLayout::home` (`LayoutHome`), which is the regular Home-tab.
     pub home: LayoutHome,
@@ -93,6 +93,8 @@ pub(crate) struct LayoutMain {
     /// Visible Audiobookshelf episode rows and their filtered episode indices.
     /// Populated by the podcast hero renderer for mouse selection.
     pub audiobookshelf_episode_rows: Vec<(Rect, usize)>,
+    /// Visible Audiobookshelf book chapter rows and their chapter indices.
+    pub audiobookshelf_book_chapter_rows: Vec<(Rect, usize)>,
     /// Screen rect of the selected row/cell in the library panel. The outer
     /// selectable renderer owns this; nested detail/hero renderers never
     /// overwrite it. Consumed by the context menu's keyboard anchor.
@@ -123,12 +125,12 @@ pub(crate) struct LayoutMain {
     /// render_wide_right_album_browser`), the sub-rect of
     /// `wide_music_right_area` below the pill row. `left_row_targets` is
     /// indexed relative to this rect's top -- set by both the wide and
-    /// narrow (legacy top placement) callers of the shared browser renderer, since
+    /// narrow inline callers of the shared browser renderer, since
     /// they share row-target indexing but differ in outer gating rect.
     pub wide_music_browser_area: Rect,
     /// Bounding rect of the Audiobookshelf book tab's right pane (bucket
     /// pills + book browser). Populated whenever the book tab renders, in
-    /// both the wide two-column layout and the narrow legacy top placement fallback
+    /// both the wide two-column layout and the narrow inline presentation
     /// -- unlike `wide_music_right_area`, both book panes are always
     /// visible (book-browsing spec).
     pub audiobookshelf_book_right_area: Rect,

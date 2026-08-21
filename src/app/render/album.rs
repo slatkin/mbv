@@ -40,6 +40,7 @@ impl App {
         cols: u16,
         layout: &mut LayoutMain,
     ) -> usize {
+        layout.wide_music_track_hitmap.clear();
         let AlbumRowsCursorCtx {
             cursor,
             stored_scroll,
@@ -106,7 +107,7 @@ impl App {
         // is unchanged.
         let expand_selected =
             !in_music_group_view || self.libs[lib_idx].album_track_focus.is_some();
-        let plan = self.build_grouped_album_display_plan(
+        let mut plan = self.build_grouped_album_display_plan(
             albums,
             &album_info,
             &order,
@@ -126,6 +127,32 @@ impl App {
             )),
             hero_handles_detail,
         );
+        if !hero_handles_detail
+            && plan.selected_block_bounds.is_some_and(|(top, bottom)| {
+                bottom.saturating_sub(top).saturating_add(3) >= visible
+            })
+        {
+            plan = self.build_grouped_album_display_plan(
+                albums,
+                &album_info,
+                &order,
+                cursor,
+                true,
+                HeaderFocusCtx {
+                    in_music_group_view,
+                    expand_selected,
+                },
+                Some((
+                    area.width,
+                    if self.images_enabled() && area.width >= INLINE_ALBUM_ART_RESERVED + 20 {
+                        INLINE_ALBUM_ART_RESERVED
+                    } else {
+                        0
+                    },
+                )),
+                true,
+            );
+        }
         layout.left_sorted_indices = plan.order.clone();
         let display_cursor = plan.display_cursor;
         let display_rows = plan.rows;
@@ -172,7 +199,8 @@ impl App {
         let mut sr: Vec<Vec<usize>> = vec![Vec::new()];
         for (di, row) in display_rows.iter().enumerate() {
             match row {
-                GroupedAlbumDisplayRow::Album(idx) => {
+                GroupedAlbumDisplayRow::Album(idx)
+                | GroupedAlbumDisplayRow::AlbumInlineDetailStart(idx) => {
                     let col = group_album_idx % cn;
                     display_screen_rows[di] = screen;
                     display_columns[di] = Some(col);
@@ -225,6 +253,35 @@ impl App {
                 cw,
                 0,
             );
+        }
+        if !hero_handles_detail
+            && matches!(
+                display_rows.get(display_cursor),
+                Some(GroupedAlbumDisplayRow::AlbumInlineDetailStart(_))
+            )
+        {
+            let detail_rows = display_rows[display_cursor..]
+                .iter()
+                .take_while(|row| {
+                    matches!(
+                        row,
+                        GroupedAlbumDisplayRow::AlbumInlineDetailStart(_)
+                            | GroupedAlbumDisplayRow::AlbumDetailContinuation
+                            | GroupedAlbumDisplayRow::AlbumLoading
+                    )
+                })
+                .count();
+            let screen_y = display_screen_rows[display_cursor].saturating_sub(screen_offset);
+            if screen_y < visible && detail_rows > 0 {
+                layout.hero_area = Rect {
+                    x: area.x,
+                    y: area.y + screen_y as u16,
+                    width: area.width,
+                    height: detail_rows.min(visible - screen_y) as u16,
+                };
+                layout.inline_hero_area = layout.hero_area;
+                layout.selected_item_rect = Some(layout.hero_area);
+            }
         }
         // Visible-slice row map and targets indexed by screen row
         let vs = visible.min(sr.len().saturating_sub(screen_offset));
@@ -308,7 +365,8 @@ impl App {
             // Determine if this row should start a new terminal row or continue
             // in the current row (for two-column packing).
             let row_area = match row {
-                GroupedAlbumDisplayRow::Album(_) => {
+                GroupedAlbumDisplayRow::Album(_)
+                | GroupedAlbumDisplayRow::AlbumInlineDetailStart(_) => {
                     let col = display_columns[abs_row_idx].unwrap_or(0);
                     let col_width = area.width / cn as u16;
                     let col_x = area.x + (col as u16 * col_width);
@@ -363,6 +421,56 @@ impl App {
                             focused,
                         },
                     );
+                }
+                GroupedAlbumDisplayRow::AlbumInlineDetailStart(idx) => {
+                    let height = visible_rows[row_idx..]
+                        .iter()
+                        .take_while(|(_, r)| {
+                            matches!(
+                                *r,
+                                &GroupedAlbumDisplayRow::AlbumInlineDetailStart(_)
+                                    | &GroupedAlbumDisplayRow::AlbumDetailContinuation
+                                    | &GroupedAlbumDisplayRow::AlbumLoading
+                            )
+                        })
+                        .count() as u16;
+                    self.render_album_row(
+                        f,
+                        AlbumRowCtx {
+                            row_area,
+                            idx: *idx,
+                            album_info: &album_info,
+                            cursor,
+                            avail,
+                            selected_block_bounds,
+                            in_music_group_view,
+                            abs_row_idx,
+                            selected_art_reserved_w,
+                            focused,
+                        },
+                    );
+                    if height > 1 {
+                        if let Some(tracks) = self.album_tracks_cache.get(&albums[*idx].id).cloned()
+                        {
+                            self.render_album_detail(
+                                f,
+                                Rect {
+                                    y: row_area.y + 1,
+                                    height: height - 1,
+                                    ..row_area
+                                },
+                                &tracks,
+                                self.libs[lib_idx].album_track_focus.unwrap_or(0),
+                                self.libs[lib_idx].album_track_focus.is_some(),
+                                false,
+                                false,
+                                true,
+                                false,
+                                selected_art_reserved_w,
+                                layout,
+                            );
+                        }
+                    }
                 }
                 GroupedAlbumDisplayRow::AlbumActionHint => {
                     self.render_album_action_hint(

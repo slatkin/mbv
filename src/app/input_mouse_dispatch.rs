@@ -275,13 +275,30 @@ impl App {
                             }
                         }
                         let pos = (col, row).into();
-                        let in_inline_hero = self.layout.main.inline_hero
-                            && self.layout.main.hero_area.contains(pos);
-                        let in_left = !in_inline_hero
-                            && (self.layout.main.left_area.contains(pos)
-                                || self.layout.main.hero_area.contains(pos));
+                        let in_left = self.layout.main.left_area.contains(pos)
+                            || self.layout.main.inline_hero_area.contains(pos);
+                        if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
+                            if self
+                                .layout
+                                .main
+                                .tv_wide_episode_rows
+                                .iter()
+                                .any(|(rect, _)| rect.contains(pos))
+                            {
+                                self.activate_series_selection_episode(lib_idx);
+                                return;
+                            }
+                            if self.is_music_group_view(lib_idx) {
+                                if let Some(track_idx) = self.layout.main.wide_music_track_at(pos) {
+                                    self.libs[lib_idx].album_track_focus = Some(track_idx);
+                                    self.select(lib_idx);
+                                    return;
+                                }
+                            }
+                        }
                         match self.tab {
-                            TabSelection::Home => self.home_play(),
+                            TabSelection::Home if in_left => self.home_play(),
+                            TabSelection::Home => {}
                             TabSelection::Feeds => {
                                 // Double-click on Feeds: no-op (playback wiring pending).
                             }
@@ -318,7 +335,14 @@ impl App {
                                             .audiobookshelf_book_browse
                                             .get(index)
                                             .is_some_and(|state| state.chapter_selection.is_some());
-                                        if in_left && in_chapters {
+                                        if in_chapters
+                                            && self
+                                                .layout
+                                                .main
+                                                .audiobookshelf_book_chapter_rows
+                                                .iter()
+                                                .any(|(rect, _)| rect.contains(pos))
+                                        {
                                             self.activate_audiobookshelf_book_row();
                                         }
                                     }

@@ -215,3 +215,16 @@ fn abs_layout_state_cannot_drive_emby_mouse_after_switch() {
         "Emby-directed click must not re-interpret ABS episode rows"
     );
 }
+
+#[test]
+fn narrow_tv_episode_target_precedes_parent_hero() {
+    let mut app = make_library_app(0);
+    app.libs[0].library.collection_type = "tvshows".into();
+    app.libs[0].nav_stack[0].items[0].item_type = "Series".into();
+    app.layout.main.browse_destination = Some(TabSelection::EmbyLibrary(0));
+    app.layout.main.hero_area = Rect::new(10, 5, 20, 8);
+    app.layout.main.tv_wide_episode_rows = vec![(Rect::new(11, 8, 18, 1), 0)];
+
+    assert!(app.click_set_cursor(12, 8));
+    assert_eq!(app.libs[0].series_selection, Some(0));
+}

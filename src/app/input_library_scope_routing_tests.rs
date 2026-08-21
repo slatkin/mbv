@@ -496,6 +496,7 @@ fn single_click_on_hero_only_focuses_the_panel() {
         width: 20,
         height: 5,
     };
+    app.layout.main.inline_hero_area = app.layout.main.hero_area;
 
     app.handle_mouse(make_library_mouse_event(
         MouseEventKind::Down(MouseButton::Left),
@@ -525,6 +526,7 @@ fn double_click_on_hero_activates_the_selected_item() {
         width: 20,
         height: 5,
     };
+    app.layout.main.inline_hero_area = app.layout.main.hero_area;
 
     let click = make_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 11);
     app.handle_mouse(click);
@@ -539,4 +541,45 @@ fn double_click_on_hero_activates_the_selected_item() {
         Some(0),
         "double-click on the hero activates the selected Series, same as Enter"
     );
+}
+
+#[test]
+fn wide_read_only_home_and_feed_heroes_are_inert() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    for tab in [TabSelection::Home, TabSelection::Feeds] {
+        let mut app = make_app_stub();
+        app.tab = tab;
+        app.panel_focus = PanelFocus::Queue;
+        app.layout.main.hero_area = Rect::new(10, 10, 20, 5);
+
+        assert!(
+            !app.click_set_cursor(12, 11),
+            "wide read-only hero must not handle clicks for {tab:?}"
+        );
+        assert_eq!(app.panel_focus, PanelFocus::Queue);
+    }
+}
+
+#[test]
+fn wide_read_only_home_and_feed_double_clicks_are_inert() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    for tab in [TabSelection::Home, TabSelection::Feeds] {
+        let mut app = make_app_stub();
+        app.tab = tab;
+        app.panel_focus = PanelFocus::Library;
+        app.home.continue_items = vec![make_item("Home item", "Movie")];
+        app.layout.main.browse_destination = Some(tab);
+        app.layout.main.hero_area = Rect::new(10, 10, 20, 5);
+        app.layout.main.left_area = Rect::new(40, 10, 20, 5);
+        app.refocus_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(1));
+        let click = make_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 11);
+
+        app.handle_mouse(click);
+        app.handle_mouse(click);
+
+        assert!(
+            !app.player.status.lock().unwrap().active,
+            "{tab:?} hero activated"
+        );
+    }
 }

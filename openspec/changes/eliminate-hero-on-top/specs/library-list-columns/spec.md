@@ -11,7 +11,7 @@ The library list SHALL choose its column count from the width available to the l
 #### Scenario: Inline hero browser
 - **WHEN** a hero-bearing browse surface uses the inline presentation
 - **THEN** its browser SHALL render one column
-- **AND** the selected hero SHALL occupy full-width flow rows below the active item row
+- **AND** the selected hero SHALL replace the active item row as one full-width flow segment
 
 #### Scenario: Wide non-hero list pane
 - **WHEN** a non-hero library list pane reaches the shared breakpoint

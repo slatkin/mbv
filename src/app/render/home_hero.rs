@@ -16,13 +16,13 @@ use textwrap::wrap;
 /// the title above it).
 pub(super) const WIDE_OVERVIEW_PAD: usize = 2;
 
-/// Pre-wrapped content for a legacy top placement item's metadata column, plus the
+/// Pre-wrapped content for an inline item's metadata column, plus the
 /// total row count it needs. Computed once (mirroring `compact_banner_layout`'s
 /// measure-before-render pattern) so the caller can size the panel to fit
 /// before rendering, and so the title and overview are wrapped exactly once
 /// per frame rather than once to measure and again to render. Shared by the
 /// Emby Keep Watching hero and the generic Audiobookshelf hero -- both are
-/// beside-image, legacy top placement items and use the same wrap-around-the-image
+/// beside-image, inline items and use the same wrap-around-the-image
 /// shape.
 pub(super) struct KeepWatchingHeroLayout {
     title_lines: Vec<String>,
@@ -35,7 +35,7 @@ pub(super) struct KeepWatchingHeroLayout {
     pub(super) height: u16,
 }
 
-/// Per-provider metadata for the shared legacy top placement meta block: an optional
+/// Per-provider metadata for the shared inline meta block: an optional
 /// glyph drawn one space after the last title line (Emby's watch-state icon),
 /// plus the metadata rows below the subtitle (release date, duration, ...).
 pub(super) struct HeroMetaBlock {
@@ -112,7 +112,7 @@ impl App {
 
     /// Builds the Keep Watching hero panel's metadata layout for `item`,
     /// delegating to the shared [`hero_text_layout`] (also used by the
-    /// generic Audiobookshelf hero, so both legacy top placement items share one
+    /// generic Audiobookshelf hero, so both inline items share one
     /// wrap-around-the-image implementation).
     pub(super) fn keep_watching_hero_layout(
         item: &mbv_core::api::EmbyItem,
@@ -295,9 +295,9 @@ impl App {
         );
     }
 
-    /// Renders a beside-image legacy top placement item: image column then text
+    /// Renders a beside-image inline item: image column then text
     /// column, unconditionally and in that order for every provider. The
-    /// single call site every legacy top placement item with a cover goes through
+    /// single call site every inline item with a cover goes through
     /// (Emby Keep Watching and the generic Audiobookshelf hero), so the two
     /// can't drift out of sync the way two hand-written call sites can --
     /// the image render in particular must never be skipped (not even when
@@ -410,9 +410,9 @@ impl App {
     }
 }
 
-/// Beside-image legacy top placement dims: image width, the wrap-around text layout,
+/// Beside-image inline dims: image width, the wrap-around text layout,
 /// and the image's row count. The single source of this geometry for every
-/// legacy top placement item with a cover -- Emby Keep Watching and the generic
+/// inline item with a cover -- Emby Keep Watching and the generic
 /// Audiobookshelf hero both call this so their layouts can't drift apart.
 pub(super) fn beside_image_hero_dims(
     title: &str,
@@ -438,7 +438,7 @@ pub(super) fn beside_image_hero_dims(
     (img_w, layout, image_rows)
 }
 
-/// Beside-image legacy top placement `Rect`s: the metadata column (left) and image
+/// Beside-image inline `Rect`s: the metadata column (left) and image
 /// column (right), both stretched to the taller of the two so the shorter
 /// one's background/border still spans the full row height. The single
 /// source of this geometry, shared the same way as [`beside_image_hero_dims`].
@@ -471,7 +471,7 @@ pub(super) fn beside_image_hero_rects(
     (meta_area, img_area)
 }
 
-/// Wrap-around-the-image text layout shared by every legacy top placement item with a
+/// Wrap-around-the-image text layout shared by every inline item with a
 /// beside-text image: title wrap lines, then one row each for the show-name
 /// line, the duration/progress line, and the blank separator, then the
 /// wrapped overview. The overview wraps around the image: it wraps at

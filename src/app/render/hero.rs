@@ -32,8 +32,7 @@ pub(super) const HERO_PLACEHOLDER_ROWS: u16 = 18;
 /// Row budget for the selected item's title on the hero's top row, rendered
 /// in yellow. Reserved only in two-column lists (`show_title`), where the
 /// list row's own title is truncated to a narrow cell; one-column lists
-/// skip it since the full-width row title right above the hero already shows
-/// the name.
+/// skip it since the full-width replacement content already shows the name.
 pub(super) const HERO_TITLE_ROWS: u16 = 1;
 /// Rows the hero *block* adds beyond the content rows, matching the
 /// selected-block look of music/homevideo: a `▁` top border row and a `▔`
@@ -50,6 +49,82 @@ pub(super) struct InlineDetailFlow {
     pub detail_screen_row: usize,
 }
 
+pub(super) enum InlineDisplayRow {
+    Replacement,
+    Source(usize),
+}
+
+/// Returns the physical row count after replacing one source row with detail.
+pub(super) fn inline_display_row_count(
+    source_rows: usize,
+    selected_row: usize,
+    detail_rows: u16,
+) -> usize {
+    if detail_rows == 0 || selected_row >= source_rows {
+        source_rows
+    } else {
+        source_rows - 1 + detail_rows as usize
+    }
+}
+
+/// Maps a physical display row back to its source row, or identifies one of
+/// the rows owned by the selected replacement.
+pub(super) fn inline_display_row(
+    source_rows: usize,
+    selected_row: usize,
+    detail_rows: u16,
+    display_row: usize,
+) -> Option<InlineDisplayRow> {
+    let total = inline_display_row_count(source_rows, selected_row, detail_rows);
+    if display_row >= total || selected_row >= source_rows {
+        return None;
+    }
+    let detail_rows = detail_rows as usize;
+    if detail_rows == 0 {
+        return Some(InlineDisplayRow::Source(display_row));
+    }
+    if (selected_row..selected_row + detail_rows).contains(&display_row) {
+        Some(InlineDisplayRow::Replacement)
+    } else if display_row < selected_row {
+        Some(InlineDisplayRow::Source(display_row))
+    } else {
+        Some(InlineDisplayRow::Source(display_row - detail_rows + 1))
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod flow_tests {
+    use super::*;
+
+    #[test]
+    fn replacement_maps_selected_row_without_a_legacy_row() {
+        assert_eq!(inline_display_row_count(4, 1, 3), 6);
+        assert!(matches!(
+            inline_display_row(4, 1, 3, 1),
+            Some(InlineDisplayRow::Replacement)
+        ));
+        assert!(matches!(
+            inline_display_row(4, 1, 3, 2),
+            Some(InlineDisplayRow::Replacement)
+        ));
+        assert!(matches!(
+            inline_display_row(4, 1, 3, 3),
+            Some(InlineDisplayRow::Replacement)
+        ));
+        assert!(matches!(
+            inline_display_row(4, 1, 3, 4),
+            Some(InlineDisplayRow::Source(2))
+        ));
+    }
+
+    #[test]
+    fn replacement_needs_one_row_for_the_browser_context() {
+        assert!(inline_detail_flow(0, 3, 4, 0).is_some());
+        assert!(inline_detail_flow(0, 4, 4, 0).is_none());
+    }
+}
+
 pub(super) fn inline_detail_flow(
     cursor_row: usize,
     detail_rows: u16,
@@ -58,17 +133,17 @@ pub(super) fn inline_detail_flow(
 ) -> Option<InlineDetailFlow> {
     let detail_rows = detail_rows as usize;
     let visible_rows = visible_rows as usize;
-    if detail_rows == 0 || detail_rows + 1 > visible_rows {
+    if detail_rows == 0 || detail_rows >= visible_rows {
         return None;
     }
 
-    let lower_bound = (cursor_row + detail_rows + 1)
+    let lower_bound = (cursor_row + detail_rows)
         .saturating_sub(visible_rows)
         .min(cursor_row);
     let offset = stored_offset.clamp(lower_bound, cursor_row);
     Some(InlineDetailFlow {
         offset,
-        detail_screen_row: cursor_row + 1 - offset,
+        detail_screen_row: cursor_row - offset,
     })
 }
 
@@ -159,7 +234,7 @@ pub(super) enum HeroLine {
 }
 
 /// Where the `Hero` component's right-aligned image starts, relative to
-/// `area`. The two legacy top placement content kinds place it differently: the
+/// `area`. The two inline content kinds place it differently: the
 /// movie hero pins the image to `area`'s own top row, sharing that row with
 /// the title when one is shown; the Series hero starts its image on the row
 /// *after* the title, one row lower. This is an existing, preserved
@@ -185,7 +260,7 @@ pub(super) struct HeroImage {
 pub(super) struct HeroContent<'a> {
     pub title: Option<&'a str>,
     pub meta_line: Option<&'a str>,
-    /// Role colour for `meta_line` -- the one place today's two legacy top placement
+    /// Role colour for `meta_line` -- the one place today's two inline
     /// content kinds disagree (movie: `MUTED_GREEN`, series: `SUBTLE`), so
     /// it is the declaration's colour-variant field (design.md decision 6)
     /// rather than a value this component picks itself.
@@ -211,7 +286,7 @@ pub(super) struct HeroPaintResult {
 /// Paints the `Hero` component's text content -- title row, meta line,
 /// "Playing" indicator, and overview/detail lines wrapped around the
 /// right-aligned image reservation -- into `area`. Extracted unchanged from
-/// `detail.rs`'s `render_compact_detail` (the movie hero, legacy top placement's
+/// `detail.rs`'s `render_compact_detail` (the movie hero, inline presentation's
 /// source per design.md decision 4); `detail_series_view.rs`'s Series hero
 /// shares the same shape and now calls this too.
 pub(super) fn paint_hero_content(
@@ -366,7 +441,7 @@ pub(super) fn paint_hero_content(
     }
 }
 
-/// Renders Home's legacy top placement metadata shape -- wrapped yellow title,
+/// Renders Home's inline metadata shape -- wrapped yellow title,
 /// optional green subtitle row, one meta line, a blank separator, then the
 /// overview -- shared by the Keep Watching (Emby) hero and the generic
 /// Audiobookshelf/Feeds hero, which otherwise duplicated this block
@@ -475,7 +550,7 @@ pub(super) fn render_home_hero_meta_block(
     // Hero-on-left (the recessed-box path): the box's own top padding row
     // doubles as the separator above, leaving the metadata flush against the
     // box's top edge. Reserve one more row so the gap above the box is
-    // visible. The narrow legacy top placement path (overview_pad == 0) renders no
+    // visible. The narrow inline path (overview_pad == 0) renders no
     // box and keeps its single separator row.
     if overview_pad > 0 && !overview_lines.is_empty() {
         row += 1;

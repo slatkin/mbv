@@ -24,12 +24,50 @@ const HERO_ON_LEFT_PILLS_ROW_HEIGHT: u16 = 1;
 /// Blank rows below the pill row before the list starts.
 const HERO_ON_LEFT_PILLS_GAP_ROWS: u16 = 1;
 
-/// Whether `content_area` can use the shared hero-on-left composition.
-/// Callers reserve the separator row before asking, so the height check is
-/// deliberately centralized here rather than repeated by each surface.
-pub(super) fn can_use_hero_on_left(content_area: Rect) -> bool {
-    content_area.width >= crate::app::TWO_COLUMN_THRESHOLD
-        && content_area.height.saturating_sub(1) >= HERO_ON_LEFT_MIN_AREA_HEIGHT
+/// Resolves the only shared responsive decision for hero-bearing browsers and
+/// returns the pane geometry when the wide presentation fits. Callers provide
+/// content; they do not own a breakpoint or a height threshold.
+pub(super) fn shared_hero_presentation(content_area: Rect) -> Option<(Rect, Rect)> {
+    (content_area.width >= crate::app::TWO_COLUMN_THRESHOLD
+        && content_area.height.saturating_sub(1) >= HERO_ON_LEFT_MIN_AREA_HEIGHT)
+        .then(|| hero_on_left_panes(content_area))
+}
+
+#[cfg(test)]
+#[allow(clippy::items_after_test_module)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_presentation_owns_breakpoint_and_pane_geometry() {
+        let wide = shared_hero_presentation(Rect {
+            x: 3,
+            y: 4,
+            width: crate::app::TWO_COLUMN_THRESHOLD,
+            height: HERO_ON_LEFT_MIN_AREA_HEIGHT + 1,
+        });
+        assert!(wide.is_some());
+        let Some((left, right)) = wide else {
+            unreachable!();
+        };
+        assert_eq!(left.x, 3);
+        assert_eq!(right.x, left.right() + 2);
+
+        assert!(shared_hero_presentation(Rect {
+            x: 0,
+            y: 0,
+            width: crate::app::TWO_COLUMN_THRESHOLD - 1,
+            height: 20,
+        })
+        .is_none());
+        assert!(shared_hero_presentation(Rect {
+            x: 0,
+            y: 0,
+            width: crate::app::TWO_COLUMN_THRESHOLD,
+            height: HERO_ON_LEFT_MIN_AREA_HEIGHT,
+        })
+        .is_none());
+    }
 }
 
 /// Returns `(left_pane, right_pane)` for the hero-on-left arrangement's
@@ -103,17 +141,13 @@ pub(super) fn hero_on_left_right_pane(
     }
 }
 
-/// Paints the hero-on-left arrangement's right (list) pane border: hero-on-left's
-/// declared variant of the shared [`render_selected_block_borders`] primitive
-/// (design.md decision 6) -- a `▔` top row and a `▁` bottom row, with a
-/// focus-resolved background, one row inside `list_panel`'s own top/bottom
-/// edge. The variant is a separate match arm in `render_selected_block_borders`
-/// (`SelectedBlockBorderStyle::HeroOnLeft`), so a hero-on-left-only change
-/// here can never reach the `legacy top placement` arm legacy top placement's `hero_block_shell`
-/// uses. hero-on-left's own fixed window mirrors `hero_block_shell`'s
+/// Paints the focused browser rail's border using the shared framing primitive:
+/// a `▔` top row and a `▁` bottom row, with a focus-resolved background, one
+/// row inside `list_panel`'s own top/bottom edge. The rail uses the shared
+/// painter's focused-rail framing arm; its fixed window mirrors `hero_block_shell`'s
 /// (`offset = 0`, fully visible, padding rows `[1, height - 2]`); this is
 /// hero-on-left's thin shell entry point, the same role `hero_block_shell`
-/// plays for legacy top placement.
+/// plays for inline presentation.
 pub(super) fn hero_on_left_list_panel_border(f: &mut Frame, list_panel: Rect, focused: bool) {
     if list_panel.height == 0 {
         return;
@@ -132,7 +166,7 @@ pub(super) fn hero_on_left_list_panel_border(f: &mut Frame, list_panel: Rect, fo
         list_panel.height as usize,
         1,
         (list_panel.height as usize).saturating_sub(2),
-        super::SelectedBlockBorderStyle::HeroOnLeft { focused },
+        super::SelectedBlockBorderStyle::FocusedRail { focused },
     );
 }
 
@@ -170,11 +204,11 @@ pub(super) fn hero_on_left_recessed_box(
 }
 
 /// One line of the `Hero` component's hero-on-left text block. Unlike
-/// legacy top placement's single-row, truncated [`super::hero::HeroLine`], hero-on-left
+/// inline presentation's single-row, truncated [`super::hero::HeroLine`], hero-on-left
 /// text wraps across as many rows as it needs (design.md decision 2's
 /// "Consequence": text wrapping moves into `Hero`, screens hand over
 /// unwrapped strings). Style is screen-chosen (e.g. focus-derived bold),
-/// matching how `HeroContent::meta_color` lets a legacy top placement screen pick its
+/// matching how `HeroContent::meta_color` lets an inline browser pick its
 /// own colour.
 pub(super) struct WrappedHeroLine<'a> {
     pub text: &'a str,

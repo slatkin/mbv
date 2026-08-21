@@ -270,9 +270,9 @@ fn narrow_layout_still_renders_hero_chapters_and_browser_together() {
             .position(|target| *target == Some(LibraryRowTarget::Book(0)))
             .expect("narrow selected book row should be mapped") as u16;
     assert_eq!(
-        buffer[(browser.x, selected_row)].style().bg,
-        Some(palette::SURFACE_RESTING),
-        "inline selected book row must use the resting background"
+        layout.selected_item_rect,
+        Some(layout.hero_area),
+        "inline hero must own the selected book geometry"
     );
     let row_text = (browser.x..browser.right())
         .map(|x| buffer[(x, selected_row)].symbol())
@@ -284,14 +284,14 @@ fn narrow_layout_still_renders_hero_chapters_and_browser_together() {
 }
 
 #[test]
-fn narrow_book_detail_is_not_pinned_above_the_browser() {
+fn narrow_book_detail_replaces_the_browser_row() {
     let mut app = make_audiobookshelf_book_app();
     let mut layout = LayoutMain::default();
     let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 20);
 
     assert!(
         layout.hero_area.y >= layout.audiobookshelf_book_right_area.y,
-        "narrow book detail must enter browser flow instead of remaining pinned above it: hero={:?}, browser={:?}",
+        "narrow book detail must replace the selected browser row: hero={:?}, browser={:?}",
         layout.hero_area,
         layout.audiobookshelf_book_right_area
     );
@@ -304,6 +304,27 @@ fn narrow_book_detail_is_suppressed_in_a_short_viewport() {
     let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 4);
 
     assert_eq!(layout.hero_area.height, 0);
+}
+
+#[test]
+fn narrow_book_chapter_target_precedes_parent_hero() {
+    let mut app = make_audiobookshelf_book_app();
+    app.audiobookshelf_book_browse[0].chapter_selection = None;
+    let mut layout = LayoutMain::default();
+    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
+    let (rect, chapter) = layout
+        .audiobookshelf_book_chapter_rows
+        .first()
+        .copied()
+        .expect("narrow book detail must publish chapter targets");
+
+    app.layout.main = layout;
+    app.layout.main.browse_destination = Some(app.tab);
+    assert!(app.click_set_cursor(rect.x + 1, rect.y));
+    assert_eq!(
+        app.audiobookshelf_book_browse[0].chapter_selection,
+        Some(chapter)
+    );
 }
 
 /// The hero must render the book's author, narrator, year, and description
@@ -337,7 +358,7 @@ fn hero_renders_author_narrator_year_and_description() {
     app.tab = TabSelection::AudiobookshelfLibrary(0);
     app.panel_focus = PanelFocus::Library;
 
-    // Narrow (single-column legacy top placement) — 80 cols gives the meta row
+    // Narrow (single-column inline presentation) — 80 cols gives the meta row
     // enough room for the narrator span without truncation.
     let mut layout = LayoutMain::default();
     let out = render_library_to_string_sized(&mut app, &mut layout, 80, 24);

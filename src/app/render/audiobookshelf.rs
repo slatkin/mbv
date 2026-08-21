@@ -4,8 +4,8 @@ use super::detail_series::{
     SERIES_IMAGE_ROWS,
 };
 use super::hero::{
-    inline_detail_flow, selected_detail_shell, HeroContent, HeroImage, ImageTop,
-    HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
+    inline_detail_flow, inline_display_row, inline_display_row_count, selected_detail_shell,
+    HeroContent, HeroImage, ImageTop, InlineDisplayRow, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
 use super::hero_left;
 use super::list_rows::{
@@ -113,8 +113,7 @@ impl App {
         };
 
         let cols = library_column_count(area.width);
-        if hero_left::can_use_hero_on_left(area) {
-            let (hero_panel, right_panel) = hero_left::hero_on_left_panes(area);
+        if let Some((hero_panel, right_panel)) = hero_left::shared_hero_presentation(area) {
             layout.hero_area = hero_panel;
             layout.left_area = right_panel;
             let content = Rect {
@@ -157,11 +156,9 @@ impl App {
         layout.left_area = area;
         let desired_rows =
             self.audiobookshelf_hero_content_rows(index, true) + HERO_BLOCK_EXTRA_ROWS;
-        let hero_rows = desired_rows.min(area.height.saturating_sub(1));
-        let hero_rows = (hero_rows >= HERO_BLOCK_EXTRA_ROWS)
-            .then_some(hero_rows)
+        let hero_rows = (desired_rows >= HERO_BLOCK_EXTRA_ROWS && desired_rows < area.height)
+            .then_some(desired_rows)
             .unwrap_or(0);
-        layout.inline_hero = hero_rows > 0;
         self.render_audiobookshelf_show_rows(f, area, index, focused, cols, hero_rows, layout);
         if hero_rows > 0 {
             let cursor_row = self.audiobookshelf_browse[index].cursor() / cols.max(1);
@@ -175,6 +172,8 @@ impl App {
                 width: area.width,
                 height: hero_rows,
             };
+            layout.inline_hero_area = layout.hero_area;
+            layout.selected_item_rect = Some(layout.hero_area);
             selected_detail_shell(f, layout.hero_area, hero_rows, focused);
             let content = Rect {
                 x: area.x + SELECTED_BLOCK_SIDE_PADDING,
@@ -590,13 +589,7 @@ impl App {
             .iter()
             .position(|row| row.contains(&cursor))
             .unwrap_or(0);
-        let mut display_rows = rows.clone();
-        if hero_rows > 0 {
-            display_rows.splice(
-                cursor_row + 1..cursor_row + 1,
-                (0..hero_rows).map(|_| Vec::new()),
-            );
-        }
+        let total_display = inline_display_row_count(rows.len(), cursor_row, hero_rows);
         let visible = area.height as usize;
         let scroll = if hero_rows > 0 {
             inline_detail_flow(cursor_row, hero_rows, area.height, state.scroll)
@@ -608,54 +601,79 @@ impl App {
         };
         state.scroll = scroll;
         let cell_width = library_cell_width(area, cols) as usize;
-        let items = display_rows
-            .iter()
-            .skip(scroll)
+        let items = (scroll..total_display)
             .take(visible)
-            .map(|indices| {
-                let mut spans = Vec::new();
-                for (cell, index) in indices.iter().enumerate() {
-                    let selected = *index == cursor;
-                    let title = if selected && hero_rows > 0 {
-                        String::new()
-                    } else {
-                        trunc_str(&state.shows[*index].title, cell_width.saturating_sub(2))
-                    };
-                    let pad_to = if cell + 1 == indices.len() {
-                        cell_width
-                    } else {
-                        cell_width + LIBRARY_COLUMN_GAP as usize
-                    };
-                    spans.extend(item_cell_spans(
-                        title,
-                        String::new(),
-                        selected,
-                        focused_or_subtle(focused),
-                        pad_to,
-                    ));
+            .map(|display_row| {
+                match inline_display_row(rows.len(), cursor_row, hero_rows, display_row)
+                    .expect("visible row is within the replacement flow")
+                {
+                    InlineDisplayRow::Replacement => ListItem::new(Line::default()),
+                    InlineDisplayRow::Source(source_row) => {
+                        let indices = &rows[source_row];
+                        let mut spans = Vec::new();
+                        for (cell, index) in indices.iter().enumerate() {
+                            let selected = *index == cursor;
+                            let title =
+                                trunc_str(&state.shows[*index].title, cell_width.saturating_sub(2));
+                            let pad_to = if cell + 1 == indices.len() {
+                                cell_width
+                            } else {
+                                cell_width + LIBRARY_COLUMN_GAP as usize
+                            };
+                            spans.extend(item_cell_spans(
+                                title,
+                                String::new(),
+                                selected,
+                                focused_or_subtle(focused),
+                                pad_to,
+                            ));
+                        }
+                        ListItem::new(Line::from(spans))
+                    }
                 }
-                ListItem::new(Line::from(spans))
             })
             .collect::<Vec<_>>();
-        layout.left_row_map = display_rows
-            .iter()
-            .skip(scroll)
+        layout.left_row_map = (scroll..total_display)
             .take(visible)
-            .map(|row| row.first().copied())
+            .map(|display_row| {
+                match inline_display_row(rows.len(), cursor_row, hero_rows, display_row)
+                    .expect("visible row is within the replacement flow")
+                {
+                    InlineDisplayRow::Replacement => (display_row == cursor_row).then_some(cursor),
+                    InlineDisplayRow::Source(source_row) => rows[source_row].first().copied(),
+                }
+            })
             .collect();
-        layout.left_item_rows = display_rows;
+        layout.left_item_rows = (0..total_display)
+            .map(|display_row| {
+                match inline_display_row(rows.len(), cursor_row, hero_rows, display_row)
+                    .expect("display row is within the replacement flow")
+                {
+                    InlineDisplayRow::Replacement => {
+                        if display_row == cursor_row {
+                            vec![cursor]
+                        } else {
+                            Vec::new()
+                        }
+                    }
+                    InlineDisplayRow::Source(source_row) => rows[source_row].clone(),
+                }
+            })
+            .collect();
         layout.left_screen_offset = scroll;
         f.render_widget(List::new(items), area);
-        if focused && layout.left_item_rows.len() > visible {
+        if focused && total_display > visible {
             super::render_right_scrollbar(
                 f,
                 area,
-                layout.left_item_rows.len().saturating_sub(visible),
+                total_display.saturating_sub(visible),
                 scroll,
                 palette::SCROLLBAR,
             );
         }
-        draw_column_selection_markers(f, area, cursor, &layout.left_item_rows, scroll);
+        if hero_rows == 0 {
+            draw_column_selection_markers(f, area, cursor, &layout.left_item_rows, scroll);
+        }
     }
 }
 

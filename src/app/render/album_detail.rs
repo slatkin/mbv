@@ -91,7 +91,7 @@ impl App {
         flush_left: bool,
         show_hint: bool,
         art_reserved_w: u16,
-        _layout: &mut LayoutMain,
+        layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;
@@ -345,6 +345,24 @@ impl App {
         .column_spacing(1)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);
+
+        layout
+            .wide_music_track_hitmap
+            .extend(items.iter().enumerate().skip(state.offset()).scan(
+                table_area.y,
+                |y, (index, item)| {
+                    let title = track_title(item);
+                    let height = wrap(&title, title_col_w.max(1)).len().max(1) as u16;
+                    let rect = Rect {
+                        x: table_area.x,
+                        y: *y,
+                        width: table_area.width,
+                        height: height.min(table_area.bottom().saturating_sub(*y)),
+                    };
+                    *y = (*y).saturating_add(height);
+                    (rect.height > 0).then_some((rect, index))
+                },
+            ));
 
         let visible_rows = table_area.height as usize;
         if !selected_region_gutter && n > visible_rows {
