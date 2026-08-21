@@ -1,49 +1,90 @@
-## 1. Establish The UI Boundary
+Steps 1–5 are separate PRs, in order. Step 5 repeats per surface and is tracked in
+`ledger.md`. Nothing in step 5 starts before step 1 merges.
 
-- [ ] 1.1 Map every current render module and independently rendered surface into canonical screen, arrangement, component, or theme responsibilities without changing behaviour. Record the settled hero-on-left-wide / selected-row-replacement-narrow baseline, make the normative no-grandfathering scope explicit, and confirm that no current surface is classified as bespoke.
-- [ ] 1.2 Define the approved distributed component and arrangement boundaries, plus the future bespoke component/arrangement path, and document which modules may perform direct Ratatui painting across the whole current render tree; screen modules only compose semantic data, require one authoritative owner per concern, and do not create a monolithic renderer.
-- [ ] 1.3 Narrow theme access so screen code consumes semantic roles or component policies rather than raw palette primitives. This is a large cross-cutting diff (100+ call sites across `queue.rs`, `detail_series_view.rs`, `music_wide.rs`, `home_hero.rs`, `indicators.rs`, `album_rows.rs`, etc.); use the pilot surfaces to establish the API, then resolve or explicitly classify every remaining access rather than deferring it to a child migration issue.
-- [ ] 1.4 Define typed, centrally owned policy and variant representations for the pilot arrangement, including the closed approved hero additional-content styles (Movie overview, TV seasons/pills and episodes, Music tracks), using private fields or sealed implementations where appropriate. Keep style data and interaction state separate from arrangement-owned geometry, and keep every override in the owning central module rather than in surface code.
-- [ ] 1.5 Add the new domain terms (component, arrangement, bespoke surface, policy, variant) to `CONTEXT.md` under Presentation, per the repo term-coordination rule.
-- [ ] 1.6 Record a complete current-surface-to-additional-content-style matrix for every hero-bearing surface, including provider-specific content and row policies; an unmapped surface or bespoke designation is a boundary violation, not deferred child-issue work.
+## 1. Split the render tree (PR 1 — maintainer-decided, mechanical)
 
-## 2. Make Components Own Interaction
+- [ ] 1.1 Create `src/app/render/{screens,arrangements,components,theme}/` and move
+      each existing module's functions per the classification table in `design.md`.
+      Move only — no logic edits in this PR. Existing render tests pass unchanged.
+- [ ] 1.2 Split functions that both read app state and paint at that seam: state half
+      to `screens/`, painting half to `components/`.
+- [ ] 1.3 Split `feeds.rs` (792), `render/mod.rs` (715), `audiobookshelf.rs` (702),
+      and `queue.rs` (697) during the move so nothing crosses the 800-line cap.
+- [ ] 1.4 Verify: `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace
+      --all-targets`, `rtk make check-code-file-lines`. No test file edited except
+      for module paths.
+- [ ] 1.5 Add the new domain terms (component, arrangement, bespoke surface, policy,
+      variant) to `CONTEXT.md` under Presentation, per the repo term-coordination rule.
 
-- [ ] 2.1 Define the typed hit-map/result contract used by interactive components.
-- [ ] 2.2 Migrate the pilot interactive component so its painted layout and hit targets are produced from one geometry calculation.
-- [ ] 2.3 Update the pilot screen and input handling to consume component hit targets instead of reconstructing coordinates.
-- [ ] 2.4 Add focused Ratatui `TestBackend` coverage for the pilot component's visual states and hit-target geometry.
+## 2. Make palette primitives private (PR 2 — compiler-driven)
 
-## 3. Establish The Closed Arrangement Model
-- [ ] 3.3 Move the shared hero-on-left geometry and component composition behind the arrangement boundary while preserving current output.
-- [ ] 3.4 Represent legitimate screen differences as typed content models or named central policies using the approved hero additional-content style family (including Movie overview, TV seasons/pills and episodes, Music tracks, and mapped provider-specific styles), not screen-local painter branches or newly invented styles. The arrangement continues to own geometry for every style.
-- [ ] 3.5 Add focused Rust unit/buffer tests for narrow-width, focus-state, and selected/unselected pilot behavior; keep these tests as component verification, separate from the source-based enforcement checks.
-- [ ] 3.6 Confirm that no current surface requires bespoke status. Define the future process for adding a central bespoke component/arrangement only when a concrete new no-reuse case exists, with its reason and verification coverage; do not use that path to exempt current surfaces.
-- [ ] 3.7 Classify every remaining independently rendered surface and either route it through canonical ownership or register an explicit bespoke component/arrangement with its reason and verification; do not defer current-surface enforcement to a child migration issue.
+- [ ] 2.1 Move the raw `Color` constants from `src/app/palette.rs` into a private
+      module under `render/theme/`; leave only semantic roles public.
+- [ ] 2.2 Build, and fix the ~509 call sites the compiler reports. Where no existing
+      role fits, add a named role rather than re-exporting the primitive.
+- [ ] 2.3 Review the added roles as the substantive output of this step. A role that
+      is a rename of one primitive with no semantic meaning is a bypass.
+- [ ] 2.4 Verify no behaviour change: existing buffer tests pass with no expected-output
+      edits.
 
-## 4. Sync Stale Specs
+## 3. Guidance and bypass checks (PR 3)
 
-- [ ] 4.1 Sync the live arrangement specs with the completed selected-row-replacement-narrow / hero-on-left-wide baseline.
-- [ ] 4.2 Sync the `library-list-hero` and `ui-design-language` live specs with the tightened component-ownership and role-narrowing requirements this change adds.
+- [ ] 3.1 Add mandatory TUI ownership rules to `AGENTS.md`: screens do not call
+      Ratatui, construct rects, or compute hit targets; overrides live in the central
+      owner; new UI work follows the boundary from this PR forward.
+- [ ] 3.2 Add `.opencode/skills/mbv-frontend/SKILL.md` with the reuse workflow, the
+      controlled-override decision table, Ratatui patterns, and a completion checklist
+      covering component ownership, narrow-width behaviour, interaction targets, and
+      buffer tests.
+- [ ] 3.3 Include worked examples distinguishing content changes, named policies,
+      central variants, new components, and bespoke surfaces — showing that none of
+      them permits screen-owned geometry.
+- [ ] 3.4 Add ast-grep rules scoped to `render/screens/`: `use ratatui::`,
+      `render_widget`, `Layout::`, `Rect` construction, `buffer_mut`.
+- [ ] 3.5 State in the skill what the checks do not catch — duplicated arrangement
+      geometry, hit targets drifted from painting — so review knows what it owns.
+- [ ] 3.6 Run the checks against the post-step-1 tree; the screen modules must be
+      clean, since step 1 already moved the painting out.
 
-## 5. Guide Agents And Developers
+## 4. Hit-target ownership: design gate (PR 4 — design only)
 
-- [ ] 5.1 Add concise mandatory TUI architecture and controlled-override requirements to `AGENTS.md`; state explicitly that they are normative requirements, not conventions, and that existing surfaces are not grandfathered.
-- [ ] 5.2 Add the committed `.opencode/skills/mbv-frontend/SKILL.md` with the reuse workflow, decision table, Ratatui patterns, and completion checklist.
-- [ ] 5.3 Include examples distinguishing content changes (including approved hero additional-content styles), named policies, central variants, new components, and explicit bespoke surfaces; show that none of these permits screen-owned geometry.
-- [ ] 5.4 Ensure the guidance requires checking component ownership, narrow-width behaviour, interaction targets, and focused buffer tests before completion.
+- [ ] 4.1 Read `src/app/input_mouse.rs`, `input_mouse_dispatch.rs`, and
+      `input_mouse_panels.rs` and write down how each surface currently resolves a
+      click.
+- [ ] 4.2 Answer, in writing: where the hit map is stored between frames; what
+      invalidates it (resize, tab switch, scroll, repaint-less state change); what a
+      mouse event does before first paint and after resize; whether components publish
+      into a shared map or return one arrangements aggregate.
+- [ ] 4.3 Go/no-go. On go, add the typed hit-map contract and migrate every surface
+      that handles mouse in one PR. On no-go, record the reason, keep the existing
+      coordinate arithmetic, and drop the hit-target requirement from the delta spec.
+- [ ] 4.4 Do not ship a partial migration. Some surfaces on hit maps and the rest on
+      coordinate arithmetic is worse than either alone.
 
-## 6. Detect Common Bypasses
+## 5. Per-surface migration (repeats — one PR per surface)
 
-- [ ] 6.1 Add a practical code-based repository check (ast-grep rule scoped to screen modules, matching the repo's existing tool routing) for direct arrangement bypasses and unapproved painting outside approved UI modules; this source check, not unit-test assertions, enforces the boundary.
-- [ ] 6.2 Add a check or lint for raw `palette::` primitive access in screen modules outside the theme layer.
-- [ ] 6.3 Make exceptions explicit and reviewable rather than silently excluding whole render areas from the checks; require every exception or override to live in a named central component, arrangement, theme, or future bespoke component/arrangement.
-- [ ] 6.4 Add a check or documented test convention for interactive components that do not expose their hit geometry.
-- [ ] 6.5 Run the new checks against the whole existing tree and resolve every violation needed to establish the boundary or add an explicit documented exception; do not defer current-surface enforcement to a child migration issue.
+For each surface in `ledger.md`, in two commits:
 
-## 7. Verify And Document Adoption
+- [ ] 5.1 Commit 1: characterization `TestBackend` buffer test capturing current
+      output — default, focused, narrow-width, and selected states. No production
+      code in this commit.
+- [ ] 5.2 Commit 2: route the surface through arrangement/component ownership. The
+      characterization test is unchanged and still passes.
+- [ ] 5.3 Record the surface's hero additional-content style (Movie overview, TV
+      seasons/pills and episodes, Music tracks, or a mapped provider-specific style)
+      if it is hero-bearing.
+- [ ] 5.4 Represent screen differences as typed content models or named central
+      policies, not screen-local painter branches.
+- [ ] 5.5 If the surface genuinely cannot reuse the vocabulary, register it as a
+      named bespoke component with its reason and its own buffer coverage. It still
+      obeys ownership, semantic styling, and verification rules.
+- [ ] 5.6 Tick the surface off in `ledger.md` in the same PR.
 
-- [ ] 7.1 Run the mbv check, test, lint, and file-size commands (`rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace --all-targets`, `rtk make check-code-file-lines`) for the boundary, pilot migration, and new guidance/skill files.
-- [ ] 7.2 Review the whole-tree implementation, including the pilot diff, for duplicated geometry, raw screen-level styles, independent hit-target calculations, and uncontrolled overrides.
-- [ ] 7.3 Update the UI design-system documentation/spec references with the final module names, complete surface-to-style matrix, and approved exception process.
-- [ ] 7.4 Validate the completed OpenSpec change and confirm every current surface is classified and enforced; child issues may audit compliance or record approved customisations and overrides, but do not carry deferred migration work.
+## 6. Sync specs
+
+- [ ] 6.1 Sync `right-panel-arrangements` with the post-#584 hero-on-left-wide /
+      selected-row-replacement-narrow baseline.
+- [ ] 6.2 Sync `library-list-hero` and `ui-design-language` with the tightened
+      ownership and the private-primitive theme API.
+- [ ] 6.3 Reconcile the `ui-design-system` delta spec with step 4's outcome.
+- [ ] 6.4 `openspec validate` passes.

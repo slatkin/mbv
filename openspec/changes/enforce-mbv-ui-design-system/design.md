@@ -1,183 +1,199 @@
 ## Context
 
-PR #552 extracted shared painters and colour roles. The completed #584 migration
-now provides the settled hero-on-left-wide / selected-row-replacement-narrow baseline across the
-hero-bearing surfaces. The remaining design-system problem is ownership:
-screens still bypass shared geometry, call raw Ratatui APIs, duplicate hit-target
-arithmetic, and select raw palette values directly.
+Ratatui 0.30.2, single Rust binary, `TestBackend` for buffer tests. No separate UI
+crate. Existing arrangement specs are `right-panel-arrangements`,
+`library-list-hero`, and `ui-design-language`; this change extends them.
 
-The UI is a single Rust application using Ratatui 0.30.2 and `TestBackend`; no
-separate UI crate or plugin system exists. The existing arrangement specs are
-`right-panel-arrangements`, `library-list-hero`, and `ui-design-language`; this
-change extends and tightens them rather than superseding them.
+The tree as it stands: `src/app/render/` is 77 files / 23k lines (21k non-test),
+`render/mod.rs` is a flat list of 44 modules, and nothing is labelled a screen or a
+component. `hero.rs`, `list.rs`, `card.rs`, and `queue.rs` each compose *and* paint.
+509 `palette::` references span 56 files. Mouse handling is 1,558 lines in
+`src/app/input_mouse*.rs`, working from app state.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Preserve the completed selected-row replacement / hero-on-left arrangement while enforcing its
-  ownership boundaries.
-- Keep the live arrangement specs aligned with the shipped selected-row-replacement-narrow
-  presentation.
-- Make canonical components and arrangements the owners of geometry, painting,
-  styling, and interaction geometry.
-- Allow screen-specific content and a closed vocabulary of typed visual policies.
-- Make bespoke rendering explicit rather than an accidental local copy.
-- Give agents precise repository rules and a repeatable UI workflow.
-- Add lightweight mechanical checks. Retain focused buffer/layout tests as
-  supporting component verification, not as the architecture enforcement
-  mechanism.
-- Add the new domain terms (component, arrangement, bespoke surface, policy,
-  variant) to `CONTEXT.md` per the repo term-coordination rule.
+- Give the ownership rules a module structure to attach to.
+- Make the palette rule compiler-enforced rather than reviewer-enforced.
+- Preserve existing visual output, proven per surface by a characterization test.
+- Give agents a boundary they cannot each define differently.
+- Ship in independently mergeable steps.
 
 **Non-Goals:**
 
-- Redesign every existing screen's visual presentation in one migration. This
-  change does require ownership classification and enforcement for every current
-  surface while preserving its output unless separate visual work changes it.
-- Make mbv a general-purpose UI framework or support third-party UI plugins.
-- Change user-facing visual design as part of the boundary work alone.
+- Redesign any screen's visual presentation.
+- Make mbv a general-purpose UI framework or support UI plugins.
+- Migrate every surface before this change can close. The ledger tracks the
+  remainder.
 - Move application state or provider logic into the UI layer.
-- Supersede the existing `right-panel-arrangements`, `library-list-hero`, or
-  `ui-design-language` specs; this change extends and tightens them.
+- Supersede `right-panel-arrangements`, `library-list-hero`, or
+  `ui-design-language`.
 
 ## Decisions
 
+### Screen / arrangement / component classification (step 1)
+
+The split is decided by one criterion, applied per function, so two agents reach
+the same answer:
+
+| Takes | Is a | May |
+|---|---|---|
+| `&App` / app state, returns nothing | **screen** | call arrangements, build typed content models |
+| typed content model + `Rect` + `&mut Buffer` | **component** | paint, compute its own geometry |
+| typed content model + `Rect`, places components | **arrangement** | own breakpoints, split rects, place components |
+
+A function that reads app state *and* paints is split at that seam; the state-reading
+half stays in the screen module, the painting half moves. Screen modules end up with
+no `use ratatui::` beyond re-export types, no `Layout::`, no `Rect` construction.
+
+Target layout:
+
+```text
+src/app/render/screens/      -- app state in, typed models out
+src/app/render/arrangements/ -- placement, breakpoints, rect splitting
+src/app/render/components/   -- painting, self-owned geometry
+src/app/render/theme/        -- roles public, primitives private
+```
+
+The move is mechanical and behaviour-preserving. Files near the 800-line cap
+(`feeds.rs`, `mod.rs`, `audiobookshelf.rs`, `queue.rs`) split during the move.
+
+This boundary is settled by the maintainer in step 1 and is not re-litigated by
+per-surface work. Everything downstream depends on it, so nothing else starts
+first.
+
+### Palette: primitives private (step 2)
+
+`src/app/palette.rs:51-69` currently defines roles as public aliases of public raw
+constants in the same file:
+
+```rust
+pub const SURFACE_FOCUSED: Color = BG_GREEN;
+pub const ACCENT: Color = AQUA;
+```
+
+Rewriting call sites to prefer the alias enforces nothing — `BG_GREEN` stays
+reachable. Instead: primitives move to a private module inside `theme/`, roles
+become the only public surface, and the compiler produces the call-site diff. Where
+no role fits a site, a role is added; the added roles are the real output of this
+step and are worth reviewing.
+
+This is the one place where the rule needs no check, no lint, and no reviewer.
+
+### Components own hit targets — pending a design gate (step 4)
+
+Components deriving hit targets from their painted geometry is correct in principle.
+It is not yet designed, because the consumer is not a screen:
+`input_mouse_panels.rs` handles a mouse event on a later tick, from app state
+(`row >= content_top`), not from render output.
+
+Making this work requires a render→input channel with answers to:
+
+- who stores the hit map between frames, and where
+- what invalidates it (resize, tab switch, scroll, state change without repaint)
+- what a mouse event does before the first paint, or after a resize but before the
+  next paint
+- whether components publish into a shared map or return one that arrangements
+  aggregate upward
+
+Step 4 produces those answers as a written design against the real files, then a
+go/no-go. If it does not fall out cleanly, hit-target ownership is deferred and the
+existing coordinate arithmetic stays — one consistent mechanism. A partial
+migration leaving some surfaces on hit maps and the rest on coordinate math is the
+worst outcome available and is explicitly out of bounds.
+
 ### Closed structural vocabulary, extensible content
 
-Arrangements, components, and structural visual variants are closed and centrally
-defined. Screen models remain extensible for titles, metadata, rows, images, and
-other semantic content. This preserves consistency without forcing every content
-difference into the central component.
+Arrangements, components, and structural variants are closed and centrally defined.
+Screen models stay extensible for titles, metadata, rows, and images.
 
-An enum or sealed trait is preferred for a small closed variant set. Policy
-constructors should expose named valid combinations rather than public booleans
-that permit invalid combinations. A registration-based extension trait was
-rejected because it would allow arbitrary Ratatui painting and would restore the
+An enum or sealed trait for a small closed variant set; policy constructors exposing
+named valid combinations rather than public booleans. A registration-based extension
+trait was rejected — it permits arbitrary Ratatui painting and restores the
 convention-only failure mode.
 
-Screens may select a centrally named policy or variant and provide semantic data,
-but they may not implement an override. Every structural, styling, geometry, or
-interaction override belongs in the central component, arrangement, theme, or
-future bespoke component/arrangement that owns it.
+Screens select a named policy or variant and supply semantic data. Overrides live in
+the owning central component, arrangement, or theme.
 
-### Hero additional-content styles do not bypass geometry requirements
+### Hero additional-content styles
 
-The hero has a closed family of approved additional-content styles already
-represented by the existing surfaces. This family includes the Movie
-overview/detail block, the TV season/pill and episode workspace, the Music
-track-list workspace, and the other provider-specific styles already in use.
-Provider data and row semantics remain extensible inside a style, and existing
-preview or focusable child states remain valid, but screens do not invent another
-additional-content style. A genuinely new style or override is a central
-design-system change implemented by its owning component or arrangement, not a
-screen-local exception.
+The hero has a closed family of approved styles already represented in the tree: the
+Movie overview/detail block, the TV season/pill and episode workspace, the Music
+track-list workspace, and the other provider-specific styles in use. Provider data
+and row semantics stay extensible within a style; screens do not invent another one.
 
-The implementation must produce a complete matrix mapping every current
-hero-bearing surface to one approved style (and any centrally defined content or
-row policy it uses). The matrix is part of enforcement: an unmapped surface is a
-violation, not a future child-issue migration.
+Each surface is mapped to its style as part of that surface's migration, not as an
+up-front matrix — the mapping is only trustworthy once someone has read the surface
+closely enough to move it.
 
-The initial matrix contains no bespoke surfaces. Every existing render surface is
-classified under canonical screen, arrangement, component, or theme ownership.
-Bespoke rendering is a future extension path and may be introduced only when a
-concrete new surface cannot reuse the canonical vocabulary and its central owner,
-reason, and verification are defined at that time.
-
-Screens provide the data and interaction state for an approved style; they do not
-provide layout rectangles, row arithmetic, spacing, breakpoints, or renderer
-callbacks.
-
-The arrangement owns the geometry for every mode, including pane placement,
-available-height budgeting, image/text stacking, optional-block placement,
-responsive presentation, and aggregation of child hit targets. A mode may change
-which semantic child content exists or whether that child content can receive
-focus, but it does not create a screen-local geometry exception. Read-only modes
-remain inert; focusable modes use the shared focus and hit-target contracts.
-
-### Components own hit targets
-
-Interactive components will derive hit targets from their layout and return or
-publish a typed hit map alongside their render result. Screens will consume those
-targets rather than repeating coordinate arithmetic. Ratatui's `Widget` and
-`StatefulWidget` remain useful painting primitives, but they do not provide this
-ownership themselves, so hit-target output is an mbv design-system responsibility.
+Screens supply data and interaction state. The arrangement owns pane placement,
+height budgeting, image/text stacking, optional-block placement, and responsive
+presentation.
 
 ### Semantic theme API
 
-Components consume semantic theme roles or component style policies. Raw palette
-primitives remain implementation details of the theme layer wherever practical.
-Screens should not pass arbitrary `Color` or `Style` values into shared components.
-This retains the current role-based direction while making the API narrower and
-more difficult to bypass.
+Components consume semantic roles or component style policies. Screens do not pass
+arbitrary `Color` or `Style` into shared components. Step 2 makes this structural.
+
+### Enforcement, honestly
+
+Three mechanisms, in descending order of strength:
+
+1. **The compiler** — private palette primitives. Cannot be bypassed.
+2. **ast-grep, path-scoped** — `use ratatui::`, `render_widget`, `Layout::`, and
+   `Rect` construction inside `screens/`. Catches the common bypass; catches
+   nothing subtler.
+3. **Review, against the skill's checklist** — duplicated arrangement geometry,
+   hit targets drifted from painting. These are the failures the change exists to
+   prevent, and no static check finds them.
+
+The earlier draft named the source check as *the* enforcement mechanism. It is not:
+ast-grep can find `render_widget` under a path and no more. Step 1 exists precisely
+so that mechanism 2 has a path to scope to, and mechanism 3 has a name for what it
+is reviewing. Buffer tests verify component behaviour and preserved output; they do
+not establish conformance.
+
+### Migration gate: characterization test first
+
+Buffer coverage is uneven. `list_tests.rs` (758 lines) and `movies_wide_tests.rs`
+(359) pin the list/hero paths well. The 12 overlay files (~90KB) have essentially
+none, and four surfaces queued for migration are overlays.
+
+So each surface migration lands in two commits: the characterization `TestBackend`
+test first, proving current output; then the migration, with that test unchanged.
+Migrating an untested overlay is a blind refactor and "output preserved" is an
+unverifiable claim there.
 
 ### Layered module boundary
 
-The UI will be organised conceptually as:
-
 ```text
-screen models -> arrangements -> components -> Ratatui
-                         \-> hit maps
+screens -> arrangements -> components -> Ratatui
+                   \-> hit maps (step 4, if it clears)
 ```
 
-Module visibility, private theme primitives, typed component APIs, and the explicit
-future bespoke component/arrangement path provide the first boundary. A separate
-crate is not required for the initial migration because it would add coupling and
-move code without solving all same-crate import bypasses.
+Module visibility, private theme primitives, and typed component APIs are the
+boundary. A separate crate is not required and would not close same-crate import
+bypasses.
 
-Centralisation means one authoritative owner and vocabulary for each geometry,
-style, interaction, and bespoke concern; it does not mean one monolithic renderer.
-Arrangements, components, theme modules, and any future named bespoke
-component/arrangement remain distributed and independently testable, while screen
-modules only compose them and provide semantic data. Screen modules do not call
-Ratatui, construct layout rectangles, or calculate hit targets.
-
-### Guidance plus mechanical detection
-
-`AGENTS.md` will contain concise mandatory rules. The `mbv-frontend` skill will
-contain the decision workflow, examples, and completion checklist. These documents
-describe and reinforce the normative requirements; they do not turn them into
-optional conventions or define a grandfathering path. Source checks or lint
-configuration enforce common forbidden patterns and ownership boundaries. Ratatui
-buffer/layout and unit tests verify component behavior, but their assertions are
-supporting verification rather than the conformance mechanism. Documentation alone
-is insufficient; mechanical checks alone cannot judge every legitimate exception.
-
-### Whole-tree enforcement with representative implementation
-
-`#563` closes only after the whole current render tree has been classified and
-brought inside the ownership boundary. Every independently rendered surface is
-either routed through canonical screen, arrangement, component, and theme
-modules or is an explicitly named bespoke surface with a documented reason,
-ownership, semantic styling, hit geometry, and focused verification. No surface
-may remain an informal exception. These are mandatory requirements with no
-grandfathering, not conventions that a screen may choose to follow.
-
-An approved customisation is therefore a named central implementation decision,
-not permission for a surface to paint locally. Child issues may document and audit
-that decision, but they cannot grant a surface-local override.
-
-The hero-on-left arrangement and one interactive component may serve as the
-representative implementation used to establish the APIs, but that pilot does
-not limit the compliance scope. Existing visual output is preserved; visual
-redesigns are separate work. Child issues record audits and approved
-customisations or overrides against this enforced tree and must not defer
-classification, ownership, or enforcement for a current surface. New UI work
-must follow the boundary immediately after the guidance and initial checks land.
+Centralisation means one authoritative owner per geometry, style, and interaction
+concern — not one monolithic renderer. Arrangements and components stay distributed
+and independently testable.
 
 ## Risks / Trade-offs
 
-- [Risk] The closed vocabulary can make legitimate new UI work feel centralised
-  in one module. -> Keep content models extensible and make named policy/variant
-  additions small and well-tested.
-- [Risk] Source checks may flag legitimate low-level component code. -> Run checks
-  across the whole render tree while allowing direct Ratatui access only in named
-  component, arrangement, theme, or future bespoke component/arrangement.
-- [Risk] Existing render modules contain mixed screen and component logic. ->
-  Classify and isolate ownership as part of this change while preserving output;
-  separate visual redesigns are not required.
-- [Risk] Agent skills can be ignored or unavailable in another environment. -> Put
-  non-negotiable rules in `AGENTS.md` and keep the skill as workflow guidance.
-- [Risk] Ratatui's buffer escape hatch permits bypasses inside the crate. -> Keep
-  direct buffer access inside approved component/arrangement modules and make
-  exceptions explicit in review.
+- [Risk] The step-1 module move is a large mechanical diff that could hide a
+  behaviour change. -> Move only; no logic edits in the same commit. Existing
+  render tests must pass unchanged.
+- [Risk] Step 2 surfaces sites where no semantic role fits, tempting a
+  pass-through alias. -> Adding a role is the correct answer and is reviewable;
+  a `TEXT`-shaped escape hatch is not.
+- [Risk] The ledger stops shrinking and the change stalls half-done. -> Accepted.
+  Half-done here is a strictly better tree than today's, and enforcement still
+  applies to everything anyone touches.
+- [Risk] Closed vocabulary makes new UI work feel bottlenecked in one module.
+  -> Keep content models extensible; keep named policy additions small.
+- [Risk] Agent skills can be ignored or unavailable elsewhere. -> Non-negotiable
+  rules in `AGENTS.md`; the skill carries workflow.
+- [Risk] Ratatui's buffer escape hatch permits in-crate bypasses. -> Confined to
+  `components/` by the ast-grep scope; visible in review.
