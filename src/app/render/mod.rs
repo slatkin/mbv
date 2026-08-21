@@ -75,7 +75,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 use std::time::Instant;
-use visualizer::VISUALIZER_HEIGHT;
 
 // Test-only: these names are otherwise unused in the production build (their
 // only production callers moved into chrome.rs/widgets.rs, which
@@ -438,7 +437,6 @@ impl App {
             height: 1,
         };
 
-        let mut visualizer_h: u16 = 0;
         let (lib_area, queue_area) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
             (right_area, Rect::default())
         } else {
@@ -474,18 +472,6 @@ impl App {
                         now_playing_title,
                         palette::SURFACE_CHROME,
                     );
-                    // Fill leftover space below the playback content with the
-                    // visualizer when enabled; otherwise it stays SURFACE_CHROME.
-                    let wide_viz_h = card_h.saturating_sub(player_h);
-                    if self.visualizer_enabled && wide_viz_h >= 3 {
-                        let wide_viz_area = Rect {
-                            x: panel_area.x,
-                            y: panel_area.y + player_h,
-                            width: panel_area.width,
-                            height: wide_viz_h,
-                        };
-                        self.render_visualizer(f, wide_viz_area, palette::SURFACE_CHROME);
-                    }
                 } else {
                     let panel_area = Rect {
                         x: left_content.x,
@@ -507,17 +493,7 @@ impl App {
                 }
             }
 
-            // Reserve space for visualizer at the bottom of the queue panel.
-            // Wide queue-only mode shows the visualizer inside the playback
-            // panel instead, so it's not duplicated here.
-            visualizer_h = if !is_wide && self.visualizer_enabled && left_remaining >= 3 {
-                left_remaining.min(VISUALIZER_HEIGHT)
-            } else {
-                0
-            };
-            let queue_h = left_remaining
-                .saturating_sub(visualizer_h)
-                .saturating_sub(1);
+            let queue_h = left_remaining.saturating_sub(1);
             (
                 right_area,
                 Rect {
@@ -610,33 +586,6 @@ impl App {
                         );
                     }
                 }
-            }
-
-            // Render visualizer at the bottom of the left panel (within queue panel bounds)
-            if self.visualizer_enabled && visualizer_h >= 3 {
-                let left_viz_area = Rect {
-                    x: left_content.x,
-                    y: left_content.y + left_content.height.saturating_sub(visualizer_h),
-                    width: left_content.width,
-                    height: visualizer_h,
-                };
-                self.render_visualizer(f, left_viz_area, palette::SURFACE_BACKDROP);
-                // Render horizontal rule at the bottom of the left visualizer
-                let bottom_y = left_viz_area.y + left_viz_area.height - 1;
-                let hr_text = "▁".repeat(left_viz_area.width as usize);
-                let hr_line = Line::from(Span::styled(
-                    hr_text,
-                    Style::default()
-                        .fg(palette::SEEK_TRACK)
-                        .bg(palette::SURFACE_BACKDROP),
-                ));
-                let hr_area = Rect {
-                    x: left_viz_area.x,
-                    y: bottom_y,
-                    width: left_viz_area.width,
-                    height: 1,
-                };
-                f.render_widget(Paragraph::new(vec![hr_line]), hr_area);
             }
         }
         if right_visible {

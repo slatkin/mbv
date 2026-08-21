@@ -2,7 +2,7 @@ use super::RENDER_FILTER;
 use crate::app::images::{
     audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key, QUEUE_CARD_PLACEHOLDER_KEY,
 };
-use crate::app::{palette, App};
+use crate::app::{palette, App, PanelFocus};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::Rect;
@@ -37,7 +37,7 @@ impl App {
         left_align: bool,
     ) -> (u16, u16, bool) {
         // On short terminals (<= 30 rows) cap the card image at 12 rows so the queue
-        // list keeps adequate space; taller terminals cap at 18 rows.
+        // list keeps adequate space; taller terminals cap at 24 rows.
         let max_h = max_h.min(if self.terminal_height <= 30 { 12 } else { 24 });
         let image_loading = self.card_image_loading.contains(cache_key);
         let actual_size = if let Some(state) = self.cached_image_protocol_mut(cache_key) {
@@ -85,13 +85,23 @@ impl App {
         // No image loaded yet — if a fetch is in-flight and we have never
         // rendered a card before, reserve the full height cap so the queue
         // panel doesn't expand then collapse when the first image arrives.
+        let reservation = if self.last_card_height == 0 && image_loading {
+            self.card_reserved_rect(area, left_align)
+        } else {
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: self.last_card_height,
+            }
+        };
         let placeholder = if self.last_card_height == 0 && image_loading {
-            max_h
+            reservation.height
         } else {
             self.last_card_height
         };
         let placeholder_w = if self.last_card_width == 0 && image_loading {
-            area.width
+            reservation.width
         } else {
             self.last_card_width
         };
@@ -104,12 +114,7 @@ impl App {
         if image_loading && placeholder > 0 {
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
-                Rect {
-                    x: area.x,
-                    y: area.y,
-                    width: area.width,
-                    height: placeholder,
-                },
+                reservation,
             );
         }
         (placeholder, placeholder_w, image_loading)
@@ -182,15 +187,81 @@ impl App {
             left_align,
         );
         if rendered == (0, 0, false) {
-            (
-                area.height
-                    .min(if self.terminal_height <= 30 { 12 } else { 24 }),
-                area.width,
-                false,
-            )
+            let rect = self.card_reserved_rect(area, left_align);
+            (rect.height, rect.width, false)
         } else {
             rendered
         }
+    }
+
+    /// The rectangle the queue card reserves for artwork: the last rendered
+    /// image/visualizer size, or the full reserved slot (capped like the
+    /// artwork height) before anything has rendered. Used by both the blank
+    /// reservations and the visualizer so `v` never moves the queue list.
+    fn card_reserved_rect(&self, area: Rect, left_align: bool) -> Rect {
+        let max_h = area
+            .height
+            .min(if self.terminal_height <= 30 { 12 } else { 24 });
+        let height = if self.last_card_height == 0 {
+            // Keep the queue title separator and one queue row visible when
+            // the card area is shorter than its normal image cap.
+            if max_h == area.height {
+                max_h.saturating_sub(2)
+            } else {
+                max_h
+            }
+        } else {
+            self.last_card_height
+        };
+        let width = if self.last_card_width == 0 {
+            if left_align {
+                height.saturating_mul(2).min(area.width)
+            } else {
+                area.width
+            }
+        } else {
+            self.last_card_width
+        };
+        let x = if left_align {
+            area.x
+        } else {
+            area.x + (area.width.saturating_sub(width)) / 2
+        };
+        Rect {
+            x,
+            y: area.y,
+            width: width.min(area.width),
+            height: height.min(area.height),
+        }
+    }
+
+    /// Renders the selected visualizer into the queue card's reserved artwork
+    /// rectangle and returns the geometry the artwork/placeholder path would
+    /// return, so toggling `v` never moves the queue list. Capture eligibility
+    /// is a separate concern (`sync_visualizer`); here an empty sample window
+    /// just paints the cleared vectorscope background.
+    fn render_card_visualizer(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        left_align: bool,
+    ) -> (u16, u16, bool) {
+        let rect = self.card_reserved_rect(area, left_align);
+        let bg = palette::resolve_surface_focus(matches!(
+            self.effective_panel_focus(),
+            PanelFocus::Queue
+        ));
+        self.render_visualizer(f, rect, bg);
+        (rect.height, rect.width, false)
+    }
+
+    /// Blank artwork reservation for terminal-images-disabled use: keeps the
+    /// same fallback rectangle the placeholder path uses when it cannot
+    /// render, without fetching or painting any artwork. Returns the same
+    /// geometry as `render_card_visualizer` so `v` never moves the queue.
+    fn render_blank_card_reservation(&mut self, area: Rect, left_align: bool) -> (u16, u16, bool) {
+        let rect = self.card_reserved_rect(area, left_align);
+        (rect.height, rect.width, false)
     }
 
     /// Renders the card image and returns `(rows_used, cols_used, image_loading)`.
@@ -203,6 +274,12 @@ impl App {
         area: Rect,
         left_align: bool,
     ) -> (u16, u16, bool) {
+        if self.visualizer_enabled {
+            return self.render_card_visualizer(f, area, left_align);
+        }
+        if !self.images_enabled() {
+            return self.render_blank_card_reservation(area, left_align);
+        }
         let playback = self.effective_playback_state();
         let active_source = if playback.active {
             let queue = self.playback_queue();
@@ -238,10 +315,7 @@ impl App {
         let img_types = card_image_types(&item.item_type);
         let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
         let cache_key = card_cache_key(&item);
-        let is_music_item = matches!(img_types, &["Primary"] | &["AudioChild"]);
-        if self.images_enabled() || is_music_item {
-            self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
-        }
+        self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
         let use_placeholder = self
             .card_image_states
             .get(&cache_key)
@@ -271,10 +345,7 @@ impl App {
             .collect();
         for (pkey, pid, psid, ptype) in prefetch {
             let ptypes = card_image_types(&ptype);
-            let is_music = matches!(ptypes, &["Primary"] | &["AudioChild"]);
-            if self.images_enabled() || is_music {
-                self.fetch_list_card_image_when_idle(pkey, pid, psid, ptypes);
-            }
+            self.fetch_list_card_image_when_idle(pkey, pid, psid, ptypes);
         }
         if use_placeholder {
             return self.render_card_placeholder(f, area, left_align);
@@ -605,5 +676,111 @@ mod tests {
         assert!(fetch_triggered(&app, "id4:P"));
         assert!(fetch_triggered(&app, "id5:P"));
         assert!(!fetch_triggered(&app, "id0:P"));
+    }
+
+    #[test]
+    fn selected_visualizer_reserves_geometry_without_fetching_artwork() {
+        let mut app = make_queue_app(3, 2);
+        app.image_protocol_enabled = true;
+        app.visualizer_enabled = true;
+
+        let backend = TestBackend::new(30, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut geometry = (0, 0, false);
+        term.draw(|f| {
+            geometry = app.render_card(f, Rect::new(0, 0, 30, 20), false);
+        })
+        .unwrap();
+        let (h, w, loading) = geometry;
+
+        assert!(
+            h > 0 && w > 0,
+            "the selected visualizer must reserve the card rectangle, got ({h},{w})"
+        );
+        assert!(!loading);
+        assert!(
+            !fetch_triggered(&app, "id2:P"),
+            "selecting the visualizer must not fetch artwork"
+        );
+        assert!(!app
+            .card_image_states
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
+        assert_eq!(
+            term.backend().buffer()[(0, 0)].style().bg,
+            Some(crate::app::palette::resolve_surface_focus(false)),
+            "an empty selected visualizer must still paint its reserved card"
+        );
+    }
+
+    #[test]
+    fn selected_visualizer_ignores_confirmed_missing_artwork() {
+        let mut app = make_queue_app(6, 2);
+        app.image_protocol_enabled = true;
+        app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.card_image_states
+            .insert("id2:P".into(), CachedImage::empty());
+        app.visualizer_enabled = true;
+
+        let (h, w, loading) = render_card(&mut app);
+
+        assert!(h > 0 && w > 0);
+        assert!(!loading);
+        assert!(
+            !app.card_image_states
+                .contains_key(QUEUE_CARD_PLACEHOLDER_KEY),
+            "visualizer selection must not fall back to the bundled placeholder"
+        );
+    }
+
+    #[test]
+    fn pending_artwork_keeps_loading_reservation() {
+        let mut app = make_queue_app(3, 1);
+        app.image_protocol_enabled = true;
+        app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
+
+        let (h, w, loading) = render_card(&mut app);
+
+        assert!(
+            loading,
+            "pending artwork must report the in-flight loading reservation"
+        );
+        assert!(
+            h > 0 && w > 0,
+            "the loading reservation must reserve card rows, got ({h},{w})"
+        );
+    }
+
+    #[test]
+    fn images_off_artwork_and_visualizer_return_identical_geometry_without_fetch() {
+        // Terminal images are disabled by default in the stub.
+        let mut app = make_queue_app(3, 2);
+        assert!(!app.images_enabled());
+
+        let artwork = render_card(&mut app);
+        assert!(!fetch_triggered(&app, "id2:P"));
+        assert!(!app
+            .card_image_states
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
+
+        app.visualizer_enabled = true;
+        let visualizer = render_card(&mut app);
+
+        assert!(
+            artwork.0 > 0 && artwork.1 > 0,
+            "artwork selection must keep a blank reservation, got ({},{})",
+            artwork.0,
+            artwork.1
+        );
+        assert_eq!(
+            artwork, visualizer,
+            "images-off artwork and visualizer must keep the same fallback rectangle"
+        );
+        assert!(
+            !fetch_triggered(&app, "id2:P"),
+            "images-off must not fetch artwork"
+        );
+        assert!(app.card_image_states.is_empty());
     }
 }

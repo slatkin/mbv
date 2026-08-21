@@ -51,7 +51,7 @@ The recipe downloads the matching release binary directly from GitHub and verifi
 - **Session control from mbv** — connect to another active Emby session and control it from mbv. `F3` opens the session list. Emby Sessions may advertise private-LAN ctrl and shared-data ports in `supported_commands`.
 - **Playlist integration** — browse Emby playlists, enqueue them, save the current queue back with `Ctrl+S`. Queue source (Playlist, Album, Series, Shuffle, Remote, Collection, Unknown) is preserved.
 - **Normal playback controls** — seek, pause, adjust volume, cycle audio tracks, toggle subtitles, Next Up / Skip Intro prompts.
-- **System-audio visualizer** — press `v` to show a PipeWire stereo vectorscope for the default system output. This intentionally may include audio from other applications; it does not reroute or change mpv playback. Requires PipeWire. Set `[display].visualizer_glyph` to change the point glyph; the default is `●`.
+- **System-audio visualizer** — press `v` to switch the queue card between artwork and a PipeWire stereo vectorscope for the default system output. This intentionally may include audio from other applications; it does not reroute or change mpv playback. Requires PipeWire. Set `[display].visualizer_glyph` to change the point glyph; the default is `●`.
 
 ## mbv-Only Features
 
