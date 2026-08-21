@@ -1,7 +1,3 @@
-use super::feeds_model::{
-    current_time_secs, feed_display_rows, feed_entry_meta_line, feed_hero_content_rows,
-    pack_feed_rows, PackedFeedRow,
-};
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{
     library_cell_width, library_column_count, LIBRARY_COLUMN_GAP,
@@ -18,6 +14,10 @@ use crate::app::render::components::list_rows::{
 };
 use crate::app::render::components::widgets::{
     render_pill_bar, render_placeholder, render_right_scrollbar_with_viewport, PillBar,
+};
+use crate::app::render::screens::feeds_model::{
+    current_time_secs, feed_display_rows, feed_entry_meta_line, feed_hero_content_rows,
+    pack_feed_rows, PackedFeedRow,
 };
 use crate::app::App;
 use ratatui::layout::Rect;

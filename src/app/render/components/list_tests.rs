@@ -1,4 +1,5 @@
 use super::*;
+// Characterization coverage stays beside the moved library component.
 use crate::app::layout::LayoutMain;
 use crate::app::render::components::list_rows::selected_cell_rect;
 use crate::app::tests::{make_app_stub, make_item};

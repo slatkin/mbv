@@ -1,4 +1,5 @@
 use crate::app::layout::LayoutMain;
+// Home feed-group painting belongs to the Home component surface.
 use crate::app::render::components::home_video::render_home_video_item;
 use crate::app::ui_util::*;
 use crate::app::{palette, App};

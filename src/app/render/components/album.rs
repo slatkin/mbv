@@ -1,10 +1,10 @@
-use super::album_plan::{GroupedAlbumDisplayRow, HeaderFocusCtx};
 use crate::app::layout::LayoutMain;
 use crate::app::render::components::album_art::{INLINE_ALBUM_ART_RESERVED, INLINE_ALBUM_ART_ROWS};
 use crate::app::render::components::album_rows::AlbumRowCtx;
 use crate::app::render::components::list_rows::{
     draw_column_selection_markers, selected_cell_rect,
 };
+use crate::app::render::screens::album_plan::{GroupedAlbumDisplayRow, HeaderFocusCtx};
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;

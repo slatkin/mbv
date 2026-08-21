@@ -1,5 +1,7 @@
 use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::hero_left;
+use crate::app::render::arrangements::home as home_arrangement;
+use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::components::hero::{self, HERO_BLOCK_EXTRA_ROWS};
 use crate::app::render::components::home_hero::{
     HeroData, KeepWatchingHeroLayout, WIDE_OVERVIEW_PAD,
@@ -19,14 +21,6 @@ use ratatui::Frame;
 /// (`music_wide.rs`, `audiobookshelf_books.rs`).
 const HOME_HERO_PAD_X: u16 = 2;
 const HOME_HERO_PAD_Y: u16 = 1;
-
-fn inset_pane_vertically(area: Rect) -> Rect {
-    Rect {
-        y: area.y.saturating_add(HOME_HERO_PAD_Y),
-        height: area.height.saturating_sub(HOME_HERO_PAD_Y * 2),
-        ..area
-    }
-}
 
 impl App {
     pub(in crate::app::render) fn render_home_list(
@@ -97,11 +91,7 @@ impl App {
         // (design.md decision 6 -- pill *position* is geometry, not a
         // per-screen declaration).
         let content_offset = if two_column { 1 + pill_gap_rows } else { 2 };
-        let content_area = Rect {
-            y: area.y.saturating_add(content_offset),
-            height: area.height.saturating_sub(content_offset),
-            ..area
-        };
+        let content_area = home_arrangement::content_area(area, content_offset);
 
         let mut rows: Vec<DisplayRow> = Vec::new();
         if self.home.section == 0 {
@@ -172,12 +162,8 @@ impl App {
             };
             hero_panel.height = area.height.saturating_sub(1);
             layout.hero_area = hero_panel;
-            let mut hero_content = Rect {
-                x: hero_panel.x.saturating_add(HOME_HERO_PAD_X),
-                y: hero_panel.y.saturating_add(HOME_HERO_PAD_Y),
-                width: hero_panel.width.saturating_sub(HOME_HERO_PAD_X * 2),
-                height: hero_panel.height.saturating_sub(HOME_HERO_PAD_Y * 2),
-            };
+            let mut hero_content =
+                home_arrangement::panel_content(hero_panel, HOME_HERO_PAD_X, HOME_HERO_PAD_Y);
             let hero_col_height = hero_content.height;
 
             hero_data = match emby_item {
@@ -374,22 +360,18 @@ impl App {
                 .flatten();
             let hero_rows = flow.as_ref().map(|_| desired_hero_rows).unwrap_or(0);
             narrow_hero_rows = hero_rows;
-            let hero_area = flow.map(|flow| Rect {
-                x: content_area.x,
-                y: content_area.y + flow.detail_screen_row as u16,
-                width: content_area.width,
-                height: hero_rows,
+            let hero_area = flow.map(|flow| {
+                home_arrangement::inline_hero_area(content_area, flow.detail_screen_row, hero_rows)
             });
             if let Some(hero_area) = hero_area {
                 layout.hero_area = hero_area;
             }
-            let hero_content = hero_area.map(|hero_area| Rect {
-                x: hero_area.x.saturating_add(SELECTED_BLOCK_SIDE_PADDING),
-                y: hero_area.y.saturating_add(2),
-                width: hero_area
-                    .width
-                    .saturating_sub(SELECTED_BLOCK_SIDE_PADDING * 2),
-                height: hero_rows.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
+            let hero_content = hero_area.map(|hero_area| {
+                library_arrangement::selected_detail_content_area(
+                    hero_area,
+                    SELECTED_BLOCK_SIDE_PADDING,
+                    HERO_BLOCK_EXTRA_ROWS,
+                )
             });
             hero_data = match (dims, hero_content) {
                 (
@@ -435,12 +417,7 @@ impl App {
                 }
                 _ => None,
             };
-            narrow_pills_area = Some(Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
-                height: 1,
-            });
+            narrow_pills_area = Some(home_arrangement::pills_area(area));
             list_area = content_area;
         }
 
@@ -451,22 +428,14 @@ impl App {
         // list takes the full width, same as the single-column layout.
         let wide_pill_section = two_column && hero_data.is_some();
         let (pills_area, green_panel_full): (Rect, Option<Rect>) = if wide_pill_section {
-            let right_area = inset_pane_vertically(list_area);
+            let right_area = library_arrangement::wide_list_area(list_area, 0, HOME_HERO_PAD_Y);
             let right_pane =
                 hero_left::hero_on_left_right_pane(list_area, right_area, HOME_HERO_PAD_Y);
             (right_pane.pills_area, Some(right_pane.list_panel))
         } else if two_column {
             // Wide layout, no hero item: same top-of-area fallback the
             // hero-on-left pane would have used.
-            (
-                Rect {
-                    x: area.x,
-                    y: area.y,
-                    width: area.width,
-                    height: 1,
-                },
-                None,
-            )
+            (home_arrangement::pills_area(area), None)
         } else {
             // Narrow: section pills stay outside the selected detail flow.
             (narrow_pills_area.unwrap_or_default(), None)
@@ -479,12 +448,7 @@ impl App {
                 Block::default().style(Style::default().bg(panel_bg)),
                 list_panel,
             );
-            Rect {
-                x: list_panel.x.saturating_add(HOME_HERO_PAD_X),
-                y: list_panel.y.saturating_add(HOME_HERO_PAD_Y),
-                width: list_panel.width.saturating_sub(HOME_HERO_PAD_X * 2),
-                height: list_panel.height.saturating_sub(HOME_HERO_PAD_Y * 2),
-            }
+            home_arrangement::panel_content(list_panel, HOME_HERO_PAD_X, HOME_HERO_PAD_Y)
         } else {
             list_area
         };
@@ -516,12 +480,7 @@ impl App {
         // layout inherits the ordinary library panel surface (no green
         // focus fill -- Home's panel background matches every other
         // inline browser's regardless of focus).
-        let pill_gap = Rect {
-            x: pills_area.x,
-            y: pills_area.y.saturating_add(1),
-            width: pills_area.width,
-            height: 1,
-        };
+        let pill_gap = home_arrangement::pill_gap(pills_area);
         if pill_gap.y < area.bottom() && pill_gap.width > 0 {
             let panel_bg = palette::SURFACE_BACKDROP;
             f.render_widget(

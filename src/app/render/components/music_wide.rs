@@ -1,16 +1,11 @@
-//! Grouped Music's wide (hero-on-left) rendering: `compute_wide_left_layout`
-//! below is design.md's hero-on-left geometry source (component catalogue,
-//! decision 4), the counterpart to `hero.rs`'s inline presentation
-//! `placement-neutral geometry`. It stays in this file rather than moving into
-//! `hero.rs` because its sizing constants (`PANE_PAD_X`, `PANE_PAD_Y`, ...)
-//! are shared with this file's non-hero list-pane layout below; the pane
-//! split, right-pane pill/list geometry, and hero text paint moved into
-//! `hero.rs` in phase 5 ("Assemble hero-on-left") since those have no
-//! remaining dependency on this file's local constants.
+//! Grouped Music's wide hero-on-left component.
 
 use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::hero_left::{self, WrappedHeroLine};
-use crate::app::render::components::album_art::INLINE_ALBUM_ART_RESERVED;
+use crate::app::render::arrangements::library as library_arrangement;
+use crate::app::render::arrangements::music::{
+    self as music_arrangement, WideMusicLeftLayout, PANE_PAD_X, PANE_PAD_Y,
+};
 use crate::app::{palette, App, PanelFocus};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -18,14 +13,6 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 
-/// Padding inside recessed wide-music blocks, matching the Home overview block.
-const PANE_PAD_X: u16 = 2;
-const PANE_PAD_Y: u16 = 1;
-/// Minimum left-pane height needed to draw a hero/track separator row.
-const MIN_LEFT_HEIGHT_FOR_SEPARATOR: u16 = 6;
-/// Minimum width for the hero metadata column to remain beside the artwork.
-/// Narrower columns move the metadata below the artwork instead.
-const MIN_HERO_METADATA_SIDE_WIDTH: u16 = 15;
 /// Reserved width for the right-aligned track duration column plus its
 /// leading space (`fmt_duration_mmss` output is unbounded but rarely
 /// exceeds this).
@@ -54,145 +41,6 @@ fn wide_album_metadata(album: &mbv_core::api::EmbyItem, artist: &str) -> (String
     (title, album.production_year)
 }
 
-/// Tracks the vertical sub-areas of the wide Music left pane so the
-/// hero and track regions can be allocated independently.
-struct WideLeftLayout {
-    /// Title + metadata + artwork region at the top of the left pane.
-    hero_area: Rect,
-    /// Track list region below the hero.
-    track_area: Rect,
-    /// Artwork sub-rect aligned one row below the pane top and flush with the
-    /// track block's right edge.
-    art_area: Rect,
-    /// Text sub-rect inside `hero_area` (left of artwork).
-    text_area: Rect,
-    /// Whether the hero uses the narrow stacked artwork/metadata layout.
-    stack_metadata: bool,
-}
-
-/// Computes the vertical split of the wide Music left pane between the
-/// hero (title, metadata, artwork) and the persistent track list.
-///
-/// The hero is sized to the artwork (or its compact metadata when images are
-/// disabled), so the track block starts directly below the visible hero.
-/// The track region reserves its own padding and at least one visible content
-/// row when tracks exist.
-fn compute_wide_left_layout(
-    left_area: Rect,
-    images_enabled: bool,
-    track_count: usize,
-) -> WideLeftLayout {
-    let total_h = left_area.height;
-    // Keep the hero/banner inset against the left pane, like the track block
-    // below it, while leaving the pane itself visible around the content.
-    let hero_content_area = Rect {
-        x: left_area.x.saturating_add(PANE_PAD_X),
-        width: left_area.width.saturating_sub(PANE_PAD_X * 2),
-        ..left_area
-    };
-    let art_available = images_enabled && hero_content_area.width >= INLINE_ALBUM_ART_RESERVED;
-    let side_metadata_width = hero_content_area
-        .width
-        .saturating_sub(INLINE_ALBUM_ART_RESERVED);
-    let stack_metadata = art_available && side_metadata_width < MIN_HERO_METADATA_SIDE_WIDTH;
-    // Reserve a separator row between hero and tracks.
-    let sep: u16 = if total_h > MIN_LEFT_HEIGHT_FOR_SEPARATOR {
-        1
-    } else {
-        0
-    };
-
-    // The track block is exactly the loaded track rows plus one padding row at
-    // each edge. Loading and empty states still need one content row.
-    let track_rows = track_count.max(1) as u16;
-    let requested_track_h = track_rows.saturating_add(PANE_PAD_Y * 2);
-
-    // Keep the hero no taller than the artwork. This keeps the track block
-    // directly below the visible cover instead of leaving an empty tail under
-    // the artwork just because the pane happens to be tall.
-    let hero_ideal = if art_available {
-        crate::app::render::components::album_art::INLINE_ALBUM_ART_ROWS
-            .saturating_add(if stack_metadata { 3 } else { 0 })
-    } else {
-        2
-    }
-    .min(total_h.saturating_sub(sep + PANE_PAD_Y * 2));
-    let track_h = requested_track_h.min(total_h.saturating_sub(hero_ideal + sep));
-    let hero_h = hero_ideal.min(total_h.saturating_sub(track_h + sep));
-
-    let hero_area = Rect {
-        x: hero_content_area.x,
-        y: left_area.y,
-        width: hero_content_area.width,
-        height: hero_h,
-    };
-    let track_area = Rect {
-        x: left_area.x,
-        y: left_area.y + hero_h + sep,
-        width: left_area.width,
-        height: track_h,
-    };
-
-    let art_area = if art_available && hero_area.width >= INLINE_ALBUM_ART_RESERVED {
-        let art_width = if stack_metadata {
-            hero_area.width
-        } else {
-            INLINE_ALBUM_ART_RESERVED
-        };
-        Rect {
-            x: if stack_metadata {
-                hero_area.x
-            } else {
-                hero_area.x.saturating_add(
-                    hero_area
-                        .width
-                        .saturating_sub(INLINE_ALBUM_ART_RESERVED)
-                        .saturating_add(PANE_PAD_X),
-                )
-            },
-            y: hero_area.y,
-            width: art_width,
-            height: if stack_metadata {
-                crate::app::render::components::album_art::INLINE_ALBUM_ART_ROWS
-                    .min(hero_area.height)
-            } else {
-                hero_area.height
-            },
-        }
-    } else {
-        Rect::default()
-    };
-    let text_area = if stack_metadata {
-        Rect {
-            x: hero_area.x,
-            y: hero_area.y.saturating_add(art_area.height),
-            width: hero_area.width,
-            height: hero_area.height.saturating_sub(art_area.height),
-        }
-    } else {
-        Rect {
-            width: hero_area.width.saturating_sub(art_area.width),
-            ..hero_area
-        }
-    };
-
-    WideLeftLayout {
-        hero_area,
-        track_area,
-        art_area,
-        text_area,
-        stack_metadata,
-    }
-}
-
-fn inset_pane_vertically(area: Rect) -> Rect {
-    Rect {
-        y: area.y.saturating_add(PANE_PAD_Y),
-        height: area.height.saturating_sub(PANE_PAD_Y * 2),
-        ..area
-    }
-}
-
 impl App {
     /// Renders the wide grouped Music layout: a left pane with album hero
     /// and persistent tracks, and a right pane with music-group pills and
@@ -208,16 +56,13 @@ impl App {
         layout.wide_music_track_hitmap.clear();
         layout.wide_music_art_area = Rect::default();
 
-        let left_content_area = Rect {
-            height: area.height.saturating_sub(1),
-            ..area
-        };
-        let Some((mut left_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
+        let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {
             // Too narrow for wide mode — fall back to narrow rendering.
             self.render_list(f, area, focused, layout);
             return;
         };
-        left_panel.height = left_content_area.height;
+        let left_panel = panes.left_panel;
+        let right_panel = panes.right_panel;
 
         // Keep a library-side separator row below the left pane, while the
         // right pane remains flush with the status bar below the library area.
@@ -236,8 +81,8 @@ impl App {
         // The shared library content area already provides the outer
         // horizontal gutter. Only retain vertical breathing room here so the
         // wide panes do not acquire a second two-column frame.
-        let left_area = inset_pane_vertically(left_panel);
-        let right_area = inset_pane_vertically(right_panel);
+        let left_area = panes.left_area;
+        let right_area = panes.right_area;
         layout.wide_music_right_area = right_area;
 
         // ── Focus state ──────────────────────────────────────────────────
@@ -263,7 +108,7 @@ impl App {
         }
 
         // ── Left pane: hero + tracks ────────────────────────────────────
-        let left_layout = compute_wide_left_layout(
+        let left_layout = music_arrangement::wide_music_left_layout(
             left_area,
             album.is_some() && self.images_enabled(),
             track_count,
@@ -339,15 +184,7 @@ impl App {
         // `browser_area.x` (the row painters' own leading gutter), so inset
         // one cell less than the panel's other padded content to land text
         // at the panel's standard two-column interior inset.
-        let browser_area = Rect {
-            x: list_panel.x.saturating_add(PANE_PAD_X).saturating_sub(1),
-            y: list_panel.y.saturating_add(PANE_PAD_Y),
-            width: list_panel
-                .width
-                .saturating_sub(PANE_PAD_X * 2)
-                .saturating_add(1),
-            height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
-        };
+        let browser_area = music_arrangement::wide_music_browser_area(list_panel);
         if list_panel.height > 0 {
             let list_bg = palette::resolve_surface_focus(right_focused);
             f.render_widget(
@@ -407,7 +244,7 @@ impl App {
     fn render_wide_left_hero(
         &mut self,
         f: &mut Frame,
-        left_layout: &WideLeftLayout,
+        left_layout: &WideMusicLeftLayout,
         album: &mbv_core::api::EmbyItem,
         left_focused: bool,
         library_focused: bool,

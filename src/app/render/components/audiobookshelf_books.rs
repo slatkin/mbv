@@ -14,7 +14,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Cell, Row, Table, TableState};
 use ratatui::Frame;
 
-/// Padding inside recessed wide-book blocks, matching Music's wide layout
+/// Padding inside recessed wide-book blocks, matching Music's wide layout.
 /// (`music_wide.rs::PANE_PAD_X`/`PANE_PAD_Y`) -- duplicated rather than
 /// shared per this change's design (two consumers isn't yet a strong case
 /// for extraction).

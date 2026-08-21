@@ -1,4 +1,5 @@
 use super::*;
+// Characterization coverage stays beside the moved TV component.
 use crate::app::render::test_helpers::render_library_to_string_sized;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, SeriesDetail, TabSelection};

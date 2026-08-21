@@ -1,11 +1,11 @@
-use super::detail_series::{
+use crate::app::layout::LayoutMain;
+use crate::app::render::components::hero::{HeroContent, HeroImage, HeroLine, ImageTop};
+use crate::app::render::components::list_rows::selection_marker;
+use crate::app::render::screens::detail_series::{
     series_meta_line, wrap_overview_lines, SERIES_DETAIL_DIVIDER_ROWS,
     SERIES_DETAIL_EPISODE_ROWS_ESTIMATE, SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS,
     SERIES_IMAGE_PLACEHOLDER_ROWS, SERIES_IMAGE_ROWS,
 };
-use crate::app::layout::LayoutMain;
-use crate::app::render::components::hero::{HeroContent, HeroImage, HeroLine, ImageTop};
-use crate::app::render::components::list_rows::selection_marker;
 use crate::app::render::{render_pill_bar, render_placeholder, MarkerEdge, PillBar, RENDER_FILTER};
 use crate::app::ui_util::*;
 use crate::app::{palette, App};

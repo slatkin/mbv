@@ -1,4 +1,5 @@
 use crate::app::layout::LayoutMain;
+// Music-group selector painting is a component; screen state remains in App.
 use crate::app::render::components::widgets::{render_pill_bar, PillBar};
 use crate::app::ui_util::*;
 use crate::app::App;

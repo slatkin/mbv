@@ -1,4 +1,5 @@
 use crate::app::render::components::home_video::home_panel_scroll;
+// Characterization coverage stays beside the moved Home component.
 
 #[test]
 fn keeps_current_offset_when_row_already_visible() {

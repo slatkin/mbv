@@ -1,4 +1,5 @@
 //! Wide Movies hero-on-left verification (movies-hero-on-left change):
+//! The test remains unchanged apart from its component-module location.
 //! the left pane renders the exact shared Home selected-Emby card (same
 //! image cache key), the right rail holds the pill row + one-column list,
 //! cursor movement stays list-owned, and the read-only hero is never a

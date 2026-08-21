@@ -120,7 +120,7 @@ is its own commit within this PR.
 
 ## 5. Per-surface migration (repeats — one PR per surface, tracked in `ledger.md`)
 
-Migrate the 14 single/dual-file surfaces first (ledger rows 2, 5–19); they're
+Migrate the 16 single/dual-file surfaces first (ledger rows 2, 5–19); they're
 mechanical and validate the flow cheaply. The 3 multi-file surfaces (rows 1, 3,
 4) go last and need an extra step: none of them has an arrangement yet for
 their shared Rect/Layout math, unlike hero-bearing screens
@@ -130,48 +130,48 @@ pattern to reuse.
 
 ### 5.1–5.7 apply to each single/dual-file surface (rows 2, 5–19)
 
-- [ ] 5.1 Commit 1: characterization `TestBackend` buffer test capturing current
+- [x] 5.1 Commit 1: characterization `TestBackend` buffer test capturing current
       output — default, focused, narrow-width, and selected states. No production
       code in this commit.
-- [ ] 5.2 Commit 2: route the surface through arrangement/component ownership. The
+- [x] 5.2 Commit 2: route the surface through arrangement/component ownership. The
       characterization test is unchanged and still passes.
-- [ ] 5.3 Record the surface's hero additional-content style (Movie overview, TV
+- [x] 5.3 Record the surface's hero additional-content style (Movie overview, TV
       seasons/pills and episodes, Music tracks, or a mapped provider-specific style)
       if it is hero-bearing.
-- [ ] 5.4 Represent screen differences as typed content models or named central
+- [x] 5.4 Represent screen differences as typed content models or named central
       policies, not screen-local painter branches.
-- [ ] 5.5 If the surface genuinely cannot reuse the vocabulary, register it as a
+- [x] 5.5 If the surface genuinely cannot reuse the vocabulary, register it as a
       named bespoke component with its reason and its own buffer coverage. It still
       obeys ownership, semantic styling, and verification rules.
-- [ ] 5.6 Tick the surface off in `ledger.md` in the same PR.
-- [ ] 5.7 Repeat 5.1–5.6 until all 14 rows in this group are ticked.
+- [x] 5.6 Tick the surface off in `ledger.md` in the same PR.
+- [x] 5.7 Repeat 5.1–5.6 until all 16 rows in this group are ticked.
 
 ### 5.8–5.15 apply to each multi-file surface (rows 1, 3, 4 — in ledger order)
 
-- [ ] 5.8 Commit 1: characterization tests for every screen file in the surface
+- [x] 5.8 Commit 1: characterization tests for every screen file in the surface
       that doesn't already have one, at the same four states as 5.1.
-- [ ] 5.9 Commit 2: extract the surface's shared Rect/Layout math into a new
+- [x] 5.9 Commit 2: extract the surface's shared Rect/Layout math into a new
       arrangement module, following the `Rect`-in/`Rect`-out shape of
       `arrangements/hero_left.rs` (e.g. `hero_on_left_panes`) — no app state in
       the new functions.
-- [ ] 5.10 Commit 3+: route each screen file in the surface through the new
+- [x] 5.10 Commit 3+: route each screen file in the surface through the new
       arrangement and existing components, one file per commit.
       Characterization tests unchanged and still pass after each commit.
-- [ ] 5.11 Record hero additional-content style for any hero-bearing screen in
+- [x] 5.11 Record hero additional-content style for any hero-bearing screen in
       the surface.
-- [ ] 5.12 Represent screen differences as typed content models or named
+- [x] 5.12 Represent screen differences as typed content models or named
       central policies, not screen-local painter branches.
-- [ ] 5.13 If a screen genuinely cannot reuse existing vocabulary, register it
+- [x] 5.13 If a screen genuinely cannot reuse existing vocabulary, register it
       as a named bespoke component with its reason and its own buffer
       coverage.
-- [ ] 5.14 Tick the surface off in `ledger.md` in the same PR.
-- [ ] 5.15 Repeat 5.8–5.14 until all 3 rows in this group are ticked.
+- [x] 5.14 Tick the surface off in `ledger.md` in the same PR.
+- [x] 5.15 Repeat 5.8–5.14 until all 3 rows in this group are ticked.
 
 ## 6. Sync specs
 
-- [ ] 6.1 Sync `right-panel-arrangements` with the post-#584 hero-on-left-wide /
+- [x] 6.1 Sync `right-panel-arrangements` with the post-#584 hero-on-left-wide /
       selected-row-replacement-narrow baseline.
-- [ ] 6.2 Sync `library-list-hero` and `ui-design-language` with the tightened
+- [x] 6.2 Sync `library-list-hero` and `ui-design-language` with the tightened
       ownership and the private-primitive theme API.
-- [ ] 6.3 Reconcile the `ui-design-system` delta spec with step 4's outcome.
-- [ ] 6.4 `openspec validate` passes.
+- [x] 6.3 Reconcile the `ui-design-system` delta spec with step 4's outcome.
+- [x] 6.4 `openspec validate` passes.

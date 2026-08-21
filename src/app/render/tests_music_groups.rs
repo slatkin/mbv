@@ -1,4 +1,4 @@
-use super::screens::album::AlbumRowsCursorCtx;
+use super::components::album::AlbumRowsCursorCtx;
 use super::screens::album_plan::{
     sorted_group_album_order, GroupedAlbumDisplayRow, HeaderFocusCtx,
 };

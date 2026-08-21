@@ -1,12 +1,13 @@
 use super::detail::compact_banner_image_cache_key;
 use crate::app::layout::LayoutMain;
+use crate::app::render::arrangements::library;
+use crate::app::render::components::album::AlbumRowsCursorCtx;
 use crate::app::render::components::hero::{
     selected_detail_shell, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS, HERO_TITLE_ROWS,
 };
 use crate::app::render::components::list_rows::{ListRenderCtx, SELECTED_BLOCK_SIDE_PADDING};
-use crate::app::render::screens::album::AlbumRowsCursorCtx;
 use crate::app::App;
-use ratatui::layout::*;
+use ratatui::layout::Rect;
 use ratatui::Frame;
 
 impl App {
@@ -302,15 +303,7 @@ impl App {
         // Narrow library heroes belong to the scrolling list. Keep the shared
         // pill geometry without reserving an additional detail region.
         let pills_reserved = if show_pills { 2 } else { 0 };
-        let pills_area = Rect {
-            height: show_pills as u16,
-            ..content_area
-        };
-        let list_area = Rect {
-            y: content_area.y + pills_reserved,
-            height: content_area.height.saturating_sub(pills_reserved),
-            ..content_area
-        };
+        let (pills_area, list_area) = library::inline_library_areas(content_area, pills_reserved);
         let inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
             && inline_hero_rows < list_area.height)
             .then_some(inline_hero_rows)
@@ -580,15 +573,11 @@ impl App {
             // padding, and inset 2 cols on each side like music/homevideo's
             // selected blocks; the banner layout is a pure function of the
             // panel width, so this paints the same content as before.
-            let content_rect = Rect {
-                x: layout.hero_area.x + SELECTED_BLOCK_SIDE_PADDING,
-                y: layout.hero_area.y + 2,
-                width: layout
-                    .hero_area
-                    .width
-                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
-                height: inline_hero_rows - HERO_BLOCK_EXTRA_ROWS,
-            };
+            let content_rect = library::selected_detail_content_area(
+                layout.hero_area,
+                SELECTED_BLOCK_SIDE_PADDING,
+                HERO_BLOCK_EXTRA_ROWS,
+            );
             let lib_idx = self.tab.emby_library_index().unwrap();
             // Same movie/Series branch as the row spacing above: a selected
             // Series renders its season pills + episode table instead of the

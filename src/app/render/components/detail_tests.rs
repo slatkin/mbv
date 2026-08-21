@@ -1,4 +1,5 @@
 use super::*;
+// Characterization coverage stays beside the moved detail component.
 
 #[test]
 fn content_rows_is_never_shorter_than_the_rendered_image_height() {

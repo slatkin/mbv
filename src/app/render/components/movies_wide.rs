@@ -11,9 +11,10 @@
 
 use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::hero_left;
+use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::components::home_hero::{prepare_wide_emby_hero_card, HeroData};
 use crate::app::{palette, App};
-use ratatui::layout::*;
+use ratatui::layout::Rect;
 use ratatui::style::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
@@ -63,9 +64,12 @@ impl App {
             ..area
         };
 
-        let Some((mut left_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
+        let Some(panes) = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y)
+        else {
             return;
         };
+        let mut left_panel = panes.left_panel;
+        let right_panel = panes.right_panel;
         left_panel.height = left_content_area.height;
 
         // Library-side separator row below the left pane, matching Music and
@@ -80,16 +84,8 @@ impl App {
             },
         );
 
-        let left_area = Rect {
-            y: left_panel.y.saturating_add(PANE_PAD_Y),
-            height: left_panel.height.saturating_sub(PANE_PAD_Y * 2),
-            ..left_panel
-        };
-        let right_area = Rect {
-            y: right_panel.y.saturating_add(PANE_PAD_Y),
-            height: right_panel.height.saturating_sub(PANE_PAD_Y * 2),
-            ..right_panel
-        };
+        let left_area = panes.left_area;
+        let right_area = panes.right_area;
         layout.movies_wide_right_area = right_area;
 
         // ── Left pane: read-only shared hero card ────────────────────────
@@ -149,12 +145,7 @@ impl App {
                 list_panel,
             );
         }
-        let list_area = Rect {
-            x: list_panel.x.saturating_add(PANE_PAD_X),
-            y: list_panel.y.saturating_add(PANE_PAD_Y),
-            width: list_panel.width.saturating_sub(PANE_PAD_X * 2),
-            height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
-        };
+        let list_area = library_arrangement::wide_list_area(list_panel, PANE_PAD_X, PANE_PAD_Y);
 
         self.render_wide_library_rows(f, list_area, lib_idx, focused, layout);
 

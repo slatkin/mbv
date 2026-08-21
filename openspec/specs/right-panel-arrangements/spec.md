@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines the right panel's two responsive arrangements, which screens use each, and where the
+Defines the right panel's two responsive hero presentations, which screens use each, and where the
 responsive decision is made, so that the wide and narrow presentations can be changed independently
 of one another and a new screen inherits a known arrangement without being individually designed.
 
@@ -80,8 +80,10 @@ Every hero-bearing right-panel browse surface SHALL use hero-on-left for its wid
 
 The responsive breakpoint SHALL be evaluated in one place, and its value SHALL be defined in one
 place. An individual screen SHALL NOT test the available width to select an arrangement, a column
-count, or any presentation that differs between arrangements. Code outside a screen SHALL NOT paint
-part of that screen's arrangement.
+count, or any presentation that differs between arrangements. The arrangement SHALL own pane
+placement, breakpoints, and rectangle splitting; components SHALL own painting; and screens SHALL
+provide content and interaction state. Code outside a screen SHALL NOT paint part of that screen's
+arrangement.
 
 #### Scenario: The breakpoint value is changed
 
@@ -155,23 +157,6 @@ geometry, the breakpoint, or focus behaviour.
 
 - **WHEN** a shared default changes
 - **THEN** every screen that has not declared a difference for it renders the change
-
-### Requirement: Mouse targets are produced by the arrangement
-
-The arrangement SHALL produce the mouse hit targets for the content it draws, in one common form
-shared by all right-panel screens. Hit-testing SHALL NOT require knowing which screen produced the
-targets, and adding a screen SHALL NOT require adding a target representation or a hit-testing
-branch.
-
-#### Scenario: The user clicks an item row
-
-- **WHEN** the user clicks an item row on any right-panel screen, in either arrangement
-- **THEN** that item is resolved through the common hit targets
-
-#### Scenario: A new screen is added
-
-- **WHEN** a new right-panel screen is added using an existing arrangement
-- **THEN** its rows and panes are clickable without new hit-testing code
 
 ### Requirement: The right panel has exactly two hero presentations
 

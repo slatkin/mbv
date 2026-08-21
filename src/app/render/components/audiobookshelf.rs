@@ -1,8 +1,3 @@
-use super::detail_series::{
-    wrap_overview_lines, SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
-    SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS,
-    SERIES_IMAGE_ROWS,
-};
 use crate::app::images::audiobookshelf_cover_cache_key;
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{
@@ -15,6 +10,11 @@ use crate::app::render::components::hero::{
 };
 use crate::app::render::components::list_rows::{
     draw_column_selection_markers, focused_or_subtle, item_cell_spans, SELECTED_BLOCK_SIDE_PADDING,
+};
+use crate::app::render::screens::detail_series::{
+    wrap_overview_lines, SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
+    SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS,
+    SERIES_IMAGE_ROWS,
 };
 use crate::app::render::{render_pill_bar, render_placeholder, PillBar, RENDER_FILTER};
 use crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;

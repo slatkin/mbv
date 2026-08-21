@@ -1,6 +1,8 @@
-use super::audiobookshelf_books::{PANE_PAD_X, PANE_PAD_Y, PILLS_GAP_ROWS, PILLS_ROW_HEIGHT};
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::render::arrangements::hero_left;
+use crate::app::render::components::audiobookshelf_books::{
+    PANE_PAD_X, PANE_PAD_Y, PILLS_GAP_ROWS, PILLS_ROW_HEIGHT,
+};
 use crate::app::render::components::hero::{selected_detail_shell, HERO_BLOCK_EXTRA_ROWS};
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::ui_util::trunc_str;

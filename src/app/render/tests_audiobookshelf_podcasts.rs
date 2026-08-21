@@ -106,6 +106,38 @@ fn narrow_podcast_replacement_owns_one_parent_target() {
 }
 
 #[test]
+fn audiobook_podcast_buffer_characterization_covers_default_focused_narrow_and_selected_states() {
+    for focused in [false, true] {
+        let mut app = audiobookshelf_app();
+        let mut layout = LayoutMain::default();
+        let terminal = render_library_to_terminal_focused(&mut app, &mut layout, focused);
+        let output = buffer_to_string(&terminal);
+        assert!(
+            output.contains("▁"),
+            "hero shell missing in focused={focused}"
+        );
+    }
+
+    let mut wide_app = audiobookshelf_app();
+    let mut wide_layout = LayoutMain::default();
+    let wide_output = render_library_to_string_sized(&mut wide_app, &mut wide_layout, 100, 30);
+    assert!(
+        wide_output.contains("Show A"),
+        "selected show missing in wide output"
+    );
+
+    for (width, height) in [(40, 20)] {
+        let mut app = audiobookshelf_app();
+        let mut layout = LayoutMain::default();
+        let output = render_library_to_string_sized(&mut app, &mut layout, width, height);
+        assert!(
+            output.contains("▁"),
+            "selected hero shell missing at {width}x{height}"
+        );
+    }
+}
+
+#[test]
 fn wide_podcast_detail_preserves_episode_rows_and_played_filtering() {
     let mut app = audiobookshelf_app();
     let state = &mut app.audiobookshelf_browse[0];

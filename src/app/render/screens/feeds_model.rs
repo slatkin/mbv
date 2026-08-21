@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum FeedAgeGroup {
+pub(in crate::app::render) enum FeedAgeGroup {
     New,
     Recent,
     OlderThanTwoWeeks,
@@ -15,7 +15,7 @@ pub(super) enum FeedAgeGroup {
 }
 
 impl FeedAgeGroup {
-    pub(super) fn label(self) -> &'static str {
+    pub(in crate::app::render) fn label(self) -> &'static str {
         match self {
             Self::New => "New",
             Self::Recent => "Recent",
@@ -27,7 +27,7 @@ impl FeedAgeGroup {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum FeedDisplayRow {
+pub(in crate::app::render) enum FeedDisplayRow {
     Spacer,
     Heading(FeedAgeGroup),
     Entry(usize),
@@ -46,7 +46,7 @@ fn feed_age_group(pub_date_secs: Option<u64>, now_secs: u64) -> FeedAgeGroup {
     }
 }
 
-pub(super) fn feed_display_rows(
+pub(in crate::app::render) fn feed_display_rows(
     entries: &[mbv_core::playback_queue::FeedEntry],
     now_secs: u64,
 ) -> Vec<FeedDisplayRow> {
@@ -68,7 +68,7 @@ pub(super) fn feed_display_rows(
     rows
 }
 
-pub(super) fn current_time_secs() -> u64 {
+pub(in crate::app::render) fn current_time_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -118,7 +118,7 @@ pub(super) fn format_pub_date(secs: Option<u64>) -> String {
 /// element presence -- no image, since feed entries carry no artwork), a
 /// title row (two-column lists only) plus a single metadata line and its
 /// trailing spacer.
-pub(super) fn feed_hero_content_rows(show_title: bool) -> u16 {
+pub(in crate::app::render) fn feed_hero_content_rows(show_title: bool) -> u16 {
     let title_rows = if show_title { HERO_TITLE_ROWS } else { 0 };
     title_rows + 2
 }
@@ -126,7 +126,7 @@ pub(super) fn feed_hero_content_rows(show_title: bool) -> u16 {
 /// The feeds hero's one metadata line: duration, publish date, MIME type,
 /// and watched state, in that order -- feeds' declared metadata set
 /// (design.md decision 6).
-pub(super) fn feed_entry_meta_line(entry: &FeedEntry) -> String {
+pub(in crate::app::render) fn feed_entry_meta_line(entry: &FeedEntry) -> String {
     let mut parts = Vec::new();
     let duration = format_duration(entry.duration_ticks);
     if !duration.is_empty() {
@@ -152,13 +152,16 @@ pub(super) fn feed_entry_meta_line(entry: &FeedEntry) -> String {
 /// their own row; entries pack `cols` per row, never crossing a heading/
 /// spacer boundary (same rule `list_letter_groups.rs`'s `push_item_row`
 /// uses for the Emby library list).
-pub(super) enum PackedFeedRow {
+pub(in crate::app::render) enum PackedFeedRow {
     Spacer,
     Heading(FeedAgeGroup),
     Items(Vec<usize>),
 }
 
-pub(super) fn pack_feed_rows(display_rows: &[FeedDisplayRow], cols: usize) -> Vec<PackedFeedRow> {
+pub(in crate::app::render) fn pack_feed_rows(
+    display_rows: &[FeedDisplayRow],
+    cols: usize,
+) -> Vec<PackedFeedRow> {
     let cols = cols.max(1);
     let mut packed = Vec::new();
     let mut current: Vec<usize> = Vec::with_capacity(cols);

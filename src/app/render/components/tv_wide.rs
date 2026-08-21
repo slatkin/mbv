@@ -1,5 +1,6 @@
 use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::hero_left;
+use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::{palette, App, PanelFocus};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -31,21 +32,14 @@ impl App {
         layout.tv_wide_episode_rows.clear();
         layout.tv_wide_season_tabs.clear();
 
-        let Some((mut left_panel, right_panel)) = hero_left::shared_hero_presentation(area) else {
+        let Some(panes) = library_arrangement::wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y)
+        else {
             return;
         };
-        left_panel.height = area.height.saturating_sub(1);
-        let left_area = Rect {
-            x: left_panel.x.saturating_add(PANE_PAD_X),
-            y: left_panel.y.saturating_add(PANE_PAD_Y),
-            width: left_panel.width.saturating_sub(PANE_PAD_X * 2),
-            height: left_panel.height.saturating_sub(PANE_PAD_Y * 2),
-        };
-        let right_area = Rect {
-            y: right_panel.y.saturating_add(PANE_PAD_Y),
-            height: right_panel.height.saturating_sub(PANE_PAD_Y * 2),
-            ..right_panel
-        };
+        let left_panel = panes.left_panel;
+        let right_panel = panes.right_panel;
+        let left_area = panes.left_area;
+        let right_area = panes.right_area;
         layout.tv_wide_left_area = left_area;
         layout.tv_wide_right_area = right_area;
         layout.left_area = Rect::default();
@@ -86,12 +80,7 @@ impl App {
         }
 
         let list_panel = right_pane.list_panel;
-        let list_area = Rect {
-            x: list_panel.x.saturating_add(PANE_PAD_X),
-            y: list_panel.y.saturating_add(PANE_PAD_Y),
-            width: list_panel.width.saturating_sub(PANE_PAD_X * 2),
-            height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
-        };
+        let list_area = library_arrangement::wide_list_area(list_panel, PANE_PAD_X, PANE_PAD_Y);
         if list_panel.height > 0 {
             f.render_widget(
                 Block::default().style(palette::resolve_surface_focus(right_focused)),

@@ -70,6 +70,36 @@ mod album_listing_tests;
 #[path = "tests_audiobookshelf_books.rs"]
 mod audiobookshelf_book_tests;
 #[cfg(test)]
+#[path = "tests_confirm_modal.rs"]
+mod confirm_modal_tests;
+#[cfg(test)]
+#[path = "tests_context_menu.rs"]
+mod context_menu_tests;
+#[cfg(test)]
+#[path = "tests_daemon_lost_modal.rs"]
+mod daemon_lost_modal_tests;
+#[cfg(test)]
+#[path = "tests_feeds_manage_popup.rs"]
+mod feeds_manage_popup_tests;
+#[cfg(test)]
+#[path = "tests_help.rs"]
+mod help_tests;
+#[cfg(test)]
+#[path = "tests_home_characterization.rs"]
+mod home_characterization_tests;
+#[cfg(test)]
+#[path = "tests_library_characterization.rs"]
+mod library_characterization_tests;
+#[cfg(test)]
+#[path = "tests_library_routes_popup.rs"]
+mod library_routes_popup_tests;
+#[cfg(test)]
+#[path = "tests_multiselect.rs"]
+mod multiselect_tests;
+#[cfg(test)]
+#[path = "tests_music_characterization.rs"]
+mod music_characterization_tests;
+#[cfg(test)]
 #[path = "tests_music_groups.rs"]
 mod music_group_tests;
 #[cfg(test)]
@@ -79,11 +109,26 @@ mod non_music_tests;
 #[path = "tests_panel.rs"]
 mod panel_tests;
 #[cfg(test)]
+#[path = "tests_playlists.rs"]
+mod playlists_tests;
+#[cfg(test)]
 #[path = "tests_queue.rs"]
 mod queue_tests;
 #[cfg(test)]
+#[path = "tests_remote_reanchor.rs"]
+mod remote_reanchor_tests;
+#[cfg(test)]
 #[path = "tests_scroll_pills.rs"]
 mod scroll_pills_tests;
+#[cfg(test)]
+#[path = "tests_search_sidebar.rs"]
+mod search_sidebar_tests;
+#[cfg(test)]
+#[path = "tests_sessions.rs"]
+mod sessions_tests;
+#[cfg(test)]
+#[path = "tests_settings.rs"]
+mod settings_tests;
 #[cfg(test)]
 #[path = "test_helpers.rs"]
 mod test_helpers;

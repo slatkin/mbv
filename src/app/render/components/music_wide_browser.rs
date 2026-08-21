@@ -1,7 +1,7 @@
-use super::album_plan::{GroupedAlbumDisplayRow, HeaderFocusCtx};
 use crate::app::layout::LayoutMain;
 use crate::app::render::components::album_rows::AlbumRowCtx;
 use crate::app::render::components::list_rows::draw_column_selection_markers;
+use crate::app::render::screens::album_plan::{GroupedAlbumDisplayRow, HeaderFocusCtx};
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::Frame;
@@ -126,7 +126,7 @@ impl App {
             };
 
             match row {
-                super::album_plan::GroupedAlbumDisplayRow::ArtistHeader(header) => {
+                GroupedAlbumDisplayRow::ArtistHeader(header) => {
                     // Wide right rail: no selectable headers (design Decision 5).
                     self.render_artist_header_row(
                         f, row_area, header, true, // in_music_group_view
@@ -134,8 +134,8 @@ impl App {
                         *row_idx, 0, // No art reservation in right rail.
                     );
                 }
-                super::album_plan::GroupedAlbumDisplayRow::ArtistGroupSpacer => {}
-                super::album_plan::GroupedAlbumDisplayRow::Album(idx) => {
+                GroupedAlbumDisplayRow::ArtistGroupSpacer => {}
+                GroupedAlbumDisplayRow::Album(idx) => {
                     let selected = *idx == cursor;
                     if selected {
                         layout.selected_item_rect = Some(Rect {

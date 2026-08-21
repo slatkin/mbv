@@ -8,7 +8,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 impl App {
-    /// Shared confirmation-modal overlay used by every blocking yes/no
+    /// Shared confirmation-modal overlay used by every blocking confirmation
     /// prompt in the app (clear queue, remove now-playing item, rescan
     /// library, save-playlist overwrite/discard).
     pub(in crate::app::render) fn render_confirm_modal(&mut self, f: &mut Frame) {

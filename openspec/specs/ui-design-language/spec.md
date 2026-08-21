@@ -26,6 +26,24 @@ role.
 - **WHEN** two screens display the same concept, such as a selected row or a resting panel
 - **THEN** both derive that colour from the same role and render identically
 
+### Requirement: Raw colour primitives are private
+
+Raw colour primitives, including literal `Color` values and hue-named constants, SHALL be private to
+the theme module. Modules outside the theme SHALL consume semantic roles or component style policies;
+the theme SHALL NOT re-export raw primitives as a styling API.
+
+#### Scenario: A component needs a colour
+
+- **WHEN** a component requires a visual colour
+- **THEN** it obtains that colour from a semantic role or named component style policy
+- **AND** it does not import a raw colour primitive
+
+#### Scenario: A raw primitive changes
+
+- **WHEN** a raw colour primitive changes inside the theme
+- **THEN** only the semantic roles that reference it expose the change
+- **AND** modules outside the theme do not gain direct access to the primitive
+
 ### Requirement: Focus state colouring is centrally controlled
 
 The focused and unfocused appearance of every panel, sub-panel, list, and component SHALL be

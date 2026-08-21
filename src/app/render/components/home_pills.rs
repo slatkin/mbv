@@ -1,4 +1,5 @@
 use crate::app::layout::LayoutMain;
+// Home section selector painting is centralized with the other Home components.
 use crate::app::render::components::widgets::{render_pill_bar, PillBar};
 use crate::app::ui_util::*;
 use crate::app::App;
