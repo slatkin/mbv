@@ -8,6 +8,7 @@ fn test_mpv() -> Mpv {
         audio_pipe_path: None,
         audio_pipe_samplerate: 0,
         audio_pipe_bitdepth: 0,
+        audio_device: None,
     });
     let mpv = result.unwrap().0;
     mpv.set_property("ao", "null").unwrap();

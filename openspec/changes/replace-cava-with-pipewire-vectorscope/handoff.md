@@ -8,7 +8,7 @@ Implementation is complete at `22/22` tasks.
 
 ## Implemented
 
-- Added `pipewire = "0.10.1"` to the workspace and `mbv-core`, plus PipeWire package dependencies in Debian metadata, `PKGBUILD`, and CI.
+- Added `pipewire = "0.10.1"` to the workspace and `mbv` client, plus client-only PipeWire package dependencies in Debian metadata, `PKGBUILD`, and CI.
 - Replaced the Cava child/FIFO parser with `PipeWireWorker`, a PipeWire main-loop capture stream, interleaved stereo F32LE parsing, non-blocking bounded sample publication, failure reporting, explicit disconnect, bounded join, and cleanup.
 - Added bounded-buffer tests for newest complete stereo pairs and worker lifecycle behavior.
 - Replaced app Cava state with PipeWire state while preserving local, same-host Local daemon, remote, and audio-pipe eligibility rules.
@@ -41,7 +41,7 @@ Fresh final checks passed:
 - `pw-link -l` showed the probe connected only to the default FiiO sink monitor and showed both links removed after stop.
 - A real unavailable-server probe reported `failed to connect to PipeWire: Creation failed` without hanging worker shutdown.
 
-`cargo deb` and `dpkg-deb` are unavailable in this environment. CI now inspects both generated packages and requires their standalone `pipewire` and `libpipewire-0.3-0` dependencies.
+CI inspects both generated packages, requires PipeWire runtime dependencies for `mbv`, and rejects them for `mbvd`.
 
 ## Live Acceptance
 

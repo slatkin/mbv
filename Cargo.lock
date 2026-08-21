@@ -1563,7 +1563,7 @@ dependencies = [
 
 [[package]]
 name = "mbv"
-version = "0.17.12"
+version = "0.17.15"
 dependencies = [
  "crossterm",
  "fuzzy-matcher",
@@ -1574,6 +1574,7 @@ dependencies = [
  "mbv-core",
  "native-tls",
  "nix 0.31.3",
+ "pipewire",
  "rand 0.10.2",
  "ratatui",
  "ratatui-image",
@@ -1592,7 +1593,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-core"
-version = "0.17.12"
+version = "0.17.15"
 dependencies = [
  "libc",
  "libmpv2",
@@ -1600,7 +1601,6 @@ dependencies = [
  "log",
  "native-tls",
  "percent-encoding",
- "pipewire",
  "rand 0.10.2",
  "redb",
  "serde",
@@ -1613,7 +1613,7 @@ dependencies = [
 
 [[package]]
 name = "mbvd"
-version = "0.17.12"
+version = "0.17.15"
 dependencies = [
  "libc",
  "log",

@@ -26,7 +26,7 @@ None.
 
 ## Impact
 
-- Core visualizer source-of-truth types and runtime ownership in `crates/mbv-core/`.
+- Client visualizer worker, source-of-truth types, and runtime ownership in `src/app/`.
 - App visualizer lifecycle, frame synchronization, preferences, and Ratatui rendering in `src/app/`.
 - Linux build dependencies and release packaging: remove Cava and add the selected PipeWire development/runtime requirements.
 - Existing visualizer specifications, ADR references, README text, tests, and CI provisioning.

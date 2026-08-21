@@ -233,6 +233,121 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
 }
 
 #[test]
+fn init_mpv_projects_mutually_exclusive_output() {
+    // Real (headless) mpv init, same pattern as player_tests_active_file.rs's
+    // test_mpv() -- serialized on SYS_ENV_LOCK because init_mpv reads env
+    // vars for its config/ipc paths.
+    let env_lock = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
+
+    // ALSA mode: only the selected device is projected; the pipe startup
+    // guard never arms.
+    let (mpv, startup_pause_armed) = init_mpv(&MpvRunConfig {
+        headless: true,
+        use_mpv_config: false,
+        no_scripts: true,
+        always_skip_intro: false,
+        audio_pipe_path: None,
+        audio_pipe_samplerate: 0,
+        audio_pipe_bitdepth: 0,
+        audio_device: Some("alsa".to_string()),
+    })
+    .unwrap();
+    assert!(
+        !startup_pause_armed,
+        "clocked ALSA output must not arm the pipe startup guard"
+    );
+    assert_eq!(mpv.get_property::<String>("audio-device").unwrap(), "alsa");
+    mpv.set_property("ao", "null").unwrap(); // avoid opening real hardware for the rest of the suite
+    drop(mpv);
+
+    // Explicit pipe mode: existing pipe properties are preserved and
+    // audio_device is ignored.
+    let pipe_path = std::env::temp_dir()
+        .join(format!("mbv-test-init-mpv-pipe-{}", uuid::Uuid::new_v4()))
+        .display()
+        .to_string();
+    let (mpv, startup_pause_armed) = init_mpv(&MpvRunConfig {
+        headless: true,
+        use_mpv_config: false,
+        no_scripts: true,
+        always_skip_intro: false,
+        audio_pipe_path: Some(pipe_path.clone()),
+        audio_pipe_samplerate: 48_000,
+        audio_pipe_bitdepth: 16,
+        audio_device: Some("alsa/hw:Loopback,0,0".to_string()),
+    })
+    .unwrap();
+    assert!(
+        startup_pause_armed,
+        "explicit pipe output must still arm the startup guard"
+    );
+    assert_eq!(mpv.get_property::<String>("ao").unwrap(), "pcm");
+    assert_ne!(
+        mpv.get_property::<String>("audio-device").unwrap(),
+        "alsa/hw:Loopback,0,0",
+        "audio_device must be ignored while pipe output is selected"
+    );
+    let _ = std::fs::remove_file(&pipe_path);
+
+    drop(env_lock);
+}
+
+#[test]
+fn mpv_audio_errors_only_classify_alsa_initialization_failures() {
+    assert!(is_clocked_audio_error(
+        &libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
+        true,
+    ));
+    assert!(!is_clocked_audio_error(
+        &libmpv2::Error::Raw(libmpv2::mpv_error::LoadingFailed),
+        true,
+    ));
+    assert!(!is_clocked_audio_error(
+        &libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
+        false,
+    ));
+}
+
+#[test]
+fn alsa_initialization_error_stops_run_with_output_error() {
+    let (mut run, status, events) = make_queue_session_for_pos_tests_with_events(0);
+    run.config.audio_pipe_path = None;
+    run.config.audio_device = Some("alsa/hw:Loopback,0,0".into());
+    run.reporter.clear_session();
+    let mut progress = noop_progress();
+
+    assert!(run.on_mpv_error(
+        libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
+        &mut progress,
+    ));
+    assert!(!status.lock().unwrap().active);
+    let PlayerEvent::Stopped { error, .. } = events.recv().unwrap() else {
+        panic!("expected stopped event");
+    };
+    assert_eq!(
+        error.as_deref(),
+        Some("audio output failed to start (device: alsa/hw:Loopback,0,0)")
+    );
+}
+
+#[test]
+fn media_end_file_error_is_not_reported_as_alsa_failure() {
+    let (mut run, _status, events) = make_queue_session_for_pos_tests_with_events(0);
+    run.origin = PlaybackOrigin::Standalone;
+    run.config.audio_pipe_path = None;
+    run.config.audio_device = Some("alsa".into());
+    run.reporter.clear_session();
+    let mpv = test_mpv();
+    let mut progress = noop_progress();
+
+    assert!(!run.on_end_file(mpv_end_file_reason::Error, &mpv, &mut progress));
+    let PlayerEvent::Stopped { error, .. } = events.recv().unwrap() else {
+        panic!("expected stopped event");
+    };
+    assert!(error.is_none());
+}
+
+#[test]
 fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
     let (event_tx, _event_rx) = mpsc::channel();
     let player = Player::new(

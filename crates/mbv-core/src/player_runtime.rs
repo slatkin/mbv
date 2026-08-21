@@ -38,6 +38,9 @@ struct MpvRunConfig {
     audio_pipe_path: Option<String>,
     audio_pipe_samplerate: u32,
     audio_pipe_bitdepth: u8,
+    /// Mutually exclusive with `audio_pipe_path`: set only when pipe output
+    /// is not selected for this run (see `resolve_run_output`).
+    audio_device: Option<String>,
 }
 
 fn user_mpv_config_dir() -> Option<PathBuf> {
@@ -563,6 +566,17 @@ fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
                 }
             }
             Err(e) => log::warn!(target: "player", "audio pipe disabled for this session: {e}"),
+        }
+    } else if let Some(device) = &config.audio_device {
+        // Clocked ALSA output: the device identifier alone selects the
+        // backend, so `ao` is left to mpv's own negotiation.
+        if let Err(e) = mpv.set_property("audio-device", device.as_str()) {
+            return Err(format!(
+                "clocked audio output: failed to set audio-device '{device}': {}",
+                mpv_err_str(&e)
+            ));
+        } else {
+            log::info!(target: "player", "clocked audio output: using ALSA device {device}");
         }
     }
     if startup_pause_armed {
