@@ -43,6 +43,8 @@ This replaces the current attached-session `v` no-op. Keeping the no-op would vi
 
 While artwork is selected, a pending fetch keeps the existing dim loading reservation. A fetch that resolves without artwork, a queue item with no artwork source, or an empty queue uses the existing bundled placeholder. When visualization is selected, those steady placeholder paths instead render the empty or populated vectorscope.
 
+When terminal images are disabled, artwork selection performs no image fetch and paints no terminal image, but the card renderer keeps the fallback rectangle already used when the placeholder cannot render. Visualization selection remains available and draws into that same rectangle. Both selections return identical geometry so `v` does not move the queue list when no image protocol is available.
+
 Immediately substituting the visualizer during every pending fetch was rejected because it would flash unrelated content before valid artwork appears and could change card geometry when the fetch completes.
 
 ### Delete both separate visualizer layout branches

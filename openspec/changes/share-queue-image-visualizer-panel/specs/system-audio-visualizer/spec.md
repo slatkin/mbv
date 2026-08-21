@@ -29,6 +29,11 @@ mbv SHALL persist whether the queue card displays artwork or the visualizer. Pre
 - **WHEN** artwork is selected and a usable image fetch is still pending
 - **THEN** mbv preserves the queue card's loading reservation until the fetch resolves
 
+#### Scenario: Terminal images are disabled
+
+- **WHEN** terminal images are disabled and the user switches between artwork and the visualizer
+- **THEN** the queue card keeps the same fallback rectangle, artwork selection renders no terminal image, the visualizer remains available, and mbv does not fetch artwork
+
 ### Requirement: Visualizer has one embedded placement
 
 mbv SHALL render the embedded visualizer only in the queue card's artwork rectangle and SHALL NOT reserve a separate visualizer area below the queue list or within unused playback-panel rows.

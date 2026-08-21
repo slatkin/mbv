@@ -24,11 +24,11 @@ When enabled during supported local playback, mbv SHALL capture stereo PCM from 
 
 The visualizer SHALL NOT create, modify, or destroy persistent PipeWire nodes, links, sinks, sources, loopbacks, or modules, and SHALL NOT change or restore mpv `ao` or `audio-device` properties.
 
-### Requirement: PipeWire failure is isolated from playback
+### Requirement: PipeWire visualizer failure is isolated from playback
 
 If PipeWire is unavailable, the default monitor cannot be captured, the stream disconnects, or sample data cannot be consumed, mbv SHALL log the diagnostic, clear active vectorscope points, and keep playback and normal input handling running.
 
-### Requirement: Capture resources are bounded and cleaned up
+### Requirement: PipeWire capture resources are bounded and cleaned up
 
 mbv SHALL keep captured PCM in a bounded latest-sample buffer, supervise the PipeWire capture thread and stream, and release those resources after normal or failed shutdown.
 
