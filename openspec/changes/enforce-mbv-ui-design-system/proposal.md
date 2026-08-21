@@ -16,22 +16,42 @@ regress it.
 
 - Define a closed mbv UI design-system boundary for components, arrangements,
   semantic theme roles, and interaction geometry.
-- Bring every independently rendered surface inside that boundary: each surface
-  must use canonical design-system ownership or an explicitly identified bespoke
-  component.
+- Bring every independently rendered surface in the current render tree inside
+  that boundary: each surface must use canonical design-system ownership or an
+  explicitly identified bespoke component.
+- Start with no bespoke surfaces. Every current surface must be classified under
+  canonical screen, arrangement, component, or theme ownership; the bespoke path
+  is defined for a future surface only when a concrete no-reuse case exists.
+- Require whole-tree classification and enforcement before this change closes.
+  These are normative requirements, not conventions or optional guidance, and
+  there is no grandfathering for existing surfaces. Existing visual output may
+  remain unchanged, but no surface may remain an unclassified or informal
+  exception. Visual redesigns are separate work; child issues record
+  per-surface audits and approved customisations or overrides rather than
+  deferred migrations.
 - Keep screen content extensible while making structural and visual variation use
-  centrally defined typed policies or variants.
+  centrally defined typed policies or variants. Any override lives in the central
+  component, arrangement, or theme implementation; a surface may only select a
+  named option and supply semantic data.
+- Preserve the existing hero additional-content styles, including the Movie
+  overview/detail block, the TV season/pill and episode workspace, and the Music
+  track-list workspace, along with the other provider-specific styles already in
+  use. Require a complete current-surface-to-style mapping. Screens supply
+  provider data and row semantics to these approved styles; they do not invent a
+  new style or own its geometry or responsive layout.
 - Make arrangements own placement and composition. Interactive components derive
   and emit hit targets from the same internal geometry they paint; arrangements
   aggregate those targets for screens to consume.
 - Treat bespoke rendering only as an exception from component reuse. Bespoke
   components still obey the ownership, semantic styling, hit-geometry, and test
-  requirements.
+  requirements, and their overrides live in the central bespoke component or
+  arrangement rather than in surface code.
 - Add repository-level UI rules to `AGENTS.md`.
 - Add a committed `mbv-frontend` agent skill describing the UI workflow, reuse
   rules, controlled override decision table, and verification expectations.
-- Add practical mechanical checks and focused tests that make common bypasses
-  visible during development and review.
+- Add practical source/mechanical checks that make common bypasses visible during
+  development and review. Focused unit and buffer tests verify component behavior,
+  but test assertions are not the design-system enforcement mechanism.
 
 ## Capabilities
 
@@ -72,7 +92,10 @@ regress it.
 - Parent issue: https://github.com/slatkin/mbv/issues/563
 - Prerequisite: https://github.com/slatkin/mbv/issues/584 must land before this
   change begins.
-- Per-surface compliance audits are tracked as sub-issues of #563.
+- Child issues under #563 are limited to per-surface compliance audits and
+  formal records for approved customisations or overrides. They are not
+  migration tickets and cannot defer bringing a current surface inside the
+  enforced boundary.
 
 ## Planning Status
 
@@ -83,18 +106,24 @@ design-system ownership and enforcement work.
 Decisions established in the current exploration:
 
 - Completion requires whole-tree classification and enforcement, not pilot-only
-  or changed-code-only compliance.
+  or changed-code-only compliance. This is a normative requirement with no
+  grandfathering, not a convention. A pilot implementation may establish the
+  APIs, but it does not limit the compliance scope.
 - A bespoke component is exempt only from reuse; it is not exempt from the design
   system's ownership, styling, interaction, or verification rules.
 - Interactive components derive and emit targets from their painted geometry;
   arrangements place components and aggregate their typed targets; screens consume
   the aggregate map.
+- The ownership migration preserves existing visual output unless separate visual
+  work explicitly changes it; child issues do not defer current-surface
+  classification or enforcement.
 
 The next exploration session should begin by:
 
 - Re-reading the resulting render tree and live UI specs as the baseline.
-- Defining the exact surface, screen-model, arrangement, component, theme, and
-  bespoke module boundaries against the real post-#584 code.
+- Defining the exact surface, screen-model, arrangement, component, and theme
+  boundaries against the real post-#584 code, while documenting only the future
+  path for adding a bespoke component or arrangement.
 - Reconciling `design.md`, the delta specs, and `tasks.md` against that baseline.
 - Choosing a whole-tree enforcement strategy and explicit approved-painting
   boundary that can pass against the existing tree when this change completes.
