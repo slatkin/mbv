@@ -1,4 +1,4 @@
-use super::hero_left;
+use super::{hero_left, padded_rect};
 use ratatui::layout::Rect;
 
 /// The shared padded panes used by wide library presentations.
@@ -16,12 +16,7 @@ pub(in crate::app::render) fn wide_library_panes(
 ) -> Option<WideLibraryPanes> {
     let (mut left_panel, right_panel) = hero_left::shared_hero_presentation(area)?;
     left_panel.height = area.height.saturating_sub(1);
-    let left_area = Rect {
-        x: left_panel.x.saturating_add(pad_x),
-        y: left_panel.y.saturating_add(pad_y),
-        width: left_panel.width.saturating_sub(pad_x * 2),
-        height: left_panel.height.saturating_sub(pad_y * 2),
-    };
+    let left_area = padded_rect(left_panel, pad_x, pad_y);
     let right_area = Rect {
         x: right_panel.x,
         y: right_panel.y.saturating_add(pad_y),
@@ -37,12 +32,7 @@ pub(in crate::app::render) fn wide_library_panes(
 }
 
 pub(in crate::app::render) fn wide_list_area(panel: Rect, pad_x: u16, pad_y: u16) -> Rect {
-    Rect {
-        x: panel.x.saturating_add(pad_x),
-        y: panel.y.saturating_add(pad_y),
-        width: panel.width.saturating_sub(pad_x * 2),
-        height: panel.height.saturating_sub(pad_y * 2),
-    }
+    padded_rect(panel, pad_x, pad_y)
 }
 
 pub(in crate::app::render) fn inline_library_areas(area: Rect, controls_rows: u16) -> (Rect, Rect) {
