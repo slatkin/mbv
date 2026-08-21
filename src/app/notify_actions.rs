@@ -29,10 +29,10 @@ impl ToastSeverity {
     /// but is mapped for exhaustiveness rather than left `unreachable!()`.
     pub fn toast_bg(&self) -> ratatui::style::Color {
         match self {
-            ToastSeverity::Neutral => super::palette::DARK_BG,
+            ToastSeverity::Neutral => super::palette::TOAST_BG_NEUTRAL,
             ToastSeverity::Success => super::palette::TOAST_BG_SUCCESS,
             ToastSeverity::Warning => super::palette::TOAST_BG_WARNING,
-            ToastSeverity::Error => super::palette::TOAST_BG,
+            ToastSeverity::Error => super::palette::TOAST_BG_ERROR,
         }
     }
 }

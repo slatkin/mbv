@@ -4,6 +4,9 @@ use crate::app::tests::make_app_stub;
 use crate::app::TabSelection;
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;
+use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
+use ratatui::Terminal;
 
 fn feed_app() -> App {
     let mut app = make_app_stub();
@@ -70,4 +73,37 @@ fn narrow_feeds_suppress_detail_when_the_viewport_is_too_short() {
     let layout = render_view(&mut app, 60, 4);
 
     assert_eq!(layout.hero_area.height, 0);
+}
+
+fn render_feed_buffer(width: u16, height: u16, focused: bool) -> String {
+    let mut app = feed_app();
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    let mut layout = LayoutMain::default();
+    terminal
+        .draw(|f| {
+            app.render_feeds(f, Rect::new(0, 0, width, height), focused, &mut layout);
+        })
+        .unwrap();
+    buffer_to_string(&terminal)
+}
+
+#[test]
+fn feeds_buffer_characterization_covers_default_focused_narrow_and_selected_states() {
+    for (width, height, focused) in [
+        (140, 30, false),
+        (140, 30, true),
+        (60, 20, true),
+        (40, 20, false),
+    ] {
+        let output = render_feed_buffer(width, height, focused);
+        assert!(
+            output.contains("Test Feed"),
+            "missing feed selector: {output:?}"
+        );
+        assert!(
+            output.contains("Entry One"),
+            "missing selected entry: {output:?}"
+        );
+    }
 }

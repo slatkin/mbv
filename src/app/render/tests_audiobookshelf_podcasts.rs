@@ -1,6 +1,6 @@
 use super::test_helpers::*;
 use super::*;
-use crate::app::render::list_rows::SELECTED_BLOCK_SIDE_PADDING;
+use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::tests_podcast::audiobookshelf_app;
 use crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use mbv_core::audiobookshelf::AudiobookshelfProgress;
@@ -45,7 +45,7 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
     assert_eq!(buffer[(hero.x, hero.y)].symbol(), "▁");
     assert_eq!(
         buffer[(hero.x, hero.y)].style().fg,
-        Some(palette::SEEK_TRACK)
+        Some(palette::PROGRESS_TRACK)
     );
     assert_eq!(
         buffer[(hero.x, hero.y + 1)].style().bg,
@@ -63,7 +63,7 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
     );
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].style().fg,
-        Some(palette::SEEK_TRACK)
+        Some(palette::PROGRESS_TRACK)
     );
 }
 
@@ -103,6 +103,38 @@ fn narrow_podcast_replacement_owns_one_parent_target() {
         Some(&3)
     );
     assert_eq!(layout.hero_area.y as usize, selected_row);
+}
+
+#[test]
+fn audiobook_podcast_buffer_characterization_covers_default_focused_narrow_and_selected_states() {
+    for focused in [false, true] {
+        let mut app = audiobookshelf_app();
+        let mut layout = LayoutMain::default();
+        let terminal = render_library_to_terminal_focused(&mut app, &mut layout, focused);
+        let output = buffer_to_string(&terminal);
+        assert!(
+            output.contains("▁"),
+            "hero shell missing in focused={focused}"
+        );
+    }
+
+    let mut wide_app = audiobookshelf_app();
+    let mut wide_layout = LayoutMain::default();
+    let wide_output = render_library_to_string_sized(&mut wide_app, &mut wide_layout, 100, 30);
+    assert!(
+        wide_output.contains("Show A"),
+        "selected show missing in wide output"
+    );
+
+    for (width, height) in [(40, 20)] {
+        let mut app = audiobookshelf_app();
+        let mut layout = LayoutMain::default();
+        let output = render_library_to_string_sized(&mut app, &mut layout, width, height);
+        assert!(
+            output.contains("▁"),
+            "selected hero shell missing at {width}x{height}"
+        );
+    }
 }
 
 #[test]

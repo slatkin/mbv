@@ -37,24 +37,24 @@ fn volume_pill_number_is_aqua() {
     app.ui_volume = 60;
     let spans = app.volume_status_spans();
     assert_eq!(spans[2].content.to_string(), " 60");
-    assert_eq!(spans[2].style.fg, Some(palette::AQUA));
+    assert_eq!(spans[2].style.fg, Some(palette::ACCENT));
 }
 
 #[test]
 fn emby_status_glyph_color_tracks_service_state() {
     use mbv_core::service_runtime::ServiceState;
-    let color = super::chrome::service_state_color;
-    assert_eq!(color(ServiceState::Ready, palette::AQUA), palette::AQUA);
+    let color = super::components::chrome::service_state_color;
+    assert_eq!(color(ServiceState::Ready, palette::ACCENT), palette::ACCENT);
     assert_eq!(
-        color(ServiceState::NotConfigured, palette::AQUA),
-        palette::MUTED
+        color(ServiceState::NotConfigured, palette::ACCENT),
+        palette::TEXT_MUTED
     );
     for state in [
         ServiceState::Connecting,
         ServiceState::NeedsAuthentication,
         ServiceState::Unavailable,
     ] {
-        assert_eq!(color(state, palette::AQUA), palette::RED);
+        assert_eq!(color(state, palette::ACCENT), palette::STATUS_ERROR);
     }
 }
 
@@ -62,35 +62,41 @@ fn emby_status_glyph_color_tracks_service_state() {
 fn stay_alive_glyph_color_tracks_target_and_daemon_loss() {
     fn color(daemon_lost: bool, on_local_daemon: bool) -> ratatui::style::Color {
         if daemon_lost {
-            palette::YELLOW
+            palette::TEXT_FOCUS_ACCENT
         } else if on_local_daemon {
-            palette::RED
+            palette::STATUS_ERROR
         } else {
-            palette::MUTED
+            palette::TEXT_MUTED
         }
     }
-    assert_eq!(color(false, false), palette::MUTED); // not in stay-alive mode
-    assert_eq!(color(false, true), palette::RED); // local daemon active
-                                                  // Daemon lost (yellow) wins over a still-pointed local target.
-    assert_eq!(color(true, true), palette::YELLOW);
-    assert_eq!(color(true, false), palette::YELLOW);
+    assert_eq!(color(false, false), palette::TEXT_MUTED); // not in stay-alive mode
+    assert_eq!(color(false, true), palette::STATUS_ERROR); // local daemon active
+                                                           // Daemon lost (yellow) wins over a still-pointed local target.
+    assert_eq!(color(true, true), palette::TEXT_FOCUS_ACCENT);
+    assert_eq!(color(true, false), palette::TEXT_FOCUS_ACCENT);
 }
 
 #[test]
 fn audiobookshelf_status_glyph_color_tracks_service_state() {
     use mbv_core::service_runtime::ServiceState;
-    let color = super::chrome::service_state_color;
-    assert_eq!(color(ServiceState::Ready, palette::AMBER), palette::AMBER);
+    let color = super::components::chrome::service_state_color;
     assert_eq!(
-        color(ServiceState::NotConfigured, palette::AMBER),
-        palette::MUTED
+        color(ServiceState::Ready, palette::ACCENT_AUDIOBOOKSHELF),
+        palette::ACCENT_AUDIOBOOKSHELF
+    );
+    assert_eq!(
+        color(ServiceState::NotConfigured, palette::ACCENT_AUDIOBOOKSHELF),
+        palette::TEXT_MUTED
     );
     for state in [
         ServiceState::Connecting,
         ServiceState::NeedsAuthentication,
         ServiceState::Unavailable,
     ] {
-        assert_eq!(color(state, palette::AMBER), palette::RED);
+        assert_eq!(
+            color(state, palette::ACCENT_AUDIOBOOKSHELF),
+            palette::STATUS_ERROR
+        );
     }
 }
 
@@ -115,7 +121,7 @@ fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
             f,
             Rect::new(0, 0, 60, 1),
             "Title",
-            palette::BG_GREEN,
+            palette::SURFACE_FOCUSED,
             &mut layout,
             palette::SURFACE_PLAYBACK,
         );
@@ -151,7 +157,7 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
             f,
             Rect::new(0, 0, 60, 1),
             "Title",
-            palette::BG_GREEN,
+            palette::SURFACE_FOCUSED,
             &mut layout,
             palette::SURFACE_PLAYBACK,
         );
@@ -190,7 +196,7 @@ fn narrow_queue_only_panel_puts_title_on_bottom_now_playing_row() {
             &mut layout,
             4,
             true,
-            &Some(("My Title".to_string(), palette::WHITE)),
+            &Some(("My Title".to_string(), palette::TEXT_STRONG)),
             palette::SURFACE_CHROME,
         );
     })
@@ -237,7 +243,7 @@ fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
             &mut layout,
             4,
             true,
-            &Some((long_title.to_string(), palette::WHITE)),
+            &Some((long_title.to_string(), palette::TEXT_STRONG)),
             palette::SURFACE_CHROME,
         );
     })
@@ -282,7 +288,7 @@ fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
                 &mut layout,
                 4,
                 true,
-                &Some((long_title.to_string(), palette::WHITE)),
+                &Some((long_title.to_string(), palette::TEXT_STRONG)),
                 palette::SURFACE_CHROME,
             );
         })
@@ -313,7 +319,7 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
                 f,
                 Rect::new(0, 0, 30, 1),
                 long_title,
-                palette::WHITE,
+                palette::TEXT_STRONG,
                 layout,
                 palette::SURFACE_CHROME,
             );

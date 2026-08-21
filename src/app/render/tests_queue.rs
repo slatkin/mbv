@@ -75,7 +75,7 @@ fn queue_only_renders_queue_focused_when_queue_holds_focus() {
         let cell = &buf[(layout.queue_area.x + 1, layout.queue_area.y + 1)];
         assert_eq!(
             cell.style().bg,
-            Some(palette::BG_GREEN_SOFT),
+            Some(palette::SURFACE_ACCENT_SOFT),
             "queue-only with queue focus at width {width} must use the queue's focused frame background, got {:?}",
             cell.style().bg
         );
@@ -91,7 +91,7 @@ fn both_mode_focused_queue_keeps_focused_styling() {
     let cell = &buf[(layout.queue_area.x + 1, layout.queue_area.y + 1)];
     assert_eq!(
         cell.style().bg,
-        Some(palette::BG_GREEN_SOFT),
+        Some(palette::SURFACE_ACCENT_SOFT),
         "focused queue in both mode must keep the queue's focused frame background, got {:?}",
         cell.style().bg
     );
@@ -229,7 +229,7 @@ fn wide_queue_only_leftover_rows_stay_dark_bg_without_duplicate_visualizer() {
     let leftover_cell = &buf[(30, 10)];
     assert_eq!(
         leftover_cell.style().bg,
-        Some(palette::DARK_BG),
+        Some(palette::SURFACE_CHROME),
         "wide playback leftovers must keep DARK_BG, got {:?}",
         leftover_cell.style().bg
     );

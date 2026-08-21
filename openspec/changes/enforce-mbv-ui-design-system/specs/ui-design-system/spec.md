@@ -15,7 +15,11 @@ change's `ledger.md`; that list may only shrink.
 The UI SHALL separate screen content, arrangement geometry, and component painting.
 Screens SHALL provide semantic content and approved variants; arrangements SHALL own
 shared geometry; components SHALL own their painting and styling. Screen modules
-SHALL NOT call Ratatui, construct layout rectangles, or compute hit targets.
+SHALL NOT call Ratatui or construct layout rectangles.
+
+Hit-target ownership is outside this capability's scope. Existing app-layout and input
+resolution remains authoritative; this change SHALL NOT introduce a partial migration
+to arrangement- or component-published hit maps.
 
 Classification is by signature: a function taking app state and returning a typed
 content model is screen code; a function taking a typed content model, a `Rect`, and
@@ -26,6 +30,11 @@ breakpoints is an arrangement.
 - **WHEN** a screen needs different titles, metadata, rows, or images
 - **THEN** it supplies a screen model to an existing arrangement or component
 - **AND** it does not copy the arrangement's geometry or painter
+
+#### Scenario: Existing hit-target resolution is preserved
+- **WHEN** a surface is migrated under this capability
+- **THEN** its existing app-layout and input hit-target resolution remains in use
+- **AND** no partial arrangement or component hit-map migration is introduced
 
 #### Scenario: A surface is migrated
 - **WHEN** a surface listed in the change ledger is brought inside the boundary

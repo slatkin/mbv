@@ -1,0 +1,17 @@
+id: no-layout-in-screens
+language: rust
+severity: error
+message: >-
+  screens/ must not call `Layout::...` directly. Breakpoints and rect
+  splitting are owned by an arrangement. See
+  .opencode/skills/mbv-frontend/SKILL.md.
+files:
+  - "src/app/render/screens/**"
+ignores:
+  - "src/app/render/screens/**/*tests*.rs"
+rule:
+  kind: scoped_identifier
+  has:
+    kind: identifier
+    field: path
+    regex: "^Layout$"

@@ -1,0 +1,19 @@
+id: no-render-widget-in-screens
+language: rust
+severity: error
+message: >-
+  screens/ must not call `render_widget`/`render_stateful_widget` directly.
+  Painting is owned by a component; route through an existing one or add a
+  named component if none fits. See
+  .opencode/skills/mbv-frontend/SKILL.md.
+files:
+  - "src/app/render/screens/**"
+ignores:
+  - "src/app/render/screens/**/*tests*.rs"
+rule:
+  kind: call_expression
+  has:
+    kind: field_expression
+    has:
+      kind: field_identifier
+      regex: "^render_(stateful_)?widget$"

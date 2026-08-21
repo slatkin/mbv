@@ -1,0 +1,77 @@
+use super::super::super::palette;
+use super::super::super::App;
+use crate::app::render::components::modal_frame::render_modal_frame;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::Paragraph;
+use ratatui::Frame;
+
+impl App {
+    /// Blocking modal raised when a local daemon's connection is lost with
+    /// no announced shutdown (a crash) -- see `player_event.rs`'s
+    /// `PlayerEvent::Stopped` handling. Taller than the confirm modal: it
+    /// shows diagnostics (last playing title, daemon log path, and an
+    /// optional restart-failure line) above a 3-choice hint instead of a
+    /// yes/no one.
+    pub(in crate::app::render) fn render_daemon_lost_modal(&mut self, f: &mut Frame) {
+        let (last_playing_title, daemon_log_path, restart_error) = match &self.daemon_lost_modal {
+            Some(m) => (
+                m.last_playing_title.clone(),
+                m.daemon_log_path.clone(),
+                m.restart_error.clone(),
+            ),
+            None => return,
+        };
+        let inner = render_modal_frame(
+            f,
+            &mut self.dim_backdrop_active,
+            " Daemon Lost ",
+            64,
+            10,
+            palette::SURFACE_FOCUSED,
+        );
+
+        let mut lines = vec![Line::from(Span::styled(
+            "The local daemon connection was lost unexpectedly.",
+            Style::default().fg(palette::TEXT_STRONG),
+        ))];
+        if let Some(title) = &last_playing_title {
+            lines.push(Line::from(Span::styled(
+                format!("Was playing: {title}"),
+                Style::default().fg(palette::TEXT_SECONDARY),
+            )));
+        }
+        lines.push(Line::from(Span::styled(
+            format!("Daemon log: {daemon_log_path}"),
+            Style::default().fg(palette::TEXT_SECONDARY),
+        )));
+        if let Some(error) = &restart_error {
+            lines.push(Line::from(Span::styled(
+                format!("Restart failed: {error}"),
+                Style::default().fg(palette::STATUS_ERROR),
+            )));
+        }
+        f.render_widget(
+            Paragraph::new(lines),
+            Rect {
+                x: inner.x + 1,
+                y: inner.y + 1,
+                width: inner.width.saturating_sub(2),
+                height: inner.height.saturating_sub(3),
+            },
+        );
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "[R] Restart and resume    [S] Restart, don't resume    [Q] Quit",
+                Style::default().fg(palette::TEXT_EMPHASIS),
+            )),
+            Rect {
+                x: inner.x + 1,
+                y: inner.y + inner.height.saturating_sub(2),
+                width: inner.width.saturating_sub(2),
+                height: 1,
+            },
+        );
+    }
+}
