@@ -167,13 +167,6 @@ pub fn render_view_to_terminal(
     (term, layout)
 }
 
-pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Terminal<TestBackend> {
-    let backend = TestBackend::new(width, height);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    term
-}
-
 pub fn render_view(app: &mut App, width: u16, height: u16) -> LayoutMain {
     render_view_to_terminal(app, width, height).1
 }

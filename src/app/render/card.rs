@@ -95,11 +95,6 @@ impl App {
                 height: self.last_card_height,
             }
         };
-        let placeholder = if self.last_card_height == 0 && image_loading {
-            reservation.height
-        } else {
-            self.last_card_height
-        };
         let placeholder_w = if self.last_card_width == 0 && image_loading {
             reservation.width
         } else {
@@ -111,13 +106,13 @@ impl App {
         // ratios vary too widely here (backdrop, poster, album art,
         // thumbnail) to estimate a tighter width the way the banner does
         // for posters specifically, so this fills the full reserved area.
-        if image_loading && placeholder > 0 {
+        if image_loading && reservation.height > 0 {
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
                 reservation,
             );
         }
-        (placeholder, placeholder_w, image_loading)
+        (reservation.height, placeholder_w, image_loading)
     }
 
     /// Renders artwork for the active/selected queue item when it isn't an
@@ -255,15 +250,6 @@ impl App {
         (rect.height, rect.width, false)
     }
 
-    /// Blank artwork reservation for terminal-images-disabled use: keeps the
-    /// same fallback rectangle the placeholder path uses when it cannot
-    /// render, without fetching or painting any artwork. Returns the same
-    /// geometry as `render_card_visualizer` so `v` never moves the queue.
-    fn render_blank_card_reservation(&mut self, area: Rect, left_align: bool) -> (u16, u16, bool) {
-        let rect = self.card_reserved_rect(area, left_align);
-        (rect.height, rect.width, false)
-    }
-
     /// Renders the card image and returns `(rows_used, cols_used, image_loading)`.
     /// `rows_used`/`cols_used` are 0 if the queue is empty or the image is not
     /// yet ready. `image_loading` is true when a fetch is in-flight (caller
@@ -278,7 +264,8 @@ impl App {
             return self.render_card_visualizer(f, area, left_align);
         }
         if !self.images_enabled() {
-            return self.render_blank_card_reservation(area, left_align);
+            let rect = self.card_reserved_rect(area, left_align);
+            return (rect.height, rect.width, false);
         }
         let playback = self.effective_playback_state();
         let active_source = if playback.active {
