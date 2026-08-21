@@ -30,7 +30,7 @@ When the terminal is narrower than 80 columns, the Power View layout SHALL use a
 
 Mini view's last-shown panel SHALL be tracked independently of the three-state `panel_mode` used at 80+ columns. Widening the terminal back to 80+ columns SHALL restore whatever `panel_mode` and panel focus were active before the terminal narrowed, unchanged by any mini-view toggling that happened while narrow.
 
-#### Scenario: Narrow terminal starts in library-only mini view
+#### Scenario: Narrow terminal starts in queue-only mini view
 
 - **WHEN** the application starts, or the terminal narrows below 80 columns
 - **THEN** the layout shows only the queue panel, full width

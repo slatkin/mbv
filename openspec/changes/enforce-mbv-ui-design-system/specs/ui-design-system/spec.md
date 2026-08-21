@@ -17,10 +17,13 @@ Screens SHALL provide semantic content and approved variants; arrangements SHALL
 shared geometry; components SHALL own their painting and styling. Screen modules
 SHALL NOT call Ratatui, construct layout rectangles, or compute hit targets.
 
-Classification is by signature: a function taking app state and returning a typed
-content model is screen code; a function taking a typed content model, a `Rect`, and
-a buffer is a component; a function placing components within a `Rect` and owning
-breakpoints is an arrangement.
+Classification is by the target shape after the split, not a match against
+existing signatures: a function taking app state and returning a typed content
+model is screen code; a function taking a typed content model, a `Rect`, and
+`&mut Frame` is a component; a function placing components within a `Rect` and
+owning breakpoints is an arrangement. An existing `impl App` method that both
+reads app state and paints through `&mut Frame` is screen code whose painting
+body moves out to a component.
 
 #### Scenario: A screen adds content without duplicating a painter
 - **WHEN** a screen needs different titles, metadata, rows, or images

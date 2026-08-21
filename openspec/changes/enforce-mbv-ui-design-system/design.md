@@ -5,9 +5,9 @@ crate. Existing arrangement specs are `right-panel-arrangements`,
 `library-list-hero`, and `ui-design-language`; this change extends them.
 
 The tree as it stands: `src/app/render/` is 77 files / 23k lines (21k non-test),
-`render/mod.rs` is a flat list of 44 modules, and nothing is labelled a screen or a
-component. `hero.rs`, `list.rs`, `card.rs`, and `queue.rs` each compose *and* paint.
-509 `palette::` references span 56 files. Mouse handling is 1,558 lines in
+`render/mod.rs` declares 45 non-test modules, and nothing is labelled a screen or
+a component. `hero.rs`, `list.rs`, `card.rs`, and `queue.rs` each compose *and*
+paint. 520 `palette::` references span 56 files. Mouse handling is 1,558 lines in
 `src/app/input_mouse*.rs`, working from app state.
 
 ## Goals / Non-Goals
@@ -34,18 +34,34 @@ component. `hero.rs`, `list.rs`, `card.rs`, and `queue.rs` each compose *and* pa
 
 ### Screen / arrangement / component classification (step 1)
 
-The split is decided by one criterion, applied per function, so two agents reach
-the same answer:
+The table below is the target shape of each category after the split, not a
+signature match against the code as it stands today. Classifying existing
+code is a behavioural question, applied per function: does it read app
+state, does it paint, does it place other components.
 
 | Takes | Is a | May |
 |---|---|---|
 | `&App` / app state, returns nothing | **screen** | call arrangements, build typed content models |
-| typed content model + `Rect` + `&mut Buffer` | **component** | paint, compute its own geometry |
+| typed content model + `Rect` + `&mut Frame` | **component** | paint, compute its own geometry |
 | typed content model + `Rect`, places components | **arrangement** | own breakpoints, split rects, place components |
 
-A function that reads app state *and* paints is split at that seam; the state-reading
-half stays in the screen module, the painting half moves. Screen modules end up with
-no `use ratatui::` beyond re-export types, no `Layout::`, no `Rect` construction.
+This codebase paints through `&mut Frame` (116 occurrences in
+`src/app/render/`); it does not use the buffer-widget pattern —
+`&mut Buffer` and `impl Widget` both appear 0 times in `src/`. Nobody
+should look for a `Buffer`/`Widget`-based split.
+
+Only 4 free functions already take `&App` and paint nothing, matching the
+screen row directly. The dominant existing form is the `impl App` render
+method — 52 `impl App` blocks, 50 `&self`/`&mut self` methods taking
+`&mut Frame` (for example `render_tabs` in `chrome_tabs.rs:31`,
+`render_multiselect_popup` in `overlays/multiselect.rs:153`) — which
+reads app state *and* paints in the same body, matching the screen row
+and the component row at once. These are screen code: a function that
+reads app state *and* paints is split at that seam, the state-reading
+half stays in the screen module, and the painting half of its body is
+what moves out to a component. Screen modules end up with no
+`use ratatui::` beyond re-export types, no `Layout::`, no `Rect`
+construction.
 
 Target layout:
 
@@ -56,7 +72,12 @@ src/app/render/components/   -- painting, self-owned geometry
 src/app/render/theme/        -- roles public, primitives private
 ```
 
-The move is mechanical and behaviour-preserving. Files near the 800-line cap
+`theme/` is not created in step 1: nothing is classified into it yet,
+since `palette.rs` lives outside `render/` today and only moves into
+`theme/` in step 2 (task 2.1). Step 1 creates only `screens/`,
+`arrangements/`, and `components/`.
+
+The move is behaviour-preserving. Files near the 800-line cap
 (`feeds.rs`, `mod.rs`, `audiobookshelf.rs`, `queue.rs`) split during the move.
 
 This boundary is settled by the maintainer in step 1 and is not re-litigated by
@@ -75,18 +96,29 @@ pub const ACCENT: Color = AQUA;
 
 Rewriting call sites to prefer the alias enforces nothing — `BG_GREEN` stays
 reachable. Instead: primitives move to a private module inside `theme/`, roles
-become the only public surface, and the compiler produces the call-site diff. Where
-no role fits a site, a role is added; the added roles are the real output of this
-step and are worth reviewing.
+become the only public surface, and the compiler produces the call-site list. Of
+520 `palette::` references, ~130 already use a role; the remaining ~390 use a
+primitive directly and need one assigned. That assignment is real work, but not a
+fresh naming exercise: the archived "Role vocabulary (final)" table
+(`openspec/changes/archive/2026-08-17-centralize-ui-design-language/design.md`,
+starting at line 83) already assigns a role to every primitive. Step 2 implements
+that table rather than inventing role names. Where a site genuinely isn't covered,
+a role is added; the added roles are the real design output of this step and are
+worth reviewing.
 
-This is the one place where the rule needs no check, no lint, and no reviewer.
+The rule itself then needs no check, no lint, and no reviewer — only the added
+roles do.
 
 ### Components own hit targets — pending a design gate (step 4)
 
 Components deriving hit targets from their painted geometry is correct in principle.
-It is not yet designed, because the consumer is not a screen:
-`input_mouse_panels.rs` handles a mouse event on a later tick, from app state
-(`row >= content_top`), not from render output.
+Archived tasks 8.1-8.5 in
+`openspec/changes/archive/2026-08-17-centralize-ui-design-language/tasks.md`
+already specify this work — the hit-target representation, the four `LayoutMain`
+row representations, the two pane rects, and the `input_mouse*` collapse — and
+were left unchecked when that change archived. It is not yet designed, because
+the consumer is not a screen: `input_mouse_panels.rs` handles a mouse event on a
+later tick, from app state (`row >= content_top`), not from render output.
 
 Making this work requires a render→input channel with answers to:
 
@@ -157,8 +189,9 @@ not establish conformance.
 ### Migration gate: characterization test first
 
 Buffer coverage is uneven. `list_tests.rs` (758 lines) and `movies_wide_tests.rs`
-(359) pin the list/hero paths well. The 12 overlay files (~90KB) have essentially
-none, and four surfaces queued for migration are overlays.
+(359) pin the list/hero paths well. Of the 11 overlay files (~90KB), 9 have zero
+buffer coverage; `help.rs` has 4 inline tests and `library_routes.rs` has 7. All
+11 overlay surfaces are queued for migration (ledger rows 9-19).
 
 So each surface migration lands in two commits: the characterization `TestBackend`
 test first, proving current output; then the migration, with that test unchanged.
@@ -183,8 +216,9 @@ and independently testable.
 ## Risks / Trade-offs
 
 - [Risk] The step-1 module move is a large mechanical diff that could hide a
-  behaviour change. -> Move only; no logic edits in the same commit. Existing
-  render tests must pass unchanged.
+  behaviour change. -> Two commits: whole-module moves first (already
+  one-sided), then seam splits for functions that read app state and paint.
+  No behaviour change in either; existing render tests must pass unchanged.
 - [Risk] Step 2 surfaces sites where no semantic role fits, tempting a
   pass-through alias. -> Adding a role is the correct answer and is reviewable;
   a `TEXT`-shaped escape hatch is not.

@@ -114,6 +114,9 @@ impl App {
             && area.width < super::MINI_VIEW_THRESHOLD
         {
             self.mini_view_focus = PanelFocus::Queue;
+            // Same entry contract as pressing `x` into queue-only: moving
+            // effective focus to the queue initializes its cursor.
+            self.focus_queue_initial_item();
         }
         self.terminal_width = area.width;
         self.terminal_height = area.height;

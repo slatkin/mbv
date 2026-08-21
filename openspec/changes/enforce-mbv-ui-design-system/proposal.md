@@ -14,14 +14,18 @@ The boundary is established mechanically, then surfaces move behind it one at a
 time. Each step below is a separate mergeable PR; none depends on a later one.
 
 1. **Split `src/app/render/` into named screen and component/arrangement
-   modules.** The classification is the deliverable — a flat list of 44 modules
-   that both compose and paint gives the rules nothing to attach to. The split is
-   a mechanical move; it changes no behaviour.
+   modules.** The classification is the deliverable — a flat list of 45
+   non-test modules that both compose and paint gives the rules nothing to
+   attach to. The split preserves behaviour; the one-sided modules move
+   wholesale, and functions that both read state and paint are extracted at
+   that seam.
 2. **Make raw palette constants private.** `src/app/palette.rs` currently
    defines semantic roles as aliases beside the raw constants they alias, in the
    same file, all public. Moving primitives behind a private module and exposing
-   only roles turns 509 call sites into a compiler-driven diff and makes the rule
-   self-enforcing rather than reviewer-enforced.
+   only roles turns the 520 `palette::` call sites into a compiler-reported
+   list; ~130 already use a role, and assigning the remaining ~390 is real
+   work — see `design.md` step 2 for why it is mechanical rather than a fresh
+   naming exercise.
 3. **Add the guidance and the bypass checks.** Mandatory rules in `AGENTS.md`, a
    committed `mbv-frontend` skill, and ast-grep rules scoped to the screen
    modules created in step 1.
@@ -44,7 +48,7 @@ touches. Surfaces nobody touches are not blocking.
 
 The earlier draft required every surface classified and enforced before this
 change could close, with no grandfathering. Against 21k lines of non-test render
-code, 509 palette sites in 56 files, and 12 overlay files with no buffer
+code, 520 palette sites in 56 files, and 11 overlay files, 9 with no buffer
 coverage, that is a multi-month rewrite behind a single issue with no merge
 points — and it puts the untested overlays in the same batch as the well-tested
 list/hero paths. The ledger reaches the same endpoint while every step is
@@ -70,14 +74,16 @@ reviewable on its own.
 
 - `src/app/render/`: module split into screen vs component/arrangement
   responsibilities; per-surface migration thereafter.
-- `src/app/palette.rs`: primitives privatised, roles promoted; ~509 call sites
-  updated by the compiler.
+- `src/app/palette.rs`: primitives privatised, roles promoted; 520 `palette::`
+  call sites touched, ~390 newly assigned a role.
 - `src/app/input_mouse*.rs`: read during step 4's design; changed only if step 4
   clears.
 - `CONTEXT.md`: new domain terms (component, arrangement, bespoke surface,
-  policy, variant) added under Presentation per the repo term-coordination rule.
+  policy, variant) under Presentation — three collide with existing entries and
+  are flagged to the user before anything is added (tasks.md 1.5).
 - `AGENTS.md`: mandatory UI rules.
-- `.opencode/skills/mbv-frontend/`: committed agent workflow and review guidance.
+- `.opencode/skills/mbv-frontend/` and `.claude/skills/mbv-frontend/`: committed
+  agent workflow and review guidance, in both trees.
 - ast-grep rules for direct painting and raw-palette access in screen modules.
 - No runtime protocol, persisted-data, or user-facing media behaviour changes.
 
