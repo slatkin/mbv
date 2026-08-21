@@ -187,8 +187,8 @@ pub(super) const LEFT_WIDTH_STEP: u16 = 5;
 /// the other way around.
 pub(super) const TWO_COLUMN_THRESHOLD: u16 = 82;
 /// The narrow-terminal breakpoint below which the Power View uses the
-/// two-state "mini view" (`x` toggles library-only ⇄ queue-only) instead of
-/// the three-state both/library-only/queue-only cycle. Independent of and
+/// two-state "mini view" (`x` toggles library-only <-> queue-only) instead of
+/// the three-state both/queue-only/library-only cycle. Independent of and
 /// unrelated to `TWO_COLUMN_THRESHOLD` (82), which governs the library
 /// panel's internal list-column layout (see design.md).
 pub(super) const MINI_VIEW_THRESHOLD: u16 = 80;

@@ -98,34 +98,91 @@ fn both_mode_focused_queue_keeps_focused_styling() {
 }
 
 #[test]
-fn mini_view_starts_at_library_only_by_default() {
+fn mini_view_starts_at_queue_only_by_default() {
     // A fresh app on a narrow terminal, with no prior interaction, must show
-    // library-only (the default mini_view_focus), not both and not queue-only.
+    // queue-only (the default mini_view_focus), not both and not library-only.
     let mut app = make_movie_app();
     let width = crate::app::MINI_VIEW_THRESHOLD - 1;
 
     let layout = render_view(&mut app, width, 20);
 
     assert_eq!(
-        layout.queue_area.width, 0,
-        "mini view must start library-only: queue area must be absent"
+        layout.queue_area.width,
+        width.saturating_sub(4),
+        "mini view must start queue-only: queue must span the terminal width"
     );
     assert_eq!(
         layout.panel_area.width, width,
-        "mini library-only overlays must span the terminal width"
+        "mini queue-only panel must span the terminal width"
     );
     assert_eq!(
         layout.panel_content_area.width,
         width.saturating_sub(4),
-        "mini library-only mouse content bounds must span the terminal width"
+        "mini queue-only mouse content bounds must span the terminal width"
     );
     assert_eq!(
         app.effective_panel_mode(),
-        crate::app::PanelMode::LibraryOnly,
-        "fresh narrow app defaults to library-only mini view"
+        crate::app::PanelMode::QueueOnly,
+        "fresh narrow app defaults to queue-only mini view"
     );
 }
 
+#[test]
+fn narrowing_from_each_wide_mode_starts_queue_only_without_mutating_wide_state() {
+    for (mode, focus) in [
+        (crate::app::PanelMode::Both, crate::app::PanelFocus::Library),
+        (
+            crate::app::PanelMode::LibraryOnly,
+            crate::app::PanelFocus::Library,
+        ),
+        (
+            crate::app::PanelMode::QueueOnly,
+            crate::app::PanelFocus::Queue,
+        ),
+    ] {
+        let mut app = make_movie_app();
+        app.panel_mode = mode;
+        app.panel_focus = focus;
+        app.mini_view_focus = crate::app::PanelFocus::Library;
+
+        render_app_to_terminal(&mut app, crate::app::MINI_VIEW_THRESHOLD - 1, 20);
+
+        assert_eq!(app.effective_panel_mode(), crate::app::PanelMode::QueueOnly);
+        assert_eq!(app.effective_panel_focus(), crate::app::PanelFocus::Queue);
+        assert_eq!(app.panel_mode, mode);
+        assert_eq!(app.panel_focus, focus);
+    }
+}
+
+#[test]
+fn narrow_toggle_survives_render_and_widening_restores_wide_state() {
+    let mut app = make_movie_app();
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.panel_focus = crate::app::PanelFocus::Queue;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+
+    render_app_to_terminal(&mut app, crate::app::MINI_VIEW_THRESHOLD - 1, 20);
+    app.handle_key(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('x'),
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    assert_eq!(
+        app.effective_panel_mode(),
+        crate::app::PanelMode::LibraryOnly
+    );
+
+    render_app_to_terminal(&mut app, crate::app::MINI_VIEW_THRESHOLD - 1, 20);
+    assert_eq!(
+        app.effective_panel_mode(),
+        crate::app::PanelMode::LibraryOnly
+    );
+
+    render_app_to_terminal(&mut app, crate::app::MINI_VIEW_THRESHOLD, 20);
+    assert_eq!(app.effective_panel_mode(), crate::app::PanelMode::QueueOnly);
+    assert_eq!(app.effective_panel_focus(), crate::app::PanelFocus::Queue);
+    assert_eq!(app.panel_mode, crate::app::PanelMode::QueueOnly);
+    assert_eq!(app.panel_focus, crate::app::PanelFocus::Queue);
+}
 #[test]
 fn queue_keeps_rows_formerly_reserved_for_separate_visualizer() {
     // The visualizer now shares the queue card slot, so selecting it must not

@@ -138,8 +138,8 @@ impl App {
                 .map(|v| (v as u16).max(LEFT_WIDTH_DEFAULT))
                 .unwrap_or(LEFT_WIDTH_DEFAULT),
             panel_mode: PanelMode::default(),
-            // Mini view always starts on the library panel; not persisted.
-            mini_view_focus: PanelFocus::Library,
+            // Mini view always starts on the queue panel; not persisted.
+            mini_view_focus: PanelFocus::Queue,
             // Always start on Home. The saved queue is restored independently;
             // the saved library tab remains available for runtime persistence.
             library_tab_pending: 0,
