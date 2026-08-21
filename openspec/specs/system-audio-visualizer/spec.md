@@ -44,7 +44,7 @@ mbv SHALL keep captured PCM in a bounded latest-sample buffer, supervise the Pip
 
 ### Requirement: Unsupported playback paths remain unchanged
 
-The visualizer SHALL NOT start local PipeWire capture for remote playback or audio-pipe playback. Playback hosted by a same-host Local daemon SHALL remain supported because it is audible on this machine.
+The visualizer SHALL NOT start system-output capture for attached Emby Session playback or audio-pipe playback. Playback hosted by a same-host Local daemon SHALL NOT be treated as unsupported. Direct remote Player-owner playback SHALL permit local capture because external local forwarding such as Snapcast can make that playback audible on this machine; when no such forwarding exists, the local system-output monitor is simply silent.
 
 ### Requirement: Stereo PCM renders as a vectorscope
 

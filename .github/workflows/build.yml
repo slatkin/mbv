@@ -37,7 +37,7 @@ jobs:
             "$@"
           }
           pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed rust nasm mpv pipewire openssl github-cli git openssh
+          pacman_retry pacman -S --noconfirm --needed rust clang nasm mpv pipewire openssl dpkg github-cli git openssh
 
       - uses: actions/checkout@v7
 
@@ -98,6 +98,10 @@ jobs:
           cargo deb --no-build --manifest-path crates/mbvd/Cargo.toml --deb-version "${PKGVER}"
           MBV_DEB=$(ls target/debian/mbv_*.deb | head -1)
           MBVD_DEB=$(ls target/debian/mbvd_*.deb | head -1)
+          for deb in "${MBV_DEB}" "${MBVD_DEB}"; do
+            dpkg-deb --field "${deb}" Depends | grep -Eq '(^|, )pipewire(,|$)'
+            dpkg-deb --field "${deb}" Depends | grep -Eq '(^|, )libpipewire-0\.3-0(,|$)'
+          done
           echo "MBV_DEB=${MBV_DEB}" >> "$GITHUB_ENV"
           echo "MBVD_DEB=${MBVD_DEB}" >> "$GITHUB_ENV"
 

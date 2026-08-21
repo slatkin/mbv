@@ -12,7 +12,7 @@ ncmpcpp is GPL-2.0-or-later. It is a behavioral reference only; this change must
 
 - Own capture, buffering, freshness, and rendering inside mbv.
 - Keep the capture callback bounded and independent from TUI timing.
-- Preserve the existing visualizer lifecycle conditions and panel placement.
+- Preserve the existing visualizer lifecycle conditions and panel placement, except that Direct remote playback may capture audio forwarded into the local system output.
 - Make failure observable in logs but harmless to playback.
 - Leave a raw stereo PCM boundary that later modes can consume without designing those modes now.
 
@@ -20,7 +20,7 @@ ncmpcpp is GPL-2.0-or-later. It is a behavioral reference only; this change must
 
 - Abstract audio backends or support PulseAudio, ALSA, macOS, or Windows.
 - Add FFT, spectra, waveform modes, mode cycling, trails, decay, user-facing gain controls, or channel selection.
-- Capture only mbv-owned playback or synchronize against downstream device latency.
+- Capture only mbv-owned playback or synchronize against downstream device latency; the monitor may include any locally audible forwarded audio.
 - Change Local daemon startup, shared data, Stay-Alive behavior, or the ctrl protocol.
 - Translate ncmpcpp source or reproduce its configuration surface.
 
@@ -40,6 +40,8 @@ The stream will auto-connect to the default system-output sink when visualizatio
 
 Explicit node selection was rejected because it would introduce device configuration and persistence unrelated to the single-mode replacement.
 
+Direct remote Player-owner playback does not imply that audio is inaudible locally: external forwarding such as Snapcast may feed the same machine's default sink. The app therefore permits capture for Direct remote playback while retaining the attached Emby Session and audio-pipe exclusions. No forwarding detection or configuration is added; an unforwarded remote playback path produces a silent local monitor.
+
 ### Share a bounded overwrite buffer, not frame messages
 
 Capture and rendering will share a fixed-capacity circular buffer of interleaved stereo samples. Capture overwrites the oldest samples when full. Rendering snapshots the newest complete window and never consumes a queue of precomputed visual frames. Lock acquisition on the capture path must be non-blocking; if the renderer momentarily owns the buffer, the incoming block may be dropped rather than delaying PipeWire.
@@ -52,7 +54,7 @@ A frame channel was rejected because the current `try_send` behavior retains old
 
 For every complete sample pair in the newest window, the renderer will apply a fixed internal 4x display gain, clamp each channel to `[-1.0, 1.0]`, map left amplitude around the panel's horizontal center, and map right amplitude around its vertical center. The gain is a rendering adjustment only: captured samples remain raw and no user-facing setting is added. Duplicate terminal coordinates need only be written once. Silence maps to the center; a fully silent window is treated as inactive so it does not display a permanent center point.
 
-The renderer will clear the panel interior each frame and use the existing visualizer foreground/background palette. It will not add persistence trails, interpolation, antialiasing, user-facing gain controls, or ncmpcpp's color-ring calculation. These omissions keep the implementation independent and make the vectorscope behavior derivable entirely from this design.
+The renderer will clear the panel interior each frame and preserve the existing background palette. Point color is selected from the existing bright palette by amplified distance from center: aqua, foam, yellow, then red across four amplitude bands. This stable mapping avoids sample-order flicker while making signal intensity visible. It will not add persistence trails, interpolation, antialiasing, user-facing gain controls, or ncmpcpp's color-ring calculation.
 
 ### Persist one validated glyph
 
@@ -62,9 +64,9 @@ The two-character ncmpcpp `visualizer_look` contract was rejected because only t
 
 ### Measure freshness at the render boundary
 
-The active visualizer will target a 16 ms render interval. Each render snapshots current PCM immediately before drawing, so delayed iterations skip history rather than replay it. Development-only measurement will count terminal frames that consumed a newer sample generation and verify at least 50 fresh frames per second under steady synthetic or looped-back audio on a capable terminal.
+The active visualizer will target a 16 ms render interval. Each render snapshots current PCM immediately before drawing, so delayed iterations skip history rather than replay it.
 
-Configured timers alone are not acceptance evidence. The old assumption that a `poll` timeout caps reads was incorrect because readiness wakes `poll` immediately; measurement must cover capture callback generation, sample publication, app-loop wakeup, and terminal draw completion.
+Configured timers alone are not acceptance evidence. The old assumption that a `poll` timeout caps reads was incorrect because readiness wakes `poll` immediately; measurement must cover capture callback publication, app-loop wakeup, and terminal draw completion.
 
 ## Risks / Trade-offs
 

@@ -33,7 +33,6 @@ impl App {
         }
 
         let mut seen = HashSet::new();
-        let point_style = Style::default().fg(palette::AQUA).bg(bg);
         for sample in &self.visualizer_window.samples {
             let Some((x, y)) = sample_to_cell(*sample, inner.width, inner.height) else {
                 continue;
@@ -43,7 +42,7 @@ impl App {
             }
             if let Some(cell) = f.buffer_mut().cell_mut((inner.x + x, inner.y + y)) {
                 cell.set_symbol(&self.visualizer_glyph);
-                cell.set_style(point_style);
+                cell.set_style(Style::default().fg(point_color(*sample)).bg(bg));
             }
         }
     }
@@ -81,6 +80,15 @@ fn sample_to_cell(sample: StereoSample, width: u16, height: u16) -> Option<(u16,
         (x.round() as i32).clamp(0, width as i32 - 1) as u16,
         (y.round() as i32).clamp(0, height as i32 - 1) as u16,
     ))
+}
+
+fn point_color(sample: StereoSample) -> Color {
+    match sample.left.abs().max(sample.right.abs()) * DISPLAY_GAIN {
+        amplitude if amplitude < 0.25 => palette::AQUA,
+        amplitude if amplitude < 0.5 => palette::FOAM,
+        amplitude if amplitude < 0.75 => palette::YELLOW,
+        _ => palette::RED,
+    }
 }
 
 #[cfg(test)]
@@ -144,6 +152,24 @@ mod tests {
             ),
             Some((4, 4))
         );
+    }
+
+    #[test]
+    fn point_color_uses_amplitude_bands() {
+        for (amplitude, expected) in [
+            (0.04, palette::AQUA),
+            (0.08, palette::FOAM),
+            (0.15, palette::YELLOW),
+            (0.25, palette::RED),
+        ] {
+            assert_eq!(
+                point_color(StereoSample {
+                    left: amplitude,
+                    right: 0.0,
+                }),
+                expected
+            );
+        }
     }
 
     #[test]

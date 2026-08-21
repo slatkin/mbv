@@ -43,15 +43,19 @@ mbv SHALL keep captured PCM in a bounded latest-sample buffer, SHALL supervise t
 - **THEN** the capture stream and worker do not remain active after the mbv process terminates
 
 ### Requirement: Unsupported playback paths remain unchanged
-The visualizer SHALL NOT start system-output capture for playback that is not audible on this machine, or for audio-pipe playback, unless a future capability explicitly adds support. Playback hosted by a same-host Local daemon SHALL NOT be treated as unsupported: it is audible on this machine and is covered by the supported-playback requirement below.
+The visualizer SHALL NOT start system-output capture for attached Emby Session playback or audio-pipe playback. Playback hosted by a same-host Local daemon SHALL NOT be treated as unsupported. Direct remote Player-owner playback SHALL permit local capture because external local forwarding such as Snapcast can make that playback audible on this machine; when no such forwarding exists, the local system-output monitor is simply silent.
 
 #### Scenario: Audio-pipe playback is active
 - **WHEN** playback uses the configured audio pipe
 - **THEN** mbv does not start the system-audio visualizer worker
 
-#### Scenario: Remote playback is active
-- **WHEN** playback is handled by a daemon on another machine, or by an attached Emby session on another device
+#### Scenario: Attached Session playback is active
+- **WHEN** playback is observed through an attached Emby Session on another device
 - **THEN** mbv does not start local PipeWire capture
+
+#### Scenario: Direct remote playback is forwarded locally
+- **WHEN** playback is handled by a Direct remote Player owner and its audio is forwarded into this machine's default system output
+- **THEN** mbv captures that local system output and displays the forwarded audio
 
 #### Scenario: Audio-pipe playback through a local daemon
 - **WHEN** playback is hosted by a same-host Local daemon and the audio pipe is enabled
@@ -87,7 +91,7 @@ If PipeWire is unavailable, the default system-output monitor cannot be captured
 - **THEN** mbv clears active vectorscope points and continues the player session
 
 ### Requirement: Stereo PCM renders as a vectorscope
-The visualizer SHALL apply a fixed internal display gain to each newest complete stereo sample pair before clamping it and mapping it into the existing panel, with left-channel amplitude controlling horizontal displacement and right-channel amplitude controlling vertical displacement. The display gain SHALL not change captured samples or add a user-facing configuration setting. The figure SHALL be cleared and rebuilt from the newest sample window on each visual frame.
+The visualizer SHALL apply a fixed internal display gain to each newest complete stereo sample pair before clamping it and mapping it into the existing panel, with left-channel amplitude controlling horizontal displacement and right-channel amplitude controlling vertical displacement. Points SHALL use aqua, foam, yellow, and red from the existing palette in amplitude bands from center outward. The display gain SHALL not change captured samples or add a user-facing configuration setting. The figure SHALL be cleared and rebuilt from the newest sample window on each visual frame.
 
 #### Scenario: Stereo signal is captured
 - **WHEN** the captured left and right channels contain non-silent samples
