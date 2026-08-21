@@ -368,6 +368,45 @@ shared width breakpoint and minimum-height guard are satisfied; otherwise the
 surface uses Inline hero.
 _Avoid_: separate detail block, split, side-by-side, hero-on-side
 
+**Component**:
+A `src/app/render/components/` unit that takes a typed content model plus a
+`Rect` (and, for Ratatui, a `&mut Buffer`/`Frame`), paints, and computes its
+own geometry within that `Rect`. Components consume semantic theme roles or
+component style policies — never arbitrary `Color`/`Style` passed in from a
+screen.
+_Avoid_: screen, arrangement
+
+**Arrangement**:
+A `src/app/render/arrangements/` unit that takes a typed content model plus a
+`Rect`, places one or more components, and owns breakpoints and rect
+splitting. Arrangements sit between screens and components in the render
+dependency order (`screens -> arrangements -> components`).
+_Avoid_: layout (bare), component, screen
+
+**Variant**:
+One of a small, closed set of named presentations for an arrangement or
+component, centrally defined rather than invented per screen — for example
+Inline hero and Hero-on-left are the two variants of the hero presentation. A
+screen selects a variant and supplies data; it does not branch on ad hoc
+per-screen painting logic to fake one.
+_Avoid_: mode (reserved for Panel mode), option
+
+**Policy**:
+A named constructor exposing a small, closed set of valid style or behavior
+combinations for a component or arrangement, used at the screen/component
+boundary instead of passing arbitrary booleans or raw `Style`/`Color` values
+across it.
+_Avoid_: config, options, flags (bare)
+
+**Bespoke surface**:
+A surface that, after a genuine attempt to reuse the closed arrangement and
+component vocabulary, still cannot express its presentation that way. It is
+registered as a named component with its own stated reason and its own
+buffer-test coverage, but otherwise obeys the same ownership, semantic
+theming, and verification rules as every other surface — it is not an
+exemption from them.
+_Avoid_: one-off, special case, exception
+
 **Sidebar**:
 An anchored, full-height destination rendered at a fixed width from one edge
 of the window (code: `render_panel_shell`, whose rect is literally named

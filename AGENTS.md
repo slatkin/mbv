@@ -31,6 +31,22 @@ bypass filtering. `rtk grep` format flags (`-c/-l/-L/-o/-Z`) run raw.
 - Lint: `rtk cargo clippy --workspace --all-targets`
 - File-size check: `rtk make check-code-file-lines`
 
+## TUI ownership
+
+- `src/app/render/{screens,arrangements,components,theme}/`: screens own app
+  state and content; arrangements own placement and breakpoints; components
+  own painting and geometry; theme exposes semantic roles only, primitives
+  are private. See `CONTEXT.md` Presentation for term definitions.
+- Screens do not call Ratatui, construct `Rect`s, or compute hit targets.
+  A structural or visual override lives in the owning arrangement, component,
+  or theme — never as a screen-local painter branch.
+- This boundary is mandatory for new UI work from this PR forward. Existing
+  surfaces migrate individually per
+  `openspec/changes/enforce-mbv-ui-design-system/ledger.md`; an unmigrated
+  surface is not licence to add another one.
+- Workflow, the reuse/override decision table, and the completion checklist:
+  `.opencode/skills/mbv-frontend/SKILL.md`.
+
 ## Constraints
 
 - Source files cap at 800 lines; split over-limit files in the same PR.

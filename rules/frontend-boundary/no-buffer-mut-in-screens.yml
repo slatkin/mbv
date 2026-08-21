@@ -1,0 +1,17 @@
+id: no-buffer-mut-in-screens
+language: rust
+severity: error
+message: >-
+  screens/ must not reach into `buffer_mut()`. Direct buffer access is a
+  components/ escape hatch only. See .opencode/skills/mbv-frontend/SKILL.md.
+files:
+  - "src/app/render/screens/**"
+ignores:
+  - "src/app/render/screens/**/*tests*.rs"
+rule:
+  kind: call_expression
+  has:
+    kind: field_expression
+    has:
+      kind: field_identifier
+      regex: "^buffer_mut$"

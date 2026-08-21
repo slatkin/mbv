@@ -1,5 +1,7 @@
-use super::album::AlbumRowsCursorCtx;
-use super::album_plan::{sorted_group_album_order, GroupedAlbumDisplayRow, HeaderFocusCtx};
+use super::screens::album::AlbumRowsCursorCtx;
+use super::screens::album_plan::{
+    sorted_group_album_order, GroupedAlbumDisplayRow, HeaderFocusCtx,
+};
 use super::test_helpers::*;
 use super::*;
 use crate::app::tests::make_item;

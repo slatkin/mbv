@@ -1,6 +1,6 @@
 use super::test_helpers::*;
 use super::*;
-use crate::app::render::list_rows::SELECTED_BLOCK_SIDE_PADDING;
+use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::tests_podcast::audiobookshelf_app;
 use crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use mbv_core::audiobookshelf::AudiobookshelfProgress;
@@ -45,7 +45,7 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
     assert_eq!(buffer[(hero.x, hero.y)].symbol(), "▁");
     assert_eq!(
         buffer[(hero.x, hero.y)].style().fg,
-        Some(palette::SEEK_TRACK)
+        Some(palette::PROGRESS_TRACK)
     );
     assert_eq!(
         buffer[(hero.x, hero.y + 1)].style().bg,
@@ -63,7 +63,7 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
     );
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].style().fg,
-        Some(palette::SEEK_TRACK)
+        Some(palette::PROGRESS_TRACK)
     );
 }
 

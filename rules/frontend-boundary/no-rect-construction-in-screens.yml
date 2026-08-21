@@ -1,0 +1,25 @@
+id: no-rect-construction-in-screens
+language: rust
+severity: error
+message: >-
+  screens/ must not construct a `Rect` (struct literal or `Rect::new`).
+  Geometry is owned by an arrangement or component. See
+  .opencode/skills/mbv-frontend/SKILL.md.
+files:
+  - "src/app/render/screens/**"
+ignores:
+  - "src/app/render/screens/**/*tests*.rs"
+rule:
+  any:
+    - kind: struct_expression
+      has:
+        kind: type_identifier
+        field: name
+        regex: "^Rect$"
+    - kind: call_expression
+      has:
+        kind: scoped_identifier
+        has:
+          kind: identifier
+          field: path
+          regex: "^Rect$"

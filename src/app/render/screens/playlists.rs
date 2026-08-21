@@ -1,0 +1,319 @@
+use super::super::super::palette;
+use super::super::super::ui_util::trunc_str;
+use super::super::super::App;
+use super::super::super::{SavePlaylistStage, PLAYLISTS_PANEL_W};
+use crate::app::render::components::modal_frame::render_modal_frame;
+use ratatui::layout::Rect;
+use ratatui::style::{Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::Paragraph;
+use ratatui::Frame;
+
+impl App {
+    pub(in crate::app::render) fn render_playlists_panel(
+        &mut self,
+        f: &mut Frame,
+        area: Option<Rect>,
+    ) {
+        let (title, hint) = if self.playlists_open.is_some() {
+            let name = self
+                .playlists_open
+                .as_ref()
+                .map(|p| p.name.as_str())
+                .unwrap_or("Playlist");
+            (
+                name.to_uppercase(),
+                "[↵]play [←]back [Esc]close".to_string(),
+            )
+        } else {
+            (
+                "PLAYLISTS".to_string(),
+                "[↵]play [→]browse [n]rename [d]delete [r]refresh [Esc]close".to_string(),
+            )
+        };
+
+        let content = match area {
+            Some(area) => Self::render_panel_shell_at(f, area, &title, &hint, true),
+            None => Self::render_panel_shell(f, f.area(), PLAYLISTS_PANEL_W, &title, &hint),
+        };
+        let ix = content.x;
+        let iw = content.width as usize;
+        let list_h = content.height as usize;
+
+        if self.playlists_open.is_some() {
+            self.render_open_playlist_panel(f, content, ix, iw, list_h);
+            return;
+        }
+
+        if self.playlists_loading && self.playlists.is_empty() {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    " Loading…",
+                    Style::default().fg(palette::TEXT_SECONDARY),
+                )),
+                content,
+            );
+            return;
+        }
+        if self.playlists.is_empty() {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    " No playlists found",
+                    Style::default().fg(palette::TEXT_SECONDARY),
+                )),
+                content,
+            );
+            return;
+        }
+
+        if self.playlists_cursor < self.playlists_scroll {
+            self.playlists_scroll = self.playlists_cursor;
+        } else if self.playlists_cursor >= self.playlists_scroll + list_h {
+            self.playlists_scroll = self.playlists_cursor + 1 - list_h;
+        }
+
+        let loaded_id: Option<&str> = if let crate::config::QueueSource::Playlist {
+            id: Some(ref id),
+            ..
+        } = self.queue_source
+        {
+            Some(id.as_str())
+        } else {
+            None
+        };
+
+        for (vi, pl) in self.playlists[self.playlists_scroll..].iter().enumerate() {
+            if vi >= list_h {
+                break;
+            }
+            let abs_idx = self.playlists_scroll + vi;
+            let selected = abs_idx == self.playlists_cursor;
+            let is_loaded = loaded_id.map(|id| id == pl.id.as_str()).unwrap_or(false);
+            let fg = if selected {
+                palette::ACCENT_ACTIVE
+            } else if is_loaded {
+                palette::TEXT_ACCENT_MUTED
+            } else {
+                palette::TEXT_PRIMARY
+            };
+            let count_str = if pl.total_count > 0 {
+                format!(" ({})", pl.total_count)
+            } else {
+                String::new()
+            };
+            let name_max =
+                Self::panel_row_text_width(content.width).saturating_sub(count_str.len());
+            let row_y = content.y + vi as u16;
+            Self::render_panel_row(
+                f,
+                ix,
+                row_y,
+                content.width,
+                selected,
+                vec![
+                    Span::styled(
+                        trunc_str(&pl.name, name_max),
+                        Style::default().fg(fg).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(count_str, Style::default().fg(palette::TEXT_MUTED)),
+                ],
+            );
+        }
+        Self::render_sidebar_scrollbar(f, content, self.playlists.len(), self.playlists_scroll);
+    }
+
+    fn render_open_playlist_panel(
+        &mut self,
+        f: &mut Frame,
+        content: Rect,
+        ix: u16,
+        iw: usize,
+        list_h: usize,
+    ) {
+        if self.playlists_open_loading && self.playlists_open_items.is_empty() {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    " Loading…",
+                    Style::default().fg(palette::TEXT_SECONDARY),
+                )),
+                content,
+            );
+            return;
+        }
+        if self.playlists_open_items.is_empty() {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    " Playlist is empty",
+                    Style::default().fg(palette::TEXT_SECONDARY),
+                )),
+                content,
+            );
+            return;
+        }
+
+        // Clamp against the current item count: a background reload (e.g.
+        // LibEvent::PlaylistItemsLoaded) can replace playlists_open_items with a
+        // shorter list while the cursor/scroll are still positioned in the old,
+        // longer one, which would otherwise panic the slices below.
+        let max_idx = self.playlists_open_items.len() - 1;
+        self.playlists_open_cursor = self.playlists_open_cursor.min(max_idx);
+        self.playlists_open_scroll = self.playlists_open_scroll.min(max_idx);
+
+        let item_lines = |label: &str| -> usize {
+            let text_w = iw.saturating_sub(6);
+            if label.len() <= text_w {
+                1
+            } else {
+                2
+            }
+        };
+
+        while self.playlists_open_scroll > self.playlists_open_cursor {
+            self.playlists_open_scroll = self.playlists_open_cursor;
+        }
+        loop {
+            if self.playlists_open_scroll >= self.playlists_open_cursor {
+                break;
+            }
+            let lines_to_cursor: usize = self.playlists_open_items
+                [self.playlists_open_scroll..=self.playlists_open_cursor]
+                .iter()
+                .map(|i| item_lines(&i.display_name()))
+                .sum();
+            if lines_to_cursor <= list_h {
+                break;
+            }
+            self.playlists_open_scroll += 1;
+        }
+
+        let mut y = 0usize;
+        for (vi, item) in self.playlists_open_items[self.playlists_open_scroll..]
+            .iter()
+            .enumerate()
+        {
+            if y >= list_h {
+                break;
+            }
+            let abs_idx = self.playlists_open_scroll + vi;
+            let selected = abs_idx == self.playlists_open_cursor;
+            let fg = if selected {
+                palette::ACCENT_ACTIVE
+            } else {
+                palette::TEXT_PRIMARY
+            };
+            let num_str = format!("{:>2}. ", abs_idx + 1);
+            let text_w = Self::panel_row_text_width(content.width).saturating_sub(num_str.len());
+            let indent = " ".repeat(2 + num_str.len());
+            let label = item.display_name();
+            let (line1, line2) = if label.len() <= text_w {
+                (label, String::new())
+            } else {
+                let wrap_at = label[..text_w].rfind(' ').unwrap_or(text_w);
+                (
+                    label[..wrap_at].to_string(),
+                    label[wrap_at..].trim_start().to_string(),
+                )
+            };
+            let row_y = content.y + y as u16;
+            Self::render_panel_row(
+                f,
+                ix,
+                row_y,
+                content.width,
+                selected,
+                vec![
+                    Span::styled(num_str, Style::default().fg(palette::TEXT_MUTED)),
+                    Span::styled(line1, Style::default().fg(fg)),
+                ],
+            );
+            y += 1;
+            if !line2.is_empty() && y < list_h {
+                f.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::raw(&indent),
+                        Span::styled(
+                            trunc_str(&line2, text_w),
+                            Style::default().fg(palette::TEXT_SECONDARY),
+                        ),
+                    ])),
+                    Rect {
+                        x: ix,
+                        y: row_y + 1,
+                        width: content.width,
+                        height: 1,
+                    },
+                );
+                y += 1;
+            }
+        }
+
+        let total_lines: usize = self
+            .playlists_open_items
+            .iter()
+            .map(|i| item_lines(&i.display_name()))
+            .sum();
+        let lines_before_scroll: usize = self.playlists_open_items[..self.playlists_open_scroll]
+            .iter()
+            .map(|i| item_lines(&i.display_name()))
+            .sum();
+        Self::render_sidebar_scrollbar(f, content, total_lines, lines_before_scroll);
+    }
+
+    pub(in crate::app::render) fn render_save_playlist_dialog(&mut self, f: &mut Frame) {
+        let Some(ref dialog) = self.save_playlist_dialog else {
+            return;
+        };
+        let title_text = match dialog.stage {
+            SavePlaylistStage::RenamePlaylist { .. } => " Rename Playlist ",
+            _ => " Save as Playlist ",
+        };
+        let inner = render_modal_frame(
+            f,
+            &mut self.dim_backdrop_active,
+            title_text,
+            52,
+            7,
+            palette::SURFACE_FOCUSED,
+        );
+        let label = "Name: ";
+        let cursor = "▏";
+        let max_input = inner.width as usize - label.len() - cursor.len() - 2;
+        let visible: String = dialog
+            .input
+            .chars()
+            .rev()
+            .take(max_input)
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect();
+        let input_line = format!("{}{}{}", label, visible, cursor);
+        let hint = "Enter to save · Esc to cancel";
+        let input_y = inner.y + (inner.height.saturating_sub(3)) / 2;
+        let hint_y = input_y + 2;
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                input_line,
+                Style::default().fg(palette::TEXT_STRONG),
+            )),
+            Rect {
+                x: inner.x + 1,
+                y: input_y,
+                width: inner.width.saturating_sub(2),
+                height: 1,
+            },
+        );
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                hint,
+                Style::default().fg(palette::TEXT_SECONDARY),
+            )),
+            Rect {
+                x: inner.x + 1,
+                y: hint_y,
+                width: inner.width.saturating_sub(2),
+                height: 1,
+            },
+        );
+    }
+}

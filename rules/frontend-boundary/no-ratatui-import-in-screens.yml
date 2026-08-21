@@ -1,0 +1,15 @@
+id: no-ratatui-import-in-screens
+language: rust
+severity: error
+message: >-
+  screens/ must not import ratatui directly. Screen modules provide app state
+  and typed content models; painting belongs to an arrangement or component.
+  See CONTEXT.md (Component, Arrangement) and
+  .opencode/skills/mbv-frontend/SKILL.md.
+files:
+  - "src/app/render/screens/**"
+ignores:
+  - "src/app/render/screens/**/*tests*.rs"
+rule:
+  kind: use_declaration
+  regex: "\\bratatui\\b"
