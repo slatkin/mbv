@@ -1,11 +1,13 @@
 use super::super::{palette, App};
+use mbv_core::visualizer::StereoSample;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Widget};
 use ratatui::Frame;
+use std::collections::HashSet;
 
 pub(super) const VISUALIZER_HEIGHT: u16 = 11;
+const SILENCE_THRESHOLD: f32 = 0.0001;
+const DISPLAY_GAIN: f32 = 4.0;
 
 impl App {
     pub(super) fn render_visualizer(&self, f: &mut Frame, area: Rect, bg: Color) {
@@ -16,7 +18,7 @@ impl App {
         for y in area.y..area.y + area.height {
             for x in area.x..area.x + area.width {
                 if let Some(cell) = f.buffer_mut().cell_mut((x, y)) {
-                    cell.set_style(bg_style);
+                    cell.set_symbol(" ").set_style(bg_style);
                 }
             }
         }
@@ -26,43 +28,59 @@ impl App {
             width: area.width.saturating_sub(4),
             height: area.height.saturating_sub(2),
         };
-        if inner.width == 0 || inner.height == 0 {
+        if inner.width == 0 || inner.height == 0 || is_silent(&self.visualizer_window.samples) {
             return;
         }
 
-        let bars = &self.visualizer_frame;
-        let rows = (0..inner.height)
-            .map(|row| {
-                let text = (0..inner.width)
-                    .map(|column| {
-                        if column % 2 == 1 {
-                            ' '
-                        } else {
-                            let value = if bars.is_empty() {
-                                0.0
-                            } else {
-                                let bar_index = (column / 2) as usize * bars.len()
-                                    / inner.width.div_ceil(2) as usize;
-                                let raw = bars[bar_index.min(bars.len() - 1)];
-                                raw.min(1.0)
-                            };
-                            let height = (value * inner.height as f32).round() as u16;
-                            if height >= inner.height.saturating_sub(row) {
-                                '█'
-                            } else {
-                                ' '
-                            }
-                        }
-                    })
-                    .collect::<String>();
-                Line::from(Span::styled(
-                    text,
-                    Style::default().fg(palette::AQUA).bg(bg),
-                ))
-            })
-            .collect::<Vec<_>>();
-        Paragraph::new(rows).render(inner, f.buffer_mut());
+        let mut seen = HashSet::new();
+        let point_style = Style::default().fg(palette::AQUA).bg(bg);
+        for sample in &self.visualizer_window.samples {
+            let Some((x, y)) = sample_to_cell(*sample, inner.width, inner.height) else {
+                continue;
+            };
+            if !seen.insert((x, y)) {
+                continue;
+            }
+            if let Some(cell) = f.buffer_mut().cell_mut((inner.x + x, inner.y + y)) {
+                cell.set_symbol(&self.visualizer_glyph);
+                cell.set_style(point_style);
+            }
+        }
     }
+}
+
+fn is_silent(samples: &[StereoSample]) -> bool {
+    samples.iter().all(|sample| {
+        sample.left.abs() <= SILENCE_THRESHOLD && sample.right.abs() <= SILENCE_THRESHOLD
+    })
+}
+
+fn sample_to_cell(sample: StereoSample, width: u16, height: u16) -> Option<(u16, u16)> {
+    if width == 0 || height == 0 {
+        return None;
+    }
+    let left = (sample.left * DISPLAY_GAIN).clamp(-1.0, 1.0);
+    let right = (sample.right * DISPLAY_GAIN).clamp(-1.0, 1.0);
+    let center_x = width / 2;
+    let center_y = height / 2;
+    let positive_x = width.saturating_sub(center_x.saturating_add(1));
+    let positive_y = height.saturating_sub(center_y.saturating_add(1));
+    let x = center_x as f32
+        + if left < 0.0 {
+            left * center_x as f32
+        } else {
+            left * positive_x as f32
+        };
+    let y = center_y as f32
+        + if right < 0.0 {
+            right * center_y as f32
+        } else {
+            right * positive_y as f32
+        };
+    Some((
+        (x.round() as i32).clamp(0, width as i32 - 1) as u16,
+        (y.round() as i32).clamp(0, height as i32 - 1) as u16,
+    ))
 }
 
 #[cfg(test)]
@@ -73,10 +91,65 @@ mod tests {
     use ratatui::Terminal;
 
     #[test]
+    fn coordinate_mapping_preserves_orientation_clamps_and_hides_silence() {
+        assert_eq!(
+            sample_to_cell(
+                StereoSample {
+                    left: -1.0,
+                    right: -1.0
+                },
+                5,
+                5
+            ),
+            Some((0, 0))
+        );
+        assert_eq!(
+            sample_to_cell(
+                StereoSample {
+                    left: 1.0,
+                    right: 1.0
+                },
+                5,
+                5
+            ),
+            Some((4, 4))
+        );
+        assert_eq!(
+            sample_to_cell(
+                StereoSample {
+                    left: 2.0,
+                    right: -2.0
+                },
+                5,
+                5
+            ),
+            Some((4, 0))
+        );
+        assert!(is_silent(&[StereoSample {
+            left: 0.0,
+            right: 0.0
+        }]));
+        assert!(!is_silent(&[StereoSample {
+            left: 0.0,
+            right: 0.01
+        }]));
+        assert_eq!(
+            sample_to_cell(
+                StereoSample {
+                    left: 0.5,
+                    right: 0.5
+                },
+                5,
+                5
+            ),
+            Some((4, 4))
+        );
+    }
+
+    #[test]
     fn render_visualizer_is_noop_on_empty_area() {
         let mut app = make_app_stub();
         app.visualizer_enabled = true;
-        app.visualizer_frame = vec![1.0; 64];
 
         let backend = TestBackend::new(20, 10);
         let mut term = Terminal::new(backend).unwrap();
@@ -84,5 +157,24 @@ mod tests {
             app.render_visualizer(f, Rect::default(), crate::app::palette::SURFACE_BACKDROP);
         })
         .unwrap();
+    }
+
+    #[test]
+    fn render_visualizer_clears_points_before_the_next_frame() {
+        let mut app = make_app_stub();
+        app.visualizer_window.samples = vec![StereoSample {
+            left: 1.0,
+            right: 1.0,
+        }];
+
+        let backend = TestBackend::new(10, 5);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| app.render_visualizer(f, Rect::new(0, 0, 10, 5), Color::Black))
+            .unwrap();
+        app.visualizer_window = Default::default();
+        term.draw(|f| app.render_visualizer(f, Rect::new(0, 0, 10, 5), Color::Black))
+            .unwrap();
+
+        assert_eq!(term.backend().buffer().cell((7, 3)).unwrap().symbol(), " ");
     }
 }

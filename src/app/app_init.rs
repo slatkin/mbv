@@ -50,6 +50,7 @@ pub(super) struct AppInit {
     pub(super) use_nerd_fonts: bool,
     pub(super) indicator_style: super::render::indicators::IndicatorStyle,
     pub(super) image_cache_size: usize,
+    pub(super) visualizer_glyph: String,
     pub(super) lib_tx: mpsc::Sender<LibEvent>,
     pub(super) lib_rx: mpsc::Receiver<LibEvent>,
     pub(super) sessions_tx: mpsc::Sender<SessionEvent>,

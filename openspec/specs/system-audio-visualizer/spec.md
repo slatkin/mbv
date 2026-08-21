@@ -1,87 +1,59 @@
 # system-audio-visualizer Specification
 
 ## Purpose
-TBD - created by archiving change embed-cava-system-audio-visualizer. Update Purpose after archive.
+
+The embedded visualizer captures the audible default system output through PipeWire and renders a stereo vectorscope without changing playback routing.
+
 ## Requirements
-### Requirement: Local playback can show a system-audio visualizer
-When the embedded visualizer is enabled for supported local playback, mbv SHALL start CAVA using its normal default system-audio input and SHALL display the resulting spectrum in the embedded visualizer area.
+
+### Requirement: Local playback can show a system-audio vectorscope
+
+When enabled during supported local playback, mbv SHALL capture stereo PCM from the current default PipeWire system-output monitor and display it in the existing visualizer area.
 
 #### Scenario: Visualizer starts with local playback
+
 - **WHEN** supported local playback begins with the visualizer enabled
-- **THEN** mbv starts CAVA, consumes its spectrum frames, and displays active bars without changing the mpv audio output configuration
+- **THEN** mbv starts PipeWire capture and displays vectorscope points without changing mpv audio output configuration
 
 #### Scenario: Unrelated system audio is present
-- **WHEN** another application produces audio on the system default audio path
-- **THEN** that audio MAY contribute to the displayed spectrum
 
-### Requirement: Visualizer startup does not reroute playback
-The visualizer SHALL NOT create, modify, or destroy PulseAudio/PipeWire sinks, sources, links, loopbacks, or modules, and SHALL NOT change or restore mpv `ao` or `audio-device` properties.
+- **WHEN** another application produces audio on the current default system output
+- **THEN** that application's stereo PCM MAY contribute to the vectorscope
 
-#### Scenario: Visualizer is enabled
-- **WHEN** mbv starts the visualizer
-- **THEN** mpv continues using the exact audio output configuration it had before visualization
+### Requirement: Visualizer does not reroute playback
 
-#### Scenario: Visualizer is disabled
-- **WHEN** mbv stops the visualizer
-- **THEN** mbv stops CAVA and leaves the audio graph and mpv output configuration unchanged
+The visualizer SHALL NOT create, modify, or destroy persistent PipeWire nodes, links, sinks, sources, loopbacks, or modules, and SHALL NOT change or restore mpv `ao` or `audio-device` properties.
 
-### Requirement: CAVA failure is isolated from playback
-If CAVA cannot start, cannot open its default input, exits unexpectedly, or emits invalid frames, mbv SHALL log the diagnostic, clear the visualizer state, and SHALL keep playback and normal input handling running.
+### Requirement: PipeWire failure is isolated from playback
 
-#### Scenario: CAVA is unavailable
-- **WHEN** the `cava` executable cannot be started
-- **THEN** mbv keeps playback running and renders inactive visualizer bars
+If PipeWire is unavailable, the default monitor cannot be captured, the stream disconnects, or sample data cannot be consumed, mbv SHALL log the diagnostic, clear active vectorscope points, and keep playback and normal input handling running.
 
-#### Scenario: CAVA emits invalid output
-- **WHEN** CAVA emits an incomplete or malformed spectrum frame
-- **THEN** mbv rejects that frame, clears active bars, and continues the player session
+### Requirement: Capture resources are bounded and cleaned up
 
-### Requirement: CAVA resources are bounded and cleaned up
-mbv SHALL use a private bounded transport for CAVA spectrum frames, SHALL supervise the CAVA child, and SHALL remove its private temporary resources after normal or failed shutdown.
+mbv SHALL keep captured PCM in a bounded latest-sample buffer, supervise the PipeWire capture thread and stream, and release those resources after normal or failed shutdown.
+
+#### Scenario: Capture outpaces rendering
+
+- **WHEN** PipeWire supplies samples faster than the TUI consumes windows
+- **THEN** mbv overwrites old samples and retains only the newest complete stereo samples
 
 #### Scenario: Normal shutdown
-- **WHEN** local playback ends or visualization is disabled
-- **THEN** mbv terminates and reaps CAVA, stops its frame reader, and removes the private transport
 
-#### Scenario: Application exits unexpectedly
-- **WHEN** mbv exits while CAVA is running
-- **THEN** CAVA does not remain as an unmanaged child and private transport resources are eventually reclaimable
+- **WHEN** local playback ends or visualization is disabled
+- **THEN** mbv disconnects capture, stops its loop, joins its worker, and releases the sample buffer
 
 ### Requirement: Unsupported playback paths remain unchanged
-The visualizer SHALL NOT start CAVA for playback that is not audible on this machine, or for
-audio-pipe playback, unless a future capability explicitly adds support. Playback hosted by a
-same-host local daemon SHALL NOT be treated as unsupported: it is audible on this machine and is
-covered by the supported-playback requirement below.
 
-#### Scenario: Audio-pipe playback is active
-- **WHEN** playback uses the configured audio pipe
-- **THEN** mbv does not start the system-audio visualizer worker
+The visualizer SHALL NOT start local PipeWire capture for remote playback or audio-pipe playback. Playback hosted by a same-host Local daemon SHALL remain supported because it is audible on this machine.
 
-#### Scenario: Remote playback is active
-- **WHEN** playback is handled by a daemon on another machine, or by an attached Emby session on another device
-- **THEN** mbv does not start the local CAVA visualizer worker
+### Requirement: Stereo PCM renders as a vectorscope
 
-#### Scenario: Audio-pipe playback through a local daemon
-- **WHEN** playback is hosted by a same-host local daemon and the audio pipe is enabled
-- **THEN** mbv does not start the system-audio visualizer worker
+The visualizer SHALL apply a fixed internal display gain before clamping and mapping left-channel amplitude to horizontal displacement and right-channel amplitude to vertical displacement, clear and rebuild the figure from the newest sample window on each frame, deduplicate terminal cells, and suppress points for a silent window. The gain SHALL not change captured samples or add a user-facing configuration setting.
 
-### Requirement: Same-host local-daemon playback supports the visualizer
-CAVA captures the machine's default system audio and has no connection to the playing process, so
-audio played by a same-host local daemon is as capturable as in-process playback. A client of a
-same-host local daemon SHALL be able to run the system-audio visualizer under the same conditions
-as bare-mode playback. mbv SHALL decide this from whether the daemon endpoint is on this machine,
-not from whether the Player is in-process.
+### Requirement: Vectorscope glyph is configurable
 
-#### Scenario: Client of a local daemon enables the visualizer
-- **WHEN** a client attached to a same-host local daemon has the visualizer enabled and playback is active
-- **THEN** mbv starts CAVA with its normal default system-audio input and displays the spectrum
-- **THEN** mbv does not alter the daemon's audio output configuration
+mbv SHALL persist one valid single-cell Unicode vectorscope glyph and SHALL default it to `●` when the setting is missing, empty, a control character, or does not occupy exactly one terminal cell.
 
-#### Scenario: Several clients show the visualizer
-- **WHEN** more than one client of the same local daemon has the visualizer enabled
-- **THEN** each client runs its own CAVA worker against system audio and displays a spectrum
+### Requirement: Vectorscope favors fresh frames
 
-#### Scenario: Client of a remote daemon enables the visualizer
-- **WHEN** a client attached to a daemon on another machine has the visualizer enabled
-- **THEN** mbv does not start the local CAVA visualizer worker
-
+During steady capture, mbv SHALL target 60 visual frames per second and SHALL skip stale visualization windows rather than replaying queued frames. On a terminal capable of sustaining the cadence, at least 50 frames per second SHALL use the newest sample window available at render time.

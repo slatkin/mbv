@@ -19,7 +19,7 @@ ncmpcpp is GPL-2.0-or-later. It is a behavioral reference only; this change must
 **Non-Goals:**
 
 - Abstract audio backends or support PulseAudio, ALSA, macOS, or Windows.
-- Add FFT, spectra, waveform modes, mode cycling, trails, decay, gain controls, or channel selection.
+- Add FFT, spectra, waveform modes, mode cycling, trails, decay, user-facing gain controls, or channel selection.
 - Capture only mbv-owned playback or synchronize against downstream device latency.
 - Change Local daemon startup, shared data, Stay-Alive behavior, or the ctrl protocol.
 - Translate ncmpcpp source or reproduce its configuration surface.
@@ -50,9 +50,9 @@ A frame channel was rejected because the current `try_send` behavior retains old
 
 ### Render one independently defined stereo vectorscope
 
-For every complete sample pair in the newest window, the renderer will clamp each channel to `[-1.0, 1.0]`, map left amplitude around the panel's horizontal center, and map right amplitude around its vertical center. Duplicate terminal coordinates need only be written once. Silence maps to the center; a fully silent window is treated as inactive so it does not display a permanent center point.
+For every complete sample pair in the newest window, the renderer will apply a fixed internal 4x display gain, clamp each channel to `[-1.0, 1.0]`, map left amplitude around the panel's horizontal center, and map right amplitude around its vertical center. The gain is a rendering adjustment only: captured samples remain raw and no user-facing setting is added. Duplicate terminal coordinates need only be written once. Silence maps to the center; a fully silent window is treated as inactive so it does not display a permanent center point.
 
-The renderer will clear the panel interior each frame and use the existing visualizer foreground/background palette. It will not add persistence trails, interpolation, antialiasing, gain, or ncmpcpp's color-ring calculation. These omissions keep the implementation independent and make the vectorscope behavior derivable entirely from this design.
+The renderer will clear the panel interior each frame and use the existing visualizer foreground/background palette. It will not add persistence trails, interpolation, antialiasing, user-facing gain controls, or ncmpcpp's color-ring calculation. These omissions keep the implementation independent and make the vectorscope behavior derivable entirely from this design.
 
 ### Persist one validated glyph
 

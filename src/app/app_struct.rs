@@ -24,7 +24,7 @@ use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use mbv_core::visualizer::CavaWorker;
+use mbv_core::visualizer::{PipeWireWorker, StereoSampleWindow};
 use mbv_core::ws::WsEvent;
 use ratatui_image::picker::Picker;
 use std::sync::mpsc;
@@ -325,8 +325,9 @@ pub struct App {
     pub(super) mute_on: bool,
     pub(super) visualizer_enabled: bool,
     pub(super) visualizer_failed: bool,
-    pub(super) visualizer: Option<CavaWorker>,
-    pub(super) visualizer_frame: Vec<f32>,
+    pub(super) visualizer: Option<PipeWireWorker>,
+    pub(super) visualizer_window: StereoSampleWindow,
+    pub(super) visualizer_glyph: String,
     pub(super) now_playing_throbber_index: usize,
     pub(super) last_throbber_advance: std::time::Instant,
     /// Text and start time of the shared marquee clock, reset whenever the

@@ -1,21 +1,21 @@
 use super::App;
-use mbv_core::visualizer::CavaWorker;
+use mbv_core::visualizer::PipeWireWorker;
 
 impl App {
     pub(super) fn sync_visualizer(&mut self) {
         if let Some(worker) = self.visualizer.as_ref() {
-            match worker.take_latest_frame() {
-                Ok(Some(frame)) => self.visualizer_frame = frame,
+            match worker.take_latest_window() {
+                Ok(Some(window)) => self.visualizer_window = window,
                 Ok(None) => {}
-                Err(_) => {
-                    log::warn!(target: "visualizer", "CAVA worker stopped; visualizer disabled for this playback");
+                Err(error) => {
+                    log::warn!(target: "visualizer", "PipeWire worker stopped; visualizer disabled for this playback: {error}");
                     self.visualizer_failed = true;
                     self.stop_visualizer_worker();
                 }
             }
         }
 
-        // CAVA captures system audio, not mpv directly, so it works equally
+        // PipeWire captures system audio, not mpv directly, so it works equally
         // whether playback is in-process or hosted by a same-host local
         // daemon -- only a genuinely remote daemon or an attached Emby
         // session make this machine's audio the wrong thing to capture.
@@ -30,9 +30,9 @@ impl App {
             return;
         }
         if self.visualizer.is_none() && !self.visualizer_failed {
-            match CavaWorker::start() {
+            match PipeWireWorker::start() {
                 Ok(worker) => {
-                    log::info!(target: "visualizer", "started CAVA system-audio worker");
+                    log::info!(target: "visualizer", "started PipeWire system-audio worker");
                     self.visualizer = Some(worker);
                 }
                 Err(error) => {
@@ -47,7 +47,7 @@ impl App {
         if let Some(mut worker) = self.visualizer.take() {
             worker.stop();
         }
-        self.visualizer_frame.clear();
+        self.visualizer_window = Default::default();
     }
 
     pub(super) fn toggle_visualizer(&mut self) {
@@ -65,7 +65,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn audio_pipe_playback_does_not_start_cava() {
+    fn audio_pipe_playback_does_not_start_pipewire() {
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;
         app.player.status.lock().unwrap().active = true;
@@ -75,7 +75,7 @@ mod tests {
     }
 
     #[test]
-    fn remote_playback_does_not_start_local_cava() {
+    fn remote_playback_does_not_start_local_pipewire() {
         let mut app = crate::app::tests::make_remote_app_stub(Vec::new(), Vec::new());
         app.visualizer_enabled = true;
         app.sync_visualizer();

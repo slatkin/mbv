@@ -21,6 +21,7 @@ impl App {
             image_cache_size: self.image_cache_size,
             use_nerd_fonts: self.use_nerd_fonts,
             indicator_style: indicator_style.to_string(),
+            visualizer_glyph: self.visualizer_glyph.clone(),
         }
     }
 
@@ -45,7 +46,7 @@ impl App {
     /// spinning the terminal for no reason.
     pub(super) fn render_interval(&mut self) -> Duration {
         if self.visualizer.is_some() {
-            return Duration::from_millis(12);
+            return Duration::from_millis(16);
         }
         let playback = self.effective_playback_state();
         if playback.active

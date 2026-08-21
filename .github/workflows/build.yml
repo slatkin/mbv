@@ -37,7 +37,7 @@ jobs:
             "$@"
           }
           pacman_retry pacman -Syu --noconfirm
-          pacman_retry pacman -S --noconfirm --needed rust nasm mpv cava openssl github-cli git openssh
+          pacman_retry pacman -S --noconfirm --needed rust nasm mpv pipewire openssl github-cli git openssh
 
       - uses: actions/checkout@v7
 

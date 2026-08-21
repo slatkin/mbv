@@ -87,11 +87,15 @@ If PipeWire is unavailable, the default system-output monitor cannot be captured
 - **THEN** mbv clears active vectorscope points and continues the player session
 
 ### Requirement: Stereo PCM renders as a vectorscope
-The visualizer SHALL map each newest complete stereo sample pair into the existing panel with left-channel amplitude controlling horizontal displacement and right-channel amplitude controlling vertical displacement. The figure SHALL be cleared and rebuilt from the newest sample window on each visual frame.
+The visualizer SHALL apply a fixed internal display gain to each newest complete stereo sample pair before clamping it and mapping it into the existing panel, with left-channel amplitude controlling horizontal displacement and right-channel amplitude controlling vertical displacement. The display gain SHALL not change captured samples or add a user-facing configuration setting. The figure SHALL be cleared and rebuilt from the newest sample window on each visual frame.
 
 #### Scenario: Stereo signal is captured
 - **WHEN** the captured left and right channels contain non-silent samples
 - **THEN** mbv draws vectorscope points at positions determined by the paired channel amplitudes
+
+#### Scenario: Typical-level audio is captured
+- **WHEN** the captured signal has ordinary non-silent PCM levels below full scale
+- **THEN** the fixed display gain expands its visual spread before clamping without changing playback or captured sample data
 
 #### Scenario: Captured output is silent
 - **WHEN** the newest complete sample window contains silence

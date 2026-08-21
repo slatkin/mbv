@@ -9,6 +9,9 @@ pub use mbv_core::config::{load_last_remote_connection, save_last_remote_connect
 pub use mbv_core::config::{LastRemoteConnection, TestStateDirGuard};
 
 use std::path::PathBuf;
+use unicode_width::UnicodeWidthStr;
+
+pub const DEFAULT_VISUALIZER_GLYPH: &str = "●";
 
 #[cfg(test)]
 pub mod tests {
@@ -21,6 +24,7 @@ pub struct UiConfig {
     pub image_cache_size: usize,
     pub use_nerd_fonts: bool,
     pub indicator_style: String, // chips|brackets|outlined|dots|pipes|keyvalue|powerline
+    pub visualizer_glyph: String,
 }
 
 impl Default for UiConfig {
@@ -30,6 +34,7 @@ impl Default for UiConfig {
             image_cache_size: 50,
             use_nerd_fonts: false,
             indicator_style: "keyvalue".into(),
+            visualizer_glyph: DEFAULT_VISUALIZER_GLYPH.into(),
         }
     }
 }
@@ -72,12 +77,18 @@ fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
         .and_then(|v| v.as_str())
         .unwrap_or("keyvalue")
         .to_string();
+    let visualizer_glyph = validated_visualizer_glyph(
+        display
+            .and_then(|m| m.get("visualizer_glyph"))
+            .and_then(|v| v.as_str()),
+    );
 
     Ok(UiConfig {
         image_protocol,
         image_cache_size,
         use_nerd_fonts,
         indicator_style,
+        visualizer_glyph,
     })
 }
 
@@ -120,6 +131,10 @@ pub fn save_ui_config(ui: &UiConfig) {
         "indicator_style".to_string(),
         toml::Value::String(ui.indicator_style.clone()),
     );
+    display.insert(
+        "visualizer_glyph".to_string(),
+        toml::Value::String(validated_visualizer_glyph(Some(&ui.visualizer_glyph))),
+    );
     match &ui.image_protocol {
         Some(protocol) => {
             display.insert(
@@ -141,6 +156,47 @@ pub fn save_ui_config(ui: &UiConfig) {
         if std::fs::write(&tmp, text).is_ok() {
             let _ = std::fs::rename(tmp, path);
         }
+    }
+}
+
+fn validated_visualizer_glyph(value: Option<&str>) -> String {
+    let Some(value) = value else {
+        return DEFAULT_VISUALIZER_GLYPH.into();
+    };
+    if value.is_empty() || value.chars().any(char::is_control) || UnicodeWidthStr::width(value) != 1
+    {
+        DEFAULT_VISUALIZER_GLYPH.into()
+    } else {
+        value.into()
+    }
+}
+
+#[cfg(test)]
+mod ui_config_tests {
+    use super::{parse_ui_config, validated_visualizer_glyph, DEFAULT_VISUALIZER_GLYPH};
+
+    #[test]
+    fn visualizer_glyph_round_trips_and_invalid_values_fall_back() {
+        let config = parse_ui_config("[display]\nvisualizer_glyph = \"x\"\n").unwrap();
+        assert_eq!(config.visualizer_glyph, "x");
+
+        let serialized = format!(
+            "[display]\nvisualizer_glyph = \"{}\"\n",
+            config.visualizer_glyph
+        );
+        assert_eq!(parse_ui_config(&serialized).unwrap().visualizer_glyph, "x");
+
+        for value in ["", "界"] {
+            let invalid = format!("[display]\nvisualizer_glyph = \"{value}\"\n");
+            assert_eq!(
+                parse_ui_config(&invalid).unwrap().visualizer_glyph,
+                DEFAULT_VISUALIZER_GLYPH
+            );
+        }
+        assert_eq!(
+            validated_visualizer_glyph(Some("\n")),
+            DEFAULT_VISUALIZER_GLYPH
+        );
     }
 }
 

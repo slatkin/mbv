@@ -605,6 +605,9 @@ impl App {
                         return Err(e.into());
                     }
                 }
+                if self.visualizer.is_some() {
+                    self.sync_visualizer();
+                }
                 if let Err(e) = terminal.draw(|f| self.render(f)) {
                     log::error!(target: "run_loop", "terminal.draw() failed: {e:?} (kind={:?})", e.kind());
                     return Err(e.into());

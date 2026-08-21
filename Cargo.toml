@@ -21,6 +21,7 @@ tungstenite = { version = "0.30", features = ["native-tls"] }
 redb = "2"
 log = "0.4"
 libc = "0.2"
+pipewire = "0.10.1"
 nix = { version = "0.31", features = ["fs", "process", "signal", "term", "socket"] }
 
 [package]
@@ -66,8 +67,7 @@ maintainer = "slatkin <slatkin@gmail.com>"
 copyright = "2024, slatkin"
 license-file = ["LICENSE", "0"]
 extended-description = "Terminal UI client for Emby media servers. Embeds mpv for playback, syncs position with Emby, and supports full remote control via Emby's websocket API."
-depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1"
-recommends = "cava"
+depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1, libpipewire-0.3-0"
 section = "video"
 priority = "optional"
 assets = [
