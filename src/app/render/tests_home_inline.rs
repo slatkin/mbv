@@ -15,6 +15,10 @@ fn home_emby_app() -> crate::app::App {
 #[test]
 fn narrow_home_inserts_selected_detail_into_the_section_flow() {
     let mut app = home_emby_app();
+    // Mini view defaults to queue-only, which doesn't render the Home tab at
+    // all; opt into the library side so this test exercises the narrow
+    // inline-detail flow it was written for.
+    app.mini_view_focus = PanelFocus::Library;
     let layout = render_view(&mut app, 60, 40);
 
     assert!(layout.hero_area.height > 0);
@@ -24,6 +28,7 @@ fn narrow_home_inserts_selected_detail_into_the_section_flow() {
 #[test]
 fn narrow_home_suppresses_detail_when_the_viewport_is_too_short() {
     let mut app = home_emby_app();
+    app.mini_view_focus = PanelFocus::Library;
     let layout = render_view(&mut app, 60, 4);
 
     assert_eq!(layout.hero_area.height, 0);

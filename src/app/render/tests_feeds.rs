@@ -48,6 +48,10 @@ fn wide_feeds_use_a_left_detail_and_right_entry_workspace() {
 #[test]
 fn narrow_feeds_insert_selected_entry_detail_into_the_list_flow() {
     let mut app = feed_app();
+    // Mini view defaults to queue-only, which doesn't render the Feeds tab at
+    // all; opt into the library side so this test exercises the narrow
+    // inline-detail flow it was written for.
+    app.mini_view_focus = crate::app::PanelFocus::Library;
     let layout = render_view(&mut app, 60, 20);
 
     assert!(layout.hero_area.height > 0);
@@ -62,6 +66,7 @@ fn narrow_feeds_insert_selected_entry_detail_into_the_list_flow() {
 #[test]
 fn narrow_feeds_suppress_detail_when_the_viewport_is_too_short() {
     let mut app = feed_app();
+    app.mini_view_focus = crate::app::PanelFocus::Library;
     let layout = render_view(&mut app, 60, 4);
 
     assert_eq!(layout.hero_area.height, 0);
