@@ -132,7 +132,7 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
         help_line(key_w, "F3", "Remote sessions"),
         help_line(key_w, "F4", "Playlists"),
         help_line(key_w, "F5", "Refresh view"),
-        help_line(key_w, "v", "Toggle system-audio visualizer"),
+        help_line(key_w, "v", "Switch queue artwork / visualizer"),
         help_line(key_w, "Tab", "Cycle menu"),
         help_line(key_w, "1 – 9", "Jump to tab"),
         help_line(key_w, "↑ / ↓", "Move cursor"),

@@ -183,3 +183,81 @@ fn narrow_toggle_survives_render_and_widening_restores_wide_state() {
     assert_eq!(app.panel_mode, crate::app::PanelMode::QueueOnly);
     assert_eq!(app.panel_focus, crate::app::PanelFocus::Queue);
 }
+#[test]
+fn queue_keeps_rows_formerly_reserved_for_separate_visualizer() {
+    // The visualizer now shares the queue card slot, so selecting it must not
+    // consume queue-list rows below the panel the way the old bottom
+    // visualizer reservation did.
+    let mut app = make_queue_app(20);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.visualizer_enabled = true;
+
+    let (_, layout_on) = render_view_to_terminal(&mut app, 80, 40);
+    let queue_rows_with_visualizer = layout_on.queue_area.height;
+
+    app.visualizer_enabled = false;
+    let (_, layout_off) = render_view_to_terminal(&mut app, 80, 40);
+
+    assert_eq!(
+        queue_rows_with_visualizer, layout_off.queue_area.height,
+        "selecting the visualizer must not subtract rows below the queue list"
+    );
+    assert!(
+        queue_rows_with_visualizer > 0,
+        "the queue list must still have rows to render"
+    );
+}
+
+#[test]
+fn wide_queue_only_leftover_rows_stay_dark_bg_without_duplicate_visualizer() {
+    let mut app = make_queue_app(5);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.visualizer_enabled = true;
+    app.visualizer_window.samples = vec![mbv_core::visualizer::StereoSample {
+        left: 1.0,
+        right: 1.0,
+    }];
+
+    let (term, _layout) = render_view_to_terminal(&mut app, 120, 40);
+    let buf = term.backend().buffer();
+
+    // With no previous artwork geometry, the initial visualizer reservation
+    // is (x=2, y=1, w=48, h=24); the wide playback panel starts at x=52 and
+    // the 4-row player content tops it, so
+    // leftover rows below it must stay on the dark chrome background rather
+    // than hosting a second visualizer.
+    let leftover_cell = &buf[(30, 10)];
+    assert_eq!(
+        leftover_cell.style().bg,
+        Some(palette::DARK_BG),
+        "wide playback leftovers must keep DARK_BG, got {:?}",
+        leftover_cell.style().bg
+    );
+    // Region the removed wide-panel visualizer branch used to paint.
+    let mut duplicate = false;
+    'scan: for y in 5..25 {
+        for x in 52..buf.area().width {
+            if buf[(x, y)].symbol() == crate::config::DEFAULT_VISUALIZER_GLYPH {
+                duplicate = true;
+                break 'scan;
+            }
+        }
+    }
+    assert!(
+        !duplicate,
+        "the visualizer must only render inside the queue card slot, never in playback-panel leftovers"
+    );
+    let mut card_visualizer = false;
+    'card: for y in 1..25 {
+        for x in 2..50 {
+            if buf[(x, y)].symbol() == crate::config::DEFAULT_VISUALIZER_GLYPH {
+                card_visualizer = true;
+                break 'card;
+            }
+        }
+    }
+    assert!(
+        card_visualizer,
+        "the selected visualizer must render inside the queue card slot"
+    );
+}

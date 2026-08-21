@@ -84,11 +84,13 @@ mod tests {
     }
 
     #[test]
-    fn attached_remote_session_visualizer_key_is_noop() {
+    fn attached_session_v_key_toggles_selection_without_local_capture() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let (mut app, cmd_rx) =
             crate::app::tests::make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
         app.connected_session_id = Some("session-1".to_string());
         app.visualizer_enabled = false;
+        app.player.status.lock().unwrap().active = true;
 
         let handled = app.handle_key_visualizer(crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Char('v'),
@@ -96,12 +98,22 @@ mod tests {
         ));
 
         assert_eq!(handled, Some(false));
-        assert!(!app.visualizer_enabled);
+        assert!(
+            app.visualizer_enabled,
+            "v flips artwork/visualizer selection even in an attached session"
+        );
         assert!(cmd_rx.try_recv().is_err());
+        assert!(!app.visualizer_should_run());
+        app.sync_visualizer();
+        assert!(
+            app.visualizer.is_none(),
+            "attached-session playback must not start a local PipeWire capture"
+        );
     }
 
     #[test]
     fn local_visualizer_key_still_toggles() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = false;
 
@@ -111,6 +123,54 @@ mod tests {
         ));
 
         assert_eq!(handled, Some(false));
+        assert!(app.visualizer_enabled);
+    }
+
+    #[test]
+    fn selecting_artwork_stops_capture() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = true;
+        app.visualizer_window.samples = vec![mbv_core::visualizer::StereoSample {
+            left: 1.0,
+            right: 1.0,
+        }];
+
+        app.toggle_visualizer();
+
+        assert!(!app.visualizer_enabled);
+        assert!(
+            app.visualizer_window.samples.is_empty(),
+            "selecting artwork must tear down the capture sample window"
+        );
+    }
+
+    #[test]
+    fn toggle_visualizer_persists_selection_under_existing_key() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = false;
+
+        app.toggle_visualizer();
+
+        let prefs: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
+        )
+        .expect("prefs json");
+        assert_eq!(prefs["visualizer_enabled"].as_bool(), Some(true));
+    }
+
+    #[test]
+    fn build_restores_visualizer_selection_from_prefs() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        std::fs::write(
+            crate::config::prefs_path(),
+            serde_json::json!({ "visualizer_enabled": true }).to_string(),
+        )
+        .expect("write prefs");
+
+        let app = crate::app::tests::make_built_app();
+
         assert!(app.visualizer_enabled);
     }
 

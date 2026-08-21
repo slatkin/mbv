@@ -5,7 +5,6 @@ use ratatui::style::{Color, Style};
 use ratatui::Frame;
 use std::collections::HashSet;
 
-pub(super) const VISUALIZER_HEIGHT: u16 = 11;
 const SILENCE_THRESHOLD: f32 = 0.0001;
 const DISPLAY_GAIN: f32 = 4.0;
 
