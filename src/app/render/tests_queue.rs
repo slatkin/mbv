@@ -107,9 +107,17 @@ fn mini_view_starts_at_library_only_by_default() {
     let layout = render_view(&mut app, width, 20);
 
     assert_eq!(
-        layout.panel_area.width, 0,
-        "mini view must start library-only: no left panel rendered, got {:?}",
-        layout.panel_area
+        layout.queue_area.width, 0,
+        "mini view must start library-only: queue area must be absent"
+    );
+    assert_eq!(
+        layout.panel_area.width, width,
+        "mini library-only overlays must span the terminal width"
+    );
+    assert_eq!(
+        layout.panel_content_area.width,
+        width.saturating_sub(4),
+        "mini library-only mouse content bounds must span the terminal width"
     );
     assert_eq!(
         app.effective_panel_mode(),

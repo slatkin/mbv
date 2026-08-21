@@ -331,8 +331,14 @@ impl App {
                 height: content_h,
             }
         };
-        layout.panel_area = left_area;
-        layout.panel_content_area = Self::left_panel_content_area(left_area);
+        layout.panel_area = if self.terminal_width < super::MINI_VIEW_THRESHOLD
+            && self.effective_panel_mode() == PanelMode::LibraryOnly
+        {
+            area
+        } else {
+            left_area
+        };
+        layout.panel_content_area = Self::left_panel_content_area(layout.panel_area);
 
         // The queue panel always renders with focused styling whenever it
         // holds real panel focus — including queue-only mode and mini view.
