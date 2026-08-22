@@ -34,6 +34,24 @@ fn home_video_library_is_never_album_folders_and_renders_via_original_list_path(
 }
 
 #[test]
+fn narrow_home_video_selected_item_retains_inline_detail() {
+    let mut app = make_home_video_app();
+    app.libs[0].nav_stack[0].items[1].overview = "The selected home video overview.".into();
+    app.libs[0].nav_stack[0].cursor = 1;
+    let mut layout = LayoutMain::default();
+    let output = render_library_to_string_sized(&mut app, &mut layout, 70, 30);
+
+    assert!(
+        layout.hero_area.height > 0,
+        "selected Home Video detail disappeared"
+    );
+    assert!(
+        output.contains("Vacation Clip"),
+        "selected Home Video title is missing:\n{output}"
+    );
+}
+
+#[test]
 fn wide_home_video_uses_a_left_detail_and_right_rail() {
     let mut app = make_home_video_app();
     let layout = render_view(&mut app, 200, 40);
@@ -160,5 +178,114 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
             .starts_with('A'),
         "first sorted item should start with A, got: {}",
         app.libs[0].nav_stack[0].items[first_idx].name,
+    );
+
+    let mut layout = LayoutMain::default();
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 20)).unwrap();
+    terminal
+        .draw(|f| {
+            app.render_library(
+                f,
+                ratatui::layout::Rect::new(0, 0, 120, 20),
+                true,
+                &mut layout,
+            )
+        })
+        .unwrap();
+    assert_surface_pills(
+        &terminal,
+        &layout,
+        ratatui::layout::Rect {
+            y: layout.selector_tabs[0].0.y,
+            height: layout
+                .tv_wide_right_area
+                .bottom()
+                .saturating_sub(layout.selector_tabs[0].0.y),
+            ..layout.tv_wide_right_area
+        },
+        1,
+        ratatui::style::Color::Reset,
+        &(0..9).collect::<Vec<_>>(),
+        &["⌘", "A–C", "D–F", "G–I", "J–L", "M–O", "P–R", "S–U", "V–Z"],
+        0,
+    );
+}
+
+/// Characterization test for the narrow (single-column) Series inline hero
+/// (task 2.1/2.2): renders hero content only (title/meta/overview/image) --
+/// no "Series:" season pill/count row, no episode table. The wide
+/// (hero-on-left) presentation is a non-goal here; see `tv_wide_tests.rs`
+/// for its unchanged coverage.
+#[test]
+fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list() {
+    let mut app = make_app_stub();
+    app.tab = TabSelection::EmbyLibrary(0);
+
+    let mut library = make_item("Shows", "CollectionFolder");
+    library.id = "library".into();
+    library.collection_type = "tvshows".into();
+    library.is_folder = true;
+
+    let mut series = make_item("The Series", "Series");
+    series.id = "series".into();
+    series.overview = "An overview of the series.".into();
+
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    season.index_number = 1;
+    let mut episode = make_item("Pilot", "Episode");
+    episode.id = "episode".into();
+    episode.index_number = 1;
+    episode.runtime_ticks = 3600 * mbv_core::api::TICKS_PER_SECOND;
+
+    app.libs.push(LibraryTab {
+        library,
+        nav_stack: vec![BrowseLevel {
+            parent_id: "library".into(),
+            title: "Shows".into(),
+            items: vec![series],
+            total_count: 1,
+            cursor: 0,
+            scroll: 0,
+            item_types: Some("Series".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        }],
+        search: None,
+        feed_home_video: None,
+        album_track_focus: None,
+        series_selection: None,
+        series_season_cursor: 0,
+        library_total: Some(1),
+    });
+    let mut episodes = std::collections::HashMap::new();
+    episodes.insert("season-1".into(), vec![episode]);
+    app.series_detail_cache.insert(
+        "series".into(),
+        crate::app::SeriesDetail {
+            seasons: vec![season],
+            episodes,
+        },
+    );
+
+    let mut layout = LayoutMain::default();
+    // Below `TWO_COLUMN_THRESHOLD` so the narrow single-column presentation
+    // renders instead of `render_wide_tv`.
+    let output = render_library_to_string_sized(&mut app, &mut layout, 70, 30);
+
+    assert!(output.contains("The Series"), "{output}");
+    assert!(output.contains("An overview"), "{output}");
+    assert!(
+        !output.contains("Series:"),
+        "narrow inline hero must not show the season pill/count row:\n{output}"
+    );
+    assert!(
+        !output.contains("Pilot"),
+        "narrow inline hero must not show the episode table:\n{output}"
     );
 }

@@ -1,14 +1,13 @@
 use super::super::{effective_sort_str, letter_bucket, LetterFilter};
-use super::hero::{inline_display_row, inline_display_row_count, InlineDisplayRow};
+use super::hero::InlineDisplayRow;
 use super::list_rows::{
-    draw_column_selection_markers, focused_or_subtle, item_cell_spans, selected_cell_rect,
-    DisplayRow, ListRenderCtx,
+    focused_or_subtle, item_cell_spans, selected_cell_rect, DisplayRow, InlineReplacementPlan,
+    ListRenderCtx,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::ui_util::*;
 use crate::app::{palette, App};
-use ratatui::layout::Rect;
 use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
@@ -98,82 +97,29 @@ impl App {
             .position(|r| matches!(r, DisplayRow::Item(idxs) if idxs.contains(&cursor)))
             .unwrap_or(0);
 
-        let total_display = inline_display_row_count(display_rows.len(), display_cursor, hero_rows);
-
-        // Keep the cursor row visible: never scroll it above the viewport's
-        // top.
-        let (mut offset, mut detail_screen_row) = if hero_rows > 0 {
-            let flow = super::hero::inline_detail_flow(
-                display_cursor,
-                hero_rows,
-                content_area.height,
-                stored_scroll,
-            )
-            .expect("inline detail was admitted only when its active row fits");
-            (flow.offset, Some(flow.detail_screen_row))
-        } else {
-            let lower_bound = display_cursor.saturating_sub(visible.saturating_sub(1));
-            (stored_scroll.clamp(lower_bound, display_cursor), None)
-        };
-        // If stale scroll state would put the first item of a bucket at the
-        // top of the viewport, back up so its letter header remains visible.
-        if visible > 1 && offset > 0 {
-            let mut run_start = offset;
-            if run_start > 0
-                && matches!(
-                    display_rows.get(run_start - 1),
-                    Some(DisplayRow::LetterHeader(_))
-                )
-            {
-                run_start -= 1;
-            }
-            offset = run_start;
-        }
-        if hero_rows > 0 {
-            detail_screen_row = Some(display_cursor.saturating_sub(offset));
-        }
+        let plan = InlineReplacementPlan::new(
+            &display_rows,
+            display_cursor,
+            cursor,
+            hero_rows,
+            content_area.height,
+            stored_scroll,
+        );
+        let offset = plan.offset();
+        let detail_rows = plan.detail_rows();
+        let total_display = plan.total_display_rows();
         let final_offset = offset;
 
-        // Build row map so mouse clicks can map visual row → item index
-        // (first item of each row; two-column mouse clicks resolve the
-        // cell via `left_item_rows`).
-        for visible_row in (offset..total_display).take(visible) {
-            layout.left_row_map.push(
-                match inline_display_row(display_rows.len(), display_cursor, hero_rows, visible_row)
-                    .expect("visible row is within the replacement flow")
-                {
-                    InlineDisplayRow::Replacement => {
-                        (visible_row == display_cursor).then_some(cursor)
-                    }
-                    InlineDisplayRow::Source(source_row) => match &display_rows[source_row] {
-                        DisplayRow::Spacer | DisplayRow::LetterHeader(_) => None,
-                        DisplayRow::Item(idxs) => idxs.first().copied(),
-                    },
-                },
-            );
-        }
         // Publish the full row structure (parallel to the display rows,
         // empty entries for headers) so column-aware cursor movement and
         // mouse hit-testing can resolve cells between frames.
-        layout.left_item_rows = (0..total_display)
-            .map(|display_row| {
-                match inline_display_row(display_rows.len(), display_cursor, hero_rows, display_row)
-                    .expect("display row is within the replacement flow")
-                {
-                    InlineDisplayRow::Replacement => {
-                        if display_row == display_cursor {
-                            vec![cursor]
-                        } else {
-                            Vec::new()
-                        }
-                    }
-                    InlineDisplayRow::Source(source_row) => match &display_rows[source_row] {
-                        DisplayRow::Item(idxs) => idxs.clone(),
-                        _ => Vec::new(),
-                    },
-                }
-            })
+        let row_targets = plan.row_targets();
+        layout.left_row_map = (offset..total_display)
+            .take(visible)
+            .enumerate()
+            .map(|(visible_row, _)| row_targets[offset + visible_row])
             .collect();
+        layout.left_item_rows = plan.item_rows();
 
         let show_scrollbar = focused && total_display > visible;
 
@@ -183,7 +129,8 @@ impl App {
         let list_items: Vec<ListItem> = (offset..total_display)
             .take(visible)
             .map(|display_row| {
-                match inline_display_row(display_rows.len(), display_cursor, hero_rows, display_row)
+                match plan
+                    .display_row(display_row)
                     .expect("display row is within the replacement flow")
                 {
                     InlineDisplayRow::Replacement => ListItem::new(Line::default()),
@@ -242,7 +189,7 @@ impl App {
                                 // highlight background rather than adding an indent.
                                 let avail = normal_avail;
                                 let name_w = avail.saturating_sub(dur_str.width());
-                                let (title, dur_str) = if selected && hero_rows > 0 {
+                                let (title, dur_str) = if selected && detail_rows > 0 {
                                     (String::new(), String::new())
                                 } else {
                                     (trunc_str(&item_name, name_w), dur_str)
@@ -274,13 +221,8 @@ impl App {
             LIBRARY_COLUMN_GAP,
         );
 
-        if let Some(detail_screen_row) = detail_screen_row {
-            layout.hero_area = Rect {
-                x: content_area.x,
-                y: content_area.y + detail_screen_row as u16,
-                width: content_area.width,
-                height: hero_rows,
-            };
+        if let Some(hero_area) = plan.hero_area(content_area) {
+            layout.hero_area = hero_area;
             layout.inline_hero_area = layout.hero_area;
             layout.selected_item_rect = Some(layout.hero_area);
         }
@@ -301,8 +243,14 @@ impl App {
             );
         }
 
-        if hero_rows == 0 {
-            draw_column_selection_markers(f, content_area, cursor, &layout.left_item_rows, offset);
+        if plan.should_draw_selection_markers() {
+            super::list_rows::draw_column_selection_markers(
+                f,
+                content_area,
+                cursor,
+                &layout.left_item_rows,
+                offset,
+            );
         }
 
         final_offset

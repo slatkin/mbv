@@ -1,4 +1,44 @@
+use super::components::widgets::{render_pill_bar, PillBar};
 use super::test_helpers::*;
+use crate::app::palette;
+use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
+use ratatui::Terminal;
+
+#[test]
+fn pill_bar_does_not_paint_the_reserved_spacer_row() {
+    let labels = vec!["All".to_string(), "A-C".to_string()];
+    let ids = vec![0, 1];
+    let mut terminal = Terminal::new(TestBackend::new(20, 2)).unwrap();
+
+    terminal
+        .draw(|f| {
+            let area = Rect::new(0, 0, 20, 2);
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                area,
+            );
+            render_pill_bar(
+                f,
+                area,
+                PillBar {
+                    labels: &labels,
+                    ids: &ids,
+                    selected_pos: 0,
+                    prefix: None,
+                },
+            );
+        })
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(19, 0)].bg, palette::PILL_ROW_BG);
+    for x in 0..20 {
+        assert_eq!(buffer[(x, 1)].bg, palette::SURFACE_BACKDROP);
+    }
+}
 
 #[test]
 fn pill_bar_hitboxes_carry_caller_ids_not_display_positions() {

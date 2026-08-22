@@ -187,48 +187,50 @@ impl App {
         {
             if let TabSelection::AudiobookshelfLibrary(_) = self.tab {
                 let pos = (col, row).into();
-                if let Some(episode_index) = self
-                    .layout
-                    .main
-                    .audiobookshelf_episode_rows
-                    .iter()
-                    .find(|(rect, _)| rect.contains(pos))
-                    .map(|(_, index)| *index)
-                {
-                    let Some(index) = self.tab.audiobookshelf_index() else {
-                        return false;
-                    };
-                    if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
-                        if state.episode_selection.is_some() {
-                            state.episode_selection = Some(episode_index);
-                            self.set_panel_focus(PanelFocus::Library);
-                            return true;
+                if self.layout.main.is_wide_podcast_active() {
+                    if let Some(episode_index) = self
+                        .layout
+                        .main
+                        .audiobookshelf_episode_rows
+                        .iter()
+                        .find(|(rect, _)| rect.contains(pos))
+                        .map(|(_, index)| *index)
+                    {
+                        let Some(index) = self.tab.audiobookshelf_index() else {
+                            return false;
+                        };
+                        if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
+                            if state.episode_selection.is_some() {
+                                state.episode_selection = Some(episode_index);
+                                self.set_panel_focus(PanelFocus::Library);
+                                return true;
+                            }
                         }
                     }
                 }
             }
             if let TabSelection::AudiobookshelfLibrary(index) = self.tab {
                 let pos = (col, row).into();
-                if let Some(chapter_index) = self
-                    .layout
-                    .main
-                    .audiobookshelf_book_chapter_rows
-                    .iter()
-                    .find(|(rect, _)| rect.contains(pos))
-                    .map(|(_, index)| *index)
-                {
-                    if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
-                        state.chapter_selection = Some(chapter_index);
-                        self.set_panel_focus(PanelFocus::Library);
-                        return true;
+                if self.layout.main.is_wide_book_active() {
+                    if let Some(chapter_index) = self
+                        .layout
+                        .main
+                        .audiobookshelf_book_chapter_rows
+                        .iter()
+                        .find(|(rect, _)| rect.contains(pos))
+                        .map(|(_, index)| *index)
+                    {
+                        if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
+                            state.chapter_selection = Some(chapter_index);
+                            self.set_panel_focus(PanelFocus::Library);
+                            return true;
+                        }
                     }
                 }
             }
             if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
                 let pos = (col, row).into();
-                if self.layout.main.is_wide_tv_active()
-                    || self.libs[lib_idx].library.collection_type == "tvshows"
-                {
+                if self.layout.main.is_wide_tv_active() {
                     if let Some(episode) = self
                         .layout
                         .main
@@ -242,7 +244,7 @@ impl App {
                         return true;
                     }
                 }
-                if self.is_music_group_view(lib_idx) {
+                if self.is_music_group_view(lib_idx) && self.layout.main.is_wide_music_active() {
                     if let Some(track) = self.layout.main.wide_music_track_at(pos) {
                         self.set_panel_focus(PanelFocus::Library);
                         self.libs[lib_idx].album_track_focus = Some(track);
@@ -273,7 +275,10 @@ impl App {
                         self.set_panel_focus(PanelFocus::Library);
                         return true;
                     }
-                    TabSelection::Home | TabSelection::Feeds => {}
+                    TabSelection::Home | TabSelection::Feeds => {
+                        self.set_panel_focus(PanelFocus::Library);
+                        return true;
+                    }
                 }
             }
             // Wide Music: right-pane clicks (pills + album browser) bypass
@@ -522,6 +527,9 @@ impl App {
                             match self.audiobookshelf_kind_at(index) {
                                 Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
                                     self.select_audiobookshelf_book(target);
+                                }
+                                _ if self.podcast_filter_target_active(index) => {
+                                    self.select_audiobookshelf_filter(target);
                                 }
                                 _ => self.select_audiobookshelf_show(target),
                             }

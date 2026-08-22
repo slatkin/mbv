@@ -17,7 +17,14 @@ use ratatui::Frame;
 /// exceeds this).
 const DURATION_COL_W: usize = 8;
 
-fn wide_album_metadata(album: &mbv_core::api::EmbyItem, artist: &str) -> (String, u32) {
+/// Strips the "Artist (Year) " folder-name prefix from an album's display
+/// name, returning the bare title and resolved release year. Shared with
+/// the narrow Model A album hero (`render_album_hero_detail`) so both
+/// surfaces agree on the same title/year convention.
+pub(in crate::app::render) fn wide_album_metadata(
+    album: &mbv_core::api::EmbyItem,
+    artist: &str,
+) -> (String, u32) {
     let display_name = album.display_name();
     if let Some((parsed_artist, parsed_year, title)) =
         crate::app::render::parse_album_folder_name(&display_name)

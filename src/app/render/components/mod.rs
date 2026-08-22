@@ -1,6 +1,7 @@
 pub(super) mod album;
 pub(super) mod album_art;
 pub(super) mod album_detail;
+pub(super) mod album_inline;
 pub(super) mod album_rows;
 pub(super) mod audiobookshelf;
 pub(super) mod audiobookshelf_book_browser;
@@ -44,6 +45,7 @@ pub(super) mod music_wide_browser;
 pub(super) mod playlists;
 pub(super) mod remote_reanchor;
 pub(super) mod search_sidebar;
+pub(super) mod selection_modal;
 pub(super) mod sessions;
 pub(super) mod settings;
 pub(super) mod tv_wide;

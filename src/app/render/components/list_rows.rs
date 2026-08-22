@@ -57,6 +57,177 @@ pub(in crate::app::render) enum DisplayRow {
     Item(Vec<usize>),
 }
 
+/// The shared selected-row replacement contract for a single-column browser.
+/// Callers provide their already-built rows; this plan owns admission,
+/// swallowing, flow scroll, fallback, geometry, targets, and marker policy.
+pub(in crate::app::render) struct InlineReplacementPlan<'a> {
+    display_rows: &'a [DisplayRow],
+    selected_row: usize,
+    selected_item: usize,
+    detail_rows: u16,
+    total_display_rows: usize,
+    offset: usize,
+    detail_screen_row: Option<usize>,
+}
+
+impl<'a> InlineReplacementPlan<'a> {
+    /// Builds one replacement plan from the surface's display rows. A detail
+    /// block is admitted only when `inline_detail_flow` can keep it and one
+    /// ordinary browser row visible; otherwise the ordinary row flow wins.
+    pub(in crate::app::render) fn new(
+        display_rows: &'a [DisplayRow],
+        selected_row: usize,
+        selected_item: usize,
+        desired_detail_rows: u16,
+        visible_rows: u16,
+        stored_offset: usize,
+    ) -> Self {
+        let admitted = (selected_row < display_rows.len()).then(|| {
+            super::hero::inline_detail_flow(
+                selected_row,
+                desired_detail_rows,
+                visible_rows,
+                stored_offset,
+            )
+        });
+        let (detail_rows, offset, detail_screen_row) = match admitted.flatten() {
+            Some(flow) => {
+                let mut offset = flow.offset;
+                if matches!(
+                    display_rows.get(offset.saturating_sub(1)),
+                    Some(DisplayRow::LetterHeader(_))
+                ) && offset > 0
+                {
+                    let header_offset = offset - 1;
+                    let detail_end =
+                        selected_row.saturating_sub(header_offset) + desired_detail_rows as usize;
+                    if detail_end <= visible_rows as usize {
+                        offset = header_offset;
+                    }
+                }
+                (
+                    desired_detail_rows,
+                    offset,
+                    Some(selected_row.saturating_sub(offset)),
+                )
+            }
+            None => {
+                if selected_row >= display_rows.len() {
+                    let max_offset = display_rows.len().saturating_sub(visible_rows as usize);
+                    let offset = stored_offset.min(max_offset);
+                    return Self {
+                        display_rows,
+                        selected_row,
+                        selected_item,
+                        detail_rows: 0,
+                        total_display_rows: display_rows.len(),
+                        offset,
+                        detail_screen_row: None,
+                    };
+                }
+                let visible_rows = visible_rows as usize;
+                let lower_bound = selected_row.saturating_sub(visible_rows.saturating_sub(1));
+                let offset = stored_offset.clamp(lower_bound, selected_row);
+                (0, offset, None)
+            }
+        };
+        let total_display_rows =
+            super::hero::inline_display_row_count(display_rows.len(), selected_row, detail_rows);
+        Self {
+            display_rows,
+            selected_row,
+            selected_item,
+            detail_rows,
+            total_display_rows,
+            offset,
+            detail_screen_row,
+        }
+    }
+
+    pub(in crate::app::render) fn detail_rows(&self) -> u16 {
+        self.detail_rows
+    }
+
+    pub(in crate::app::render) fn offset(&self) -> usize {
+        self.offset
+    }
+
+    pub(in crate::app::render) fn total_display_rows(&self) -> usize {
+        self.total_display_rows
+    }
+
+    #[cfg(test)]
+    pub(in crate::app::render) fn detail_screen_row(&self) -> Option<usize> {
+        self.detail_screen_row
+    }
+
+    pub(in crate::app::render) fn hero_area(&self, content_area: Rect) -> Option<Rect> {
+        self.detail_screen_row.map(|screen_row| Rect {
+            y: content_area.y + screen_row as u16,
+            height: self.detail_rows,
+            ..content_area
+        })
+    }
+
+    pub(in crate::app::render) fn display_row(
+        &self,
+        display_row: usize,
+    ) -> Option<super::hero::InlineDisplayRow> {
+        if self.selected_row >= self.display_rows.len() {
+            return (display_row < self.display_rows.len())
+                .then_some(super::hero::InlineDisplayRow::Source(display_row));
+        }
+        super::hero::inline_display_row(
+            self.display_rows.len(),
+            self.selected_row,
+            self.detail_rows,
+            display_row,
+        )
+    }
+
+    pub(in crate::app::render) fn row_targets(&self) -> Vec<Option<usize>> {
+        (0..self.total_display_rows)
+            .map(|display_row| match self.display_row(display_row) {
+                Some(super::hero::InlineDisplayRow::Replacement) => {
+                    (display_row == self.selected_row).then_some(self.selected_item)
+                }
+                Some(super::hero::InlineDisplayRow::Source(source_row)) => {
+                    match &self.display_rows[source_row] {
+                        DisplayRow::Item(items) => items.first().copied(),
+                        DisplayRow::Spacer | DisplayRow::LetterHeader(_) => None,
+                    }
+                }
+                None => None,
+            })
+            .collect()
+    }
+
+    pub(in crate::app::render) fn item_rows(&self) -> Vec<Vec<usize>> {
+        (0..self.total_display_rows)
+            .map(|display_row| match self.display_row(display_row) {
+                Some(super::hero::InlineDisplayRow::Replacement) => {
+                    if display_row == self.selected_row {
+                        vec![self.selected_item]
+                    } else {
+                        Vec::new()
+                    }
+                }
+                Some(super::hero::InlineDisplayRow::Source(source_row)) => {
+                    match &self.display_rows[source_row] {
+                        DisplayRow::Item(items) => items.clone(),
+                        DisplayRow::Spacer | DisplayRow::LetterHeader(_) => Vec::new(),
+                    }
+                }
+                None => Vec::new(),
+            })
+            .collect()
+    }
+
+    pub(in crate::app::render) fn should_draw_selection_markers(&self) -> bool {
+        self.detail_rows == 0
+    }
+}
+
 /// Shared inputs to the per-kind row-rendering bodies of `render_list`
 /// (`render_letter_grouped_rows`, `render_plain_rows`): the
 /// prelude values both kinds' bodies read, factored out so each callee takes

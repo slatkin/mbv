@@ -100,6 +100,57 @@ impl App {
             _ => {}
         }
 
+        // A selection modal owns the topmost browse targets. Consume every
+        // mouse event while it is open so the underlying library cannot see
+        // a click intended for a modal row or pill.
+        if self.selection_modal.is_some() {
+            if !matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+                return;
+            }
+            let pos = (col, row).into();
+            if !self.layout.main.selection_modal_area.contains(pos) {
+                self.close_selection_modal();
+                return;
+            }
+            if let Some(target) = self
+                .layout
+                .main
+                .selector_tabs
+                .iter()
+                .find(|(rect, _)| rect.contains(pos))
+                .map(|(_, target)| *target)
+            {
+                let source = self
+                    .selection_modal
+                    .as_ref()
+                    .map(|modal| modal.source.clone());
+                match source {
+                    Some(crate::app::types_selection_modal::SelectionModalSource::Series {
+                        ..
+                    }) => self.select_series_selection_modal_season(target),
+                    Some(crate::app::types_selection_modal::SelectionModalSource::Podcast {
+                        ..
+                    }) => self.select_podcast_selection_modal_filter(target),
+                    _ => {}
+                }
+                return;
+            }
+            if let Some(row_index) = self
+                .layout
+                .main
+                .selection_modal_rows
+                .iter()
+                .find(|(rect, _)| rect.contains(pos))
+                .map(|(_, row_index)| *row_index)
+            {
+                if let Some(modal) = self.selection_modal.as_mut() {
+                    modal.cursor = row_index;
+                }
+                self.activate_selection_modal_item();
+            }
+            return;
+        }
+
         if matches!(
             mouse.kind,
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
@@ -208,7 +259,10 @@ impl App {
                                         Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
                                             self.select_audiobookshelf_book_bucket(target);
                                         }
-                                        _ => self.select_audiobookshelf_filter(target),
+                                        _ if self.podcast_filter_target_active(index) => {
+                                            self.select_audiobookshelf_filter(target);
+                                        }
+                                        _ => self.select_audiobookshelf_podcast_bucket(target),
                                     }
                                 }
                                 TabSelection::EmbyLibrary(lib_idx) => {
@@ -267,9 +321,7 @@ impl App {
                                 {
                                     self.activate_series_selection_episode(lib_idx);
                                 } else if self.layout.main.tv_wide_right_area.contains(pos) {
-                                    if let Some(item) = self.selected_series_item(lib_idx) {
-                                        self.enter_series_selection(lib_idx, &item);
-                                    }
+                                    self.activate_selected_series(lib_idx);
                                 }
                                 return;
                             }
@@ -278,18 +330,25 @@ impl App {
                         let in_left = self.layout.main.left_area.contains(pos)
                             || self.layout.main.inline_hero_area.contains(pos);
                         if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
-                            if self
-                                .layout
-                                .main
-                                .tv_wide_episode_rows
-                                .iter()
-                                .any(|(rect, _)| rect.contains(pos))
+                            if self.layout.main.is_wide_tv_active()
+                                && self
+                                    .layout
+                                    .main
+                                    .tv_wide_episode_rows
+                                    .iter()
+                                    .any(|(rect, _)| rect.contains(pos))
                             {
                                 self.activate_series_selection_episode(lib_idx);
                                 return;
                             }
                             if self.is_music_group_view(lib_idx) {
-                                if let Some(track_idx) = self.layout.main.wide_music_track_at(pos) {
+                                let track_idx = self
+                                    .layout
+                                    .main
+                                    .is_wide_music_active()
+                                    .then(|| self.layout.main.wide_music_track_at(pos))
+                                    .flatten();
+                                if let Some(track_idx) = track_idx {
                                     self.libs[lib_idx].album_track_focus = Some(track_idx);
                                     self.select(lib_idx);
                                     return;
@@ -314,7 +373,11 @@ impl App {
                                                 .get(index)
                                                 .is_some_and(|state| state.episode_selection.is_some());
                                             if !in_episodes {
-                                                self.enter_audiobookshelf_episode_selection();
+                                                if self.layout.main.is_wide_podcast_active() {
+                                                    self.enter_audiobookshelf_episode_selection();
+                                                } else {
+                                                    self.open_podcast_selection_modal();
+                                                }
                                             } else {
                                                 // Episode activation: inert seam for
                                                 // #518 (double-click on a selected
@@ -324,26 +387,23 @@ impl App {
                                         }
                                     }
                                     crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
-                                        // Both panes are always visible now
-                                        // (no Enter-to-enter modal), so a
-                                        // double-click in the hero/chapters
-                                        // pane only activates a focused
-                                        // chapter row; it has nothing to
-                                        // activate when the browser pane is
-                                        // focused instead.
-                                        let in_chapters = self
-                                            .audiobookshelf_book_browse
-                                            .get(index)
-                                            .is_some_and(|state| state.chapter_selection.is_some());
-                                        if in_chapters
-                                            && self
-                                                .layout
-                                                .main
-                                                .audiobookshelf_book_chapter_rows
-                                                .iter()
-                                                .any(|(rect, _)| rect.contains(pos))
-                                        {
-                                            self.activate_audiobookshelf_book_row();
+                                        if !self.layout.main.is_wide_book_active() && in_left {
+                                            self.activate_audiobookshelf_book_parent();
+                                        } else {
+                                            let in_chapters = self
+                                                .audiobookshelf_book_browse
+                                                .get(index)
+                                                .is_some_and(|state| state.chapter_selection.is_some());
+                                            if in_chapters
+                                                && self
+                                                    .layout
+                                                    .main
+                                                    .audiobookshelf_book_chapter_rows
+                                                    .iter()
+                                                    .any(|(rect, _)| rect.contains(pos))
+                                            {
+                                                self.activate_audiobookshelf_book_row();
+                                            }
                                         }
                                     }
                                 }
@@ -379,9 +439,7 @@ impl App {
                                         self.activate_album_folder_row(lib_idx);
                                     } else if self.libs[lib_idx].series_selection.is_some() {
                                         self.activate_series_selection_episode(lib_idx);
-                                    } else if let Some(item) = self.selected_series_item(lib_idx) {
-                                        self.enter_series_selection(lib_idx, &item);
-                                    } else {
+                                    } else if !self.activate_selected_series(lib_idx) {
                                         self.select(lib_idx);
                                     }
                                 }

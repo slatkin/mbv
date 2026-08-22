@@ -166,6 +166,9 @@ impl App {
         if self.daemon_lost_modal.is_some() {
             self.render_daemon_lost_modal(f);
         }
+        if self.selection_modal.is_some() {
+            self.render_selection_modal(f, &mut layout.main);
+        }
 
         // Record the destination this completed frame was rendered for, on
         // the layout about to be installed. The tag is set only here (never
@@ -189,6 +192,7 @@ impl App {
             || self.multiselect_popup.is_some()
             || self.save_playlist_dialog.is_some()
             || self.library_routes_popup.is_some()
+            || self.selection_modal.is_some()
     }
 
     pub(in crate::app) fn any_other_modal_open(&self) -> bool {
@@ -203,6 +207,7 @@ impl App {
             || self.show_sessions
             || self.show_playlists
             || self.search_sidebar.is_some()
+            || self.selection_modal.is_some()
     }
 }
 

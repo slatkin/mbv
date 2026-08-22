@@ -134,34 +134,54 @@ impl App {
         let tx = self.lib_tx.clone();
         let sid = series_id.clone();
         std::thread::spawn(move || {
-            // Fetch seasons
-            let seasons = client
+            let (seasons, episodes) = client
                 .get_items_sorted(&sid, None, false, 0, PAGE_SIZE, "SortName", "Ascending")
                 .map(|(items, _total)| items)
+                .map(|seasons| (seasons, std::collections::HashMap::new()))
                 .unwrap_or_default();
-
-            // Fetch episodes for the first season (if any)
-            let mut episodes: std::collections::HashMap<String, Vec<mbv_core::api::EmbyItem>> =
-                std::collections::HashMap::new();
-            if let Some(first_season) = seasons.first() {
-                let eps = client
-                    .get_items_sorted(
-                        &first_season.id,
-                        None,
-                        false,
-                        0,
-                        PAGE_SIZE,
-                        "IndexNumber",
-                        "Ascending",
-                    )
-                    .map(|(items, _total)| items)
-                    .unwrap_or_default();
-                episodes.insert(first_season.id.clone(), eps);
-            }
-
             let _ = tx.send(LibEvent::SeriesDetailFetched {
                 series_id: sid,
                 seasons,
+                episodes,
+            });
+        });
+    }
+
+    /// Fetches one season only after the complete ordered Series detail is in
+    /// the cache. The detail event handler calls this for every uncached pill.
+    pub(super) fn fetch_series_season_episodes(&mut self, series_id: String, season_id: String) {
+        let key = (series_id.clone(), season_id.clone());
+        let Some(detail) = self.series_detail_cache.get(&series_id) else {
+            return;
+        };
+        if !detail.seasons.iter().any(|season| season.id == season_id)
+            || detail.episodes.contains_key(&season_id)
+            || self.series_season_loading.contains(&key)
+        {
+            return;
+        }
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
+        self.series_detail_loading.insert(series_id.clone());
+        self.series_season_loading.insert(key);
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let episodes = client
+                .get_items_sorted(
+                    &season_id,
+                    None,
+                    false,
+                    0,
+                    PAGE_SIZE,
+                    "IndexNumber",
+                    "Ascending",
+                )
+                .map(|(items, _)| items)
+                .unwrap_or_default();
+            let _ = tx.send(LibEvent::SeriesSeasonEpisodesFetched {
+                series_id,
+                season_id,
                 episodes,
             });
         });

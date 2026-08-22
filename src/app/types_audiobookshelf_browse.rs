@@ -126,10 +126,14 @@ impl AudiobookshelfBrowseState {
     }
 
     pub fn visible_episodes(&self) -> Vec<&AudiobookshelfDownloadedEpisode> {
-        let mut episodes = self
-            .episodes
-            .as_deref()
-            .unwrap_or_default()
+        self.visible_episodes_from(self.episodes.as_deref().unwrap_or_default())
+    }
+
+    pub fn visible_episodes_from<'a>(
+        &self,
+        source: &'a [AudiobookshelfDownloadedEpisode],
+    ) -> Vec<&'a AudiobookshelfDownloadedEpisode> {
+        let mut episodes = source
             .iter()
             .filter(|episode| match self.episode_filter {
                 AudiobookshelfEpisodeFilter::All => true,
@@ -265,6 +269,35 @@ pub(super) fn build_surname_buckets(books: &[AudiobookshelfBook]) -> Vec<Surname
             books.len()
         } else {
             books.partition_point(|book| surname_bucket_key(&book.author_sort_key) <= upper)
+        };
+        if end > start {
+            buckets.push(SurnameBucket {
+                label: SURNAME_BUCKET_LABELS[i],
+                start,
+                end,
+            });
+        }
+        start = end;
+    }
+    buckets
+}
+
+/// Same partitioning as `build_surname_buckets`, keyed by a podcast show's
+/// title instead of a book's author surname -- shows have no separate sort
+/// key, so the title itself (already the sort key `append_page` orders
+/// `shows` by) is the bucket key. Kept as a separate function rather than a
+/// generic one over both owning types: `AudiobookshelfShow` and
+/// `AudiobookshelfBook` share no common trait today, and the loop body is
+/// small enough that duplicating it is cheaper than introducing one.
+pub(super) fn build_show_title_buckets(shows: &[AudiobookshelfShow]) -> Vec<SurnameBucket> {
+    let mut buckets = Vec::with_capacity(SURNAME_BUCKET_LABELS.len());
+    let mut start = 0;
+    for (i, &upper) in SURNAME_BUCKET_UPPER.iter().enumerate() {
+        let is_last = i + 1 == SURNAME_BUCKET_UPPER.len();
+        let end = if is_last {
+            shows.len()
+        } else {
+            shows.partition_point(|show| surname_bucket_key(&show.title) <= upper)
         };
         if end > start {
             buckets.push(SurnameBucket {

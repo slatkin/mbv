@@ -162,21 +162,10 @@ impl App {
             let in_track_focus_mode = self.is_viewing_album_folders(lib_idx)
                 && self.libs[lib_idx].album_track_focus.is_some();
             if self.libs[lib_idx].search.is_none() && in_track_focus_mode {
-                let level_items = self
-                    .selected_album_item(lib_idx)
-                    .and_then(|album| self.album_tracks_cache.get(&album.id).cloned())
-                    .unwrap_or_default();
-                let mut tracks: Vec<EmbyItem> =
-                    level_items.into_iter().filter(is_playable).collect();
-                sort_audio_tracks(&mut tracks);
-                if let Some(start_idx) = tracks.iter().position(|i| i.id == fresh.id) {
-                    self.replace_playback_queue(tracks.clone(), start_idx);
-                    self.queue_source = crate::config::QueueSource::Album;
-                    if !self.has_direct_remote_queue() {
-                        self.save_queue_state();
+                if let Some(album) = self.selected_album_item(lib_idx) {
+                    if self.play_album_track(&album.id, &fresh) {
+                        return;
                     }
-                    self.play_items_routed(tracks, start_idx);
-                    return;
                 }
             }
             let autoload = self.config.lock().unwrap().autoload;
@@ -210,7 +199,11 @@ impl App {
                                 if !self.has_direct_remote_queue() {
                                     self.save_queue_state();
                                 }
-                                self.play_items_routed(siblings, start_idx);
+                                self.play_items_routed(
+                                    siblings,
+                                    start_idx,
+                                    self.queue_source.clone(),
+                                );
                                 return;
                             }
                             drop(client);
@@ -225,13 +218,49 @@ impl App {
         }
     }
 
+    /// Plays a track through the album queue path used by the wide music
+    /// workspace. Returns false when the track is not in the cached album.
+    pub(super) fn play_album_track(&mut self, album_id: &str, track: &EmbyItem) -> bool {
+        let mut tracks: Vec<EmbyItem> = self
+            .album_tracks_cache
+            .get(album_id)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(is_playable)
+            .collect();
+        sort_audio_tracks(&mut tracks);
+        let Some(start_idx) = tracks.iter().position(|item| item.id == track.id) else {
+            return false;
+        };
+        if self.connected_session_id.is_none() && self.emby_snapshot().is_none() {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return false;
+        }
+        self.queue_source = crate::config::QueueSource::Album;
+        self.replace_playback_queue(tracks.clone(), start_idx);
+        self.play_items_routed(tracks, start_idx, crate::config::QueueSource::Album);
+        if !self.has_direct_remote_queue() {
+            self.save_queue_state();
+        }
+        true
+    }
+
     /// Activation for a row in the album-folder listing
     /// (`is_viewing_album_folders` level). Shared by the Enter key and mouse
     /// click so the two paths cannot drift (see #145 / mouse-click parity fix).
     /// Precondition: caller has confirmed `is_viewing_album_folders(lib_idx)`.
+    ///
+    /// Wide keeps entering the in-hero `album_track_focus` mode (design.md
+    /// decision 6); narrow has no inline track list to focus (see
+    /// `render_album_hero_detail`), so it opens the selection modal instead.
     pub(super) fn activate_album_folder_row(&mut self, lib_idx: usize) {
         if self.libs[lib_idx].album_track_focus.is_none() {
-            self.libs[lib_idx].album_track_focus = Some(0);
+            if self.layout.main.is_wide_music_active() {
+                self.libs[lib_idx].album_track_focus = Some(0);
+            } else if let Some(album) = self.selected_album_item(lib_idx) {
+                self.open_album_selection_modal(&album);
+            }
         } else {
             let has_focused_track = self
                 .selected_album_item(lib_idx)

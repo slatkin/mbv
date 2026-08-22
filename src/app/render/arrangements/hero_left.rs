@@ -119,7 +119,36 @@ pub(in crate::app::render) fn hero_on_left_panes(content_area: Rect) -> (Rect, R
 /// constant here so the two files do not each own a copy of the same value.
 pub(in crate::app::render) struct HeroOnLeftRightPane {
     pub pills_area: Rect,
+    pub spacer_area: Rect,
     pub list_panel: Rect,
+}
+
+pub(in crate::app::render) struct PillBarAreas {
+    pub pills_area: Rect,
+    pub spacer_area: Rect,
+    pub content_area: Rect,
+}
+
+/// Places the shared one-row pill bar, its one-row parent-background spacer,
+/// and the content below them.
+pub(in crate::app::render) fn pill_bar_areas(area: Rect) -> PillBarAreas {
+    let reserved = HERO_ON_LEFT_PILLS_ROW_HEIGHT + HERO_ON_LEFT_PILLS_GAP_ROWS;
+    PillBarAreas {
+        pills_area: Rect {
+            height: HERO_ON_LEFT_PILLS_ROW_HEIGHT.min(area.height),
+            ..area
+        },
+        spacer_area: Rect {
+            y: area.y.saturating_add(HERO_ON_LEFT_PILLS_ROW_HEIGHT),
+            height: HERO_ON_LEFT_PILLS_GAP_ROWS.min(area.height.saturating_sub(1)),
+            ..area
+        },
+        content_area: Rect {
+            y: area.y.saturating_add(reserved),
+            height: area.height.saturating_sub(reserved),
+            ..area
+        },
+    }
 }
 
 pub(in crate::app::render) fn hero_on_left_right_pane(
@@ -127,24 +156,16 @@ pub(in crate::app::render) fn hero_on_left_right_pane(
     right_area: Rect,
     bottom_pad: u16,
 ) -> HeroOnLeftRightPane {
-    let pills_area = Rect {
+    let areas = pill_bar_areas(Rect {
         x: right_area.x,
         y: right_panel.y,
         width: right_area.width,
-        height: HERO_ON_LEFT_PILLS_ROW_HEIGHT,
-    };
-    let browser_y = right_panel.y + HERO_ON_LEFT_PILLS_ROW_HEIGHT + HERO_ON_LEFT_PILLS_GAP_ROWS;
-    let list_panel = Rect {
-        x: right_area.x,
-        y: browser_y,
-        width: right_area.width,
-        height: right_panel.height.saturating_sub(
-            HERO_ON_LEFT_PILLS_ROW_HEIGHT + HERO_ON_LEFT_PILLS_GAP_ROWS + bottom_pad,
-        ),
-    };
+        height: right_panel.height.saturating_sub(bottom_pad),
+    });
     HeroOnLeftRightPane {
-        pills_area,
-        list_panel,
+        pills_area: areas.pills_area,
+        spacer_area: areas.spacer_area,
+        list_panel: areas.content_area,
     }
 }
 

@@ -1,6 +1,7 @@
 use super::notify_actions::ToastSeverity;
-use super::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use super::types_audiobookshelf_browse::BookRow;
+use super::types_audiobookshelf_browse::{build_show_title_buckets, AudiobookshelfEpisodeFilter};
+use super::types_selection_modal::SelectionModalSource;
 use super::App;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, QueueItem};
@@ -170,6 +171,23 @@ impl App {
         }
     }
 
+    /// Selects the first show in a clicked alphabetical panel bucket. Podcast
+    /// pills are derived from the title-sorted show list, so the cursor itself
+    /// is the selected-bucket state.
+    pub(super) fn select_audiobookshelf_podcast_bucket(&mut self, bucket_pos: usize) {
+        let Some(index) = self.tab.audiobookshelf_index() else {
+            return;
+        };
+        let Some(bucket) = self.audiobookshelf_browse.get(index).and_then(|state| {
+            build_show_title_buckets(&state.shows)
+                .get(bucket_pos)
+                .copied()
+        }) else {
+            return;
+        };
+        self.select_audiobookshelf_show(bucket.start);
+    }
+
     pub(super) fn move_audiobookshelf_show_cursor(&mut self, delta: i64) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
@@ -256,10 +274,31 @@ impl App {
         state.set_episode_filter(AudiobookshelfEpisodeFilter::ALL[next]);
     }
 
+    /// Whether a click/target at `index` should route to the podcast episode
+    /// filter (selection-modal open for this podcast, or already browsing
+    /// its episode list) rather than the show/bucket list.
+    pub(super) fn podcast_filter_target_active(&self, index: usize) -> bool {
+        self.selection_modal
+            .as_ref()
+            .is_some_and(|modal| matches!(modal.source, SelectionModalSource::Podcast { .. }))
+            || self
+                .audiobookshelf_browse
+                .get(index)
+                .is_some_and(|state| state.episode_selection.is_some())
+    }
+
     pub(super) fn select_audiobookshelf_filter(&mut self, target: usize) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
+        if self
+            .selection_modal
+            .as_ref()
+            .is_some_and(|modal| matches!(modal.source, SelectionModalSource::Podcast { .. }))
+        {
+            self.select_podcast_selection_modal_filter(target);
+            return;
+        }
         let Some(filter) = AudiobookshelfEpisodeFilter::ALL.get(target).copied() else {
             return;
         };
