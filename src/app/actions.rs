@@ -206,6 +206,14 @@ impl App {
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
             self.set_panel_focus(PanelFocus::Queue);
         }
+        if self.is_cast_attached() {
+            let cast_items = items
+                .into_iter()
+                .map(|item| QueueItem::Emby(Box::new(item)))
+                .collect();
+            self.dispatch_selection_to_cast(cast_items, start_idx);
+            return;
+        }
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.clear_playback_overlays();
             let id = conn_id.clone();
@@ -259,6 +267,13 @@ impl App {
             self.set_panel_focus(PanelFocus::Queue);
         }
         let label = item.playback_label();
+        if self.is_cast_attached() {
+            self.replace_playback_queue(vec![item], 0);
+            let all_items = self.playback_queue().all_queue_items();
+            self.dispatch_selection_to_cast(all_items, 0);
+            self.set_queue_scope(self.playback_target_queue_scope());
+            return;
+        }
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.retire_remote_tracking(true);
             self.clear_playback_overlays();
