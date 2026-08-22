@@ -348,6 +348,7 @@ fn resolve_emby_cast_item(
             item_id: item.id.clone(),
             media_source_id: info.media_source_id,
             session_id: info.session_id,
+            runtime_ticks: item.runtime_ticks,
         },
     ))
 }
