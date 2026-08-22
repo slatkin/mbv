@@ -410,6 +410,7 @@ impl App {
                     self.show_sessions = !self.show_sessions;
                     if self.show_sessions {
                         self.spawn_sessions_load();
+                        self.spawn_cast_discovery();
                     }
                     return;
                 }

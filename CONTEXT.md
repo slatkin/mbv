@@ -327,8 +327,9 @@ _Avoid_: idle ticker, background feed, screensaver feed
 
 **Playback target**:
 Where explicit playback actions are sent: local in-process Player, directly
-controlled remote Player owner (via ctrl), or Emby session (via observed remote
-playback). Resolved per action from queue scope, active route, and attachment.
+controlled remote Player owner (via ctrl), Emby session (via observed remote
+playback), or an attached cast receiver. Resolved per action from queue
+scope, active route, and attachment.
 _Avoid_: play target, output target, active player
 
 ## Presentation
@@ -628,3 +629,44 @@ The Local daemon a stay-alive client falls back to once Direct remote
 control or a Library route ends. A bare-mode client has no home daemon;
 ending remote control there resumes its own in-process Player directly.
 _Avoid_: home base, origin daemon
+
+## Cast
+
+**Cast receiver**:
+A Google Cast device discovered on the LAN via mDNS and presented as a row
+in the F3 target panel alongside Emby sessions, identified durably by its
+advertised identifier across address changes rather than a stored host/port.
+Called a **cast target** once mbv is attached to it — the receiver in its
+role as where playback actions are sent.
+_Avoid_: chromecast device, TV, cast device
+
+**Cast attachment**:
+mbv's relationship to a cast receiver it controls: selecting one attaches
+mbv without starting, stopping, or reconfiguring the local Player, and while
+attached, playing a selection dispatches it to the receiver instead of local
+playback. Held beside `connected_session_id`, independent of Emby session
+state — both may be attached at once. Distinct from Attach above: it is not
+a ctrl connection and creates no Client relationship, even though both name
+"one process reaching a playback target." On launch, with `auto_reconnect`
+enabled, mbv attaches to the receiver it was attached to at exit, restoring
+control and displayed state from its reported status without dispatching
+anything.
+_Avoid_: attach (bare, without "cast"), cast session, cast connection
+
+**Dispatch**:
+Sending a played selection's items to a cast receiver's own media queue in
+one act; mbv does not project, track, or reconcile that queue afterward, and
+the receiver performs its own advancement between dispatched items.
+Distinct from Bound (a Player owner holding mbv's own queue) — a receiver
+owns what it plays independently of mbv's queue once dispatch completes.
+_Avoid_: enqueue, cast queue, load (bare)
+
+**Uncastable**:
+An item mbv's queue holds that cannot be sent to a cast receiver — no
+retrievable media URL, a credential that can only be carried in a request
+header, or (for Audiobookshelf) a multi-file book whose position cannot be
+represented on a receiver without corrupting its stored resume point.
+Reported to the user by name and reason rather than substituted or dropped
+silently. Distinct from Unplayable item, which never enters a Player
+owner's queue at all.
+_Avoid_: unplayable (cast), unsupported item, skip reason

@@ -25,6 +25,7 @@ impl App {
         let _test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
+        let (cast_tx, cast_rx) = mpsc::channel();
         let mut app = App {
             #[cfg(test)]
             _test_state_dir_guard,
@@ -187,6 +188,8 @@ impl App {
             notif_failed: false,
             context_menu: None,
             sessions: Vec::new(),
+            cast_receivers: Vec::new(),
+            panel_targets: Vec::new(),
             sessions_cursor: 0,
             sessions_scroll: 0,
             sessions_loading: false,
@@ -209,6 +212,11 @@ impl App {
             last_capabilities: Instant::now(),
             connected_session_id: None,
             connected_session_state: None,
+            cast_attachment: None,
+            cast_tx,
+            cast_rx,
+            last_cast_poll: Instant::now() - Duration::from_secs(60),
+            cast_status_loading: false,
             remote_tracker: None,
             remote_queue_projection: None,
             remote_queue_lineage: 0,
@@ -600,6 +608,11 @@ impl App {
         if endpoint.is_local() {
             app.try_auto_reconnect();
         }
+        // Cast reattach doesn't depend on Emby readiness (7.3), so unlike
+        // the Emby restore above it isn't gated on `endpoint.is_local()`:
+        // cast discovery/connect run on this machine's own LAN regardless
+        // of which daemon this launch's player talks to.
+        app.try_cast_auto_reconnect();
         let generation = app.audiobookshelf_runtime.generation();
         app.audiobookshelf_startup_request = (audiobookshelf_configured
             && audiobookshelf_credential_present)

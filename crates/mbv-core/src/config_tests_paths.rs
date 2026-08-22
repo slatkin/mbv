@@ -566,6 +566,34 @@ fn load_last_remote_connection_reports_read_failure_with_path() {
 }
 
 #[test]
+fn save_and_load_last_cast_receiver_round_trips() {
+    let _guard = TestStateDirGuard::new();
+
+    assert!(save_last_cast_receiver(Some("device-1")).is_ok());
+
+    assert_eq!(
+        load_last_cast_receiver().unwrap(),
+        Some("device-1".to_string())
+    );
+}
+
+#[test]
+fn load_last_cast_receiver_returns_none_when_no_file_exists() {
+    let _guard = TestStateDirGuard::new();
+    assert_eq!(load_last_cast_receiver().unwrap(), None);
+}
+
+#[test]
+fn save_last_cast_receiver_none_clears_a_previously_saved_record() {
+    let _guard = TestStateDirGuard::new();
+    assert!(save_last_cast_receiver(Some("device-1")).is_ok());
+
+    assert!(save_last_cast_receiver(None).is_ok());
+
+    assert_eq!(load_last_cast_receiver().unwrap(), None);
+}
+
+#[test]
 fn save_config_settings_reports_rename_failure_with_path() {
     let dir = std::env::temp_dir().join(format!("mbv-save-config-error-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();

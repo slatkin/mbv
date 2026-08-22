@@ -499,3 +499,94 @@ fn remote_status_spans_shows_local_device_name_when_off() {
     );
     assert!(!text.contains("remote:"));
 }
+
+fn rendered_text(app: &mut App, width: u16, height: u16) -> String {
+    let terminal = render_app_to_terminal(app, width, height);
+    let buf = terminal.backend().buffer();
+    let area = buf.area;
+    let mut text = String::new();
+    for y in 0..area.height {
+        for x in 0..area.width {
+            text.push_str(buf[(x, y)].symbol());
+        }
+    }
+    text
+}
+
+fn dispatched_cast_status(state: mbv_core::cast_client::CastPlaybackState) -> App {
+    use crate::app::types_cast::{CastProgressTarget, DispatchedCastItem};
+    use mbv_core::cast_client::CastStatus;
+    use mbv_core::playback_queue::QueueItemContentId;
+
+    let mut app = make_app_stub();
+    app.attach_cast("device-1".to_string());
+    let attachment = app.cast_attachment.as_mut().unwrap();
+    attachment.dispatched = vec![DispatchedCastItem {
+        url: "https://receiver/a.mp3".to_string(),
+        content_id: QueueItemContentId::Feed("guid".to_string()),
+        title: "Chromecast Episode Title".to_string(),
+        report: CastProgressTarget::Feed {
+            feed_id: Some("feed".to_string()),
+            guid: "guid".to_string(),
+        },
+    }];
+    attachment.status = Some(CastStatus {
+        position_seconds: Some(12.0),
+        duration_seconds: Some(120.0),
+        playback_rate: 1.0,
+        state,
+        playing_content_id: Some("https://receiver/a.mp3".to_string()),
+    });
+    app
+}
+
+#[test]
+fn cast_now_playing_title_renders_while_the_receiver_is_playing() {
+    use mbv_core::cast_client::CastPlaybackState;
+    let mut app = dispatched_cast_status(CastPlaybackState::Playing);
+    let text = rendered_text(&mut app, 100, 20);
+    assert!(
+        text.contains("Chromecast Episode Title"),
+        "expected the dispatched item's title while the receiver plays:\n{text}"
+    );
+}
+
+#[test]
+fn cast_now_playing_title_is_absent_while_the_receiver_is_idle() {
+    use mbv_core::cast_client::CastPlaybackState;
+    let mut app = dispatched_cast_status(CastPlaybackState::Idle);
+    let text = rendered_text(&mut app, 100, 20);
+    assert!(
+        !text.contains("Chromecast Episode Title"),
+        "an idle receiver should show no now-playing title:\n{text}"
+    );
+}
+
+#[test]
+fn the_f3_panel_labels_a_mixed_emby_and_cast_target_list_by_kind() {
+    // Same friendly/device name on both channels (8.2's "device appearing
+    // on both channels shows as two distinct targets"): the render must
+    // still distinguish the two rows by kind tag.
+    let mut app = make_app_stub();
+    app.show_sessions = true;
+    app.sessions = vec![crate::app::tests::make_session("Living Room", "Emby")];
+    app.cast_receivers = vec![mbv_core::cast_discovery::CastReceiver {
+        id: "cast-1".to_string(),
+        friendly_name: "Living Room".to_string(),
+        host: "192.168.0.5".to_string(),
+        port: 8009,
+    }];
+    app.rebuild_panel_targets();
+
+    let text = rendered_text(&mut app, 100, 20);
+
+    assert!(
+        text.contains("[EMBY]") && text.contains("[CAST]"),
+        "expected both kind labels for a device on both channels:\n{text}"
+    );
+    assert_eq!(
+        text.matches("Living Room").count(),
+        2,
+        "expected two distinct rows for the same device name:\n{text}"
+    );
+}

@@ -59,8 +59,9 @@ alter what the receiver plays.
 ### Requirement: Transport commands control the attached receiver
 
 While a cast target is attached, mbv SHALL route play, pause, stop, seek, next, previous,
-volume, mute, and subtitle-track commands to that receiver, using the same key bindings
-that control other attached targets.
+volume, and mute commands to that receiver, using the same key bindings that control other
+attached targets. Subtitle-track selection is not supported for cast targets in v1 (see
+`cast-media-dispatch`).
 
 #### Scenario: Transport key is pressed while attached
 

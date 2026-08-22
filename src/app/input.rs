@@ -94,6 +94,7 @@ impl App {
         if key.code == KeyCode::F(3) {
             self.show_sessions = true;
             self.spawn_sessions_load();
+            self.spawn_cast_discovery();
             return Some(false);
         }
         if key.code == KeyCode::F(4) {

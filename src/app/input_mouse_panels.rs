@@ -111,9 +111,9 @@ impl App {
             let content_top = if panel { content_area.y } else { 1 };
             match mouse.kind {
                 MouseEventKind::ScrollDown => {
-                    if !self.sessions.is_empty() {
+                    if !self.panel_targets.is_empty() {
                         self.sessions_cursor =
-                            (self.sessions_cursor + 1).min(self.sessions.len() - 1);
+                            (self.sessions_cursor + 1).min(self.panel_targets.len() - 1);
                     }
                 }
                 MouseEventKind::ScrollUp => {
@@ -121,11 +121,10 @@ impl App {
                 }
                 MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
                     let idx = ((row - content_top) / ENTRY_H) as usize;
-                    if idx < self.sessions.len() {
+                    if idx < self.panel_targets.len() {
                         if self.sessions_cursor == idx {
-                            if let Some(sess) = self.sessions.get(idx) {
-                                let sess = sess.clone();
-                                self.connect_to_session(&sess);
+                            if let Some(target) = self.panel_targets.get(idx).cloned() {
+                                self.select_panel_target(target);
                             }
                         } else {
                             self.sessions_cursor = idx;

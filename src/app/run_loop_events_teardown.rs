@@ -117,6 +117,34 @@ impl App {
                 );
             }
         }
+        // 7.1/7.2: leave an attached receiver playing (no stop, no
+        // teardown call -- see design.md "exit orphans the session") and
+        // persist its identifier for the next launch's reattach
+        // (`App::try_cast_auto_reconnect`). Independent of the
+        // `LastRemoteConnection` block above and its own separate file
+        // (`config_state.rs`'s `save_last_cast_receiver` doc comment): a
+        // cast attachment never touches `active_route`/
+        // `connected_session_id`, and its record belongs to this machine's
+        // own local LAN regardless of which daemon this launch's player
+        // talks to, so it isn't skipped for a genuinely-remote launch the
+        // way the block above is. Gated only on `auto_reconnect`, per task
+        // 7.2. Status polling ends here too, but not because anything
+        // stops it explicitly -- the run loop that ticks
+        // `spawn_cast_status_poll` (mod.rs) has already exited by the time
+        // `teardown` runs, so no further poll ever fires.
+        if !self.config.lock().unwrap().auto_reconnect {
+            log::info!(target: "auto_reconnect", "cast persistence skipped: auto-reconnect disabled");
+        } else {
+            let cast_receiver_id = self.cast_attachment.as_ref().map(|a| a.receiver_id.clone());
+            match mbv_core::config::save_last_cast_receiver(cast_receiver_id.as_deref()) {
+                Ok(()) => {
+                    log::info!(target: "auto_reconnect", "cast receiver persistence succeeded receiver_id={cast_receiver_id:?}")
+                }
+                Err(e) => {
+                    log::warn!(target: "auto_reconnect", "cast receiver persistence failed: {e}")
+                }
+            }
+        }
         let quit_requested = QUIT_REQUESTED.load(Ordering::Relaxed);
         // Leave the daemon's player running when the TUI disconnects; only stop
         // and join the player when we own it locally. Both signal-triggered and

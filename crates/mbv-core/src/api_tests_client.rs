@@ -303,3 +303,86 @@ fn device_id_migrates_from_legacy_mby_dir() {
 fn make_temp_data_dir() -> std::path::PathBuf {
     std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()))
 }
+
+// ── get_playback_info_for_cast (task 4.2) ─────────────────────────────────
+
+fn respond_json(listener: std::net::TcpListener, body: serde_json::Value) {
+    use std::io::Write;
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let _ = read_one_request(&mut stream);
+        let body = body.to_string();
+        let _ = stream.write_all(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            )
+            .as_bytes(),
+        );
+    });
+}
+
+#[test]
+fn get_playback_info_for_cast_direct_play_uses_the_standard_stream_url() {
+    let (listener, url) = local_listener_url();
+    respond_json(
+        listener,
+        json!({"MediaSources": [{"Id": "msid1", "SupportsDirectPlay": true}]}),
+    );
+    let client = client_with_url(&url);
+    let profile = crate::cast_dispatch::build_cast_device_profile(
+        crate::cast_dispatch::CastSubtitleKind::None,
+    );
+    let info = client
+        .get_playback_info_for_cast("item123", false, &profile)
+        .unwrap();
+    assert_eq!(
+        info.item.url,
+        format!("{url}/Videos/item123/stream?static=true&api_key=tok&MediaSourceId=msid1")
+    );
+    assert_eq!(info.item.content_type, "video/mp4");
+    assert_eq!(info.media_source_id.as_str(), "msid1");
+}
+
+#[test]
+fn get_playback_info_for_cast_transcode_uses_the_server_supplied_url() {
+    let (listener, url) = local_listener_url();
+    respond_json(
+        listener,
+        json!({"MediaSources": [{
+            "Id": "msid2",
+            "SupportsDirectPlay": false,
+            "TranscodingUrl": "/videos/item123/master.m3u8?DeviceId=x",
+        }]}),
+    );
+    let client = client_with_url(&url);
+    let profile = crate::cast_dispatch::build_cast_device_profile(
+        crate::cast_dispatch::CastSubtitleKind::None,
+    );
+    let info = client
+        .get_playback_info_for_cast("item123", false, &profile)
+        .unwrap();
+    assert_eq!(
+        info.item.url,
+        format!("{url}/videos/item123/master.m3u8?DeviceId=x")
+    );
+    assert_eq!(info.item.content_type, "application/vnd.apple.mpegurl");
+}
+
+#[test]
+fn get_playback_info_for_cast_failed_request_is_an_error() {
+    let (listener, url) = local_listener_url();
+    std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let _ = read_one_request(&mut stream);
+        }
+        // Connection dropped with no response: a connectivity-class failure.
+    });
+    let client = client_with_url(&url);
+    let profile = crate::cast_dispatch::build_cast_device_profile(
+        crate::cast_dispatch::CastSubtitleKind::None,
+    );
+    assert!(client
+        .get_playback_info_for_cast("item123", false, &profile)
+        .is_err());
+}

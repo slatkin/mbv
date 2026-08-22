@@ -6,6 +6,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.toggle_play_pause(app),
             Self::Remote(target) => target.toggle_play_pause(app),
+            Self::Cast(target) => target.toggle_play_pause(app),
         }
     }
 
@@ -13,6 +14,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.stop(app),
             Self::Remote(target) => target.stop(app),
+            Self::Cast(target) => target.stop(app),
         }
     }
 
@@ -20,6 +22,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.seek_relative(app, delta),
             Self::Remote(target) => target.seek_relative(app, delta),
+            Self::Cast(target) => target.seek_relative(app, delta),
         }
     }
 
@@ -27,6 +30,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.jump_track(app, step),
             Self::Remote(target) => target.jump_track(app, step, transport),
+            Self::Cast(target) => target.jump_track(app, step),
         }
     }
 
@@ -34,6 +38,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.toggle_command_mute(app),
             Self::Remote(target) => target.toggle_command_mute(app),
+            Self::Cast(target) => target.toggle_command_mute(app),
         }
     }
 
@@ -41,6 +46,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.is_audio_item(app),
             Self::Remote(target) => target.is_audio_item(app),
+            Self::Cast(target) => target.is_audio_item(app),
         }
     }
 
@@ -48,6 +54,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.toggle_soft_mute(app),
             Self::Remote(target) => target.toggle_soft_mute(app),
+            Self::Cast(target) => target.toggle_soft_mute(app),
         }
     }
 
@@ -55,6 +62,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.cycle_audio(app),
             Self::Remote(target) => target.cycle_audio(app),
+            Self::Cast(target) => target.cycle_audio(app),
         }
     }
 
@@ -62,6 +70,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.adjust_volume(app, delta),
             Self::Remote(target) => target.adjust_volume(app, delta),
+            Self::Cast(target) => target.adjust_volume(app, delta),
         }
     }
 
@@ -69,6 +78,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.cycle_sub(app),
             Self::Remote(target) => target.cycle_sub(app),
+            Self::Cast(target) => target.cycle_sub(app),
         }
     }
 
@@ -76,6 +86,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.displayed_volume(app),
             Self::Remote(target) => target.displayed_volume(app),
+            Self::Cast(target) => target.displayed_volume(app),
         }
     }
 
@@ -83,6 +94,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.displayed_mute(app),
             Self::Remote(target) => target.displayed_mute(app),
+            Self::Cast(target) => target.displayed_mute(app),
         }
     }
 
@@ -90,6 +102,7 @@ impl PlaybackTarget {
         match self {
             Self::Local(target) => target.indicator_data(app),
             Self::Remote(target) => target.indicator_data(app),
+            Self::Cast(target) => target.indicator_data(app),
         }
     }
 }
@@ -102,6 +115,14 @@ impl App {
     /// always report `IsPaused=true` (some Emby Web builds), the
     /// position-advance observation each poll keeps this returning false.
     pub(super) fn playback_transport_paused(&self) -> bool {
+        if let Some(paused) = self
+            .cast_attachment
+            .as_ref()
+            .and_then(|a| a.status.as_ref())
+            .map(|s| s.state == mbv_core::cast_client::CastPlaybackState::Paused)
+        {
+            return paused;
+        }
         if self.connected_session_state.is_some() {
             return self.remote_stalled_while_paused;
         }
@@ -113,7 +134,9 @@ impl App {
     /// The mutable receiver is intentional: reconciliation clears the pending
     /// prediction once the player thread catches up.
     pub(super) fn effective_playback_state(&mut self) -> super::PlaybackState {
-        if let Some(ref remote) = self.connected_session_state {
+        if let Some(state) = self.cast_effective_playback_state() {
+            state
+        } else if let Some(ref remote) = self.connected_session_state {
             let maybe_active_idx = remote.now_playing_item_id.as_ref().and_then(|id| {
                 self.player_tab
                     .queue

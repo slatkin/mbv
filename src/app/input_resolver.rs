@@ -116,7 +116,9 @@ impl App {
             // A direct daemon connection is also a valid playback route even
             // before it reports active playback; this keeps Stop available
             // while a guarded Play is resolving.
-            has_remote_session: self.connected_session_id.is_some() || self.player.is_remote(),
+            has_remote_session: self.connected_session_id.is_some()
+                || self.player.is_remote()
+                || self.is_cast_attached(),
             track_select_active: self.active_album_track_lib_idx().is_some(),
         }
     }

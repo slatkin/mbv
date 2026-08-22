@@ -1,3 +1,4 @@
+use super::notify_actions::ToastSeverity;
 use super::settings::settings_total_rows;
 use super::types_settings::SettingsDestination;
 use super::App;
@@ -158,25 +159,91 @@ impl App {
                 self.sessions_cursor = self.sessions_cursor.saturating_sub(1);
             }
             KeyCode::Down => {
-                if !self.sessions.is_empty() {
-                    self.sessions_cursor = (self.sessions_cursor + 1).min(self.sessions.len() - 1);
+                if !self.panel_targets.is_empty() {
+                    self.sessions_cursor =
+                        (self.sessions_cursor + 1).min(self.panel_targets.len() - 1);
                 }
             }
             KeyCode::Char('r') => {
                 self.spawn_sessions_load();
+                self.spawn_cast_discovery();
             }
             KeyCode::Enter => {
-                if let Some(sess) = self.sessions.get(self.sessions_cursor) {
-                    let sess = sess.clone();
-                    self.connect_to_session(&sess);
+                if let Some(target) = self.panel_targets.get(self.sessions_cursor).cloned() {
+                    self.select_panel_target(target);
                 }
             }
             KeyCode::Char('d') => {
+                // Cast attachment is orthogonal to Emby session state (7.2/
+                // 8.3), so both are detached independently here rather than
+                // one branch excluding the other (8.6).
                 self.disconnect_remote();
+                if self.is_cast_attached() {
+                    self.detach_cast();
+                    self.flash(
+                        "Detached from cast target".to_string(),
+                        ToastSeverity::Success,
+                    );
+                }
                 self.show_sessions = false;
             }
             _ => {}
         }
         Some(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::make_app_stub;
+    use crossterm::event::KeyModifiers;
+
+    fn ev(code: KeyCode, mods: KeyModifiers) -> KeyEvent {
+        KeyEvent::new(code, mods)
+    }
+
+    #[test]
+    fn d_key_detaches_a_cast_target_without_affecting_the_queue() {
+        let mut app = make_app_stub();
+        app.show_sessions = true;
+        app.attach_cast("device-1".to_string());
+        app.player_tab.queue = mbv_core::playback_queue::PlaybackQueue::from_queue_items(
+            vec![mbv_core::playback_queue::QueueItem::Feed(
+                mbv_core::playback_queue::FeedEntry {
+                    guid: "a".to_string(),
+                    title: "Episode a".to_string(),
+                    enclosure_url: Some("https://feed/a.mp3".to_string()),
+                    link: None,
+                    mime_type: Some("audio/mpeg".to_string()),
+                    duration_ticks: None,
+                    pub_date_secs: None,
+                    feed_kind: None,
+                    feed_id: Some("feed".to_string()),
+                    position_ticks: 0,
+                    played: false,
+                },
+            )],
+            Some(0),
+        );
+        let before: Vec<String> = app
+            .player_tab
+            .queue
+            .slots()
+            .iter()
+            .map(|s| s.item.id().to_string())
+            .collect();
+
+        app.handle_key_sessions(ev(KeyCode::Char('d'), KeyModifiers::NONE));
+
+        assert!(!app.is_cast_attached());
+        let after: Vec<String> = app
+            .player_tab
+            .queue
+            .slots()
+            .iter()
+            .map(|s| s.item.id().to_string())
+            .collect();
+        assert_eq!(before, after);
     }
 }

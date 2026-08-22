@@ -1,9 +1,11 @@
 use super::images;
 use super::layout;
+use super::panel_targets::PanelTarget;
 use super::render;
 use super::resize::{ResizeRegisterTx, ResizeResponseRx};
 use super::search_sidebar::SearchSidebar;
 use super::types_browse::{AlbumIndexState, SeriesDetail};
+use super::types_cast::{CastAttachment, CastEvent};
 use super::types_confirm::ConfirmModal;
 use super::types_context_menu::{ContextMenu, LibraryRoutePopup, MultiSelectPopup};
 use super::types_daemon_lost::DaemonLostModal;
@@ -254,6 +256,13 @@ pub struct App {
     pub(super) search_debounce_pending: Option<String>,
     pub(super) search_sidebar: Option<SearchSidebar>,
     pub(super) sessions: Vec<mbv_core::api::SessionInfo>,
+    /// Last cast discovery browse result (8.1), independent of `sessions`'s
+    /// own reload cadence -- see `panel_targets::build_panel_targets`.
+    pub(super) cast_receivers: Vec<mbv_core::cast_discovery::CastReceiver>,
+    /// The F3 panel's merged Emby+Cast target list, rebuilt from `sessions`/
+    /// `cast_receivers` by `App::rebuild_panel_targets` (8.1/8.2).
+    /// `sessions_cursor` indexes this list, not `sessions` directly.
+    pub(super) panel_targets: Vec<PanelTarget>,
     pub(super) sessions_cursor: usize,
     pub(super) sessions_scroll: usize,
     pub(super) sessions_loading: bool,
@@ -281,6 +290,14 @@ pub struct App {
     pub(super) sessions_rx: mpsc::Receiver<SessionEvent>,
     pub(super) connected_session_id: Option<String>,
     pub(super) connected_session_state: Option<mbv_core::api::SessionInfo>,
+    /// Cast attachment, beside `connected_session_id`/`connected_session_state`
+    /// above: `None` means no cast target is attached. See `cast_actions.rs`
+    /// for attach/detach and `cast_status_actions.rs` for status polling.
+    pub(super) cast_attachment: Option<CastAttachment>,
+    pub(super) cast_tx: mpsc::Sender<CastEvent>,
+    pub(super) cast_rx: mpsc::Receiver<CastEvent>,
+    pub(super) last_cast_poll: Instant,
+    pub(super) cast_status_loading: bool,
     pub(super) remote_tracker: Option<mbv_core::remote_reconciliation::ReconciliationTracker>,
     pub(super) remote_queue_projection: Option<RemoteQueueProjection>,
     pub(super) remote_queue_lineage: u64,

@@ -39,6 +39,7 @@ impl App {
         let active = self.player.status.lock().unwrap().active;
         self.visualizer_enabled
             && self.connected_session_id.is_none()
+            && !self.is_cast_attached()
             && active
             && !audio_pipe_enabled
     }
@@ -79,6 +80,31 @@ mod tests {
         let mut app = crate::app::tests::make_remote_app_stub(Vec::new(), Vec::new());
         app.visualizer_enabled = true;
         app.player.status.lock().unwrap().active = true;
+
+        assert!(app.visualizer_should_run());
+    }
+
+    #[test]
+    fn attached_cast_target_blocks_the_visualizer_gate() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = true;
+        app.player.status.lock().unwrap().active = true;
+        assert!(app.visualizer_should_run());
+
+        app.attach_cast("device-1".to_string());
+
+        assert!(!app.visualizer_should_run());
+    }
+
+    #[test]
+    fn detaching_a_cast_target_restores_the_gate() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = true;
+        app.player.status.lock().unwrap().active = true;
+        app.attach_cast("device-1".to_string());
+        assert!(!app.visualizer_should_run());
+
+        app.detach_cast();
 
         assert!(app.visualizer_should_run());
     }

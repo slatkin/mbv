@@ -152,6 +152,7 @@ pub(crate) fn make_app_stub() -> App {
     let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
     let (search_tx, search_rx) =
         std::sync::mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
+    let (cast_tx, cast_rx) = std::sync::mpsc::channel();
 
     let player = PlayerProxy::stub(status.clone());
 
@@ -295,6 +296,8 @@ pub(crate) fn make_app_stub() -> App {
         marquee_text: String::new(),
         marquee_started_at: std::time::Instant::now(),
         sessions: Vec::new(),
+        cast_receivers: Vec::new(),
+        panel_targets: Vec::new(),
         sessions_cursor: 0,
         sessions_scroll: 0,
         sessions_loading: false,
@@ -322,6 +325,11 @@ pub(crate) fn make_app_stub() -> App {
         sessions_rx,
         connected_session_id: None,
         connected_session_state: None,
+        cast_attachment: None,
+        cast_tx,
+        cast_rx,
+        last_cast_poll: Instant::now() - std::time::Duration::from_secs(60),
+        cast_status_loading: false,
         remote_tracker: None,
         remote_queue_projection: None,
         remote_queue_lineage: 0,

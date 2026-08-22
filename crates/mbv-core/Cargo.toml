@@ -21,3 +21,11 @@ uuid.workspace = true
 tungstenite.workspace = true
 log.workspace = true
 libc.workspace = true
+rust_cast = "0.21"
+mdns-sd = { version = "0.21", default-features = false, features = ["log"] }
+
+[dev-dependencies]
+# mdns-sd's `Receiver<ServiceEvent>` is a `flume` channel; tests construct one
+# directly to feed synthetic events into cast_discovery's pure collection
+# logic without a real mDNS browse.
+flume = "0.12"

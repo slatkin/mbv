@@ -9,6 +9,9 @@ mod audiobookshelf_browse_actions;
 mod audiobookshelf_service_actions;
 mod bootstrap;
 mod browse_level_actions;
+mod cast_actions;
+mod cast_reattach;
+mod cast_status_actions;
 mod construct;
 mod consume_quit_actions;
 mod context_menu_actions;
@@ -53,7 +56,9 @@ mod music_grouping;
 mod notify_actions;
 pub(crate) mod palette;
 mod panel_focus_state;
+mod panel_targets;
 mod playback_target;
+mod playback_target_cast;
 mod playback_target_local;
 mod playback_target_remote;
 mod player_event;
@@ -77,6 +82,7 @@ mod shared_sync;
 mod shuffle_folder_actions;
 mod types_audiobookshelf_browse;
 mod types_browse;
+mod types_cast;
 mod types_confirm;
 mod types_context_menu;
 mod types_daemon_lost;
@@ -119,9 +125,9 @@ use self::types_library_tab::LibraryTab;
 #[cfg(test)]
 use self::types_playback::HomePane;
 use self::types_playback::{
-    HomeLatestSource, LocalPlaybackTarget, PendingQueueAction, PlaybackState, PlaybackTarget,
-    QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteReanchorPopup, RemoteSlotState,
-    SuspendedLocalSession, UndoEntry,
+    CastPlaybackTarget, HomeLatestSource, LocalPlaybackTarget, PendingQueueAction, PlaybackState,
+    PlaybackTarget, QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteReanchorPopup,
+    RemoteSlotState, SuspendedLocalSession, UndoEntry,
 };
 use self::types_player_tab::PlayerTab;
 use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};
@@ -178,6 +184,18 @@ type SessionsLoadFn =
 static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
 #[cfg(test)]
 static SESSIONS_LOAD_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+// Test seam for `App::connect_cast_receiver`'s resolve-and-connect step
+// (7.3/7.5), mirroring the overrides above: lets tests substitute a fake
+// worker instead of a real mDNS browse + `CastClient::connect`, without
+// making the reattach/attach-on-selection call sites themselves
+// test-aware.
+#[cfg(test)]
+type CastConnectFn = fn(&str, Duration) -> Result<mpsc::Sender<types_cast::CastJob>, String>;
+#[cfg(test)]
+static CAST_CONNECT_OVERRIDE: Mutex<Option<CastConnectFn>> = Mutex::new(None);
+#[cfg(test)]
+static CAST_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 pub(super) const LEFT_WIDTH_DEFAULT: u16 = 40;
 pub(super) const LEFT_WIDTH_STEP: u16 = 5;
@@ -432,6 +450,8 @@ impl App {
 
             had_events |= self.drain_session_events();
 
+            had_events |= self.drain_cast_events();
+
             had_events |= self.drain_shared_events();
 
             had_events |= self.drain_feed_tab_results();
@@ -516,6 +536,17 @@ impl App {
                 && !self.sessions_loading
             {
                 self.spawn_sessions_load();
+            }
+
+            // Periodic status poll while attached to a cast target (6.1). The
+            // keep-alive heartbeat this poll's background thread sends is not
+            // optional -- see `CAST_STATUS_POLL_INTERVAL`'s doc comment.
+            if self.cast_attachment.is_some()
+                && self.last_cast_poll.elapsed()
+                    >= self::cast_status_actions::CAST_STATUS_POLL_INTERVAL
+                && !self.cast_status_loading
+            {
+                self.spawn_cast_status_poll();
             }
 
             // Keep this session visible to other Emby clients
