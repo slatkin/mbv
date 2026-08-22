@@ -106,6 +106,28 @@ impl App {
         self.selection_modal = None;
     }
 
+    /// Opens the Album constituent-list modal (design.md decision 3/task
+    /// 3.3): a flat scrollable list of track `Item` rows, no headers (unlike
+    /// Series' season-grouped modal -- tracks aren't hierarchical). Ensures
+    /// the track list is fetched, mirroring `open_series_selection_modal`;
+    /// if it hasn't landed in `album_tracks_cache` yet, opens with a loading
+    /// placeholder instead of track rows.
+    pub(crate) fn open_album_selection_modal(&mut self, album: &EmbyItem) {
+        self.fetch_album_tracks(album.id.clone());
+        let state = match self.album_tracks_cache.get(&album.id) {
+            Some(tracks) => album_modal_state(tracks),
+            None => SelectionModalListState::Loading,
+        };
+        self.open_selection_modal(
+            SelectionModalSource::Album {
+                album_id: album.id.clone(),
+            },
+            album.display_name(),
+            state,
+            None,
+        );
+    }
+
     /// Replaces the live list only when the provider completion belongs to the
     /// open modal. The selected item's provider ID, rather than its row
     /// position, is the cursor anchor across reordered refreshes.
@@ -159,10 +181,6 @@ impl App {
         modal.cursor = item_positions[next];
     }
 
-    // Per-source activation behavior (playing a track, jumping to an
-    // episode, ...) is added by the surface-migration tasks that give each
-    // `SelectionModalSource` real items; `PodcastEpisodes` and `BookChapters`
-    // stay close-only stubs until their migration tasks land.
     pub(crate) fn activate_selection_modal_item(&mut self) {
         let Some(modal) = self.selection_modal.as_ref() else {
             return;

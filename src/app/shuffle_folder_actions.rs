@@ -55,7 +55,7 @@ impl App {
                 drop(client);
                 self.replace_playback_queue(items.clone(), 0);
                 self.set_panel_focus(PanelFocus::Queue);
-                self.play_items_routed(items, 0);
+                self.play_items_routed(items, 0, crate::config::QueueSource::Unknown);
             }
             Err(e) => {
                 drop(client);
@@ -114,7 +114,7 @@ impl App {
                 if !self.has_direct_remote_queue() {
                     self.save_queue_state();
                 }
-                self.play_items_routed(items, 0);
+                self.play_items_routed(items, 0, crate::config::QueueSource::Shuffle);
             }
             Err(e) => {
                 drop(client);

@@ -575,7 +575,7 @@ impl App {
 
         // Paint the selected replacement after the list has established its
         // flow geometry: shell first, then content inset past its framing.
-        if layout.hero_area.height > 0 {
+        if !show_grouped && layout.hero_area.height > 0 {
             selected_detail_shell(f, layout.hero_area, inline_hero_rows, focused);
             // Content, offset 2 rows down past the top border + top
             // padding, and inset 2 cols on each side like music/homevideo's

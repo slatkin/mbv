@@ -528,12 +528,7 @@ impl App {
                                 Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
                                     self.select_audiobookshelf_book(target);
                                 }
-                                _ if self.selection_modal.as_ref().is_some_and(|modal| {
-                                    matches!(
-                                        modal.source,
-                                        crate::app::types_selection_modal::SelectionModalSource::Podcast { .. }
-                                    )
-                                }) || self.audiobookshelf_browse.get(index).is_some_and(|state| state.episode_selection.is_some()) => {
+                                _ if self.podcast_filter_target_active(index) => {
                                     self.select_audiobookshelf_filter(target);
                                 }
                                 _ => self.select_audiobookshelf_show(target),

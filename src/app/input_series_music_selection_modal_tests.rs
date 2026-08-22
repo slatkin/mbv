@@ -309,6 +309,18 @@ fn wide_series_enter_still_enters_series_selection_not_the_modal() {
     );
 }
 
+#[test]
+fn keyboard_series_change_resets_the_season_cursor_before_first_season_fetch() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_series_app();
+    app.layout.main.tv_wide_right_area = Rect::new(10, 0, 20, 10);
+    app.libs[0].series_season_cursor = 1;
+
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+    assert_eq!(app.libs[0].series_season_cursor, 0);
+}
+
 /// Narrow (`is_wide_music_active() == false`, the default zero-area layout)
 /// Enter on a selected album opens the selection modal instead of entering
 /// the in-hero `album_track_focus` mode (design.md decision 6; task 3.3).

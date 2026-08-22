@@ -152,6 +152,10 @@ impl<'a> InlineReplacementPlan<'a> {
         self.offset
     }
 
+    pub(in crate::app::render) fn total_display_rows(&self) -> usize {
+        self.total_display_rows
+    }
+
     #[cfg(test)]
     pub(in crate::app::render) fn detail_screen_row(&self) -> Option<usize> {
         self.detail_screen_row

@@ -220,6 +220,41 @@ fn hero_handles_detail_suppresses_all_inline_detail_rows() {
 }
 
 #[test]
+fn hero_handling_drops_hint_wrap_rows_but_keeps_album_title_rows() {
+    let mut app = make_music_group_app();
+    let mut albums = app.libs[0].nav_stack.last().unwrap().items.clone();
+    albums[0].name = "A deliberately long album title that wraps".into();
+    let album_info = app.group_album_info(&albums, None);
+    let order = sorted_group_album_order(&album_info);
+    let plan = app.build_grouped_album_display_plan(
+        &albums,
+        &album_info,
+        &order,
+        0,
+        false,
+        HeaderFocusCtx {
+            in_music_group_view: true,
+            expand_selected: false,
+        },
+        Some((30, 0)),
+        true,
+    );
+
+    assert_eq!(
+        plan.rows
+            .iter()
+            .filter(|row| matches!(row, GroupedAlbumDisplayRow::AlbumWrappedContinuation))
+            .count(),
+        2,
+        "album title wrapping must remain while hint wrapping is removed"
+    );
+    assert!(plan
+        .rows
+        .iter()
+        .any(|row| matches!(row, GroupedAlbumDisplayRow::Album(0))));
+}
+
+#[test]
 fn narrow_grouped_music_replaces_selected_album_row_with_hero_detail() {
     // Task 3.2: the selected album's row is replaced by the Model A hero
     // (title/meta/art), not an inline track table -- see
@@ -266,6 +301,30 @@ fn narrow_grouped_music_replaces_selected_album_row_with_hero_detail() {
         hero_marker,
         Some('\u{258e}'),
         "the shared replacement plan suppresses the ordinary marker over its hero"
+    );
+}
+
+#[test]
+fn narrow_grouped_music_does_not_repaint_album_hero_with_zero_row_shell() {
+    let mut app = make_music_group_app();
+    let mut layout = LayoutMain::default();
+    let output = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
+
+    let top_row = output
+        .lines()
+        .nth(layout.hero_area.y as usize)
+        .unwrap_or_default();
+    let bottom_row = output
+        .lines()
+        .nth(layout.hero_area.bottom().saturating_sub(1) as usize)
+        .unwrap_or_default();
+    assert!(
+        top_row.contains('▁'),
+        "album hero top border missing: {top_row:?}"
+    );
+    assert!(
+        bottom_row.contains('▔'),
+        "album hero bottom border missing: {bottom_row:?}"
     );
 }
 

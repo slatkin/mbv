@@ -179,11 +179,21 @@ impl App {
     }
 
     pub(super) fn move_lib_cursor(&mut self, lib_idx: usize, delta: i64) {
-        // Defensive bounds check; see `move_lib_cursor_rows` for the stale
-        // index contract. Never substitute library zero on a miss.
         if lib_idx >= self.libs.len() {
             return;
         }
+        let before = self.selected_series_item(lib_idx).map(|item| item.id);
+        self.move_lib_cursor_inner(lib_idx, delta);
+        let after = self.selected_series_item(lib_idx).map(|item| item.id);
+        if before != after {
+            self.libs[lib_idx].series_selection = None;
+            self.libs[lib_idx].series_season_cursor = 0;
+        }
+    }
+
+    fn move_lib_cursor_inner(&mut self, lib_idx: usize, delta: i64) {
+        // Defensive bounds check; see `move_lib_cursor_rows` for the stale
+        // index contract. Never substitute library zero on a miss.
         let now = Instant::now();
         let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
         self.last_nav_at = now;

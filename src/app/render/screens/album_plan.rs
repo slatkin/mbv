@@ -242,10 +242,12 @@ impl App {
                 } else {
                     "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks"
                 };
-                rows.extend(std::iter::repeat_n(
-                    GroupedAlbumDisplayRow::AlbumWrappedContinuation,
-                    selected_hint_lines(hint).saturating_sub(1),
-                ));
+                if !hero_handles_detail {
+                    rows.extend(std::iter::repeat_n(
+                        GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                        selected_hint_lines(hint).saturating_sub(1),
+                    ));
+                }
 
                 for &idx in &group_indices {
                     if !hero_handles_detail && idx == cursor {

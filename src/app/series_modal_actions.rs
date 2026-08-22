@@ -4,25 +4,18 @@ use super::{App, SeriesDetail};
 impl App {
     pub(super) fn handle_series_detail_fetched(&mut self, series_id: String, detail: SeriesDetail) {
         self.series_detail_cache.insert(series_id.clone(), detail);
-        let missing_seasons: Vec<String> = self
+        self.series_detail_loading.remove(&series_id);
+        // Only the first season is needed up front: it's the default season
+        // cursor/modal selection, and every other season is fetched lazily
+        // on demand as the user navigates to it (`switch_series_selection_season`,
+        // `select_series_season`, `select_series_selection_modal_season`).
+        let first_season_id = self
             .series_detail_cache
             .get(&series_id)
-            .into_iter()
-            .flat_map(|detail| detail.seasons.iter())
-            .filter(|season| {
-                self.series_detail_cache
-                    .get(&series_id)
-                    .is_some_and(|detail| !detail.episodes.contains_key(&season.id))
-            })
-            .map(|season| season.id.clone())
-            .collect();
-        if missing_seasons.is_empty() {
-            self.series_detail_loading.remove(&series_id);
-        } else {
-            self.series_detail_loading.remove(&series_id);
-            for season_id in missing_seasons {
-                self.fetch_series_season_episodes(series_id.clone(), season_id);
-            }
+            .and_then(|detail| detail.seasons.first())
+            .map(|season| season.id.clone());
+        if let Some(season_id) = first_season_id {
+            self.fetch_series_season_episodes(series_id.clone(), season_id);
             self.refresh_series_detail_loading(&series_id);
         }
         self.refresh_series_modal(&series_id);

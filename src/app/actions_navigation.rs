@@ -199,7 +199,11 @@ impl App {
                                 if !self.has_direct_remote_queue() {
                                     self.save_queue_state();
                                 }
-                                self.play_items_routed(siblings, start_idx);
+                                self.play_items_routed(
+                                    siblings,
+                                    start_idx,
+                                    self.queue_source.clone(),
+                                );
                                 return;
                             }
                             drop(client);
@@ -229,9 +233,13 @@ impl App {
         let Some(start_idx) = tracks.iter().position(|item| item.id == track.id) else {
             return false;
         };
-        self.replace_playback_queue(tracks.clone(), start_idx);
-        self.play_items_routed(tracks, start_idx);
+        if self.connected_session_id.is_none() && self.emby_snapshot().is_none() {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return false;
+        }
         self.queue_source = crate::config::QueueSource::Album;
+        self.replace_playback_queue(tracks.clone(), start_idx);
+        self.play_items_routed(tracks, start_idx, crate::config::QueueSource::Album);
         if !self.has_direct_remote_queue() {
             self.save_queue_state();
         }

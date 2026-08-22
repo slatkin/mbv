@@ -107,7 +107,7 @@ impl App {
         );
         let offset = plan.offset();
         let detail_rows = plan.detail_rows();
-        let total_display = plan.item_rows().len();
+        let total_display = plan.total_display_rows();
         let final_offset = offset;
 
         // Publish the full row structure (parallel to the display rows,

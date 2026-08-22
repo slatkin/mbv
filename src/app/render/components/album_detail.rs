@@ -2,7 +2,7 @@ use crate::app::layout::LayoutMain;
 use crate::app::render::components::album_art::inline_album_art_cache_key;
 use crate::app::render::components::hero::{HeroContent, HeroImage, ImageTop};
 use crate::app::render::components::music_wide::wide_album_metadata;
-use crate::app::selection_modal_actions::{album_modal_state, album_track_title};
+use crate::app::selection_modal_actions::album_track_title;
 use crate::app::ui_util::*;
 use crate::app::{palette, App};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
@@ -466,27 +466,5 @@ impl App {
                 palette::SCROLLBAR,
             );
         }
-    }
-
-    /// Opens the Album constituent-list modal (design.md decision 3/task
-    /// 3.3): a flat scrollable list of track `Item` rows, no headers (unlike
-    /// Series' season-grouped modal -- tracks aren't hierarchical). Ensures
-    /// the track list is fetched, mirroring `open_series_selection_modal`;
-    /// if it hasn't landed in `album_tracks_cache` yet, opens with a loading
-    /// placeholder instead of track rows.
-    pub(in crate::app) fn open_album_selection_modal(&mut self, album: &EmbyItem) {
-        self.fetch_album_tracks(album.id.clone());
-        let state = match self.album_tracks_cache.get(&album.id) {
-            Some(tracks) => album_modal_state(tracks),
-            None => crate::app::types_selection_modal::SelectionModalListState::Loading,
-        };
-        self.open_selection_modal(
-            crate::app::types_selection_modal::SelectionModalSource::Album {
-                album_id: album.id.clone(),
-            },
-            album.display_name(),
-            state,
-            None,
-        );
     }
 }

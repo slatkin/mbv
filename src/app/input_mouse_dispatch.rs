@@ -259,12 +259,7 @@ impl App {
                                         Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
                                             self.select_audiobookshelf_book_bucket(target);
                                         }
-                                        _ if self.selection_modal.as_ref().is_some_and(|modal| {
-                                            matches!(
-                                                modal.source,
-                                                crate::app::types_selection_modal::SelectionModalSource::Podcast { .. }
-                                            )
-                                        }) || self.audiobookshelf_browse.get(index).is_some_and(|state| state.episode_selection.is_some()) => {
+                                        _ if self.podcast_filter_target_active(index) => {
                                             self.select_audiobookshelf_filter(target);
                                         }
                                         _ => self.select_audiobookshelf_podcast_bucket(target),
@@ -444,10 +439,7 @@ impl App {
                                         self.activate_album_folder_row(lib_idx);
                                     } else if self.libs[lib_idx].series_selection.is_some() {
                                         self.activate_series_selection_episode(lib_idx);
-                                    } else if self.activate_selected_series(lib_idx) {
-                                        // Enter and double-click share the same
-                                        // narrow/wide Series activation gate.
-                                    } else {
+                                    } else if !self.activate_selected_series(lib_idx) {
                                         self.select(lib_idx);
                                     }
                                 }

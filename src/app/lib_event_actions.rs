@@ -1,5 +1,5 @@
 use super::selection_modal_actions::album_modal_state;
-use super::types_selection_modal::SelectionModalSource;
+use super::types_selection_modal::{SelectionModalListState, SelectionModalSource};
 use super::ui_util::sort_audio_tracks;
 use super::{
     notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
@@ -282,7 +282,7 @@ impl App {
                             .as_ref()
                             .is_some_and(|id| state.detail_loading_ids.contains(id));
                     }
-                    None
+                    Some(SelectionModalListState::Empty)
                 }
             };
             if let Some(modal_state) = modal_state {
@@ -333,7 +333,7 @@ impl App {
                     }) {
                         state.detail_loading = false;
                     }
-                    None
+                    Some(SelectionModalListState::Empty)
                 }
             };
             if let Some(modal_state) = modal_state {
@@ -710,6 +710,35 @@ impl App {
                     is_finished,
                 },
             );
+        }
+        let podcast_modal_state = self.selection_modal.as_ref().and_then(|modal| {
+            let SelectionModalSource::Podcast { library_item_id } = &modal.source else {
+                return None;
+            };
+            self.audiobookshelf_browse
+                .iter()
+                .find(|state| {
+                    state
+                        .shows
+                        .iter()
+                        .any(|show| show.library_item_id == *library_item_id)
+                })
+                .and_then(|state| {
+                    let modal_state = if state.detail_cache.contains_key(library_item_id) {
+                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state_for_detail(
+                            state,
+                            library_item_id,
+                        )
+                    } else if state.selected_id.as_deref() == Some(library_item_id) {
+                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state(state)
+                    } else {
+                        return None;
+                    };
+                    Some((library_item_id.clone(), modal_state))
+                })
+        });
+        if let Some((library_item_id, state)) = podcast_modal_state {
+            self.refresh_selection_modal(SelectionModalSource::Podcast { library_item_id }, state);
         }
         if !matching_slot_ids.is_empty() {
             self.save_queue_state();

@@ -167,8 +167,11 @@ impl App {
         self.render_audiobookshelf_podcast_bucket_pills(f, pills_area, index, layout);
         let list_area = areas.content_area;
         layout.left_area = list_area;
-        let desired_rows =
-            self.audiobookshelf_hero_content_rows(index, true) + HERO_BLOCK_EXTRA_ROWS;
+        let hero_content_width = list_area
+            .width
+            .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
+        let desired_rows = self.audiobookshelf_hero_content_rows(index, true, hero_content_width)
+            + HERO_BLOCK_EXTRA_ROWS;
         let hero_rows = if desired_rows >= HERO_BLOCK_EXTRA_ROWS && desired_rows < list_area.height
         {
             desired_rows
@@ -251,7 +254,7 @@ impl App {
         );
     }
 
-    fn audiobookshelf_hero_content_rows(&self, index: usize, show_title: bool) -> u16 {
+    fn audiobookshelf_hero_content_rows(&self, index: usize, show_title: bool, width: u16) -> u16 {
         let state = &self.audiobookshelf_browse[index];
         let mut rows = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
         rows += state
@@ -264,7 +267,29 @@ impl App {
             .filter(|description| !description.is_empty())
         {
             rows += 1;
-            rows += wrap_overview_lines(description, |_| 48).len().min(4) as u16;
+            let (image_width, image_height) = if self.images_enabled() {
+                (SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS)
+            } else {
+                (0, 0)
+            };
+            let image_start = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
+            let image_end = image_start + image_height;
+            let description_start = image_start
+                + state
+                    .selected_show()
+                    .and_then(|show| show.author.as_ref())
+                    .is_some() as u16
+                + 1;
+            rows += wrap_overview_lines(description, |line| {
+                let row = description_start + line as u16;
+                if row >= image_start && row < image_end {
+                    width.saturating_sub(image_width) as usize
+                } else {
+                    width as usize
+                }
+            })
+            .len()
+            .min(4) as u16;
         }
         if state.episode_selection.is_some() {
             rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;

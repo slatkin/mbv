@@ -9,7 +9,7 @@ pub(super) fn book_modal_state(
     book_id: &str,
 ) -> SelectionModalListState {
     match state.detail_cache.get(book_id) {
-        Some((chapters, files)) if !chapters.is_empty() => SelectionModalListState::Ready(
+        Some((chapters, _)) if !chapters.is_empty() => SelectionModalListState::Ready(
             chapters
                 .iter()
                 .map(|chapter| {

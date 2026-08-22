@@ -122,6 +122,23 @@ fn narrow_podcast_detail_is_suppressed_when_the_viewport_is_too_short() {
 }
 
 #[test]
+fn narrow_podcast_hero_reserves_description_rows_at_actual_width() {
+    let mut app = audiobookshelf_app();
+    app.audiobookshelf_browse[0].shows[0].description = Some(
+        "A deliberately long description that wraps beyond the old fixed estimator width.".into(),
+    );
+    let mut layout = LayoutMain::default();
+
+    render_library_to_string_sized(&mut app, &mut layout, 30, 20);
+
+    assert!(
+        layout.hero_area.height >= 9,
+        "narrow hero must reserve the wrapped description before painting: {:?}",
+        layout.hero_area
+    );
+}
+
+#[test]
 fn narrow_podcast_replacement_owns_one_parent_target() {
     let mut app = audiobookshelf_app();
     let state = &mut app.audiobookshelf_browse[0];

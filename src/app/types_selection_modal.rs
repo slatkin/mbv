@@ -7,9 +7,8 @@ pub(crate) enum SelectionModalSource {
 }
 
 /// One row in the modal's list. `Header` is a non-selectable divider (the
-/// Series modal's season names, in a later task); every other surface's
-/// modal has no headers and uses only `Item` rows. Cursor movement must
-/// skip `Header` rows.
+/// Series modal's season name); every other surface's modal has no headers
+/// and uses only `Item` rows. Cursor movement must skip `Header` rows.
 pub(crate) enum SelectionModalRow {
     Header(String),
     Item(SelectionModalItem),
@@ -73,9 +72,8 @@ impl SelectionModalListState {
     }
 }
 
-/// Podcast-only played/unplayed filter, shown as pills at the top of the
-/// modal (wired by a later task; this task only needs the state shape and
-/// enough rendering to show the pills when present).
+/// Pill filter shown at the top of the modal: played/unplayed for Podcast,
+/// season number for Series.
 pub(crate) struct SelectionModalFilter {
     pub(crate) labels: Vec<String>,
     pub(crate) selected: usize,
