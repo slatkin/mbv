@@ -278,7 +278,7 @@ fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
     // Advance the marquee clock past its initial hold, into the scroll.
     // The "On Now: " prefix must stay put -- only the title pans.
     app.marquee_started_at =
-        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 300 * 5);
+        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 200 * 5);
     let mut term2 = Terminal::new(TestBackend::new(30, 5)).unwrap();
     term2
         .draw(|f| {
@@ -340,7 +340,7 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
 
     // Advance the shared marquee clock past its initial hold.
     app.marquee_started_at =
-        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 300 * 5);
+        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 200 * 5);
     let later = render(&mut app, &mut layout);
     assert!(
         !later.contains('\u{2026}'),
@@ -399,7 +399,7 @@ fn idle_feed_title_marquees_instead_of_truncating() {
 
     // Advance the shared marquee clock past its initial hold.
     app.marquee_started_at =
-        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 300 * 5);
+        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 200 * 5);
     let later = render(&mut app, &mut layout);
     assert!(
         !later.contains('\u{2026}'),

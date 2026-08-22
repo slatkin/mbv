@@ -25,7 +25,7 @@ fn marquee_col(overflow: usize, elapsed_ms: u128) -> usize {
     if overflow == 0 {
         return 0;
     }
-    const STEP_MS: u128 = 300;
+    const STEP_MS: u128 = 200;
     const HOLD_MS: u128 = 1200;
     let scroll_ms = overflow as u128 * STEP_MS;
     let cycle = 2 * HOLD_MS + 2 * scroll_ms;
@@ -545,5 +545,15 @@ impl App {
             .unwrap_or_else(|| vec![(title.to_string(), title_color)]);
 
         self.marquee_spans(&parts, max_width)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::marquee_col;
+
+    #[test]
+    fn marquee_advances_five_columns_per_second() {
+        assert_eq!(marquee_col(10, 1_200 + 200 * 5), 5);
     }
 }
