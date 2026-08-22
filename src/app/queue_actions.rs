@@ -289,17 +289,6 @@ impl App {
                     self.replace_playback_queue(items.clone(), start_idx);
                 }
                 self.set_queue_scope(self.playback_target_queue_scope());
-                if self.is_cast_attached() {
-                    let cast_items = items
-                        .into_iter()
-                        .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
-                        .collect();
-                    self.dispatch_selection_to_cast(cast_items, start_idx);
-                    if !direct_remote {
-                        self.save_queue_state();
-                    }
-                    return;
-                }
                 if let Some(ref conn_id) = self.connected_session_id.clone() {
                     self.clear_playback_overlays();
                     let id = conn_id.clone();

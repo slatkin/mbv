@@ -430,7 +430,7 @@ fn partition_dispatch_with_start(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::tests::make_app_stub;
     use mbv_core::playback_queue::FeedEntry;
 
     fn feed_item(guid: &str, url: Option<&str>) -> QueueItem {
@@ -621,28 +621,5 @@ mod tests {
         assert!(!app.player.status.lock().unwrap().active);
         assert_eq!(app.cast_attachment.as_ref().unwrap().dispatched.len(), 1);
         assert!(app.status.contains("Episode a") && app.status.contains("no media URL to cast"));
-    }
-
-    #[test]
-    fn library_play_while_cast_attached_does_not_command_local_player() {
-        let mut app = make_app_stub();
-        app.emby_runtime.client = Some(std::sync::Arc::new(std::sync::Mutex::new(
-            EmbyClient::new(crate::config::Config::default()),
-        )));
-        app.attach_cast("device-1".to_string());
-        {
-            let mut status = app.player.status.lock().unwrap();
-            status.active = true;
-        }
-        let commands = app.player.spy_on_commands();
-        let mut item = make_item("Song", "Audio");
-        item.media_type = "Audio".to_string();
-
-        app.play_item(item);
-
-        assert!(
-            commands.try_recv().is_err(),
-            "library playback must dispatch to the attached cast target"
-        );
     }
 }

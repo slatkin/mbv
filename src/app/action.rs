@@ -534,11 +534,6 @@ impl App {
                     .take(t)
                     .filter(|s| s.item.as_emby().is_some())
                     .count();
-                if self.is_cast_attached() {
-                    self.dispatch_selection_to_cast(all_items, t);
-                    self.set_queue_scope(self.playback_target_queue_scope());
-                    return false;
-                }
                 // Connected remote session: hand off Emby items to the
                 // session; Feed entries cannot cross the Emby session API
                 // so they fall through to the local/direct-remote path.
