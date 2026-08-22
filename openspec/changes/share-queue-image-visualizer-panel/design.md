@@ -1,6 +1,6 @@
 ## Context
 
-See `proposal.md` for motivation. The queue card renderer already owns artwork selection, missing-artwork fallback, image sizing, and the `(height, width)` consumed by queue layout. The visualizer is currently rendered later in `render_main`, either below the queue list or in spare rows under the wide queue-only playback content. Its persisted `visualizer_enabled` boolean controls both display and PipeWire worker lifecycle.
+See `proposal.md` for motivation. The queue card renderer already owns artwork selection, missing-artwork fallback, image sizing, and the `(height, width)` consumed by queue layout. The visualizer is currently rendered later in `render_main`, either below the queue list or in spare rows under the wide queue-only playback content. Its session-local `visualizer_enabled` boolean controls both display and PipeWire worker lifecycle.
 
 The shared slot must preserve the queue card's current dimensions, remain available without playback, and retain the existing rule that PipeWire capture runs only for supported active playback on this machine. ADR 0009 currently defines `v` as enable/disable and must be amended with the implementation.
 
@@ -9,7 +9,7 @@ The shared slot must preserve the queue card's current dimensions, remain availa
 **Goals:**
 
 - Make the queue card renderer the only owner of visualizer placement and artwork fallback.
-- Keep one persisted two-state choice and the existing preference migration path.
+- Keep one session-local two-state choice; the selection never persists across launches.
 - Reclaim every row reserved solely for the old separate visualizer.
 - Preserve image-loading stability and all capture isolation guarantees.
 
@@ -27,9 +27,9 @@ The shared slot must preserve the queue card's current dimensions, remain availa
 
 The old alternative was to calculate matching geometry in `render_main` and overlay the visualizer there. That would duplicate image sizing and missing-artwork decisions, so the card renderer remains the single boundary.
 
-### Keep the persisted boolean but treat it as content selection
+### Keep the boolean but treat it as session-local content selection
 
-The existing persisted `visualizer_enabled` value already represents the required two states. Its on-disk key remains readable so existing users retain their choice; implementation names may be clarified locally where doing so does not require compatibility scaffolding. `v` flips the selection in every context. Selecting artwork stops capture; selecting visualization asks lifecycle synchronization to start capture only when existing local/active/audio-pipe guards allow it.
+The existing `visualizer_enabled` value already represents the required two states, but the selection is not persisted: every launch starts on artwork, and mbv neither writes nor reads an on-disk key for it. A stale `visualizer_enabled` entry left in existing prefs files is ignored. `v` flips the selection in every context within a run. Selecting artwork stops capture; selecting visualization asks lifecycle synchronization to start capture only when existing local/active/audio-pipe guards allow it.
 
 An enum was rejected because there are exactly two requested states and no third state is planned.
 
@@ -57,11 +57,11 @@ ADR 0009 will be amended in place to retain `v` as the visualizer command while 
 
 ## Risks / Trade-offs
 
-- [A persisted `true` preference changes placement after upgrade] -> Preserve the value intentionally; users who previously enabled the visualizer see it selected in the new shared slot.
+- [A stale `visualizer_enabled` key remains in existing prefs files] -> Ignore it on read and stop writing it; leftover keys are inert JSON.
 - [Visualizer rendering accidentally changes card geometry] -> Derive its rectangle from the existing placeholder/image reservation and add focused narrow and wide render assertions.
 - [Missing artwork and loading artwork are confused] -> Test pending, resolved-empty, no-source, and decoded-image states separately at the card-render boundary.
 - [Removing layout branches leaves stale queue-height behavior] -> Add render tests asserting no rows are subtracted below the queue and no playback-panel visualizer is drawn.
 
 ## Migration Plan
 
-Land the preference-compatible renderer and layout deletion together with the spec and ADR updates. Rollback requires no data migration because the persisted boolean and vectorscope configuration remain unchanged.
+Land the session-local renderer and layout deletion together with the spec and ADR updates. Rollback requires no data migration because the selection was never persisted and the vectorscope configuration remains unchanged.

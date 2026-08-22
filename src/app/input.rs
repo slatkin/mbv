@@ -258,7 +258,6 @@ impl App {
             "ui_volume": self.ui_volume,
             "mute_on": self.mute_on,
             "pre_mute_volume": self.pre_mute_volume,
-            "visualizer_enabled": self.visualizer_enabled,
             "panel_focus": self.panel_focus.pref_value(),
             "library_tab": self
                 .tab

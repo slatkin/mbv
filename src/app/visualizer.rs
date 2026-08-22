@@ -146,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn toggle_visualizer_persists_selection_under_existing_key() {
+    fn toggle_visualizer_does_not_persist_selection() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = false;
@@ -157,11 +157,14 @@ mod tests {
             &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
         )
         .expect("prefs json");
-        assert_eq!(prefs["visualizer_enabled"].as_bool(), Some(true));
+        assert!(
+            prefs.get("visualizer_enabled").is_none(),
+            "visualizer selection must stay session-local"
+        );
     }
 
     #[test]
-    fn build_restores_visualizer_selection_from_prefs() {
+    fn build_starts_on_artwork_even_with_saved_visualizer_pref() {
         let _guard = crate::config::TestStateDirGuard::new();
         std::fs::write(
             crate::config::prefs_path(),
@@ -171,7 +174,10 @@ mod tests {
 
         let app = crate::app::tests::make_built_app();
 
-        assert!(app.visualizer_enabled);
+        assert!(
+            !app.visualizer_enabled,
+            "every launch must default to artwork, ignoring the stale key"
+        );
     }
 
     #[test]

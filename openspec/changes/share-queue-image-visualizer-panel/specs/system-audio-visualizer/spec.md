@@ -2,7 +2,12 @@
 
 ### Requirement: Queue card selects artwork or visualization
 
-mbv SHALL persist whether the queue card displays artwork or the visualizer. Pressing unmodified `v` SHALL switch between those two contents without changing the queue card's reserved rectangle.
+mbv SHALL keep the artwork/visualizer queue-card selection session-local: every launch SHALL display artwork when available, and pressing unmodified `v` SHALL switch between those two contents without changing the queue card's reserved rectangle.
+
+#### Scenario: Launch after selecting the visualizer
+
+- **WHEN** a previous run ended with the visualizer selected
+- **THEN** the next launch displays queue artwork instead of the visualizer
 
 #### Scenario: User selects the visualizer
 

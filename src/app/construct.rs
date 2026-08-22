@@ -152,7 +152,9 @@ impl App {
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
             pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),
             mute_on: prefs["mute_on"].as_bool().unwrap_or(false),
-            visualizer_enabled: prefs["visualizer_enabled"].as_bool().unwrap_or(false),
+            // Visualizer selection is session-local; every launch starts on
+            // artwork so a stale visualizer choice never blanks the card.
+            visualizer_enabled: false,
             visualizer_failed: false,
             visualizer: None,
             visualizer_window: Default::default(),
