@@ -1,7 +1,8 @@
 use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
+use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
-use crate::app::render::components::audiobookshelf_books::{PILLS_GAP_ROWS, PILLS_ROW_HEIGHT};
+use crate::app::render::components::audiobookshelf_books::BookHeroPlan;
 use crate::app::render::components::hero::{selected_detail_shell, HERO_BLOCK_EXTRA_ROWS};
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::ui_util::trunc_str;
@@ -17,8 +18,8 @@ use ratatui::Frame;
 /// bucket-filtered book list (Music's album-list-within-artist-filter
 /// analog). Reuses `render_pill_bar`/`PillBar` per Music's
 /// `render_music_group_pills_row` shape, and the panel chrome (recessed
-/// background, `▔`/`▁` border glyphs) `render_wide_music_group` uses for its
-/// right rail -- duplicated rather than shared, per this change's design.
+/// background, `▔`/`▁` border glyphs) used by the other hero-on-left library
+/// rails.
 impl App {
     pub(in crate::app::render) fn render_audiobookshelf_book_right_pane_wide(
         &mut self,
@@ -28,6 +29,7 @@ impl App {
         index: usize,
         right_focused: bool,
         layout: &mut LayoutMain,
+        plan: &BookHeroPlan,
     ) {
         f.render_widget(
             Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
@@ -57,14 +59,14 @@ impl App {
                 right_focused,
                 layout,
                 0,
+                plan,
             );
         }
         hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     }
 
-    /// The narrow inline presentation's right pane: no recessed panel
-    /// chrome (the pre-redesign narrow book renderer had none either), just
-    /// the pill row directly above the single-column book list.
+    /// The narrow inline presentation's browser area has no recessed panel
+    /// chrome; its shared pill row is placed by the parent arrangement.
     pub(in crate::app::render) fn render_audiobookshelf_book_right_pane_narrow(
         &mut self,
         f: &mut Frame,
@@ -73,30 +75,17 @@ impl App {
         right_focused: bool,
         layout: &mut LayoutMain,
         detail_rows: u16,
+        plan: &BookHeroPlan,
     ) {
-        if area.height == 0 {
-            return;
-        }
-        let pills_area = Rect {
-            height: PILLS_ROW_HEIGHT.min(area.height),
-            ..area
-        };
-        self.render_audiobookshelf_book_bucket_pills(f, pills_area, index, layout);
-        let list_area = Rect {
-            y: area.y + PILLS_ROW_HEIGHT + PILLS_GAP_ROWS,
-            height: area
-                .height
-                .saturating_sub(PILLS_ROW_HEIGHT + PILLS_GAP_ROWS),
-            ..area
-        };
-        if list_area.height > 0 {
+        if area.height > 0 {
             self.render_audiobookshelf_book_browser_rows(
                 f,
-                list_area,
+                area,
                 index,
                 right_focused,
                 layout,
                 detail_rows,
+                plan,
             );
         }
     }
@@ -148,6 +137,7 @@ impl App {
         right_focused: bool,
         layout: &mut LayoutMain,
         detail_rows: u16,
+        plan: &BookHeroPlan,
     ) {
         let Some(mut state) = self.audiobookshelf_book_browse.get(index).cloned() else {
             return;
@@ -219,20 +209,26 @@ impl App {
                     }
                 }
                 selected_detail_shell(f, layout.hero_area, detail_height, right_focused);
-                let hero_rows = self.audiobookshelf_book_hero_rows(&state) + HERO_BLOCK_EXTRA_ROWS;
+                let hero_rows = plan.content_rows + HERO_BLOCK_EXTRA_ROWS;
                 let hero_height = hero_rows.min(detail_height);
                 if hero_height >= HERO_BLOCK_EXTRA_ROWS {
+                    let content_area = library_arrangement::selected_detail_content_area(
+                        Rect {
+                            y: detail_y,
+                            height: hero_height,
+                            ..layout.hero_area
+                        },
+                        SELECTED_BLOCK_SIDE_PADDING,
+                        HERO_BLOCK_EXTRA_ROWS,
+                    );
+                    let paint_plan = plan.constrained_to_height(content_area.height);
                     self.render_audiobookshelf_book_hero(
                         f,
-                        Rect {
-                            x: area.x + SELECTED_BLOCK_SIDE_PADDING,
-                            y: detail_y + 2,
-                            width: area.width.saturating_sub(SELECTED_BLOCK_SIDE_PADDING * 2),
-                            height: hero_height.saturating_sub(HERO_BLOCK_EXTRA_ROWS),
-                        },
+                        content_area,
                         index,
                         right_focused,
                         layout,
+                        &paint_plan,
                     );
                     let chapters_y = detail_y + hero_height;
                     let chapters_height = detail_height.saturating_sub(hero_height);

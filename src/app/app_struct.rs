@@ -18,6 +18,7 @@ use super::types_playback::{
     RemoteQueueProjection, RemoteReanchorPopup, SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
+use super::types_selection_modal::SelectionModal;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
 use super::types_tab_selection::TabSelection;
 use super::visualizer_worker::{PipeWireWorker, StereoSampleWindow};
@@ -240,6 +241,7 @@ pub struct App {
     pub(super) settings_save_at: Option<Instant>,
     pub(super) confirm_logout: bool,
     pub(super) multiselect_popup: Option<MultiSelectPopup>,
+    pub(super) selection_modal: Option<SelectionModal>,
     pub(super) library_routes_popup: Option<LibraryRoutePopup>,
     pub(super) help_scroll: u16,
     pub(super) system_notifications: bool,
@@ -374,6 +376,7 @@ pub struct App {
     /// so the inline detail pane can render without drilling in.
     pub(super) series_detail_cache: std::collections::HashMap<String, SeriesDetail>,
     pub(super) series_detail_loading: std::collections::HashSet<String>,
+    pub(super) series_season_loading: std::collections::HashSet<(String, String)>,
     pub(super) save_playlist_dialog: Option<SavePlaylistDialog>,
     pub(super) image_protocol: Option<String>,
     pub(super) image_protocol_enabled: bool,

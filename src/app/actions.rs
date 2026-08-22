@@ -432,8 +432,14 @@ impl App {
 }
 
 #[cfg(test)]
+#[path = "actions_tests_audiobookshelf_modal_events.rs"]
+mod audiobookshelf_modal_event_tests;
+#[cfg(test)]
 #[path = "actions_tests_letter.rs"]
 mod letter_tests;
+#[cfg(test)]
+#[path = "actions_tests_modal_events.rs"]
+mod modal_event_tests;
 #[cfg(test)]
 #[path = "actions_tests_queue_enrich.rs"]
 mod queue_enrich_tests;

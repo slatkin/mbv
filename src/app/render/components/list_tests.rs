@@ -1,12 +1,17 @@
 use super::*;
 // Characterization coverage stays beside the moved library component.
 use crate::app::layout::LayoutMain;
-use crate::app::render::components::list_rows::selected_cell_rect;
+use crate::app::render::components::list_rows::{
+    selected_cell_rect, DisplayRow, InlineReplacementPlan,
+};
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, TabSelection};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
+
+#[path = "list_late_tests.rs"]
+mod late_tests;
 
 fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
     let buf = term.backend().buffer();
@@ -502,6 +507,156 @@ fn inline_detail_flow_accounts_for_detail_rows_and_scroll() {
 }
 
 #[test]
+fn inline_replacement_plan_owns_the_shared_contract() {
+    let rows = vec![
+        DisplayRow::Item(vec![0]),
+        DisplayRow::Item(vec![1]),
+        DisplayRow::LetterHeader("B".into()),
+        DisplayRow::Item(vec![3]),
+        DisplayRow::Item(vec![4]),
+        DisplayRow::Item(vec![5]),
+        DisplayRow::Item(vec![6]),
+        DisplayRow::Item(vec![7]),
+        DisplayRow::Item(vec![8]),
+    ];
+    let plan = InlineReplacementPlan::new(&rows, 7, 7, 4, 8, 0);
+
+    assert_eq!(plan.detail_rows(), 4, "a complete detail block is admitted");
+    assert_eq!(
+        plan.offset(),
+        3,
+        "bottom selection grows the viewport upward"
+    );
+    assert_eq!(plan.detail_screen_row(), Some(4));
+    assert_eq!(
+        plan.hero_area(Rect::new(10, 2, 30, 8)),
+        Some(Rect::new(10, 6, 30, 4))
+    );
+    assert!(matches!(
+        plan.display_row(7),
+        Some(super::super::hero::InlineDisplayRow::Replacement)
+    ));
+    assert!(matches!(
+        plan.display_row(11),
+        Some(super::super::hero::InlineDisplayRow::Source(8))
+    ));
+    assert_eq!(
+        plan.row_targets(),
+        vec![
+            Some(0),
+            Some(1),
+            None,
+            Some(3),
+            Some(4),
+            Some(5),
+            Some(6),
+            Some(7),
+            None,
+            None,
+            None,
+            Some(8),
+        ],
+        "the source row is swallowed and only the replacement's first row targets the parent"
+    );
+    assert_eq!(
+        plan.item_rows(),
+        vec![
+            vec![0],
+            vec![1],
+            Vec::new(),
+            vec![3],
+            vec![4],
+            vec![5],
+            vec![6],
+            vec![7],
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            vec![8],
+        ]
+    );
+    assert!(!plan.should_draw_selection_markers());
+}
+
+#[test]
+fn inline_replacement_plan_preserves_scroll_and_restores_ordinary_rows_when_it_cannot_fit() {
+    let rows = vec![
+        DisplayRow::Item(vec![0]),
+        DisplayRow::Item(vec![1]),
+        DisplayRow::Item(vec![2]),
+        DisplayRow::Item(vec![3]),
+        DisplayRow::Item(vec![4]),
+        DisplayRow::Item(vec![5]),
+    ];
+    let persisted = InlineReplacementPlan::new(&rows, 4, 4, 2, 6, 2);
+    assert_eq!(persisted.offset(), 2, "a valid stored scroll is retained");
+    assert_eq!(persisted.detail_screen_row(), Some(2));
+
+    let fallback = InlineReplacementPlan::new(&rows, 4, 4, 6, 6, 2);
+    assert_eq!(fallback.detail_rows(), 0, "a complete hero cannot fit");
+    assert_eq!(fallback.offset(), 2);
+    assert_eq!(
+        fallback.item_rows(),
+        vec![vec![0], vec![1], vec![2], vec![3], vec![4], vec![5]]
+    );
+    assert!(fallback.should_draw_selection_markers());
+}
+
+#[test]
+fn inline_replacement_plan_fallback_keeps_selected_row_visible_at_header_boundary() {
+    let rows = vec![
+        DisplayRow::LetterHeader("A".into()),
+        DisplayRow::Item(vec![1]),
+        DisplayRow::Item(vec![2]),
+        DisplayRow::Item(vec![3]),
+        DisplayRow::Item(vec![4]),
+    ];
+    let fallback = InlineReplacementPlan::new(&rows, 4, 4, 4, 4, 1);
+
+    assert_eq!(fallback.offset(), 1);
+    assert_eq!(fallback.row_targets().get(4), Some(&Some(4)));
+}
+
+#[test]
+fn inline_replacement_plan_fallback_keeps_the_shared_offset_when_header_would_only_fit_ordinary_row(
+) {
+    let rows = vec![
+        DisplayRow::LetterHeader("A".into()),
+        DisplayRow::Item(vec![1]),
+        DisplayRow::Item(vec![2]),
+        DisplayRow::Item(vec![3]),
+    ];
+    let fallback = InlineReplacementPlan::new(&rows, 3, 3, 4, 4, 1);
+
+    assert_eq!(fallback.detail_rows(), 0);
+    assert_eq!(fallback.offset(), 1);
+}
+
+#[test]
+fn inline_replacement_plan_admits_grouping_header_only_at_the_fit_boundary() {
+    let mut rows = (0..9)
+        .map(|i| DisplayRow::Item(vec![i]))
+        .collect::<Vec<_>>();
+    rows[2] = DisplayRow::LetterHeader("B".into());
+
+    let fits = InlineReplacementPlan::new(&rows, 7, 7, 3, 8, 3);
+    assert_eq!(
+        fits.offset(),
+        2,
+        "the header remains visible when the hero still fits"
+    );
+    assert_eq!(fits.detail_screen_row(), Some(5));
+
+    let does_not_fit = InlineReplacementPlan::new(&rows, 7, 7, 4, 8, 3);
+    assert_eq!(
+        does_not_fit.offset(),
+        3,
+        "the header is omitted rather than pushing the hero below the viewport"
+    );
+    assert_eq!(does_not_fit.detail_screen_row(), Some(4));
+}
+
+#[test]
 fn inline_detail_replaces_the_selected_media_row() {
     let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected", "Movie 2"]);
     app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
@@ -563,197 +718,5 @@ fn inline_detail_height_tracks_variable_selected_content() {
         "inline detail height must follow content: short={}, long={}",
         short_layout.hero_area.height,
         long_layout.hero_area.height
-    );
-}
-
-#[test]
-fn inline_detail_is_suppressed_when_the_active_row_cannot_fit_with_it() {
-    let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected"]);
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
-    let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 81, 4);
-
-    assert_eq!(
-        layout.hero_area.height, 0,
-        "detail must be suppressed in a tiny viewport"
-    );
-    assert!(
-        layout.selected_item_rect.is_some(),
-        "the active media row must retain the available viewport"
-    );
-}
-
-#[test]
-fn inline_detail_scroll_keeps_selected_replacement_in_the_viewport() {
-    let titles: Vec<&str> = (0..12).map(|_| "Movie").collect();
-    let mut app = make_movie_list_app(titles);
-    app.libs[0].nav_stack.last_mut().unwrap().items[8].name = "Movie 8 Selected".into();
-    app.libs[0].nav_stack.last_mut().unwrap().items[8].overview = "Selected detail".into();
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = 8;
-    let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 81, 16);
-
-    let selected = layout.selected_item_rect.expect("selected row is visible");
-    assert!(
-        layout.hero_area.height > 0,
-        "selected detail should remain addressable"
-    );
-    assert_eq!(layout.hero_area, selected);
-    assert!(layout.hero_area.y + layout.hero_area.height <= 16);
-}
-
-#[test]
-fn inline_replacement_has_one_parent_media_target() {
-    let mut app = make_movie_list_app(vec!["Movie 0", "Movie 1 Selected", "Movie 2"]);
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
-    let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 81, 40);
-
-    let selected_row = layout
-        .left_row_map
-        .iter()
-        .position(|row| *row == Some(1))
-        .expect("selected replacement should own the parent target");
-    let following_row = layout
-        .left_row_map
-        .iter()
-        .skip(selected_row + 1)
-        .position(|row| row == &Some(2))
-        .map(|offset| selected_row + 1 + offset)
-        .expect("following media row should be mapped");
-    assert_eq!(
-        selected_row,
-        layout.hero_area.y as usize - layout.left_area.y as usize
-    );
-    assert_eq!(
-        layout.left_row_map[selected_row..following_row]
-            .iter()
-            .filter(|row| **row == Some(1))
-            .count(),
-        1,
-        "the replacement must publish exactly one parent target"
-    );
-}
-
-#[test]
-fn selected_cell_uses_carat_no_double_hash_in_two_column_mode() {
-    let mut app = make_no_banner_list_app(vec!["Alpha", "Beta", "Gamma", "Delta"]);
-    let mut layout = LayoutMain::default();
-    let term = render_list_term(&mut app, &mut layout, 82, 8);
-    let out = buffer_to_string(&term);
-    let list_line = out
-        .lines()
-        .nth(layout.left_area.y as usize)
-        .expect("list_area's first row should exist in the rendered buffer");
-    assert!(
-        list_line.contains('\u{258e}'),
-        "selected cell's left edge should carry the ▎ mark: {list_line:?}"
-    );
-    assert!(
-        !list_line.contains("##Alpha"),
-        "selected cell's title must not be prefixed with ## in two-column mode: {list_line:?}"
-    );
-}
-
-#[test]
-fn hero_content_tracks_cursor_when_selection_scrolled_offscreen() {
-    let mut titles: Vec<String> = (0..40).map(|i| format!("Movie {i}")).collect();
-    titles[39] = "Movie 39 Selected".to_string();
-    let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
-    let mut app = make_movie_list_app(title_refs);
-    let mut layout = LayoutMain::default();
-
-    // Move the cursor to the last item: the hero (below-breakpoint
-    // inline presentation) must still show that item's title even though
-    // the viewport is far too short to render its row's position. The wide
-    // hero-on-left variant (left card tracks a scrolled-away rail row) is
-    // covered in `movies_wide_tests.rs`.
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = 39;
-    let term = render_list_term(&mut app, &mut layout, 81, 20);
-    let out = buffer_to_string(&term);
-
-    assert!(layout.hero_area.height > 0, "hero should still be shown");
-    assert!(
-        out.contains("Movie 39"),
-        "the hero should still show the cursor's item even though its row is offscreen"
-    );
-}
-
-#[test]
-fn two_column_mouse_click_selects_the_clicked_cell_not_the_row_first_item() {
-    let mut app = make_no_banner_list_app(vec!["Click A", "Click B", "Click C"]);
-    let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 82, 8);
-    sync_layout_to_app(&mut app, &layout);
-    let la = layout.left_area;
-    // Click cell 1 of the first row (x = cell 1 start, y = row 0).
-    let cell1_x = la.x + 42;
-    assert!(app.click_set_cursor(cell1_x, la.y));
-    assert_eq!(
-        cursor_of(&app),
-        1,
-        "click on the right cell must select the second item of the row"
-    );
-}
-
-#[test]
-fn letter_grouped_replacement_moves_with_a_scrolled_header() {
-    let titles: Vec<String> = (0..60).map(|i| format!("Movie {i:02}")).collect();
-    let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
-    let mut app = make_movie_list_app(title_refs);
-    let selected = &mut app.libs[0].nav_stack.last_mut().unwrap().items[50];
-    selected.name = "Movie 50 Selected".into();
-    selected.overview = "Selected detail".into();
-    app.libs[0].nav_stack.last_mut().unwrap().cursor = 50;
-    app.libs[0].nav_stack.last_mut().unwrap().scroll = 50;
-    let mut layout = LayoutMain::default();
-    let _ = render_list_term(&mut app, &mut layout, 81, 40);
-
-    assert!(layout.hero_area.height > 0);
-    assert_eq!(
-        layout.hero_area.y,
-        layout.left_area.y
-            + layout
-                .left_row_map
-                .iter()
-                .position(|item| *item == Some(50))
-                .unwrap() as u16,
-        "detail geometry must be recomputed after restoring the preceding header"
-    );
-}
-
-// Regression gate for the `show_grouped` fix (design.md Decision 6): without
-// the `search.is_none()` guard, `render_grouped_album_rows` would pair
-// its unfiltered `GroupedAlbumCatalog` with the filtered search-result
-// vector, mislabeling every row. This pins the guard's two inputs directly
-// rather than the rendered output, since `show_grouped` itself is a local
-// binding inside `render_list`, not a standalone function.
-#[test]
-fn show_grouped_guard_is_false_while_search_is_active_on_album_folders() {
-    let mut app = crate::app::render::test_helpers::make_music_group_app();
-    let lib_idx = app.tab.emby_library_index().unwrap();
-
-    assert!(
-        app.is_viewing_album_folders(lib_idx),
-        "fixture must sit at the album-folder level for this guard to matter"
-    );
-    assert!(app.libs[lib_idx].search.is_none());
-    assert!(
-        app.is_viewing_album_folders(lib_idx) && app.libs[lib_idx].search.is_none(),
-        "baseline: show_grouped's condition holds with no active search"
-    );
-
-    app.libs[lib_idx].search = Some(crate::app::LibSearch {
-        query: "x".into(),
-        items: Vec::new(),
-        results: Vec::new(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    assert!(
-        !(app.is_viewing_album_folders(lib_idx) && app.libs[lib_idx].search.is_none()),
-        "show_grouped's condition must go false once a search is active"
     );
 }

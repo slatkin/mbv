@@ -217,7 +217,7 @@ fn abs_layout_state_cannot_drive_emby_mouse_after_switch() {
 }
 
 #[test]
-fn narrow_tv_episode_target_precedes_parent_hero() {
+fn narrow_tv_does_not_activate_an_invisible_episode_target() {
     let mut app = make_library_app(0);
     app.libs[0].library.collection_type = "tvshows".into();
     app.libs[0].nav_stack[0].items[0].item_type = "Series".into();
@@ -226,5 +226,26 @@ fn narrow_tv_episode_target_precedes_parent_hero() {
     app.layout.main.tv_wide_episode_rows = vec![(Rect::new(11, 8, 18, 1), 0)];
 
     assert!(app.click_set_cursor(12, 8));
-    assert_eq!(app.libs[0].series_selection, Some(0));
+    assert_eq!(
+        app.libs[0].series_selection, None,
+        "narrow TV must not focus an invisible wide-only episode target"
+    );
+}
+
+#[test]
+fn narrow_home_and_feeds_heroes_are_the_only_parent_target() {
+    for tab in [TabSelection::Home, TabSelection::Feeds] {
+        let mut app = make_app_stub();
+        app.tab = tab;
+        app.panel_focus = PanelFocus::Queue;
+        app.layout.main.inline_hero_area = Rect::new(10, 5, 20, 4);
+        app.layout.main.left_area = Rect::new(0, 0, 40, 12);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        assert!(
+            app.click_set_cursor(12, 6),
+            "{tab:?} hero is a parent target"
+        );
+        assert_eq!(app.panel_focus, PanelFocus::Library);
+    }
 }

@@ -29,6 +29,12 @@ For wide Movies, the left hero SHALL continue using Home's selected-media card. 
 - **THEN** the previous row returns to its ordinary presentation and the new selected row is replaced by inline detail
 - **AND** the previous row returns to its ordinary presentation
 
+#### Scenario: Selected inline hero reaches the viewport bottom
+
+- **WHEN** the selected row's full inline hero would extend below the visible browser
+- **THEN** the browser scrolls upward until the complete inline hero is visible
+- **AND** every surface uses the shared inline-detail flow rather than surface-specific scrolling
+
 #### Scenario: Narrow list has insufficient space
 
 - **WHEN** the inline presentation cannot fit the minimum active row and minimum selected detail
@@ -62,6 +68,9 @@ For wide Movies, the left hero SHALL continue using Home's selected-media card. 
 - **THEN** selected-book hero content (title, author, metadata, overview, cover) replaces the active book row
 - **AND** chapter detail does NOT render inside the inline hero
 - **AND** the cover image uses Model A (right-aligned, wrap-around), not Model B
+- **AND** exactly one author-bucket pill row renders above the browser with a parent-background spacer
+- **AND** no chapter child target or chapter focus exists in the narrow presentation
+- **AND** Enter or parent double-click opens the chapter selection modal
 
 #### Scenario: Narrow Feeds
 

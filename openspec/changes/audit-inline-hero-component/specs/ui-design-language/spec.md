@@ -29,6 +29,15 @@ The inline hero SHALL render one content shape on every surface: title, optional
 - **THEN** the pills SHALL move to the panel area
 - **AND** no pills SHALL render inside the inline hero
 
+#### Scenario: A panel pill bar reserves a spacer row
+
+- **WHEN** a panel reserves vertical space between a pill bar and its browser content
+- **THEN** the pill bar SHALL paint exactly one row
+- **AND** the spacer row SHALL inherit the parent panel background
+- **AND** surfaces SHALL NOT extend the pill-row background into the spacer
+- **AND** pill hit targets SHALL be exactly one row high
+- **AND** each designated pill area SHALL have exactly one render owner
+
 #### Scenario: A surface with a tall image uses the wrong model
 
 - **WHEN** a surface with a tall image (poster, book cover) would use the beside-image model (Model B)

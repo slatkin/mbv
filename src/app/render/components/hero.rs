@@ -21,6 +21,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use unicode_width::UnicodeWidthStr;
 
 /// Height reserved for the hero panel while it has no content to size to.
 /// A letter-pill switch clears the slice (so the selected item disappears)
@@ -41,6 +42,34 @@ pub(in crate::app::render) const HERO_TITLE_ROWS: u16 = 1;
 /// the hero block's reserved rows (the list makes room), not painted over
 /// list content like `render_selected_block_borders` does.
 pub(in crate::app::render) const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
+
+/// Word-wraps text using a width that may change for each completed line.
+/// Inline heroes use this to narrow overview text beside a right-aligned
+/// image without making the wrapping policy screen-specific.
+pub(in crate::app::render) fn wrap_overview_lines(
+    text: &str,
+    mut width_for_line: impl FnMut(usize) -> usize,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        let word_width = word.width();
+        let available = width_for_line(lines.len());
+        if current.is_empty() {
+            current.push_str(word);
+        } else if current.width() + 1 + word_width <= available {
+            current.push(' ');
+            current.push_str(word);
+        } else {
+            lines.push(std::mem::take(&mut current));
+            current.push_str(word);
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
+}
 /// The shared display-flow accounting for an inline selected-detail block.
 /// `offset` is the first display row in the viewport and
 /// `detail_screen_row` is the detail block's row relative to that viewport.

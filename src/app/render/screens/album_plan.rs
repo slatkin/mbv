@@ -443,15 +443,10 @@ impl App {
                         | GroupedAlbumDisplayRow::AlbumActionHint
                 )
             });
-            // Removing the inline-detail rows shifts the selected album's
-            // display position. Recompute it instead of clamping the old
-            // pre-removal index, which can point at the next album and make
-            // scrolling/row highlighting disagree with the hero selection.
-            let display_cursor = find_display_cursor(&rows);
             return GroupedAlbumDisplayPlan {
                 order: order.to_vec(),
+                display_cursor: find_display_cursor(&rows),
                 rows,
-                display_cursor,
                 selected_block_bounds: None,
                 track_detail_bounds: None,
             };

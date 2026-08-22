@@ -53,8 +53,8 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
     );
     assert_eq!(
         buffer[(hero.x + SELECTED_BLOCK_SIDE_PADDING, hero.y + 2)].symbol(),
-        "A",
-        "podcast hero content must start two rows below the top border"
+        "S",
+        "podcast hero title must start two rows below the top border"
     );
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].symbol(),
@@ -64,6 +64,51 @@ fn narrow_podcasts_replace_selected_show_row_with_detail() {
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].style().fg,
         Some(palette::PROGRESS_TRACK)
+    );
+    assert!(!layout.is_wide_podcast_active());
+    assert!(layout.audiobookshelf_episode_rows.is_empty());
+}
+
+#[test]
+fn narrow_podcast_panel_shows_one_alphabetical_pill_row() {
+    let mut app = audiobookshelf_app();
+    let mut layout = LayoutMain::default();
+    let terminal = render_library_to_terminal_focused(&mut app, &mut layout, true);
+    let buffer = terminal.backend().buffer();
+
+    assert_surface_pills(
+        &terminal,
+        &layout,
+        Rect::new(0, 0, 60, 20),
+        1,
+        ratatui::style::Color::Reset,
+        &[0],
+        &["⌘", "S–U"],
+        0,
+    );
+
+    // "Show A" buckets under "S\u{2013}U".
+    let pills_row = 0u16;
+    let mut row_text = String::new();
+    for x in 0..buffer.area().width {
+        row_text.push_str(buffer[(x, pills_row)].symbol());
+    }
+    assert!(
+        row_text.contains('\u{2318}'),
+        "narrow panel's pill row must show the '⌘' prefix: {row_text:?}"
+    );
+    assert!(
+        row_text.contains("S\u{2013}U"),
+        "narrow panel's pill row must show the show's alphabetical bucket: {row_text:?}"
+    );
+    // Exactly one pill row: the row below it is the gap row before the list.
+    let mut next_row_text = String::new();
+    for x in 0..buffer.area().width {
+        next_row_text.push_str(buffer[(x, pills_row + 1)].symbol());
+    }
+    assert!(
+        !next_row_text.contains('\u{2318}'),
+        "only one pill row should render in the panel: {next_row_text:?}"
     );
 }
 
@@ -102,7 +147,11 @@ fn narrow_podcast_replacement_owns_one_parent_target() {
             .find_map(|row| row.first()),
         Some(&3)
     );
-    assert_eq!(layout.hero_area.y as usize, selected_row);
+    // The narrow panel reserves a one-row alphabetical bucket-pill row plus
+    // a gap row above the show list (task 4.3), so the hero's absolute
+    // screen row is offset from its list-relative `selected_row` index by
+    // that reservation.
+    assert_eq!(layout.hero_area.y as usize, selected_row + 2);
 }
 
 #[test]
@@ -134,6 +183,58 @@ fn audiobook_podcast_buffer_characterization_covers_default_focused_narrow_and_s
             output.contains("▁"),
             "selected hero shell missing at {width}x{height}"
         );
+    }
+}
+
+#[test]
+fn narrow_podcast_detail_shows_author_description_no_pills_or_table() {
+    // Before this migration (task 4.1's characterization), this same setup
+    // rendered the author/description as a hand-painted block and showed
+    // the in-hero " ⌘ " filter pill bar + episode table whenever
+    // `episode_selection` was set. Task 4.2 makes author/description plain
+    // `HeroLine`s and gates the pill bar + table on `persistent` (wide
+    // only), so the narrow hero never shows them, even if
+    // `episode_selection` is set (simulated here as a stale value -- Enter
+    // no longer sets it in narrow mode, see `open_podcast_selection_modal`).
+    let mut app = audiobookshelf_app();
+    let state = &mut app.audiobookshelf_browse[0];
+    state.shows[0].author = Some("Author A".into());
+    state.shows[0].description = Some("A description of the show.".into());
+    state.episode_selection = Some(0);
+    let mut layout = LayoutMain::default();
+    let terminal = render_library_to_terminal_focused(&mut app, &mut layout, true);
+    let output = buffer_to_string(&terminal);
+
+    assert!(
+        output.contains("Author A"),
+        "narrow hero renders the author as a standard hero line"
+    );
+    assert!(
+        output.contains("description of the show"),
+        "narrow hero renders the description as standard hero lines"
+    );
+    assert!(
+        !output.contains("Played") && !output.contains("Unplayed"),
+        "narrow hero must not show the in-hero filter pill bar"
+    );
+    assert!(
+        !output.contains("Episode A"),
+        "narrow hero must not show the episode table"
+    );
+
+    // The narrow panel's alphabetical bucket pills (task 4.3) legitimately
+    // show '⌘' elsewhere on screen; the requirement is that none of it
+    // renders inside the hero rect itself.
+    let buffer = terminal.backend().buffer();
+    let hero = layout.hero_area;
+    for y in hero.y..hero.bottom() {
+        for x in hero.x..hero.right() {
+            assert_ne!(
+                buffer[(x, y)].symbol(),
+                "\u{2318}",
+                "no pills may render inside the hero rect"
+            );
+        }
     }
 }
 

@@ -1,4 +1,8 @@
 use crate::app::layout::LayoutMain;
+use crate::app::render::components::album_art::inline_album_art_cache_key;
+use crate::app::render::components::hero::{HeroContent, HeroImage, ImageTop};
+use crate::app::render::components::music_wide::wide_album_metadata;
+use crate::app::selection_modal_actions::{album_modal_state, album_track_title};
 use crate::app::ui_util::*;
 use crate::app::{palette, App};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
@@ -12,63 +16,138 @@ use textwrap::wrap;
 const INLINE_ALBUM_TITLE_EXTRA_INDENT: u16 = 1;
 const INLINE_ALBUM_TRACK_EXTRA_INDENT: u16 = 2;
 
-fn track_title(item: &EmbyItem) -> String {
-    let raw_name = if item.name.trim().is_empty() {
-        item.file_name()
+/// Image box size for the Model A album hero (`render_album_hero_detail`),
+/// matching the Series inline hero's `SERIES_IMAGE_*` sizing (`detail_series.rs`)
+/// so both Model A surfaces reserve comparable image rows.
+const ALBUM_HERO_IMAGE_COLS: u16 = 18;
+const ALBUM_HERO_IMAGE_ROWS: u16 = 12;
+const ALBUM_HERO_IMAGE_PLACEHOLDER_ROWS: u16 = 10;
+
+/// Row budget for the Model A album hero's *content* (title through the
+/// trailing blank row) -- the caller adds its own block framing
+/// (`HERO_BLOCK_EXTRA_ROWS`) on top, mirroring
+/// `App::series_inline_detail_rows`'s split between this estimate (used by
+/// `build_grouped_album_display_plan` to reserve space) and the actual paint
+/// call (`render_album_hero_detail`).
+pub(in crate::app::render) fn album_hero_detail_rows(images_enabled: bool) -> usize {
+    let mut rows = 1 /* title */ + 1 /* meta */ + 1 /* spacer */;
+    let img_rows = if images_enabled {
+        ALBUM_HERO_IMAGE_ROWS as usize
     } else {
-        item.name.trim()
+        0
     };
-    let file_name = raw_name.rsplit(['/', '\\']).next().unwrap_or(raw_name);
-    let (stem, from_filename) = file_name
-        .rsplit_once('.')
-        .filter(|(_, extension)| {
-            [
-                "aac", "aif", "aiff", "alac", "ape", "flac", "m4a", "mka", "mp3", "oga", "ogg",
-                "opus", "wav", "wma", "wv",
-            ]
-            .iter()
-            .any(|known| extension.eq_ignore_ascii_case(known))
-        })
-        .map(|(stem, _)| (stem, true))
-        .unwrap_or((file_name, false));
-
-    let digits_end = stem
-        .char_indices()
-        .take_while(|(_, ch)| ch.is_ascii_digit())
-        .last()
-        .map(|(idx, ch)| idx + ch.len_utf8())
-        .unwrap_or(0);
-    if digits_end == 0 {
-        return stem.to_string();
-    }
-
-    // A metadata title such as "4 Non Blondes" is not a filename prefix if
-    // Emby's canonical track number says otherwise. Filename-like values are
-    // still parsed even when the server did not provide IndexNumber.
-    if !from_filename
-        && item.index_number > 0
-        && stem[..digits_end].parse::<i64>().ok() != Some(item.index_number)
-    {
-        return stem.to_string();
-    }
-
-    let after_number = &stem[digits_end..];
-    let trimmed = after_number.trim_start();
-    let has_separator = trimmed.len() != after_number.len()
-        || matches!(trimmed.chars().next(), Some('-' | '.' | '_'));
-    if !has_separator {
-        return stem.to_string();
-    }
-
-    let title = trimmed.trim_start_matches(['-', '.', '_']).trim();
-    if title.is_empty() {
-        stem.to_string()
-    } else {
-        title.to_string()
-    }
+    // The image starts right after the title row (`ImageTop::AfterTitle`).
+    rows = rows.max(1 + img_rows);
+    rows + 1 /* trailing spacer */
 }
 
 impl App {
+    /// Renders the narrow grouped-album Model A hero (task 3.2): title,
+    /// "artist • year" meta, and right-aligned album art via
+    /// `paint_hero_content` -- no track table, no action hints (those moved
+    /// to the selection modal, see `open_album_selection_modal`). Mirrors
+    /// `render_series_inline_detail`'s image-sizing shape, simplified since
+    /// albums have no overview text.
+    pub(in crate::app::render) fn render_album_hero_detail(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        album: &EmbyItem,
+        focused: bool,
+    ) {
+        if area.height == 0 {
+            return;
+        }
+
+        let artist = self.resolve_group_album_artist(album);
+        let (title, year) = wide_album_metadata(album, &artist);
+        let show_artist = !artist.is_empty() && artist != "Unknown Artist";
+        let meta = match (show_artist, year > 0) {
+            (true, true) => format!("{artist} • {year}"),
+            (true, false) => artist,
+            (false, true) => year.to_string(),
+            (false, false) => String::new(),
+        };
+
+        let cache_key = inline_album_art_cache_key(&album.id);
+        if !album.id.is_empty() && self.images_enabled() {
+            self.fetch_card_image(
+                cache_key.clone(),
+                album.id.clone(),
+                album.series_id.clone(),
+                crate::app::render::MUSIC_ALBUM_IMAGE_TYPES,
+            );
+        }
+        let img_loading = !album.id.is_empty()
+            && self.images_enabled()
+            && self.card_image_loading.contains(&cache_key);
+        let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) = {
+            if let Some(state) = self.cached_image_protocol_mut(&cache_key) {
+                let avail = ratatui::layout::Size {
+                    width: ALBUM_HERO_IMAGE_COLS,
+                    height: ALBUM_HERO_IMAGE_ROWS,
+                };
+                match state.size_for(
+                    ratatui_image::Resize::Scale(Some(crate::app::render::RENDER_FILTER)),
+                    avail,
+                ) {
+                    Some(actual) => (actual.width, actual.height, false),
+                    None => (
+                        ALBUM_HERO_IMAGE_COLS,
+                        ALBUM_HERO_IMAGE_PLACEHOLDER_ROWS,
+                        true,
+                    ),
+                }
+            } else if img_loading {
+                (
+                    ALBUM_HERO_IMAGE_COLS,
+                    ALBUM_HERO_IMAGE_PLACEHOLDER_ROWS,
+                    true,
+                )
+            } else {
+                (0, 0, false)
+            }
+        };
+
+        let hero_content = HeroContent {
+            title: Some(title.as_str()),
+            meta_line: (!meta.is_empty()).then_some(meta.as_str()),
+            meta_color: palette::TEXT_DETAIL_META,
+            show_playing: false,
+            unconditional_spacer_after_meta: true,
+            lines: &[],
+            image: (img_height > 0).then_some(HeroImage {
+                actual_w: img_actual_w,
+                height: img_height,
+                top: ImageTop::AfterTitle,
+            }),
+        };
+        let result = crate::app::render::components::hero::paint_hero_content(
+            f,
+            area,
+            &hero_content,
+            focused,
+        );
+
+        if let Some(img_rect) = result.img_rect {
+            if img_is_placeholder {
+                f.render_widget(
+                    Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
+                    img_rect,
+                );
+            } else if let Some(state) = self.cached_image_protocol_mut(&cache_key) {
+                type AImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+                f.render_stateful_widget(
+                    AImg::default().resize(ratatui_image::Resize::Scale(Some(
+                        crate::app::render::RENDER_FILTER,
+                    ))),
+                    img_rect,
+                    state,
+                );
+            }
+        }
+    }
+
     /// Renders the music album detail panel (track list) into `area` — the lib
     /// slot below the card. The card itself already shows the album art (handled
     /// in `render_card`). Mirrors `render_compact_detail` for movies.
@@ -289,7 +368,7 @@ impl App {
                 }
                 let num_w = track_num.chars().count();
                 let title_width = title_col_w.saturating_sub(num_w).max(1);
-                let title = track_title(item);
+                let title = album_track_title(item);
                 let title_lines = wrap(&title, title_width);
                 let mut wrapped_title_lines = Vec::with_capacity(title_lines.len());
                 for (line_idx, line) in title_lines.into_iter().enumerate() {
@@ -363,7 +442,7 @@ impl App {
             .extend(items.iter().enumerate().skip(state.offset()).scan(
                 table_area.y,
                 |y, (index, item)| {
-                    let title = track_title(item);
+                    let title = album_track_title(item);
                     let height = wrap(&title, title_col_w.max(1)).len().max(1) as u16;
                     let rect = Rect {
                         x: table_area.x,
@@ -387,5 +466,27 @@ impl App {
                 palette::SCROLLBAR,
             );
         }
+    }
+
+    /// Opens the Album constituent-list modal (design.md decision 3/task
+    /// 3.3): a flat scrollable list of track `Item` rows, no headers (unlike
+    /// Series' season-grouped modal -- tracks aren't hierarchical). Ensures
+    /// the track list is fetched, mirroring `open_series_selection_modal`;
+    /// if it hasn't landed in `album_tracks_cache` yet, opens with a loading
+    /// placeholder instead of track rows.
+    pub(in crate::app) fn open_album_selection_modal(&mut self, album: &EmbyItem) {
+        self.fetch_album_tracks(album.id.clone());
+        let state = match self.album_tracks_cache.get(&album.id) {
+            Some(tracks) => album_modal_state(tracks),
+            None => crate::app::types_selection_modal::SelectionModalListState::Loading,
+        };
+        self.open_selection_modal(
+            crate::app::types_selection_modal::SelectionModalSource::Album {
+                album_id: album.id.clone(),
+            },
+            album.display_name(),
+            state,
+            None,
+        );
     }
 }

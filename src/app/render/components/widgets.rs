@@ -333,6 +333,7 @@ pub(in crate::app::render) fn render_pill_bar(
     if area.width == 0 || area.height == 0 || bar.labels.is_empty() {
         return selector_tabs;
     }
+    let area = Rect { height: 1, ..area };
     let n = bar.labels.len();
     let bar_w = area.width as usize;
     let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);

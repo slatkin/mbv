@@ -178,12 +178,16 @@ impl App {
             }
         }
         // Activate series-selection mode on Enter when the cursor is on a
-        // Series item (instead of drilling down via `select`).
-        if key.code == KeyCode::Enter && self.libs[lib_idx].series_selection.is_none() {
-            if let Some(item) = self.selected_series_item(lib_idx) {
-                self.enter_series_selection(lib_idx, &item);
-                return Some(false);
-            }
+        // Series item (instead of drilling down via `select`). Wide keeps
+        // the existing in-hero episode focus (`series_selection`); narrow
+        // has no inline season/episode block to focus (see
+        // `render_series_inline_detail`), so it opens the selection modal
+        // instead (design.md Decision 6).
+        if key.code == KeyCode::Enter
+            && self.libs[lib_idx].series_selection.is_none()
+            && self.activate_selected_series(lib_idx)
+        {
+            return Some(false);
         }
 
         // Tab/BackTab are consumed by `handle_global_view_key` in
@@ -194,6 +198,21 @@ impl App {
         // Every other key is consumed here, never falling through to
         // queue-item handling.
         Some(false)
+    }
+
+    /// Applies the single Series activation gate shared by keyboard Enter and
+    /// browse double-click. Narrow presentations open the selection modal;
+    /// wide presentations retain the persistent season/episode workspace.
+    pub(super) fn activate_selected_series(&mut self, lib_idx: usize) -> bool {
+        let Some(item) = self.selected_series_item(lib_idx) else {
+            return false;
+        };
+        if self.layout.main.is_wide_tv_active() {
+            self.enter_series_selection(lib_idx, &item);
+        } else {
+            self.open_series_selection_modal(&item);
+        }
+        true
     }
 
     /// The Audiobookshelf library keyboard handler for the exhaustively
@@ -234,8 +253,21 @@ impl App {
             KeyCode::Esc | KeyCode::Backspace if episode_selection => {
                 self.leave_audiobookshelf_episode_selection()
             }
-            KeyCode::Enter | KeyCode::Char(' ') if !episode_selection => {
+            KeyCode::Char(' ') if !episode_selection => {
                 self.enter_audiobookshelf_episode_selection()
+            }
+            // Enter on a selected show (instead of the always-focus-episodes
+            // behavior above): wide keeps the existing in-hero episode focus
+            // (`episode_selection`); narrow has no inline episode block to
+            // focus (see `render_audiobookshelf_hero`'s `persistent` gate),
+            // so it opens the selection modal instead (design.md decisions
+            // 4 and 6).
+            KeyCode::Enter if !episode_selection => {
+                if self.layout.main.is_wide_podcast_active() {
+                    self.enter_audiobookshelf_episode_selection();
+                } else {
+                    self.open_podcast_selection_modal();
+                }
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
                 self.play_selected_audiobookshelf_episode(index);
@@ -252,10 +284,10 @@ impl App {
 
     /// The Audiobookshelf book-library keyboard handler for the exhaustively
     /// matched `AudiobookshelfLibrary(index)` when its resolved kind is
-    /// `Book`. Navigates whichever pane is focused (the hero's chapter list
-    /// or the right-pane book browser), toggles pane focus with left/right
-    /// arrow (replacing the old Enter-to-enter/Esc-to-leave modal
-    /// transition -- both panes stay visible either way), cycles the
+    /// `Book`. Wide navigates either the hero's chapter list or the right-pane
+    /// book browser and toggles pane focus with left/right arrow. Narrow
+    /// navigates the browser and opens the chapter modal from the parent.
+    /// It cycles the
     /// alphabetical-bucket pill with `[`/`]`, and plays or enqueues the
     /// selected book. Every key is consumed: podcast/Emby actions and
     /// queue-item handling are unreachable from here.
@@ -264,10 +296,11 @@ impl App {
         index: usize,
         key: KeyEvent,
     ) -> Option<bool> {
-        let chapters_focused = self
-            .audiobookshelf_book_browse
-            .get(index)
-            .is_some_and(|state| state.chapter_selection.is_some());
+        let chapters_focused = self.layout.main.is_wide_book_active()
+            && self
+                .audiobookshelf_book_browse
+                .get(index)
+                .is_some_and(|state| state.chapter_selection.is_some());
         // Bucket-pill cycling (a direct precedent: `switch_music_group`'s
         // `[`/`]` group cycling), available regardless of which pane is
         // focused.
@@ -308,11 +341,16 @@ impl App {
             KeyCode::End if !chapters_focused => self.jump_audiobookshelf_book_cursor(true),
             // Left arrow moves focus from the browser to the hero's chapter
             // list; Right is a no-op there (already rightmost).
-            KeyCode::Left if !chapters_focused => self.focus_audiobookshelf_book_chapters(),
+            KeyCode::Left if !chapters_focused && self.layout.main.is_wide_book_active() => {
+                self.focus_audiobookshelf_book_chapters()
+            }
             // Space plays the selected book (book-playback spec: ordinary
-            // play); Enter mirrors it now that it no longer opens chapter
-            // selection (that transition is the Left/Right focus toggle
-            // above).
+            // play). Narrow Enter opens the chapter modal when the hero fits;
+            // otherwise it keeps ordinary book activation. Wide Enter keeps
+            // the existing book activation behavior.
+            KeyCode::Enter if !chapters_focused && !self.layout.main.is_wide_book_active() => {
+                self.activate_audiobookshelf_book_parent();
+            }
             KeyCode::Char(' ') | KeyCode::Enter if !chapters_focused => {
                 self.play_selected_audiobookshelf_book(index);
             }

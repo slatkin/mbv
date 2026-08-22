@@ -131,6 +131,11 @@ impl App {
             )),
             hero_handles_detail,
         );
+        if hero_handles_detail {
+            return self.render_grouped_album_rows_inline_plan(
+                f, area, albums, album_info, cursor_ctx, focused, plan, layout,
+            );
+        }
         if !hero_handles_detail
             && plan.selected_block_bounds.is_some_and(|(top, bottom)| {
                 bottom.saturating_sub(top).saturating_add(3) >= visible

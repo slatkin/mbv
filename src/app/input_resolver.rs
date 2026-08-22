@@ -152,6 +152,10 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_context_menu,
     },
     ContextEntry {
+        name: "selection_modal",
+        handler: App::handle_key_selection_modal,
+    },
+    ContextEntry {
         name: "daemon_lost_modal",
         handler: App::handle_key_daemon_lost_modal,
     },

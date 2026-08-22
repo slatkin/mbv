@@ -497,6 +497,7 @@ fn context_stack_order_is_pinned() {
         names,
         vec![
             "context_menu",
+            "selection_modal",
             "daemon_lost_modal",
             "confirm_modal",
             "remote_reanchor",
