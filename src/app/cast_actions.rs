@@ -221,6 +221,17 @@ impl App {
             }
             CastEvent::ConnectFailed { receiver_id, error } => {
                 log::warn!(target: "cast", "connect to receiver {receiver_id:?} failed: {error}");
+                // Detach if the failure is for the currently-attached
+                // receiver (attach-on-selection sets state optimistically
+                // before the connect completes; reattach does not, so
+                // detach_cast is a no-op there).
+                if self
+                    .cast_attachment
+                    .as_ref()
+                    .is_some_and(|a| a.receiver_id == receiver_id)
+                {
+                    self.detach_cast();
+                }
                 self.flash(
                     format!("\u{26a0} Couldn't connect to cast receiver: {error}"),
                     ToastSeverity::Warning,
@@ -307,9 +318,10 @@ fn resolve_cast_dispatch_item(
             )
         }),
         QueueItem::Audiobookshelf(episode) => resolve_abs_episode_cast_item(episode, abs),
-        QueueItem::AudiobookshelfBook(book) => {
-            Err(cast_dispatch::resolve_audiobookshelf_book_dispatch(book).unwrap_err())
-        }
+        QueueItem::AudiobookshelfBook(book) => Err(format!(
+            "\"{}\" is a multi-file audiobook and can't be cast",
+            book.title
+        )),
     };
     ResolvedCastItem {
         name,
@@ -336,7 +348,6 @@ fn resolve_emby_cast_item(
             item_id: item.id.clone(),
             media_source_id: info.media_source_id,
             session_id: info.session_id,
-            runtime_ticks: item.runtime_ticks,
         },
     ))
 }
@@ -515,6 +526,41 @@ mod tests {
             .map(|s| s.item.id().to_string())
             .collect();
         assert_eq!(before, after);
+    }
+
+    #[test]
+    fn failed_connect_after_selection_detaches_the_phantom_attachment() {
+        let _connect_guard = super::super::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        fn connect_fail(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
+            Err("receiver not found".to_string())
+        }
+        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_fail);
+
+        let mut app = make_app_stub();
+        let receiver = mbv_core::cast_discovery::CastReceiver {
+            id: "device-1".to_string(),
+            friendly_name: "Living Room".to_string(),
+            host: "192.168.0.5".to_string(),
+            port: 8009,
+        };
+        // Selection attaches optimistically before the connect completes.
+        app.select_panel_target(PanelTarget::Cast(receiver));
+        assert!(app.is_cast_attached());
+
+        // The background connect fails and reports back.
+        let event = app
+            .cast_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .unwrap();
+        app.handle_cast_event(event);
+
+        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+        assert!(
+            !app.is_cast_attached(),
+            "a failed connect should clear the optimistic attachment"
+        );
+        assert!(app.status.contains("Couldn't connect to cast receiver"));
     }
 
     #[test]
