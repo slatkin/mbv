@@ -93,17 +93,18 @@ SHALL NOT substitute a different item or fail silently.
 - **WHEN** mbv determines an item cannot be dispatched to the attached receiver
 - **THEN** mbv presents a message naming the item and the reason
 
-### Requirement: Text subtitles are delivered as sidecar tracks
+### Requirement: Text subtitles are not delivered to cast targets in v1
 
-mbv SHALL deliver text-based subtitles to the receiver as separate subtitle tracks that
-the receiver renders, and SHALL allow the user to select or disable them during playback.
-Image-based subtitles SHALL instead be rendered into the video by the server.
+mbv SHALL NOT deliver text-based subtitle tracks to a cast receiver. Image-based subtitles
+SHALL instead be rendered into the video by the server, since that decision is made through
+the device profile and does not depend on cast-protocol track support. (v1 gap: the cast
+sender library in use has no wire primitive for Cast media tracks; see design.md Risks.)
 
 #### Scenario: Item has text subtitles
 
 - **WHEN** an item with text-based subtitles is dispatched to a cast target
-- **THEN** mbv supplies those subtitles as selectable tracks
-- **AND** the user can enable or disable them without restarting playback
+- **THEN** mbv does not supply those subtitles as tracks
+- **AND** the item plays without subtitles
 
 #### Scenario: Item has image-based subtitles
 

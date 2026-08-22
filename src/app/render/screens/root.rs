@@ -60,7 +60,8 @@ impl App {
         let mut layout = AppLayout::default();
 
         let active = self.player.status.lock().unwrap().active;
-        let show_controls = active || self.connected_session_id.is_some();
+        let show_controls =
+            active || self.connected_session_id.is_some() || self.cast_attachment.is_some();
         let playing_panel = show_controls;
         // Always reserve the player rows (title + controls) so
         // that content doesn't shift when the player appears or disappears.
@@ -92,6 +93,8 @@ impl App {
         let now_playing_title: Option<(String, Color)> = if playing_panel {
             if active {
                 now_playing.map(|t| (t, title_color))
+            } else if let Some(ref cast) = self.cast_attachment {
+                self.cast_now_playing_title(cast).map(|t| (t, title_color))
             } else if let Some(ref state) = self.connected_session_state {
                 state.now_playing.clone().map(|t| (t, title_color))
             } else {

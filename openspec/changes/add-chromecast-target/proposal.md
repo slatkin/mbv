@@ -15,14 +15,15 @@ gatekeeper.
   the receiver owns them from there. mbv does not project, track, or reconcile the
   receiver's queue.
 - mbv controls an attached receiver with standard cast transport: play, pause, stop, seek,
-  next, previous, volume, and subtitle track selection. Now-playing state is read from the
-  receiver's reported status.
+  next, previous, and volume. Now-playing state is read from the receiver's reported status.
 - Media URLs are handed to the receiver directly. mbv does not proxy bytes and does not
   bind a listening socket. Emby items request a Chromecast device profile through the
   existing `PlaybackInfo` call so the server chooses direct-play or transcode; feed and
   Audiobookshelf-podcast sources use the URL their existing preparation already produces.
-- Text subtitles are delivered as sidecar tracks the receiver renders; image-based
-  subtitles are burned in server-side.
+- **Known gap (v1)**: text subtitles are not delivered to cast targets — `rust_cast` 0.21
+  exposes no wire primitive for Cast media tracks (confirmed by source inspection during the
+  spike). Image-based subtitles are still burned in server-side, since that decision is made
+  through the Emby device profile and does not depend on cast-protocol track support.
 - **BREAKING for Audiobookshelf books only**: multi-file books are not castable. mbv
   reports them as uncastable rather than dispatching them, because a per-file position
   cannot be written back as a book position without corrupting resume.

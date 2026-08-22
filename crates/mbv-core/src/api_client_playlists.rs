@@ -1,3 +1,11 @@
+/// The resolved cast-bound media plus the Emby session/media-source identity
+/// it was negotiated under, so progress can be reported for it later.
+pub struct CastPlaybackInfo {
+    pub item: crate::cast_client::CastMediaItem,
+    pub media_source_id: MediaSourceId,
+    pub session_id: EmbySessionId,
+}
+
 impl EmbyClient {
     pub fn get_playback_info(&self, item_id: &str) -> PlaybackInfo {
         let body = serde_json::json!({
@@ -63,6 +71,81 @@ impl EmbyClient {
             media_source_id: MediaSourceId::new(msid),
             external_subtitle_urls: sub_urls,
         }
+    }
+
+    /// Requests playback info with a Chromecast device profile and resolves
+    /// the media URL/content type the receiver should fetch, per
+    /// cast-media-dispatch's "Emby media URLs are negotiated for the
+    /// receiver" requirement. Deliberately separate from `get_playback_info`
+    /// above (used for local session tracking from player_runtime.rs and
+    /// player_runtime_controller.rs) so this addition touches none of those
+    /// call sites. Also carries the session/media-source identity the
+    /// cast-session-control progress-reporting requirement needs, since
+    /// there is no other caller (yet) whose shape this would disturb.
+    pub fn get_playback_info_for_cast(
+        &self,
+        item_id: &str,
+        is_audio: bool,
+        profile: &crate::cast_dispatch::CastDeviceProfile,
+    ) -> Result<CastPlaybackInfo, String> {
+        let mut body = serde_json::json!({
+            "UserId": self.user_id,
+            "MaxStreamingBitrate": 140000000,
+            "EnableDirectPlay": true,
+            "EnableDirectStream": false,
+            "IsPlayback": true,
+            "DeviceProfile": profile.profile_json,
+        });
+        if let Some(index) = profile.subtitle_stream_index {
+            body["SubtitleStreamIndex"] = serde_json::json!(index);
+        }
+        let mut resp: Value = self
+            .post(&format!(
+                "/Items/{}/PlaybackInfo",
+                crate::encode_path_segment(item_id)
+            ))
+            .send_json(body)
+            .map_err(|e| format!("cast PlaybackInfo failed: {e}"))?
+            .body_mut()
+            .read_json()
+            .map_err(|e| format!("cast PlaybackInfo parse failed: {e}"))?;
+        let media_source = resp["MediaSources"][0].take();
+        if media_source.is_null() {
+            return Err("cast PlaybackInfo returned no media source".to_string());
+        }
+        let media_source_id = media_source["Id"].as_str().unwrap_or(item_id).to_string();
+        let session_id = resp["PlaySessionId"].as_str().unwrap_or("").to_string();
+        let session_id = if session_id.is_empty() {
+            gen_session_id()
+        } else {
+            EmbySessionId::new(session_id)
+        };
+        let direct_play = media_source["SupportsDirectPlay"]
+            .as_bool()
+            .unwrap_or(false);
+        let item = if direct_play {
+            let endpoint = if is_audio { "Audio" } else { "Videos" };
+            crate::cast_client::CastMediaItem {
+                url: format!(
+                    "{}/{}/{}/stream?static=true&api_key={}&MediaSourceId={}",
+                    self.config.server_url, endpoint, item_id, self.token, media_source_id
+                ),
+                content_type: cast_content_type(is_audio, true).to_string(),
+            }
+        } else {
+            let transcoding_url = media_source["TranscodingUrl"].as_str().ok_or_else(|| {
+                "cast PlaybackInfo requires transcoding but returned no TranscodingUrl".to_string()
+            })?;
+            crate::cast_client::CastMediaItem {
+                url: format!("{}{}", self.config.server_url, transcoding_url),
+                content_type: cast_content_type(is_audio, false).to_string(),
+            }
+        };
+        Ok(CastPlaybackInfo {
+            item,
+            media_source_id: MediaSourceId::new(media_source_id),
+            session_id,
+        })
     }
 
     // ── Playlists ────────────────────────────────────────────────────────────
@@ -220,5 +303,17 @@ impl EmbyClient {
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
             .unwrap_or_default())
+    }
+}
+
+/// The content type for a cast-bound Emby media URL. Deterministic from
+/// (is_audio, direct_play) alone because `build_cast_device_profile`
+/// declares exactly one container per media type in one place (mp4/h264/aac
+/// video, mp3 audio; hls video / mp3-http audio for transcoding).
+fn cast_content_type(is_audio: bool, direct_play: bool) -> &'static str {
+    match (is_audio, direct_play) {
+        (true, _) => "audio/mpeg",
+        (false, true) => "video/mp4",
+        (false, false) => "application/vnd.apple.mpegurl",
     }
 }

@@ -15,25 +15,14 @@ impl App {
                 sessions,
                 generation,
             } => {
-                let old_id = self
-                    .sessions
-                    .get(self.sessions_cursor)
-                    .map(|s| s.id.clone());
                 self.sessions = sessions;
                 self.sessions_loading = false;
                 self.last_session_poll = Instant::now();
-                if let Some(id) = old_id {
-                    if let Some(pos) = self.sessions.iter().position(|s| s.id == id) {
-                        self.sessions_cursor = pos;
-                    } else {
-                        self.sessions_cursor = self
-                            .sessions_cursor
-                            .min(self.sessions.len().saturating_sub(1));
-                        if !self.sessions.is_empty() {
-                            log::warn!(target: "sessions", "selected session gone; cursor clamped");
-                        }
-                    }
-                }
+                // Rebuilds the F3 panel's merged Emby+Cast list and
+                // re-locates the panel cursor by identity (8.1); this
+                // supersedes what used to be a `self.sessions`-only
+                // old_id/cursor-clamp here.
+                self.rebuild_panel_targets();
                 // Update connected session state; auto-disconnect if gone
                 if let Some(ref conn_id) = self.connected_session_id.clone() {
                     if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id).cloned() {

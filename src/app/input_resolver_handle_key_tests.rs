@@ -7,6 +7,16 @@ fn ev(code: KeyCode, mods: KeyModifiers) -> KeyEvent {
 }
 
 #[test]
+fn input_snapshot_has_remote_session_true_while_cast_attached() {
+    let mut app = make_app_stub();
+    assert!(!app.input_snapshot().has_remote_session);
+    app.attach_cast("device-1".to_string());
+    assert!(app.input_snapshot().has_remote_session);
+    app.detach_cast();
+    assert!(!app.input_snapshot().has_remote_session);
+}
+
+#[test]
 fn help_f1_closes_help_via_handle_key() {
     let mut app = make_app_stub();
     app.show_help = true;

@@ -15,10 +15,16 @@ pub(super) struct RemotePlaybackTarget {
     pub(super) session_id: String,
 }
 
+/// Reads/writes `app.cast_attachment` directly, the same way
+/// `LocalPlaybackTarget` reads `app.player` -- see `playback_target_cast.rs`.
+#[derive(Clone, Copy)]
+pub(super) struct CastPlaybackTarget;
+
 #[derive(Clone)]
 pub(super) enum PlaybackTarget {
     Local(LocalPlaybackTarget),
     Remote(RemotePlaybackTarget),
+    Cast(CastPlaybackTarget),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

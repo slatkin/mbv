@@ -53,7 +53,14 @@ pub(crate) fn queue_restore_cursor(
 }
 
 impl App {
+    /// Cast takes priority over an attached Emby session: the two are
+    /// mutually exclusive attachment slots (see `remote_slot_state.rs`), but
+    /// this ordering keeps the seam correct even if that invariant is ever
+    /// relaxed.
     pub(super) fn playback_target(&self) -> PlaybackTarget {
+        if self.cast_attachment.is_some() {
+            return PlaybackTarget::Cast(super::CastPlaybackTarget);
+        }
         match self.connected_session_id.clone() {
             Some(session_id) => PlaybackTarget::Remote(RemotePlaybackTarget { session_id }),
             None => PlaybackTarget::Local(LocalPlaybackTarget),
@@ -61,7 +68,7 @@ impl App {
     }
 
     pub(super) fn playback_display_target(&self) -> PlaybackTarget {
-        if self.connected_session_state.is_some() {
+        if self.cast_attachment.is_some() || self.connected_session_state.is_some() {
             self.playback_target()
         } else {
             PlaybackTarget::Local(LocalPlaybackTarget)
@@ -411,6 +418,19 @@ impl App {
             let _ = queue.queue.set_active_slot(selected_slot);
         }
         let all_items = self.queue_for_scope(scope).all_queue_items();
+        // While a cast target is attached, playing a selection dispatches it
+        // to the receiver instead of the local player (cast-session-control
+        // "Attaching to a cast target does not engage the local player").
+        // `submit_queue`/local playback state below is never touched on this
+        // path.
+        if self.is_cast_attached() {
+            self.dispatch_selection_to_cast(all_items, selected_index);
+            self.set_queue_scope(scope);
+            if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
+                self.set_panel_focus(PanelFocus::Queue);
+            }
+            return true;
+        }
         let audio_only = all_items.iter().all(QueueItem::is_audio);
         let submitted =
             self.player
