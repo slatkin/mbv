@@ -69,14 +69,3 @@ bypass filtering. `rtk grep` format flags (`-c/-l/-L/-o/-Z`) run raw.
   Issues/discussions (`slatkin/mbv`) and gists for ad-hoc notes.
 - Commit specs/plans/docs with code; merge applied deltas into `openspec/specs/`
   and archive completed changes.
-
-## Tool routing
-
-- For code discovery or impact, use JCodeMunch `plan_turn`; use JCodeMunch for
-  source retrieval, references, and impact. Honor negative evidence and
-  `budget_warning`; do not use native Read/Grep/Glob/Bash for exploration.
-- Use ast-grep only for a concrete AST predicate, preferably scoped to known
-  files. It does not replace reference or impact analysis. Exclude duplicate
-  `.worktrees/` and `.opencode/` trees from manual/structural scans.
-- After source edits, call JCodeMunch `register_edit` unless a hook reindexed
-  the files.
