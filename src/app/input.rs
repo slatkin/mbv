@@ -241,9 +241,15 @@ impl App {
     /// The currently selected Home pill's persistent identity, or an empty
     /// string when Continue Watching (section 0) is selected.
     pub(super) fn home_section_pref(&self) -> String {
+        // Section 0 is Continue Watching and has no `latest` entry; an empty
+        // string is its restore sentinel. `saturating_sub(1)` would underflow
+        // to 0 and wrongly return `latest[0]`'s key, landing on the next pill.
+        if self.home.section == 0 {
+            return String::new();
+        }
         self.home
             .latest
-            .get(self.home.section.saturating_sub(1))
+            .get(self.home.section - 1)
             .map(|(_, source, _, _)| source.pref_key())
             .unwrap_or_default()
     }

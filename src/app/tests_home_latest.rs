@@ -689,11 +689,35 @@ fn home_latest_source_pref_key_round_trips() {
 
 #[test]
 fn home_section_pref_is_empty_for_continue_watching() {
-    let app = make_app_stub();
-    assert!(app.home.latest.is_empty());
-    let key = app.home_section_pref();
+    let mut app = make_app_stub();
+    // A populated `latest` is what exposes the off-by-one: with section 0,
+    // the old `saturating_sub(1)` returned `latest[0]`'s key (the next pill).
+    app.home.latest = vec![
+        (
+            "Movies".into(),
+            HomeLatestSource::Emby("lib-movies".into()),
+            vec![QueueItem::Emby(Box::new(make_item("Movie one", "Movie")))],
+            0,
+        ),
+        (
+            "Podcasts".into(),
+            HomeLatestSource::Audiobookshelf("abs-pod".into()),
+            vec![QueueItem::Audiobookshelf(abs_episode("1"))],
+            0,
+        ),
+    ];
+
+    // Section 0 (Continue Watching) must persist as the empty sentinel, never
+    // as a `latest` pill's key.
+    app.home.section = 0;
     assert!(
-        key.is_empty(),
+        app.home_section_pref().is_empty(),
         "Continue Watching persists as no section key"
     );
+
+    // A real pill index must still persist its own key.
+    app.home.section = 1;
+    assert_eq!(app.home_section_pref(), "emby:lib-movies");
+    app.home.section = 2;
+    assert_eq!(app.home_section_pref(), "abs:abs-pod");
 }
