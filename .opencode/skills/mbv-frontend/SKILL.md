@@ -6,9 +6,10 @@ description: Ownership rules and workflow for mbv's terminal UI (src/app/render/
 # mbv-frontend
 
 `src/app/render/` is split into four kinds of module. The split is the
-enforcement boundary from `openspec/changes/enforce-mbv-ui-design-system`; the
-term definitions live in `CONTEXT.md` under Presentation and are authoritative
-if this skill and `CONTEXT.md` ever disagree.
+enforcement boundary from the completed change archived at
+`openspec/changes/archive/2026-08-23-enforce-mbv-ui-design-system/`; the term
+definitions live in `CONTEXT.md` under Presentation and are authoritative if this
+skill and `CONTEXT.md` ever disagree.
 
 | Module | Owns | Must not |
 |---|---|---|
@@ -19,10 +20,10 @@ if this skill and `CONTEXT.md` ever disagree.
 
 Dependency order: `screens -> arrangements -> components -> Ratatui`.
 
-Not every surface has been migrated to this yet —
-`openspec/changes/enforce-mbv-ui-design-system/ledger.md` tracks what remains.
-An existing violation in a file you are not touching is not licence to add a
-new one anywhere, including in that same file.
+The visual migration ledger is archived with the completed design-system change.
+The separate, proposed interactive-ownership migration is tracked in
+`docs/architecture/interactive-surface-ledger.md`. Existing violations and legacy
+interactive ownership are not licence to add new ones, including in the same file.
 
 ## Reuse workflow
 
@@ -121,7 +122,7 @@ one you're relying on:
 1. **The compiler** — private theme primitives. A raw `Color` outside
    `theme/` is a compile error. Cannot be bypassed.
 2. **ast-grep**, scoped to `src/app/render/screens/`
-   (`rules/frontend-boundary/*.yml`, run via `ast-grep scan` from repo root) —
+   (`rules/frontend-boundary/*.yml`, run via `rtk ast-grep scan` from repo root) —
    flags `use ratatui::`, `render_widget`/`render_stateful_widget`,
    `Layout::...`, `Rect` construction, and `buffer_mut()` in screen modules.
    This catches the common bypass and nothing subtler. It does **not** catch:

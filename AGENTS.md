@@ -40,10 +40,10 @@ bypass filtering. `rtk grep` format flags (`-c/-l/-L/-o/-Z`) run raw.
 - Screens do not call Ratatui, construct `Rect`s, or compute hit targets.
   A structural or visual override lives in the owning arrangement, component,
   or theme — never as a screen-local painter branch.
-- This boundary is mandatory for new UI work from this PR forward. Existing
-  surfaces migrate individually per
-  `openspec/changes/enforce-mbv-ui-design-system/ledger.md`; an unmigrated
-  surface is not licence to add another one.
+- This boundary is mandatory for new UI work. The completed visual migration ledger
+  is archived with its change; the proposed interactive-ownership migration is
+  tracked separately in `docs/architecture/interactive-surface-ledger.md`. A
+  legacy interactive surface is not licence to violate the render boundary.
 - Workflow, the reuse/override decision table, and the completion checklist:
   `.opencode/skills/mbv-frontend/SKILL.md`.
 

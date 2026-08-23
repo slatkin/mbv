@@ -51,8 +51,9 @@ rendering remains part of the same inventory.
   surface-dependent behavior and preserves obsolete activation and geometry paths.
 - **Ignore the minimum-height guard:** rejected because a left workspace without
   enough height makes selected detail and browser content inaccessible.
-- **Build the complete component framework now:** rejected; that belongs to issue
-  #563 and is not required to establish this placement invariant.
+- **Build the complete interactive component architecture now:** rejected; that is
+  tracked separately by #603 and is not required to establish this placement
+  invariant. Issue #563 established the render-only design-system boundary.
 
 ## Consequences
 
