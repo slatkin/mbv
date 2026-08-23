@@ -376,13 +376,19 @@ shared width breakpoint and minimum-height guard are satisfied; otherwise the
 surface uses Inline hero.
 _Avoid_: separate detail block, split, side-by-side, hero-on-side
 
-**Component**:
+**Render Component**:
 A `src/app/render/components/` unit that takes a typed content model plus a
 `Rect` (and, for Ratatui, a `&mut Buffer`/`Frame`), paints, and computes its
 own geometry within that `Rect`. Components consume semantic theme roles or
 component style policies — never arbitrary `Color`/`Style` passed in from a
 screen.
-_Avoid_: screen, arrangement
+_Avoid_: component (bare), interactive component, screen, arrangement
+
+**Interactive Component**:
+A TuiRealm `AppComponent` under `src/app/components/` that owns one independently
+routed surface's local presentation state, input interpretation, updates,
+rendering, and geometry, and returns typed requests for work outside its authority.
+_Avoid_: component (bare), controller, render component, widget
 
 **Arrangement**:
 A `src/app/render/arrangements/` unit that takes a typed content model plus a

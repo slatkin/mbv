@@ -1,0 +1,70 @@
+---
+status: accepted
+---
+
+# Migrate the Existing TUI Framework to TuiRealm
+
+mbv's interactive TUI is already an implicit framework spread across `App`, the
+run loop, `CONTEXT_STACK`, surface-specific input handlers, render adapters, and
+`AppLayout`. We will replace that framework with TuiRealm rather than design a
+second mbv-specific component framework on top of Ratatui.
+
+Every independently interactive surface will become a TuiRealm `AppComponent`.
+TuiRealm's `Application<ComponentId, Msg, UserEvent>` will own mounted component
+instances, focus, subscriptions, event delivery, and component rendering. Flat
+component IDs are registry addresses; mbv derives parent, visibility, render
+order, and focus relationships from typed IDs and parent state.
+
+An Interactive Component owns its private presentation state, event
+interpretation, local updates, rendering, viewport, and render-derived hit
+geometry. It emits a `Msg` only for work crossing its authority boundary. Runtime
+completions enter through TuiRealm `UserEvent`s or minimal shell adapters.
+
+The application Model remains the shell. It owns terminal lifecycle, Remote
+Service and worker lifecycle, Player and canonical queue authority, protocols,
+persistence, and external effects. Interactive Components do not receive `App`,
+Service clients, credentials, `Config`, `PlayerProxy`, protocol objects, channels,
+or shared integration locks.
+
+The existing render system remains the visual substrate. Arrangements provide a
+child's outer area; its TuiRealm `Component::view` implementation owns internal
+placement and delegates painting to existing Render Components. Adopting TuiRealm
+does not require replacing those painters with `tui-realm-stdlib` widgets.
+
+This decision does not add a parallel custom `Component` trait, registry,
+dispatcher, focus framework, generic effect scheduler, Flux store architecture,
+or separate UI crate. TuiRealm supplies the application framework; mbv adds only
+domain-specific IDs, messages, user events, presentation models, and shell-effect
+handling.
+
+## Completion
+
+Internal checkpoints and temporary adapters may organize the conversion, but a
+mixed TuiRealm/legacy architecture is not a completed or mergeable endpoint. The
+migration is complete only when every interactive-surface ledger row uses
+TuiRealm, component-local state and handlers have left `App`, `CONTEXT_STACK` and
+`AppLayout` are removed, and no parallel legacy interaction framework remains.
+
+Existing input precedence, responsive behavior, images-disabled behavior, render
+characterization, and process-boundary behavior remain regression contracts.
+Search is not a proof of concept, and its existing correctness bugs are separate
+from this framework migration.
+
+## Considered Options
+
+- Continue extracting bespoke hierarchical components: rejected because it would
+  create and maintain another application framework.
+- Adopt Flux in addition to TuiRealm: rejected because TuiRealm already provides
+  one-way `Event -> Msg -> Model` coordination, while another store and dispatcher
+  could recreate global `App` state under new names.
+- Keep the current framework and only reorganize files: rejected because ownership,
+  event delivery, focus, effects, rendering, and geometry would remain bespoke and
+  globally coupled.
+
+## Consequences
+
+The implementation design must map ADR 0002 input precedence, simultaneous mouse
+targets, shell/runtime completions, and component-owned geometry onto TuiRealm
+without recreating replacement framework machinery. TuiRealm 4.1 matches mbv's
+Ratatui 0.30 and Crossterm 0.29 dependencies but requires Rust 1.88; mbv must make
+that toolchain requirement explicit before implementation.

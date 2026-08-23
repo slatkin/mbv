@@ -1,40 +1,35 @@
-# Interactive TUI Component Architecture Map
+# TuiRealm Migration Architecture Map
 
-This document maps mbv's current interactive architecture, the accepted
-surface-component target, the constraints inherited from existing decisions,
-and the questions that must be resolved before the first proof of concept.
-Issue #603 is the umbrella tracker. This map is architecture discovery, not an
-implementation plan.
+This document maps mbv's current interactive architecture, the accepted TuiRealm
+target, the constraints inherited from existing decisions, and the integration
+questions that must be resolved before implementation. Issue #603 is the umbrella
+tracker. This map is architecture discovery, not an implementation plan.
 
 ## Status
 
 - Current architecture: verified from `main` by static inspection on
   2026-08-23.
-- Target architecture: accepted in ADR 0022.
-- Migration policy: accepted in ADR 0023.
+- Target architecture and migration policy: accepted in ADR 0022.
+- Framework target: TuiRealm 4.1 using Ratatui 0.30 and Crossterm 0.29.
 - Authoritative interactive inventory:
   `docs/architecture/interactive-surface-ledger.md`.
 - Phase 0 architecture map and ledger: reviewed 2026-08-23.
-- First implementation candidate: Search sidebar, after its unresolved contracts
-  are decided in an OpenSpec change.
+- No implementation is authorized until the TuiRealm input, runtime-event,
+  hierarchy, and geometry integration contracts are accepted.
 - Existing visual design-system rules remain authoritative unless a later
   accepted spec or ADR explicitly supersedes them.
 
 ## External Reference
 
-Ratatui documents three optional application patterns:
+TuiRealm is the selected application framework:
 
-- Component Architecture:
-  <https://ratatui.rs/concepts/application-patterns/component-architecture/>
-- The Elm Architecture:
-  <https://ratatui.rs/concepts/application-patterns/the-elm-architecture/>
-- Flux Architecture:
-  <https://ratatui.rs/concepts/application-patterns/flux-architecture/>
+- TuiRealm: <https://github.com/veeso/tui-realm>
 
-Ratatui's Component Architecture co-locates component state, event handling,
-updates, and rendering. mbv currently uses the word `Component` for a narrower
-render painter (`CONTEXT.md:379-385`). The terminology collision is unresolved;
-it must be settled in `CONTEXT.md` before implementation.
+A TuiRealm `AppComponent` co-locates component state, event handling, updates, and
+rendering. mbv calls that unit an `Interactive Component` rooted at
+`src/app/components/`; the narrower painter is a `Render Component` rooted at
+`src/app/render/components/`. Bare `component` is not canonical
+(`CONTEXT.md:379-392`).
 
 ## Current Architecture
 
@@ -227,19 +222,19 @@ projection is acceptable; its lock and `PlayerProxy` are not.
 
 ```text
 terminal event
-  -> parent priority routing
-  -> local component message
-  -> component update
-  -> optional typed output
-  -> parent or shell policy
+  -> TuiRealm active AppComponent
+  -> private state update
+  -> optional Msg
+  -> TuiRealm Model update
+  -> focus/mount change or shell policy
   -> existing Service/player/persistence effect
-  -> typed completion
-  -> routed component message
+  -> UserEvent completion
+  -> subscribed AppComponent
 ```
 
-Whether repeated shell effects later justify a shared effect enum/executor is
-unresolved. A generic scheduler, dependency-injection framework, or whole-loop
-rewrite is not a prerequisite for the first proof.
+TuiRealm supplies the registry, focus, subscriptions, event delivery, messages, and
+render entry point. A second component trait, dispatcher, focus framework, generic
+effect scheduler, or Flux store is outside the target.
 
 ## Accepted Interactive Hierarchy
 
@@ -291,8 +286,8 @@ All rows are `legacy` until an implementation change proves otherwise.
 | Audiobookshelf podcasts | Show/episode workspace and selector targets | High |
 | Audiobookshelf books | Browser/chapter workspace and replacement geometry | High |
 | Feeds | Grouping, selector, list, and inline hero | Medium |
-| Global Search sidebar | Keyboard, debounce, async result, viewport; first proof | Medium |
-| Inline library Search | `LibSearch` inside one Emby browser; not part of the first proof | Medium |
+| Global Search sidebar | Keyboard, debounce, async result, viewport; ordinary conversion row | Medium |
+| Inline library Search | `LibSearch` inside one Emby browser; distinct conversion row | Medium |
 | Settings | Destinations, forms, Service setup, nested popups | High |
 | Sessions | Merged Emby/Cast targets and fixed-stride mouse geometry | Medium |
 | Playlists | Variable row geometry duplicated in mouse path | High |
@@ -307,11 +302,11 @@ characterization covers the render surfaces listed in the archived visual ledger
 That coverage is a regression asset, not proof of interactive ownership. Many tests
 still construct `App`.
 
-## Search: Candidate First Proof
+## Search: Rejected First Proof
 
-The first proof is only the global Search sidebar opened by Ctrl+/. Inline library
-Search (`LibSearch`, routed immediately below the global sidebar in
-`CONTEXT_STACK`) remains a separate legacy child of the Emby browser.
+The global Search sidebar is not the first proof and no Search component migration is
+authorized. Inline library Search remains a separate legacy child of the Emby
+browser.
 
 ### Current ownership map
 
@@ -375,22 +370,27 @@ Existing behavior risks discovered during mapping:
 These are existing risks, not authorized behavior changes in an architecture-only
 migration. Each needs an explicit decision or separate bug scope.
 
-### Accepted proof boundary
+### Rejected proof boundary
 
-Search will own its presentation state, local messages, deterministic
-updates, rendering, debounce policy, and viewport state. `UiRoot` would own child
-presence rather than an internal `open` boolean. Search would return typed outputs
-for request, activation, and dismissal. The shell would retain the Service client,
-thread/channel execution, and navigation application.
+This boundary was explored but is not an implementation authorization. Defining it
+before the common component contract would let Search establish another bespoke
+interface that later surfaces might not share.
 
-The proof is complete only when Search can be constructed, updated, and rendered
-to `TestBackend` without constructing or importing `App`; old state is removed
-rather than mirrored; central precedence is preserved; and existing Search behavior
-tests remain green.
+Inside `src/app/components/search.rs`, the local `Message` enum is private and the
+shell-facing `Output` enum is public. `Output` contains only requests that cross
+Search's authority boundary; there is no global UI message/effect enum and names are
+not redundantly prefixed with `Search` inside the Search module.
 
-The timer input, request identity, viewport contract, module path, and exact shell
-output execution remain unresolved and must be decided in the Search OpenSpec
-design before implementation.
+Search owns the 300 ms debounce policy and its pending deadline. The shell owns the
+clock: it supplies `Instant`, consults `next_deadline()`, and calls `on_time(now)`.
+Only Search decides whether the deadline is current and emits `Output::Search` when
+due; no generic scheduling output or shell-owned Search deadline is introduced.
+
+The App-free and behavior requirements below remain useful evidence for any later
+Search migration, but they do not define the common standard.
+
+Search-specific timer, request identity, viewport, and output questions are deferred.
+Do not create a Search OpenSpec until the common component contract is accepted.
 
 ### Required render seam
 
@@ -436,31 +436,36 @@ command is `rtk cargo nextest run -p mbv search_sidebar`. Together they must cov
 
 Prefer extending durable existing tests; do not create one test per message branch.
 
-## Migration Ratchet
+## Complete Conversion Gate
 
 The ledger at `docs/architecture/interactive-surface-ledger.md` is stable and
 non-archived. It has one row per independently interactive surface, not per painter
-or file. Durable states are only `legacy` and `migrated`; implementation commits may
-use temporary adapters, but no half-migrated state is accepted as an endpoint.
+or file. Row states may expose internal conversion progress, but a mixed
+TuiRealm/legacy framework is not a completed or mergeable endpoint.
 
 - New interactive surfaces conform from creation.
-- Existing surfaces migrate through explicit, behavior-preserving changes.
+- Existing surfaces migrate within one complete-conversion OpenSpec using explicit,
+  behavior-preserving checkpoints.
 - Narrow fixes and shared visual changes may touch legacy surfaces without forcing
   a full migration.
 - A legacy change may not add a new surface-specific `App` state cluster, new
   `impl App` interaction subsystem, or duplicated geometry without an explicit
   exception.
-- A migrated surface may not regain `App`-owned local state, input, or rendering.
+- A converted surface may not regain `App`-owned local state, input, or rendering.
 - A migration removes old state; it does not synchronize mirrors.
 - Each migration preserves existing input precedence, responsive behavior, images-
   disabled behavior, and characterization coverage.
 
+Completion additionally requires every interactive surface to implement TuiRealm's
+`AppComponent`, with `CONTEXT_STACK`, `AppLayout`, temporary state mirrors, and the
+legacy interaction framework removed.
+
 ## Enforcement
 
-Compiler enforcement should use private component state and narrow typed APIs.
-Migrated component paths must not accept `&mut App`.
+Compiler enforcement should use TuiRealm's `AppComponent` contract, private state,
+and narrow typed APIs. Interactive Component paths must not accept `&mut App`.
 
-Path-scoped ast-grep rules should reject, for migrated component modules:
+Path-scoped ast-grep rules should reject, for Interactive Component modules:
 
 - `impl App`;
 - importing or using `App` as a type;
@@ -477,16 +482,13 @@ are a ratchet, not proof; review still owns state-authority and duplicated-geome
 questions.
 
 Rule files have the fixed location `rules/interactive-component-boundary/*.yml` and
-that directory must be added to `sgconfig.yml`. Their `files` matcher remains
-unresolved until the interactive-component module root is approved. The required
-local command is `rtk ast-grep scan`; rule fixtures must demonstrate one accepted
-and one rejected case per rule.
+that directory must be added to `sgconfig.yml`. Their `files` matcher is
+`src/app/components/**/*.rs`. The required local command is `rtk ast-grep scan`;
+rule fixtures must demonstrate one accepted and one rejected case per rule.
 
-The Search change must add `.github/workflows/architecture-boundaries.yml`, with a
-PR/push job named `interactive-component-boundary` that installs the pinned ast-grep
-CLI version `0.44.1` and runs `ast-grep scan`. Search cannot be marked migrated until
-that job, `rtk cargo nextest run -p mbv search_sidebar`, and
-`rtk cargo check -p mbv` pass.
+The complete-conversion change must add `.github/workflows/architecture-boundaries.yml`,
+with a PR/push job named `interactive-component-boundary` that installs the pinned
+ast-grep CLI version `0.44.1` and runs `ast-grep scan`.
 
 Any exception to the no-new-debt or dependency rules requires maintainer approval
 recorded in issue #603 and linked from the affected ledger row. Widening an ignore
@@ -519,28 +521,27 @@ not duplicate every message branch or replace durable behavior tests.
 - `AppLayout` is the current completed-frame geometry authority.
 - Search crosses state, input, update, async, navigation, and rendering boundaries.
 
-### Accepted by ADR 0022 and ADR 0023
+### Accepted by ADR 0022
 
-- Hierarchical interactive surface components.
+- TuiRealm as the application framework for every interactive surface.
+- TuiRealm `AppComponent` as the Interactive Component contract.
 - Parent-owned presence/focus and child-local messages.
-- Typed outputs for parent/shell work.
+- TuiRealm `Msg` outputs for parent/shell work and `UserEvent` completions.
 - Vertical surface modules, split only when size or cohesion requires it.
 - Shell, Service, playback, queue, worker, and persistence authority remain outside.
-- Explicit ledger migration with no mirrored-state endpoint.
-- Search as the first proof only after architecture review.
+- One complete conversion with no mirrored-state or mixed-framework endpoint.
+- No parallel custom component, dispatcher, focus, effect, or Flux framework.
 
-### Unresolved before Search implementation
+### Unresolved before implementation
 
-1. Canonical terminology and module root for interactive components (which also
-   determines the exact static-rule glob).
-2. Exact local message and typed-output vocabulary.
-3. Debounce timer/deadline contract.
-4. Same-query stale-response generation policy.
-5. Render-derived viewport contract.
-6. Shell adapter versus shared effect enum/executor.
-7. Whether and how the current hit-map contract is ever superseded.
-8. Which mouse-driven surface is the second proof.
-9. Whether real interfaces justify a common trait, nested TEA, or a UI crate.
+1. Exact `ComponentId`, `Msg`, and `UserEvent` shapes.
+2. Parent/child visibility, mount, render-order, and focus calculations.
+3. ADR 0002 key precedence using TuiRealm focus and subscriptions.
+4. Simultaneously visible mouse targets and overlay blocking.
+5. Component-owned geometry replacing `AppLayout`.
+6. Runtime receiver mapping to TuiRealm ports or minimal shell adapters.
+7. Rust 1.88/MSRV adoption for TuiRealm 4.1.
+8. Enforcement and tests that reject a parallel legacy framework.
 
 No item in this unresolved list may be silently decided by an implementation agent.
 
@@ -563,17 +564,14 @@ No item in this unresolved list may be silently decided by an implementation age
    root, Queue, and pills screen modules. Do not present a clean scan as current
    fact or widen ignores to hide them.
 
-## Phases After Architecture Review
+## Work After Architecture Review
 
-1. Create an OpenSpec change for governance plus the Search proof.
-2. Resolve the Search-specific open questions in its design before code.
-3. Migrate Search behavior-preservingly and verify it directly without `App`.
-4. Review the resulting interface and migrate one structurally different,
-   mouse-driven surface.
-5. Decide from two real components whether a common trait, shared effect executor,
-   generic geometry contract, nested TEA, or separate UI crate is justified.
-6. Establish root/overlay routing and continue explicit ledger migrations through
-   Queue, Library children, and remaining overlays.
+1. Resolve the TuiRealm integration questions above.
+2. Create one complete-conversion OpenSpec with internal checkpoints.
+3. Convert the shell, root hierarchy, every ledger surface, overlays, and geometry.
+4. Remove temporary adapters, `CONTEXT_STACK`, `AppLayout`, and component-local
+   `App` state.
+5. Verify the full behavior and architecture gate before declaring completion.
 
-The umbrella issue coordinates these phases. Each implementation slice gets its own
-OpenSpec change and reviewable acceptance contract.
+The umbrella issue coordinates this work. Internal checkpoints may remain
+reviewable, but they do not authorize a permanently mixed framework.

@@ -21,6 +21,13 @@ playback belongs to the terminal, Local daemon, or packaged `mbvd`.
 - `crates/mbvd/`: separately packaged daemon, persistent state, and sockets.
 - Change source-of-truth types before callers.
 
+## Planning and Documenting
+
+- When planning changes, engage the user with design questions. Do not dump unnecessary
+information about the plan into the session window. Detail should be captured in markdown
+documents. No one is reading ephemeral screen dumps, ever and they are not accessible to
+you are future agents unless you capture them in writing.
+
 ## Commands
 
 Prefix every command in a chain with `rtk`; use `rtk proxy <cmd>` only to

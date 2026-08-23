@@ -1,12 +1,13 @@
 # Interactive Surface Migration Ledger
 
 This is the stable inventory for issue #603. It tracks interactive ownership,
-not the completed render-system migration. The target architecture is accepted in
-ADR 0022 and the migration policy in ADR 0023.
+not the completed render-system migration. The TuiRealm target and complete-
+conversion policy are accepted in ADR 0022.
 
-ADRs 0022 and 0023, this ledger, and the architecture map were reviewed on
-2026-08-23. Every row is currently `legacy`; Search implementation still requires
-the contracts listed in the architecture map to be decided in an OpenSpec change.
+The architecture map and ledger were reviewed on 2026-08-23. The earlier bespoke
+component and incremental-migration ADRs were replaced when the project was
+reframed as migration of the existing TUI framework to TuiRealm. Every row remains
+`legacy`; implementation waits for the TuiRealm integration design.
 
 ## States
 
@@ -15,8 +16,9 @@ the contracts listed in the architecture map to be decided in an OpenSpec change
 - `migrated`: one component owns its approved local boundary; old `App` fields and
   handlers are removed rather than mirrored; static and behavior checks pass.
 
-No other committed state is valid. Temporary adapters may exist inside a migration
-change but do not justify marking a row migrated.
+No other committed state is valid. Temporary adapters may exist inside the
+complete-conversion change, but a mixed TuiRealm/legacy framework is not a completed
+or mergeable endpoint even when individual rows are marked `migrated`.
 
 ## Update Rules
 
@@ -48,7 +50,7 @@ change but do not justify marking a row migrated.
 | Library | Audiobookshelf book browser | legacy | ABS book state/actions/renderers | Browser/chapter workspace |
 | Library | Feeds | legacy | feed state/actions/renderers | Grouping, selector and inline hero |
 | Root | Overlay stack | legacy | `App` options/flags and `CONTEXT_STACK` | Parent owns overlay presence and priority |
-| Overlay stack | Global Search sidebar | legacy | `SearchSidebar` plus `App` input/debounce/worker/render paths | First proof; excludes inline Search |
+| Overlay stack | Global Search sidebar | legacy | `SearchSidebar` plus `App` input/debounce/worker/render paths | Not an authorized proof; excludes inline Search |
 | Overlay stack | Settings sidebar and setup forms | legacy | `App` settings/forms and settings input/render paths | Service effects remain shell-owned |
 | Settings | Multiselect popup | legacy | `App.multiselect_popup` and modal handlers | Nested Settings child |
 | Settings | Library-routes popup | legacy | `App.library_routes_popup` and modal handlers | Nested Settings child |
