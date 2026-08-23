@@ -37,7 +37,7 @@ pub(in crate::app::render) fn render_home_list_rows(
     let list_w = crate::app::render::content_width(list_area.width, needs_scrollbar) as u16;
     let scroll_y = if hero_rows > 0 {
         super::hero::inline_detail_flow(
-            cursor_row as usize,
+            cursor_row,
             hero_rows,
             list_area.height,
             app.home.home_scroll,
@@ -182,7 +182,7 @@ pub(in crate::app::render) fn render_home_list_rows(
     layout.home.hitmap = hitmap;
 
     if hero_rows > 0 {
-        let detail_row = cursor_row as usize;
+        let detail_row = cursor_row;
         if detail_row >= scroll_y as usize && detail_row < display_content_h as usize {
             layout.hero_area = Rect {
                 x: list_area.x,

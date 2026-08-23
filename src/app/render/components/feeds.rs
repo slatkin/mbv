@@ -249,9 +249,11 @@ impl App {
         let hero_rows = if wide {
             hero_rows
         } else {
-            (hero_rows >= HERO_BLOCK_EXTRA_ROWS && hero_rows < list_area.height)
-                .then_some(hero_rows)
-                .unwrap_or(0)
+            if hero_rows >= HERO_BLOCK_EXTRA_ROWS && hero_rows < list_area.height {
+                hero_rows
+            } else {
+                0
+            }
         };
         let visible = list_area.height as usize;
         let packed_cursor_row = packed
@@ -279,12 +281,7 @@ impl App {
         let visible_count = total_display.saturating_sub(scroll).min(visible);
         let mut row_map: Vec<Option<usize>> = Vec::with_capacity(list_area.height as usize);
         let entries = self.feed_tab.visible_entries();
-        let mut row_y = list_area.y;
-
-        for display_row in (scroll..total_display).take(visible) {
-            if row_y >= list_area.y + list_area.height {
-                break;
-            }
+        for (row_y, display_row) in (list_area.y..).zip((scroll..total_display).take(visible)) {
             match inline_display_row(packed.len(), packed_cursor_row, hero_rows, display_row)
                 .expect("visible row is within the replacement flow")
             {
@@ -347,7 +344,6 @@ impl App {
                     }
                 },
             }
-            row_y += 1;
         }
         row_map.resize(list_area.height as usize, None);
         layout.left_row_map = row_map;

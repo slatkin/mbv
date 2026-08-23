@@ -192,7 +192,8 @@ fn audiobook_podcast_buffer_characterization_covers_default_focused_narrow_and_s
         "selected show missing in wide output"
     );
 
-    for (width, height) in [(40, 20)] {
+    {
+        let (width, height) = (40, 20);
         let mut app = audiobookshelf_app();
         let mut layout = LayoutMain::default();
         let output = render_library_to_string_sized(&mut app, &mut layout, width, height);

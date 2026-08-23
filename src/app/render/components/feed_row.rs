@@ -58,9 +58,11 @@ pub(in crate::app::render) fn render_feed_entry_cell(
     } else {
         Span::styled(" ", Style::default().bg(bg))
     });
-    let title = show_title
-        .then(|| trunc_str(&entry.title, title_w))
-        .unwrap_or_default();
+    let title = if show_title {
+        trunc_str(&entry.title, title_w)
+    } else {
+        Default::default()
+    };
     spans.push(Span::styled(
         format!(" {title}"),
         Style::default().fg(fg).bg(bg).add_modifier(if selected {

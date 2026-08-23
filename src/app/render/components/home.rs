@@ -235,7 +235,12 @@ impl App {
                 .saturating_sub(SELECTED_BLOCK_SIDE_PADDING * 2);
 
             enum HeroContentDims {
-                Emby(mbv_core::api::EmbyItem, u16, KeepWatchingHeroLayout, u16),
+                Emby(
+                    Box<mbv_core::api::EmbyItem>,
+                    u16,
+                    KeepWatchingHeroLayout,
+                    u16,
+                ),
                 // Audiobookshelf: image beside the metadata column, same
                 // shape as `Emby` -- the standard inline arrangement.
                 GenericBeside(QueueItem, u16, KeepWatchingHeroLayout, u16),
@@ -278,7 +283,7 @@ impl App {
                         if meta_layout.height < 4 {
                             HeroContentDims::None
                         } else {
-                            HeroContentDims::Emby(item, img_w, meta_layout, image_rows)
+                            HeroContentDims::Emby(Box::new(item), img_w, meta_layout, image_rows)
                         }
                     }
                     None => current_item
@@ -377,7 +382,7 @@ impl App {
                             image_rows,
                         );
                     Some(HeroData::Emby(
-                        Box::new(item),
+                        item,
                         meta_area,
                         hero_content,
                         img_area,

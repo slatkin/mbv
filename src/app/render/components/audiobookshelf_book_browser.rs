@@ -153,9 +153,11 @@ impl App {
         let cursor = state.cursor();
         let count = bucket.end - bucket.start;
         let cursor_pos = cursor.saturating_sub(bucket.start).min(count - 1);
-        let detail_rows = (detail_rows >= HERO_BLOCK_EXTRA_ROWS + 1)
-            .then_some(detail_rows)
-            .unwrap_or(0);
+        let detail_rows = if detail_rows > HERO_BLOCK_EXTRA_ROWS {
+            detail_rows
+        } else {
+            0
+        };
         let flow = (detail_rows > 0)
             .then(|| {
                 crate::app::render::components::hero::inline_detail_flow(

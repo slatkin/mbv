@@ -153,9 +153,11 @@ pub(in crate::app::render) fn render_home_latest_row(
     let title_col_w = avail.saturating_sub(META_COL_W + META_INNER_PAD * 2);
 
     let mut spans: Vec<Span> = vec![Span::styled(
-        show_title
-            .then(|| trunc_str(&item.display_name(), title_col_w))
-            .unwrap_or_default(),
+        if show_title {
+            trunc_str(&item.display_name(), title_col_w)
+        } else {
+            Default::default()
+        },
         Style::default().fg(home_title_color(selected, focused)),
     )];
     let actual_title_w: usize = spans.iter().map(|s| s.content.width()).sum();

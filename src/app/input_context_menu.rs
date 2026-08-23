@@ -7,9 +7,7 @@ impl App {
         &mut self,
         key: crossterm::event::KeyEvent,
     ) -> Option<bool> {
-        let Some(menu) = self.context_menu.as_mut() else {
-            return None;
-        };
+        let menu = self.context_menu.as_mut()?;
 
         match key.code {
             crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Down => {

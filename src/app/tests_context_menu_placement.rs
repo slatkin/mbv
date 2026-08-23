@@ -87,6 +87,10 @@ fn context_menu_entries_render_below_the_reserved_top_row() {
     terminal.draw(|f| app.render(f)).unwrap();
 
     let rect = app.layout.context_menu_rect.unwrap();
-    let first_label = terminal.backend().buffer().get(rect.x + 1, rect.y + 1);
+    let first_label = terminal
+        .backend()
+        .buffer()
+        .cell((rect.x + 1, rect.y + 1))
+        .unwrap();
     assert_eq!(first_label.symbol(), "P");
 }

@@ -282,10 +282,13 @@ impl App {
             0
         };
         if !use_shared_replacement_plan {
-            inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
-                && inline_hero_rows < content_area.height)
-                .then_some(inline_hero_rows)
-                .unwrap_or(0);
+            inline_hero_rows = if inline_hero_rows > HERO_BLOCK_EXTRA_ROWS
+                && inline_hero_rows < content_area.height
+            {
+                inline_hero_rows
+            } else {
+                0
+            };
         }
         // Browser-level pills and search controls stay outside the selected
         // replacement: letter-range pills for large non-music libraries, or
@@ -311,10 +314,13 @@ impl App {
             (Rect::default(), content_area)
         };
         if !use_shared_replacement_plan {
-            inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
-                && inline_hero_rows < list_area.height)
-                .then_some(inline_hero_rows)
-                .unwrap_or(0);
+            inline_hero_rows = if inline_hero_rows > HERO_BLOCK_EXTRA_ROWS
+                && inline_hero_rows < list_area.height
+            {
+                inline_hero_rows
+            } else {
+                0
+            };
         }
         if show_letter_pills && !search_active {
             let lib_idx = self.tab.emby_library_index().unwrap();

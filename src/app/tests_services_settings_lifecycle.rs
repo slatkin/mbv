@@ -60,8 +60,10 @@ fn auth_rejection_clears_player_even_when_secret_deletion_fails() {
 #[test]
 fn auth_rejection_isolated_cleanup_preserves_setup_owned_content_and_other_secrets() {
     let _guard = TestStateDirGuard::new();
-    let mut config = crate::config::Config::default();
-    config.emby_setup = Some(EmbySetup::new("https://emby.example", "user-id"));
+    let mut config = crate::config::Config {
+        emby_setup: Some(EmbySetup::new("https://emby.example", "user-id")),
+        ..Default::default()
+    };
     config.feeds.push(FeedSubscription {
         name: "News".into(),
         url: "https://feed.example/rss".into(),
@@ -117,8 +119,10 @@ fn auth_rejection_isolated_cleanup_preserves_setup_owned_content_and_other_secre
 #[test]
 fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_and_content() {
     let _guard = TestStateDirGuard::new();
-    let mut config = crate::config::Config::default();
-    config.emby_setup = Some(EmbySetup::new("https://emby.example", "user-id"));
+    let config = crate::config::Config {
+        emby_setup: Some(EmbySetup::new("https://emby.example", "user-id")),
+        ..Default::default()
+    };
     let mut app = tests::make_app_stub();
     *app.config.lock().unwrap() = config.clone();
     let mut client = mbv_core::api::EmbyClient::new(config.clone());
@@ -194,8 +198,10 @@ fn startup_worker_disconnect_without_secret_requires_authentication() {
 #[test]
 fn retry_failure_completion_preserves_existing_runtime_and_advances_generation() {
     let _guard = TestStateDirGuard::new();
-    let mut config = crate::config::Config::default();
-    config.emby_setup = Some(EmbySetup::new("https://emby.example", "user-id"));
+    let config = crate::config::Config {
+        emby_setup: Some(EmbySetup::new("https://emby.example", "user-id")),
+        ..Default::default()
+    };
     let mut app = tests::make_app_stub();
     *app.config.lock().unwrap() = config.clone();
     let mut client = mbv_core::api::EmbyClient::new(config.clone());
@@ -240,8 +246,10 @@ fn retry_failure_completion_preserves_existing_runtime_and_advances_generation()
 fn stale_auth_completion_cannot_delete_new_secret_or_change_ready_runtime() {
     let _guard = TestStateDirGuard::new();
     let mut app = tests::make_app_stub();
-    let mut config = crate::config::Config::default();
-    config.emby_setup = Some(EmbySetup::new("https://emby.example", "user-id"));
+    let config = crate::config::Config {
+        emby_setup: Some(EmbySetup::new("https://emby.example", "user-id")),
+        ..Default::default()
+    };
     *app.config.lock().unwrap() = config;
     let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
     client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
@@ -323,8 +331,10 @@ fn ready_emby_repair_opens_the_transactional_setup_form() {
 fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     let _guard = TestStateDirGuard::new();
     let old_setup = EmbySetup::new("https://old.example", "old-user");
-    let mut config = crate::config::Config::default();
-    config.emby_setup = Some(old_setup.clone());
+    let config = crate::config::Config {
+        emby_setup: Some(old_setup.clone()),
+        ..Default::default()
+    };
     let mut app = tests::make_app_stub();
     *app.config.lock().unwrap() = config.clone();
     app.emby_runtime.state = ServiceState::Ready;
