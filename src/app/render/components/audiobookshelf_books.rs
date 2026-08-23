@@ -4,8 +4,8 @@ use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::hero::{
-    paint_hero_content, wrap_overview_lines, HeroContent, HeroImage, HeroLine, ImageTop,
-    HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
+    inline_hero_text_width, paint_hero_content, wrap_overview_lines, HeroContent, HeroImage,
+    HeroLine, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::render::RENDER_FILTER;
@@ -35,9 +35,7 @@ pub(in crate::app::render) struct BookHeroPlan {
 
 impl BookHeroPlan {
     pub(in crate::app::render) fn constrained_to_height(&self, height: u16) -> Self {
-        let image_height = self
-            .image_height
-            .min(height.saturating_sub(HERO_TITLE_ROWS));
+        let image_height = self.image_height.min(height.saturating_sub(1));
         Self {
             image_height,
             content_rows: self.content_rows.min(height),
@@ -295,17 +293,21 @@ impl App {
             .filter(|d| !d.is_empty())
             .map(crate::app::ui_util::trunc_overview)
             .unwrap_or_default();
+        let meta_rows = 2;
+        let author_rows = (!book.author_display.as_deref().unwrap_or("").is_empty()) as u16;
+        let overview_start = HERO_TITLE_ROWS + meta_rows + author_rows;
         let overview_rows = wrap_overview_lines(&overview, |line| {
-            if line < image_height as usize {
-                width.saturating_sub(image_width) as usize
-            } else {
-                width as usize
-            }
+            inline_hero_text_width(
+                width,
+                image_width,
+                image_height,
+                overview_start + line as u16,
+            ) as usize
         })
         .len() as u16;
-        let author_rows = (!book.author_display.as_deref().unwrap_or("").is_empty()) as u16;
-        let content_rows =
-            (HERO_TITLE_ROWS + image_height).max(HERO_TITLE_ROWS + 2 + author_rows + overview_rows);
+        let content_rows = image_height
+            .saturating_add(1)
+            .max(HERO_TITLE_ROWS + meta_rows + author_rows + overview_rows);
         BookHeroPlan {
             image_key,
             image_width,
@@ -399,22 +401,23 @@ impl App {
         let image_width = plan.image_width;
         let image_height = plan.image_height;
         let placeholder = plan.placeholder;
-        let title_rows = HERO_TITLE_ROWS;
-        let image_start_row = area.y + title_rows;
-        let image_end_row = image_start_row + image_height;
+        let meta_rows = if meta_parts.is_empty() { 0 } else { 2 };
+        let overview_start_row = area.y + HERO_TITLE_ROWS + meta_rows + (!author.is_empty()) as u16;
         let text_width = |row: u16| {
-            if image_height > 0 && row >= image_start_row && row < image_end_row {
-                area.width.saturating_sub(image_width) as usize
-            } else {
-                area.width as usize
-            }
+            inline_hero_text_width(
+                area.width,
+                image_width,
+                image_height,
+                row.saturating_sub(area.y),
+            ) as usize
         };
         let mut lines = Vec::new();
         if !author.is_empty() {
             lines.push(HeroLine::Plain(author.to_string()));
         }
-        let overview_lines =
-            wrap_overview_lines(&overview, |line| text_width(image_start_row + line as u16));
+        let overview_lines = wrap_overview_lines(&overview, |line| {
+            text_width(overview_start_row + line as u16)
+        });
         lines.extend(overview_lines.into_iter().map(HeroLine::Plain));
         let meta = (!meta_parts.is_empty()).then(|| meta_parts.join("  "));
         let content = HeroContent {
@@ -427,7 +430,6 @@ impl App {
             image: (image_height > 0).then_some(HeroImage {
                 actual_w: image_width,
                 height: image_height,
-                top: ImageTop::AfterTitle,
             }),
         };
         let result = paint_hero_content(f, area, &content, focused);

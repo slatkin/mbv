@@ -267,21 +267,24 @@ pub(in crate::app::render) enum HeroLine {
     Prefixed { label: &'static str, value: String },
 }
 
-/// Where the `Hero` component's right-aligned image starts, relative to
-/// `area`. The two inline content kinds place it differently: the
-/// movie hero pins the image to `area`'s own top row, sharing that row with
-/// the title when one is shown; the Series hero starts its image on the row
-/// *after* the title, one row lower. This is an existing, preserved
-/// difference between the two -- not something this component unifies.
-pub(in crate::app::render) enum ImageTop {
-    AreaTop,
-    AfterTitle,
-}
-
 pub(in crate::app::render) struct HeroImage {
     pub actual_w: u16,
     pub height: u16,
-    pub top: ImageTop,
+}
+
+/// Inline hero images are top-right with one cell of text clearance on the
+/// left and bottom.
+pub(in crate::app::render) fn inline_hero_text_width(
+    area_width: u16,
+    image_width: u16,
+    image_height: u16,
+    row_from_top: u16,
+) -> u16 {
+    if image_height > 0 && row_from_top <= image_height {
+        area_width.saturating_sub(image_width.saturating_add(1))
+    } else {
+        area_width
+    }
 }
 
 /// Data the `Hero` component paints, already resolved by the screen: no
@@ -319,10 +322,7 @@ pub(in crate::app::render) struct HeroPaintResult {
 
 /// Paints the `Hero` component's text content -- title row, meta line,
 /// "Playing" indicator, and overview/detail lines wrapped around the
-/// right-aligned image reservation -- into `area`. Extracted unchanged from
-/// `detail.rs`'s `render_compact_detail` (the movie hero, inline presentation's
-/// source per design.md decision 4); `detail_series_view.rs`'s Series hero
-/// shares the same shape and now calls this too.
+/// canonical top-right image reservation -- into `area`.
 pub(in crate::app::render) fn paint_hero_content(
     f: &mut Frame,
     area: Rect,
@@ -337,7 +337,6 @@ pub(in crate::app::render) fn paint_hero_content(
     }
 
     let inner_x = area.x;
-    let inner_w = area.width as usize;
     let inner_w16 = area.width;
     let mut row = area.y;
     let max_y = area.y + area.height;
@@ -348,22 +347,13 @@ pub(in crate::app::render) fn paint_hero_content(
         palette::TEXT_SECONDARY
     };
 
-    if let Some(title) = content.title {
-        row = render_hero_title_row(f, inner_x, row, max_y, inner_w16, title, focused);
-    }
-
-    let (img_actual_w, img_height, img_top_row) = match &content.image {
-        Some(img) => {
-            let top_row = match img.top {
-                ImageTop::AreaTop => area.y.min(area.y + area.height.saturating_sub(1)),
-                ImageTop::AfterTitle => row,
-            };
-            (img.actual_w, img.height, top_row)
-        }
-        None => (0, 0, area.y),
-    };
+    let (img_actual_w, img_height) = content
+        .image
+        .as_ref()
+        .map(|img| (img.actual_w, img.height))
+        .unwrap_or((0, 0));
+    let img_top_row = area.y;
     let img_x = area.x + area.width.saturating_sub(img_actual_w);
-    let img_end_row = img_top_row + img_height;
     let img_rect = if img_height > 0 {
         Some(Rect {
             x: img_x,
@@ -375,15 +365,20 @@ pub(in crate::app::render) fn paint_hero_content(
         None
     };
 
-    let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
-    let narrow_w16 = inner_w16.saturating_sub(img_actual_w);
     let text_dims = |r: u16| -> (usize, u16) {
-        if img_height > 0 && r >= img_top_row && r < img_end_row {
-            (narrow_w, narrow_w16)
-        } else {
-            (inner_w, inner_w16)
-        }
+        let width = inline_hero_text_width(
+            inner_w16,
+            img_actual_w,
+            img_height,
+            r.saturating_sub(area.y),
+        );
+        (width as usize, width)
     };
+
+    if let Some(title) = content.title {
+        let (_, title_width) = text_dims(row);
+        row = render_hero_title_row(f, inner_x, row, max_y, title_width, title, focused);
+    }
 
     if let Some(meta) = content.meta_line {
         if row < max_y {

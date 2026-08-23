@@ -14,10 +14,11 @@ fn content_rows_is_never_shorter_than_the_rendered_image_height() {
     };
     assert_eq!(
         short_text_layout.content_rows(),
-        12,
-        "banner must reserve at least the image's height even when the \
+        13,
+        "banner must reserve the image's height and bottom gutter even when the \
          wrapped text alone would need far fewer rows"
     );
+    assert_eq!(short_text_layout.content_rows_with_title(1), 13);
 
     let tall_text_layout = CompactBannerLayout {
         meta_line: Some("Crime  1974  1h33m".to_string()),
@@ -49,4 +50,10 @@ fn content_rows_is_never_shorter_than_the_rendered_image_height() {
         1,
         "with no image (e.g. images disabled), sizing stays text-only"
     );
+
+    let empty_layout = CompactBannerLayout {
+        lines: Vec::new(),
+        ..no_image_layout
+    };
+    assert_eq!(empty_layout.content_rows(), 0);
 }

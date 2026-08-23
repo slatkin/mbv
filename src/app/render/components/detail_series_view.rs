@@ -1,6 +1,6 @@
 use crate::app::layout::LayoutMain;
 use crate::app::render::components::hero::{
-    wrap_overview_lines, HeroContent, HeroImage, HeroLine, ImageTop,
+    inline_hero_text_width, wrap_overview_lines, HeroContent, HeroImage, HeroLine,
 };
 use crate::app::render::components::list_rows::selection_marker;
 use crate::app::render::{render_pill_bar, render_placeholder, MarkerEdge, PillBar, RENDER_FILTER};
@@ -70,8 +70,6 @@ impl App {
             self.fetch_series_detail(item.id.clone());
         }
 
-        let inner_w = (area.width as usize).saturating_sub(1);
-        let inner_w16 = area.width.saturating_sub(1);
         let max_y = area.y + area.height;
 
         // ── Series Primary image sizing (right-aligned, text wraps around
@@ -109,20 +107,15 @@ impl App {
         // Series metadata (year range + genre) and overview need the same
         // width-narrowing `text_dims` the movie hero uses, computed here
         // (before the image's actual on-screen row is known) only for the
-        // overview's line-by-line wrap width -- the title row hasn't
-        // rendered yet, so estimate the image's top row the same way the
-        // `Hero` component will (`ImageTop::AfterTitle`: right after the
-        // title row, or `area.y` if there's no title).
+        // overview's line-by-line wrap width.
         let title_rows = if show_title { 1 } else { 0 };
-        let img_start_row_estimate = area.y + title_rows;
-        let img_end_row_estimate = img_start_row_estimate + img_height;
-        let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
         let text_dims_pre = |r: u16| -> usize {
-            if img_height > 0 && r >= img_start_row_estimate && r < img_end_row_estimate {
-                narrow_w
-            } else {
-                inner_w
-            }
+            inline_hero_text_width(
+                area.width,
+                img_actual_w,
+                img_height,
+                r.saturating_sub(area.y),
+            ) as usize
         };
 
         let ser_meta = series_meta_line(&item);
@@ -166,7 +159,6 @@ impl App {
             image: (img_height > 0).then_some(HeroImage {
                 actual_w: img_actual_w,
                 height: img_height,
-                top: ImageTop::AfterTitle,
             }),
         };
         let result = crate::app::render::components::hero::paint_hero_content(
@@ -183,22 +175,18 @@ impl App {
             result.next_row
         };
 
-        // Reconstruct `text_dims` from the Hero's actual painted image rect
-        // (not the pre-title estimate above) for the season row/table below,
-        // which still need to narrow around the image exactly as before.
-        let (img_start_row, img_actual_w, img_height) = match result.img_rect {
-            Some(r) => (r.y, r.width, r.height),
-            None => (0, 0, 0),
+        let (img_actual_w, img_height) = match result.img_rect {
+            Some(r) => (r.width, r.height),
+            None => (0, 0),
         };
-        let img_end_row = img_start_row + img_height;
-        let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
-        let narrow_w16 = inner_w16.saturating_sub(img_actual_w);
         let text_dims = |r: u16| -> (usize, u16) {
-            if img_height > 0 && r >= img_start_row && r < img_end_row {
-                (narrow_w, narrow_w16)
-            } else {
-                (inner_w, inner_w16)
-            }
+            let width = inline_hero_text_width(
+                area.width,
+                img_actual_w,
+                img_height,
+                r.saturating_sub(area.y),
+            );
+            (width as usize, width)
         };
 
         // ── Render series image last so it layers over text ───────────────

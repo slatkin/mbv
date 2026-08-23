@@ -232,6 +232,11 @@ Screens supply data and interaction state. The arrangement owns pane placement,
 height budgeting, image/text stacking, optional-block placement, and responsive
 presentation.
 
+Inline hero image geometry is invariant: the shared `hero.rs` component places the
+image against the top and right edges and keeps text one column left and one row below
+it. Surfaces retain content-specific image dimensions but cannot select placement or
+gutter geometry.
+
 ### Semantic theme API
 
 Components consume semantic roles or component style policies. Screens do not pass

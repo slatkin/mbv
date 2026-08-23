@@ -1,5 +1,7 @@
 use crate::app::layout::LayoutMain;
-use crate::app::render::components::hero::{HeroContent, HeroImage, HeroLine, ImageTop};
+use crate::app::render::components::hero::{
+    inline_hero_text_width, HeroContent, HeroImage, HeroLine,
+};
 use crate::app::render::RENDER_FILTER;
 use crate::app::ui_util::*;
 use crate::app::{palette, App};
@@ -81,9 +83,20 @@ impl CompactBannerLayout {
     /// cap is applied to the text side -- real Emby movie metadata is short
     /// by convention (#263), so unbounded growth there is intended.
     pub(in crate::app::render) fn content_rows(&self) -> usize {
-        let text_rows =
-            self.meta_line.is_some() as usize + self.show_playing as usize + self.lines.len();
-        text_rows.max(self.img_height as usize)
+        self.content_rows_with_title(0)
+    }
+
+    pub(in crate::app::render) fn content_rows_with_title(&self, title_rows: u16) -> usize {
+        let text_rows = title_rows as usize
+            + self.meta_line.is_some() as usize
+            + self.show_playing as usize
+            + self.lines.len();
+        let image_rows = if self.img_height > 0 {
+            self.img_height.saturating_add(1) as usize
+        } else {
+            0
+        };
+        text_rows.max(image_rows)
     }
 }
 
@@ -144,7 +157,7 @@ impl App {
         panel_width: u16,
         truncate_overview: bool,
     ) -> CompactBannerLayout {
-        let inner_w = (panel_width as usize).saturating_sub(2);
+        let inner_w = panel_width as usize;
 
         let primary_cache_key = compact_banner_image_cache_key(&item.id);
         if self.images_enabled() {
@@ -220,7 +233,7 @@ impl App {
                 (placeholder_w, placeholder_h, true)
             };
 
-        let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
+        let narrow_w = inline_hero_text_width(inner_w as u16, img_actual_w, img_height, 0) as usize;
 
         let mut rows_before_overview = 0usize;
 
@@ -266,7 +279,8 @@ impl App {
         // overview/director lines do; `shadow_lines` counts how many of the
         // *upcoming* overview/director lines still fall within the image's
         // row span.
-        let shadow_lines = (img_height as usize).saturating_sub(rows_before_overview);
+        let shadow_lines =
+            (img_height.saturating_add(1) as usize).saturating_sub(rows_before_overview);
 
         let mut lines: Vec<String> = Vec::new();
         let mut director_line_idx: Option<usize> = None;
@@ -383,13 +397,9 @@ impl App {
             show_playing: content.show_playing,
             unconditional_spacer_after_meta: false,
             lines: &lines,
-            // The poster is right-aligned on the hero's top row, sharing that
-            // row with the title in two-column lists or flush with the
-            // hero's top border in one-column lists.
             image: (content.img_height > 0).then_some(HeroImage {
                 actual_w: content.img_actual_w,
                 height: content.img_height,
-                top: ImageTop::AreaTop,
             }),
         };
         let result = crate::app::render::components::hero::paint_hero_content(

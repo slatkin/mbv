@@ -1,6 +1,6 @@
 use crate::app::layout::LayoutMain;
 use crate::app::render::components::album_art::inline_album_art_cache_key;
-use crate::app::render::components::hero::{HeroContent, HeroImage, ImageTop};
+use crate::app::render::components::hero::{HeroContent, HeroImage};
 use crate::app::render::components::music_wide::wide_album_metadata;
 use crate::app::selection_modal_actions::album_track_title;
 use crate::app::ui_util::*;
@@ -36,8 +36,8 @@ pub(in crate::app::render) fn album_hero_detail_rows(images_enabled: bool) -> us
     } else {
         0
     };
-    // The image starts right after the title row (`ImageTop::AfterTitle`).
-    rows = rows.max(1 + img_rows);
+    // The trailing spacer is also the image's bottom gutter.
+    rows = rows.max(img_rows);
     rows + 1 /* trailing spacer */
 }
 
@@ -119,7 +119,6 @@ impl App {
             image: (img_height > 0).then_some(HeroImage {
                 actual_w: img_actual_w,
                 height: img_height,
-                top: ImageTop::AfterTitle,
             }),
         };
         let result = crate::app::render::components::hero::paint_hero_content(

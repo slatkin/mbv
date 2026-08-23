@@ -10,8 +10,8 @@ use crate::app::render::components::detail_series_view::{
     SERIES_IMAGE_ROWS,
 };
 use crate::app::render::components::hero::{
-    inline_detail_flow, inline_display_row, inline_display_row_count, selected_detail_shell,
-    wrap_overview_lines, HeroContent, HeroImage, HeroLine, ImageTop, InlineDisplayRow,
+    inline_detail_flow, inline_display_row, inline_display_row_count, inline_hero_text_width,
+    selected_detail_shell, wrap_overview_lines, HeroContent, HeroImage, HeroLine, InlineDisplayRow,
     HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
 use crate::app::render::components::list_rows::{
@@ -272,9 +272,7 @@ impl App {
             } else {
                 (0, 0)
             };
-            let image_start = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
-            let image_end = image_start + image_height;
-            let description_start = image_start
+            let description_start = HERO_TITLE_ROWS.saturating_mul(show_title as u16)
                 + state
                     .selected_show()
                     .and_then(|show| show.author.as_ref())
@@ -282,11 +280,7 @@ impl App {
                 + 1;
             rows += wrap_overview_lines(description, |line| {
                 let row = description_start + line as u16;
-                if row >= image_start && row < image_end {
-                    width.saturating_sub(image_width) as usize
-                } else {
-                    width as usize
-                }
+                inline_hero_text_width(width, image_width, image_height, row) as usize
             })
             .len()
             .min(4) as u16;
@@ -301,7 +295,7 @@ impl App {
         }
         rows += SERIES_DETAIL_TRAILING_BLANK_ROWS as u16;
         if self.images_enabled() {
-            rows = rows.max(SERIES_IMAGE_ROWS + show_title as u16);
+            rows = rows.max(SERIES_IMAGE_ROWS + 1);
         }
         rows
     }
@@ -374,22 +368,14 @@ impl App {
         // trailing spacer) is reproduced with empty `HeroLine::Plain`
         // entries, which `paint_hero_content` skips painting but still
         // advances the row for (`hero.rs:427-440`).
-        let title_rows = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
-        let img_start_row_estimate = area.y + title_rows;
-        let img_end_row_estimate = img_start_row_estimate + image_height;
-        // Pre-render width estimate for wrapping the description, mirroring
-        // `detail_series_view.rs`'s `text_dims_pre`: the image's real
-        // top row (computed inside `paint_hero_content`) is always right
-        // after the title, so this estimate matches it exactly.
+        // Pre-render width estimate for wrapping the description.
         let text_width_pre = |current_row: u16| -> u16 {
-            if image_height > 0
-                && current_row >= img_start_row_estimate
-                && current_row < img_end_row_estimate
-            {
-                area.width.saturating_sub(image_width)
-            } else {
-                area.width
-            }
+            inline_hero_text_width(
+                area.width,
+                image_width,
+                image_height,
+                current_row.saturating_sub(area.y),
+            )
         };
         let mut hero_lines: Vec<HeroLine> = Vec::new();
         if let Some(author) = show.author.as_deref() {
@@ -401,7 +387,10 @@ impl App {
             .filter(|description| !description.is_empty())
         {
             hero_lines.push(HeroLine::Plain(String::new()));
-            let description_start_row = img_start_row_estimate + show.author.is_some() as u16 + 1;
+            let description_start_row = area.y
+                + HERO_TITLE_ROWS.saturating_mul(show_title as u16)
+                + show.author.is_some() as u16
+                + 1;
             let description_lines = wrap_overview_lines(description, |line| {
                 text_width_pre(description_start_row + line as u16) as usize
             });
@@ -421,7 +410,6 @@ impl App {
             image: (image_height > 0).then_some(HeroImage {
                 actual_w: image_width,
                 height: image_height,
-                top: ImageTop::AfterTitle,
             }),
         };
         let hero_result = crate::app::render::components::hero::paint_hero_content(
@@ -431,25 +419,16 @@ impl App {
             focused,
         );
         let mut row = hero_result.next_row;
-        let (image_x, image_start, image_end) = match hero_result.img_rect {
-            Some(r) => (r.x, r.y, r.y + r.height),
-            None => (area.x + area.width, area.y, area.y),
-        };
         let text_width = |current_row: u16| {
-            if image_height > 0 && current_row >= image_start && current_row < image_end {
-                area.width.saturating_sub(image_width)
-            } else {
-                area.width
-            }
+            inline_hero_text_width(
+                area.width,
+                image_width,
+                image_height,
+                current_row.saturating_sub(area.y),
+            )
         };
 
-        if image_height > 0 {
-            let image_rect = Rect {
-                x: image_x,
-                y: image_start,
-                width: image_width,
-                height: image_height,
-            };
+        if let Some(image_rect) = hero_result.img_rect {
             if placeholder {
                 f.render_widget(
                     Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),

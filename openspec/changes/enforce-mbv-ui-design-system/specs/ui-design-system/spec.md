@@ -55,6 +55,12 @@ breakpoints is an arrangement.
 - **AND** any approved customisation is implemented by the central owning component
   or arrangement, not by the surface
 
+#### Scenario: An Inline hero displays an image
+- **WHEN** an Inline hero has an image
+- **THEN** the shared hero component places it against the top and right edges
+- **AND** text reserves a one-column gutter to its left and a one-row gutter below it
+- **AND** the surface may supply image dimensions but not placement or gutter geometry
+
 ### Requirement: Structural variation uses an approved vocabulary
 
 Structural or visual differences SHALL be represented by centrally defined named

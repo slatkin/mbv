@@ -175,3 +175,9 @@ pattern to reuse.
       ownership and the private-primitive theme API.
 - [x] 6.3 Reconcile the `ui-design-system` delta spec with step 4's outcome.
 - [x] 6.4 `openspec validate` passes.
+
+## 7. Standardise Inline hero image geometry
+
+- [x] 7.1 Remove per-surface image placement from the shared hero model; place every
+      image top-right with a one-column left gutter and one-row bottom gutter.
+- [x] 7.2 Verify the shared component geometry and all image-bearing Inline hero paths.

@@ -241,10 +241,9 @@ impl App {
                     self.is_home_video_view(lib_idx) || self.is_podcast_library(lib_idx);
                 let content_rows = self
                     .compact_banner_layout_with_overview(item, panel_width, truncate_overview)
-                    .content_rows() as u16;
-                content_rows
-                    + HERO_TITLE_ROWS.saturating_mul((cols > 1) as u16)
-                    + HERO_BLOCK_EXTRA_ROWS
+                    .content_rows_with_title(HERO_TITLE_ROWS.saturating_mul((cols > 1) as u16))
+                    as u16;
+                content_rows + HERO_BLOCK_EXTRA_ROWS
             } else if let Some(item) = &selected_series_item {
                 self.series_inline_detail_rows(item, content_area.width, cols > 1) as u16
                     + HERO_BLOCK_EXTRA_ROWS

@@ -53,14 +53,13 @@ impl App {
             }
         }
 
-        // Keep the block tall enough for the image (which starts below the
-        // title row), if it extends below the text and episode content.
+        // Keep the block tall enough for the image and its bottom gutter.
         let img_height = if self.images_enabled() {
             SERIES_IMAGE_ROWS as usize
         } else {
             0
         };
-        let image_end_row = img_height + show_title as usize;
+        let image_end_row = img_height.saturating_add((img_height > 0) as usize);
         rows = rows.max(image_end_row);
 
         // Blank spacer below the episode list

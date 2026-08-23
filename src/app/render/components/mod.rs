@@ -55,3 +55,7 @@ pub(super) mod widgets;
 #[cfg(test)]
 #[path = "home_video_tests.rs"]
 mod home_video_tests;
+
+#[cfg(test)]
+#[path = "hero_tests.rs"]
+mod hero_tests;
