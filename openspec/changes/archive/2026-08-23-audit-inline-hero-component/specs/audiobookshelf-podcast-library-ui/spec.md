@@ -28,44 +28,6 @@ Podcast title, author, and description SHALL occupy the corresponding TV hero te
 - **THEN** the podcast hero SHALL omit cover fetching and rendering
 - **THEN** its text SHALL use the same image-disabled width and row budgeting as the TV Shows hero
 
-### Requirement: Podcast libraries use alphabetical panel pills
-
-The Audiobookshelf podcast tab SHALL render alphabetical browsing pills (All, A–C, D–F, … `#`) in the panel area, one row, with the `⌘` prefix, matching every other library tab. The pills SHALL use the shared `render_pill_bar` widget and SHALL write `layout.selector_tabs`. Episode filter pills (All, Played, Unplayed) SHALL NOT render inside the inline hero. The played/unplayed filter SHALL live in the selection modal, not in the panel or the hero content.
-
-#### Scenario: Podcast tab renders alphabetical pills
-
-- **WHEN** the Audiobookshelf podcast tab is displayed with shows available
-- **THEN** alphabetical browsing pills render in the panel area, one row, with the `⌘` prefix
-- **AND** no pills render inside the inline hero
-
-#### Scenario: Podcast tab pills use the shared widget
-
-- **WHEN** the alphabetical pills are rendered
-- **THEN** they use the same `render_pill_bar` widget and `PillBar` structure as every other library tab
-- **AND** they write `layout.selector_tabs` for mouse hit-testing
-
-### Requirement: Downloaded episodes use the selection modal
-
-Downloaded podcast episodes SHALL be listed in the constituent-list modal (see `inline-hero-selection-modal`) when the user presses Enter on a selected podcast show. The modal SHALL render one selectable row per matching episode with the episode title and duration. The inline hero SHALL NOT render episode rows.
-
-#### Scenario: User opens the episode modal
-
-- **WHEN** the user presses Enter on a selected podcast show in the inline presentation
-- **THEN** the constituent-list modal opens with matching downloaded episodes
-- **AND** each episode shows its title and duration
-
-#### Scenario: User selects an episode from the modal
-
-- **WHEN** the user navigates to an episode in the modal and presses Enter
-- **THEN** the episode is selected according to the podcast tab's existing activation behavior
-- **AND** the modal closes
-
-#### Scenario: Podcast detail is empty or loading
-
-- **WHEN** matching episodes are empty or detail is loading
-- **THEN** the modal shows a scoped empty or loading state
-- **AND** the inline hero is unaffected
-
 ### Requirement: Personalized shelves are absent from the podcast tab
 
 The Audiobookshelf podcast tab SHALL NOT render or navigate personalized shelf data, and shelf data SHALL NOT affect show order, selection, scrolling, hit testing, or pagination.
@@ -151,3 +113,57 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 
 - **WHEN** the obsolete separate placement is removed
 - **THEN** Audiobookshelf podcasts continue through only hero-on-left and selected-row replacement
+
+## ADDED Requirements
+
+### Requirement: Podcast libraries use alphabetical panel pills
+
+The Audiobookshelf podcast tab SHALL render alphabetical browsing pills (All, A–C, D–F, … `#`) in the panel area, one row, with the `⌘` prefix, matching every other library tab. The pills SHALL use the shared `render_pill_bar` widget and SHALL write `layout.selector_tabs`. Episode filter pills (All, Played, Unplayed) SHALL NOT render inside the inline hero. The played/unplayed filter SHALL live in the selection modal, not in the panel or the hero content.
+
+#### Scenario: Podcast tab renders alphabetical pills
+
+- **WHEN** the Audiobookshelf podcast tab is displayed with shows available
+- **THEN** alphabetical browsing pills render in the panel area, one row, with the `⌘` prefix
+- **AND** no pills render inside the inline hero
+
+#### Scenario: Podcast tab pills use the shared widget
+
+- **WHEN** the alphabetical pills are rendered
+- **THEN** they use the same `render_pill_bar` widget and `PillBar` structure as every other library tab
+- **AND** they write `layout.selector_tabs` for mouse hit-testing
+
+### Requirement: Downloaded episodes use the selection modal
+
+Downloaded podcast episodes SHALL be listed in the constituent-list modal (see `inline-hero-selection-modal`) when the user presses Enter on a selected podcast show. The modal SHALL render one selectable row per matching episode with the episode title and duration. The inline hero SHALL NOT render episode rows.
+
+#### Scenario: User opens the episode modal
+
+- **WHEN** the user presses Enter on a selected podcast show in the inline presentation
+- **THEN** the constituent-list modal opens with matching downloaded episodes
+- **AND** each episode shows its title and duration
+
+#### Scenario: User selects an episode from the modal
+
+- **WHEN** the user navigates to an episode in the modal and presses Enter
+- **THEN** the episode is selected according to the podcast tab's existing activation behavior
+- **AND** the modal closes
+
+#### Scenario: Podcast detail is empty or loading
+
+- **WHEN** matching episodes are empty or detail is loading
+- **THEN** the modal shows a scoped empty or loading state
+- **AND** the inline hero is unaffected
+
+## REMOVED Requirements
+
+### Requirement: Selected podcasts map TV season selection to played-state filters
+
+**Reason**: The podcast tab no longer exposes TV-style season/played-state filters inside the inline hero; alphabetical browsing pills and the inline-hero selection modal replace that interaction.
+
+**Migration**: Use the alphabetical panel pills (All, A–C, D–F, … `#`) for browsing, and the inline-hero selection modal for downloaded episodes.
+
+### Requirement: Downloaded episodes use the TV episode-list presentation
+
+**Reason**: Downloaded episodes now render in the inline-hero selection modal instead of a TV-style episode table inside the inline hero.
+
+**Migration**: List downloaded episodes in the constituent-list modal (see `inline-hero-selection-modal`).
