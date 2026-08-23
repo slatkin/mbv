@@ -134,6 +134,21 @@ pub(crate) struct LayoutMain {
     /// -- unlike `wide_music_right_area`, both book panes are always
     /// visible (book-browsing spec).
     pub audiobookshelf_book_right_area: Rect,
+    /// Bounding rect of the Audiobookshelf podcast tab's right pane (show
+    /// workspace). Populated only when the wide hero-on-left podcast layout
+    /// is active, mirroring `tv_wide_right_area`/`wide_music_right_area` --
+    /// unlike the book tab, the narrow podcast presentation has no
+    /// equivalent always-visible right pane.
+    pub audiobookshelf_podcast_right_area: Rect,
+    /// Bounding rect of the Audiobookshelf book tab's wide-only right pane.
+    /// Unlike `audiobookshelf_book_right_area`, this stays empty for the
+    /// narrow inline presentation and is therefore safe for input gating.
+    pub audiobookshelf_book_wide_right_area: Rect,
+    /// Bounds and row hit targets owned by the open selection modal. These
+    /// stay separate from browse geometry so modal clicks cannot reach the
+    /// underlying library.
+    pub selection_modal_area: Rect,
+    pub selection_modal_rows: Vec<(Rect, usize)>,
     /// The destination (`self.tab`) the last completed render frame was drawn
     /// for. Set by `App::render` only on the layout that completes and is
     /// installed, never on intermediate drafts; the fresh-frame replacement
@@ -165,6 +180,21 @@ impl LayoutMain {
 
     pub(crate) fn is_wide_tv_active(&self) -> bool {
         self.tv_wide_right_area.width > 0 && self.tv_wide_right_area.height > 0
+    }
+
+    /// Whether the wide hero-on-left podcast layout rendered this frame. The
+    /// right pane is only set by the wide podcast renderer, so it is a
+    /// reliable signal even when the show list is empty.
+    pub(crate) fn is_wide_podcast_active(&self) -> bool {
+        self.audiobookshelf_podcast_right_area.width > 0
+            && self.audiobookshelf_podcast_right_area.height > 0
+    }
+
+    /// Whether the wide hero-on-left Audiobookshelf book layout rendered this
+    /// frame. The ordinary book right area is populated in both presentations.
+    pub(crate) fn is_wide_book_active(&self) -> bool {
+        self.audiobookshelf_book_wide_right_area.width > 0
+            && self.audiobookshelf_book_wide_right_area.height > 0
     }
 
     /// Returns the track index whose hit target contains `pos`, if any.

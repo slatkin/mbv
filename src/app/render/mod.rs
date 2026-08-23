@@ -138,6 +138,10 @@ mod tests;
 #[cfg(test)]
 mod tests_audiobookshelf_podcasts;
 #[cfg(test)]
+mod tests_conformance_matrix;
+#[cfg(test)]
 mod tests_feeds;
 #[cfg(test)]
 mod tests_home_inline;
+#[cfg(test)]
+mod tests_selection_modal;

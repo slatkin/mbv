@@ -4,26 +4,29 @@ use crate::app::library_column_width::{
     library_cell_width, library_column_count, LIBRARY_COLUMN_GAP,
 };
 use crate::app::render::arrangements::hero_left;
+use crate::app::render::components::detail_series_view::{
+    SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
+    SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS,
+    SERIES_IMAGE_ROWS,
+};
 use crate::app::render::components::hero::{
     inline_detail_flow, inline_display_row, inline_display_row_count, selected_detail_shell,
-    HeroContent, HeroImage, ImageTop, InlineDisplayRow, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
+    wrap_overview_lines, HeroContent, HeroImage, HeroLine, ImageTop, InlineDisplayRow,
+    HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
 use crate::app::render::components::list_rows::{
     draw_column_selection_markers, focused_or_subtle, item_cell_spans, SELECTED_BLOCK_SIDE_PADDING,
 };
-use crate::app::render::screens::detail_series::{
-    wrap_overview_lines, SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
-    SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS,
-    SERIES_IMAGE_ROWS,
-};
 use crate::app::render::{render_pill_bar, render_placeholder, PillBar, RENDER_FILTER};
-use crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
+use crate::app::types_audiobookshelf_browse::{
+    build_show_title_buckets, AudiobookshelfEpisodeFilter,
+};
 use crate::app::ui_util::{fmt_duration_approx, trunc_str};
 use crate::app::{palette, App};
 use ratatui::layout::{Constraint, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Cell, List, ListItem, Paragraph, Row, Table, TableState};
+use ratatui::widgets::{Block, Cell, List, ListItem, Row, Table, TableState};
 use ratatui::Frame;
 
 fn format_episode_date(value: &str) -> Option<String> {
@@ -116,6 +119,7 @@ impl App {
         if let Some((hero_panel, right_panel)) = hero_left::shared_hero_presentation(area) {
             layout.hero_area = hero_panel;
             layout.left_area = right_panel;
+            layout.audiobookshelf_podcast_right_area = right_panel;
             let content = Rect {
                 x: hero_panel.x + SELECTED_BLOCK_SIDE_PADDING,
                 y: hero_panel.y + SELECTED_BLOCK_SIDE_PADDING,
@@ -127,7 +131,7 @@ impl App {
                     .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
             };
             if content.width > 0 && content.height > 0 {
-                self.render_audiobookshelf_hero(f, content, index, focused, false, layout);
+                self.render_audiobookshelf_hero(f, content, index, focused, false, true, layout);
             }
             if state.shows.is_empty() {
                 render_placeholder(f, right_panel, "No podcast shows");
@@ -153,41 +157,104 @@ impl App {
             return;
         }
 
-        layout.left_area = area;
-        let desired_rows =
-            self.audiobookshelf_hero_content_rows(index, true) + HERO_BLOCK_EXTRA_ROWS;
-        let hero_rows = (desired_rows >= HERO_BLOCK_EXTRA_ROWS && desired_rows < area.height)
-            .then_some(desired_rows)
-            .unwrap_or(0);
-        self.render_audiobookshelf_show_rows(f, area, index, focused, cols, hero_rows, layout);
+        // Narrow-mode panel row: alphabetical show-title bucket pills, above
+        // the scrolling show list (design.md "alphabetical panel pills
+        // handle tab-level browsing"; matches `render_letter_pills_row`'s
+        // shape). Wide mode has no equivalent row -- its right pane is
+        // always the full unfiltered show workspace.
+        let areas = hero_left::pill_bar_areas(area);
+        let pills_area = areas.pills_area;
+        self.render_audiobookshelf_podcast_bucket_pills(f, pills_area, index, layout);
+        let list_area = areas.content_area;
+        layout.left_area = list_area;
+        let hero_content_width = list_area
+            .width
+            .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
+        let desired_rows = self.audiobookshelf_hero_content_rows(index, true, hero_content_width)
+            + HERO_BLOCK_EXTRA_ROWS;
+        let hero_rows = if desired_rows >= HERO_BLOCK_EXTRA_ROWS && desired_rows < list_area.height
+        {
+            desired_rows
+        } else {
+            0
+        };
+        self.render_audiobookshelf_show_rows(f, list_area, index, focused, cols, hero_rows, layout);
         if hero_rows > 0 {
             let cursor_row = self.audiobookshelf_browse[index].cursor() / cols.max(1);
             let detail_screen_row =
-                inline_detail_flow(cursor_row, hero_rows, area.height, state.scroll)
+                inline_detail_flow(cursor_row, hero_rows, list_area.height, state.scroll)
                     .expect("admitted inline detail must fit")
                     .detail_screen_row;
             layout.hero_area = Rect {
-                x: area.x,
-                y: area.y + detail_screen_row as u16,
-                width: area.width,
+                x: list_area.x,
+                y: list_area.y + detail_screen_row as u16,
+                width: list_area.width,
                 height: hero_rows,
             };
             layout.inline_hero_area = layout.hero_area;
             layout.selected_item_rect = Some(layout.hero_area);
             selected_detail_shell(f, layout.hero_area, hero_rows, focused);
             let content = Rect {
-                x: area.x + SELECTED_BLOCK_SIDE_PADDING,
+                x: list_area.x + SELECTED_BLOCK_SIDE_PADDING,
                 y: layout.hero_area.y + 2,
-                width: area.width.saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
+                width: list_area
+                    .width
+                    .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING),
                 height: hero_rows - HERO_BLOCK_EXTRA_ROWS,
             };
-            self.render_audiobookshelf_hero(f, content, index, focused, cols > 1, layout);
+            self.render_audiobookshelf_hero(f, content, index, focused, true, false, layout);
         } else {
             layout.hero_area = Rect::default();
         }
     }
 
-    fn audiobookshelf_hero_content_rows(&self, index: usize, show_title: bool) -> u16 {
+    /// Renders the narrow podcast panel's alphabetical show-title bucket
+    /// pills (labels from `build_show_title_buckets`, omitting any empty
+    /// range), matching `render_letter_pills_row`'s shape. Show titles have
+    /// no separate sort key the way Emby libraries' `LetterFilter` name
+    /// ranges do, so buckets are computed directly from `state.shows`
+    /// (already title-sorted, see `AudiobookshelfBrowseState::append_page`)
+    /// each render rather than persisted -- the selected pill just reflects
+    /// whichever bucket the cursor's show currently falls in.
+    fn render_audiobookshelf_podcast_bucket_pills(
+        &mut self,
+        f: &mut Frame,
+        row_area: Rect,
+        index: usize,
+        layout: &mut LayoutMain,
+    ) {
+        let Some(state) = self.audiobookshelf_browse.get(index) else {
+            layout.selector_tabs = Vec::new();
+            return;
+        };
+        let buckets = build_show_title_buckets(&state.shows);
+        if buckets.is_empty() || row_area.width == 0 {
+            layout.selector_tabs = Vec::new();
+            return;
+        }
+        let cursor = state.cursor();
+        let selected_pos = buckets
+            .iter()
+            .position(|bucket| cursor >= bucket.start && cursor < bucket.end)
+            .unwrap_or(0);
+        let labels: Vec<String> = buckets
+            .iter()
+            .map(|bucket| bucket.label.to_string())
+            .collect();
+        let ids: Vec<usize> = (0..labels.len()).collect();
+        layout.selector_tabs = render_pill_bar(
+            f,
+            row_area,
+            PillBar {
+                labels: &labels,
+                ids: &ids,
+                selected_pos,
+                prefix: Some(" ⌘ "),
+            },
+        );
+    }
+
+    fn audiobookshelf_hero_content_rows(&self, index: usize, show_title: bool, width: u16) -> u16 {
         let state = &self.audiobookshelf_browse[index];
         let mut rows = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
         rows += state
@@ -200,7 +267,29 @@ impl App {
             .filter(|description| !description.is_empty())
         {
             rows += 1;
-            rows += wrap_overview_lines(description, |_| 48).len().min(4) as u16;
+            let (image_width, image_height) = if self.images_enabled() {
+                (SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS)
+            } else {
+                (0, 0)
+            };
+            let image_start = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
+            let image_end = image_start + image_height;
+            let description_start = image_start
+                + state
+                    .selected_show()
+                    .and_then(|show| show.author.as_ref())
+                    .is_some() as u16
+                + 1;
+            rows += wrap_overview_lines(description, |line| {
+                let row = description_start + line as u16;
+                if row >= image_start && row < image_end {
+                    width.saturating_sub(image_width) as usize
+                } else {
+                    width as usize
+                }
+            })
+            .len()
+            .min(4) as u16;
         }
         if state.episode_selection.is_some() {
             rows += 1 + SERIES_DETAIL_DIVIDER_ROWS as u16;
@@ -224,6 +313,7 @@ impl App {
         index: usize,
         focused: bool,
         show_title: bool,
+        persistent: bool,
         layout: &mut LayoutMain,
     ) {
         let Some(state) = self.audiobookshelf_browse.get(index).cloned() else {
@@ -278,19 +368,56 @@ impl App {
             });
         // Title row (paints into `area`, same shape as the movie/series
         // hero's top-row title) plus the image's right-aligned reservation,
-        // via the shared `Hero` component; the author/description block
-        // below keeps its own choreography (spacer only before a present
-        // description, then an unconditional trailing spacer), which
-        // doesn't match either of `Hero`'s two built-in spacer patterns, so
-        // it stays hand-painted here rather than forced through
-        // `HeroContent::lines`.
+        // via the shared `Hero` component. Author/description are plain
+        // `HeroLine`s (design.md decision 2): the spacer choreography
+        // (spacer only before a present description, then an unconditional
+        // trailing spacer) is reproduced with empty `HeroLine::Plain`
+        // entries, which `paint_hero_content` skips painting but still
+        // advances the row for (`hero.rs:427-440`).
+        let title_rows = HERO_TITLE_ROWS.saturating_mul(show_title as u16);
+        let img_start_row_estimate = area.y + title_rows;
+        let img_end_row_estimate = img_start_row_estimate + image_height;
+        // Pre-render width estimate for wrapping the description, mirroring
+        // `detail_series_view.rs`'s `text_dims_pre`: the image's real
+        // top row (computed inside `paint_hero_content`) is always right
+        // after the title, so this estimate matches it exactly.
+        let text_width_pre = |current_row: u16| -> u16 {
+            if image_height > 0
+                && current_row >= img_start_row_estimate
+                && current_row < img_end_row_estimate
+            {
+                area.width.saturating_sub(image_width)
+            } else {
+                area.width
+            }
+        };
+        let mut hero_lines: Vec<HeroLine> = Vec::new();
+        if let Some(author) = show.author.as_deref() {
+            hero_lines.push(HeroLine::Plain(author.to_string()));
+        }
+        if let Some(description) = show
+            .description
+            .as_deref()
+            .filter(|description| !description.is_empty())
+        {
+            hero_lines.push(HeroLine::Plain(String::new()));
+            let description_start_row = img_start_row_estimate + show.author.is_some() as u16 + 1;
+            let description_lines = wrap_overview_lines(description, |line| {
+                text_width_pre(description_start_row + line as u16) as usize
+            });
+            for line_text in description_lines.into_iter().take(4) {
+                hero_lines.push(HeroLine::Plain(line_text));
+            }
+        }
+        hero_lines.push(HeroLine::Plain(String::new()));
+
         let hero_content = HeroContent {
             title: show_title.then_some(show.title.as_str()),
             meta_line: None,
             meta_color: palette::TEXT_SECONDARY,
             show_playing: false,
             unconditional_spacer_after_meta: false,
-            lines: &[],
+            lines: &hero_lines,
             image: (image_height > 0).then_some(HeroImage {
                 actual_w: image_width,
                 height: image_height,
@@ -316,53 +443,6 @@ impl App {
             }
         };
 
-        if let Some(author) = show.author.as_deref() {
-            if row < max_y {
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        trunc_str(author, text_width(row) as usize),
-                        Style::default().fg(palette::TEXT_SECONDARY),
-                    )),
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: text_width(row),
-                        height: 1,
-                    },
-                );
-                row += 1;
-            }
-        }
-        if let Some(description) = show
-            .description
-            .as_deref()
-            .filter(|description| !description.is_empty())
-        {
-            row = (row + 1).min(max_y);
-            let description_lines =
-                wrap_overview_lines(description, |line| text_width(row + line as u16) as usize);
-            for line_text in description_lines.iter().take(4) {
-                if row >= max_y {
-                    break;
-                }
-                let width = text_width(row);
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        trunc_str(line_text, width as usize),
-                        Style::default().fg(palette::TEXT_SECONDARY),
-                    )),
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width,
-                        height: 1,
-                    },
-                );
-                row += 1;
-            }
-        }
-        row = (row + 1).min(max_y);
-
         if image_height > 0 {
             let image_rect = Rect {
                 x: image_x,
@@ -387,38 +467,36 @@ impl App {
             }
         }
 
-        if row < max_y {
-            if state.episode_selection.is_some() {
-                let labels = AudiobookshelfEpisodeFilter::ALL
-                    .iter()
-                    .map(|filter| filter.label().to_string())
-                    .collect::<Vec<_>>();
-                let ids = (0..labels.len()).collect::<Vec<_>>();
-                layout.selector_tabs = render_pill_bar(
-                    f,
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: text_width(row),
-                        height: 1,
-                    },
-                    PillBar {
-                        labels: &labels,
-                        ids: &ids,
-                        selected_pos: AudiobookshelfEpisodeFilter::ALL
-                            .iter()
-                            .position(|filter| *filter == state.episode_filter)
-                            .unwrap_or(0),
-                        prefix: Some(" ⌘ "),
-                    },
-                );
-            }
-            if state.episode_selection.is_some() {
-                row += 1;
-            }
+        // Wide-only: narrow shows hero content only and routes Enter to the
+        // selection modal instead (`open_podcast_selection_modal`).
+        if persistent && state.episode_selection.is_some() && row < max_y {
+            let labels = AudiobookshelfEpisodeFilter::ALL
+                .iter()
+                .map(|filter| filter.label().to_string())
+                .collect::<Vec<_>>();
+            let ids = (0..labels.len()).collect::<Vec<_>>();
+            layout.selector_tabs = render_pill_bar(
+                f,
+                Rect {
+                    x: area.x,
+                    y: row,
+                    width: text_width(row),
+                    height: 1,
+                },
+                PillBar {
+                    labels: &labels,
+                    ids: &ids,
+                    selected_pos: AudiobookshelfEpisodeFilter::ALL
+                        .iter()
+                        .position(|filter| *filter == state.episode_filter)
+                        .unwrap_or(0),
+                    prefix: Some(" ⌘ "),
+                },
+            );
+            row += 1;
         }
 
-        if state.episode_selection.is_some() && row < max_y {
+        if persistent && state.episode_selection.is_some() && row < max_y {
             let table_area = Rect {
                 x: area.x,
                 y: row,

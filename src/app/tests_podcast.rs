@@ -247,6 +247,12 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
 #[test]
 fn audiobookshelf_activation_enters_selection_then_remains_inert_without_owner() {
     let mut app = audiobookshelf_app();
+    // Wide (task 4.4): narrow now routes this same Enter to the selection
+    // modal instead (see `narrow_podcast_enter_opens_selection_modal_with_episode_rows`
+    // in `input_library_scope_routing_tests.rs`). This test's subject is the
+    // in-hero episode-selection/inert-without-owner behavior, which only
+    // wide mode still exercises.
+    app.layout.main.audiobookshelf_podcast_right_area = ratatui::layout::Rect::new(10, 0, 20, 10);
     let enter = crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Enter,
         crossterm::event::KeyModifiers::NONE,

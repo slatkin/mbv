@@ -31,20 +31,6 @@ pub(in crate::app::render) fn wide_library_panes(
     })
 }
 
-pub(in crate::app::render) fn inline_library_areas(area: Rect, controls_rows: u16) -> (Rect, Rect) {
-    (
-        Rect {
-            height: controls_rows.min(area.height),
-            ..area
-        },
-        Rect {
-            y: area.y.saturating_add(controls_rows),
-            height: area.height.saturating_sub(controls_rows),
-            ..area
-        },
-    )
-}
-
 pub(in crate::app::render) fn selected_detail_content_area(
     hero_area: Rect,
     side_padding: u16,

@@ -4,7 +4,7 @@ use crate::app::{BrowseLevel, ConfirmAction, LibraryTab, PanelFocus, TabSelectio
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 
-fn make_library_app() -> App {
+pub(super) fn make_library_app() -> App {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);
@@ -43,7 +43,7 @@ fn make_library_app() -> App {
     app
 }
 
-fn make_library_mouse_event(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+pub(super) fn make_library_mouse_event(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
     MouseEvent {
         kind,
         column,
@@ -313,6 +313,39 @@ fn double_click_on_a_folder_row_drills_in() {
 }
 
 #[test]
+fn movie_enter_and_parent_double_click_match_narrow_and_wide() {
+    for wide in [false, true] {
+        let mut keyboard = make_library_app();
+        keyboard.layout.main.left_area = Rect::new(10, 5, 20, 5);
+        if wide {
+            keyboard.layout.main.movies_wide_right_area = Rect::new(40, 0, 20, 15);
+        }
+        assert_eq!(keyboard.layout.main.is_wide_movies_active(), wide);
+
+        keyboard.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(keyboard.status, "Emby is unavailable");
+        assert!(keyboard.selection_modal.is_none());
+        assert!(keyboard.libs[0].series_selection.is_none());
+
+        let mut mouse = make_library_app();
+        mouse.layout.main.left_area = Rect::new(10, 5, 20, 5);
+        if wide {
+            mouse.layout.main.movies_wide_right_area = Rect::new(40, 0, 20, 15);
+        }
+        let click = make_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 6);
+        mouse.handle_mouse(click);
+        mouse.handle_mouse(click);
+
+        assert_eq!(
+            mouse.status, keyboard.status,
+            "Movie double-click must use the same activation as Enter (wide={wide})"
+        );
+        assert!(mouse.selection_modal.is_none());
+        assert!(mouse.libs[0].series_selection.is_none());
+    }
+}
+
+#[test]
 fn mouse_click_on_a_new_series_row_only_moves_the_cursor() {
     // Regression test: clicking a *different, not-yet-selected* TV
     // Series row must not drill in either. Series rows are always
@@ -466,120 +499,4 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
 
     assert_eq!(app.libs[0].nav_stack[0].title, "Power restored");
     assert!(!app.libs[0].nav_stack[0].loading);
-}
-
-fn make_series_app() -> App {
-    let mut app = make_library_app();
-    for item in app.libs[0].nav_stack[0].items.iter_mut() {
-        item.is_folder = true;
-        item.item_type = "Series".into();
-    }
-    app.libs[0].library.collection_type = "tvshows".into();
-    app
-}
-
-// Regression coverage for the inline hero's click handling (issue found in
-// review of #448): a single click on the hero must only focus the library
-// panel, matching the app-wide "single click only focuses; double-click
-// activates" convention (see `mouse_click_on_a_different_folder_row_only_focuses_it`
-// / `double_click_on_a_folder_row_drills_in` above). Activation used to fire
-// from a single click inside `click_set_cursor`, bypassing that convention
-// entirely for the hero.
-#[test]
-fn single_click_on_hero_only_focuses_the_panel() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_series_app();
-    app.panel_focus = PanelFocus::Queue;
-    app.layout.main.hero_area = Rect {
-        x: 10,
-        y: 10,
-        width: 20,
-        height: 5,
-    };
-    app.layout.main.inline_hero_area = app.layout.main.hero_area;
-
-    app.handle_mouse(make_library_mouse_event(
-        MouseEventKind::Down(MouseButton::Left),
-        12,
-        11,
-    ));
-
-    assert_eq!(
-        app.panel_focus,
-        PanelFocus::Library,
-        "click focuses the panel"
-    );
-    assert_eq!(
-        app.libs[0].series_selection, None,
-        "a single click on the hero must not enter series selection"
-    );
-    assert_eq!(app.libs[0].nav_stack.len(), 1);
-}
-
-#[test]
-fn double_click_on_hero_activates_the_selected_item() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_series_app();
-    app.layout.main.hero_area = Rect {
-        x: 10,
-        y: 10,
-        width: 20,
-        height: 5,
-    };
-    app.layout.main.inline_hero_area = app.layout.main.hero_area;
-
-    let click = make_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 11);
-    app.handle_mouse(click);
-    assert_eq!(
-        app.libs[0].series_selection, None,
-        "the first click of the pair only focuses"
-    );
-
-    app.handle_mouse(click);
-    assert_eq!(
-        app.libs[0].series_selection,
-        Some(0),
-        "double-click on the hero activates the selected Series, same as Enter"
-    );
-}
-
-#[test]
-fn wide_read_only_home_and_feed_heroes_are_inert() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    for tab in [TabSelection::Home, TabSelection::Feeds] {
-        let mut app = make_app_stub();
-        app.tab = tab;
-        app.panel_focus = PanelFocus::Queue;
-        app.layout.main.hero_area = Rect::new(10, 10, 20, 5);
-
-        assert!(
-            !app.click_set_cursor(12, 11),
-            "wide read-only hero must not handle clicks for {tab:?}"
-        );
-        assert_eq!(app.panel_focus, PanelFocus::Queue);
-    }
-}
-
-#[test]
-fn wide_read_only_home_and_feed_double_clicks_are_inert() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    for tab in [TabSelection::Home, TabSelection::Feeds] {
-        let mut app = make_app_stub();
-        app.tab = tab;
-        app.panel_focus = PanelFocus::Library;
-        app.home.continue_items = vec![make_item("Home item", "Movie")];
-        app.layout.main.browse_destination = Some(tab);
-        app.layout.main.hero_area = Rect::new(10, 10, 20, 5);
-        app.layout.main.left_area = Rect::new(40, 10, 20, 5);
-        app.refocus_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(1));
-        let click = make_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 11);
-
-        app.handle_mouse(click);
-        app.handle_mouse(click);
-
-        assert!(
-            !app.player.status.lock().unwrap().active,
-            "{tab:?} hero activated"
-        );
-    }
 }

@@ -1,3 +1,5 @@
+use super::selection_modal_actions::album_modal_state;
+use super::types_selection_modal::{SelectionModalListState, SelectionModalSource};
 use super::ui_util::sort_audio_tracks;
 use super::{
     notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
@@ -246,20 +248,50 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(generation) {
                 return;
             }
-            if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
-                state
-                    .books
-                    .iter()
-                    .any(|book| book.library_item_id == library_item_id)
-            }) {
-                state.detail_loading_ids.remove(&library_item_id);
-                state.detail_loading = state
-                    .selected_id
-                    .as_ref()
-                    .is_some_and(|id| state.detail_loading_ids.contains(id));
-                if let Ok(detail) = result {
-                    state.detail_cache.insert(library_item_id.clone(), detail);
+            let modal_state = match result {
+                Ok(detail) => {
+                    let state = self.audiobookshelf_book_browse.iter_mut().find(|state| {
+                        state
+                            .books
+                            .iter()
+                            .any(|book| book.library_item_id == library_item_id)
+                    });
+                    state.map(|state| {
+                        state.detail_loading_ids.remove(&library_item_id);
+                        state.detail_loading = state
+                            .selected_id
+                            .as_ref()
+                            .is_some_and(|id| state.detail_loading_ids.contains(id));
+                        state.detail_cache.insert(library_item_id.clone(), detail);
+                        super::audiobookshelf_book_modal_actions::book_modal_state(
+                            state,
+                            &library_item_id,
+                        )
+                    })
                 }
+                Err(_error) => {
+                    if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
+                        state
+                            .books
+                            .iter()
+                            .any(|book| book.library_item_id == library_item_id)
+                    }) {
+                        state.detail_loading_ids.remove(&library_item_id);
+                        state.detail_loading = state
+                            .selected_id
+                            .as_ref()
+                            .is_some_and(|id| state.detail_loading_ids.contains(id));
+                    }
+                    Some(SelectionModalListState::Empty)
+                }
+            };
+            if let Some(modal_state) = modal_state {
+                self.refresh_selection_modal(
+                    SelectionModalSource::Book {
+                        book_id: library_item_id,
+                    },
+                    modal_state,
+                );
             }
             return;
         }
@@ -272,19 +304,43 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(generation) {
                 return;
             }
-            if let Some(state) = self.audiobookshelf_browse.iter_mut().find(|state| {
-                state
-                    .shows
-                    .iter()
-                    .any(|show| show.library_item_id == library_item_id)
-            }) {
-                state.detail_loading = false;
-                if let Ok(episodes) = result {
-                    state.cache_detail(library_item_id.clone(), episodes.clone());
-                    if state.selected_id.as_deref() == Some(&library_item_id) {
-                        state.episodes = Some(episodes);
-                    }
+            let modal_state = match result {
+                Ok(episodes) => {
+                    let state = self.audiobookshelf_browse.iter_mut().find(|state| {
+                        state
+                            .shows
+                            .iter()
+                            .any(|show| show.library_item_id == library_item_id)
+                    });
+                    state.map(|state| {
+                        state.detail_loading = false;
+                        state.cache_detail(library_item_id.clone(), episodes.clone());
+                        if state.selected_id.as_deref() == Some(&library_item_id) {
+                            state.episodes = Some(episodes);
+                        }
+                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state_for_detail(
+                            state,
+                            &library_item_id,
+                        )
+                    })
                 }
+                Err(_error) => {
+                    if let Some(state) = self.audiobookshelf_browse.iter_mut().find(|state| {
+                        state
+                            .shows
+                            .iter()
+                            .any(|show| show.library_item_id == library_item_id)
+                    }) {
+                        state.detail_loading = false;
+                    }
+                    Some(SelectionModalListState::Empty)
+                }
+            };
+            if let Some(modal_state) = modal_state {
+                self.refresh_selection_modal(
+                    SelectionModalSource::Podcast { library_item_id },
+                    modal_state,
+                );
             }
             return;
         }
@@ -513,26 +569,23 @@ impl App {
                 // album is open, so normalize it once before rendering or
                 // resolving the focused track for playback.
                 sort_audio_tracks(&mut tracks);
-                self.album_tracks_cache.insert(album_id, tracks);
+                let state = album_modal_state(&tracks);
+                self.album_tracks_cache.insert(album_id.clone(), tracks);
+                self.refresh_selection_modal(SelectionModalSource::Album { album_id }, state);
             }
             LibEvent::SeriesDetailFetched {
                 series_id,
                 seasons,
                 episodes,
-            } => {
-                self.series_detail_loading.remove(&series_id);
-                self.series_detail_cache
-                    .insert(series_id, crate::app::SeriesDetail { seasons, episodes });
-            }
+            } => self.handle_series_detail_fetched(
+                series_id,
+                crate::app::SeriesDetail { seasons, episodes },
+            ),
             LibEvent::SeriesSeasonEpisodesFetched {
                 series_id,
                 season_id,
                 episodes,
-            } => {
-                if let Some(detail) = self.series_detail_cache.get_mut(&series_id) {
-                    detail.episodes.insert(season_id, episodes);
-                }
-            }
+            } => self.handle_series_season_episodes_fetched(series_id, season_id, episodes),
             LibEvent::AudiobookshelfDetailFetched { .. }
             | LibEvent::AudiobookshelfShowsFetched { .. }
             | LibEvent::AudiobookshelfBooksFetched { .. }
@@ -657,6 +710,35 @@ impl App {
                     is_finished,
                 },
             );
+        }
+        let podcast_modal_state = self.selection_modal.as_ref().and_then(|modal| {
+            let SelectionModalSource::Podcast { library_item_id } = &modal.source else {
+                return None;
+            };
+            self.audiobookshelf_browse
+                .iter()
+                .find(|state| {
+                    state
+                        .shows
+                        .iter()
+                        .any(|show| show.library_item_id == *library_item_id)
+                })
+                .and_then(|state| {
+                    let modal_state = if state.detail_cache.contains_key(library_item_id) {
+                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state_for_detail(
+                            state,
+                            library_item_id,
+                        )
+                    } else if state.selected_id.as_deref() == Some(library_item_id) {
+                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state(state)
+                    } else {
+                        return None;
+                    };
+                    Some((library_item_id.clone(), modal_state))
+                })
+        });
+        if let Some((library_item_id, state)) = podcast_modal_state {
+            self.refresh_selection_modal(SelectionModalSource::Podcast { library_item_id }, state);
         }
         if !matching_slot_ids.is_empty() {
             self.save_queue_state();

@@ -74,9 +74,7 @@ impl App {
         // Single-column Home's whole panel (content plus the shared tab
         // gutters) is painted green while focused in `render_main`, before
         // this function runs.
-        // The wide layout keeps two blank rows below the pill bar (panel
-        // surface transition); the single-column layout only needs one.
-        let pill_gap_rows: u16 = if two_column { 2 } else { 1 };
+        let narrow_pill_areas = hero_left::pill_bar_areas(area);
         // Wide (hero-on-left) still pre-reserves its own pill row above
         // `content_area` (its pills sit at the top of the right pane, a
         // hero-on-left concern, `hero_on_left_right_pane`). Narrow
@@ -85,8 +83,7 @@ impl App {
         // outside the selected replacement, same as every other inline browser
         // (design.md decision 6 -- pill *position* is geometry, not a
         // per-screen declaration).
-        let content_offset = if two_column { 1 + pill_gap_rows } else { 2 };
-        let content_area = home_arrangement::content_area(area, content_offset);
+        let content_area = narrow_pill_areas.content_area;
 
         let mut rows: Vec<DisplayRow> = Vec::new();
         if self.home.section == 0 {
@@ -411,7 +408,7 @@ impl App {
                 }
                 _ => None,
             };
-            narrow_pills_area = Some(home_arrangement::pills_area(area));
+            narrow_pills_area = Some(narrow_pill_areas.pills_area);
             list_area = content_area;
         }
 
@@ -421,18 +418,29 @@ impl App {
         // there is no right pane at all -- pills span the full row and the
         // list takes the full width, same as the single-column layout.
         let wide_pill_section = two_column && hero_data.is_some();
-        let (pills_area, green_panel_full): (Rect, Option<Rect>) = if wide_pill_section {
-            let right_area = padded_rect(list_area, 0, PANE_PAD_Y);
-            let right_pane = hero_left::hero_on_left_right_pane(list_area, right_area, PANE_PAD_Y);
-            (right_pane.pills_area, Some(right_pane.list_panel))
-        } else if two_column {
-            // Wide layout, no hero item: same top-of-area fallback the
-            // hero-on-left pane would have used.
-            (home_arrangement::pills_area(area), None)
-        } else {
-            // Narrow: section pills stay outside the selected detail flow.
-            (narrow_pills_area.unwrap_or_default(), None)
-        };
+        let (pills_area, spacer_area, green_panel_full): (Rect, Rect, Option<Rect>) =
+            if wide_pill_section {
+                let right_area = padded_rect(list_area, 0, PANE_PAD_Y);
+                let right_pane =
+                    hero_left::hero_on_left_right_pane(list_area, right_area, PANE_PAD_Y);
+                (
+                    right_pane.pills_area,
+                    right_pane.spacer_area,
+                    Some(right_pane.list_panel),
+                )
+            } else if two_column {
+                // Wide layout, no hero item: same top-of-area fallback the
+                // hero-on-left pane would have used.
+                let areas = hero_left::pill_bar_areas(area);
+                (areas.pills_area, areas.spacer_area, None)
+            } else {
+                // Narrow: section pills stay outside the selected detail flow.
+                (
+                    narrow_pills_area.unwrap_or_default(),
+                    narrow_pill_areas.spacer_area,
+                    None,
+                )
+            };
         self.render_home_section_pills_row(f, pills_area, layout);
 
         let list_area = if let Some(list_panel) = green_panel_full {
@@ -473,27 +481,13 @@ impl App {
         // layout inherits the ordinary library panel surface (no green
         // focus fill -- Home's panel background matches every other
         // inline browser's regardless of focus).
-        let pill_gap = home_arrangement::pill_gap(pills_area);
-        if pill_gap.y < area.bottom() && pill_gap.width > 0 {
+        if spacer_area.y < area.bottom() && spacer_area.width > 0 {
             let panel_bg = palette::SURFACE_BACKDROP;
             f.render_widget(
-                Paragraph::new(" ".repeat(pill_gap.width as usize))
+                Paragraph::new(" ".repeat(spacer_area.width as usize))
                     .style(Style::default().bg(panel_bg)),
-                pill_gap,
+                spacer_area,
             );
-            if pill_gap_rows > 1 {
-                let second_pill_gap = Rect {
-                    y: pill_gap.y.saturating_add(1),
-                    ..pill_gap
-                };
-                if second_pill_gap.y < area.bottom() {
-                    f.render_widget(
-                        Paragraph::new(" ".repeat(second_pill_gap.width as usize))
-                            .style(Style::default().bg(panel_bg)),
-                        second_pill_gap,
-                    );
-                }
-            }
         }
 
         layout.left_area = list_area;

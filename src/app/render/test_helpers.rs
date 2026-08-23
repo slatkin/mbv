@@ -9,6 +9,7 @@ use crate::config::Config;
 use mbv_core::api::EmbyClient;
 use mbv_core::api::EmbyItem;
 use ratatui::backend::TestBackend;
+use ratatui::style::Color;
 use ratatui::Terminal;
 
 pub fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
@@ -95,6 +96,118 @@ pub fn render_pill_bar_hitboxes(
     })
     .unwrap();
     tabs
+}
+
+pub fn assert_surface_pills(
+    terminal: &Terminal<TestBackend>,
+    layout: &LayoutMain,
+    panel: Rect,
+    expected_pill_rows: usize,
+    spacer_bg: Color,
+    expected_ids: &[usize],
+    expected_labels: &[&str],
+    selected_id: usize,
+) {
+    assert_eq!(
+        layout
+            .selector_tabs
+            .iter()
+            .map(|(_, id)| *id)
+            .collect::<Vec<_>>(),
+        expected_ids,
+        "surface pill targets"
+    );
+    let first = layout
+        .selector_tabs
+        .first()
+        .expect("surface should publish pill targets")
+        .0;
+    assert!(
+        layout
+            .selector_tabs
+            .iter()
+            .all(|(rect, _)| rect.y == first.y && rect.height == 1),
+        "pill hitboxes must occupy one shared row: {:?}",
+        layout.selector_tabs
+    );
+    let buffer = terminal.backend().buffer();
+    let painted_rows = (panel.y..panel.bottom())
+        .filter(|y| (panel.x..panel.right()).any(|x| matches!(buffer[(x, *y)].symbol(), "◢" | "◤")))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        painted_rows.len(),
+        expected_pill_rows,
+        "painted pill rows in designated panel: panel={panel:?} targets={:?}",
+        layout.selector_tabs
+    );
+    assert!(
+        painted_rows.contains(&first.y),
+        "target row is not a painted pill row: targets={:?} rows={painted_rows:?}",
+        layout.selector_tabs
+    );
+    let row_text = (0..buffer.area().width)
+        .map(|x| buffer[(x, first.y)].symbol())
+        .collect::<String>();
+    for label in expected_labels {
+        assert!(
+            row_text.contains(label),
+            "pill row missing {label:?}: {row_text:?}"
+        );
+    }
+    assert_eq!(
+        buffer[(first.x, first.y)].style().bg,
+        Some(palette::PILL_ROW_BG),
+        "pill row background"
+    );
+    for pill_y in &painted_rows {
+        assert!(
+            *pill_y + 1 < panel.bottom(),
+            "reserved spacer must fit in panel"
+        );
+        for x in panel.x..panel.right() {
+            assert_eq!(
+                buffer[(x, *pill_y + 1)].style().bg,
+                Some(spacer_bg),
+                "reserved spacer background at x={x}, y={}",
+                *pill_y + 1
+            );
+        }
+    }
+    let painted_spans = (first.x..panel.right())
+        .filter(|x| buffer[(*x, first.y)].symbol() == "◢")
+        .filter_map(|start| {
+            (start + 1..panel.right())
+                .find(|x| buffer[(*x, first.y)].symbol() == "◤")
+                .map(|end| Rect::new(start, first.y, end - start + 1, 1))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        painted_spans,
+        layout
+            .selector_tabs
+            .iter()
+            .map(|(rect, _)| *rect)
+            .collect::<Vec<_>>(),
+        "pill hitboxes must match painted horizontal spans"
+    );
+    for rect in layout.selector_tabs.iter().map(|(rect, _)| *rect) {
+        assert!(
+            panel.contains((rect.x, rect.y).into())
+                && panel.contains((rect.right() - 1, rect.bottom() - 1).into()),
+            "pill target outside designated panel: {rect:?} panel={panel:?}"
+        );
+    }
+    let selected = layout
+        .selector_tabs
+        .iter()
+        .find(|(_, id)| *id == selected_id)
+        .expect("selected pill id should have a hitbox")
+        .0;
+    assert_eq!(
+        buffer[(selected.x + 1, selected.y)].style().bg,
+        Some(palette::PILL_SELECTED_BG),
+        "selected pill appearance"
+    );
 }
 
 pub fn render_library_to_terminal(app: &mut App, layout: &mut LayoutMain) -> Terminal<TestBackend> {

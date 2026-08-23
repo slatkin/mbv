@@ -5,7 +5,9 @@ mod app_audiobookshelf_service_completion;
 mod app_emby_service_completion;
 mod app_struct;
 mod audio_subtitle_actions;
+mod audiobookshelf_book_modal_actions;
 mod audiobookshelf_browse_actions;
+mod audiobookshelf_podcast_modal_actions;
 mod audiobookshelf_service_actions;
 mod bootstrap;
 mod browse_level_actions;
@@ -41,6 +43,7 @@ mod input_queue_keys;
 mod input_remote_reanchor;
 mod input_resolver;
 mod input_search_sidebar_keys;
+mod input_selection_modal_keys;
 mod input_settings_keys;
 pub(crate) mod layout;
 mod lib_cursor_actions;
@@ -72,6 +75,8 @@ mod resize;
 mod run_loop_drains;
 mod run_loop_events;
 mod search_sidebar;
+mod selection_modal_actions;
+mod series_modal_actions;
 mod service_startup;
 mod services_settings;
 mod session_command_actions;
@@ -93,6 +98,7 @@ mod types_feeds_manage;
 mod types_library_tab;
 mod types_playback;
 mod types_player_tab;
+mod types_selection_modal;
 mod types_settings;
 mod types_tab_selection;
 pub(crate) mod ui_util;
@@ -130,6 +136,10 @@ use self::types_playback::{
     RemoteSlotState, SuspendedLocalSession, UndoEntry,
 };
 use self::types_player_tab::PlayerTab;
+use self::types_selection_modal::{
+    SelectionModal, SelectionModalFilter, SelectionModalListState, SelectionModalRow,
+    SelectionModalSource,
+};
 use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};
 #[cfg(test)]
 use self::types_settings::{ServiceEntry, SettingsDestination, SERVICE_ENTRIES};

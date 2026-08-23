@@ -1,7 +1,60 @@
-use super::{AlbumIndexState, App, LibEvent, PanelFocus};
+use super::{
+    AlbumIndexState, App, PanelFocus, SelectionModalFilter, SelectionModalListState,
+    SelectionModalRow, SelectionModalSource,
+};
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
-use mbv_core::api::EmbyItem;
+use crate::app::types_selection_modal::SelectionModalItem;
+use crate::app::ui_util::fmt_duration_approx;
+use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use std::time::Instant;
+
+pub(super) fn series_season_pill_labels(detail: &super::SeriesDetail) -> Vec<String> {
+    detail
+        .seasons
+        .iter()
+        .enumerate()
+        .map(|(index, season)| {
+            let number = if season.index_number > 0 {
+                season.index_number as usize
+            } else {
+                index + 1
+            };
+            format!("{number:02}")
+        })
+        .collect()
+}
+
+pub(super) fn series_modal_state_for_season(
+    detail: &super::SeriesDetail,
+    season_index: usize,
+) -> SelectionModalListState {
+    let Some(season) = detail.seasons.get(season_index) else {
+        return SelectionModalListState::Empty;
+    };
+    let Some(episodes) = detail.episodes.get(&season.id) else {
+        return SelectionModalListState::Loading;
+    };
+    let rows = std::iter::once(SelectionModalRow::Header(season.display_name()))
+        .chain(episodes.iter().enumerate().map(|(index, episode)| {
+            let number = if episode.index_number > 0 {
+                episode.index_number as usize
+            } else {
+                index + 1
+            };
+            let meta = if episode.runtime_ticks > 0 {
+                fmt_duration_approx(episode.runtime_ticks / TICKS_PER_SECOND)
+            } else {
+                String::new()
+            };
+            SelectionModalRow::Item(SelectionModalItem {
+                name: format!("{number}. {}", episode.name),
+                meta,
+                id: episode.id.clone(),
+            })
+        }))
+        .collect();
+    SelectionModalListState::ready(rows)
+}
 
 impl App {
     /// Number of columns the currently-rendered library list uses: 1 for
@@ -126,11 +179,21 @@ impl App {
     }
 
     pub(super) fn move_lib_cursor(&mut self, lib_idx: usize, delta: i64) {
-        // Defensive bounds check; see `move_lib_cursor_rows` for the stale
-        // index contract. Never substitute library zero on a miss.
         if lib_idx >= self.libs.len() {
             return;
         }
+        let before = self.selected_series_item(lib_idx).map(|item| item.id);
+        self.move_lib_cursor_inner(lib_idx, delta);
+        let after = self.selected_series_item(lib_idx).map(|item| item.id);
+        if before != after {
+            self.libs[lib_idx].series_selection = None;
+            self.libs[lib_idx].series_season_cursor = 0;
+        }
+    }
+
+    fn move_lib_cursor_inner(&mut self, lib_idx: usize, delta: i64) {
+        // Defensive bounds check; see `move_lib_cursor_rows` for the stale
+        // index contract. Never substitute library zero on a miss.
         let now = Instant::now();
         let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
         self.last_nav_at = now;
@@ -314,6 +377,114 @@ impl App {
         self.libs[lib_idx].series_selection = Some(0);
     }
 
+    /// Opens the Series constituent-list modal (design.md Decision 7): one
+    /// flat scrollable list with a non-selectable `Header` row per season
+    /// and selectable episode `Item` rows beneath it. Ensures the series
+    /// detail is fetched, mirroring `enter_series_selection`; if it hasn't
+    /// landed in `series_detail_cache` yet, opens with a loading placeholder
+    /// instead of episode rows.
+    pub(super) fn open_series_selection_modal(&mut self, item: &EmbyItem) {
+        let season_index = self
+            .libs
+            .iter()
+            .enumerate()
+            .find(|(lib_idx, _)| {
+                self.selected_series_item(*lib_idx)
+                    .is_some_and(|selected| selected.id == item.id)
+            })
+            .map(|(lib_idx, _)| self.libs[lib_idx].series_season_cursor)
+            .unwrap_or(0);
+        if self.series_detail_cache.contains_key(&item.id) {
+            let season_id = self
+                .series_detail_cache
+                .get(&item.id)
+                .and_then(|detail| detail.seasons.get(season_index))
+                .map(|season| season.id.clone());
+            if let Some(season_id) = season_id {
+                if !self
+                    .series_detail_cache
+                    .get(&item.id)
+                    .is_some_and(|detail| detail.episodes.contains_key(&season_id))
+                {
+                    self.fetch_series_season_episodes(item.id.clone(), season_id);
+                }
+            }
+        } else {
+            self.fetch_series_detail(item.id.clone());
+        }
+        let (state, filter) = match self.series_detail_cache.get(&item.id) {
+            Some(detail) => (
+                series_modal_state_for_season(detail, season_index),
+                Some(SelectionModalFilter {
+                    labels: series_season_pill_labels(detail),
+                    selected: season_index.min(detail.seasons.len().saturating_sub(1)),
+                }),
+            ),
+            None => (SelectionModalListState::Loading, None),
+        };
+        self.open_selection_modal(
+            SelectionModalSource::Series {
+                series_id: item.id.clone(),
+            },
+            item.display_name(),
+            state,
+            filter,
+        );
+    }
+
+    pub(super) fn cycle_series_selection_modal_season(&mut self, delta: i64) {
+        let Some((series_id, current)) = self.selection_modal.as_ref().and_then(|modal| {
+            let SelectionModalSource::Series { series_id } = &modal.source else {
+                return None;
+            };
+            Some((series_id.clone(), modal.filter.as_ref()?.selected))
+        }) else {
+            return;
+        };
+        let Some(detail) = self.series_detail_cache.get(&series_id).cloned() else {
+            return;
+        };
+        if detail.seasons.is_empty() {
+            return;
+        }
+        let next = super::ui_util::move_cursor(current, delta, detail.seasons.len());
+        self.select_series_selection_modal_season(next);
+    }
+
+    pub(super) fn select_series_selection_modal_season(&mut self, season_index: usize) {
+        let Some(series_id) = self.selection_modal.as_ref().and_then(|modal| {
+            let SelectionModalSource::Series { series_id } = &modal.source else {
+                return None;
+            };
+            Some(series_id.clone())
+        }) else {
+            return;
+        };
+        let Some(detail) = self.series_detail_cache.get(&series_id).cloned() else {
+            return;
+        };
+        if season_index >= detail.seasons.len() {
+            return;
+        }
+        let season_id = detail.seasons[season_index].id.clone();
+        if !detail.episodes.contains_key(&season_id) {
+            self.fetch_series_season_episodes(series_id.clone(), season_id);
+        }
+        let state = series_modal_state_for_season(&detail, season_index);
+        if let Some(modal) = self.selection_modal.as_mut() {
+            modal.state = state.normalize();
+            modal.cursor = modal
+                .state
+                .rows()
+                .iter()
+                .position(|row| row.item_id().is_some())
+                .unwrap_or(0);
+            if let Some(filter) = modal.filter.as_mut() {
+                filter.selected = season_index;
+            }
+        }
+    }
+
     /// Returns the episodes for the current season in series-selection
     /// mode, or `None` if not in selection mode.
     pub(super) fn series_selection_episodes(&self, lib_idx: usize) -> Option<Vec<EmbyItem>> {
@@ -360,31 +531,7 @@ impl App {
         let new_season = &detail.seasons[new_cur];
         // Ensure episodes for the new season are fetched.
         if !detail.episodes.contains_key(&new_season.id) {
-            let series_id = item.id.clone();
-            let season_id = new_season.id.clone();
-            let Some(client) = self.emby_snapshot() else {
-                return;
-            };
-            let tx = self.lib_tx.clone();
-            std::thread::spawn(move || {
-                let eps = client
-                    .get_items_sorted(
-                        &season_id,
-                        None,
-                        false,
-                        0,
-                        super::PAGE_SIZE,
-                        "IndexNumber",
-                        "Ascending",
-                    )
-                    .map(|(items, _total)| items)
-                    .unwrap_or_default();
-                let _ = tx.send(LibEvent::SeriesSeasonEpisodesFetched {
-                    series_id,
-                    season_id,
-                    episodes: eps,
-                });
-            });
+            self.fetch_series_season_episodes(item.id.clone(), new_season.id.clone());
         }
         self.libs[lib_idx].series_season_cursor = new_cur;
         // Reset episode cursor to first episode.
@@ -402,31 +549,7 @@ impl App {
             return;
         };
         if !detail.episodes.contains_key(&selected.id) {
-            let Some(client) = self.emby_snapshot() else {
-                return;
-            };
-            let tx = self.lib_tx.clone();
-            let series_id = item.id.clone();
-            let season_id = selected.id.clone();
-            std::thread::spawn(move || {
-                let episodes = client
-                    .get_items_sorted(
-                        &season_id,
-                        None,
-                        false,
-                        0,
-                        super::PAGE_SIZE,
-                        "IndexNumber",
-                        "Ascending",
-                    )
-                    .map(|(items, _)| items)
-                    .unwrap_or_default();
-                let _ = tx.send(LibEvent::SeriesSeasonEpisodesFetched {
-                    series_id,
-                    season_id,
-                    episodes,
-                });
-            });
+            self.fetch_series_season_episodes(item.id.clone(), selected.id.clone());
         }
         self.libs[lib_idx].series_season_cursor = season;
         self.libs[lib_idx].series_selection = Some(0);

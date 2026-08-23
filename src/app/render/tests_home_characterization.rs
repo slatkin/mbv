@@ -1,4 +1,4 @@
-use super::test_helpers::{buffer_to_string, make_movie_app};
+use super::test_helpers::{assert_surface_pills, buffer_to_string, make_movie_app};
 use super::*;
 use crate::app::tests::make_app_stub;
 use crate::app::{PanelFocus, TabSelection};
@@ -32,4 +32,21 @@ fn home_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states
             "home hero/list missing in {width}x{height}: {output:?}"
         );
     }
+}
+
+#[test]
+fn home_pill_row_and_targets_are_characterized_end_to_end() {
+    let mut app = home_app();
+    let (terminal, layout) = super::test_helpers::render_view_to_terminal(&mut app, 60, 20);
+
+    assert_surface_pills(
+        &terminal,
+        &layout,
+        Rect::new(0, 0, 60, 20),
+        1,
+        palette::SURFACE_BACKDROP,
+        &[0],
+        &["⌘", "Continue"],
+        0,
+    );
 }

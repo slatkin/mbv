@@ -1,3 +1,4 @@
+use crate::app::render::components::hero::{paint_hero_content, HeroContent};
 use crate::app::render::RENDER_FILTER;
 use crate::app::ui_util::*;
 use crate::app::{images, palette, App};
@@ -267,7 +268,7 @@ impl App {
         ))
     }
 
-    /// Generic hero detail for a selected non-Emby Home item, sharing its
+    /// Generic hero detail for a selected Audiobookshelf Home item, sharing its
     /// title/subtitle/meta/overview shape with the Emby Keep Watching hero
     /// via [`super::hero::render_home_hero_meta_block`], plus a 16:9 cover
     /// image filling the column below it (unlike Keep Watching's image,
@@ -289,6 +290,27 @@ impl App {
         if area.width == 0 || area.height == 0 {
             return;
         }
+
+        // Feed entries have no artwork; use the shared Model A no-image hero
+        // rather than the legacy Home metadata painter. Audiobookshelf keeps
+        // the beside-image path below because its cover is a wide thumbnail.
+        if !matches!(item, QueueItem::Audiobookshelf(_)) {
+            let meta = item
+                .duration()
+                .map(|ticks| fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64));
+            let content = HeroContent {
+                title: Some(item.title()),
+                meta_line: meta.as_deref(),
+                meta_color: palette::TEXT_SECONDARY,
+                show_playing: false,
+                unconditional_spacer_after_meta: false,
+                lines: &[],
+                image: None,
+            };
+            paint_hero_content(f, area, &content, focused);
+            return;
+        }
+
         let text_w = area.width as usize;
         let ov_w = text_w.saturating_sub(overview_pad * 2);
         let HomeLatestDetailText {

@@ -3,32 +3,48 @@
 use super::music_track_test_support::*;
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
+use crate::app::{BrowseLevel, LibraryTab, PanelFocus, SelectionModalSource};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::io::{Read, Write};
 use std::time::Duration;
+/// Narrow (`is_wide_music_active() == false`, the default zero-area layout)
+/// Enter on the album-folder listing opens the selection modal instead of
+/// entering the in-hero `album_track_focus` mode (design.md decision 6;
+/// task 3.3). Wide's unchanged behavior is covered by
+/// `wide_album_enter_still_enters_track_focus_not_the_modal` in
+/// `input_library_scope_routing_tests.rs`.
 #[test]
-fn enter_at_album_folder_listing_enters_track_mode_without_nav_push() {
+fn narrow_enter_at_album_folder_listing_opens_selection_modal_without_nav_push() {
     let mut app = make_music_album_app();
     let nav_len_before = app.libs[0].nav_stack.len();
     assert!(app.is_viewing_album_folders(0));
     assert!(app.libs[0].album_track_focus.is_none());
+    assert!(!app.layout.main.is_wide_music_active());
 
     let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(!handled);
-    assert_eq!(app.libs[0].album_track_focus, Some(0));
+    assert!(
+        app.libs[0].album_track_focus.is_none(),
+        "narrow Enter must not enter the in-hero track-focus mode"
+    );
     assert_eq!(app.libs[0].nav_stack.len(), nav_len_before);
+    let modal = app
+        .selection_modal
+        .as_ref()
+        .expect("narrow Enter must open the selection modal");
+    assert!(matches!(modal.source, SelectionModalSource::Album { .. }));
 }
 
 #[test]
-fn mouse_click_on_selected_album_folder_row_does_not_open_track_mode() {
-    // Only Enter opens inline track-selection mode. A mouse click on the
-    // already-selected album-folder row must not open it (and must not
-    // fall back to the legacy nav_stack drilldown either).
+fn mouse_click_on_selected_album_folder_row_does_not_open_track_mode_or_modal() {
+    // Only Enter activates the selected album-folder row (opening the
+    // selection modal in narrow mode). A mouse click on the already-selected
+    // row must not open it (and must not fall back to the legacy nav_stack
+    // drilldown either).
     let mut app_key = make_music_album_app();
     let mut app_mouse = make_music_album_app();
 
@@ -53,18 +69,39 @@ fn mouse_click_on_selected_album_folder_row_does_not_open_track_mode() {
         modifiers: KeyModifiers::NONE,
     });
 
-    assert_eq!(app_key.libs[0].album_track_focus, Some(0));
+    assert!(
+        app_key.selection_modal.is_some(),
+        "Enter must open the modal"
+    );
+    assert!(
+        app_mouse.selection_modal.is_none(),
+        "a single click must not open the modal"
+    );
+    assert_eq!(app_key.libs[0].album_track_focus, None);
     assert_eq!(app_mouse.libs[0].album_track_focus, None);
     assert_eq!(app_key.libs[0].nav_stack.len(), nav_len_before);
     assert_eq!(app_mouse.libs[0].nav_stack.len(), nav_len_before);
 }
 
 #[test]
-fn narrow_music_track_target_precedes_parent_hero() {
+fn narrow_music_track_target_does_not_compete_with_parent_hero() {
     let mut app = make_music_album_app();
     push_tracks(&mut app, "album-1", 2);
     app.layout.main.browse_destination = Some(TabSelection::EmbyLibrary(0));
     app.layout.main.hero_area = Rect::new(10, 5, 29, 8);
+    app.layout.main.inline_hero_area = app.layout.main.hero_area;
+    app.layout.main.wide_music_track_hitmap = vec![(Rect::new(12, 8, 20, 1), 1)];
+
+    assert!(app.click_set_cursor(13, 8));
+    assert_eq!(app.libs[0].album_track_focus, None);
+}
+
+#[test]
+fn wide_music_track_target_changes_track_focus() {
+    let mut app = make_music_album_app();
+    push_tracks(&mut app, "album-1", 2);
+    app.layout.main.browse_destination = Some(TabSelection::EmbyLibrary(0));
+    app.layout.main.wide_music_right_area = Rect::new(40, 0, 20, 15);
     app.layout.main.wide_music_track_hitmap = vec![(Rect::new(12, 8, 20, 1), 1)];
 
     assert!(app.click_set_cursor(13, 8));

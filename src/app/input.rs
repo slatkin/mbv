@@ -296,3 +296,9 @@ mod music_track_test_support;
 #[cfg(test)]
 #[path = "input_library_scope_routing_tests.rs"]
 mod library_scope_routing_tests;
+#[cfg(test)]
+#[path = "input_podcast_selection_modal_tests.rs"]
+mod podcast_selection_modal_tests;
+#[cfg(test)]
+#[path = "input_series_music_selection_modal_tests.rs"]
+mod series_music_selection_modal_tests;

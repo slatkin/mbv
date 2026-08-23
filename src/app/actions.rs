@@ -187,7 +187,12 @@ impl App {
         }
     }
 
-    pub(super) fn play_items_routed(&mut self, items: Vec<EmbyItem>, start_idx: usize) {
+    pub(super) fn play_items_routed(
+        &mut self,
+        items: Vec<EmbyItem>,
+        start_idx: usize,
+        queue_source: crate::config::QueueSource,
+    ) {
         if let Some(item) = items.get(start_idx).or_else(|| items.first()) {
             log::info!(target: "library_route", "user action=queue-replace item_id={:?} item_name={:?}", item.id, item.name);
             if self.in_non_library_thin_client_mode() {
@@ -201,6 +206,7 @@ impl App {
         if !direct_remote {
             self.on_queue_replace_silent();
         }
+        self.queue_source = queue_source;
         self.set_queue_scope(self.playback_target_queue_scope());
         // Keep library focus when playing from the library panel.
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
@@ -452,8 +458,14 @@ impl App {
 }
 
 #[cfg(test)]
+#[path = "actions_tests_audiobookshelf_modal_events.rs"]
+mod audiobookshelf_modal_event_tests;
+#[cfg(test)]
 #[path = "actions_tests_letter.rs"]
 mod letter_tests;
+#[cfg(test)]
+#[path = "actions_tests_modal_events.rs"]
+mod modal_event_tests;
 #[cfg(test)]
 #[path = "actions_tests_queue_enrich.rs"]
 mod queue_enrich_tests;

@@ -21,6 +21,56 @@ fn folder(id: &str, name: &str) -> EmbyItem {
     item
 }
 
+#[test]
+fn unavailable_album_playback_keeps_the_existing_queue() {
+    let mut app = make_app_stub();
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.player_tab.set_items(vec![existing], 0);
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("playlist-1".into()),
+        name: "Playlist".into(),
+    };
+
+    let mut track = make_item("Track", "Audio");
+    track.id = "track-1".into();
+    app.album_tracks_cache
+        .insert("album-1".into(), vec![track.clone()]);
+
+    assert!(!app.play_album_track("album-1", &track));
+    assert_eq!(app.player_tab.total_queue_len(), 1);
+    assert_eq!(app.player_tab.queue_cursor, 0);
+    assert!(matches!(
+        app.queue_source,
+        crate::config::QueueSource::Playlist { .. }
+    ));
+}
+
+#[test]
+fn album_playback_routes_with_album_queue_source() {
+    let config = crate::config::Config::default();
+    let (remote, player_rx, _cmd_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    let observed_source = remote.queue_source.clone();
+    let mut app = App::new_remote_with_config(
+        mbv_core::api::EmbyClient::new(config.clone()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        config,
+    );
+    let mut track = make_item("Track", "Audio");
+    track.id = "track-1".into();
+    app.album_tracks_cache
+        .insert("album-1".into(), vec![track.clone()]);
+
+    assert!(app.play_album_track("album-1", &track));
+    assert!(matches!(
+        *observed_source.lock().unwrap(),
+        crate::config::QueueSource::Album
+    ));
+}
+
 fn album(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "MusicAlbum");
     item.id = id.into();

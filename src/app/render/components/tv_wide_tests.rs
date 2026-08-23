@@ -1,5 +1,6 @@
 use super::*;
 // Characterization coverage stays beside the moved TV component.
+use crate::app::layout::LayoutMain;
 use crate::app::render::test_helpers::render_library_to_string_sized;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, SeriesDetail, TabSelection};
@@ -81,6 +82,42 @@ fn wide_tv_persists_series_workspace_and_separate_targets() {
 }
 
 #[test]
+fn wide_series_render_keeps_loading_treatment_during_season_fan_out() {
+    let mut app = tv_app();
+    app.series_detail_cache
+        .get_mut("series")
+        .unwrap()
+        .episodes
+        .clear();
+    app.series_detail_loading.insert("series".into());
+    app.series_season_loading
+        .insert(("series".into(), "season-1".into()));
+
+    let output = render_library_to_string_sized(&mut app, &mut LayoutMain::default(), 100, 30);
+
+    assert!(output.contains("Loading"), "{output}");
+}
+
+#[test]
+fn wide_series_with_no_seasons_keeps_the_child_region_blank() {
+    let mut app = tv_app();
+    app.series_detail_cache
+        .get_mut("series")
+        .unwrap()
+        .seasons
+        .clear();
+    let mut layout = LayoutMain::default();
+
+    let output = render_library_to_string_sized(&mut app, &mut layout, 100, 30);
+
+    assert!(output.contains("The Series"), "{output}");
+    assert!(!output.contains("No items available"), "{output}");
+    assert!(!output.contains("Empty"), "{output}");
+    assert!(layout.tv_wide_season_tabs.is_empty());
+    assert!(layout.tv_wide_episode_rows.is_empty());
+}
+
+#[test]
 fn wide_tv_selected_series_follows_inline_search_cursor() {
     let mut app = tv_app();
     let mut second = make_item("Search Series", "Series");
@@ -118,15 +155,11 @@ fn wide_tv_focused_series_browser_uses_focused_surface() {
         layout.tv_wide_right_area.y + 3,
     );
     assert_eq!(
-        terminal.backend().buffer().get(pos.0, pos.1).bg,
+        terminal.backend().buffer()[(pos.0, pos.1)].bg,
         palette::SURFACE_FOCUSED
     );
     assert_eq!(
-        terminal
-            .backend()
-            .buffer()
-            .get(layout.tv_wide_right_area.x, pos.1)
-            .bg,
+        terminal.backend().buffer()[(layout.tv_wide_right_area.x, pos.1)].bg,
         palette::SURFACE_FOCUSED
     );
 }

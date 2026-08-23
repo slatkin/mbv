@@ -7,6 +7,7 @@ use crate::app::types_audiobookshelf_browse::{
 };
 use crate::app::TabSelection;
 use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfLibrary};
+use mbv_core::config::AudiobookshelfSetup;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
@@ -44,7 +45,7 @@ fn book_with_meta(
         title: title.into(),
         author_display: Some(author.into()),
         author_sort_key: author.into(),
-        cover_path: None,
+        cover_path: Some("covers/book-a.jpg".into()),
         duration_seconds: duration,
         narrator: narrator.map(str::to_string),
         published_year: year.map(str::to_string),
@@ -59,7 +60,7 @@ fn book_with_meta(
 /// Three books spanning three different alphabetical surname buckets
 /// (Adams -> A-C, Mason -> J-L... actually M-O, Zephyr -> V-Z), so the
 /// A-C bucket is selected by default and only "Alpha Tales" is in range.
-fn make_audiobookshelf_book_app() -> App {
+pub(super) fn make_audiobookshelf_book_app() -> App {
     let mut app = make_app_stub();
     let library = AudiobookshelfLibrary {
         id: "abs-books".into(),
@@ -93,6 +94,35 @@ fn make_audiobookshelf_book_app() -> App {
     app.tab = TabSelection::AudiobookshelfLibrary(0);
     app.panel_focus = PanelFocus::Library;
     app
+}
+
+fn make_image_enabled_audiobookshelf_book_app() -> App {
+    let mut app = make_audiobookshelf_book_app();
+    app.image_protocol_enabled = true;
+    app.audiobookshelf_book_browse[0].books[0].cover_path = Some("covers/book-a.jpg".into());
+    app
+}
+
+fn assert_book_cover_stays_inside_hero(terminal: &Terminal<TestBackend>, hero: Rect) {
+    let buffer = terminal.backend().buffer();
+    for y in 0..buffer.area().height {
+        for x in 0..buffer.area().width {
+            if buffer[(x, y)].style().bg == Some(palette::BORDER_UNFOCUSED) {
+                assert!(
+                    x >= hero.x && x < hero.right() && y >= hero.y && y < hero.bottom(),
+                    "book cover escaped hero_area={hero:?} at ({x}, {y})"
+                );
+            }
+        }
+    }
+}
+
+fn assert_book_cover_is_not_painted(terminal: &Terminal<TestBackend>) {
+    let buffer = terminal.backend().buffer();
+    assert!(!buffer
+        .content()
+        .iter()
+        .any(|cell| cell.style().bg == Some(palette::BORDER_UNFOCUSED)));
 }
 
 #[test]
@@ -206,6 +236,10 @@ fn wide_layout_renders_hero_chapters_and_browser_together() {
         "the persistent chapter list must render beside the hero:\n{out}"
     );
     assert!(
+        !layout.audiobookshelf_book_chapter_rows.is_empty(),
+        "wide Books must publish chapter targets"
+    );
+    assert!(
         out.contains("A\u{2013}C"),
         "the alphabetical-bucket pill row must render in the right pane:\n{out}"
     );
@@ -235,52 +269,131 @@ fn wide_layout_renders_hero_chapters_and_browser_together() {
     );
 }
 
-/// Task 2.4: the narrow-terminal fallback must still render both the
-/// hero+chapters pane and the bucket-filtered browser, not just the hero.
 #[test]
-fn narrow_layout_still_renders_hero_chapters_and_browser_together() {
+fn wide_books_use_shared_panes_and_one_bucket_pill_owner() {
     let mut app = make_audiobookshelf_book_app();
     let mut layout = LayoutMain::default();
-    let terminal = render_library_to_terminal_focused(&mut app, &mut layout, true);
-    let out = buffer_to_string(&terminal); // 60x20, below TWO_COLUMN_THRESHOLD
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|f| app.render_library(f, Rect::new(0, 0, 100, 20), true, &mut layout))
+        .unwrap();
+    let panes = crate::app::render::arrangements::library::wide_library_panes(
+        Rect::new(0, 0, 100, 20),
+        0,
+        crate::app::render::arrangements::hero_left::PANE_PAD_Y,
+    )
+    .expect("wide test area must use the shared arrangement");
+
+    assert_eq!(layout.left_area, panes.left_area);
+    assert_eq!(layout.audiobookshelf_book_wide_right_area, panes.right_area);
+    let right_panel = Rect {
+        x: panes.right_area.x,
+        y: 0,
+        width: panes.right_area.width,
+        height: 20,
+    };
+    assert_surface_pills(
+        &terminal,
+        &layout,
+        right_panel,
+        1,
+        palette::SURFACE_BACKDROP,
+        &[0, 1, 2],
+        &["⌘", "A–C", "M–O", "V–Z"],
+        0,
+    );
+}
+
+#[test]
+fn image_enabled_wide_book_cover_stays_inside_hero_area() {
+    let mut app = make_image_enabled_audiobookshelf_book_app();
+    let mut layout = LayoutMain::default();
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|f| app.render_library(f, Rect::new(0, 0, 100, 20), true, &mut layout))
+        .unwrap();
 
     assert!(
-        out.contains("Alpha Tales"),
-        "narrow hero must still show the cursor's book:\n{out}"
+        layout.hero_area.height >= 13,
+        "12-row cover needs a 13-row content area"
     );
-    assert!(
-        out.contains("A\u{2013}C"),
-        "narrow layout must still render the bucket-pill row:\n{out}"
-    );
-    assert!(
-        out.contains("Chapter One"),
-        "narrow layout must keep chapter rows alongside the browser:\n{out}"
-    );
-    assert!(
-        layout.audiobookshelf_book_right_area.height > 0,
-        "narrow layout must still populate the browser area, not just the hero"
-    );
+    assert_book_cover_stays_inside_hero(&terminal, layout.hero_area);
+}
 
-    let browser = layout.audiobookshelf_book_right_area;
-    let buffer = terminal.backend().buffer();
-    let selected_row = browser.y
-        + layout
-            .left_row_targets
-            .iter()
-            .position(|target| *target == Some(LibraryRowTarget::Book(0)))
-            .expect("narrow selected book row should be mapped") as u16;
-    assert_eq!(
-        layout.selected_item_rect,
-        Some(layout.hero_area),
-        "inline hero must own the selected book geometry"
-    );
-    let row_text = (browser.x..browser.right())
-        .map(|x| buffer[(x, selected_row)].symbol())
-        .collect::<String>();
+#[test]
+fn image_enabled_narrow_book_cover_stays_inside_hero_area() {
+    let mut app = make_image_enabled_audiobookshelf_book_app();
+    let mut layout = LayoutMain::default();
+    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    terminal
+        .draw(|f| app.render_library(f, Rect::new(0, 0, 60, 30), true, &mut layout))
+        .unwrap();
+
     assert!(
-        !row_text.contains("Alpha Tales"),
-        "inline selected book row must not repeat the hero title: {row_text:?}"
+        layout.hero_area.height >= 17,
+        "12-row cover plus the selected shell needs a 17-row replacement"
     );
+    assert_book_cover_stays_inside_hero(&terminal, layout.hero_area);
+}
+
+#[test]
+fn image_enabled_short_wide_book_cover_stays_inside_clamped_hero_area() {
+    let mut app = make_image_enabled_audiobookshelf_book_app();
+    let mut layout = LayoutMain::default();
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|f| app.render_library(f, Rect::new(0, 0, 100, 7), true, &mut layout))
+        .unwrap();
+
+    assert!(
+        layout.hero_area.height < 13,
+        "short-wide regression must exercise the clamp"
+    );
+    assert_book_cover_stays_inside_hero(&terminal, layout.hero_area);
+}
+
+#[test]
+fn images_disabled_book_does_not_reserve_or_paint_cover() {
+    let mut app = make_image_enabled_audiobookshelf_book_app();
+    app.image_protocol_enabled = false;
+    let mut layout = LayoutMain::default();
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|f| app.render_library(f, Rect::new(0, 0, 100, 20), true, &mut layout))
+        .unwrap();
+
+    assert!(layout.hero_area.height < 13);
+    assert_book_cover_is_not_painted(&terminal);
+}
+
+#[test]
+fn book_without_art_does_not_reserve_or_paint_cover() {
+    let mut app = make_audiobookshelf_book_app();
+    app.image_protocol_enabled = true;
+    let mut layout = LayoutMain::default();
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|f| app.render_library(f, Rect::new(0, 0, 100, 20), true, &mut layout))
+        .unwrap();
+
+    assert!(layout.hero_area.height < 13);
+    assert_book_cover_is_not_painted(&terminal);
+}
+
+#[test]
+fn configured_service_book_without_art_does_not_reserve_or_paint_cover() {
+    let mut app = make_audiobookshelf_book_app();
+    app.image_protocol_enabled = true;
+    app.config.lock().unwrap().audiobookshelf_setup =
+        Some(AudiobookshelfSetup::new("https://books.example"));
+    let mut layout = LayoutMain::default();
+    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    terminal
+        .draw(|f| app.render_library(f, Rect::new(0, 0, 100, 20), true, &mut layout))
+        .unwrap();
+
+    assert!(layout.hero_area.height < 13);
+    assert_book_cover_is_not_painted(&terminal);
 }
 
 #[test]
@@ -297,43 +410,12 @@ fn narrow_book_detail_replaces_the_browser_row() {
     );
 }
 
-#[test]
-fn narrow_book_detail_is_suppressed_in_a_short_viewport() {
-    let mut app = make_audiobookshelf_book_app();
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 4);
-
-    assert_eq!(layout.hero_area.height, 0);
-}
-
-#[test]
-fn narrow_book_chapter_target_precedes_parent_hero() {
-    let mut app = make_audiobookshelf_book_app();
-    app.audiobookshelf_book_browse[0].chapter_selection = None;
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
-    let (rect, chapter) = layout
-        .audiobookshelf_book_chapter_rows
-        .first()
-        .copied()
-        .expect("narrow book detail must publish chapter targets");
-
-    app.layout.main = layout;
-    app.layout.main.browse_destination = Some(app.tab);
-    assert!(app.click_set_cursor(rect.x + 1, rect.y));
-    assert_eq!(
-        app.audiobookshelf_book_browse[0].chapter_selection,
-        Some(chapter)
-    );
-}
-
-/// The hero must render the book's author, narrator, year, and description
-/// -- metadata the API parsing now carries (iteration 2 root-cause fix).
-/// Both the narrow and wide paths go through the shared beside-image hero,
-/// so both must show the same metadata.
+/// Characterizes the ABS Books inline hero's Model A layout: the tall cover is
+/// right-aligned and the text occupies the space to its left.
 #[test]
 fn hero_renders_author_narrator_year_and_description() {
     let mut app = make_app_stub();
+    app.image_protocol_enabled = true;
     let library = AudiobookshelfLibrary {
         id: "abs-books".into(),
         name: "ABS Books".into(),
@@ -358,10 +440,12 @@ fn hero_renders_author_narrator_year_and_description() {
     app.tab = TabSelection::AudiobookshelfLibrary(0);
     app.panel_focus = PanelFocus::Library;
 
-    // Narrow (single-column inline presentation) — 80 cols gives the meta row
-    // enough room for the narrator span without truncation.
     let mut layout = LayoutMain::default();
-    let out = render_library_to_string_sized(&mut app, &mut layout, 80, 24);
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|f| app.render_library(f, Rect::new(0, 0, 80, 24), true, &mut layout))
+        .unwrap();
+    let out = buffer_to_string(&terminal);
     assert!(
         out.contains("Alpha Tales"),
         "hero must show the title:\n{out}"
@@ -380,6 +464,37 @@ fn hero_renders_author_narrator_year_and_description() {
         "hero must show the description:\n{out}"
     );
     assert!(out.contains("1h"), "hero must show the duration:\n{out}");
+
+    let hero = layout.hero_area;
+    let image_row = hero.y + 3;
+    let buffer = terminal.backend().buffer();
+    let image_start = (hero.x..hero.right())
+        .find(|x| buffer[(*x, image_row)].style().bg == Some(palette::BORDER_UNFOCUSED))
+        .expect("Model A must paint a cover placeholder");
+    let image_end = (image_start..hero.right())
+        .take_while(|x| buffer[(*x, image_row)].style().bg == Some(palette::BORDER_UNFOCUSED))
+        .last()
+        .map(|x| x + 1)
+        .expect("cover placeholder must have width");
+    assert!(
+        image_start > hero.x + hero.width / 2,
+        "Model A cover must be right-aligned rather than half-width: hero={hero:?}, image_start={image_start}"
+    );
+    assert_eq!(
+        buffer[(image_start, image_row)].style().bg,
+        Some(palette::BORDER_UNFOCUSED),
+        "Model A hero must reserve the right-aligned cover"
+    );
+    assert_eq!(
+        buffer[(image_end - 1, image_row)].style().bg,
+        Some(palette::BORDER_UNFOCUSED),
+        "Model A cover must reach the hero's right edge"
+    );
+    assert_ne!(
+        buffer[(image_start - 1, image_row)].style().bg,
+        Some(palette::BORDER_UNFOCUSED),
+        "Model A overview text must wrap to the left of the cover"
+    );
 }
 
 /// Selecting a different bucket narrows the right-pane list: a book outside
@@ -446,6 +561,7 @@ fn cursor_movement_updates_selection_without_opening_chapter_focus() {
 #[test]
 fn left_right_focus_toggle_leaves_both_panes_populated() {
     let mut app = make_audiobookshelf_book_app();
+    app.layout.main.audiobookshelf_book_wide_right_area = Rect::new(60, 0, 40, 20);
     assert_eq!(app.audiobookshelf_book_browse[0].chapter_selection, None);
 
     let right = crossterm::event::KeyEvent::new(
@@ -546,3 +662,6 @@ fn in_flight_book_detail_is_not_requested_again_after_cursor_round_trip() {
         .contains("book-m"));
     assert!(app.audiobookshelf_book_browse[0].detail_loading);
 }
+
+#[path = "tests_audiobookshelf_books_narrow.rs"]
+mod narrow_tests;

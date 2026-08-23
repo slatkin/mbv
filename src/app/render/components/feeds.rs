@@ -43,101 +43,92 @@ impl App {
         let has_subs = !subscriptions.is_empty();
         let loading = state.loading;
 
-        // Renders the group pill bar + watched-filter row starting at
-        // `start_y`, returning the selector click targets and the first
-        // free row after them (plus its trailing gap). Called either above
-        // the list (no hero to show) or below the hero (unified with
-        // Movies/TV's letter-range pills -- see `list.rs`/`hero.rs`).
-        let render_selector_rows =
-            |f: &mut Frame, pane: Rect, start_y: u16| -> (Vec<(Rect, usize)>, u16) {
-                let max_y = pane.y + pane.height;
-                let mut row = start_y;
-                let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
-
-                // Pill bar: "All" + one per subscription.
-                if row < max_y && has_subs {
-                    const MAX_LABEL: usize = 12;
-                    let mut labels: Vec<String> = vec!["All".to_string()];
-                    for sub in subscriptions {
-                        let name = if sub.name.len() > MAX_LABEL {
+        // The shared arrangement owns the pill row and spacer. The watched
+        // filter remains Feeds content immediately below that spacer, with
+        // the existing trailing gap before the list.
+        let render_selector_content = |f: &mut Frame, pane: Rect| {
+            let areas = hero_left::pill_bar_areas(pane);
+            let mut selector_tabs = Vec::new();
+            if has_subs && areas.pills_area.height > 0 {
+                const MAX_LABEL: usize = 12;
+                let labels: Vec<String> = std::iter::once("All".to_string())
+                    .chain(subscriptions.iter().map(|sub| {
+                        if sub.name.len() > MAX_LABEL {
                             format!("{}…", &sub.name[..MAX_LABEL])
                         } else {
                             sub.name.clone()
-                        };
-                        labels.push(name);
-                    }
-                    let ids: Vec<usize> = (0..labels.len()).collect();
-                    selector_tabs = render_pill_bar(
-                        f,
-                        Rect {
-                            x: pane.x,
-                            y: row,
-                            width: pane.width,
-                            height: 1,
-                        },
-                        PillBar {
-                            labels: &labels,
-                            ids: &ids,
-                            selected_pos: state.selected_group,
-                            prefix: Some(" ⌘ "),
-                        },
-                    );
-                }
-                if row < max_y {
-                    row += 1;
-                }
-                // Keep the playback-state filter visually separated from the group
-                // pill bar.
-                if row < max_y {
-                    row += 1;
-                }
-                // Watched filter indicator line.
-                if row < max_y && has_subs {
-                    let filter = state.watched_filter;
-                    let mut spans = Vec::new();
-                    for (i, f_variant) in [
-                        crate::app::types_feed_tab::WatchedFilter::All,
-                        crate::app::types_feed_tab::WatchedFilter::Watched,
-                        crate::app::types_feed_tab::WatchedFilter::Unwatched,
-                    ]
-                    .iter()
-                    .enumerate()
-                    {
-                        if i > 0 {
-                            spans.push(Span::styled(
-                                " · ",
-                                Style::default().fg(palette::TEXT_MUTED),
-                            ));
                         }
-                        let active = *f_variant == filter;
+                    }))
+                    .collect();
+                let ids: Vec<usize> = (0..labels.len()).collect();
+                selector_tabs = render_pill_bar(
+                    f,
+                    areas.pills_area,
+                    PillBar {
+                        labels: &labels,
+                        ids: &ids,
+                        selected_pos: state.selected_group,
+                        prefix: Some(" ⌘ "),
+                    },
+                );
+            }
+
+            let filter_area = Rect {
+                y: areas.spacer_area.bottom(),
+                height: if has_subs {
+                    1.min(areas.content_area.height)
+                } else {
+                    0
+                },
+                ..areas.content_area
+            };
+            if has_subs && filter_area.height > 0 {
+                let filter = state.watched_filter;
+                let mut spans = Vec::new();
+                for (i, f_variant) in [
+                    crate::app::types_feed_tab::WatchedFilter::All,
+                    crate::app::types_feed_tab::WatchedFilter::Watched,
+                    crate::app::types_feed_tab::WatchedFilter::Unwatched,
+                ]
+                .iter()
+                .enumerate()
+                {
+                    if i > 0 {
                         spans.push(Span::styled(
-                            f_variant.label().to_string(),
-                            if active {
-                                Style::default()
-                                    .fg(palette::ACCENT)
-                                    .add_modifier(Modifier::BOLD)
-                            } else {
-                                Style::default().fg(palette::TEXT_MUTED)
-                            },
+                            " · ",
+                            Style::default().fg(palette::TEXT_MUTED),
                         ));
                     }
-                    f.render_widget(
-                        Paragraph::new(Line::from(spans))
-                            .style(Style::default().bg(palette::SURFACE_BACKDROP)),
-                        Rect {
-                            x: pane.x,
-                            y: row,
-                            width: pane.width,
-                            height: 1,
+                    let active = *f_variant == filter;
+                    spans.push(Span::styled(
+                        f_variant.label().to_string(),
+                        if active {
+                            Style::default()
+                                .fg(palette::ACCENT)
+                                .add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(palette::TEXT_MUTED)
                         },
-                    );
-                    row += 1;
+                    ));
                 }
-                if row < max_y {
-                    row += 1;
-                }
-                (selector_tabs, row)
+                f.render_widget(
+                    Paragraph::new(Line::from(spans))
+                        .style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                    filter_area,
+                );
+            }
+
+            let list_y = filter_area
+                .y
+                .saturating_add(if has_subs { 2 } else { 1 })
+                .min(pane.y.saturating_add(pane.height));
+            let list_area = Rect {
+                y: list_y,
+                height: pane.y.saturating_add(pane.height).saturating_sub(list_y),
+                ..pane
             };
+            (selector_tabs, list_area)
+        };
 
         // Whether this frame will show a hero (has entries to select from):
         // if so, the selector rows move below it, unified with the
@@ -149,15 +140,7 @@ impl App {
         let (selector_tabs, list_area) = if will_show_hero {
             (Vec::new(), area)
         } else {
-            let (selector_tabs, row) = render_selector_rows(f, area, area.y);
-            let max_y = area.y + area.height;
-            let list_area = Rect {
-                x: area.x,
-                y: row,
-                width: area.width,
-                height: max_y.saturating_sub(row),
-            };
-            (selector_tabs, list_area)
+            render_selector_content(f, area)
         };
         layout.selector_tabs = selector_tabs;
         layout.left_area = list_area;
@@ -256,14 +239,8 @@ impl App {
             paint_hero_content(f, content_rect, &hero_content, focused);
         }
 
-        let (selector_tabs, row) = render_selector_rows(f, post_hero_area, post_hero_area.y);
+        let (selector_tabs, list_area) = render_selector_content(f, post_hero_area);
         layout.selector_tabs = selector_tabs;
-        let list_area = Rect {
-            x: post_hero_area.x,
-            y: row,
-            width: post_hero_area.width,
-            height: (post_hero_area.y + post_hero_area.height).saturating_sub(row),
-        };
 
         layout.left_area = list_area;
         if list_area.height == 0 {

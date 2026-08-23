@@ -1,5 +1,6 @@
 use super::detail::compact_banner_image_cache_key;
 use crate::app::layout::LayoutMain;
+use crate::app::render::arrangements::hero_left;
 use crate::app::render::arrangements::library;
 use crate::app::render::components::album::AlbumRowsCursorCtx;
 use crate::app::render::components::hero::{
@@ -212,11 +213,18 @@ impl App {
             crate::app::library_column_width::library_column_count(content_area.width)
         };
 
+        let use_shared_replacement_plan = self.tab.emby_library_index().is_some_and(|lib_idx| {
+            matches!(
+                self.libs[lib_idx].library.collection_type.as_str(),
+                "movies" | "tvshows"
+            )
+        });
+
         // Size selected detail from the same content declarations used by the
         // painters. Inline callers replace the selected source row in flow;
         // wide callers return before this branch and paint the detail pane.
         //
-        let inline_hero_rows: u16 = if self.tab.emby_library_index().is_some() {
+        let mut inline_hero_rows: u16 = if self.tab.emby_library_index().is_some() {
             let lib_idx = self.tab.emby_library_index().unwrap();
             if let Some(item) = &selected_movie_item {
                 // Actual content rows the banner will paint (meta line,
@@ -238,14 +246,7 @@ impl App {
                     + HERO_TITLE_ROWS.saturating_mul((cols > 1) as u16)
                     + HERO_BLOCK_EXTRA_ROWS
             } else if let Some(item) = &selected_series_item {
-                let (in_selection, episode_count) = self.series_selection_state(lib_idx, &item.id);
-                self.series_inline_detail_rows(
-                    item,
-                    content_area.width,
-                    cols > 1,
-                    in_selection,
-                    episode_count,
-                ) as u16
+                self.series_inline_detail_rows(item, content_area.width, cols > 1) as u16
                     + HERO_BLOCK_EXTRA_ROWS
             } else {
                 // No banner content to size to. If we're at the top browse
@@ -280,11 +281,12 @@ impl App {
         } else {
             0
         };
-        let inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
-            && inline_hero_rows < content_area.height)
-            .then_some(inline_hero_rows)
-            .unwrap_or(0);
-
+        if !use_shared_replacement_plan {
+            inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
+                && inline_hero_rows < content_area.height)
+                .then_some(inline_hero_rows)
+                .unwrap_or(0);
+        }
         // Browser-level pills and search controls stay outside the selected
         // replacement: letter-range pills for large non-music libraries, or
         // the music-group selector while browsing a group's albums. Both share
@@ -302,13 +304,18 @@ impl App {
         let show_pills = show_letter_pills || show_music_pills || search_active;
         // Narrow library heroes belong to the scrolling list. Keep the shared
         // pill geometry without reserving an additional detail region.
-        let pills_reserved = if show_pills { 2 } else { 0 };
-        let (pills_area, list_area) = library::inline_library_areas(content_area, pills_reserved);
-        let inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
-            && inline_hero_rows < list_area.height)
-            .then_some(inline_hero_rows)
-            .unwrap_or(0);
-
+        let (pills_area, list_area) = if show_pills {
+            let areas = hero_left::pill_bar_areas(content_area);
+            (areas.pills_area, areas.content_area)
+        } else {
+            (Rect::default(), content_area)
+        };
+        if !use_shared_replacement_plan {
+            inline_hero_rows = (inline_hero_rows >= HERO_BLOCK_EXTRA_ROWS + 1
+                && inline_hero_rows < list_area.height)
+                .then_some(inline_hero_rows)
+                .unwrap_or(0);
+        }
         if show_letter_pills && !search_active {
             let lib_idx = self.tab.emby_library_index().unwrap();
             self.render_letter_pills_row(f, pills_area, lib_idx, layout);
@@ -501,9 +508,10 @@ impl App {
         let final_offset: usize;
 
         if show_grouped && show_music_pills {
-            // Narrow music groups use the grouped renderer's existing inline
-            // album detail. The wide right-rail browser deliberately has no
-            // detail block and must not be reused here.
+            // Narrow music groups route the selected album's detail to the
+            // Model A hero (task 3.2) instead of an inline track table. The
+            // wide right-rail browser deliberately has no detail block and
+            // must not be reused here.
             let lib_idx = self.tab.emby_library_index().unwrap();
             final_offset = self.render_grouped_album_rows(
                 f,
@@ -515,7 +523,7 @@ impl App {
                     stored_scroll,
                 },
                 focused,
-                false,
+                true,
                 1,
                 layout,
             )
@@ -531,7 +539,7 @@ impl App {
                     stored_scroll,
                 },
                 focused,
-                false, // render the selected album detail inline in narrow mode
+                true, // hero panel handles the selected album's detail (task 3.2)
                 cols as u16,
                 layout,
             );
@@ -567,7 +575,7 @@ impl App {
 
         // Paint the selected replacement after the list has established its
         // flow geometry: shell first, then content inset past its framing.
-        if inline_hero_rows > 0 {
+        if !show_grouped && layout.hero_area.height > 0 {
             selected_detail_shell(f, layout.hero_area, inline_hero_rows, focused);
             // Content, offset 2 rows down past the top border + top
             // padding, and inset 2 cols on each side like music/homevideo's
@@ -611,6 +619,9 @@ impl App {
     }
 }
 
+#[cfg(test)]
+#[path = "movies_tv_header_fit_tests.rs"]
+mod movies_tv_header_fit_tests;
 #[cfg(test)]
 #[path = "list_tests.rs"]
 mod tests;
