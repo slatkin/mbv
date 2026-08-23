@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Incremental Interactive Component Migration
@@ -25,7 +25,7 @@ channel, persistence, and raw theme dependencies. Existing input precedence,
 responsive behavior, images-disabled behavior, geometry contracts, and durable
 behavior tests remain regression requirements.
 
-Search is the proposed first proof because it spans local state, contextual input,
+Search is the first proof because it spans local state, contextual input,
 debounce, asynchronous completion, stale-result handling, rendering, viewport state,
 dismissal, and navigation without crossing canonical playback authority. Search
 implementation does not begin until the architecture map, terminology, and its

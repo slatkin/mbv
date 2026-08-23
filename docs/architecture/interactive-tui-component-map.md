@@ -1,6 +1,6 @@
 # Interactive TUI Component Architecture Map
 
-This document maps mbv's current interactive architecture, the proposed
+This document maps mbv's current interactive architecture, the accepted
 surface-component target, the constraints inherited from existing decisions,
 and the questions that must be resolved before the first proof of concept.
 Issue #603 is the umbrella tracker. This map is architecture discovery, not an
@@ -10,12 +10,13 @@ implementation plan.
 
 - Current architecture: verified from `main` by static inspection on
   2026-08-23.
-- Target architecture: proposed in ADR 0022.
-- Migration policy: proposed in ADR 0023.
+- Target architecture: accepted in ADR 0022.
+- Migration policy: accepted in ADR 0023.
 - Authoritative interactive inventory:
   `docs/architecture/interactive-surface-ledger.md`.
-- First implementation candidate: Search sidebar, but no proof-of-concept work
-  starts until this map and the proposed ADRs are reviewed.
+- Phase 0 architecture map and ledger: reviewed 2026-08-23.
+- First implementation candidate: Search sidebar, after its unresolved contracts
+  are decided in an OpenSpec change.
 - Existing visual design-system rules remain authoritative unless a later
   accepted spec or ADR explicitly supersedes them.
 
@@ -71,7 +72,7 @@ state, rendering resources, and timing (`src/app/app_struct.rs:36-414`).
 | Render/input bridge | Terminal size, image resources, last completed `AppLayout`, mouse and click timing |
 | Timed/persistent work | Toast expiry, search/settings/library debounce, polling, keepalive, queue persistence |
 
-The proposed architecture does not move every `App` field into a UI component.
+The accepted architecture does not move every `App` field into a UI component.
 It separates presentation-owned state from shell, Service, and playback
 authority.
 
@@ -139,7 +140,7 @@ mutate `App` directly (`src/app/action.rs:23-102,385-649`). Mouse handling mixes
 shared `Command` dispatch with direct state mutation
 (`src/app/input_mouse_dispatch.rs`).
 
-The proposed hierarchy preserves central precedence. A parent routes the raw
+The accepted hierarchy preserves central precedence. A parent routes the raw
 event; the selected child interprets it as a local message. Components do not
 compete through an event broadcast.
 
@@ -222,7 +223,7 @@ Queue display models may carry `QueueSlotId` as an opaque key, but the shell or
 Player owner resolves and mutates it. A reduced or cloned playback-status
 projection is acceptable; its lock and `PlayerProxy` are not.
 
-### Proposed crossings
+### Accepted crossings
 
 ```text
 terminal event
@@ -240,7 +241,7 @@ Whether repeated shell effects later justify a shared effect enum/executor is
 unresolved. A generic scheduler, dependency-injection framework, or whole-loop
 rewrite is not a prerequisite for the first proof.
 
-## Proposed Interactive Hierarchy
+## Accepted Interactive Hierarchy
 
 ```text
 Application shell
@@ -290,7 +291,7 @@ All rows are `legacy` until an implementation change proves otherwise.
 | Audiobookshelf podcasts | Show/episode workspace and selector targets | High |
 | Audiobookshelf books | Browser/chapter workspace and replacement geometry | High |
 | Feeds | Grouping, selector, list, and inline hero | Medium |
-| Global Search sidebar | Keyboard, debounce, async result, viewport; proposed first proof | Medium |
+| Global Search sidebar | Keyboard, debounce, async result, viewport; first proof | Medium |
 | Inline library Search | `LibSearch` inside one Emby browser; not part of the first proof | Medium |
 | Settings | Destinations, forms, Service setup, nested popups | High |
 | Sessions | Merged Emby/Cast targets and fixed-stride mouse geometry | Medium |
@@ -374,9 +375,9 @@ Existing behavior risks discovered during mapping:
 These are existing risks, not authorized behavior changes in an architecture-only
 migration. Each needs an explicit decision or separate bug scope.
 
-### Proposed proof boundary
+### Accepted proof boundary
 
-Search is proposed to own its presentation state, local messages, deterministic
+Search will own its presentation state, local messages, deterministic
 updates, rendering, debounce policy, and viewport state. `UiRoot` would own child
 presence rather than an internal `open` boolean. Search would return typed outputs
 for request, activation, and dismissal. The shell would retain the Service client,
@@ -518,7 +519,7 @@ not duplicate every message branch or replace durable behavior tests.
 - `AppLayout` is the current completed-frame geometry authority.
 - Search crosses state, input, update, async, navigation, and rendering boundaries.
 
-### Proposed by ADR 0022 and ADR 0023
+### Accepted by ADR 0022 and ADR 0023
 
 - Hierarchical interactive surface components.
 - Parent-owned presence/focus and child-local messages.

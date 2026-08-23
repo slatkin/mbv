@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Hierarchical Interactive Surface Components
@@ -42,7 +42,7 @@ partial generic hit-map migration.
   scatter every interactive concern.
 - Rewrite the TUI into a full trait framework, TEA, or Flux architecture at once:
   rejected because it combines ownership migration with a whole-application rewrite.
-- Use concrete hierarchical components first: proposed because each migrated
+- Use concrete hierarchical components first: accepted because each migrated
   surface is independently useful and later abstractions can be extracted from real
   interfaces.
 

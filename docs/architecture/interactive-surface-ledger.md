@@ -1,11 +1,12 @@
 # Interactive Surface Migration Ledger
 
 This is the stable inventory for issue #603. It tracks interactive ownership,
-not the completed render-system migration. The target architecture is proposed in
+not the completed render-system migration. The target architecture is accepted in
 ADR 0022 and the migration policy in ADR 0023.
 
-No implementation work starts from this ledger until those ADRs and the architecture
-map are reviewed. Every row is currently `legacy`.
+ADRs 0022 and 0023, this ledger, and the architecture map were reviewed on
+2026-08-23. Every row is currently `legacy`; Search implementation still requires
+the contracts listed in the architecture map to be decided in an OpenSpec change.
 
 ## States
 
@@ -47,7 +48,7 @@ change but do not justify marking a row migrated.
 | Library | Audiobookshelf book browser | legacy | ABS book state/actions/renderers | Browser/chapter workspace |
 | Library | Feeds | legacy | feed state/actions/renderers | Grouping, selector and inline hero |
 | Root | Overlay stack | legacy | `App` options/flags and `CONTEXT_STACK` | Parent owns overlay presence and priority |
-| Overlay stack | Global Search sidebar | legacy | `SearchSidebar` plus `App` input/debounce/worker/render paths | Proposed first proof; excludes inline Search |
+| Overlay stack | Global Search sidebar | legacy | `SearchSidebar` plus `App` input/debounce/worker/render paths | First proof; excludes inline Search |
 | Overlay stack | Settings sidebar and setup forms | legacy | `App` settings/forms and settings input/render paths | Service effects remain shell-owned |
 | Settings | Multiselect popup | legacy | `App.multiselect_popup` and modal handlers | Nested Settings child |
 | Settings | Library-routes popup | legacy | `App.library_routes_popup` and modal handlers | Nested Settings child |
