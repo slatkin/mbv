@@ -299,6 +299,10 @@ impl LibraryListRenderCtx {
         self.scroll
     }
 
+    pub(in crate::app) fn selected_item(&self) -> Option<&mbv_core::api::EmbyItem> {
+        self.items.get(self.cursor)
+    }
+
     pub(in crate::app::render) fn rows(
         &self,
         content_area: Rect,

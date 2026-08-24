@@ -34,6 +34,7 @@ pub mod search_sidebar;
 pub mod selection_modal;
 pub mod sessions;
 pub mod settings;
+pub mod tv_workspace;
 pub mod user_event;
 
 pub use self::audiobookshelf_book::AudiobookshelfBookComponent;
@@ -67,6 +68,7 @@ pub use self::sessions::SessionsComponent;
 pub(in crate::app) use self::settings::{
     ServiceRow, SettingsComponent, SettingsRow, SettingsSnapshot, SetupDraft,
 };
+pub use self::tv_workspace::TvWorkspaceComponent;
 pub use self::user_event::UserEvent;
 
 #[cfg(test)]

@@ -132,6 +132,7 @@ pub(crate) struct LayoutMain {
     pub tv_wide_episode_rows: Vec<(Rect, usize)>,
     pub tv_wide_season_tabs: Vec<(Rect, usize)>,
     pub tv_wide_left_area: Rect,
+    pub tv_wide_area: Rect,
     /// Bounding rect of the grouped-album browser itself (`Self::
     /// render_wide_right_album_browser`), the sub-rect of
     /// `wide_music_right_area` below the pill row. `left_row_targets` is

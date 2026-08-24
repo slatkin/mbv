@@ -122,21 +122,13 @@ impl App {
                 && crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
                     .is_some()
             {
-                let ctx = self.library_list_render_ctx(lib_idx, false);
-                let selected_series = ctx
-                    .items
-                    .get(ctx.cursor)
-                    .cloned()
-                    .filter(|item| item.item_type == "Series");
-                self.render_wide_tv_with_ctx(
-                    f,
-                    area,
-                    lib_idx,
-                    focused,
-                    &ctx,
-                    selected_series.as_ref(),
-                    layout,
-                );
+                let ctx = self.wide_tv_render_ctx(lib_idx, focused);
+                let final_scroll = super::tv_wide::render_wide_tv_with_ctx(f, area, &ctx, layout);
+                if let Some(search) = self.libs[lib_idx].search.as_mut() {
+                    search.scroll = final_scroll;
+                } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                    level.scroll = final_scroll;
+                }
                 return;
             }
         }
