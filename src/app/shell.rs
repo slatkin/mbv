@@ -50,6 +50,7 @@ pub struct Model {
     pub(super) application: Application<ComponentId, Msg, UserEvent>,
     pub(super) emby_browser_id: Option<ComponentId>,
     pub(super) tv_workspace_id: Option<ComponentId>,
+    pub(super) inline_search_id: Option<ComponentId>,
     pub(super) abs_podcast_id: Option<ComponentId>,
     pub(super) abs_book_id: Option<ComponentId>,
 }
@@ -69,6 +70,7 @@ impl Model {
             application,
             emby_browser_id: None,
             tv_workspace_id: None,
+            inline_search_id: None,
             abs_podcast_id: None,
             abs_book_id: None,
         };
@@ -655,6 +657,7 @@ impl Model {
             self.sync_playback_prompt();
             self.sync_emby_browser();
             self.sync_tv_workspace();
+            self.sync_inline_search();
             self.sync_precedence_gates();
 
             self.app.expire_music_grouping_candidates();
@@ -703,6 +706,7 @@ impl Model {
                     self.render_audiobookshelf_book_component(f);
                     self.render_emby_browser_component(f);
                     self.render_tv_workspace_component(f);
+                    self.render_inline_search_component(f);
                     self.render_queue_component(f);
                     self.render_playlists_overlay(f);
                     self.render_save_playlist_overlay(f);

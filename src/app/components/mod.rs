@@ -19,6 +19,7 @@ pub mod feeds;
 pub mod feeds_manage;
 pub mod help;
 pub mod home;
+pub mod inline_search;
 pub mod legacy_input;
 pub mod library_routes;
 pub mod msg;
@@ -48,6 +49,7 @@ pub use self::feeds::FeedsComponent;
 pub use self::feeds_manage::FeedsManageComponent;
 pub use self::help::HelpComponent;
 pub use self::home::HomeComponent;
+pub(in crate::app) use self::inline_search::{InlineSearchComponent, SearchPool};
 pub use self::legacy_input::LegacyInput;
 pub use self::library_routes::LibraryRoutesComponent;
 pub use self::msg::{

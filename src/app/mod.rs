@@ -116,6 +116,7 @@ mod shell_browser;
 mod shell_feeds;
 mod shell_gates;
 mod shell_home;
+mod shell_inline_search;
 mod shell_overlays;
 mod shell_playback;
 mod shell_playback_prompt;

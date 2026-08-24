@@ -287,6 +287,12 @@ impl LibraryListRenderCtx {
         self
     }
 
+    pub(in crate::app) fn with_search(mut self, query: String, loading: bool) -> Self {
+        self.search_query = Some(query);
+        self.search_loading = loading;
+        self
+    }
+
     pub(in crate::app) fn item_count(&self) -> usize {
         self.items.len()
     }
