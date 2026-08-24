@@ -21,8 +21,8 @@ use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
 use super::components::{
-    ComponentId, LegacyInput, LegacyTerminalEvent, Msg, OverlayId, PlaybackComponent, ShellRequest,
-    UserEvent,
+    ComponentId, LegacyInput, LegacyTerminalEvent, LibraryComponent, Msg, OverlayId,
+    PlaybackComponent, ShellRequest, UserEvent,
 };
 use super::service_startup;
 use super::{
@@ -95,6 +95,14 @@ impl Model {
         // (task 3.4; see `shell_home.rs`/`components::home`'s module docs).
         model.mount_home();
         model.mount_feeds();
+        model
+            .application
+            .mount(
+                ComponentId::Library,
+                Box::new(LibraryComponent::new()),
+                vec![],
+            )
+            .expect("mount Library parent");
         // Precedence-gate attribute carrier (see `components::playback_gates`
         // module docs) -- mounted for the whole session, never active/
         // subscribed, so a future `SubClause::HasAttrValue` guard on
@@ -661,6 +669,7 @@ impl Model {
             self.sync_tv_workspace();
             self.sync_music_workspace();
             self.sync_inline_search();
+            self.sync_library_parent();
             self.sync_precedence_gates();
 
             self.app.expire_music_grouping_candidates();
