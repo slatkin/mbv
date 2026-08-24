@@ -48,9 +48,19 @@ bypass filtering. `rtk grep` format flags (`-c/-l/-L/-o/-Z`) run raw.
   A structural or visual override lives in the owning arrangement, component,
   or theme — never as a screen-local painter branch.
 - This boundary is mandatory for new UI work. The completed visual migration ledger
-  is archived with its change; the proposed interactive-ownership migration is
-  tracked separately in `docs/architecture/interactive-surface-ledger.md`. A
-  legacy interactive surface is not licence to violate the render boundary.
+  is archived with its change; the interactive-ownership migration is **in flight**
+  (`openspec/changes/migrate-tui-to-tuirealm`) and tracked row-by-row in
+  `docs/architecture/interactive-surface-ledger.md`, whose states are `legacy`,
+  `component`, and `migrated`. A legacy interactive surface is not licence to
+  violate the render boundary.
+- Interactive Components live in `src/app/components/` (TuiRealm), never as new
+  `impl App` interaction handlers. A `component` row is **half-converted by
+  design**: the component owns its rendering and local interaction state while
+  `App` keeps the field and the legacy `handle_key_*`, and the shell mirrors
+  between them via `sync_<surface>()`. Deleting that `App` state is scheduled
+  separately (group 5), not opportunistic cleanup. Read decision **D14** in
+  `openspec/changes/migrate-tui-to-tuirealm/design.md` before touching a component
+  or a `sync_*` method.
 - Workflow, the reuse/override decision table, and the completion checklist:
   `.opencode/skills/mbv-frontend/SKILL.md`.
 

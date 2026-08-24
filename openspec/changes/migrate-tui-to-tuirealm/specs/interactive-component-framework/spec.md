@@ -182,6 +182,18 @@ legacy interaction framework remains.
   rendering
 - **AND** the old fields and handlers are deleted, not synchronised with a mirror
 
+#### Scenario: A mid-migration surface is tracked as `component`, not `migrated`
+
+- **WHEN** a surface's Interactive Component has landed and paints the surface,
+  but the shell still mirrors `App` state into it or legacy input still
+  forwards to an `impl App` handler
+- **THEN** its ledger row reads `component`, which is a permitted internal
+  checkpoint and not a completed conversion
+- **AND** the row becomes `migrated` only once the `App` state and handlers are
+  deleted and the mirror is removed
+- **AND** the completion gate requires no `legacy` and no `component` row to
+  remain
+
 #### Scenario: Migration preserves existing contracts
 
 - **WHEN** any surface is converted

@@ -1,77 +1,70 @@
-# Handoff: migrate-tui-to-tuirealm — task 3.3 apply attempt
+# Handoff: migrate-tui-to-tuirealm
 
-**Date:** 2026-08-24
-**Checkpoint commit:** `88aa5310` on `feat/migrate-tui-to-tuirealm`. Includes
-everything through the prior foundation/leaf/medium-surface work plus this
-session's doc-only correction — treat it as the current baseline.
-**Progress:** 17/40 tasks complete in `tasks.md`, unchanged this session.
-No code was written.
+**Date:** 2026-08-24 (session 4 — re-scoping, doc-only)
+**Baseline:** `ccc6565d` on `feat/migrate-tui-to-tuirealm`.
+**Progress:** 17/40 tasks. No code written in sessions 2–4.
 
-## What happened
+## Read this first
 
-An `/opsx:apply` session was scoped strictly to task 3.3 ("Convert inline
-library Search"). Before writing code, it traced `LibraryTab.search`'s
-actual callers and `render_search_box`'s actual call sites, and found the
-task is not implementable in isolation as currently described — it has a
-real, previously-unscoped prerequisite. No code changes were made; `tasks.md`
-3.3 is still unticked.
+`tasks.md`'s "How to read this task list" section, then design **D14**.
+Everything below is why they were rewritten.
 
-**Full findings (file:line detail, exact functions, recommended path
-forward) are written up in
-`openspec/changes/migrate-tui-to-tuirealm/scoping-3.3-3.5.md`, under
-"Correction (2026-08-24, session 3)".** Read that section before attempting
-3.3 or 3.5 again — do not re-derive it from scratch.
+## What was wrong
 
-## The short version
+Three consecutive apply sessions (3.3, then 3.3 again, then 3.6) stalled at
+200–300k context without writing code. Each traced the surface's `App` field,
+found it read by several unrelated authorities, and correctly concluded the
+task could not land as scoped.
 
-- **Input/cursor/mouse:** `LibraryTab.search` is read/written directly in 4
-  files that are task 3.5's territory, not 3.3's — `lib_cursor_actions.rs`,
-  `actions_navigation.rs`, `input_mouse.rs`, `lib_event_actions.rs`.
-  Tractable once `InlineSearch` owns its own results cursor, but bigger than
-  scoped.
-- **Render (the bigger problem, not previously scoped at all):**
-  `render_search_box` only paints the query input; the results list renders
-  through the same unconverted painter as the plain browse list —
-  `render/components/list.rs`, `tv_wide.rs`, `movies_wide.rs`,
-  `music_wide.rs` (~1,500+ lines, 5 files). This is a real slice of task
-  3.5b's deferred render-seam extraction, not something 3.3 can do
-  standalone — doing it separately from 3.5b risks duplicate/diverging work
-  on the same functions.
+The cause was a contradiction inside the change, not the code. `tasks.md`'s
+preamble required every surface task to move state off `App` — "delete, don't
+mirror". But:
 
-## Resolved: task list resequenced (2026-08-24, this session)
+- the capability spec scopes that rule to the **completion gate** and
+  explicitly permits "internal checkpoints, behaviour-preserving commits, and
+  temporary adapters";
+- `design.md`'s Migration Plan puts mirror removal in phase 5;
+- and all seven landed conversions **mirror**. `shell_overlays.rs` /
+  `shell_home.rs` push `App` state into each component every tick via
+  `get_component_mut` + downcast, and the ledger rows say so plainly
+  ("forwards keys to existing `handle_key_confirm_modal`").
 
-The user confirmed the standing "3.5 must stay last" note no longer applies
-and separately flagged that having this dependency chain split across the
-group-3/group-4 risk-tier phase boundary was itself poorly planned. `tasks.md`
-now reflects both:
+So `tasks.md` demanded, per task, something the design disclaimed and no
+landed task had done — and the contradiction was undetectable without reading
+all four artifacts, which is exactly the expensive trace that kept exploding.
 
-- **Do next — mechanical, independent (no shared render seam):** 3.6
-  (Feeds), 3.8 (Selection modal), 3.9 (Playback prompts), 3.10 (Settings
-  popups). Same conversion pattern as the completed 3.1/3.2/3.7.
-- **`§3.5-chain` (new section in `tasks.md`, after 3.10):** 3.3, 3.5, 4.2,
-  4.3, 4.4 are now one explicit sequential block, in dependency order —
-  `3.5 → 4.2 → 4.3 → 4.4 → 3.3` — because all five read/write the same
-  render functions (`list.rs`, `tv_wide.rs`, `movies_wide.rs`,
-  `music_wide.rs`). They are no longer independently schedulable under
-  their old group-3/group-4 headings; the old line items there now just
-  point at the chain. Do not start a later step in the chain before the one
-  above it lands.
-- **3.4 (Home):** independent of the chain, but has its own unresolved
-  precedence-gate design question (`key_policy.rs`'s "lib_search"-style gap
-  — `playback`'s per-key gate can't be a static `SubClause`); needs design
-  work, not straight `/opsx:apply`.
-- **4.1, 4.5–4.10:** independent of the chain and of each other, schedulable
-  any time.
+The bridge that session 3 concluded "does not exist" **does** exist. It is the
+`sync_<surface>()` pattern, now specified as design D14.
 
-Next agent: start with the mechanical group (3.6/3.8/3.9/3.10), then begin
-the `§3.5-chain` at 3.5.
+## What changed (session 4)
 
-## Unrelated: `CLAUDE.md` / jcodemunch note
+- **`tasks.md` preamble:** stage-1 bar is now component owns render + local
+  state, shell mirrors, legacy input keeps forwarding, **do not delete `App`
+  state**. Deletion is group 5.
+- **§3.5-chain retired.** Its five tasks were serialized only because the
+  shared wide-list render seam had no task of its own. New **3.11** does that
+  extraction once (~1,500 lines across `list.rs`, `tv_wide.rs`,
+  `movies_wide.rs`, `music_wide.rs`, `detail.rs`), mirroring what 3.1 did for
+  Search. 3.3/3.5/4.2/4.3/4.4 are gated on 3.11 and then independent.
+- **Phase 5 restructured** into per-authority-cluster teardown (5.3a Library/
+  browse, 5.3b Feeds, 5.3c overlays, 5.3d framework) — clusters are the unit
+  at which deletion is actually tractable.
+- **New 1.10** (doc-only, do first): add the ledger's `component` state and
+  demote the seven rows that read `migrated` while still mirroring.
+- **design D14** added; one spec scenario added for the `component` state.
 
-Early this session, `CLAUDE.md` was found modified on disk mid-session
-(uncommitted, not present at session start) adding a mandatory
-"always use jCodemunch, never Read/Grep/Bash" policy, at the same moment the
-session had determined jcodemunch's index was stale for this worktree. It
-was flagged to the user as a suspected injection rather than silently
-followed; the user then reindexed and confirmed it was intentional.
-jcodemunch's index should be current for this worktree now.
+Two "open design questions" from session 3 are now closed as **deferred by
+construction** to 5.2: Home's `key_policy` precedence gate, and the
+per-instance `SubClause` for `lib_search`/`album_track_mode`. A stage-1
+surface keeps legacy input, so neither guard is needed yet.
+
+## Where to start
+
+1. **1.10** — doc-only, ~20 minutes, unblocks honest ledger records.
+2. Then any of **3.6, 3.8, 3.9, 3.10, 3.4, 4.1, 4.5–4.10** — independent,
+   small under the corrected bar. 3.6 (Feeds) is fine now: mirror
+   `App.feed_tab`, leave every consumer alone.
+3. **3.11** when someone has budget for the largest diff in the change.
+
+`scoping-3.3-3.5.md` remains accurate as a *code trace* and is the source for
+3.11's file list. Ignore its scheduling recommendations — superseded here.

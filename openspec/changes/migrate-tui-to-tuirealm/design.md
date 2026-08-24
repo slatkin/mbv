@@ -423,6 +423,63 @@ target boundary forbids a component receiving `App` at all. Each converted surfa
 deletes its slice of the legacy path; `LegacyInput` is removed at the completion
 gate when the last surface leaves it.
 
+### D14 — Conversion is two-stage: mirror first, delete at teardown
+
+A surface converts in **two** steps, in different phases. Conflating them is
+what stalled three implementation sessions, so the split is normative here.
+
+**Stage 1 (groups 2–4) — component + mirror.** The component owns its
+rendering and its own local interaction state. The shell keeps the `App`
+field and the `handle_key_*` handler, and pushes `App` state into the
+component every tick through a `sync_<surface>()` method:
+
+```rust
+pub(super) fn sync_<surface>(&mut self) {
+    let snapshot = /* read + clone off self.app */;
+    if let Some(comp) = self.application.get_component_mut(&id) {
+        if let Some(c) = comp.as_any_mut().downcast_mut::<XComponent>() {
+            c.set_content(snapshot);
+        }
+    }
+}
+```
+
+Async completions arrive the same way, after the shell's existing
+generation/revision/session/image-key validation (D5) — `apply_drain` in
+`sync_search_sidebar` is the reference. This is the "`get_component_mut`
+bridge" the tables below refer to, and it already exists: every surface
+landed so far (`shell_overlays.rs`, `shell_home.rs`) uses exactly this shape.
+There is nothing further to design or build for it.
+
+**Stage 2 (group 5) — teardown.** Only now is the `App` field deleted, the
+legacy handler removed, and the mirror dropped.
+
+The split exists because ownership does not transfer one surface at a time.
+An `App` field is typically read by several *unrelated* authorities — the
+surface's own actions, a different destination's data build, a management
+flow's reset, and two or three input-routing files. Deleting it demands
+migrating all of them in one diff; mirroring demands none of them. So stage 1
+stays a small, genuinely independent diff per surface, and stage 2 is
+scheduled by **authority cluster** rather than by surface, since a cluster's
+fields are read only within the cluster plus the shell.
+
+Two consequences follow, and both are deliberate:
+
+- **A mirror is the correct stage-1 outcome, not technical debt smuggled in.**
+  The spec's no-mirror requirement is a property of the *completion gate*, not
+  of each task ("The migration MAY use internal checkpoints, behaviour-
+  preserving commits, and temporary adapters"). A stage-1 task that tries to
+  delete `App` state has mis-read its bar.
+- **Input-precedence questions defer to 5.2.** Because a stage-1 surface keeps
+  forwarding to legacy input, it needs no subscription guard yet. The gates
+  that cannot be expressed as a static `SubClause` (`playback`, `lib_search`,
+  `album_track_mode`) and the per-instance guard for one-component-per-tab
+  surfaces are therefore answered once, when the precedence table moves as a
+  unit — which is the only point they can be answered coherently.
+
+The ledger records the two stages as two states: `component` (stage 1 landed)
+and `migrated` (stage 2 landed). Only `migrated` satisfies the completion gate.
+
 ## Risks / Trade-offs
 
 - **TuiRealm delivers to active + subscribers, not first-match.** This differs
