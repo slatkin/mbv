@@ -36,6 +36,7 @@ pub struct TvWorkspaceComponent {
     last_mirrored_scroll: usize,
     last_mirrored_season: usize,
     last_mirrored_episode: Option<usize>,
+    last_series_id: Option<String>,
     layout: crate::app::layout::LayoutMain,
 }
 
@@ -62,21 +63,32 @@ impl TvWorkspaceComponent {
             last_mirrored_scroll: 0,
             last_mirrored_season: 0,
             last_mirrored_episode: None,
+            last_series_id: None,
             layout: Default::default(),
         }
     }
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
+        let series_changed =
+            context.selected_series.as_ref().map(|item| &item.id) != self.last_series_id.as_ref();
+        if series_changed {
+            self.season_cursor = 0;
+            self.episode_cursor = None;
+            self.pane = Pane::Series;
+            self.last_series_id = context.selected_series.as_ref().map(|item| item.id.clone());
+        }
         if !self.initialized {
             self.cursor = context.list.cursor();
             self.scroll = context.list.scroll();
-            self.season_cursor = context.season_cursor;
-            self.episode_cursor = context.episode_cursor;
-            self.pane = if context.episode_cursor.is_some() {
-                Pane::Episodes
-            } else {
-                Pane::Series
-            };
+            if !series_changed {
+                self.season_cursor = context.season_cursor;
+                self.episode_cursor = context.episode_cursor;
+                self.pane = if context.episode_cursor.is_some() {
+                    Pane::Episodes
+                } else {
+                    Pane::Series
+                };
+            }
             self.initialized = true;
         } else {
             if self.cursor == self.last_mirrored_cursor {
@@ -85,10 +97,10 @@ impl TvWorkspaceComponent {
             if self.scroll == self.last_mirrored_scroll {
                 self.scroll = context.list.scroll();
             }
-            if self.season_cursor == self.last_mirrored_season {
+            if !series_changed && self.season_cursor == self.last_mirrored_season {
                 self.season_cursor = context.season_cursor;
             }
-            if self.episode_cursor == self.last_mirrored_episode {
+            if !series_changed && self.episode_cursor == self.last_mirrored_episode {
                 self.episode_cursor = context.episode_cursor;
                 self.pane = if context.episode_cursor.is_some() {
                     Pane::Episodes
@@ -101,6 +113,12 @@ impl TvWorkspaceComponent {
         self.cursor = self
             .cursor
             .min(self.context.list.item_count().saturating_sub(1));
+        let season_count = self
+            .context
+            .series_detail
+            .as_ref()
+            .map_or(0, |detail| detail.seasons.len());
+        self.season_cursor = self.season_cursor.min(season_count.saturating_sub(1));
         self.last_mirrored_cursor = self.context.list.cursor();
         self.last_mirrored_scroll = self.context.list.scroll();
         self.last_mirrored_season = self.context.season_cursor;
@@ -286,6 +304,48 @@ mod tests {
             false,
         ));
         assert_eq!(component.episode_cursor, Some(0));
+    }
+
+    #[test]
+    fn tv_workspace_series_change_resets_local_selection() {
+        let mut component = TvWorkspaceComponent::new();
+        let mut season_one = make_item("Season 1", "Season");
+        season_one.id = "season-1".into();
+        let mut season_two = make_item("Season 2", "Season");
+        season_two.id = "season-2".into();
+        let detail = crate::app::SeriesDetail {
+            seasons: vec![season_one, season_two],
+            episodes: std::collections::HashMap::new(),
+        };
+        let mut series_a = make_item("Series A", "Series");
+        series_a.id = "series-a".into();
+        let mut series_b = make_item("Series B", "Series");
+        series_b.id = "series-b".into();
+
+        component.set_content(TvWideRenderCtx::new(
+            LibraryListRenderCtx::from_items(vec![series_a.clone()], 0, 0),
+            Some(series_a),
+            Some(detail.clone()),
+            0,
+            None,
+            true,
+            false,
+        ));
+        component.move_season(1);
+
+        component.set_content(TvWideRenderCtx::new(
+            LibraryListRenderCtx::from_items(vec![series_b.clone()], 0, 0),
+            Some(series_b),
+            Some(detail),
+            0,
+            None,
+            true,
+            false,
+        ));
+
+        assert_eq!(component.season_cursor, 0);
+        assert!(component.episode_cursor.is_none());
+        assert!(matches!(component.pane, Pane::Series));
     }
 
     #[test]
