@@ -51,7 +51,7 @@ impl App {
         let Some(name) = name else {
             return;
         };
-        self.confirm_modal = Some(ConfirmModal {
+        self.ask_confirm(ConfirmModal {
             title: " Remove Feed ".into(),
             message: format!(
                 "Remove subscription '{}'?",

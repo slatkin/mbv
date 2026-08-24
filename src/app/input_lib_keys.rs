@@ -200,7 +200,7 @@ impl App {
             }
             KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let name = self.libs[lib_idx].library.name.clone();
-                self.confirm_modal = Some(ConfirmModal {
+                self.ask_confirm(ConfirmModal {
                     title: " Rescan Library ".into(),
                     message: format!("Rescan '{name}'?"),
                     hint: "[y] Confirm    [Esc] Cancel".into(),

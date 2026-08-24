@@ -27,7 +27,7 @@ impl App {
             return;
         }
         if controls_playback_queue && active && current_idx == pos {
-            self.confirm_modal = Some(ConfirmModal {
+            self.ask_confirm(ConfirmModal {
                 title: " Remove Item ".into(),
                 message: "Remove now-playing item and stop playback?".into(),
                 hint: "[y] Confirm    [Esc] Cancel".into(),
@@ -44,7 +44,7 @@ impl App {
                 .map(|(npid, item)| item.id == *npid)
                 .unwrap_or(false);
             if is_now_playing_remote {
-                self.confirm_modal = Some(ConfirmModal {
+                self.ask_confirm(ConfirmModal {
                     title: " Remove Item ".into(),
                     message: "Remove now-playing item and stop playback?".into(),
                     hint: "[y] Confirm    [Esc] Cancel".into(),
@@ -260,7 +260,7 @@ impl App {
         {
             self.pending_queue_action = Some(action);
             let name = super::ui_util::trunc_str(self.queue_playlist_name(), 36);
-            self.confirm_modal = Some(ConfirmModal {
+            self.ask_confirm(ConfirmModal {
                 title: " Unsaved Playlist Changes ".into(),
                 message: format!("Save changes to \"{}\"?", name),
                 hint: "[s]Save  [d]Discard  [Esc]Cancel".into(),

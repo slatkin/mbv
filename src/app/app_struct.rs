@@ -408,3 +408,9 @@ pub struct App {
     #[cfg(test)]
     pub(super) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
+
+impl App {
+    pub(super) fn ask_confirm(&mut self, modal: ConfirmModal) {
+        self.confirm_modal = Some(modal);
+    }
+}

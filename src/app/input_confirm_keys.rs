@@ -272,7 +272,7 @@ impl App {
             "Clear queue?",
             &[("clear:yes", "Clear"), ("clear:no", "Cancel")],
         );
-        self.confirm_modal = Some(ConfirmModal {
+        self.ask_confirm(ConfirmModal {
             title: " Clear Queue ".into(),
             message: "Clear the queue?".into(),
             hint: "[y] Confirm    [Esc] Cancel".into(),

@@ -189,7 +189,7 @@ impl App {
                     self.emby_runtime.state = completion.previous_state;
                     self.pending_emby_replacement = Some(startup);
                     self.emby_setup_form = None;
-                    self.confirm_modal = Some(super::types_confirm::ConfirmModal {
+                    self.ask_confirm(super::types_confirm::ConfirmModal {
                         title: " Replace Emby ".into(),
                         message: "Replace Emby? The previous server's queues, positions, routes, caches, and credential will be cleared.".into(),
                         hint: "[y/Enter] Replace    [Esc] Cancel".into(),

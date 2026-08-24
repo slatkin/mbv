@@ -386,7 +386,7 @@ impl App {
         if self.emby_runtime.state == ServiceState::NotConfigured {
             return;
         }
-        self.confirm_modal = Some(ConfirmModal {
+        self.ask_confirm(ConfirmModal {
             title: " Remove Emby ".into(),
             message: "Remove Emby? Service-owned setup and state will be cleared.".into(),
             hint: "[y/Enter] Confirm    [Esc] Cancel".into(),
@@ -398,7 +398,7 @@ impl App {
         if self.audiobookshelf_runtime.state == ServiceState::NotConfigured {
             return;
         }
-        self.confirm_modal = Some(ConfirmModal {
+        self.ask_confirm(ConfirmModal {
             title: " Remove Audiobookshelf ".into(),
             message: "Remove Audiobookshelf? Service-owned setup and state will be cleared.".into(),
             hint: "[y/Enter] Confirm    [Esc] Cancel".into(),

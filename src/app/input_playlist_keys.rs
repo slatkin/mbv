@@ -166,7 +166,7 @@ impl App {
             }
             KeyCode::Char('d') if key.modifiers.is_empty() && self.playlists_open.is_none() => {
                 if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
-                    self.confirm_modal = Some(ConfirmModal {
+                    self.ask_confirm(ConfirmModal {
                         title: " Delete Playlist ".into(),
                         message: format!(
                             "Delete playlist '{}'?",
@@ -250,7 +250,7 @@ impl App {
                     .find(|p| p.name.to_lowercase() == name.to_lowercase());
                 if let Some(existing) = existing {
                     self.save_playlist_dialog = None;
-                    self.confirm_modal = Some(ConfirmModal {
+                    self.ask_confirm(ConfirmModal {
                         title: " Overwrite Playlist ".into(),
                         message: format!(
                             "\"{}\" already exists.",
