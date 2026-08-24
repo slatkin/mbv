@@ -56,6 +56,7 @@ pub enum BrowserKind {
     Music,
     HomeVideos,
     AudiobookshelfPodcast,
+    AudiobookshelfBook,
 }
 
 impl BrowserKind {

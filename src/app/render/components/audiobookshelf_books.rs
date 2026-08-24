@@ -55,6 +55,7 @@ impl App {
         focused: bool,
         layout: &mut LayoutMain,
     ) {
+        layout.audiobookshelf_book_area = area;
         layout.audiobookshelf_book_right_area = Rect::default();
         layout.audiobookshelf_book_wide_right_area = Rect::default();
         let Some(index) = self.tab.audiobookshelf_index() else {

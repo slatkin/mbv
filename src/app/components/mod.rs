@@ -8,6 +8,7 @@
 
 #![allow(dead_code)]
 
+pub mod audiobookshelf_book;
 pub mod audiobookshelf_podcast;
 pub mod component_id;
 pub mod confirm;
@@ -29,6 +30,7 @@ pub mod selection_modal;
 pub mod sessions;
 pub mod user_event;
 
+pub use self::audiobookshelf_book::AudiobookshelfBookComponent;
 pub use self::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
 pub use self::component_id::{BrowserKey, BrowserKind, ComponentId, ModalId, OverlayId, PopupId};
 pub use self::confirm::ConfirmComponent;
@@ -52,6 +54,9 @@ pub use self::selection_modal::SelectionModalComponent;
 pub use self::sessions::SessionsComponent;
 pub use self::user_event::UserEvent;
 
+#[cfg(test)]
+#[path = "audiobookshelf_book_component_tests.rs"]
+mod audiobookshelf_book_component_tests;
 #[cfg(test)]
 #[path = "audiobookshelf_podcast_component_tests.rs"]
 mod audiobookshelf_podcast_component_tests;

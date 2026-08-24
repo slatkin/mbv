@@ -8,6 +8,9 @@ mod theme;
 // `render::components::help`, but the `components` module is private. Re-export
 // them here so `crate::app::components::help` can import them without widening
 // the whole `render::components` module.
+pub(in crate::app) use components::audiobookshelf_book::{
+    render_audiobookshelf_book_content, AudiobookshelfBookGeometry,
+};
 pub(in crate::app) use components::audiobookshelf_podcast::{
     render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry,
 };
