@@ -13,7 +13,6 @@ impl Model {
         if library.library.collection_type != "music"
             || !self.app.is_music_group_view(index)
             || !self.app.is_viewing_album_folders(index)
-            || !self.app.layout.main.is_wide_music_active()
         {
             return None;
         }
@@ -102,5 +101,24 @@ mod tests {
             message,
             Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
         ));
+    }
+
+    #[test]
+    fn shell_mounts_music_workspace_in_narrow_mode() {
+        let mut model = Model::new(make_music_group_app());
+        assert!(model.app.is_music_group_view(0));
+        assert!(model.app.is_viewing_album_folders(0));
+        assert!(!model.app.layout.main.is_wide_music_active());
+
+        let wide_area = model.app.layout.main.wide_music_area;
+        assert_eq!(wide_area.width, 0);
+        assert_eq!(wide_area.height, 0);
+        model.sync_music_workspace();
+        let id = model
+            .music_workspace_id
+            .clone()
+            .expect("narrow Music workspace mounted");
+        assert!(model.application.mounted(&id));
+        assert_eq!(model.app.layout.main.wide_music_area, wide_area);
     }
 }
