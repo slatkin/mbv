@@ -5,46 +5,18 @@ impl App {
     pub(in crate::app) fn library_list_render_ctx(
         &self,
         lib_idx: usize,
-        display_recursive_albums: bool,
+        _display_recursive_albums: bool,
     ) -> LibraryListRenderCtx {
         let lib = &self.libs[lib_idx];
-        let (items, cursor, scroll, total_count, search_query, search_loading) =
-            if let Some(search) = &lib.search {
-                let items = search
-                    .results
-                    .iter()
-                    .filter_map(|&idx| {
-                        search.items.get(idx).map(|item| {
-                            if display_recursive_albums {
-                                self.recursive_album_display_item(lib_idx, idx, item.clone())
-                            } else {
-                                item.clone()
-                            }
-                        })
-                    })
-                    .collect::<Vec<_>>();
-                let total = items.len();
-                (
-                    items,
-                    search.cursor,
-                    search.scroll,
-                    total,
-                    Some(search.query.clone()),
-                    search.loading,
-                )
-            } else {
-                match lib.nav_stack.last() {
-                    Some(level) => (
-                        level.items.clone(),
-                        level.cursor,
-                        level.scroll,
-                        level.total_count,
-                        None,
-                        false,
-                    ),
-                    None => (Vec::new(), 0, 0, 0, None, false),
-                }
-            };
+        let (items, cursor, scroll, total_count) = match lib.nav_stack.last() {
+            Some(level) => (
+                level.items.clone(),
+                level.cursor,
+                level.scroll,
+                level.total_count,
+            ),
+            None => (Vec::new(), 0, 0, 0),
+        };
 
         LibraryListRenderCtx {
             items,
@@ -58,8 +30,8 @@ impl App {
                 .and_then(|level| level.letter_filter.as_ref())
                 .cloned(),
             loading: lib.nav_stack.last().is_some_and(|level| level.loading),
-            search_query,
-            search_loading,
+            search_query: None,
+            search_loading: false,
         }
     }
 }

@@ -431,7 +431,6 @@ fn series_season_fetch_producers_require_detail_cache_before_emitting_completion
     series.id = "series-1".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "root".into(),
             title: "TV".into(),

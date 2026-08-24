@@ -87,9 +87,7 @@ impl App {
                 let ctx = self.wide_music_render_ctx(lib_idx);
                 let output =
                     super::music_wide::render_wide_music_group_with_ctx(f, area, &ctx, layout);
-                if let Some(search) = self.libs[lib_idx].search.as_mut() {
-                    search.scroll = output.final_scroll;
-                } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                     level.scroll = output.final_scroll;
                 }
                 self.paint_music_image(f, output.image_paint);
@@ -130,9 +128,7 @@ impl App {
             {
                 let ctx = self.wide_tv_render_ctx(lib_idx, focused);
                 let final_scroll = super::tv_wide::render_wide_tv_with_ctx(f, area, &ctx, layout);
-                if let Some(search) = self.libs[lib_idx].search.as_mut() {
-                    search.scroll = final_scroll;
-                } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                     level.scroll = final_scroll;
                 }
                 return;
@@ -592,14 +588,7 @@ impl App {
         // Persist the scroll offset so the viewport is remembered across frames.
         // tab is always a Library here (tab == Home uses render_home_list).
         if let Some(lib_idx) = self.tab.emby_library_index() {
-            if library_ctx
-                .as_ref()
-                .is_some_and(LibraryListRenderCtx::is_search_active)
-            {
-                if let Some(search) = &mut self.libs[lib_idx].search {
-                    search.scroll = final_offset;
-                }
-            } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                 level.scroll = final_offset;
             }
         }

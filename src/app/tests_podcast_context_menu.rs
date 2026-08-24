@@ -12,7 +12,6 @@ fn podcast_library_detects_collection_type() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
 
@@ -34,7 +33,6 @@ fn podcast_library_detects_name_when_collection_type_missing() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
 
@@ -62,7 +60,6 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
@@ -113,7 +110,6 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
@@ -169,7 +165,6 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
@@ -267,7 +262,6 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),

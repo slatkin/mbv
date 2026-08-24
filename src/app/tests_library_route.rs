@@ -81,7 +81,6 @@ fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
     lib_item.id = "lib-music".to_string();
     app.libs.push(LibraryTab {
         library: lib_item,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -116,7 +115,6 @@ fn apply_route_for_playback_restores_local_when_item_has_no_route() {
     movies_item.id = "lib-movies".to_string();
     app.libs.push(LibraryTab {
         library: movies_item,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -173,7 +171,6 @@ fn apply_route_for_playback_double_failure_strips_using_local_playback() {
     lib_item.id = "lib-movies".to_string();
     app.libs.push(LibraryTab {
         library: lib_item,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,

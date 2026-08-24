@@ -167,10 +167,6 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_queue_column_width,
     },
     ContextEntry {
-        name: "lib_search",
-        handler: App::handle_key_lib_search,
-    },
-    ContextEntry {
         name: "panel_mode_cycle_x",
         handler: App::handle_key_panel_mode_cycle,
     },

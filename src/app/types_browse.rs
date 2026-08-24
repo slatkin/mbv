@@ -1,14 +1,5 @@
 use mbv_core::api::EmbyItem;
 
-pub(super) struct LibSearch {
-    pub(super) query: String,
-    pub(super) items: Vec<mbv_core::api::EmbyItem>,
-    pub(super) results: Vec<usize>, // indices into items, sorted by score desc
-    pub(super) cursor: usize,       // position within results
-    pub(super) scroll: usize,       // viewport scroll offset for the results list
-    pub(super) loading: bool,       // true while full-library fetch is in flight
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct AlbumPathPart {
     pub(super) id: String,

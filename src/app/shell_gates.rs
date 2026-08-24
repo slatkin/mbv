@@ -21,19 +21,14 @@ impl Model {
         let skip_intro_visible = self.app.skip_intro_end_ticks.is_some();
         let next_up_visible = self.app.next_up_item.is_some();
         let blocking_overlay_active = self.blocking_overlay_active();
-        let (lib_search_active, album_track_focused) = match self.app.tab {
+        let lib_search_active = self.inline_search_id.is_some();
+        let album_track_focused = match self.app.tab {
             super::TabSelection::EmbyLibrary(index) => self
                 .app
                 .libs
                 .get(index)
-                .map(|library| {
-                    (
-                        library.search.is_some(),
-                        library.album_track_focus.is_some(),
-                    )
-                })
-                .unwrap_or((false, false)),
-            _ => (false, false),
+                .is_some_and(|library| library.album_track_focus.is_some()),
+            _ => false,
         };
         let _ = self.application.attr(
             &ComponentId::Playback,

@@ -58,9 +58,6 @@ impl App {
             }
             Some(_) => false,
         };
-        if refresh {
-            self.sync_recursive_album_search(lib_idx);
-        }
         if should_spawn {
             self.spawn_album_index_build(library_id);
         }
@@ -92,63 +89,11 @@ impl App {
         });
     }
 
-    pub(super) fn open_recursive_album_search(&mut self, lib_idx: usize) -> bool {
-        if !self.recursive_album_search_enabled(lib_idx) {
-            return false;
-        }
-        self.libs[lib_idx].search = Some(super::LibSearch {
-            query: String::new(),
-            items: Vec::new(),
-            results: Vec::new(),
-            cursor: 0,
-            scroll: 0,
-            loading: false,
-        });
-        self.sync_recursive_album_search(lib_idx);
-        true
-    }
-
-    // Visibility bump: private -> `pub(super)`. Called from
-    // `handle_lib_event`'s `AlbumIndexBuilt` handler, which stays behind in
-    // `actions.rs`.
-    pub(super) fn sync_recursive_album_search(&mut self, lib_idx: usize) {
-        if !self.recursive_album_search_enabled(lib_idx) || self.libs[lib_idx].search.is_none() {
-            return;
-        }
-        let library_id = self.libs[lib_idx].library.id.clone();
-        let (items, loading) = match self.album_indexes.get(&library_id) {
-            Some(AlbumIndexState::Ready(entries)) => (
-                entries.iter().map(|entry| entry.album.clone()).collect(),
-                false,
-            ),
-            Some(AlbumIndexState::Loading { .. }) => (Vec::new(), true),
-            _ => (Vec::new(), false),
-        };
-        if let Some(search) = self.libs[lib_idx].search.as_mut() {
-            search.items = items;
-            search.loading = loading;
-        }
-        self.update_lib_search(lib_idx);
-    }
-
-    pub(super) fn recursive_album_search_entry(&self, lib_idx: usize) -> Option<AlbumSearchEntry> {
-        if !self.recursive_album_search_enabled(lib_idx) {
-            return None;
-        }
-        let lib = self.libs.get(lib_idx)?;
-        let search = lib.search.as_ref()?;
-        let item_idx = *search.results.get(search.cursor)?;
-        let entries = match self.album_indexes.get(&lib.library.id)? {
-            AlbumIndexState::Ready(entries) => entries,
-            _ => return None,
-        };
-        entries.get(item_idx).cloned()
-    }
-
-    pub(super) fn activate_recursive_album(&mut self, lib_idx: usize) -> bool {
-        let Some(entry) = self.recursive_album_search_entry(lib_idx) else {
-            return false;
-        };
+    pub(super) fn activate_recursive_album(
+        &mut self,
+        lib_idx: usize,
+        entry: AlbumSearchEntry,
+    ) -> bool {
         let library_id = self.libs[lib_idx].library.id.clone();
         let library_name = self.libs[lib_idx].library.display_name();
         let Some(client) = self.emby_snapshot() else {
@@ -272,9 +217,6 @@ impl App {
 
     pub(in crate::app) fn maybe_fetch_next_page(&mut self, lib_idx: usize) {
         let lib = &self.libs[lib_idx];
-        if lib.search.is_some() {
-            return;
-        }
         let lvl = match lib.nav_stack.last() {
             Some(l) => l,
             None => return,

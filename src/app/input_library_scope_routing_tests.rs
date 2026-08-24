@@ -17,7 +17,6 @@ pub(super) fn make_library_app() -> App {
     let items = make_items(2);
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -120,7 +119,6 @@ fn ctrl_r_confirmation_targets_active_library() {
         library.is_folder = true;
         app.libs.push(LibraryTab {
             library,
-            search: None,
             nav_stack: vec![BrowseLevel {
                 parent_id: lib_id.into(),
                 title: title.into(),
@@ -441,7 +439,6 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,

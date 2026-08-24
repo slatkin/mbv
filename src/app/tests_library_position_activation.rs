@@ -9,7 +9,6 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -73,7 +72,6 @@ fn activating_saved_position_initializes_feed_home_video_state() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -124,7 +122,6 @@ fn ensure_lib_loaded_for_visible_library_accepts_restore_from_queue_focus() {
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -192,7 +189,6 @@ fn library_tab_next_activates_saved_placeholder() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -236,7 +232,6 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,

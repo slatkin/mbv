@@ -47,7 +47,6 @@ fn tv_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         series_selection: None,

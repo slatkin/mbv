@@ -68,7 +68,6 @@ fn make_movie_app(titles: Vec<&str>) -> App {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),

@@ -446,16 +446,7 @@ impl App {
                 parent_id,
                 items,
             } => {
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    let current_parent = lib.nav_stack.last().map(|l| l.parent_id.as_str());
-                    if current_parent == Some(&parent_id) {
-                        if let Some(s) = lib.search.as_mut() {
-                            s.items = items;
-                            s.loading = false;
-                        }
-                    }
-                }
-                self.update_lib_search(lib_idx);
+                let _ = (lib_idx, parent_id, items);
             }
             LibEvent::AlbumIndexBuilt { library_id, result } => {
                 let rebuild_pending = matches!(
@@ -487,13 +478,6 @@ impl App {
                             );
                         }
                     }
-                    if let Some(lib_idx) = self
-                        .libs
-                        .iter()
-                        .position(|lib| lib.library.id == library_id)
-                    {
-                        self.sync_recursive_album_search(lib_idx);
-                    }
                 }
             }
             LibEvent::RecursiveAlbumActivated {
@@ -509,7 +493,6 @@ impl App {
                 };
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack = nav_stack;
-                    lib.search = None;
                     lib.album_track_focus = Some(0);
                 }
                 self.save_default_library_position(lib_idx);
@@ -609,7 +592,6 @@ impl App {
             } => {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack = nav_stack;
-                    lib.search = None;
                 }
                 if switch_tab {
                     self.set_library_tab(lib_idx + 1);

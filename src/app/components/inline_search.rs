@@ -12,7 +12,7 @@ use tuirealm::event::{Event, Key, KeyModifiers, MouseEvent};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
+use super::legacy_input::to_crossterm_mouse_event;
 use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, LibraryListRenderCtx};
@@ -25,24 +25,29 @@ pub(in crate::app) enum SearchPool {
 }
 
 impl SearchPool {
-    fn items(&self) -> Vec<mbv_core::api::EmbyItem> {
+    fn filtered_items(&self, query: &str) -> Vec<mbv_core::api::EmbyItem> {
+        use fuzzy_matcher::skim::SkimMatcherV2;
+        use fuzzy_matcher::FuzzyMatcher;
+
+        if query.chars().count() < 2 {
+            return Vec::new();
+        }
+        let matcher = SkimMatcherV2::default();
         match self {
-            Self::Items(items) => items.clone(),
+            Self::Items(items) => items
+                .iter()
+                .filter(|item| matcher.fuzzy_match(&item.display_name(), query).is_some())
+                .cloned()
+                .collect(),
             Self::Albums(entries) => entries
                 .iter()
+                .filter(|entry| matcher.fuzzy_match(&entry.search_text, query).is_some())
                 .map(|entry| {
                     let mut item = entry.album.clone();
                     item.name = entry.display_label.clone();
                     item
                 })
                 .collect(),
-        }
-    }
-
-    fn len(&self) -> usize {
-        match self {
-            Self::Items(items) => items.len(),
-            Self::Albums(entries) => entries.len(),
         }
     }
 }
@@ -56,10 +61,6 @@ pub struct InlineSearchComponent {
     focused: bool,
     area: Rect,
     layout: crate::app::layout::LayoutMain,
-    initialized: bool,
-    last_mirrored_query: String,
-    last_mirrored_cursor: usize,
-    last_mirrored_scroll: usize,
 }
 
 impl InlineSearchComponent {
@@ -73,55 +74,47 @@ impl InlineSearchComponent {
             focused: false,
             area: Rect::default(),
             layout: Default::default(),
-            initialized: false,
-            last_mirrored_query: String::new(),
-            last_mirrored_cursor: 0,
-            last_mirrored_scroll: 0,
         }
     }
 
     pub(in crate::app) fn set_content(
         &mut self,
-        query: String,
         pool: SearchPool,
         loading: bool,
-        cursor: usize,
-        scroll: usize,
         focused: bool,
         area: Rect,
     ) {
-        if !self.initialized {
-            self.query = query.clone();
-            self.cursor = cursor;
-            self.scroll = scroll;
-            self.initialized = true;
-        } else {
-            if self.query == self.last_mirrored_query {
-                self.query = query.clone();
-            }
-            if self.cursor == self.last_mirrored_cursor {
-                self.cursor = cursor;
-            }
-            if self.scroll == self.last_mirrored_scroll {
-                self.scroll = scroll;
-            }
-        }
         self.pool = pool;
-        self.loading = loading;
-        self.cursor = self.cursor.min(self.pool.len().saturating_sub(1));
+        if loading {
+            self.loading = true;
+        }
+        self.cursor = self.cursor.min(
+            self.pool
+                .filtered_items(&self.query)
+                .len()
+                .saturating_sub(1),
+        );
         self.focused = focused;
         self.area = area;
-        self.last_mirrored_query = query;
-        self.last_mirrored_cursor = cursor;
-        self.last_mirrored_scroll = scroll;
+    }
+
+    pub(in crate::app) fn set_loading(&mut self, loading: bool) {
+        self.loading = loading;
+    }
+
+    pub(in crate::app) fn selected_item(&self) -> Option<mbv_core::api::EmbyItem> {
+        self.pool
+            .filtered_items(&self.query)
+            .get(self.cursor)
+            .cloned()
     }
 
     fn move_cursor(&mut self, delta: i64) {
-        self.cursor = move_cursor(self.cursor, delta, self.pool.len());
-    }
-
-    fn selected_item(&self) -> Option<mbv_core::api::EmbyItem> {
-        self.pool.items().get(self.cursor).cloned()
+        self.cursor = move_cursor(
+            self.cursor,
+            delta,
+            self.pool.filtered_items(&self.query).len(),
+        );
     }
 
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
@@ -135,7 +128,13 @@ impl InlineSearchComponent {
             Key::Up => self.move_cursor(-1),
             Key::Down => self.move_cursor(1),
             Key::Home => self.cursor = 0,
-            Key::End => self.cursor = self.pool.len().saturating_sub(1),
+            Key::End => {
+                self.cursor = self
+                    .pool
+                    .filtered_items(&self.query)
+                    .len()
+                    .saturating_sub(1)
+            }
             Key::Enter => {
                 if let Some(item) = self.selected_item() {
                     return Some(Msg::Shell(ShellRequest::InlineSearchActivate {
@@ -144,15 +143,20 @@ impl InlineSearchComponent {
                     }));
                 }
             }
-            Key::Char(c) => self.query.push(c),
+            Key::Esc => return Some(Msg::Shell(ShellRequest::InlineSearchDismiss)),
+            Key::Char(c) => {
+                self.query.push(c);
+                self.cursor = 0;
+                self.scroll = 0;
+            }
             Key::Backspace => {
                 self.query.pop();
+                self.cursor = 0;
+                self.scroll = 0;
             }
             _ => {}
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::Key(
-            to_crossterm_key_event(key),
-        )))
+        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
@@ -164,10 +168,10 @@ impl InlineSearchComponent {
             let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
             if self.layout.left_area.contains(position) {
                 let row = position.y.saturating_sub(self.layout.left_area.y) as usize;
-                self.cursor = move_cursor(row, 0, self.pool.len());
+                self.cursor = move_cursor(row, 0, self.pool.filtered_items(&self.query).len());
             }
         }
-        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
+        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
     }
 }
 
@@ -180,7 +184,8 @@ impl Default for InlineSearchComponent {
 impl Component for InlineSearchComponent {
     fn view(&mut self, frame: &mut Frame, _area: Rect) {
         self.layout = Default::default();
-        let context = LibraryListRenderCtx::from_items(self.pool.items(), self.cursor, self.scroll)
+        let items = self.pool.filtered_items(&self.query);
+        let context = LibraryListRenderCtx::from_items(items, self.cursor, self.scroll)
             .with_search(self.query.clone(), self.loading);
         self.scroll = render_generic_movies_home_video_rows_with_ctx(
             frame,
@@ -230,11 +235,8 @@ mod tests {
         let mut component = InlineSearchComponent::new();
         let items = vec![make_item("One", "Movie"), make_item("Two", "Movie")];
         component.set_content(
-            "one".into(),
             SearchPool::Items(items.clone()),
             false,
-            0,
-            0,
             true,
             Rect::new(0, 0, 40, 5),
         );
@@ -263,11 +265,8 @@ mod tests {
     fn inline_library_search_renders_plain_candidates_without_app() {
         let mut component = InlineSearchComponent::new();
         component.set_content(
-            "one".into(),
             SearchPool::Items(vec![make_item("One", "Movie")]),
             false,
-            0,
-            0,
             true,
             Rect::new(0, 0, 40, 5),
         );
@@ -288,11 +287,8 @@ mod tests {
         let mut component = InlineSearchComponent::new();
         let item = make_item("One", "Movie");
         component.set_content(
-            String::new(),
             SearchPool::Items(vec![item.clone()]),
             false,
-            0,
-            0,
             true,
             Rect::new(0, 0, 40, 5),
         );

@@ -11,7 +11,6 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "parent".into(),
             title: "Loading".into(),
@@ -77,7 +76,6 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "series".into(),
             title: "Season 1".into(),
@@ -121,7 +119,6 @@ fn ensure_feed_library_preserves_saved_feed_position() {
     library.collection_type = "homevideos".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: Some(FeedHomeVideoState {
             selected_group: 2,
@@ -156,7 +153,6 @@ fn ensure_podcast_library_preserves_saved_feed_position() {
     library.collection_type = "podcasts".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: Some(FeedHomeVideoState {
             selected_group: 1,

@@ -38,7 +38,6 @@ fn recursive_music_app() -> App {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -54,7 +53,6 @@ fn lib_tab(collection_type: &str) -> LibraryTab {
     library.collection_type = collection_type.into();
     LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,

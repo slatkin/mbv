@@ -139,7 +139,6 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-shows".into(),
             title: "Shows".into(),
@@ -256,7 +255,6 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
             letter_filter: None,
             music_grouping: None,
         }],
-        search: None,
         feed_home_video: None,
         album_track_focus: None,
         series_selection: None,

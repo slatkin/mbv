@@ -315,9 +315,7 @@ impl App {
                             .flatten();
                         if let Some(target) = target {
                             let before = self.selected_series_item(lib_idx).map(|item| item.id);
-                            if let Some(search) = self.libs[lib_idx].search.as_mut() {
-                                search.cursor = target;
-                            } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                                 level.cursor = target;
                             }
                             if before != self.selected_series_item(lib_idx).map(|item| item.id) {

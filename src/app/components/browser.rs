@@ -75,6 +75,9 @@ impl BrowserComponent {
     ) -> Option<Msg> {
         let count = self.context.item_count();
         match key.code {
+            crossterm::event::KeyCode::Char('/') if key.modifiers.is_empty() => {
+                return Some(Msg::Shell(super::msg::ShellRequest::OpenInlineSearch));
+            }
             crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Char('k') => {
                 self.cursor = move_cursor(self.cursor, -1, count)
             }

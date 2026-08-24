@@ -35,7 +35,6 @@ impl App {
                 if let Some(lib_id) = lib_id {
                     if let Some(lib_idx) = self.libs.iter().position(|l| l.library.id == lib_id) {
                         let lib = &mut self.libs[lib_idx];
-                        lib.search = None;
                         lib.nav_stack.push(BrowseLevel {
                             parent_id: item.id.clone(),
                             title: item.name.clone(),
@@ -99,7 +98,6 @@ impl App {
     pub(super) fn select_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let lib = &mut self.libs[lib_idx];
-            lib.search = None;
             lib.nav_stack.push(BrowseLevel {
                 parent_id: item.id.clone(),
                 title: item.name.clone(),
@@ -127,24 +125,19 @@ impl App {
                 "Ascending".into(),
             );
         } else if is_playable(&item) {
-            if self.libs[lib_idx].search.is_some() {
-                self.libs[lib_idx].search = None;
-                if self.is_feed_home_video_group_view(lib_idx) {
-                    let pos = self
-                        .feed_home_video_selected_items(lib_idx)
-                        .iter()
-                        .position(|i| i.id == item.id);
-                    if let (Some(pos), Some(state)) =
-                        (pos, self.libs[lib_idx].feed_home_video.as_mut())
-                    {
-                        state.video_cursor = pos;
-                    }
-                } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-                    if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
-                        lvl.cursor = pos;
-                    }
+            if self.is_feed_home_video_group_view(lib_idx) {
+                let pos = self
+                    .feed_home_video_selected_items(lib_idx)
+                    .iter()
+                    .position(|i| i.id == item.id);
+                if let (Some(pos), Some(state)) = (pos, self.libs[lib_idx].feed_home_video.as_mut())
+                {
+                    state.video_cursor = pos;
                 }
-                self.save_default_library_position(lib_idx);
+            } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+                if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
+                    lvl.cursor = pos;
+                }
             }
             let fresh = {
                 let Some(client) = self.emby_client() else {
@@ -165,7 +158,7 @@ impl App {
             };
             let in_track_focus_mode = self.is_viewing_album_folders(lib_idx)
                 && self.libs[lib_idx].album_track_focus.is_some();
-            if self.libs[lib_idx].search.is_none() && in_track_focus_mode {
+            if in_track_focus_mode {
                 if let Some(album) = self.selected_album_item(lib_idx) {
                     if self.play_album_track(&album.id, &fresh) {
                         return;
@@ -298,8 +291,7 @@ impl App {
         // videos: nav_stack[0]=folders, nav_stack[1]=grouped videos) -- there is
         // no list above to go back to. Search-clearing still falls through
         // because this guard only fires when search is None.
-        if self.libs[lib_idx].search.is_none()
-            && self.libs[lib_idx].nav_stack.len() == 2
+        if self.libs[lib_idx].nav_stack.len() == 2
             && (self.is_music_group_view(lib_idx) || self.is_feed_home_video_group_view(lib_idx))
         {
             return;
@@ -308,7 +300,7 @@ impl App {
         // Primary pop -- scoped so the mutable borrow of libs[lib_idx] ends here.
         let did_pop = {
             let lib = &mut self.libs[lib_idx];
-            if lib.search.take().is_none() && lib.nav_stack.len() > 1 {
+            if lib.nav_stack.len() > 1 {
                 let child_folder_id = lib.nav_stack.last().map(|l| l.parent_id.clone());
                 lib.nav_stack.pop();
                 if let (Some(folder_id), Some(parent)) = (child_folder_id, lib.nav_stack.last_mut())

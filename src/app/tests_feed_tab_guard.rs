@@ -32,7 +32,6 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -150,7 +149,6 @@ fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -330,7 +328,6 @@ fn f5_on_feeds_tab_does_not_reach_emby_or_audiobookshelf_refresh() {
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -408,7 +405,6 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -492,7 +488,6 @@ fn feeds_tab_keys_cannot_enter_emby_action_paths() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),

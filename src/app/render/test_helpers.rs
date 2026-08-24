@@ -317,7 +317,6 @@ pub fn make_movie_app() -> App {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -403,7 +402,6 @@ pub fn make_music_group_app() -> App {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![
             BrowseLevel {
                 parent_id: "lib-music".into(),
@@ -543,7 +541,6 @@ pub fn make_home_video_app() -> App {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-homevideos".into(),
             title: "Home Videos".into(),
@@ -582,7 +579,6 @@ pub fn make_large_movie_library_app(library_total: usize) -> App {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),

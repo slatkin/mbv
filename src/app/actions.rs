@@ -146,10 +146,6 @@ impl App {
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
         } else {
-            if let Some(s) = &lib.search {
-                let idx = *s.results.get(s.cursor)?;
-                return s.items.get(idx).cloned();
-            }
             if self.is_feed_home_video_group_view(lib_idx) {
                 return self.selected_feed_home_video_item(lib_idx);
             }

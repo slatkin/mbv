@@ -1,6 +1,6 @@
 use super::action::{album_track_command_for_key, Command};
 use super::input_resolver::KeyChord;
-use super::{App, ConfirmAction, ConfirmModal, LibSearch, PanelFocus, TabSelection};
+use super::{App, ConfirmAction, ConfirmModal, PanelFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::{Duration, Instant};
 
@@ -12,87 +12,6 @@ impl App {
             Some(lib_idx)
         } else {
             None
-        }
-    }
-
-    /// Edit the active library search query. Only query-editing keys are
-    /// recognised here: `Esc` closes the search, `Backspace` deletes one
-    /// character, and printable characters extend the query. Navigation
-    /// keys (arrows, page, Home/End, Enter) route through the same cursor
-    /// helpers the plain list uses -- `move_lib_cursor`/`jump_lib_cursor`
-    /// already resolve through `libs[lib_idx].search` when it's `Some`
-    /// (see `lib_cursor_actions.rs`), and `select()` resolves the current
-    /// item through `current_lib_item()`'s search branch, so no separate
-    /// result-cursor logic is needed here.
-    pub(super) fn handle_key_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
-        if key.modifiers.contains(KeyModifiers::ALT)
-            || key.modifiers.contains(KeyModifiers::CONTROL)
-            || !matches!(self.effective_panel_focus(), PanelFocus::Library)
-        {
-            return None;
-        }
-        // Let the shared Tab/BackTab cycling path claim these keys.
-        if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
-            return None;
-        }
-        // This handler is pinned to the CONTEXT_STACK fn-pointer table
-        // (`input_resolver.rs`), so it cannot receive an explicit index
-        // parameter. The browse dispatch front door has already normalized
-        // the destination, so bind the Emby library index by positive match
-        // instead of defaulting a missing index to library zero.
-        let TabSelection::EmbyLibrary(lib_idx) = self.tab else {
-            return None;
-        };
-        if key.code == KeyCode::Enter && self.selected_series_item(lib_idx).is_some() {
-            return None;
-        }
-        if self
-            .libs
-            .get(lib_idx)
-            .is_some_and(|lib| lib.search.is_some())
-        {
-            self.handle_lib_search_key(lib_idx, key);
-            Some(false)
-        } else {
-            None
-        }
-    }
-
-    fn handle_lib_search_key(&mut self, lib_idx: usize, key: KeyEvent) {
-        match key.code {
-            KeyCode::Esc => {
-                self.libs[lib_idx].search = None;
-            }
-            KeyCode::Backspace => {
-                let empty = self.libs[lib_idx]
-                    .search
-                    .as_ref()
-                    .is_none_or(|s| s.query.is_empty());
-                if empty {
-                    self.libs[lib_idx].search = None;
-                } else {
-                    self.libs[lib_idx].search.as_mut().unwrap().query.pop();
-                    self.update_lib_search(lib_idx);
-                }
-            }
-            KeyCode::Up => self.move_lib_cursor(lib_idx, -1),
-            KeyCode::Down => self.move_lib_cursor(lib_idx, 1),
-            KeyCode::PageUp => {
-                let p = self.lib_page_size();
-                self.move_lib_cursor(lib_idx, -(p as i64));
-            }
-            KeyCode::PageDown => {
-                let p = self.lib_page_size();
-                self.move_lib_cursor(lib_idx, p as i64);
-            }
-            KeyCode::Home => self.jump_lib_cursor(lib_idx, false),
-            KeyCode::End => self.jump_lib_cursor(lib_idx, true),
-            KeyCode::Enter => self.select(lib_idx),
-            KeyCode::Char(c) => {
-                self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
-                self.update_lib_search(lib_idx);
-            }
-            _ => {}
         }
     }
 
@@ -289,49 +208,6 @@ impl App {
                 });
             }
             KeyCode::Char('r') => self.refresh_lib(lib_idx),
-            KeyCode::Char('/') => {
-                if self.open_recursive_album_search(lib_idx) {
-                    return Some(false);
-                }
-                let (items, needs_full_load) = if self.is_feed_home_video_group_view(lib_idx) {
-                    (self.feed_home_video_selected_items(lib_idx), false)
-                } else {
-                    self.libs[lib_idx]
-                        .nav_stack
-                        .last()
-                        .map(|l| {
-                            let all = l.all_items.clone().unwrap_or_else(|| l.items.clone());
-                            // With a letter-range pill active, `l.total_count`
-                            // is the FILTERED range's count, not the whole
-                            // library's -- `l.items.len() < l.total_count`
-                            // alone would read a fully-loaded small range as
-                            // "nothing more to fetch" and search would run
-                            // over just that range. Force the full-library
-                            // fetch whenever a filter is active and it
-                            // hasn't already happened (`all_items` still
-                            // unset); `spawn_search_items_load` always fetches
-                            // the whole library unfiltered (see there).
-                            let needs = l.all_items.is_none()
-                                && (l.letter_filter.is_some() || l.items.len() < l.total_count);
-                            (all, needs)
-                        })
-                        .unwrap_or_default()
-                };
-                self.libs[lib_idx].search = Some(LibSearch {
-                    query: String::new(),
-                    items,
-                    results: Vec::new(),
-                    cursor: 0,
-                    scroll: 0,
-                    loading: needs_full_load,
-                });
-                self.libs[lib_idx].series_selection = None;
-                self.libs[lib_idx].series_season_cursor = 0;
-                if needs_full_load {
-                    self.spawn_search_items_load(lib_idx);
-                }
-                self.update_lib_search(lib_idx);
-            }
             // Any other Ctrl/Alt-modified character is claimed here as a
             // no-op. This mirrors the pre-phase-3 `is_lib_key` mirror's
             // broad catch-all in `handle_queue_key`'s left-panel

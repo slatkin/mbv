@@ -11,7 +11,6 @@ fn mixed_services_app() -> App {
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -161,7 +160,6 @@ fn two_emby_libraries_app() -> App {
         };
         app.libs.push(LibraryTab {
             library,
-            search: None,
             nav_stack: vec![level],
             feed_home_video: None,
             album_track_focus: None,

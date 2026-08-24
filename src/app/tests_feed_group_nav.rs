@@ -14,7 +14,6 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -62,7 +61,6 @@ fn feed_home_video_group_view_stays_enabled_with_cached_groups() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![
             BrowseLevel {
                 parent_id: "lib-youtube".into(),
@@ -134,7 +132,6 @@ fn fetch_home_preserves_feed_home_video_state() {
 
     app.libs.push(LibraryTab {
         library: library.clone(),
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -196,7 +193,6 @@ fn select_feed_folder_group_pushes_video_level_for_selected_folder() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -258,7 +254,6 @@ fn select_feed_folder_group_zero_pushes_all_videos_level() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -331,7 +326,6 @@ fn select_feed_folder_group_uses_client_side_all_items_cache() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -409,7 +403,6 @@ fn select_feed_folder_group_updates_feed_state_when_detail_level_exists() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -479,7 +472,6 @@ fn go_back_keeps_feed_home_video_group_view_intact() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -544,7 +536,6 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -609,7 +600,6 @@ fn refresh_lib_targets_feed_selection() {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),

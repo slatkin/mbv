@@ -23,7 +23,6 @@ fn make_library_app(cursor: usize) -> App {
     let items = make_items(2);
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),

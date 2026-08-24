@@ -38,7 +38,6 @@ fn recursive_music_app() -> App {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -154,7 +153,6 @@ fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
     movies_item.id = "lib-movies".to_string();
     app.libs.push(LibraryTab {
         library: movies_item,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -236,7 +234,6 @@ fn play_item_skips_library_routing_when_attached_to_a_session() {
     lib_item.id = "lib-music".to_string();
     app.libs.push(LibraryTab {
         library: lib_item,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -282,7 +279,6 @@ fn play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel
     lib_item.id = "lib-music".to_string();
     app.libs.push(LibraryTab {
         library: lib_item,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,

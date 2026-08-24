@@ -135,7 +135,7 @@ use self::notify_actions::ToastSeverity;
 use self::resize::spawn_resize_worker;
 use self::types_browse::{
     restore_library_position, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel,
-    LibSearch, SeriesDetail,
+    SeriesDetail,
 };
 use self::types_confirm::{ConfirmAction, ConfirmModal};
 use self::types_context_menu::{

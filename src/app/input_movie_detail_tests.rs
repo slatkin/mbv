@@ -28,7 +28,6 @@ fn make_movie_app() -> App {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -67,7 +66,6 @@ fn push_library(app: &mut App, id: &str, name: &str) {
 
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: id.into(),
             title: name.into(),
@@ -318,7 +316,6 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
     library.is_folder = true;
     lib.libs.push(crate::app::LibraryTab {
         library,
-        search: None,
         nav_stack: vec![crate::app::BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -368,7 +365,6 @@ fn ctrl_a_enqueues_selected_from_library_view() {
     movie.id = "movie-1".into();
     app.libs.push(crate::app::LibraryTab {
         library,
-        search: None,
         nav_stack: vec![crate::app::BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),

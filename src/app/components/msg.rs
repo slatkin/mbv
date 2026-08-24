@@ -176,6 +176,10 @@ pub enum ShellRequest {
         id: String,
         item_type: String,
     },
+    /// Open the inline library Search child for the focused Emby browser.
+    OpenInlineSearch,
+    /// Dismiss the focused inline library Search child.
+    InlineSearchDismiss,
     /// Close the Sessions sidebar without changing the selected destination.
     DismissSessions,
     /// Refresh the Emby session and Cast receiver snapshots.

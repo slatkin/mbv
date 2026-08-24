@@ -433,9 +433,7 @@ impl App {
                                         // Double-click on artwork or blank space: no-op.
                                         return;
                                     }
-                                    if self.activate_recursive_album(lib_idx) {
-                                        // active-search jump; unchanged
-                                    } else if self.is_viewing_album_folders(lib_idx) {
+                                    if self.is_viewing_album_folders(lib_idx) {
                                         self.activate_album_folder_row(lib_idx);
                                     } else if self.libs[lib_idx].series_selection.is_some() {
                                         self.activate_series_selection_episode(lib_idx);

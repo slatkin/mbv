@@ -326,7 +326,6 @@ fn save_default_library_position_persists_focused_item() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -367,7 +366,6 @@ fn move_lib_cursor_persists_default_library_position() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -408,7 +406,6 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -466,7 +463,6 @@ fn refresh_lib_clears_saved_position_for_active_library() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -525,7 +521,6 @@ fn trigger_lib_rescan_clears_only_active_scope() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),

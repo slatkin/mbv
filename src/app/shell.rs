@@ -258,7 +258,14 @@ impl Model {
 
             while let Ok(ev) = self.app.lib_rx.try_recv() {
                 had_events = true;
-                self.app.handle_lib_event(ev);
+                match ev {
+                    super::LibEvent::SearchItemsLoaded {
+                        lib_idx,
+                        parent_id,
+                        items,
+                    } => self.apply_inline_search_items(lib_idx, parent_id, items),
+                    ev => self.app.handle_lib_event(ev),
+                }
             }
 
             // Search results drain: the shell drains `search_rx` and writes
@@ -509,16 +516,14 @@ impl Model {
                         Msg::Shell(ShellRequest::SearchActivate { id, item_type }) => {
                             self.app.activate_search_result(id, item_type);
                         }
+                        Msg::Shell(ShellRequest::OpenInlineSearch) => {
+                            self.open_inline_search();
+                        }
+                        Msg::Shell(ShellRequest::InlineSearchDismiss) => {
+                            self.dismiss_inline_search();
+                        }
                         Msg::Shell(ShellRequest::InlineSearchActivate { id, item_type }) => {
-                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                                if let Some(item) = self
-                                    .app
-                                    .current_lib_item(lib_idx)
-                                    .filter(|item| item.id == id && item.item_type == item_type)
-                                {
-                                    self.app.select_item(lib_idx, item);
-                                }
-                            }
+                            self.activate_inline_search_item(id, item_type);
                         }
                         Msg::Shell(ShellRequest::DismissSessions) => {
                             self.app.show_sessions = false;

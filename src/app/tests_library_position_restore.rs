@@ -23,7 +23,6 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -77,7 +76,6 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -249,7 +247,6 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: None,
@@ -311,7 +308,6 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: None,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Power".into(),
