@@ -127,5 +127,12 @@ contributing surface's group 2–4 conversion to have landed.
 - [ ] 5.3c **Teardown — overlay/modal cluster.** Requires 2.1–2.5, 3.2, 3.7, 3.8, 3.9, 4.7, 4.8, 4.9, 5.2. Delete the `App` open-flags, overlay state, and the `handle_key_*` handlers the converted overlays still forward to, plus the duplicated variable-row geometry in `input_mouse_panels.rs`. Verify `rtk cargo nextest run -p mbv` + scan.
 - [ ] 5.3d **Teardown — framework removal.** Requires 5.3a–5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters. Verify `rtk cargo check -p mbv` and that no `impl App` interaction handler and no component-local `App` field remains for any surface.
 - [ ] 5.4 Confirm every mouse path reads component-owned geometry (no global hit map); verify the six precedence/mouse proofs (blocking-overlay swallow, parent/global precedence, simultaneous Queue+Library mouse, overlay blocks underlying mutation, deterministic focus restoration, geometry cannot drift) as tests.
+  `KEY_POLICY` and `KeyPolicyGate::sub_clause()` are referenced nowhere outside
+  `key_policy.rs`'s own ordering test — the file still carries
+  `#![allow(dead_code)]`. 5.2 turned the gate descriptions into real
+  `SubClause` values, but stack still runs through legacy CONTEXT_STACK
+  dispatch, so the clauses do not execute until legacy input is removed at
+  5.3c/5.3d. 5.4's six precedence proofs must either activate them first or
+  assert against the table rather than runtime behaviour.
 - [ ] 5.5 Flip all `docs/architecture/interactive-surface-ledger.md` rows to `migrated` with verification records; verify no `legacy` **and no `component`** row remains (see 1.10).
 - [ ] 5.6 Final gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`, and `rtk make check-code-file-lines` all pass; confirm no parallel legacy interaction framework remains and the shell Model holds only shell/runtime authority plus the TuiRealm `Application`.

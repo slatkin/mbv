@@ -120,15 +120,10 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
     // 13 — Inline library search
     KeyPolicyEntry {
         name: "lib_search",
-        // `InlineSearch(BrowserKey)` is runtime-parameterized (one instance
-        // per browser tab) since `BrowserKey` carries the library id -- no
-        // single `ComponentId` value represents "the" inline search
-        // statically, so this can't assert a specific `Some(id)`/`IsMounted`
-        // target the way the fixed-identity overlay entries above do.
-        // `Active(None)` + `Custom` mirror `view_dispatch`'s "whichever leaf
-        // is actually focused" pattern; task 3.3 must decide the real gate
-        // (e.g. a `SubClause` built per-instance at mount time) when wiring
-        // this live.
+        // The shell resolves the parameterized question in
+        // `sync_precedence_gates` and carries it as an attribute on the
+        // `ComponentId::Playback` carrier, so this clause needs no per-instance
+        // identity.
         owner: KeyPolicyOwner::Active(None),
         gate: KeyPolicyGate::HasAttrValue(
             ComponentId::Playback,
@@ -209,8 +204,7 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
     // 23 — Inline album-track mode
     KeyPolicyEntry {
         name: "album_track_mode",
-        // Same runtime-parameterized-key limitation as `lib_search` above --
-        // `Browser(BrowserKey)` has no single static value to assert.
+        // See the resolved parameterized-gate note on `lib_search` above.
         owner: KeyPolicyOwner::Active(None),
         gate: KeyPolicyGate::HasAttrValue(
             ComponentId::Playback,
