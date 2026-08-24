@@ -100,12 +100,12 @@ impl Model {
         if self.inline_search_id.is_some() {
             return;
         }
-        let Some(id) = self.app.libs.get(index).and_then(|library| {
-            Some(ComponentId::InlineSearch(BrowserKey {
+        let Some(id) = self.app.libs.get(index).map(|library| {
+            ComponentId::InlineSearch(BrowserKey {
                 service: ServiceKind::Emby,
                 library_id: library.library.id.clone(),
                 kind: BrowserKind::from_collection_type(&library.library.collection_type),
-            }))
+            })
         }) else {
             return;
         };
