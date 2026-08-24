@@ -71,7 +71,7 @@ impl App {
         );
     }
 
-    fn render_wide_movies_with_ctx(
+    pub(in crate::app::render) fn render_wide_movies_with_ctx(
         &mut self,
         f: &mut Frame,
         area: Rect,
