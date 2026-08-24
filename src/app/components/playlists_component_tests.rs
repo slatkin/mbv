@@ -36,6 +36,6 @@ fn playlists_component_hit_test_uses_wrapped_row_geometry() {
         kind: MouseEventKind::Down(MouseButton::Left),
         modifiers: KeyModifiers::NONE,
     }));
-    assert!(message.is_some());
+    assert!(message.is_none());
     assert_eq!(component.open_cursor(), 0);
 }

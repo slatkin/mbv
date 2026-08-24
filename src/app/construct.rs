@@ -76,7 +76,6 @@ impl App {
             lib_rx: init.lib_rx,
             search_tx: init.search_tx,
             search_rx: init.search_rx,
-            open_sidebar: None,
             sessions_tx: init.sessions_tx,
             sessions_rx: init.sessions_rx,
             card_image_tx: init.card_image_tx,

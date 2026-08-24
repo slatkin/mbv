@@ -143,14 +143,6 @@ pub(super) struct ContextEntry {
 /// `docs/adr/0002-centralized-input-handling.md`.
 pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
-        name: "settings",
-        handler: App::handle_key_settings,
-    },
-    ContextEntry {
-        name: "playlists",
-        handler: App::handle_key_playlists,
-    },
-    ContextEntry {
         name: "global_overlay_open",
         handler: App::handle_key_global_overlay_open,
     },

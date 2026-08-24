@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 impl App {
     /// Key routing for the feeds management overlay (§6.1), nested inside
-    /// `handle_key_settings` the same way `multiselect_popup` and
+    /// the Settings component the same way `multiselect_popup` and
     /// `library_routes_popup` are.
     pub(super) fn handle_key_feeds_manage(&mut self, key: KeyEvent) -> Option<bool> {
         let stage = self.feeds_manage_popup.as_ref()?.stage.clone();

@@ -78,20 +78,7 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         gate: KeyPolicyGate::IsMounted(ComponentId::Overlay(OverlayId::SelectionModal)),
         blocking: true,
     },
-    // 7–10 — Non-blocking overlays
-    KeyPolicyEntry {
-        name: "settings",
-        owner: KeyPolicyOwner::Active(Some(ComponentId::Overlay(OverlayId::Settings))),
-        gate: KeyPolicyGate::IsMounted(ComponentId::Overlay(OverlayId::Settings)),
-        blocking: false,
-    },
-    KeyPolicyEntry {
-        name: "playlists",
-        owner: KeyPolicyOwner::Active(Some(ComponentId::Overlay(OverlayId::Playlists))),
-        gate: KeyPolicyGate::IsMounted(ComponentId::Overlay(OverlayId::Playlists)),
-        blocking: false,
-    },
-    // 11 — Global overlay-open keys (only when no blocking overlay is up)
+    // Global overlay-open keys (only when no blocking overlay is up)
     KeyPolicyEntry {
         name: "global_overlay_open",
         owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),

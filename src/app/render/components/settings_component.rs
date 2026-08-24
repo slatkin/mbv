@@ -7,6 +7,13 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+#[derive(Default)]
+pub(in crate::app) struct SettingsRenderGeometry {
+    pub panel_area: Rect,
+    pub content_area: Rect,
+    pub cursor_lines: Vec<usize>,
+}
+
 pub(in crate::app) struct SettingsRenderModel<'a> {
     pub destination: SettingsDestination,
     pub rows: &'a [SettingsRow],
@@ -21,18 +28,21 @@ pub(in crate::app) fn render_settings_content(
     frame: &mut Frame,
     area: Rect,
     model: SettingsRenderModel<'_>,
+    geometry: &mut SettingsRenderGeometry,
 ) {
+    let panel_area = if area.width > 0 {
+        area
+    } else {
+        Rect {
+            width: SETTINGS_PANEL_W.min(frame.area().width),
+            height: frame.area().height,
+            ..frame.area()
+        }
+    };
+    geometry.panel_area = panel_area;
     let content = crate::app::render::render_panel_shell_at(
         frame,
-        if area.width > 0 {
-            area
-        } else {
-            Rect {
-                width: SETTINGS_PANEL_W.min(frame.area().width),
-                height: frame.area().height,
-                ..frame.area()
-            }
-        },
+        panel_area,
         match model.setup {
             Some(SetupDraft::Emby { .. }) => "EMBY SETUP",
             Some(SetupDraft::Audiobookshelf { .. }) => "AUDIOBOOKSHELF SETUP",
@@ -48,9 +58,12 @@ pub(in crate::app) fn render_settings_content(
         },
         true,
     );
+    geometry.content_area = content;
+    geometry.cursor_lines.clear();
     match model.setup {
         Some(setup) => render_setup(frame, content, setup),
         None if model.destination == SettingsDestination::Services => {
+            geometry.cursor_lines.extend(0..model.services.len());
             let lines = model
                 .services
                 .iter()
@@ -86,6 +99,12 @@ pub(in crate::app) fn render_settings_content(
         None => {
             let mut lines = Vec::new();
             for row in model.rows {
+                if let Some(cursor) = row.cursor {
+                    if geometry.cursor_lines.len() <= cursor {
+                        geometry.cursor_lines.resize(cursor + 1, 0);
+                    }
+                    geometry.cursor_lines[cursor] = lines.len();
+                }
                 if row.section {
                     lines.push(Line::from(vec![
                         Span::raw(""),

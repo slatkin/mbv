@@ -182,20 +182,58 @@ fn scroll_wheel_on_volume_pill_dispatches_the_same_command_as_the_keys() {
 
 #[test]
 fn settings_mouse_rows_follow_inset_content_area() {
-    let mut app = make_app_stub();
-    app.open_sidebar(super::SidebarId::Settings);
-    app.terminal_width = 20;
-    app.terminal_height = 10;
-    app.layout.settings_content_area = Rect::new(2, 4, 15, 3);
-    app.layout.settings_line_of_cursor = vec![0, 1];
-    app.settings_cursor = 1;
+    use crate::app::components::{
+        Msg, PersistRequest, SettingsComponent, SettingsRow, SettingsSnapshot,
+    };
+    use tuirealm::component::{AppComponent, Component};
+    use tuirealm::event::{
+        Event, KeyModifiers as RealmKeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    };
 
-    app.handle_mouse(left_down(2, 3));
-    assert_eq!(app.settings_cursor, 1, "header inset row is not clickable");
+    let mut component = SettingsComponent::new();
+    component.set_content(SettingsSnapshot {
+        destination: crate::app::types_settings::SettingsDestination::Main,
+        rows: vec![
+            SettingsRow {
+                label: "General".into(),
+                value: String::new(),
+                section: true,
+                cursor: None,
+            },
+            SettingsRow {
+                label: "Stay alive".into(),
+                value: "off".into(),
+                section: false,
+                cursor: Some(0),
+            },
+        ],
+        services: Vec::new(),
+        setup: None,
+        cursor: 1,
+        services_cursor: 0,
+        scroll: 0,
+        area: Rect::new(2, 2, 15, 8),
+    });
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(20, 10)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
 
-    app.handle_mouse(left_down(2, 4));
-    assert_eq!(
-        app.settings_cursor, 0,
-        "first inset content row is clickable"
+    let mouse = |row| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 4,
+            row,
+            modifiers: RealmKeyModifiers::NONE,
+        })
+    };
+    assert!(
+        component.on(&mouse(3)).is_none(),
+        "panel header is not clickable"
     );
+    assert!(matches!(
+        component.on(&mouse(6)),
+        Some(Msg::Persist(PersistRequest::SettingsKey { cursor: 0, key }))
+            if key.code == crossterm::event::KeyCode::Enter
+    ));
 }

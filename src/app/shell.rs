@@ -112,7 +112,7 @@ impl Model {
                 vec![],
             )
             .expect("mount Playback");
-        model.sync_settings();
+        model.update_settings_content();
         model
     }
 
@@ -462,19 +462,16 @@ impl Model {
                         Msg::Shell(ShellRequest::Quit) => quit = true,
                         Msg::Shell(ShellRequest::DismissHelp) => self.umount_help(),
                         Msg::Shell(ShellRequest::OpenSettings) => {
-                            self.app.close_sidebar(super::SidebarId::Sessions);
                             self.umount_help();
-                            self.app.open_sidebar(super::SidebarId::Settings);
+                            self.mount_sidebar(super::SidebarId::Settings);
                         }
                         Msg::Shell(ShellRequest::OpenSessions) => {
                             self.umount_help();
-                            self.app.open_sidebar(super::SidebarId::Sessions);
-                            self.app.spawn_sessions_load();
-                            self.app.spawn_cast_discovery();
+                            self.mount_sidebar(super::SidebarId::Sessions);
                         }
                         Msg::Shell(ShellRequest::OpenPlaylists) => {
-                            self.app.close_sidebar(super::SidebarId::Sessions);
                             self.umount_help();
+                            self.mount_sidebar(super::SidebarId::Playlists);
                             self.app.open_playlists_panel();
                         }
                         Msg::Shell(ShellRequest::ConfirmKey(key)) => {
@@ -495,11 +492,9 @@ impl Model {
                             self.app.handle_key_context_menu(key);
                         }
                         // Search sidebar: dismiss (Esc/Backspace-on-empty).
-                        // The component owns the state; the shell clears the
-                        // open flag, which `sync_search_sidebar` picks up to
-                        // unmount (task 3.2).
+                        // The component owns the state; the shell unmounts it.
                         Msg::Shell(ShellRequest::DismissSearch) => {
-                            self.app.close_sidebar(super::SidebarId::Search);
+                            self.dismiss_sidebar(super::SidebarId::Search);
                         }
                         // Search sidebar: activate result (Enter). The
                         // component owns the cursor/results; the shell owns
@@ -517,7 +512,7 @@ impl Model {
                             self.activate_inline_search_item(id, item_type);
                         }
                         Msg::Shell(ShellRequest::DismissSessions) => {
-                            self.app.close_sidebar(super::SidebarId::Sessions);
+                            self.dismiss_sidebar(super::SidebarId::Sessions);
                         }
                         Msg::Shell(ShellRequest::RefreshSessions) => {
                             self.app.spawn_sessions_load();
@@ -537,7 +532,7 @@ impl Model {
                                     ToastSeverity::Success,
                                 );
                             }
-                            self.app.close_sidebar(super::SidebarId::Sessions);
+                            self.dismiss_sidebar(super::SidebarId::Sessions);
                         }
                         Msg::Shell(ShellRequest::RefreshFeeds) => {
                             self.app.refresh_feeds();
@@ -579,14 +574,16 @@ impl Model {
                         Msg::Shell(ShellRequest::AudiobookshelfBookMouse(mouse)) => {
                             self.handle_audiobookshelf_book_mouse(mouse);
                         }
-                        Msg::Shell(ShellRequest::PlaylistsKey(key)) => {
-                            if self.app.handle_key_playlists(key).unwrap_or(false) {
-                                quit = true;
-                            }
-                        }
-                        Msg::Shell(ShellRequest::PlaylistsMouse(mouse)) => {
-                            self.app.handle_mouse_panels(mouse);
-                        }
+                        Msg::Shell(
+                            request @ (ShellRequest::PlaylistsBack
+                            | ShellRequest::PlaylistsOpen(_)
+                            | ShellRequest::PlaylistsActivate { .. }
+                            | ShellRequest::PlaylistsRename(_)
+                            | ShellRequest::PlaylistsDelete(_)
+                            | ShellRequest::PlaylistsRefresh
+                            | ShellRequest::DismissPlaylists),
+                        ) => self.handle_playlists_request(request),
+                        Msg::Shell(ShellRequest::DismissSettings) => self.app.close_settings(),
                         Msg::Shell(ShellRequest::SavePlaylistKey(key)) => {
                             self.handle_save_playlist_key(key);
                         }
@@ -628,21 +625,19 @@ impl Model {
             }
 
             // Apply App-owned effect handoffs to their mounted components.
-            self.sync_settings();
+            self.update_settings_content();
             self.sync_playback();
             self.sync_modal_requests();
             self.sync_context_menu();
             self.sync_multiselect();
             self.sync_library_routes();
             self.sync_feeds_manage();
-            self.sync_search_sidebar();
-            self.sync_sessions();
             self.sync_home();
             self.sync_feeds();
             self.sync_audiobookshelf_podcast();
             self.sync_audiobookshelf_book();
             self.sync_queue();
-            self.sync_playlists();
+            self.update_playlists_content();
             self.sync_playback_prompt();
             self.sync_emby_browser();
             self.sync_tv_workspace();

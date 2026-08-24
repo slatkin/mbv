@@ -195,9 +195,9 @@ impl App {
     }
 
     pub(super) fn open_playlists_panel(&mut self) {
-        self.close_sidebar(super::SidebarId::Sessions);
+        self.request_sidebar_dismiss(super::SidebarId::Sessions);
         self.close_settings();
-        self.open_sidebar(super::SidebarId::Playlists);
+        self.request_sidebar_open(super::SidebarId::Playlists);
         if self.playlists.is_empty() && !self.playlists_loading {
             self.spawn_load_playlists();
         }
@@ -240,7 +240,7 @@ impl App {
         };
         self.replace_queue_or_prompt(action);
         if !self.blocking_overlay_active {
-            self.close_sidebar(super::SidebarId::Playlists);
+            self.request_sidebar_dismiss(super::SidebarId::Playlists);
             self.set_panel_focus(PanelFocus::Queue);
         }
     }

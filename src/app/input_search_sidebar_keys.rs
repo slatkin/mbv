@@ -9,7 +9,7 @@ impl App {
     pub(super) fn activate_search_result(&mut self, item_id: String, item_type: String) {
         let libs = self.library_tabs_for_nav();
         self.spawn_navigate_to_item(item_id, item_type, libs);
-        self.close_sidebar(SidebarId::Search);
+        self.request_sidebar_dismiss(SidebarId::Search);
     }
 }
 

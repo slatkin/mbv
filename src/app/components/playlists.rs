@@ -6,11 +6,12 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseEvent};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
+use super::legacy_input::to_crossterm_mouse_event;
 use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_playlists_content, PlaylistsRenderGeometry};
 use mbv_core::api::EmbyItem;
+use std::time::{Duration, Instant};
 
 pub struct PlaylistsComponent {
     playlists: Vec<EmbyItem>,
@@ -25,6 +26,7 @@ pub struct PlaylistsComponent {
     loaded_id: Option<String>,
     panel_area: Option<Rect>,
     geometry: PlaylistsRenderGeometry,
+    last_click: Option<(Instant, u16, u16)>,
 }
 
 impl PlaylistsComponent {
@@ -42,6 +44,7 @@ impl PlaylistsComponent {
             loaded_id: None,
             panel_area: None,
             geometry: PlaylistsRenderGeometry::default(),
+            last_click: None,
         }
     }
 
@@ -87,6 +90,10 @@ impl PlaylistsComponent {
         self.open_cursor
     }
 
+    fn local_change() -> Option<Msg> {
+        None
+    }
+
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         match key.code {
             Key::Up => {
@@ -123,20 +130,52 @@ impl PlaylistsComponent {
             Key::Left if self.open.is_some() => {
                 self.open = None;
                 self.open_items.clear();
+                return Some(Msg::Shell(ShellRequest::PlaylistsBack));
             }
-            Key::Esc | Key::Backspace if self.open.is_some() => {
+            Key::Esc | Key::Backspace | Key::Function(4) if self.open.is_some() => {
                 self.open = None;
                 self.open_items.clear();
+                return Some(Msg::Shell(ShellRequest::PlaylistsBack));
             }
-            _ => {}
+            Key::Esc | Key::Function(4) => {
+                return Some(Msg::Shell(ShellRequest::DismissPlaylists));
+            }
+            Key::Function(2) => return Some(Msg::Shell(ShellRequest::OpenSettings)),
+            Key::Function(3) => return Some(Msg::Shell(ShellRequest::OpenSessions)),
+            Key::Char('q') if key.modifiers.is_empty() => {
+                return Some(Msg::Shell(ShellRequest::Quit));
+            }
+            Key::Right if self.open.is_none() => {
+                return (self.cursor < self.playlists.len())
+                    .then_some(Msg::Shell(ShellRequest::PlaylistsOpen(self.cursor)));
+            }
+            Key::Enter => {
+                let open = self.open.is_some();
+                let index = if open { self.open_cursor } else { self.cursor };
+                return Some(Msg::Shell(ShellRequest::PlaylistsActivate { open, index }));
+            }
+            Key::Char('n') if key.modifiers.is_empty() && self.open.is_none() => {
+                return (self.cursor < self.playlists.len())
+                    .then_some(Msg::Shell(ShellRequest::PlaylistsRename(self.cursor)));
+            }
+            Key::Char('d') if key.modifiers.is_empty() && self.open.is_none() => {
+                return (self.cursor < self.playlists.len())
+                    .then_some(Msg::Shell(ShellRequest::PlaylistsDelete(self.cursor)));
+            }
+            Key::Char('r') => {
+                if self.open.is_some() {
+                    self.open = None;
+                    self.open_items.clear();
+                }
+                return Some(Msg::Shell(ShellRequest::PlaylistsRefresh));
+            }
+            _ => return Self::local_change(),
         }
-        Some(Msg::Shell(ShellRequest::PlaylistsKey(
-            to_crossterm_key_event(key),
-        )))
+        Self::local_change()
     }
 
     fn move_page(&mut self, direction: i64) {
-        let page = self.geometry.content_area.height.saturating_sub(4) as i64;
+        let page = self.geometry.panel_area.height.saturating_sub(4) as i64;
         if self.open.is_some() {
             let last = self.open_items.len().saturating_sub(1) as i64;
             self.open_cursor = (self.open_cursor as i64 + direction * page).clamp(0, last) as usize;
@@ -149,19 +188,57 @@ impl PlaylistsComponent {
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let mouse = to_crossterm_mouse_event(mouse);
         let position: Position = (mouse.column, mouse.row).into();
-        if matches!(
-            mouse.kind,
-            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-        ) {
-            if let Some((open, index)) = self.geometry.hit_test(position) {
+        use crossterm::event::{MouseButton, MouseEventKind};
+        match mouse.kind {
+            MouseEventKind::ScrollDown => {
+                if self.open.is_some() {
+                    self.open_cursor =
+                        (self.open_cursor + 1).min(self.open_items.len().saturating_sub(1));
+                } else {
+                    self.cursor = (self.cursor + 1).min(self.playlists.len().saturating_sub(1));
+                }
+                Self::local_change()
+            }
+            MouseEventKind::ScrollUp => {
+                if self.open.is_some() {
+                    self.open_cursor = self.open_cursor.saturating_sub(1);
+                } else {
+                    self.cursor = self.cursor.saturating_sub(1);
+                }
+                Self::local_change()
+            }
+            MouseEventKind::Down(MouseButton::Right) if self.open.is_some() => {
+                self.open = None;
+                self.open_items.clear();
+                Some(Msg::Shell(ShellRequest::PlaylistsBack))
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                if self.panel_area.is_some_and(|area| !area.contains(position)) {
+                    return Some(Msg::Shell(ShellRequest::DismissPlaylists));
+                }
+                let Some((open, index)) = self.geometry.hit_test(position) else {
+                    return Self::local_change();
+                };
+                let now = Instant::now();
+                let double = self.last_click.is_some_and(|(at, col, row)| {
+                    now.duration_since(at) < Duration::from_millis(400)
+                        && col == mouse.column
+                        && row == mouse.row
+                });
+                self.last_click = Some((now, mouse.column, mouse.row));
                 if open {
                     self.open_cursor = index;
                 } else {
                     self.cursor = index;
                 }
+                if double {
+                    Some(Msg::Shell(ShellRequest::PlaylistsActivate { open, index }))
+                } else {
+                    Self::local_change()
+                }
             }
+            _ => Self::local_change(),
         }
-        Some(Msg::Shell(ShellRequest::PlaylistsMouse(mouse)))
     }
 }
 

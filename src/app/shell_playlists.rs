@@ -1,17 +1,11 @@
-use super::components::{ComponentId, ModalId, OverlayId, PlaylistsComponent};
+use super::components::{ComponentId, ModalId, OverlayId, PlaylistsComponent, ShellRequest};
 use super::shell::Model;
 
 impl Model {
-    pub(super) fn sync_playlists(&mut self) {
+    pub(super) fn update_playlists_content(&mut self) {
         let id = ComponentId::Overlay(OverlayId::Playlists);
-        let mounted = self.application.mounted(&id);
-        if self.app.is_sidebar_open(super::SidebarId::Playlists) && !mounted {
-            self.application
-                .mount(id.clone(), Box::new(PlaylistsComponent::new()), vec![])
-                .expect("mount Playlists");
-            self.application.active(&id).expect("activate Playlists");
-        } else if !self.app.is_sidebar_open(super::SidebarId::Playlists) && mounted {
-            let _ = self.application.umount(&id);
+        if !self.application.mounted(&id) {
+            return;
         }
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(playlists) = comp.as_any_mut().downcast_mut::<PlaylistsComponent>() {
@@ -60,6 +54,105 @@ impl Model {
             self.application.view(&id, frame, frame.area());
         }
     }
+
+    pub(super) fn handle_playlists_request(&mut self, request: ShellRequest) {
+        match request {
+            ShellRequest::PlaylistsBack => {
+                self.app.playlists_open = None;
+                self.app.playlists_open_items.clear();
+            }
+            ShellRequest::PlaylistsOpen(index) => {
+                if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                    self.app.spawn_open_playlist(playlist);
+                }
+            }
+            ShellRequest::PlaylistsActivate { open, index } => {
+                if open {
+                    let Some(selected_id) = self
+                        .app
+                        .playlists_open_items
+                        .get(index)
+                        .map(|item| item.id.clone())
+                    else {
+                        return;
+                    };
+                    let Some(playlist) = self.app.playlists_open.as_ref() else {
+                        return;
+                    };
+                    let items: Vec<_> = self
+                        .app
+                        .playlists_open_items
+                        .iter()
+                        .filter(|item| !item.is_folder)
+                        .cloned()
+                        .collect();
+                    if items.is_empty() {
+                        return;
+                    }
+                    let start_idx = items
+                        .iter()
+                        .position(|item| item.id == selected_id)
+                        .unwrap_or(0);
+                    self.app.replace_queue_or_prompt(
+                        super::types_playback::PendingQueueAction::PlayItems {
+                            items,
+                            start_idx,
+                            source: crate::config::QueueSource::Playlist {
+                                id: Some(playlist.id.clone()),
+                                name: playlist.name.clone(),
+                            },
+                        },
+                    );
+                    if !self.app.blocking_overlay_active {
+                        self.dismiss_sidebar(super::SidebarId::Playlists);
+                        self.app.set_panel_focus(super::PanelFocus::Queue);
+                    }
+                } else if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                    self.app.load_and_play_playlist(playlist.id);
+                }
+            }
+            ShellRequest::PlaylistsRename(index) => {
+                if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                    self.app
+                        .open_save_playlist_dialog(crate::app::SavePlaylistDialog {
+                            input: playlist.name,
+                            stage: crate::app::SavePlaylistStage::RenamePlaylist {
+                                id: playlist.id,
+                            },
+                        });
+                }
+            }
+            ShellRequest::PlaylistsDelete(index) => {
+                if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                    self.app.ask_confirm(crate::app::ConfirmModal {
+                        title: " Delete Playlist ".into(),
+                        message: format!(
+                            "Delete playlist '{}'?",
+                            super::ui_util::trunc_str(&playlist.name, 40)
+                        ),
+                        hint: "[y] Confirm    [Esc] Cancel".into(),
+                        on_confirm: crate::app::ConfirmAction::DeletePlaylist {
+                            id: playlist.id,
+                            name: playlist.name,
+                        },
+                    });
+                }
+            }
+            ShellRequest::PlaylistsRefresh => {
+                if let Some(playlist) = self.app.playlists_open.clone() {
+                    self.app.playlists_open = None;
+                    self.app.playlists_open_items.clear();
+                    self.app.spawn_open_playlist(playlist);
+                } else {
+                    self.app.spawn_load_playlists();
+                }
+            }
+            ShellRequest::DismissPlaylists => {
+                self.dismiss_sidebar(super::SidebarId::Playlists);
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]
@@ -72,9 +165,11 @@ mod tests {
     #[test]
     fn playlists_shell_mounts_and_routes_component() {
         let mut app = make_app_stub();
-        app.open_sidebar(crate::app::SidebarId::Playlists);
+        app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::OpenSidebar(
+            crate::app::SidebarId::Playlists,
+        ));
         let mut model = Model::new(app);
-        model.sync_playlists();
+        model.sync_modal_requests();
         let id = ComponentId::Overlay(OverlayId::Playlists);
         let message = model
             .application
@@ -84,10 +179,27 @@ mod tests {
                 code: Key::Down,
                 modifiers: KeyModifiers::NONE,
             }));
-        assert!(matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::PlaylistsKey(_)))
+        assert!(message.is_none());
+    }
+
+    #[test]
+    fn opening_a_sidebar_unmounts_the_previous_sidebar() {
+        let mut model = Model::new(make_app_stub());
+        model.app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::OpenSidebar(
+            crate::app::SidebarId::Settings,
         ));
+        model.sync_modal_requests();
+        model.app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::OpenSidebar(
+            crate::app::SidebarId::Playlists,
+        ));
+        model.sync_modal_requests();
+
+        assert!(!model
+            .application
+            .mounted(&ComponentId::Overlay(OverlayId::Settings)));
+        assert!(model
+            .application
+            .mounted(&ComponentId::Overlay(OverlayId::Playlists)));
     }
 
     #[test]

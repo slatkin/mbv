@@ -38,12 +38,10 @@ mod input_lib_keys;
 mod input_mouse;
 mod input_mouse_dispatch;
 mod input_mouse_gestures;
-mod input_mouse_panels;
 mod input_playlist_keys;
 mod input_queue_keys;
 mod input_resolver;
 mod input_search_sidebar_keys;
-mod input_settings_keys;
 mod key_policy;
 pub(crate) mod layout;
 mod lib_cursor_actions;
@@ -161,9 +159,9 @@ use self::types_selection_modal::{
     SelectionModal, SelectionModalFilter, SelectionModalListState, SelectionModalRow,
     SelectionModalSource,
 };
-use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};
 #[cfg(test)]
-use self::types_settings::{ServiceEntry, SettingsDestination, SERVICE_ENTRIES};
+use self::types_settings::SettingsDestination;
+use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};
 pub(crate) use self::types_sidebar::SidebarId;
 use self::types_tab_selection::TabSelection;
 use mbv_core::api::EmbyClient;

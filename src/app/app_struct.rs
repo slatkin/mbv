@@ -229,7 +229,6 @@ pub struct App {
     pub(super) dim_backdrop_active: bool,
     pub(super) image_cache_size_total: usize,
     pub(super) context_menu: Option<ContextMenu>,
-    pub(super) open_sidebar: Option<SidebarId>,
     pub(super) settings_cursor: usize,
     pub(super) settings_destination: SettingsDestination,
     pub(super) services_cursor: usize,
@@ -400,26 +399,18 @@ pub struct App {
 }
 
 impl App {
-    pub(super) fn is_sidebar_open(&self, sidebar: SidebarId) -> bool {
-        self.open_sidebar == Some(sidebar)
+    pub(super) fn request_sidebar_open(&mut self, sidebar: SidebarId) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::OpenSidebar(sidebar));
     }
 
-    pub(super) fn open_sidebar(&mut self, sidebar: SidebarId) {
-        self.open_sidebar = Some(sidebar);
+    pub(super) fn request_sidebar_dismiss(&mut self, sidebar: SidebarId) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissSidebar(
+            sidebar,
+        ));
     }
 
-    pub(super) fn close_sidebar(&mut self, sidebar: SidebarId) {
-        if self.open_sidebar == Some(sidebar) {
-            self.open_sidebar = None;
-        }
-    }
-
-    pub(super) fn toggle_sidebar(&mut self, sidebar: SidebarId) {
-        if self.is_sidebar_open(sidebar) {
-            self.open_sidebar = None;
-        } else {
-            self.open_sidebar(sidebar);
-        }
+    pub(super) fn request_sidebar_toggle(&mut self, sidebar: SidebarId) {
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::ToggleSidebar(sidebar));
     }
 
     pub(super) fn ask_confirm(&mut self, modal: ConfirmModal) {

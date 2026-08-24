@@ -102,10 +102,6 @@ impl App {
             self.last_scroll_at = now;
         }
 
-        if self.handle_mouse_panels(mouse) {
-            return;
-        }
-
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout.tabs_area.contains((col, row).into())
         {
@@ -126,7 +122,7 @@ impl App {
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout.settings_area.contains((col, row).into())
         {
-            self.toggle_sidebar(super::SidebarId::Settings);
+            self.request_sidebar_toggle(super::SidebarId::Settings);
             return;
         }
 
@@ -308,11 +304,7 @@ impl App {
                 }
 
                 if self.layout.playback.ind_rc.contains((col, row).into()) {
-                    self.toggle_sidebar(super::SidebarId::Sessions);
-                    if self.is_sidebar_open(super::SidebarId::Sessions) {
-                        self.spawn_sessions_load();
-                        self.spawn_cast_discovery();
-                    }
+                    self.request_sidebar_toggle(super::SidebarId::Sessions);
                     return;
                 }
                 if self.layout.playback.ind_mu.contains((col, row).into()) {

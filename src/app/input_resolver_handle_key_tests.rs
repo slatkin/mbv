@@ -98,39 +98,47 @@ fn repeated_space_dispatches_each_available_toggle() {
 }
 
 #[test]
-fn f2_opens_settings_via_handle_key() {
+fn f2_requests_settings_sidebar_mount() {
     let mut app = make_app_stub();
-    assert!(!app.is_sidebar_open(crate::app::SidebarId::Settings));
     app.handle_key(ev(KeyCode::F(2), KeyModifiers::NONE));
-    assert!(app.is_sidebar_open(crate::app::SidebarId::Settings));
-    // PRESERVED QUIRK: a second F2 press does not close settings. Once
-    // Settings is open, `handle_key_settings` (ordered ahead of
-    // `global_overlay_open`/`queue_column_width` in CONTEXT_STACK, matching the
-    // pre-phase-2 branch order) claims F2 first and its match has no
-    // `F(2)` arm, so it falls to `_ => {}` and swallows the key. This
-    // predates phase 2 (verified against commit 2147343) — not a
-    // regression introduced by this extraction.
-    app.handle_key(ev(KeyCode::F(2), KeyModifiers::NONE));
-    assert!(
-        app.is_sidebar_open(crate::app::SidebarId::Settings),
-        "F2 does not toggle settings closed once open; only Esc/F1/F3/F4/q do"
-    );
+    assert!(matches!(
+        app.pending_overlay,
+        Some(crate::app::types_overlay::OverlayRequest::ToggleSidebar(
+            crate::app::SidebarId::Settings
+        ))
+    ));
+
+    let mut model = crate::app::Model::new(app);
+    model.sync_modal_requests();
+    assert!(model
+        .application
+        .mounted(&crate::app::components::ComponentId::Overlay(
+            crate::app::components::OverlayId::Settings,
+        )));
 }
 
 #[test]
-fn f3_opens_sessions_via_handle_key() {
+fn f3_requests_sessions_sidebar_mount() {
     let mut app = make_app_stub();
-    assert!(!app.is_sidebar_open(crate::app::SidebarId::Sessions));
     app.handle_key(ev(KeyCode::F(3), KeyModifiers::NONE));
-    assert!(app.is_sidebar_open(crate::app::SidebarId::Sessions));
+    assert!(matches!(
+        app.pending_overlay,
+        Some(crate::app::types_overlay::OverlayRequest::OpenSidebar(
+            crate::app::SidebarId::Sessions
+        ))
+    ));
 }
 
 #[test]
-fn f4_opens_playlists_via_handle_key() {
+fn f4_requests_playlists_sidebar_mount() {
     let mut app = make_app_stub();
-    assert!(!app.is_sidebar_open(crate::app::SidebarId::Playlists));
     app.handle_key(ev(KeyCode::F(4), KeyModifiers::NONE));
-    assert!(app.is_sidebar_open(crate::app::SidebarId::Playlists));
+    assert!(matches!(
+        app.pending_overlay,
+        Some(crate::app::types_overlay::OverlayRequest::OpenSidebar(
+            crate::app::SidebarId::Playlists
+        ))
+    ));
 }
 
 #[test]
@@ -263,11 +271,25 @@ fn context_menu_owns_keyboard_navigation_and_dismissal() {
 }
 
 #[test]
-fn context_menu_open_is_refused_over_sidebar_surface() {
+fn context_menu_mount_dismisses_sidebar_surface() {
     let mut app = make_app_stub();
-    app.open_sidebar(crate::app::SidebarId::Sessions);
-    app.open_context_menu();
-    assert!(app.context_menu.is_none());
+    app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::OpenSidebar(
+        crate::app::SidebarId::Sessions,
+    ));
+    let mut model = crate::app::Model::new(app);
+    model.sync_modal_requests();
+    model.app.context_menu = Some(test_empty_context_menu());
+    model.sync_context_menu();
+    assert!(!model
+        .application
+        .mounted(&crate::app::components::ComponentId::Overlay(
+            crate::app::components::OverlayId::Sessions,
+        )));
+    assert!(model
+        .application
+        .mounted(&crate::app::components::ComponentId::Overlay(
+            crate::app::components::OverlayId::ContextMenu,
+        )));
 }
 
 #[test]
@@ -294,8 +316,6 @@ fn context_menu_swallow_regression_shortcuts() {
     for key in keys {
         app.handle_key_context_menu(key);
         assert!(app.context_menu.is_some(), "{key:?} must be swallowed");
-        assert!(!app.is_sidebar_open(crate::app::SidebarId::Settings));
-        assert!(!app.is_sidebar_open(crate::app::SidebarId::Sessions));
     }
 }
 
@@ -511,13 +531,12 @@ fn context_stack_order_is_pinned() {
     // `SearchSidebarComponent`, task 3.2 — its `CONTEXT_STACK` entry was
     // removed when the sidebar became a TuiRealm component).
     // The context menu owns every key while open and therefore precedes all
-    // other modal and view contexts.
+    // other modal and view contexts. Settings and Playlists now receive keys
+    // through their mounted TuiRealm components instead of this legacy stack.
     let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
     assert_eq!(
         names,
         vec![
-            "settings",
-            "playlists",
             "global_overlay_open",
             "queue_column_width",
             "panel_mode_cycle_x",

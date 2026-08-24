@@ -5,26 +5,14 @@ use super::components::{
 use super::shell::Model;
 use super::types_settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
 use super::{settings, SETTINGS_PANEL_W};
-use crossterm::event::KeyEvent;
 use ratatui::layout::Rect;
 
 impl Model {
-    pub(super) fn sync_settings(&mut self) {
+    pub(super) fn update_settings_content(&mut self) {
         let id = ComponentId::Overlay(super::components::OverlayId::Settings);
-        if self.app.is_sidebar_open(super::SidebarId::Settings) && !self.application.mounted(&id) {
-            self.application
-                .mount(id.clone(), Box::new(SettingsComponent::new()), vec![])
-                .expect("mount Settings");
-        } else if !self.app.is_sidebar_open(super::SidebarId::Settings)
-            && self.application.mounted(&id)
-        {
-            let _ = self.application.umount(&id);
-            return;
-        }
         if !self.application.mounted(&id) {
             return;
         }
-
         let child_open = self.app.multiselect_popup.is_some()
             || self.app.library_routes_popup.is_some()
             || self.app.feeds_manage_popup.is_some();
@@ -53,7 +41,7 @@ impl Model {
         let ui = self.app.ui_config_snapshot();
         let mut rows = Vec::new();
         let mut cursor = 0;
-        for (section, keys) in SETTING_SECTIONS {
+        for (section, keys) in &SETTING_SECTIONS[..SETTING_SECTIONS.len() - 1] {
             rows.push(SettingsRow {
                 label: (*section).into(),
                 value: String::new(),
@@ -70,6 +58,12 @@ impl Model {
                 cursor += 1;
             }
         }
+        rows.push(SettingsRow {
+            label: settings::setting_label(super::types_settings::SettingKey::LogOut).into(),
+            value: String::new(),
+            section: false,
+            cursor: Some(cursor),
+        });
 
         let services = SERVICE_ENTRIES
             .iter()
@@ -135,13 +129,43 @@ impl Model {
     pub(super) fn handle_service_request(&mut self, request: ServiceRequest) -> bool {
         match request {
             ServiceRequest::SettingsKey { cursor, key } => {
-                self.app.open_sidebar(super::SidebarId::Settings);
+                self.mount_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
                 self.app.services_cursor = cursor;
-                self.app.handle_key_services_settings(key).unwrap_or(false)
+                match key.code {
+                    crossterm::event::KeyCode::Enter | crossterm::event::KeyCode::Char(' ') => {
+                        self.app.activate_service_entry();
+                    }
+                    crossterm::event::KeyCode::Char('d') | crossterm::event::KeyCode::Char('D')
+                        if cursor == 0 =>
+                    {
+                        self.app.request_emby_removal();
+                    }
+                    crossterm::event::KeyCode::Char('t') | crossterm::event::KeyCode::Char('T')
+                        if cursor == 1 =>
+                    {
+                        self.app.test_audiobookshelf_connection();
+                    }
+                    crossterm::event::KeyCode::Char('r') | crossterm::event::KeyCode::Char('R')
+                        if cursor == 1 =>
+                    {
+                        self.app.route_service_action(
+                            super::types_settings::ServiceActionIntent::ReplaceAudiobookshelf,
+                        );
+                    }
+                    crossterm::event::KeyCode::Char('d') | crossterm::event::KeyCode::Char('D')
+                        if cursor == 1 =>
+                    {
+                        self.app.route_service_action(
+                            super::types_settings::ServiceActionIntent::RemoveAudiobookshelf,
+                        );
+                    }
+                    _ => {}
+                }
+                false
             }
             ServiceRequest::ActivateService(cursor) => {
-                self.app.open_sidebar(super::SidebarId::Settings);
+                self.mount_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
                 self.app.services_cursor = cursor;
                 self.app.activate_service_entry();
@@ -156,10 +180,7 @@ impl Model {
                     form.fields = [server_url, username, password];
                     form.focus = 2;
                 }
-                let _ = self.app.handle_key_services_settings(KeyEvent::new(
-                    crossterm::event::KeyCode::Enter,
-                    crossterm::event::KeyModifiers::NONE,
-                ));
+                self.app.submit_emby_setup();
                 false
             }
             ServiceRequest::SubmitAudiobookshelfSetup {
@@ -170,17 +191,15 @@ impl Model {
                     form.fields = [server_url, api_key];
                     form.focus = 1;
                 }
-                let _ = self.app.handle_key_services_settings(KeyEvent::new(
-                    crossterm::event::KeyCode::Enter,
-                    crossterm::event::KeyModifiers::NONE,
-                ));
+                self.app.submit_audiobookshelf_setup();
                 false
             }
             ServiceRequest::CancelSetup => {
-                let _ = self.app.handle_key_services_settings(KeyEvent::new(
-                    crossterm::event::KeyCode::Esc,
-                    crossterm::event::KeyModifiers::NONE,
-                ));
+                if self.app.emby_setup_form.is_some() {
+                    self.app.cancel_emby_setup();
+                } else if self.app.audiobookshelf_setup_form.is_some() {
+                    self.app.cancel_audiobookshelf_setup();
+                }
                 false
             }
             ServiceRequest::SearchQuery(query) => {
@@ -196,12 +215,54 @@ impl Model {
         &mut self,
         request: super::components::PersistRequest,
     ) -> bool {
-        match request {
-            super::components::PersistRequest::SettingsKey { cursor, key } => {
-                self.app.settings_cursor = cursor;
-                self.app.handle_key_settings(key).unwrap_or(false)
+        let super::components::PersistRequest::SettingsKey { cursor, key } = request;
+        if self.app.settings_destination == SettingsDestination::Services {
+            match key.code {
+                crossterm::event::KeyCode::Esc => {
+                    self.app.settings_destination = SettingsDestination::Main;
+                    self.app.services_cursor = 0;
+                }
+                crossterm::event::KeyCode::F(3) => {
+                    self.app.close_settings();
+                    self.mount_sidebar(super::SidebarId::Sessions);
+                }
+                crossterm::event::KeyCode::F(4) => {
+                    self.app.close_settings();
+                    self.mount_sidebar(super::SidebarId::Playlists);
+                    self.app.open_playlists_panel();
+                }
+                crossterm::event::KeyCode::Char('q') if key.modifiers.is_empty() => {
+                    return self.app.try_quit()
+                }
+                _ => {}
             }
+            return false;
         }
+
+        match key.code {
+            crossterm::event::KeyCode::Esc => self.app.close_settings(),
+            crossterm::event::KeyCode::F(3) => {
+                self.app.close_settings();
+                self.mount_sidebar(super::SidebarId::Sessions);
+            }
+            crossterm::event::KeyCode::F(4) => {
+                self.app.close_settings();
+                self.mount_sidebar(super::SidebarId::Playlists);
+                self.app.open_playlists_panel();
+            }
+            crossterm::event::KeyCode::Char('q') if key.modifiers.is_empty() => {
+                return self.app.try_quit()
+            }
+            crossterm::event::KeyCode::Left
+            | crossterm::event::KeyCode::Right
+            | crossterm::event::KeyCode::Char(' ')
+            | crossterm::event::KeyCode::Enter => {
+                self.app.settings_cursor = cursor;
+                self.app.handle_settings_activate();
+            }
+            _ => {}
+        }
+        false
     }
 }
 

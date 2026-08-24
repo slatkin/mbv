@@ -167,7 +167,7 @@ impl App {
                             self.execute_pending_queue_action(action);
                         }
                         if play_after {
-                            self.close_sidebar(SidebarId::Playlists);
+                            self.request_sidebar_dismiss(SidebarId::Playlists);
                             self.set_panel_focus(PanelFocus::Queue);
                         }
                     }

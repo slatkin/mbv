@@ -56,6 +56,9 @@ impl Model {
             return;
         };
         match request {
+            OverlayRequest::OpenSidebar(sidebar) => self.mount_sidebar(sidebar),
+            OverlayRequest::DismissSidebar(sidebar) => self.dismiss_sidebar(sidebar),
+            OverlayRequest::ToggleSidebar(sidebar) => self.toggle_sidebar(sidebar),
             OverlayRequest::Confirm(modal) => {
                 self.dismiss_modal(&Self::confirm_id());
                 let id = Self::confirm_id();

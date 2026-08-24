@@ -16,6 +16,7 @@ impl Model {
         let id = Self::context_menu_id();
         let mounted = self.application.mounted(&id);
         if self.app.context_menu.is_some() && !mounted {
+            self.dismiss_sidebars();
             self.application
                 .mount(id.clone(), Box::new(ContextMenuComponent::new()), vec![])
                 .expect("mount ContextMenu");

@@ -224,10 +224,15 @@ contributing surface's group 2–4 conversion to have landed.
     behaviour-preserving, no field deleted. This is why *Sidebars* is not the
     mechanical unit its file count suggests, and it is the same prep move as
     `5.3-pre` and *Overlay prep*.
-  - [ ] *Sidebars* — delete `open_sidebar` and the sidebar `handle_key_*` in
+  - [x] *Sidebars* — delete `open_sidebar` and the sidebar `handle_key_*` in
     `input_settings_keys.rs`, `input_playlist_keys.rs`, and
-    `services_settings.rs`. 24 files (20 prod / 4 test), 98 refs; tractable
-    only once the prep above has collapsed the write sites.
+    `services_settings.rs`. Sidebar transitions now mount/unmount the TuiRealm
+    components through the shell, with component-owned Settings and Playlists
+    mouse geometry. Verified with `rtk cargo check -p mbv`,
+    `rtk cargo nextest run -p mbv` (1,154 passed), and
+    `rtk cargo fmt --all -- --check`; the repository-wide `rtk ast-grep scan`
+    remains blocked by pre-existing render-screen boundary diagnostics outside
+    this unit.
   - [x] *Selection modal* — `selection_modal` + `input_selection_modal_keys.rs`.
     44 files (29 / 15), 362 refs, but only **four** write sites, all choked
     through `selection_modal_actions.rs`; the fan-out is presence-reads and

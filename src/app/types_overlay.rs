@@ -5,10 +5,14 @@ use super::types_playback::RemoteReanchorPopup;
 use super::types_selection_modal::{
     SelectionModal, SelectionModalFilter, SelectionModalListState, SelectionModalSource,
 };
+use super::SidebarId;
 
 /// Shell handoffs used while App action code is still called below Model.
 /// These are requests, not a second copy of component interaction state.
 pub(super) enum OverlayRequest {
+    OpenSidebar(SidebarId),
+    DismissSidebar(SidebarId),
+    ToggleSidebar(SidebarId),
     Confirm(ConfirmModal),
     DaemonLost(DaemonLostModal),
     RemoteReanchor(RemoteReanchorPopup),

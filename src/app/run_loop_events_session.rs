@@ -256,7 +256,7 @@ impl App {
                     if let Some(action) = self.pending_queue_action.take() {
                         self.execute_pending_queue_action(action);
                     }
-                    self.close_sidebar(SidebarId::Playlists);
+                    self.request_sidebar_dismiss(SidebarId::Playlists);
                     self.set_panel_focus(PanelFocus::Queue);
                 }
             }

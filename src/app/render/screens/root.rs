@@ -3,7 +3,7 @@ use crate::app::render::components::chrome;
 use crate::app::render::components::widgets::{
     render_queue_panel_frame, right_panel_content_area, COLUMN_GAP,
 };
-use crate::app::{palette, App, PanelFocus, PanelMode, SidebarId, TabSelection};
+use crate::app::{palette, App, PanelFocus, PanelMode, TabSelection};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -127,13 +127,6 @@ impl App {
             "context menu must be the only modal or sidebar surface"
         );
 
-        let panel_area = (layout.main.panel_area.width > 0).then_some(layout.main.panel_area);
-        if self.is_sidebar_open(SidebarId::Playlists) {
-            self.render_playlists_panel(f, panel_area);
-        }
-        if self.is_sidebar_open(SidebarId::Settings) {
-            self.render_settings_panel(f, &mut layout, panel_area);
-        }
         // Blocking modal mount exclusivity is asserted by the shell, where the
         // TuiRealm mount state is available.
         // Record the destination this completed frame was rendered for, on
@@ -154,10 +147,6 @@ impl App {
         self.blocking_overlay_active
             || self.multiselect_popup.is_some()
             || self.library_routes_popup.is_some()
-            || self.is_sidebar_open(SidebarId::Settings)
-            || self.is_sidebar_open(SidebarId::Sessions)
-            || self.is_sidebar_open(SidebarId::Playlists)
-            || self.is_sidebar_open(SidebarId::Search)
     }
 }
 

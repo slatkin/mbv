@@ -9,7 +9,7 @@ impl App {
     /// Open the global search sidebar. Sets the flag; the shell Model mounts
     /// the `SearchSidebarComponent` when it syncs after this call (task 3.2).
     pub(super) fn open_search_sidebar(&mut self) {
-        self.open_sidebar(SidebarId::Search);
+        self.request_sidebar_open(SidebarId::Search);
     }
 
     pub(super) fn recursive_album_search_enabled(&self, lib_idx: usize) -> bool {

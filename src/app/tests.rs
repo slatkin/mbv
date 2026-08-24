@@ -258,7 +258,6 @@ pub(crate) fn make_app_stub() -> App {
         halfblock_picker: None,
         dim_backdrop_active: false,
         image_cache_size_total: 50,
-        open_sidebar: None,
         settings_cursor: 0,
         settings_destination: SettingsDestination::Main,
         services_cursor: 0,

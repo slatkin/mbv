@@ -6,9 +6,9 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{LegacyTerminalEvent, Msg, PersistRequest, ServiceRequest};
+use super::msg::{LegacyTerminalEvent, Msg, PersistRequest, ServiceRequest, ShellRequest};
 use super::user_event::UserEvent;
-use crate::app::render::{render_settings_content, SettingsRenderModel};
+use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use crate::app::types_settings::SettingsDestination;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -63,6 +63,7 @@ pub struct SettingsComponent {
     services_cursor: usize,
     scroll: usize,
     area: Rect,
+    geometry: SettingsRenderGeometry,
     initialized: bool,
 }
 
@@ -77,6 +78,7 @@ impl SettingsComponent {
             services_cursor: 0,
             scroll: 0,
             area: Rect::default(),
+            geometry: SettingsRenderGeometry::default(),
             initialized: false,
         }
     }
@@ -131,7 +133,9 @@ impl SettingsComponent {
                 .services_cursor
                 .min(self.services.len().saturating_sub(1));
         }
-        self.scroll = snapshot.scroll;
+        if !self.initialized || destination_changed {
+            self.scroll = snapshot.scroll;
+        }
         self.area = snapshot.area;
         self.initialized = true;
     }
@@ -287,6 +291,47 @@ impl SettingsComponent {
             _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
         }
     }
+
+    fn handle_mouse(&mut self, mouse: &tuirealm::event::MouseEvent) -> Option<Msg> {
+        use crossterm::event::{MouseButton, MouseEventKind};
+        let mouse = super::legacy_input::to_crossterm_mouse_event(mouse);
+        let position = (mouse.column, mouse.row).into();
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
+            && !self.geometry.panel_area.contains(position)
+        {
+            return Some(Msg::Shell(ShellRequest::DismissSettings));
+        }
+        match mouse.kind {
+            MouseEventKind::ScrollDown => self.scroll += 3,
+            MouseEventKind::ScrollUp => self.scroll = self.scroll.saturating_sub(3),
+            MouseEventKind::Down(MouseButton::Left)
+                if self.geometry.content_area.contains(position) =>
+            {
+                let line = (mouse.row - self.geometry.content_area.y) as usize + self.scroll;
+                if let Some(cursor) = self
+                    .geometry
+                    .cursor_lines
+                    .iter()
+                    .position(|&row| row == line)
+                {
+                    if self.destination == SettingsDestination::Services {
+                        self.services_cursor = cursor;
+                        return Some(Msg::Service(ServiceRequest::ActivateService(cursor)));
+                    }
+                    self.cursor = cursor;
+                    return Some(Msg::Persist(PersistRequest::SettingsKey {
+                        cursor,
+                        key: super::legacy_input::to_crossterm_key_event(&KeyEvent {
+                            code: Key::Enter,
+                            modifiers: KeyModifiers::NONE,
+                        }),
+                    }));
+                }
+            }
+            _ => {}
+        }
+        None
+    }
 }
 
 impl Default for SettingsComponent {
@@ -310,6 +355,7 @@ impl Component for SettingsComponent {
                 services_cursor: self.services_cursor,
                 scroll: self.scroll,
             },
+            &mut self.geometry,
         );
     }
 
@@ -329,6 +375,7 @@ impl AppComponent<Msg, UserEvent> for SettingsComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
             Event::Keyboard(key) => self.handle_key(key),
+            Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
         }
     }

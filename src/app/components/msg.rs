@@ -243,10 +243,25 @@ pub enum ShellRequest {
     /// the browser's local state remains component-owned.
     AudiobookshelfBookKey(crossterm::event::KeyEvent),
     AudiobookshelfBookMouse(crossterm::event::MouseEvent),
-    /// Forward Playlists effects to the legacy App handler while the overlay's
-    /// local cursors and hit geometry remain component-owned.
-    PlaylistsKey(crossterm::event::KeyEvent),
-    PlaylistsMouse(crossterm::event::MouseEvent),
+    /// Close the nested playlist view without dismissing the sidebar.
+    PlaylistsBack,
+    /// Load the selected playlist's items.
+    PlaylistsOpen(usize),
+    /// Play the selected playlist or item.
+    PlaylistsActivate {
+        open: bool,
+        index: usize,
+    },
+    /// Open the rename dialog for the selected playlist.
+    PlaylistsRename(usize),
+    /// Ask for confirmation before deleting the selected playlist.
+    PlaylistsDelete(usize),
+    /// Refresh playlist data.
+    PlaylistsRefresh,
+    /// Dismiss the Playlists sidebar.
+    DismissPlaylists,
+    /// Dismiss the Settings sidebar, including nested settings destinations.
+    DismissSettings,
     /// Forward Save-playlist effects to the legacy App handler while the
     /// dialog's local input remains component-owned.
     SavePlaylistKey(crossterm::event::KeyEvent),
