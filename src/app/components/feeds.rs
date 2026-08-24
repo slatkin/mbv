@@ -253,8 +253,14 @@ impl FeedsComponent {
                 self.cycle_group(1);
                 noop()
             }
-            Key::Enter => Some(Msg::Shell(ShellRequest::FeedsPlay(self.cursor))),
-            Key::Char('e') => Some(Msg::Shell(ShellRequest::FeedsEnqueue(self.cursor))),
+            Key::Enter => self
+                .visible_entries
+                .get(self.cursor)
+                .map(|entry| Msg::Shell(ShellRequest::FeedsPlay(entry.guid.clone()))),
+            Key::Char('e') => self
+                .visible_entries
+                .get(self.cursor)
+                .map(|entry| Msg::Shell(ShellRequest::FeedsEnqueue(entry.guid.clone()))),
             _ => Some(Msg::Legacy(LegacyTerminalEvent::Key(
                 to_crossterm_key_event(key),
             ))),

@@ -262,6 +262,25 @@ impl App {
         else {
             return;
         };
+        self.play_feed_entry(entry);
+    }
+
+    /// Resolve a component request against the shell-owned, newest-first
+    /// combined Feed snapshot.
+    pub(super) fn feed_tab_play_guid(&mut self, guid: &str) {
+        let Some(entry) = self
+            .feed_tab
+            .all_entries
+            .iter()
+            .find(|entry| entry.guid == guid)
+            .cloned()
+        else {
+            return;
+        };
+        self.play_feed_entry(entry);
+    }
+
+    fn play_feed_entry(&mut self, entry: mbv_core::playback_queue::FeedEntry) {
         if entry.primary_source().is_none() {
             self.flash(
                 "Feed entry has no playable source".into(),
@@ -286,6 +305,25 @@ impl App {
         else {
             return;
         };
+        self.enqueue_feed_entry(entry);
+    }
+
+    /// Resolve a component request against the shell-owned, newest-first
+    /// combined Feed snapshot.
+    pub(super) fn feed_tab_enqueue_guid(&mut self, guid: &str) {
+        let Some(entry) = self
+            .feed_tab
+            .all_entries
+            .iter()
+            .find(|entry| entry.guid == guid)
+            .cloned()
+        else {
+            return;
+        };
+        self.enqueue_feed_entry(entry);
+    }
+
+    fn enqueue_feed_entry(&mut self, entry: mbv_core::playback_queue::FeedEntry) {
         if entry.primary_source().is_none() {
             self.flash(
                 "Feed entry has no playable source".into(),

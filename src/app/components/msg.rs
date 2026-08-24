@@ -191,11 +191,11 @@ pub enum ShellRequest {
     /// Refresh the Feeds subscriptions through the shell-owned worker.
     RefreshFeeds,
     /// Play the Feeds component's selected entry through the existing shell
-    /// action path.
-    FeedsPlay(usize),
+    /// action path, identified by its Feed guid.
+    FeedsPlay(String),
     /// Enqueue the Feeds component's selected entry through the existing shell
-    /// action path.
-    FeedsEnqueue(usize),
+    /// action path, identified by its Feed guid.
+    FeedsEnqueue(String),
     /// Dismiss the blocking Selection modal.
     DismissSelectionModal,
     /// Select a source-specific filter in the Selection modal.

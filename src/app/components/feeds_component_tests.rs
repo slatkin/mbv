@@ -1,5 +1,5 @@
 use super::feeds::FeedsComponent;
-use super::msg::{LegacyTerminalEvent, Msg};
+use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::config::{FeedKind, FeedSubscription};
@@ -70,6 +70,26 @@ fn watched_filter_rebuilds_the_component_visible_list() {
 
     assert_eq!(component.watched_filter(), WatchedFilter::Watched);
     assert_eq!(component.visible_titles(), ["Second"]);
+}
+
+#[test]
+fn playback_requests_use_the_selected_entry_guid() {
+    let mut component = component();
+
+    assert_eq!(
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(ShellRequest::FeedsPlay("First".into())))
+    );
+    assert_eq!(
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Char('e'),
+            modifiers: KeyModifiers::NONE,
+        })),
+        Some(Msg::Shell(ShellRequest::FeedsEnqueue("First".into())))
+    );
 }
 
 #[test]

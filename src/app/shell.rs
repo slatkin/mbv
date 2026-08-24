@@ -551,23 +551,11 @@ impl Model {
                         Msg::Shell(ShellRequest::RefreshFeeds) => {
                             self.app.refresh_feeds();
                         }
-                        Msg::Shell(ShellRequest::FeedsPlay(cursor)) => {
-                            self.app.feed_tab.cursor = cursor;
-                            let _ = self
-                                .app
-                                .handle_feed_tab_key(crossterm::event::KeyEvent::new(
-                                    crossterm::event::KeyCode::Enter,
-                                    crossterm::event::KeyModifiers::NONE,
-                                ));
+                        Msg::Shell(ShellRequest::FeedsPlay(guid)) => {
+                            self.app.feed_tab_play_guid(&guid);
                         }
-                        Msg::Shell(ShellRequest::FeedsEnqueue(cursor)) => {
-                            self.app.feed_tab.cursor = cursor;
-                            let _ = self
-                                .app
-                                .handle_feed_tab_key(crossterm::event::KeyEvent::new(
-                                    crossterm::event::KeyCode::Char('e'),
-                                    crossterm::event::KeyModifiers::NONE,
-                                ));
+                        Msg::Shell(ShellRequest::FeedsEnqueue(guid)) => {
+                            self.app.feed_tab_enqueue_guid(&guid);
                         }
                         Msg::Shell(request @ ShellRequest::DismissSelectionModal)
                         | Msg::Shell(request @ ShellRequest::SelectionModalFilterSelected(_))
