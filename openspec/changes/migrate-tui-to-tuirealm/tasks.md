@@ -212,7 +212,7 @@ contributing surface's group 2–4 conversion to have landed.
     `blocking_overlay_active` adapter that subsumes the five `impl App` presence
     reads. Both legacy modal handlers and all four fields are deleted; reset
     triggers enqueue component dismissals. 48 files — the sizing reference above.
-   - [x] *Sidebar state prep* — the four open-flags are an undocumented
+  - [x] *Sidebar state prep* — the four open-flags are an undocumented
     mutually-exclusive state machine: **39 production write sites** spread over
     `input.rs`, `input_playlist_keys.rs`, `input_settings_keys.rs`,
     `input_confirm_keys.rs`, `input_mouse_dispatch.rs`, `input_mouse_panels.rs`,
