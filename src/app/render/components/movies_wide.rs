@@ -14,6 +14,7 @@ use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::home_hero::{prepare_wide_emby_hero_card, HeroData};
+use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::{palette, App};
 use ratatui::layout::Rect;
 use ratatui::style::*;
@@ -34,11 +35,13 @@ impl App {
     /// The selected Movie from the active list source: the inline-search
     /// result cursor while search is open (the hero must not read the stale
     /// navigation-level cursor then), else the navigation cursor item.
-    fn selected_wide_movie(&self, lib_idx: usize) -> Option<mbv_core::api::EmbyItem> {
-        let lib = self.libs.get(lib_idx)?;
-        if let Some(s) = &lib.search {
-            let idx = *s.results.get(s.cursor)?;
-            return s.items.get(idx).cloned();
+    fn selected_wide_movie(
+        &self,
+        lib_idx: usize,
+        ctx: &LibraryListRenderCtx,
+    ) -> Option<mbv_core::api::EmbyItem> {
+        if ctx.is_search_active() {
+            return ctx.items.get(ctx.cursor).cloned();
         }
         self.selected_movie_item(lib_idx)
     }
@@ -53,6 +56,29 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        layout: &mut LayoutMain,
+    ) {
+        let ctx = self.library_list_render_ctx(lib_idx, false);
+        let selected_movie = self.selected_wide_movie(lib_idx, &ctx);
+        self.render_wide_movies_with_ctx(
+            f,
+            area,
+            lib_idx,
+            focused,
+            &ctx,
+            selected_movie.as_ref(),
+            layout,
+        );
+    }
+
+    fn render_wide_movies_with_ctx(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        focused: bool,
+        ctx: &LibraryListRenderCtx,
+        selected_movie: Option<&mbv_core::api::EmbyItem>,
         layout: &mut LayoutMain,
     ) {
         let left_content_area = Rect {
@@ -92,11 +118,11 @@ impl App {
             left_panel,
         );
         let hero_content = padded_rect(left_area, PANE_PAD_X, 0);
-        let hero_data = self.selected_wide_movie(lib_idx).and_then(|item| {
-            prepare_wide_emby_hero_card(&item, hero_content).map(
+        let hero_data = selected_movie.and_then(|item| {
+            prepare_wide_emby_hero_card(item, hero_content).map(
                 |(meta_layout, meta_area, img_area)| {
                     HeroData::Emby(
-                        Box::new(item),
+                        Box::new(item.clone()),
                         meta_area,
                         meta_area, // wide_area same as meta_area (image above text)
                         img_area,
@@ -114,17 +140,15 @@ impl App {
         let pills_area = right_pane.pills_area;
         let list_panel = right_pane.list_panel;
 
-        if let Some(s) = self.libs[lib_idx].search.as_ref() {
+        if ctx.is_search_active() {
             crate::app::render::components::hero::render_search_box(
-                f, pills_area, &s.query, s.loading,
+                f,
+                pills_area,
+                ctx.search_query.as_deref().unwrap_or_default(),
+                ctx.search_loading,
             );
         } else if self.is_home_video_view(lib_idx) {
-            let total = self.libs[lib_idx]
-                .nav_stack
-                .last()
-                .map(|level| level.total_count)
-                .unwrap_or(0);
-            crate::app::render::render_count_label(f, pills_area, total);
+            crate::app::render::render_count_label(f, pills_area, ctx.total_count);
         } else if self.should_show_letter_pills(lib_idx) {
             self.render_letter_pills_row(f, pills_area, lib_idx, layout);
         }
@@ -138,7 +162,15 @@ impl App {
         }
         let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
 
-        self.render_wide_library_rows(f, list_area, lib_idx, focused, layout);
+        let final_scroll =
+            self.render_wide_library_rows_with_ctx(f, list_area, ctx, focused, layout);
+        if ctx.is_search_active() {
+            if let Some(search) = &mut self.libs[lib_idx].search {
+                search.scroll = final_scroll;
+            }
+        } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            level.scroll = final_scroll;
+        }
 
         // Paint the shared hero card last (after the list, mirroring
         // `render_list`'s hero-after-list order). The exact Home wide
