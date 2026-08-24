@@ -163,10 +163,6 @@ impl App {
         // longer paints it directly. The `daemon_lost_modal.is_some()` check
         // is still needed for `any_dim_modal_open` and `any_other_modal_open`
         // below.
-        if self.selection_modal.is_some() {
-            self.render_selection_modal(f, &mut layout.main);
-        }
-
         // Record the destination this completed frame was rendered for, on
         // the layout about to be installed. The tag is set only here (never
         // on the intermediate/draft `layout`), so browse mouse handling can

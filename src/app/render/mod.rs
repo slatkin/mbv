@@ -18,6 +18,9 @@ pub(in crate::app) use components::home_hero::HomeImagePaint;
 pub(in crate::app) use components::playback_prompt::render_playback_prompt_content;
 pub(in crate::app) use components::remote_reanchor::render_remote_reanchor_popup_content;
 pub(in crate::app) use components::search_sidebar::render_search_sidebar;
+pub(in crate::app) use components::selection_modal::{
+    render_selection_modal_content, SelectionModalRenderModel,
+};
 pub(in crate::app) use components::sessions::render_sessions_overlay_content;
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the

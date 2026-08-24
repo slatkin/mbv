@@ -9,6 +9,7 @@ pub(crate) enum SelectionModalSource {
 /// One row in the modal's list. `Header` is a non-selectable divider (the
 /// Series modal's season name); every other surface's modal has no headers
 /// and uses only `Item` rows. Cursor movement must skip `Header` rows.
+#[derive(Clone)]
 pub(crate) enum SelectionModalRow {
     Header(String),
     Item(SelectionModalItem),
@@ -23,6 +24,7 @@ impl SelectionModalRow {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct SelectionModalItem {
     pub(crate) name: String,
     pub(crate) meta: String,
@@ -31,6 +33,7 @@ pub(crate) struct SelectionModalItem {
     pub(crate) id: String,
 }
 
+#[derive(Clone)]
 pub(crate) enum SelectionModalListState {
     Loading,
     Empty,
@@ -74,11 +77,13 @@ impl SelectionModalListState {
 
 /// Pill filter shown at the top of the modal: played/unplayed for Podcast,
 /// season number for Series.
+#[derive(Clone)]
 pub(crate) struct SelectionModalFilter {
     pub(crate) labels: Vec<String>,
     pub(crate) selected: usize,
 }
 
+#[derive(Clone)]
 pub(crate) struct SelectionModal {
     pub(crate) source: SelectionModalSource,
     pub(crate) title: String,

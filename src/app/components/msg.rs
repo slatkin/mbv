@@ -133,6 +133,12 @@ pub enum ShellRequest {
     /// Enqueue the Feeds component's selected entry through the existing shell
     /// action path.
     FeedsEnqueue(usize),
+    /// Dismiss the blocking Selection modal.
+    DismissSelectionModal,
+    /// Select a source-specific filter in the Selection modal.
+    SelectionModalFilterSelected(usize),
+    /// Activate the selected Selection modal item by its opaque provider id.
+    SelectionModalActivate(Option<String>),
     /// Forward a playback prompt key to the shell-owned Player handler.
     PlaybackPromptKey(crossterm::event::KeyEvent),
     /// Play the Home item at the component-owned flat cursor (task 3.4).

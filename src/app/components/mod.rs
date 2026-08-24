@@ -21,6 +21,7 @@ pub mod playback_gates;
 pub mod playback_prompt;
 pub mod remote_reanchor;
 pub mod search_sidebar;
+pub mod selection_modal;
 pub mod sessions;
 pub mod user_event;
 
@@ -39,6 +40,7 @@ pub use self::playback_gates::{
 pub use self::playback_prompt::PlaybackPromptComponent;
 pub use self::remote_reanchor::RemoteReanchorComponent;
 pub use self::search_sidebar::SearchSidebarComponent;
+pub use self::selection_modal::SelectionModalComponent;
 pub use self::sessions::SessionsComponent;
 pub use self::user_event::UserEvent;
 
@@ -51,3 +53,6 @@ mod home_component_tests;
 #[cfg(test)]
 #[path = "playback_prompt_component_tests.rs"]
 mod playback_prompt_component_tests;
+#[cfg(test)]
+#[path = "selection_modal_component_tests.rs"]
+mod selection_modal_component_tests;

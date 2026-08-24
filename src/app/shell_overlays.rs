@@ -9,7 +9,7 @@
 use super::components::{
     ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, HelpComponent,
     ModalId, OverlayId, PlaybackPromptComponent, RemoteReanchorComponent, SearchSidebarComponent,
-    SessionsComponent,
+    SelectionModalComponent, SessionsComponent, ShellRequest,
 };
 use super::shell::Model;
 
@@ -289,6 +289,103 @@ impl Model {
         self.application.view(&id, f, f.area());
     }
 
+    // --- Selection modal ----------------------------------------------------
+
+    fn selection_modal_id() -> ComponentId {
+        ComponentId::Overlay(OverlayId::SelectionModal)
+    }
+
+    /// Sync the Selection modal mount state with the legacy App snapshot.
+    pub(super) fn sync_selection_modal(&mut self) {
+        let id = Self::selection_modal_id();
+        let mounted = self.application.mounted(&id);
+        if self.app.selection_modal.is_some() && !mounted {
+            self.application
+                .mount(id.clone(), Box::new(SelectionModalComponent::new()), vec![])
+                .expect("mount SelectionModal");
+            self.application
+                .active(&id)
+                .expect("activate SelectionModal");
+        } else if self.app.selection_modal.is_none() && mounted {
+            let _ = self.application.umount(&id);
+        }
+        if let Some(modal) = self.app.selection_modal.as_ref() {
+            if let Some(comp) = self.application.get_component_mut(&id) {
+                if let Some(selection) = comp.as_any_mut().downcast_mut::<SelectionModalComponent>()
+                {
+                    selection.set_content(modal);
+                }
+            }
+        }
+    }
+
+    /// Route typed Selection modal requests to the existing source-specific
+    /// App actions after validating the current modal snapshot.
+    pub(super) fn handle_selection_modal_request(&mut self, request: ShellRequest) {
+        match request {
+            ShellRequest::DismissSelectionModal => self.app.close_selection_modal(),
+            ShellRequest::SelectionModalFilterSelected(selected) => {
+                let Some(modal) = self.app.selection_modal.as_ref() else {
+                    return;
+                };
+                let valid = modal
+                    .filter
+                    .as_ref()
+                    .is_some_and(|filter| selected < filter.labels.len());
+                if !valid {
+                    return;
+                }
+                match modal.source {
+                    super::types_selection_modal::SelectionModalSource::Series { .. } => {
+                        self.app.select_series_selection_modal_season(selected)
+                    }
+                    super::types_selection_modal::SelectionModalSource::Podcast { .. } => {
+                        self.app.select_podcast_selection_modal_filter(selected)
+                    }
+                    _ => {}
+                }
+            }
+            ShellRequest::SelectionModalActivate(item_id) => {
+                let Some(item_id) = item_id else {
+                    self.app.activate_selection_modal_item();
+                    return;
+                };
+                let Some(row_index) = self.app.selection_modal.as_ref().and_then(|modal| {
+                    modal
+                        .state
+                        .rows()
+                        .iter()
+                        .position(|row| row.item_id() == Some(item_id.as_str()))
+                }) else {
+                    return;
+                };
+                if let Some(modal) = self.app.selection_modal.as_mut() {
+                    modal.cursor = row_index;
+                }
+                self.app.activate_selection_modal_item();
+            }
+            _ => {}
+        }
+    }
+
+    /// Render the Selection modal from the shell-owned snapshot. Its component
+    /// records the returned geometry for its own mouse hit-testing.
+    pub(super) fn render_selection_modal_overlay(&mut self, f: &mut ratatui::Frame) {
+        let id = Self::selection_modal_id();
+        if !self.application.mounted(&id) {
+            return;
+        }
+        if let Some(modal) = self.app.selection_modal.as_ref() {
+            if let Some(comp) = self.application.get_component_mut(&id) {
+                if let Some(selection) = comp.as_any_mut().downcast_mut::<SelectionModalComponent>()
+                {
+                    selection.set_content(modal);
+                }
+            }
+        }
+        self.application.view(&id, f, f.area());
+    }
+
     // --- Search sidebar -----------------------------------------------------
     //
     // The Search sidebar is a non-blocking overlay mounted when
@@ -405,8 +502,14 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::PlaybackPromptComponent;
+    use crate::app::components::{Msg, PlaybackPromptComponent, SelectionModalComponent};
     use crate::app::tests::make_app_stub;
+    use crate::app::types_selection_modal::{
+        SelectionModal, SelectionModalItem, SelectionModalListState, SelectionModalRow,
+        SelectionModalSource,
+    };
+    use tuirealm::component::AppComponent;
+    use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
     fn playback_prompt_shell_sync_mounts_and_mirrors_status() {
@@ -429,6 +532,51 @@ mod tests {
 
         model.app.skip_intro_end_ticks = None;
         model.sync_playback_prompt();
+        assert!(!model.application.mounted(&id));
+    }
+
+    #[test]
+    fn selection_modal_shell_syncs_and_routes_dismissal() {
+        let mut model = Model::new(make_app_stub());
+        model.app.selection_modal = Some(SelectionModal {
+            source: SelectionModalSource::Album {
+                album_id: "album-1".into(),
+            },
+            title: "Tracks".into(),
+            state: SelectionModalListState::Ready(vec![SelectionModalRow::Item(
+                SelectionModalItem {
+                    name: "Track".into(),
+                    meta: String::new(),
+                    id: "track-1".into(),
+                },
+            )]),
+            cursor: 0,
+            filter: None,
+        });
+        model.sync_selection_modal();
+
+        let id = ComponentId::Overlay(OverlayId::SelectionModal);
+        assert!(model.application.mounted(&id));
+        let message = {
+            let component = model
+                .application
+                .get_component_mut(&id)
+                .expect("Selection modal mounted")
+                .as_any_mut()
+                .downcast_mut::<SelectionModalComponent>()
+                .expect("Selection modal type");
+            component.on(&Event::Keyboard(KeyEvent {
+                code: Key::Esc,
+                modifiers: KeyModifiers::NONE,
+            }))
+        };
+        let Some(Msg::Shell(request)) = message else {
+            panic!("Selection modal should emit a shell request");
+        };
+        model.handle_selection_modal_request(request);
+        model.sync_selection_modal();
+
+        assert!(model.app.selection_modal.is_none());
         assert!(!model.application.mounted(&id));
     }
 }
