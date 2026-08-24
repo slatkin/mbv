@@ -31,7 +31,6 @@ pub(crate) mod images;
 mod input;
 mod input_browse_dispatch;
 mod input_confirm_keys;
-mod input_context_menu;
 mod input_feed_tab_keys;
 mod input_feeds_manage_keys;
 mod input_lib_keys;
@@ -138,8 +137,8 @@ use self::types_browse::{
 };
 use self::types_confirm::{ConfirmAction, ConfirmModal};
 use self::types_context_menu::{
-    ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
-    LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
+    ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup, LibraryRouteStage,
+    MultiSelectKind, MultiSelectPopup,
 };
 use self::types_daemon_lost::DaemonLostModal;
 use self::types_events::{LibEvent, ReconciliationCommand, SessionEvent};

@@ -1,4 +1,5 @@
 use super::types_confirm::ConfirmModal;
+use super::types_context_menu::ContextMenu;
 use super::types_daemon_lost::DaemonLostModal;
 use super::types_feed::SavePlaylistDialog;
 use super::types_playback::RemoteReanchorPopup;
@@ -26,6 +27,8 @@ pub(super) enum OverlayRequest {
     RefreshSelectionModalAtSelectedFilter {
         source: SelectionModalSource,
     },
+    ContextMenu(ContextMenu),
+    DismissContextMenu,
     DismissConfirm,
     DismissDaemonLost,
     DismissRemoteReanchor,

@@ -3,6 +3,9 @@ use super::super::components::{
     MultiselectComponent, OverlayId, PopupId, SelectionModalComponent, ShellRequest,
 };
 use super::super::shell::Model;
+use crate::app::types_context_menu::{ContextMenu, ContextMenuAnchor, ContextMenuEntry};
+use crate::app::PanelFocus;
+use ratatui::layout::Rect;
 
 impl Model {
     // --- Context menu -------------------------------------------------------
@@ -11,39 +14,133 @@ impl Model {
         ComponentId::Overlay(OverlayId::ContextMenu)
     }
 
-    /// Sync the ContextMenu component mount state with `App::context_menu`.
-    pub(in crate::app) fn sync_context_menu(&mut self) {
-        let id = Self::context_menu_id();
-        let mounted = self.application.mounted(&id);
-        if self.app.context_menu.is_some() && !mounted {
-            self.dismiss_sidebars();
-            self.application
-                .mount(id.clone(), Box::new(ContextMenuComponent::new()), vec![])
-                .expect("mount ContextMenu");
-            self.application.active(&id).expect("activate ContextMenu");
-        } else if self.app.context_menu.is_none() && mounted {
-            let _ = self.application.umount(&id);
+    /// Compute the context menu's painted rect from the current `AppLayout`
+    /// and the menu's anchor/entries. Replaces the old `layout.context_menu_rect`
+    /// global written during `App::render` (task 5.3c); the component now owns
+    /// its rect and hit test.
+    fn context_menu_rect(&self, anchor: ContextMenuAnchor, entries: &[ContextMenuEntry]) -> Rect {
+        let layout = &self.app.layout;
+        let size = ContextMenu::rendered_size(entries);
+        let (panel_rect, anchor_rect): (Rect, Option<Rect>) = match &anchor {
+            ContextMenuAnchor::SelectedItem(focus) => {
+                let (panel, selected) = match focus {
+                    PanelFocus::Library => (layout.main.left_area, layout.main.selected_item_rect),
+                    PanelFocus::Queue => {
+                        (layout.main.queue_area, layout.main.queue_selected_item_rect)
+                    }
+                };
+                (panel, selected)
+            }
+            ContextMenuAnchor::Pointer { .. } => {
+                let panel = match self.app.effective_panel_focus() {
+                    PanelFocus::Library if layout.main.is_wide_tv_active() => {
+                        let pos = match &anchor {
+                            ContextMenuAnchor::Pointer { x, y } => (*x, *y).into(),
+                            ContextMenuAnchor::SelectedItem(_) => unreachable!(),
+                        };
+                        if layout.main.tv_wide_left_area.contains(pos) {
+                            layout.main.tv_wide_left_area
+                        } else {
+                            layout.main.tv_wide_right_area
+                        }
+                    }
+                    PanelFocus::Library => layout.main.left_area,
+                    PanelFocus::Queue => layout.main.queue_area,
+                };
+                (panel, None)
+            }
+        };
+        let pointer = match &anchor {
+            ContextMenuAnchor::Pointer { x, y } => Some((*x, *y)),
+            _ => None,
+        };
+        let (x, y) = ContextMenu::place(panel_rect, size, anchor_rect.as_ref(), pointer);
+        Rect {
+            x,
+            y,
+            width: size.0,
+            height: size.1,
         }
     }
 
-    /// Render the ContextMenu overlay if mounted. The placement rect is
-    /// computed by `App::render_context_menu` (called from `App::render`),
-    /// which writes `layout.context_menu_rect`; the shell reads that and
-    /// passes it to the component via downcast.
+    /// Render the ContextMenu overlay if mounted. Placement is recomputed from
+    /// `AppLayout` each frame (so it follows the fresh layout after a resize),
+    /// then passed to the component via downcast (task 5.3c).
     pub(in crate::app) fn render_context_menu_overlay(&mut self, f: &mut ratatui::Frame) {
         let id = Self::context_menu_id();
         if !self.application.mounted(&id) {
             return;
         }
+        // Read the menu's anchor/entries immutably, compute the rect, then
+        // borrow mutably only to set it (avoids aliasing `self`).
+        let (anchor, entries) = {
+            let comp = self.application.get_component(&id);
+            let Some(menu) = comp
+                .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
+            else {
+                return;
+            };
+            (menu.anchor(), menu.entries().to_vec())
+        };
+        let rect = self.context_menu_rect(anchor, &entries);
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>() {
-                if let Some(ref app_menu) = self.app.context_menu {
-                    let rect = self.app.layout.context_menu_rect.unwrap_or_default();
-                    menu.set_content(&app_menu.entries, app_menu.cursor, rect);
-                }
+                menu.set_rect(rect);
             }
         }
         self.application.view(&id, f, f.area());
+    }
+
+    /// Shell-owned key handling for the Context menu (task 5.3c): the component
+    /// owns cursor/selection rendering; the shell owns action dispatch.
+    pub(in crate::app) fn handle_context_menu_key(&mut self, key: crossterm::event::KeyEvent) {
+        let id = Self::context_menu_id();
+        if !self.application.mounted(&id) {
+            return;
+        }
+        match key.code {
+            crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Down => {
+                if let Some(comp) = self.application.get_component_mut(&id) {
+                    if let Some(menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>() {
+                        menu.move_cursor(key.code == crossterm::event::KeyCode::Down);
+                    }
+                }
+            }
+            crossterm::event::KeyCode::Enter => {
+                let action = self
+                    .application
+                    .get_component(&id)
+                    .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
+                    .and_then(|menu| menu.action_at(menu.cursor()));
+                self.dismiss_context_menu();
+                self.app.execute_context_action(action);
+            }
+            crossterm::event::KeyCode::Esc => self.dismiss_context_menu(),
+            _ => {}
+        }
+    }
+
+    /// Activate the context-menu entry at the component-owned cursor (mouse
+    /// click on a selectable row, or hover-resolved selection).
+    pub(in crate::app) fn handle_context_menu_select(&mut self, idx: usize) {
+        let id = Self::context_menu_id();
+        if !self.application.mounted(&id) {
+            return;
+        }
+        let action = self
+            .application
+            .get_component(&id)
+            .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
+            .and_then(|menu| menu.action_at(idx));
+        self.dismiss_context_menu();
+        self.app.execute_context_action(action);
+    }
+
+    fn dismiss_context_menu(&mut self) {
+        let id = Self::context_menu_id();
+        if self.application.mounted(&id) {
+            let _ = self.application.umount(&id);
+        }
     }
 
     // --- Selection modal ----------------------------------------------------

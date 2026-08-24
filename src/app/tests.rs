@@ -270,7 +270,6 @@ pub(crate) fn make_app_stub() -> App {
         notif_failed: false,
         notif_action_tx,
         notif_action_rx,
-        context_menu: None,
         lib_tx,
         lib_rx,
         search_tx,

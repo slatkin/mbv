@@ -120,12 +120,9 @@ impl App {
             &now_playing_title,
         );
 
-        self.render_context_menu(f, &mut layout);
-
-        debug_assert!(
-            self.context_menu.is_none() || !self.any_other_modal_open(),
-            "context menu must be the only modal or sidebar surface"
-        );
+        // The Context menu is an owned TuiRealm component now (task 5.3c):
+        // the shell mounts it from `pending_overlay` and paints it via the
+        // overlay stack, so nothing is written to `layout` here.
 
         // Blocking modal mount exclusivity is asserted by the shell, where the
         // TuiRealm mount state is available.

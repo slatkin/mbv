@@ -1,37 +1,37 @@
 //! Interactive Component for the Context menu overlay (design D3–D9).
 //!
-//! Owns the menu's display state (entries, cursor) set by the shell via
-//! downcast before each render. The shell owns context-menu actions
-//! (`execute_context_action`); the component forwards keys as
-//! `Msg::Shell(ShellRequest::ContextMenuKey(key))` so the shell can run the
-//! existing `handle_key_context_menu` unchanged. Mouse events are forwarded
-//! to the legacy `App::handle_mouse` path (which reads
-//! `layout.context_menu_rect` for click-inside/outside behavior).
-//!
-//! Placement is computed by `App::render_context_menu` (which needs
-//! `AppLayout` geometry) and passed to the component via downcast as
-//! `menu_rect`. The component's `view()` paints at that rect.
+//! Owns the menu's display state (`entries`, `cursor`, `anchor`) and the
+//! painted `menu_rect`, set by the shell via downcast before each render.
+//! The shell owns context-menu actions (`execute_context_action`); the
+//! component forwards keys as `Msg::Shell(ShellRequest::ContextMenuKey(key))`
+//! and handles its own mouse hit-test (click-inside/outside and hover),
+//! emitting `ContextMenuSelect`/`ContextMenuDismiss` (task 5.3c — the
+//! component owns its rect and hit test, replacing the old
+//! `layout.context_menu_rect` global).
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::Event;
+use tuirealm::event::{Event, KeyEvent as TuiKeyEvent, MouseEvent};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
+use super::legacy_input::to_crossterm_mouse_event;
 use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_context_menu_content;
+use crate::app::types_context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
+use crate::app::PanelFocus;
 
 /// The Interactive Component for the Context menu.
 ///
-/// Owns `entries` (as `(label, is_selectable)` pairs), `cursor`, and
-/// `menu_rect` (set by the shell via downcast before each render).
+/// Owns `entries` (with their `ContextAction`s), `cursor`, `anchor`, and the
+/// painted `menu_rect` (set by the shell via downcast before each render).
 pub struct ContextMenuComponent {
-    entries: Vec<(&'static str, bool)>,
+    entries: Vec<ContextMenuEntry>,
     cursor: usize,
+    anchor: ContextMenuAnchor,
     menu_rect: Rect,
 }
 
@@ -40,23 +40,113 @@ impl ContextMenuComponent {
         Self {
             entries: Vec::new(),
             cursor: 0,
+            anchor: ContextMenuAnchor::SelectedItem(PanelFocus::Library),
             menu_rect: Rect::default(),
         }
     }
 
-    /// Set the menu's display content from `App::context_menu`. Called by the
-    /// shell via `get_component_mut`+downcast before each render.
+    /// Set the menu's display content from the shell's `OverlayRequest`.
+    /// Called by the shell via `get_component_mut`+downcast on mount.
     pub(in crate::app) fn set_content(
         &mut self,
-        entries: &[crate::app::ContextMenuEntry],
+        anchor: ContextMenuAnchor,
+        entries: Vec<ContextMenuEntry>,
         cursor: usize,
-        menu_rect: Rect,
     ) {
-        self.entries.clear();
-        self.entries
-            .extend(entries.iter().map(|e| (e.label, e.action.is_some())));
+        self.anchor = anchor;
+        self.entries = entries;
         self.cursor = cursor;
-        self.menu_rect = menu_rect;
+    }
+
+    /// Set the painted rect, computed by the shell from `AppLayout` each frame.
+    pub(in crate::app) fn set_rect(&mut self, rect: Rect) {
+        self.menu_rect = rect;
+    }
+
+    /// The painted rect the shell computed from `AppLayout` (task 5.3c).
+    pub(in crate::app) fn menu_rect(&self) -> Rect {
+        self.menu_rect
+    }
+
+    /// The menu's anchor, used by the shell to recompute `menu_rect`.
+    pub(in crate::app) fn anchor(&self) -> ContextMenuAnchor {
+        self.anchor
+    }
+
+    /// Entries, used by the shell to recompute `menu_rect` size.
+    pub(in crate::app) fn entries(&self) -> &[ContextMenuEntry] {
+        &self.entries
+    }
+
+    pub(in crate::app) fn cursor(&self) -> usize {
+        self.cursor
+    }
+
+    /// The selectable action at `idx`, if any (the shell executes it).
+    pub(in crate::app) fn action_at(&self, idx: usize) -> Option<ContextAction> {
+        self.entries.get(idx).and_then(|entry| entry.action.clone())
+    }
+
+    /// Move the cursor to the next/previous selectable entry (wrapping).
+    pub(in crate::app) fn move_cursor(&mut self, down: bool) {
+        let selectable: Vec<usize> = self
+            .entries
+            .iter()
+            .enumerate()
+            .filter_map(|(i, entry)| entry.action.is_some().then_some(i))
+            .collect();
+        if selectable.is_empty() {
+            return;
+        }
+        let pos = selectable.iter().position(|&i| i == self.cursor);
+        self.cursor = match (down, pos) {
+            (true, Some(p)) => selectable[(p + 1) % selectable.len()],
+            (true, None) => selectable[0],
+            (false, Some(p)) => selectable[p.checked_sub(1).unwrap_or(selectable.len() - 1)],
+            (false, None) => selectable[selectable.len() - 1],
+        };
+    }
+
+    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        if self.entries.is_empty() || self.menu_rect == Rect::default() {
+            return None;
+        }
+        let mouse = to_crossterm_mouse_event(mouse);
+        use crossterm::event::{MouseButton, MouseEventKind};
+        use ratatui::layout::Position;
+        let pos = Position::new(mouse.column, mouse.row);
+        let inside = self.menu_rect.contains(pos);
+        let inner_y = self.menu_rect.y + 1;
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if inside && pos.y >= inner_y {
+                    let idx = (pos.y - inner_y) as usize;
+                    if let Some(entry) = self.entries.get(idx) {
+                        if entry.action.is_some() {
+                            return Some(Msg::Shell(ShellRequest::ContextMenuSelect(idx)));
+                        }
+                    }
+                }
+                Some(Msg::Shell(ShellRequest::ContextMenuDismiss))
+            }
+            MouseEventKind::Moved | MouseEventKind::Drag(MouseButton::Right) => {
+                if inside
+                    && pos.y >= inner_y
+                    && self.menu_rect.y + 1 + self.entries.len() as u16 > pos.y
+                {
+                    let idx = (pos.y - inner_y) as usize;
+                    if let Some(entry) = self.entries.get(idx) {
+                        if entry.action.is_some() && idx != self.cursor {
+                            self.cursor = idx;
+                            // Force a redraw so the highlight follows the pointer.
+                            return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+                        }
+                    }
+                }
+                Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
+            }
+            _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
+        }
     }
 }
 
@@ -68,10 +158,15 @@ impl Default for ContextMenuComponent {
 
 impl Component for ContextMenuComponent {
     fn view(&mut self, f: &mut Frame, _area: Rect) {
-        if self.entries.is_empty() {
+        if self.entries.is_empty() || self.menu_rect == Rect::default() {
             return;
         }
-        render_context_menu_content(f, self.menu_rect, &self.entries, self.cursor);
+        let entries: Vec<(&'static str, bool)> = self
+            .entries
+            .iter()
+            .map(|entry| (entry.label, entry.action.is_some()))
+            .collect();
+        render_context_menu_content(f, self.menu_rect, &entries, self.cursor);
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -94,16 +189,11 @@ impl AppComponent<Msg, UserEvent> for ContextMenuComponent {
         match ev {
             // Forward every key to the shell's existing context-menu handler.
             Event::Keyboard(key) => {
-                let crossterm_key = to_crossterm_key_event(key);
+                let crossterm_key = super::legacy_input::to_crossterm_key_event(key);
                 Some(Msg::Shell(ShellRequest::ContextMenuKey(crossterm_key)))
             }
-            // Mouse events: forward to the legacy `App::handle_mouse` path
-            // (which reads `layout.context_menu_rect` for click-inside/
-            // outside behavior).
-            Event::Mouse(mouse) => {
-                let crossterm_mouse = to_crossterm_mouse_event(mouse);
-                Some(Msg::Legacy(LegacyTerminalEvent::Mouse(crossterm_mouse)))
-            }
+            // The component owns its mouse hit-test (task 5.3c).
+            Event::Mouse(mouse) => self.handle_mouse(mouse),
             // Non-key/non-mouse events: no-op redraw signal (design D12).
             _ => Some(Msg::Legacy(LegacyTerminalEvent::NoOp)),
         }
@@ -113,10 +203,10 @@ impl AppComponent<Msg, UserEvent> for ContextMenuComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEventKind};
 
-    fn make_key(code: Key, modifiers: KeyModifiers) -> tuirealm::event::KeyEvent {
-        tuirealm::event::KeyEvent { code, modifiers }
+    fn make_key(code: Key, modifiers: KeyModifiers) -> TuiKeyEvent {
+        TuiKeyEvent { code, modifiers }
     }
 
     #[test]
@@ -151,17 +241,37 @@ mod tests {
     }
 
     #[test]
-    fn mouse_event_forwards_to_legacy_handler() {
+    fn mouse_event_selects_selectable_entry() {
         let mut comp = ContextMenuComponent::new();
+        comp.set_content(
+            ContextMenuAnchor::SelectedItem(PanelFocus::Library),
+            vec![
+                ContextMenuEntry {
+                    label: "a",
+                    action: Some(ContextAction::Play),
+                },
+                ContextMenuEntry {
+                    label: "sep",
+                    action: None,
+                },
+            ],
+            0,
+        );
+        comp.set_rect(Rect {
+            x: 10,
+            y: 5,
+            width: 10,
+            height: 4,
+        });
         let msg = comp.on(&Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
-            column: 10,
-            row: 5,
+            column: 12,
+            row: 6, // inner row 1 -> entry index 0
             modifiers: KeyModifiers::NONE,
         }));
         assert!(matches!(
             msg,
-            Some(Msg::Legacy(LegacyTerminalEvent::Mouse(_)))
+            Some(Msg::Shell(ShellRequest::ContextMenuSelect(0)))
         ));
     }
 }

@@ -1,10 +1,12 @@
 use super::notify_actions::ToastSeverity;
-use super::{App, ContextAction, PanelFocus};
+use super::types_context_menu::ContextMenu;
+use super::types_overlay::OverlayRequest;
+use super::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, PanelFocus};
 
 impl App {
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
-        self.context_menu = None;
-        self.layout.context_menu_rect = None;
+        // The shell dismisses the mounted ContextMenu component; this only
+        // dispatches the chosen action (task 5.3c).
         // The menu can only have opened on a matched Emby library, Home, or
         // the queue; `context_menu_lib_idx()` resolves the explicitly matched
         // Emby library (positive match, `None` on Home/queue) that every
@@ -284,5 +286,223 @@ impl App {
                 ToastSeverity::Error,
             ),
         }
+    }
+
+    // --- Context menu framing (formerly `input_context_menu.rs`) -----------
+    //
+    // Builds the menu content and raises it through `pending_overlay`; the
+    // shell mounts the `ContextMenuComponent` and owns placement (task 5.3c).
+    // `App::context_menu` and `layout.context_menu_rect` are gone.
+
+    fn push_context_action(
+        entries: &mut Vec<ContextMenuEntry>,
+        label: &'static str,
+        action: ContextAction,
+    ) {
+        entries.push(ContextMenuEntry {
+            label,
+            action: Some(action),
+        });
+    }
+
+    fn push_context_separator(entries: &mut Vec<ContextMenuEntry>) {
+        entries.push(ContextMenuEntry {
+            label: "────────",
+            action: None,
+        });
+    }
+
+    /// Build the context menu for the current panel/destination, or `None`
+    /// when no menu applies or it would be empty.
+    fn build_context_menu(&mut self) -> Option<ContextMenu> {
+        if self.any_other_modal_open() {
+            return None;
+        }
+        let mut entries: Vec<ContextMenuEntry> = vec![];
+
+        let cw_focused = matches!(
+            self.effective_panel_focus(),
+            crate::app::PanelFocus::Library
+        ) && self.tab.is_home();
+        let lib_idx = self.context_menu_lib_idx();
+        let in_podcast =
+            lib_idx.is_some_and(|idx| self.is_podcast_library(idx)) || self.is_in_podcast_library();
+        let podcast_bulk_ids = lib_idx.and_then(|idx| {
+            if in_podcast && self.is_feed_home_video_group_view(idx) {
+                Some((
+                    self.podcast_mark_all_ids(idx),
+                    self.podcast_mark_all_unplayed_ids(idx),
+                ))
+            } else {
+                None
+            }
+        });
+        // Exhaustive dispatch by panel and destination (design §5): a context
+        // menu opens only for Home (library focus), an explicitly selected
+        // Emby library, or an Emby queue item. Audiobookshelf and Feeds browse
+        // rows, non-Emby queue items, and absent or stale targets produce no
+        // Emby menu. `cw_focused` / `lib_idx` above drive the Emby-menu content
+        // that follows; this match only resolves which target (if any) exists.
+        let current_item = match (self.effective_panel_focus(), self.tab) {
+            (crate::app::PanelFocus::Library, crate::app::TabSelection::Home) => self
+                .home
+                .continue_items
+                .get(self.home.continue_cursor)
+                .cloned(),
+            (crate::app::PanelFocus::Library, crate::app::TabSelection::EmbyLibrary(lib_idx)) => {
+                self.current_lib_item(lib_idx)
+            }
+            (
+                crate::app::PanelFocus::Library,
+                crate::app::TabSelection::AudiobookshelfLibrary(_),
+            )
+            | (crate::app::PanelFocus::Library, crate::app::TabSelection::Feeds) => return None,
+            (crate::app::PanelFocus::Queue, _) => {
+                let queue = self.displayed_queue();
+                queue.clone_emby_item_at(queue.queue_cursor)
+            }
+        };
+
+        if let Some(ref item) = current_item {
+            if item.is_folder {
+                Self::push_context_action(
+                    &mut entries,
+                    "Play All",
+                    ContextAction::PlayFolder(item.id.clone()),
+                );
+                Self::push_context_action(
+                    &mut entries,
+                    "Shuffle",
+                    ContextAction::ShuffleFolder(item.id.clone()),
+                );
+                Self::push_context_action(
+                    &mut entries,
+                    "Add to Queue",
+                    ContextAction::EnqueueFolder(Box::new(item.clone())),
+                );
+                let (played_label, unplayed_label) = if in_podcast {
+                    ("Mark Played", "Mark Unplayed")
+                } else {
+                    ("Mark Watched", "Mark Unwatched")
+                };
+                if self.context_menu_play_state(item) {
+                    Self::push_context_action(
+                        &mut entries,
+                        unplayed_label,
+                        ContextAction::MarkUnplayed(item.id.clone()),
+                    );
+                } else {
+                    Self::push_context_action(
+                        &mut entries,
+                        played_label,
+                        ContextAction::MarkPlayed(item.id.clone()),
+                    );
+                }
+            } else {
+                Self::push_context_action(&mut entries, "Play", ContextAction::Play);
+                if cw_focused
+                    || lib_idx.is_some()
+                    || !matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue)
+                {
+                    Self::push_context_action(&mut entries, "Add to Queue", ContextAction::Enqueue);
+                }
+                // Audio items (music tracks) don't get mark-played, but podcast
+                // episodes (Audio inside a Channel library) do.
+                let is_music_audio =
+                    (item.media_type == "Audio" || item.item_type == "Audio") && !in_podcast;
+                if !is_music_audio {
+                    let (played_label, unplayed_label) = if in_podcast {
+                        ("Mark Played", "Mark Unplayed")
+                    } else {
+                        ("Mark Watched", "Mark Unwatched")
+                    };
+                    if self.context_menu_play_state(item) {
+                        Self::push_context_action(
+                            &mut entries,
+                            unplayed_label,
+                            ContextAction::MarkUnplayed(item.id.clone()),
+                        );
+                    } else {
+                        Self::push_context_action(
+                            &mut entries,
+                            played_label,
+                            ContextAction::MarkPlayed(item.id.clone()),
+                        );
+                    }
+                }
+                if cw_focused || (self.tab.is_home() && self.home.section == 0) {
+                    Self::push_context_action(
+                        &mut entries,
+                        "Remove from Continue Watching",
+                        ContextAction::RemoveFromContinueWatching,
+                    );
+                }
+                if !cw_focused
+                    && matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue)
+                {
+                    let pos = self.displayed_queue().queue_cursor;
+                    Self::push_context_action(
+                        &mut entries,
+                        "Remove from Queue",
+                        ContextAction::RemoveFromQueue(pos),
+                    );
+                }
+                if matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue) {
+                    Self::push_context_action(
+                        &mut entries,
+                        "Go to Library",
+                        ContextAction::GoToLibrary(item.id.clone(), item.item_type.clone()),
+                    );
+                }
+            }
+        }
+
+        if let Some((played_ids, unplayed_ids)) = podcast_bulk_ids {
+            if !played_ids.is_empty() || !unplayed_ids.is_empty() {
+                Self::push_context_separator(&mut entries);
+                Self::push_context_action(
+                    &mut entries,
+                    "Mark All Played",
+                    ContextAction::MarkItemsPlayed(played_ids),
+                );
+                Self::push_context_action(
+                    &mut entries,
+                    "Mark All Unplayed",
+                    ContextAction::MarkItemsUnplayed(unplayed_ids),
+                );
+            }
+        }
+
+        if entries.iter().all(|entry| entry.action.is_none()) {
+            return None;
+        }
+
+        let anchor = match self.effective_panel_focus() {
+            crate::app::PanelFocus::Library => {
+                ContextMenuAnchor::SelectedItem(crate::app::PanelFocus::Library)
+            }
+            crate::app::PanelFocus::Queue => {
+                ContextMenuAnchor::SelectedItem(crate::app::PanelFocus::Queue)
+            }
+        };
+        Some(ContextMenu {
+            anchor,
+            cursor: ContextMenu::first_selectable(&entries),
+            entries,
+        })
+    }
+
+    pub(super) fn open_context_menu(&mut self) {
+        if let Some(menu) = self.build_context_menu() {
+            self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
+        }
+    }
+
+    pub(super) fn open_context_menu_at(&mut self, x: u16, y: u16) {
+        let Some(mut menu) = self.build_context_menu() else {
+            return;
+        };
+        menu.anchor = ContextMenuAnchor::Pointer { x, y };
+        self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
     }
 }

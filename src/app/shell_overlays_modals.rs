@@ -1,5 +1,5 @@
 use super::super::components::{
-    ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, OverlayId,
+    ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, ModalId, OverlayId,
     RemoteReanchorComponent, SavePlaylistComponent, SelectionModalComponent,
 };
 use super::super::shell::Model;
@@ -177,6 +177,28 @@ impl Model {
             OverlayRequest::DismissSelectionModal => {
                 self.dismiss_modal(&ComponentId::Overlay(OverlayId::SelectionModal))
             }
+            OverlayRequest::ContextMenu(menu) => {
+                // An open context menu replaces any sidebar surface (the old
+                // `sync_context_menu` dismissed sidebars before mounting).
+                self.dismiss_sidebars();
+                let id = ComponentId::Overlay(OverlayId::ContextMenu);
+                if !self.application.mounted(&id) {
+                    self.application
+                        .mount(id.clone(), Box::new(ContextMenuComponent::new()), vec![])
+                        .expect("mount ContextMenu");
+                    self.application.active(&id).expect("activate ContextMenu");
+                }
+                if let Some(comp) = self.application.get_component_mut(&id) {
+                    if let Some(context_menu) =
+                        comp.as_any_mut().downcast_mut::<ContextMenuComponent>()
+                    {
+                        context_menu.set_content(menu.anchor, menu.entries, menu.cursor);
+                    }
+                }
+            }
+            OverlayRequest::DismissContextMenu => {
+                self.dismiss_modal(&ComponentId::Overlay(OverlayId::ContextMenu))
+            }
         }
         self.assert_modal_mount_exclusive();
         self.app.blocking_overlay_active = self.blocking_overlay_active();
@@ -204,5 +226,8 @@ impl Model {
         self.dismiss_modal(&Self::remote_reanchor_id());
         self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist));
         self.dismiss_modal(&ComponentId::Overlay(OverlayId::SelectionModal));
+        // Re-homes the playback-event trigger that used to clear `App::context_menu`
+        // (player_event.rs `raise_daemon_lost_modal`, task 5.3c).
+        self.dismiss_modal(&ComponentId::Overlay(OverlayId::ContextMenu));
     }
 }

@@ -1,9 +1,32 @@
+use crate::app::components::{ComponentId, ContextMenuComponent, OverlayId};
 use crate::app::tests::make_app_stub;
+use crate::app::types_context_menu::{
+    ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
+};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::player::PlayerCommand;
 
 fn ev(code: KeyCode, mods: KeyModifiers) -> KeyEvent {
     KeyEvent::new(code, mods)
+}
+
+fn open_context_menu_on(model: &mut crate::app::Model, menu: ContextMenu) {
+    model.app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu));
+    model.sync_modal_requests();
+}
+
+fn context_menu_component(model: &crate::app::Model) -> &ContextMenuComponent {
+    model
+        .application
+        .get_component(&ComponentId::Overlay(OverlayId::ContextMenu))
+        .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
+        .expect("context menu mounted")
+}
+
+fn context_menu_mounted(model: &crate::app::Model) -> bool {
+    model
+        .application
+        .mounted(&ComponentId::Overlay(OverlayId::ContextMenu))
 }
 
 #[test]
@@ -198,9 +221,9 @@ fn next_up_confirm_no_dismisses_via_handle_key() {
     assert!(app.next_up_item.is_none());
 }
 
-fn test_empty_context_menu() -> crate::app::ContextMenu {
-    crate::app::ContextMenu {
-        anchor: crate::app::ContextMenuAnchor::Pointer { x: 0, y: 0 },
+fn test_empty_context_menu() -> ContextMenu {
+    ContextMenu {
+        anchor: ContextMenuAnchor::Pointer { x: 0, y: 0 },
         entries: Vec::new(),
         cursor: 0,
     }
@@ -223,51 +246,56 @@ fn x_cycles_panel_mode_via_handle_key() {
 
 #[test]
 fn x_does_not_cycle_panel_mode_while_context_menu_is_open_via_handle_key() {
-    let mut app = make_app_stub();
-    app.context_menu = Some(test_empty_context_menu());
-    let before = app.panel_mode;
+    let app = make_app_stub();
+    let mut model = crate::app::Model::new(app);
+    open_context_menu_on(&mut model, test_empty_context_menu());
+    let before = model.app.panel_mode;
     // The Context menu is now a TuiRealm component (task 2.5); its key
-    // dispatch goes through `handle_key_context_menu` directly, not through
-    // CONTEXT_STACK. 'x' is swallowed by the menu.
-    app.handle_key_context_menu(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    // dispatch goes through the shell's `handle_context_menu_key`, not
+    // through CONTEXT_STACK. 'x' is swallowed by the menu.
+    model.handle_context_menu_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
     assert_eq!(
-        app.panel_mode, before,
+        model.app.panel_mode, before,
         "Panel mode must not cycle while a context menu is open"
     );
 }
 
 #[test]
 fn context_menu_owns_keyboard_navigation_and_dismissal() {
-    let mut app = make_app_stub();
-    app.context_menu = Some(crate::app::ContextMenu {
-        anchor: crate::app::ContextMenuAnchor::Pointer { x: 0, y: 0 },
-        entries: vec![
-            crate::app::ContextMenuEntry {
-                label: "first",
-                action: Some(crate::app::ContextAction::Play),
-            },
-            crate::app::ContextMenuEntry {
-                label: "separator",
-                action: None,
-            },
-            crate::app::ContextMenuEntry {
-                label: "last",
-                action: Some(crate::app::ContextAction::Play),
-            },
-        ],
-        cursor: 0,
-    });
+    let app = make_app_stub();
+    let mut model = crate::app::Model::new(app);
+    open_context_menu_on(
+        &mut model,
+        ContextMenu {
+            anchor: ContextMenuAnchor::Pointer { x: 0, y: 0 },
+            entries: vec![
+                ContextMenuEntry {
+                    label: "first",
+                    action: Some(ContextAction::Play),
+                },
+                ContextMenuEntry {
+                    label: "separator",
+                    action: None,
+                },
+                ContextMenuEntry {
+                    label: "last",
+                    action: Some(ContextAction::Play),
+                },
+            ],
+            cursor: 0,
+        },
+    );
 
     // The Context menu is now a TuiRealm component (task 2.5); its key
-    // dispatch goes through `handle_key_context_menu` directly.
-    app.handle_key_context_menu(ev(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(app.context_menu.as_ref().unwrap().cursor, 2);
-    app.handle_key_context_menu(ev(KeyCode::Down, KeyModifiers::NONE));
-    assert_eq!(app.context_menu.as_ref().unwrap().cursor, 0);
-    app.handle_key_context_menu(ev(KeyCode::Char('x'), KeyModifiers::NONE));
-    assert!(app.context_menu.is_some(), "unrelated keys are swallowed");
-    app.handle_key_context_menu(ev(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.context_menu.is_none());
+    // dispatch goes through the shell's `handle_context_menu_key`.
+    model.handle_context_menu_key(ev(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(context_menu_component(&model).cursor(), 2);
+    model.handle_context_menu_key(ev(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(context_menu_component(&model).cursor(), 0);
+    model.handle_context_menu_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+    assert!(context_menu_mounted(&model), "unrelated keys are swallowed");
+    model.handle_context_menu_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(!context_menu_mounted(&model));
 }
 
 #[test]
@@ -278,24 +306,20 @@ fn context_menu_mount_dismisses_sidebar_surface() {
     ));
     let mut model = crate::app::Model::new(app);
     model.sync_modal_requests();
-    model.app.context_menu = Some(test_empty_context_menu());
-    model.sync_context_menu();
+    open_context_menu_on(&mut model, test_empty_context_menu());
     assert!(!model
         .application
         .mounted(&crate::app::components::ComponentId::Overlay(
             crate::app::components::OverlayId::Sessions,
         )));
-    assert!(model
-        .application
-        .mounted(&crate::app::components::ComponentId::Overlay(
-            crate::app::components::OverlayId::ContextMenu,
-        )));
+    assert!(context_menu_mounted(&model));
 }
 
 #[test]
 fn context_menu_swallow_regression_shortcuts() {
     let mut app = make_app_stub();
-    app.context_menu = Some(test_empty_context_menu());
+    let mut model = crate::app::Model::new(app);
+    open_context_menu_on(&mut model, test_empty_context_menu());
     let keys = [
         ev(KeyCode::F(1), KeyModifiers::NONE),
         ev(KeyCode::F(2), KeyModifiers::NONE),
@@ -311,11 +335,11 @@ fn context_menu_swallow_regression_shortcuts() {
         ev(KeyCode::Char('x'), KeyModifiers::NONE),
     ];
     // The Context menu is now a TuiRealm component (task 2.5); its key
-    // dispatch goes through `handle_key_context_menu` directly, not through
-    // CONTEXT_STACK.
+    // dispatch goes through the shell's `handle_context_menu_key`, not
+    // through CONTEXT_STACK.
     for key in keys {
-        app.handle_key_context_menu(key);
-        assert!(app.context_menu.is_some(), "{key:?} must be swallowed");
+        model.handle_context_menu_key(key);
+        assert!(context_menu_mounted(&model), "{key:?} must be swallowed");
     }
 }
 
@@ -480,11 +504,12 @@ fn c_does_not_prompt_clear_queue_while_context_menu_is_open_via_handle_key() {
     let mut app = make_app_stub();
     app.player_tab
         .append_item(crate::app::tests::make_item("1", "Track"));
-    app.context_menu = Some(test_empty_context_menu());
-    app.handle_key_context_menu(ev(KeyCode::Char('c'), KeyModifiers::NONE));
+    let mut model = crate::app::Model::new(app);
+    open_context_menu_on(&mut model, test_empty_context_menu());
+    model.handle_context_menu_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
     assert!(
         !matches!(
-            app.pending_overlay.as_ref(),
+            model.app.pending_overlay.as_ref(),
             Some(crate::app::types_overlay::OverlayRequest::Confirm(_))
         ),
         "clear-queue confirmation must not open while a context menu is open"

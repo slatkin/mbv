@@ -485,11 +485,18 @@ impl Model {
                         Msg::Shell(ShellRequest::RemoteReanchorKey(key)) => {
                             self.handle_remote_reanchor_key(key);
                         }
-                        // Context menu: forward the key to the existing
-                        // `handle_key_context_menu` handler. The shell owns
-                        // cursor navigation and action execution (task 2.5).
+                        // Context menu: the shell owns cursor navigation and
+                        // action execution; the component owns the key/click
+                        // forwarding (task 5.3c).
                         Msg::Shell(ShellRequest::ContextMenuKey(key)) => {
-                            self.app.handle_key_context_menu(key);
+                            self.handle_context_menu_key(key);
+                        }
+                        Msg::Shell(ShellRequest::ContextMenuSelect(idx)) => {
+                            self.handle_context_menu_select(idx);
+                        }
+                        Msg::Shell(ShellRequest::ContextMenuDismiss) => {
+                            self.app.pending_overlay =
+                                Some(super::types_overlay::OverlayRequest::DismissContextMenu);
                         }
                         // Search sidebar: dismiss (Esc/Backspace-on-empty).
                         // The component owns the state; the shell unmounts it.
@@ -628,7 +635,6 @@ impl Model {
             self.update_settings_content();
             self.sync_playback();
             self.sync_modal_requests();
-            self.sync_context_menu();
             self.sync_multiselect();
             self.sync_library_routes();
             self.sync_feeds_manage();

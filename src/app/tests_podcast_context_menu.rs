@@ -63,7 +63,10 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
 
     app.open_context_menu();
 
-    let menu = app.context_menu.as_ref().expect("context menu");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu"),
+    };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert!(labels.contains(&"Mark Unplayed"));
     assert!(!labels.contains(&"Mark Played"));
@@ -107,7 +110,10 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
 
     app.open_context_menu();
 
-    let menu = app.context_menu.as_ref().expect("context menu");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu"),
+    };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert!(labels.contains(&"Mark Played"));
     assert!(!labels.contains(&"Mark Unplayed"));
@@ -167,7 +173,10 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
 
     app.open_context_menu();
 
-    let menu = app.context_menu.as_ref().expect("context menu");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu"),
+    };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert!(labels.contains(&"────────"));
     assert!(labels.contains(&"Mark All Played"));
@@ -265,7 +274,10 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
 
     app.open_context_menu();
 
-    let menu = app.context_menu.as_ref().expect("context menu");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu"),
+    };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert_eq!(labels[labels.len() - 3], "────────");
     assert_eq!(labels[labels.len() - 2], "Mark All Played");

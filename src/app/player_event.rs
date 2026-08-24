@@ -546,8 +546,10 @@ impl App {
     /// Raises the blocking daemon-lost modal (task 7.1), replacing whatever
     /// other blocking overlay was showing -- only one is ever active.
     fn raise_daemon_lost_modal(&mut self) {
-        self.context_menu = None;
-        self.layout.context_menu_rect = None;
+        // Closing the context menu is re-homed: the DaemonLost `OverlayRequest`
+        // arm calls `dismiss_blocking_modals`, which now also unmounts the
+        // ContextMenu component (task 5.3c). `pending_overlay` is a single slot,
+        // so it cannot both dismiss the menu and raise DaemonLost here.
         let last_playing_title = {
             let idx = self.player.status.lock().unwrap().current_idx;
             self.playback_queue()

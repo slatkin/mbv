@@ -238,11 +238,14 @@ contributing surface's group 2–4 conversion to have landed.
     through `selection_modal_actions.rs`; the fan-out is presence-reads and
     render, which `blocking_overlay_active` already covers. At the ceiling —
     own unit.
-  - [ ] *Context menu* — `context_menu` + `input_context_menu.rs`.
+  - [x] *Context menu* — `context_menu` + `input_context_menu.rs`.
     39 files (25 / 14), 199 refs, **nine** write sites — worse per-file fan-out
     than Selection modal despite the smaller count. Own unit. (The duplicated
     variable-row geometry in `input_mouse_panels.rs` was folded into *Sidebars*,
-    which deleted that file.)
+    which deleted that file.) Verified with `rtk cargo check -p mbv`,
+    `rtk cargo nextest run -p mbv` (1,154 passed), `rtk cargo clippy
+    --workspace --all-targets`, `rtk cargo fmt --all -- --check`, and
+    `rtk make check-code-file-lines`.
   - [ ] *Settings popups* — `multiselect_popup`, `library_routes_popup`,
     `feeds_manage_popup` + `input_feeds_manage_keys.rs`. 21 files (15 / 6),
     132 refs. One unit; the three share a parent and a dismissal path.

@@ -180,7 +180,6 @@ impl App {
             multiselect_popup: None,
             library_routes_popup: None,
             notif_failed: false,
-            context_menu: None,
             sessions: Vec::new(),
             cast_receivers: Vec::new(),
             panel_targets: Vec::new(),

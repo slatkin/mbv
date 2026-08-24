@@ -162,6 +162,11 @@ pub enum ShellRequest {
     /// ContextMenu component owns rendering and the blocking-modal swallow
     /// semantics; the shell owns cursor navigation and action execution.
     ContextMenuKey(crossterm::event::KeyEvent),
+    /// Activate the context-menu entry at the component-owned cursor. The
+    /// shell reads the entry's `ContextAction` and executes it (task 5.3c).
+    ContextMenuSelect(usize),
+    /// Dismiss the context menu (click outside / Esc-equivalent via mouse).
+    ContextMenuDismiss,
     /// Dismiss the global Search sidebar (Esc or Backspace on empty query).
     DismissSearch,
     /// Activate the selected search result: navigate to the item. The shell

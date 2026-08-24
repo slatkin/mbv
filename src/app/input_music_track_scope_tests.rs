@@ -82,7 +82,10 @@ fn context_menu_in_list_mode_offers_folder_scoped_actions_for_selected_album() {
 
     app.open_context_menu();
 
-    let menu = app.context_menu.as_ref().expect("context menu should open");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu should open"),
+    };
     let actions: Vec<_> = menu
         .entries
         .iter()
@@ -116,7 +119,10 @@ fn context_menu_in_track_mode_offers_track_scoped_actions_not_folder_actions() {
 
     app.open_context_menu();
 
-    let menu = app.context_menu.as_ref().expect("context menu should open");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("context menu should open"),
+    };
     let actions: Vec<_> = menu
         .entries
         .iter()

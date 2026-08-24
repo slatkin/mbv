@@ -118,9 +118,18 @@ fn audiobookshelf_tab_keys_cannot_enter_emby_action_paths() {
             0,
             "{key:?} must not enqueue anything"
         );
-        assert!(app.context_menu.is_none(), "{key:?} must not open a menu");
         assert!(
-            !matches!(app.pending_overlay, Some(super::types_overlay::OverlayRequest::Confirm(_))),
+            !matches!(
+                app.pending_overlay,
+                Some(super::types_overlay::OverlayRequest::ContextMenu(_))
+            ),
+            "{key:?} must not open a menu"
+        );
+        assert!(
+            !matches!(
+                app.pending_overlay,
+                Some(super::types_overlay::OverlayRequest::Confirm(_))
+            ),
             "{key:?} must not open a rescan confirmation"
         );
         assert!(
@@ -177,7 +186,10 @@ fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
 
     app.open_context_menu();
     assert!(
-        app.context_menu.is_none(),
+        !matches!(
+            app.pending_overlay,
+            Some(super::types_overlay::OverlayRequest::ContextMenu(_))
+        ),
         "Audiobookshelf must not open an Emby context menu"
     );
 
@@ -185,7 +197,10 @@ fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
     // menu, so the absence above is the destination guard, not an empty setup.
     app.tab = TabSelection::EmbyLibrary(0);
     app.open_context_menu();
-    assert!(app.context_menu.is_some());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::ContextMenu(_))
+    ));
 }
 
 #[test]
@@ -197,7 +212,10 @@ fn feeds_destination_never_opens_an_emby_context_menu() {
 
     app.open_context_menu();
     assert!(
-        app.context_menu.is_none(),
+        !matches!(
+            app.pending_overlay,
+            Some(super::types_overlay::OverlayRequest::ContextMenu(_))
+        ),
         "Feeds must not open an Emby context menu"
     );
 
@@ -205,7 +223,10 @@ fn feeds_destination_never_opens_an_emby_context_menu() {
     // menu, so the absence above is the destination guard, not an empty setup.
     app.tab = TabSelection::EmbyLibrary(0);
     app.open_context_menu();
-    assert!(app.context_menu.is_some());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::ContextMenu(_))
+    ));
 }
 
 /// An Emby item in the queue panel still opens the queue panel menu (Remove
@@ -219,10 +240,10 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
         .set_items(vec![make_item("Queue Movie", "Movie")], 0);
 
     app.open_context_menu();
-    let menu = app
-        .context_menu
-        .as_ref()
-        .expect("queue panel must open a menu");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("queue panel must open a menu"),
+    };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert!(
         labels.contains(&"Remove from Queue"),

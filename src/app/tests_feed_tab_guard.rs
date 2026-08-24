@@ -497,9 +497,18 @@ fn feeds_tab_keys_cannot_enter_emby_action_paths() {
             0,
             "{key:?} must not enqueue anything"
         );
-        assert!(app.context_menu.is_none(), "{key:?} must not open a menu");
         assert!(
-            !matches!(app.pending_overlay, Some(super::types_overlay::OverlayRequest::Confirm(_))),
+            !matches!(
+                app.pending_overlay,
+                Some(super::types_overlay::OverlayRequest::ContextMenu(_))
+            ),
+            "{key:?} must not open a menu"
+        );
+        assert!(
+            !matches!(
+                app.pending_overlay,
+                Some(super::types_overlay::OverlayRequest::Confirm(_))
+            ),
             "{key:?} must not open a rescan confirmation"
         );
         assert!(

@@ -242,6 +242,4 @@ pub(crate) struct AppLayout {
     pub settings_content_area: Rect,
     /// Mouse-row -> settings-line mapping, set each time the settings panel renders.
     pub settings_line_of_cursor: Vec<usize>,
-    /// Bounding rect of the open context menu, if any, for click-outside dismissal.
-    pub context_menu_rect: Option<Rect>,
 }

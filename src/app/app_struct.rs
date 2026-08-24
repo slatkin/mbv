@@ -6,7 +6,7 @@ use super::resize::{ResizeRegisterTx, ResizeResponseRx};
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_cast::{CastAttachment, CastEvent};
 use super::types_confirm::ConfirmModal;
-use super::types_context_menu::{ContextMenu, LibraryRoutePopup, MultiSelectPopup};
+use super::types_context_menu::{LibraryRoutePopup, MultiSelectPopup};
 use super::types_events::{LibEvent, SessionEvent};
 use super::types_feed::IdleFeed;
 use super::types_feed::SavePlaylistDialog;
@@ -228,7 +228,6 @@ pub struct App {
     pub(super) halfblock_picker: Option<Picker>,
     pub(super) dim_backdrop_active: bool,
     pub(super) image_cache_size_total: usize,
-    pub(super) context_menu: Option<ContextMenu>,
     pub(super) settings_cursor: usize,
     pub(super) settings_destination: SettingsDestination,
     pub(super) services_cursor: usize,

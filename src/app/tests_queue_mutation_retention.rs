@@ -179,7 +179,10 @@ fn confirmed_active_item_removal_retires_tracking() {
         Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
         _ => panic!("confirmation request missing"),
     };
-    app.apply_confirm_action(action, KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    app.apply_confirm_action(
+        action,
+        KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE),
+    );
 
     assert!(app.remote_tracker.is_none());
     assert_eq!(app.player_tab.emby_items().len(), 2);

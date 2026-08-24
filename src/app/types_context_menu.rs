@@ -7,6 +7,7 @@ use super::PanelFocus;
 /// How a context menu's position is anchored. A keyboard-opened menu keeps a
 /// selected-item anchor resolved from each fresh frame's layout; a
 /// mouse-opened menu keeps its click point and is independent of selection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ContextMenuAnchor {
     /// Keyboard opening: anchor to the focused panel's selected item.
     SelectedItem(PanelFocus),
@@ -35,6 +36,15 @@ pub(super) enum ContextAction {
 pub(super) struct ContextMenuEntry {
     pub(super) label: &'static str,
     pub(super) action: Option<ContextAction>,
+}
+
+impl Clone for ContextMenuEntry {
+    fn clone(&self) -> Self {
+        Self {
+            label: self.label,
+            action: self.action.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -294,9 +294,18 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
     home.home
         .continue_items
         .push(crate::app::tests::make_item("Continuing", "Movie"));
-    assert!(home.context_menu.is_none());
+    assert!(!matches!(
+        home.pending_overlay,
+        Some(crate::app::types_overlay::OverlayRequest::ContextMenu(_))
+    ));
     home.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
-    assert!(home.context_menu.is_some(), "combined (home) view");
+    assert!(
+        matches!(
+            home.pending_overlay,
+            Some(crate::app::types_overlay::OverlayRequest::ContextMenu(_))
+        ),
+        "combined (home) view"
+    );
 
     let mut lib = make_app_stub();
     lib.tab = TabSelection::EmbyLibrary(0);
@@ -323,7 +332,13 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
         ..crate::app::LibraryTab::new(library)
     });
     lib.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
-    assert!(lib.context_menu.is_some(), "library view");
+    assert!(
+        matches!(
+            lib.pending_overlay,
+            Some(crate::app::types_overlay::OverlayRequest::ContextMenu(_))
+        ),
+        "library view"
+    );
 
     let mut queue = make_movie_app();
     queue.panel_focus = PanelFocus::Queue;
@@ -331,7 +346,13 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
         .player_tab
         .append_item(crate::app::tests::make_item("Queued", "Movie"));
     queue.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
-    assert!(queue.context_menu.is_some(), "queue view");
+    assert!(
+        matches!(
+            queue.pending_overlay,
+            Some(crate::app::types_overlay::OverlayRequest::ContextMenu(_))
+        ),
+        "queue view"
+    );
 }
 
 #[test]
@@ -562,10 +583,10 @@ fn movie_context_menu_offers_unaffected_non_folder_verbs() {
 
     app.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
 
-    let menu = app
-        .context_menu
-        .as_ref()
-        .expect("expected a context menu for the focused movie");
+    let menu = match app.pending_overlay.as_ref() {
+        Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        _ => panic!("expected a context menu for the focused movie"),
+    };
     let labels: Vec<&str> = menu.entries.iter().map(|e| e.label).collect();
     assert_eq!(
         labels,
