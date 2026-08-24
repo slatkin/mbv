@@ -37,6 +37,7 @@ mod input_feeds_manage_keys;
 mod input_lib_keys;
 mod input_mouse;
 mod input_mouse_dispatch;
+mod input_mouse_gestures;
 mod input_mouse_panels;
 mod input_playlist_keys;
 mod input_queue_keys;

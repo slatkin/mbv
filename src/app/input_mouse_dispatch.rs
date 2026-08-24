@@ -1,14 +1,5 @@
-#![allow(unused_imports)]
-
 use crate::app::action::Command;
-use crate::app::layout::LibraryRowTarget;
-use crate::app::{
-    App, PanelFocus, PendingQueueAction, QueueScope, TabSelection, HELP_PANEL_W, PLAYLISTS_PANEL_W,
-    SESSIONS_PANEL_W, SETTINGS_PANEL_W,
-};
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
-use mbv_core::player::PlayerCommand;
-use ratatui::layout::Rect;
+use crate::app::{App, PanelFocus, TabSelection};
 use std::time::{Duration, Instant};
 impl App {
     pub(super) fn handle_mouse(&mut self, mouse: crossterm::event::MouseEvent) {
@@ -201,28 +192,14 @@ impl App {
                                 return;
                             }
                             match self.tab {
-                                TabSelection::Home => self.home_select_section(target),
+                                TabSelection::Home => self.handle_mouse_selector_click_home(target),
                                 TabSelection::AudiobookshelfLibrary(index) => {
-                                    match self.audiobookshelf_kind_at(index) {
-                                        Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
-                                            self.select_audiobookshelf_book_bucket(target);
-                                        }
-                                        _ if self.podcast_filter_target_active(index) => {
-                                            self.select_audiobookshelf_filter(target);
-                                        }
-                                        _ => self.select_audiobookshelf_podcast_bucket(target),
-                                    }
+                                    self.handle_mouse_selector_click_audiobookshelf(index, target)
                                 }
                                 TabSelection::EmbyLibrary(lib_idx) => {
-                                    if self.is_music_group_view(lib_idx) {
-                                        self.select_music_group(lib_idx, target);
-                                    } else if self.is_feed_home_video_group_view(lib_idx) {
-                                        self.select_feed_folder_group(lib_idx, target);
-                                    } else if self.should_show_letter_pills(lib_idx) {
-                                        self.select_letter_pill(lib_idx, target);
-                                    }
+                                    self.handle_mouse_selector_click_emby(lib_idx, target)
                                 }
-                                TabSelection::Feeds => {}
+                                TabSelection::Feeds => self.handle_mouse_selector_click_feeds(),
                             }
                             return;
                         }
@@ -292,91 +269,24 @@ impl App {
                                 }
                             }
                         }
-                        match self.tab {
-                            TabSelection::Home if in_left => self.home_play(),
-                            TabSelection::Home => {}
+                        let should_return = match self.tab {
+                            TabSelection::Home => {
+                                self.handle_mouse_double_click_home(in_left);
+                                false
+                            }
                             TabSelection::Feeds => {
-                                // Double-click on Feeds: no-op (playback wiring pending).
+                                self.handle_mouse_double_click_feeds();
+                                false
                             }
                             TabSelection::AudiobookshelfLibrary(index) => {
-                                let Some(kind) = self.audiobookshelf_kind_at(index) else {
-                                    return;
-                                };
-                                match kind {
-                                    crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
-                                        if in_left {
-                                            let in_episodes = self
-                                                .audiobookshelf_browse
-                                                .get(index)
-                                                .is_some_and(|state| state.episode_selection.is_some());
-                                            if !in_episodes {
-                                                if self.layout.main.is_wide_podcast_active() {
-                                                    self.enter_audiobookshelf_episode_selection();
-                                                } else {
-                                                    self.open_podcast_selection_modal();
-                                                }
-                                            } else {
-                                                // Episode activation: inert seam for
-                                                // #518 (double-click on a selected
-                                                // episode).
-                                                self.activate_audiobookshelf_episode(index);
-                                            }
-                                        }
-                                    }
-                                    crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
-                                        if !self.layout.main.is_wide_book_active() && in_left {
-                                            self.activate_audiobookshelf_book_parent();
-                                        } else {
-                                            let in_chapters = self
-                                                .audiobookshelf_book_browse
-                                                .get(index)
-                                                .is_some_and(|state| state.chapter_selection.is_some());
-                                            if in_chapters
-                                                && self
-                                                    .layout
-                                                    .main
-                                                    .audiobookshelf_book_chapter_rows
-                                                    .iter()
-                                                    .any(|(rect, _)| rect.contains(pos))
-                                            {
-                                                self.activate_audiobookshelf_book_row();
-                                            }
-                                        }
-                                    }
-                                }
+                                self.handle_mouse_double_click_audiobookshelf(index, in_left, pos)
                             }
                             TabSelection::EmbyLibrary(lib_idx) => {
-                                if in_left {
-                                    // Double-click activates the row under the cursor
-                                    // (the first click of the pair already focused it).
-                                    // Mirrors the Enter key's activation for the same
-                                    // row so the two gestures can't drift: recursive
-                                    // album search jump, album-folder track mode,
-                                    // series selection, then `select()` (plays media
-                                    // items and drills into folders). The inline hero is
-                                    // just another surface over the selected item, so a
-                                    // double-click there activates it the same way --
-                                    // including entering a Series' season/episode
-                                    // selection, which a single click never did.
-                                    // Wide Music: double-click on a track plays it.
-                                    if self.layout.main.is_wide_music_active() {
-                                        let pos = (col, row).into();
-                                        if let Some(track_idx) =
-                                            self.layout.main.wide_music_track_at(pos)
-                                        {
-                                            self.libs[lib_idx].album_track_focus = Some(track_idx);
-                                            self.select(lib_idx);
-                                        }
-                                        // Double-click on artwork or blank space: no-op.
-                                        return;
-                                    }
-                                    if self.is_viewing_album_folders(lib_idx) {
-                                        self.activate_album_folder_row(lib_idx);
-                                    } else if !self.activate_selected_series(lib_idx) {
-                                        self.select(lib_idx);
-                                    }
-                                }
+                                self.handle_mouse_double_click_emby(lib_idx, in_left, pos)
                             }
+                        };
+                        if should_return {
+                            return;
                         }
                     }
                     // Wide Music: double-click on right pane album enters
@@ -495,14 +405,12 @@ impl App {
                     return;
                 }
                 match self.tab {
-                    TabSelection::Home | TabSelection::EmbyLibrary(_) => {
-                        if self.click_set_cursor(col, row) {
-                            self.open_context_menu_at(col, row);
-                        }
+                    TabSelection::Home => self.handle_mouse_right_click_home(col, row),
+                    TabSelection::EmbyLibrary(_) => self.handle_mouse_right_click_emby(col, row),
+                    TabSelection::AudiobookshelfLibrary(_) => {
+                        self.handle_mouse_right_click_audiobookshelf(col, row)
                     }
-                    TabSelection::AudiobookshelfLibrary(_) | TabSelection::Feeds => {
-                        self.click_set_cursor(col, row);
-                    }
+                    TabSelection::Feeds => self.handle_mouse_right_click_feeds(col, row),
                 }
             }
             MouseEventKind::Drag(MouseButton::Left)

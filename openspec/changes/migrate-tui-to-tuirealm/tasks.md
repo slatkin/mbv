@@ -252,7 +252,7 @@ contributing surface's group 2–4 conversion to have landed.
   - [ ] *Album track focus* — delete `LibraryTab.album_track_focus` and re-home
     its four `= None` resets. 30 files (21 / 9), 113 refs. Independent of 5.3c;
     may run in parallel with it.
-  - [ ] *Mouse gesture prep* — extract the three remaining `match self.tab`
+  - [x] *Mouse gesture prep* — extract the three remaining `match self.tab`
     dispatch points in `App::handle_mouse` (`input_mouse_dispatch.rs`: selector-tab
     click, double-click activate, right-click menu) into one named method per
     gesture per surface, mirroring the already-extracted
