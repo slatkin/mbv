@@ -15,6 +15,7 @@ pub(in crate::app) use components::feeds::{render_feeds_content, FeedsRenderMode
 pub(in crate::app) use components::help::{help_destination, render_help_panel, HelpDestination};
 pub(in crate::app) use components::home::render_home_content;
 pub(in crate::app) use components::home_hero::HomeImagePaint;
+pub(in crate::app) use components::playback_prompt::render_playback_prompt_content;
 pub(in crate::app) use components::remote_reanchor::render_remote_reanchor_popup_content;
 pub(in crate::app) use components::search_sidebar::render_search_sidebar;
 pub(in crate::app) use components::sessions::render_sessions_overlay_content;
@@ -26,7 +27,7 @@ pub(in crate::app) use components::sessions::render_sessions_overlay_content;
 #[allow(unused_imports)]
 pub(in crate::app) use components::chrome::{
     left_panel_content_area, panel_content_area, panel_row_text_width, render_panel_row,
-    render_panel_shell, render_panel_shell_at, render_sidebar_scrollbar,
+    render_panel_shell, render_panel_shell_at, render_sidebar_scrollbar, toast_line,
 };
 
 // Re-exports so paths that resolved at `render::X` (or, from render's other

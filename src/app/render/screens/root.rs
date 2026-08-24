@@ -4,10 +4,10 @@ use crate::app::render::components::widgets::{
     render_queue_panel_frame, right_panel_content_area, COLUMN_GAP,
 };
 use crate::app::{palette, App, PanelFocus, PanelMode, TabSelection};
-use ratatui::layout::{Alignment, Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph};
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 use std::time::Instant;
 
@@ -370,6 +370,7 @@ impl App {
             width: right_area.width,
             height: 1,
         };
+        playback.status_area = status_area;
 
         let (lib_area, queue_area) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
             (right_area, Rect::default())
@@ -526,36 +527,10 @@ impl App {
             self.render_library(f, render_lib_area, left_focused, layout);
         }
 
-        // Status bar + toast overlay at the bottom of the right panel.
+        // Status bar at the bottom of the right panel. Playback prompts are
+        // painted by the shell-mounted component after this legacy frame.
         if status_area.width > 0 {
             self.render_status_bar(f, status_area, playback, false);
-            // Neutral toasts always render in-app (spec: "Neutral toasts …
-            // SHALL always render in-app"). Prompts (status_expires == None)
-            // and non-system-notification fallback toasts follow the existing
-            // gating: visible only when the desktop notification path isn't
-            // working (system notifications disabled or failed).
-            let is_neutral_toast = self.status_expires.is_some()
-                && self.status_severity == crate::app::notify_actions::ToastSeverity::Neutral;
-            let show_toast = !self.status.is_empty()
-                && (is_neutral_toast || !self.system_notifications || self.notif_failed);
-            if show_toast {
-                // Prompts (no expiry) and Neutral toasts use standard
-                // status-bar styling; colored toasts use severity palette.
-                let styled_as_status_bar = self.status_expires.is_none()
-                    || self.status_severity == crate::app::notify_actions::ToastSeverity::Neutral;
-                let (toast_bg, toast_fg) = if styled_as_status_bar {
-                    (palette::SURFACE_CHROME, palette::TEXT_PRIMARY)
-                } else {
-                    (self.status_severity.toast_bg(), palette::TOAST_FG)
-                };
-                f.render_widget(Clear, status_area);
-                f.render_widget(
-                    Paragraph::new(Self::toast_line(&self.status, toast_fg))
-                        .alignment(Alignment::Center)
-                        .style(Style::default().fg(toast_fg).bg(toast_bg)),
-                    status_area,
-                );
-            }
         }
     }
 }

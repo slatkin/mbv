@@ -30,6 +30,8 @@ use ratatui::layout::Rect;
 /// that zeroed them out.
 #[derive(Default)]
 pub(crate) struct LayoutPlayback {
+    /// Status-bar area used by the shell-mounted playback prompt component.
+    pub status_area: Rect,
     pub seekbar_area: Rect,
     pub ind_rc: Rect,
     pub ind_mu: Rect,

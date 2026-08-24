@@ -18,6 +18,7 @@ pub mod home;
 pub mod legacy_input;
 pub mod msg;
 pub mod playback_gates;
+pub mod playback_prompt;
 pub mod remote_reanchor;
 pub mod search_sidebar;
 pub mod sessions;
@@ -35,6 +36,7 @@ pub use self::msg::{LegacyTerminalEvent, Msg, ServiceRequest, ShellRequest};
 pub use self::playback_gates::{
     PlaybackGatesComponent, ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE,
 };
+pub use self::playback_prompt::PlaybackPromptComponent;
 pub use self::remote_reanchor::RemoteReanchorComponent;
 pub use self::search_sidebar::SearchSidebarComponent;
 pub use self::sessions::SessionsComponent;
@@ -46,3 +48,6 @@ mod feeds_component_tests;
 #[cfg(test)]
 #[path = "home_component_tests.rs"]
 mod home_component_tests;
+#[cfg(test)]
+#[path = "playback_prompt_component_tests.rs"]
+mod playback_prompt_component_tests;

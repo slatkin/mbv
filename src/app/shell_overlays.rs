@@ -8,11 +8,58 @@
 
 use super::components::{
     ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, HelpComponent,
-    ModalId, OverlayId, RemoteReanchorComponent, SearchSidebarComponent, SessionsComponent,
+    ModalId, OverlayId, PlaybackPromptComponent, RemoteReanchorComponent, SearchSidebarComponent,
+    SessionsComponent,
 };
 use super::shell::Model;
 
 impl Model {
+    // --- Playback prompt ----------------------------------------------------
+
+    /// Sync the status-bar playback prompt with the shell-owned prompt state.
+    pub(super) fn sync_playback_prompt(&mut self) {
+        let id = ComponentId::PlaybackPrompt;
+        let mounted = self.application.mounted(&id);
+        let prompt_open =
+            self.app.skip_intro_end_ticks.is_some() || self.app.next_up_item.is_some();
+        if prompt_open && !mounted {
+            self.application
+                .mount(id.clone(), Box::new(PlaybackPromptComponent::new()), vec![])
+                .expect("mount PlaybackPrompt");
+            self.application
+                .active(&id)
+                .expect("activate PlaybackPrompt");
+        } else if !prompt_open && mounted {
+            let _ = self.application.umount(&id);
+        }
+        let visible = !self.app.status.is_empty()
+            && (!self.app.system_notifications || self.app.notif_failed);
+        let area = self.app.layout.playback.status_area;
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(prompt) = comp.as_any_mut().downcast_mut::<PlaybackPromptComponent>() {
+                prompt.set_content(&self.app.status, visible, area);
+            }
+        }
+    }
+
+    /// Render the prompt after the legacy frame has established the status-bar
+    /// geometry, before any blocking overlay paints its dimmed backdrop.
+    pub(super) fn render_playback_prompt(&mut self, f: &mut ratatui::Frame) {
+        let id = ComponentId::PlaybackPrompt;
+        if !self.application.mounted(&id) {
+            return;
+        }
+        let visible = !self.app.status.is_empty()
+            && (!self.app.system_notifications || self.app.notif_failed);
+        let area = self.app.layout.playback.status_area;
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(prompt) = comp.as_any_mut().downcast_mut::<PlaybackPromptComponent>() {
+                prompt.set_content(&self.app.status, visible, area);
+            }
+        }
+        self.application.view(&id, f, f.area());
+    }
+
     /// True when a blocking overlay (context menu, selection modal,
     /// daemon-lost, confirm, remote-reanchor, save-playlist) is mounted —
     /// those swallow every key, including F1. Excludes Settings-child popups
@@ -352,5 +399,36 @@ impl Model {
             }
         }
         self.application.view(&id, f, f.area());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::components::PlaybackPromptComponent;
+    use crate::app::tests::make_app_stub;
+
+    #[test]
+    fn playback_prompt_shell_sync_mounts_and_mirrors_status() {
+        let mut model = Model::new(make_app_stub());
+        model.app.skip_intro_end_ticks = Some(100);
+        model.app.status = "Skip intro? (Y/n)".into();
+
+        model.sync_playback_prompt();
+
+        let id = ComponentId::PlaybackPrompt;
+        assert!(model.application.mounted(&id));
+        let component = model
+            .application
+            .get_component(&id)
+            .expect("Playback prompt mounted")
+            .as_any()
+            .downcast_ref::<PlaybackPromptComponent>()
+            .expect("Playback prompt type");
+        assert_eq!(component.status(), "Skip intro? (Y/n)");
+
+        model.app.skip_intro_end_ticks = None;
+        model.sync_playback_prompt();
+        assert!(!model.application.mounted(&id));
     }
 }

@@ -323,30 +323,30 @@ pub(in crate::app) fn render_panel_row(
     );
 }
 
-impl App {
-    pub(in crate::app::render) fn toast_line(s: &str, fg: Color) -> Line<'static> {
-        let text_style = Style::default().fg(fg).add_modifier(Modifier::BOLD);
-        let open = s.find(['[', '(']);
-        if let Some(i) = open {
-            let close = s[i..].find([']', ')']).map(|j| i + j);
-            if let Some(j) = close {
-                let mut spans = vec![
-                    Span::styled(s[..i].to_string(), text_style),
-                    Span::styled(s[i..i + 1].to_string(), text_style),
-                ];
-                for c in s[i + 1..j].chars() {
-                    spans.push(Span::styled(c.to_string(), text_style));
-                }
-                spans.push(Span::styled(s[j..j + 1].to_string(), text_style));
-                if j + 1 < s.len() {
-                    spans.push(Span::styled(s[j + 1..].to_string(), text_style));
-                }
-                return Line::from(spans);
+pub(in crate::app) fn toast_line(s: &str, fg: Color) -> Line<'static> {
+    let text_style = Style::default().fg(fg).add_modifier(Modifier::BOLD);
+    let open = s.find(['[', '(']);
+    if let Some(i) = open {
+        let close = s[i..].find([']', ')']).map(|j| i + j);
+        if let Some(j) = close {
+            let mut spans = vec![
+                Span::styled(s[..i].to_string(), text_style),
+                Span::styled(s[i..i + 1].to_string(), text_style),
+            ];
+            for c in s[i + 1..j].chars() {
+                spans.push(Span::styled(c.to_string(), text_style));
             }
+            spans.push(Span::styled(s[j..j + 1].to_string(), text_style));
+            if j + 1 < s.len() {
+                spans.push(Span::styled(s[j + 1..].to_string(), text_style));
+            }
+            return Line::from(spans);
         }
-        Line::from(Span::styled(s.to_string(), text_style))
     }
+    Line::from(Span::styled(s.to_string(), text_style))
+}
 
+impl App {
     pub(in crate::app::render) fn settings_content_area(content: Rect) -> Rect {
         Rect {
             x: content.x.saturating_add(2),

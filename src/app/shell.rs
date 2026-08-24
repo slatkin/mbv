@@ -532,6 +532,13 @@ impl Model {
                                     crossterm::event::KeyModifiers::NONE,
                                 ));
                         }
+                        Msg::Shell(ShellRequest::PlaybackPromptKey(key)) => {
+                            if self.app.skip_intro_end_ticks.is_some() {
+                                self.app.handle_key_confirm_skip_intro(key);
+                            } else if self.app.next_up_item.is_some() {
+                                self.app.handle_key_confirm_next_up(key);
+                            }
+                        }
                         // Search sidebar: debounce deadline passed. The
                         // component owns the debounce; the shell owns the
                         // Emby client and spawns the search thread (task 3.2).
@@ -561,6 +568,7 @@ impl Model {
             self.sync_sessions();
             self.sync_home();
             self.sync_feeds();
+            self.sync_playback_prompt();
             self.sync_precedence_gates();
 
             self.app.expire_music_grouping_candidates();
@@ -603,6 +611,7 @@ impl Model {
                     self.app.render(f);
                     self.render_home_component(f);
                     self.render_feeds_component(f);
+                    self.render_playback_prompt(f);
                     self.render_help_overlay(f);
                     self.render_confirm_overlay(f);
                     self.render_daemon_lost_overlay(f);
