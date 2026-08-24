@@ -17,6 +17,7 @@ pub mod help;
 pub mod home;
 pub mod legacy_input;
 pub mod msg;
+pub mod multiselect;
 pub mod playback_gates;
 pub mod playback_prompt;
 pub mod remote_reanchor;
@@ -25,7 +26,7 @@ pub mod selection_modal;
 pub mod sessions;
 pub mod user_event;
 
-pub use self::component_id::{ComponentId, ModalId, OverlayId};
+pub use self::component_id::{ComponentId, ModalId, OverlayId, PopupId};
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;
 pub use self::daemon_lost::DaemonLostComponent;
@@ -34,6 +35,7 @@ pub use self::help::HelpComponent;
 pub use self::home::HomeComponent;
 pub use self::legacy_input::LegacyInput;
 pub use self::msg::{LegacyTerminalEvent, Msg, ServiceRequest, ShellRequest};
+pub use self::multiselect::MultiselectComponent;
 pub use self::playback_gates::{
     PlaybackGatesComponent, ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE,
 };

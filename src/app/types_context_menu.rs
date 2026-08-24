@@ -37,7 +37,7 @@ pub(super) struct ContextMenuEntry {
     pub(super) action: Option<ContextAction>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MultiSelectKind {
     HiddenLibraries,
     HiddenLatest,
@@ -45,6 +45,7 @@ pub(crate) enum MultiSelectKind {
     FeedViewLibraries,
 }
 
+#[derive(Clone)]
 pub(super) struct MultiSelectPopup {
     pub(super) kind: MultiSelectKind,
     pub(super) items: Vec<(String, String, bool)>, // (name_lower, display_name, is_hidden)

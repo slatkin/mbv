@@ -8,8 +8,9 @@
 
 use super::components::{
     ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, HelpComponent,
-    ModalId, OverlayId, PlaybackPromptComponent, RemoteReanchorComponent, SearchSidebarComponent,
-    SelectionModalComponent, SessionsComponent, ShellRequest,
+    ModalId, MultiselectComponent, OverlayId, PlaybackPromptComponent, PopupId,
+    RemoteReanchorComponent, SearchSidebarComponent, SelectionModalComponent, SessionsComponent,
+    ShellRequest,
 };
 use super::shell::Model;
 
@@ -386,6 +387,67 @@ impl Model {
         self.application.view(&id, f, f.area());
     }
 
+    // --- Settings Multiselect popup ----------------------------------------
+
+    fn multiselect_id() -> ComponentId {
+        ComponentId::Popup(PopupId::Multiselect)
+    }
+
+    pub(super) fn sync_multiselect(&mut self) {
+        let id = Self::multiselect_id();
+        let mounted = self.application.mounted(&id);
+        if self.app.multiselect_popup.is_some() && !mounted {
+            self.application
+                .mount(id.clone(), Box::new(MultiselectComponent::new()), vec![])
+                .expect("mount Multiselect");
+            self.application.active(&id).expect("activate Multiselect");
+        } else if self.app.multiselect_popup.is_none() && mounted {
+            let _ = self.application.umount(&id);
+        }
+        if let Some(popup) = self.app.multiselect_popup.as_ref() {
+            if let Some(comp) = self.application.get_component_mut(&id) {
+                if let Some(multiselect) = comp.as_any_mut().downcast_mut::<MultiselectComponent>()
+                {
+                    multiselect.set_content(popup);
+                }
+            }
+        }
+    }
+
+    pub(super) fn handle_multiselect_commit(&mut self) {
+        let id = Self::multiselect_id();
+        let Some((kind, items)) = self
+            .application
+            .get_component_mut(&id)
+            .and_then(|component| {
+                component
+                    .as_any_mut()
+                    .downcast_mut::<MultiselectComponent>()
+                    .and_then(|component| component.commit_snapshot())
+            })
+        else {
+            return;
+        };
+        if self
+            .app
+            .multiselect_popup
+            .as_ref()
+            .is_some_and(|popup| popup.kind == kind)
+        {
+            if let Some(popup) = self.app.multiselect_popup.as_mut() {
+                popup.items = items;
+            }
+            self.app.close_multiselect_popup();
+        }
+    }
+
+    pub(super) fn render_multiselect_popup(&mut self, f: &mut ratatui::Frame) {
+        let id = Self::multiselect_id();
+        if self.application.mounted(&id) {
+            self.application.view(&id, f, f.area());
+        }
+    }
+
     // --- Search sidebar -----------------------------------------------------
     //
     // The Search sidebar is a non-blocking overlay mounted when
@@ -502,8 +564,11 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::{Msg, PlaybackPromptComponent, SelectionModalComponent};
+    use crate::app::components::{
+        Msg, MultiselectComponent, PlaybackPromptComponent, SelectionModalComponent,
+    };
     use crate::app::tests::make_app_stub;
+    use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
     use crate::app::types_selection_modal::{
         SelectionModal, SelectionModalItem, SelectionModalListState, SelectionModalRow,
         SelectionModalSource,
@@ -577,6 +642,40 @@ mod tests {
         model.sync_selection_modal();
 
         assert!(model.app.selection_modal.is_none());
+        assert!(!model.application.mounted(&id));
+    }
+
+    #[test]
+    fn multiselect_shell_syncs_and_commits_component_choices() {
+        let mut model = Model::new(make_app_stub());
+        model.app.multiselect_popup = Some(MultiSelectPopup {
+            kind: MultiSelectKind::HiddenLibraries,
+            items: vec![("movies".into(), "Movies".into(), false)],
+            cursor: 0,
+        });
+        model.sync_multiselect();
+
+        let id = ComponentId::Popup(PopupId::Multiselect);
+        let message = {
+            let component = model
+                .application
+                .get_component_mut(&id)
+                .expect("Multiselect mounted")
+                .as_any_mut()
+                .downcast_mut::<MultiselectComponent>()
+                .expect("Multiselect type");
+            component.on(&Event::Keyboard(KeyEvent {
+                code: Key::Enter,
+                modifiers: KeyModifiers::NONE,
+            }))
+        };
+        let Some(Msg::Shell(request)) = message else {
+            panic!("Multiselect should emit a shell request");
+        };
+        model.handle_multiselect_commit();
+        assert!(matches!(request, ShellRequest::MultiselectCommit { .. }));
+        model.sync_multiselect();
+        assert!(model.app.multiselect_popup.is_none());
         assert!(!model.application.mounted(&id));
     }
 }

@@ -139,6 +139,12 @@ pub enum ShellRequest {
     SelectionModalFilterSelected(usize),
     /// Activate the selected Selection modal item by its opaque provider id.
     SelectionModalActivate(Option<String>),
+    /// Commit the component-owned Multiselect choices through the legacy App
+    /// action path.
+    MultiselectCommit {
+        kind: crate::app::types_context_menu::MultiSelectKind,
+        items: Vec<(String, String, bool)>,
+    },
     /// Forward a playback prompt key to the shell-owned Player handler.
     PlaybackPromptKey(crossterm::event::KeyEvent),
     /// Play the Home item at the component-owned flat cursor (task 3.4).
