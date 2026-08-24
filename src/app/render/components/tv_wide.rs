@@ -79,17 +79,14 @@ impl App {
             Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
             left_panel,
         );
-        if selected_series.is_some() {
-            self.render_series_inline_detail(
-                f,
-                left_area,
-                lib_idx,
-                episode_focused,
-                true,
-                true,
-                layout,
-            );
-        } else {
+        if !self.render_wide_tv_series_selection(
+            f,
+            left_area,
+            lib_idx,
+            episode_focused,
+            selected_series,
+            layout,
+        ) {
             crate::app::render::render_placeholder(f, left_area, " Loading\u{2026}");
         }
 
@@ -114,8 +111,13 @@ impl App {
             );
         }
 
-        let final_scroll =
-            self.render_wide_library_rows_with_ctx(f, list_area, ctx, right_focused, layout);
+        let final_scroll = self.render_generic_movies_home_video_rows_with_ctx(
+            f,
+            list_area,
+            ctx,
+            right_focused,
+            layout,
+        );
         if ctx.is_search_active() {
             if let Some(search) = &mut self.libs[lib_idx].search {
                 search.scroll = final_scroll;
@@ -125,6 +127,30 @@ impl App {
         }
 
         hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
+    }
+
+    fn render_wide_tv_series_selection(
+        &mut self,
+        f: &mut Frame,
+        left_area: Rect,
+        lib_idx: usize,
+        episode_focused: bool,
+        selected_series: Option<&mbv_core::api::EmbyItem>,
+        layout: &mut LayoutMain,
+    ) -> bool {
+        if selected_series.is_none() {
+            return false;
+        }
+        self.render_series_inline_detail(
+            f,
+            left_area,
+            lib_idx,
+            episode_focused,
+            true,
+            true,
+            layout,
+        );
+        true
     }
 }
 
