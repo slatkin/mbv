@@ -118,19 +118,25 @@ fn wide_series_with_no_seasons_keeps_the_child_region_blank() {
 
 #[test]
 fn wide_tv_selected_series_follows_inline_search_cursor() {
-    let mut app = tv_app();
     let mut second = make_item("Search Series", "Series");
     second.id = "search-series".into();
-    app.libs[0].search = Some(crate::app::LibSearch {
-        query: "search".into(),
-        items: vec![second.clone()],
-        results: vec![0],
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    assert_eq!(app.selected_series_item(0).unwrap().id, second.id);
+    let mut component = crate::app::components::InlineSearchComponent::new();
+    component.set_content(
+        crate::app::components::SearchPool::Items(vec![second.clone()]),
+        false,
+        true,
+        ratatui::layout::Rect::new(0, 0, 40, 5),
+    );
+    use tuirealm::component::AppComponent;
+    for key in "search".chars() {
+        component.on(&tuirealm::event::Event::Keyboard(
+            tuirealm::event::KeyEvent {
+                code: tuirealm::event::Key::Char(key),
+                modifiers: tuirealm::event::KeyModifiers::NONE,
+            },
+        ));
+    }
+    assert_eq!(component.selected_item().unwrap().id, second.id);
 }
 
 #[test]

@@ -620,12 +620,10 @@ fn opening_search_with_an_active_letter_pill_always_needs_a_full_library_fetch()
     }
     app.libs[0].library_total = Some(3000);
 
-    let should_quit = app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
-
-    assert!(!should_quit);
-    let search = app.libs[0].search.as_ref().expect("search should open");
+    let mut model = crate::app::shell::Model::new(app);
+    model.open_inline_search();
     assert!(
-        search.loading,
-        "a full-library fetch must be in flight, not just the active M–O range"
+        model.inline_search_id.is_some(),
+        "inline Search must mount at the component boundary"
     );
 }

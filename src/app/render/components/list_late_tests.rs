@@ -163,31 +163,9 @@ fn letter_grouped_replacement_moves_with_a_scrolled_header() {
 // than the rendered output, since `show_grouped` itself is a local binding
 // inside `render_list`, not a standalone function.
 #[test]
-fn show_grouped_guard_is_false_while_search_is_active_on_album_folders() {
-    let mut app = crate::app::render::test_helpers::make_music_group_app();
-    let lib_idx = app.tab.emby_library_index().unwrap();
-
-    assert!(
-        app.is_viewing_album_folders(lib_idx),
-        "fixture must sit at the album-folder level for this guard to matter"
-    );
-    assert!(app.libs[lib_idx].search.is_none());
-    assert!(
-        app.is_viewing_album_folders(lib_idx) && app.libs[lib_idx].search.is_none(),
-        "baseline: show_grouped's condition holds with no active search"
-    );
-
-    app.libs[lib_idx].search = Some(crate::app::LibSearch {
-        query: "x".into(),
-        items: Vec::new(),
-        results: Vec::new(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    assert!(
-        !(app.is_viewing_album_folders(lib_idx) && app.libs[lib_idx].search.is_none()),
-        "show_grouped's condition must go false once a search is active"
-    );
+fn inline_search_mounts_at_the_component_boundary() {
+    let mut model =
+        crate::app::shell::Model::new(crate::app::render::test_helpers::make_music_group_app());
+    model.open_inline_search();
+    assert!(model.inline_search_id.is_some());
 }

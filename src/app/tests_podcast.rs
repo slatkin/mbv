@@ -112,10 +112,6 @@ fn audiobookshelf_tab_keys_cannot_enter_emby_action_paths() {
             Some(false),
             "Audiobookshelf tab must consume {key:?}"
         );
-        assert!(
-            app.libs[0].search.is_none(),
-            "{key:?} must not open an Emby search"
-        );
         assert_eq!(
             app.libs[0].nav_stack.len(),
             nav_len,

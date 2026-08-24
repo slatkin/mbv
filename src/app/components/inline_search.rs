@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn inline_library_search_query_and_cursor_survive_shell_mirrors() {
         let mut component = InlineSearchComponent::new();
-        let items = vec![make_item("One", "Movie"), make_item("Two", "Movie")];
+        let items = vec![make_item("One", "Movie"), make_item("Only", "Movie")];
         component.set_content(
             SearchPool::Items(items.clone()),
             false,
@@ -244,26 +244,25 @@ mod tests {
             code: Key::Char('x'),
             modifiers: KeyModifiers::NONE,
         }));
+        component.query = "on".into();
+        component.set_content(
+            SearchPool::Items(items),
+            false,
+            true,
+            Rect::new(0, 0, 40, 5),
+        );
         component.on(&Event::Keyboard(KeyEvent {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
         }));
-        component.set_content(
-            "one".into(),
-            SearchPool::Items(items),
-            false,
-            0,
-            0,
-            true,
-            Rect::new(0, 0, 40, 5),
-        );
-        assert_eq!(component.query, "onex");
+        assert_eq!(component.query, "on");
         assert_eq!(component.cursor, 1);
     }
 
     #[test]
     fn inline_library_search_renders_plain_candidates_without_app() {
         let mut component = InlineSearchComponent::new();
+        component.query = "one".into();
         component.set_content(
             SearchPool::Items(vec![make_item("One", "Movie")]),
             false,
@@ -286,6 +285,7 @@ mod tests {
     fn inline_library_search_enter_emits_activation_message() {
         let mut component = InlineSearchComponent::new();
         let item = make_item("One", "Movie");
+        component.query = "one".into();
         component.set_content(
             SearchPool::Items(vec![item.clone()]),
             false,

@@ -10,9 +10,7 @@
 #![allow(dead_code)]
 
 use super::components::component_id::{ModalId, OverlayId};
-use super::components::{
-    ComponentId, ATTR_ALBUM_TRACK_FOCUSED, ATTR_BLOCKING_OVERLAY_ACTIVE, ATTR_LIB_SEARCH_ACTIVE,
-};
+use super::components::{ComponentId, ATTR_ALBUM_TRACK_FOCUSED, ATTR_BLOCKING_OVERLAY_ACTIVE};
 use tuirealm::props::{AttrValue, Attribute};
 use tuirealm::subscription::SubClause;
 
@@ -117,21 +115,6 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         gate: KeyPolicyGate::IsMounted(ComponentId::Queue),
         blocking: false,
     },
-    // 13 — Inline library search
-    KeyPolicyEntry {
-        name: "lib_search",
-        // The shell resolves the parameterized question in
-        // `sync_precedence_gates` and carries it as an attribute on the
-        // `ComponentId::Playback` carrier, so this clause needs no per-instance
-        // identity.
-        owner: KeyPolicyOwner::Active(None),
-        gate: KeyPolicyGate::HasAttrValue(
-            ComponentId::Playback,
-            ATTR_LIB_SEARCH_ACTIVE,
-            AttrValue::Flag(true),
-        ),
-        blocking: false,
-    },
     // 15 — Panel mode cycle
     KeyPolicyEntry {
         name: "panel_mode_cycle_x",
@@ -204,7 +187,6 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
     // 23 — Inline album-track mode
     KeyPolicyEntry {
         name: "album_track_mode",
-        // See the resolved parameterized-gate note on `lib_search` above.
         owner: KeyPolicyOwner::Active(None),
         gate: KeyPolicyGate::HasAttrValue(
             ComponentId::Playback,

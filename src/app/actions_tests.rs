@@ -13,6 +13,7 @@ use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
 use std::collections::HashMap;
 use std::sync::mpsc;
+use tuirealm::component::AppComponent;
 
 fn folder(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "Folder");
@@ -182,11 +183,10 @@ fn album_index_traverses_deep_branches_pages_and_ignores_non_albums() {
 
 #[test]
 fn recursive_album_search_matches_ancestor_labels() {
-    let mut app = recursive_music_app();
+    let mut component = crate::app::components::InlineSearchComponent::new();
     let target = album("album-1", "Needle Record");
-    app.album_indexes.insert(
-        "music-lib".into(),
-        AlbumIndexState::Ready(vec![AlbumSearchEntry {
+    component.set_content(
+        crate::app::components::SearchPool::Albums(vec![AlbumSearchEntry {
             album: target,
             ancestors: vec![AlbumPathPart {
                 id: "group-a".into(),
@@ -195,58 +195,63 @@ fn recursive_album_search_matches_ancestor_labels() {
             display_label: "Deep Group / Needle Record".into(),
             search_text: "Deep Group / Needle Record".into(),
         }]),
+        false,
+        true,
+        ratatui::layout::Rect::new(0, 0, 40, 5),
     );
-
-    assert!(app.open_recursive_album_search(0));
-    app.libs[0].search.as_mut().unwrap().query = "deep grp".into();
-    app.update_lib_search(0);
-
-    assert_eq!(app.libs[0].search.as_ref().unwrap().results, vec![0]);
+    for key in "deep grp".chars() {
+        component.on(&tuirealm::event::Event::Keyboard(
+            tuirealm::event::KeyEvent {
+                code: tuirealm::event::Key::Char(key),
+                modifiers: tuirealm::event::KeyModifiers::NONE,
+            },
+        ));
+    }
     assert_eq!(
-        app.recursive_album_display_item(0, 0, album("album-1", "Needle Record"))
-            .name,
+        component.selected_item().unwrap().name,
         "Deep Group / Needle Record"
     );
-
-    app.libs[0].search.as_mut().unwrap().query = "needle rec".into();
-    app.update_lib_search(0);
-    assert_eq!(app.libs[0].search.as_ref().unwrap().results, vec![0]);
 }
 
 #[test]
 fn album_only_music_keeps_visible_list_search() {
-    let mut app = recursive_music_app();
-    app.music_levels = vec!["album".into()];
-    app.libs[0].search = Some(super::super::LibSearch {
-        query: "visible rec".into(),
-        items: vec![album("album-1", "Visible Record")],
-        results: Vec::new(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    assert!(!app.open_recursive_album_search(0));
-    app.update_lib_search(0);
-
-    assert_eq!(app.libs[0].search.as_ref().unwrap().results, vec![0]);
+    let mut component = crate::app::components::InlineSearchComponent::new();
+    component.set_content(
+        crate::app::components::SearchPool::Items(vec![album("album-1", "Visible Record")]),
+        false,
+        true,
+        ratatui::layout::Rect::new(0, 0, 40, 5),
+    );
+    for key in "visible rec".chars() {
+        component.on(&tuirealm::event::Event::Keyboard(
+            tuirealm::event::KeyEvent {
+                code: tuirealm::event::Key::Char(key),
+                modifiers: tuirealm::event::KeyModifiers::NONE,
+            },
+        ));
+    }
+    assert_eq!(component.selected_item().unwrap().id, "album-1");
 }
 
 #[test]
 fn album_index_completion_updates_the_open_current_query() {
-    let mut app = recursive_music_app();
-    app.album_indexes.insert(
-        "music-lib".into(),
-        AlbumIndexState::Loading {
-            rebuild_pending: false,
-        },
+    let mut component = crate::app::components::InlineSearchComponent::new();
+    component.set_content(
+        crate::app::components::SearchPool::Albums(Vec::new()),
+        true,
+        true,
+        ratatui::layout::Rect::new(0, 0, 40, 5),
     );
-    assert!(app.open_recursive_album_search(0));
-    app.libs[0].search.as_mut().unwrap().query = "remote group".into();
-
-    app.handle_lib_event(LibEvent::AlbumIndexBuilt {
-        library_id: "music-lib".into(),
-        result: Ok(vec![AlbumSearchEntry {
+    for key in "remote group".chars() {
+        component.on(&tuirealm::event::Event::Keyboard(
+            tuirealm::event::KeyEvent {
+                code: tuirealm::event::Key::Char(key),
+                modifiers: tuirealm::event::KeyModifiers::NONE,
+            },
+        ));
+    }
+    component.set_content(
+        crate::app::components::SearchPool::Albums(vec![AlbumSearchEntry {
             album: album("album-1", "Record"),
             ancestors: vec![AlbumPathPart {
                 id: "group-a".into(),
@@ -255,16 +260,18 @@ fn album_index_completion_updates_the_open_current_query() {
             display_label: "Remote Group / Record".into(),
             search_text: "Remote Group / Record".into(),
         }]),
-    });
-
-    let search = app.libs[0].search.as_ref().unwrap();
-    assert!(!search.loading);
-    assert_eq!(search.query, "remote group");
-    assert_eq!(search.results, vec![0]);
+        false,
+        true,
+        ratatui::layout::Rect::new(0, 0, 40, 5),
+    );
+    assert_eq!(
+        component.selected_item().unwrap().name,
+        "Remote Group / Record"
+    );
 }
 
 #[test]
-fn failed_album_index_becomes_unavailable_and_clears_search_loading() {
+fn failed_album_index_becomes_unavailable() {
     let mut app = recursive_music_app();
     app.album_indexes.insert(
         "music-lib".into(),
@@ -272,8 +279,6 @@ fn failed_album_index_becomes_unavailable_and_clears_search_loading() {
             rebuild_pending: false,
         },
     );
-    assert!(app.open_recursive_album_search(0));
-
     app.handle_lib_event(LibEvent::AlbumIndexBuilt {
         library_id: "music-lib".into(),
         result: Err("index failed".into()),
@@ -283,7 +288,6 @@ fn failed_album_index_becomes_unavailable_and_clears_search_loading() {
         app.album_indexes.get("music-lib"),
         Some(AlbumIndexState::Unavailable)
     ));
-    assert!(!app.libs[0].search.as_ref().unwrap().loading);
     assert!(app.status.contains("index failed"));
 }
 
@@ -334,14 +338,6 @@ fn recursive_activation_keeps_panel_focus_and_enters_inline_tracks() {
     app.library_position_state
         .libraries
         .insert("music-lib".into(), default_position.clone());
-    app.libs[0].search = Some(super::super::LibSearch {
-        query: String::new(),
-        items: Vec::new(),
-        results: Vec::new(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
     let level = BrowseLevel {
         parent_id: "artist-c".into(),
         title: "Artist C".into(),
@@ -364,7 +360,6 @@ fn recursive_activation_keeps_panel_focus_and_enters_inline_tracks() {
         nav_stack: vec![level],
     });
 
-    assert!(app.libs[0].search.is_none());
     assert_eq!(app.libs[0].album_track_focus, Some(0));
     assert_eq!(app.libs[0].nav_stack.last().unwrap().parent_id, "artist-c");
     let position = app

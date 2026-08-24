@@ -56,6 +56,11 @@ impl Model {
         };
         let recursive = self.app.recursive_album_search_enabled(index);
         let library_id = self.app.libs[index].library.id.clone();
+        let loading = recursive
+            && matches!(
+                self.app.album_indexes.get(&library_id),
+                Some(AlbumIndexState::Loading { .. })
+            );
         let pool = if recursive {
             match self.app.album_indexes.get(&library_id) {
                 Some(AlbumIndexState::Ready(entries)) => SearchPool::Albums(entries.clone()),
@@ -80,7 +85,10 @@ impl Model {
             if let Some(search_component) =
                 comp.as_any_mut().downcast_mut::<InlineSearchComponent>()
             {
-                search_component.set_content(pool, false, focused, area);
+                search_component.set_content(pool, loading, focused, area);
+                if recursive {
+                    search_component.set_loading(loading);
+                }
             }
         }
     }
@@ -237,21 +245,12 @@ mod tests {
     use super::*;
     use crate::app::components::{InlineSearchComponent, LegacyTerminalEvent, Msg};
     use crate::app::render::make_movie_app;
-    use crate::app::LibSearch;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
     fn inline_library_search_shell_mounts_and_routes() {
         let mut model = Model::new(make_movie_app());
-        model.app.libs[0].search = Some(LibSearch {
-            query: "movie".into(),
-            items: vec![crate::app::tests::make_item("Movie", "Movie")],
-            results: vec![0],
-            cursor: 0,
-            scroll: 0,
-            loading: false,
-        });
-        model.sync_inline_search();
+        model.open_inline_search();
         let id = model
             .inline_search_id
             .clone()
@@ -266,7 +265,7 @@ mod tests {
             }));
         assert!(matches!(
             message,
-            Some(Msg::Legacy(LegacyTerminalEvent::Key(_)))
+            Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
         ));
         assert!(model
             .application

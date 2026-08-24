@@ -487,9 +487,8 @@ fn enter_on_queue_tab_dispatches_queue_play_cursor_via_handle_key() {
 
 #[test]
 fn context_stack_order_is_pinned() {
-    // The unified search modal was retired in favor of two surfaces: an
-    // inline `lib_search` entry per library tab (restoring the pre-modal
-    // in-list search box) and a global `Ctrl+/` panel (now the
+    // The unified search modal was retired in favor of a global `Ctrl+/`
+    // panel (now the
     // `SearchSidebarComponent`, task 3.2 — its `CONTEXT_STACK` entry was
     // removed when the sidebar became a TuiRealm component).
     // The context menu owns every key while open and therefore precedes all
@@ -504,7 +503,6 @@ fn context_stack_order_is_pinned() {
             "playlists",
             "global_overlay_open",
             "queue_column_width",
-            "lib_search",
             "panel_mode_cycle_x",
             "confirm_skip_intro",
             "confirm_next_up",

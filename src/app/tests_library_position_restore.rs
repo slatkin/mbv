@@ -143,14 +143,6 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         library,
-        search: Some(LibSearch {
-            query: "stale".into(),
-            items: make_items(1),
-            results: vec![0],
-            cursor: 0,
-            scroll: 0,
-            loading: false,
-        }),
         nav_stack: Vec::new(),
         feed_home_video: None,
         album_track_focus: Some(0),
@@ -235,7 +227,6 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
         saved.libraries.get("lib-movies").cloned(),
         Some(expected_position)
     );
-    assert!(app.libs[0].search.is_none());
     assert!(app.libs[0].album_track_focus.is_none());
 }
 

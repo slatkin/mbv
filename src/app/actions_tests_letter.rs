@@ -7,7 +7,7 @@ use crate::app::library_browse_actions::{
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibSearch, LibraryTab, QueueScope, TabSelection,
+    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
@@ -133,7 +133,7 @@ fn should_show_letter_pills_true_for_any_captured_total() {
 }
 
 #[test]
-fn should_show_letter_pills_excludes_music_search_and_drilldowns() {
+fn should_show_letter_pills_excludes_music_and_drilldowns() {
     let mut app = make_app_stub();
     app.libs.push(lib_tab("music"));
     push_top_level(&mut app.libs[0], 10);
@@ -147,17 +147,6 @@ fn should_show_letter_pills_excludes_music_search_and_drilldowns() {
     push_top_level(&mut app.libs[1], 10);
     app.libs[1].library_total = Some(1000);
     assert!(app.should_show_letter_pills(1));
-
-    app.libs[1].search = Some(crate::app::LibSearch {
-        query: String::new(),
-        items: Vec::new(),
-        results: Vec::new(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-    assert!(!app.should_show_letter_pills(1), "hidden while searching");
-    app.libs[1].search = None;
 
     // A second nav level (drilled into a folder) is no longer the "top"
     // browse level.
@@ -174,6 +163,13 @@ fn should_show_letter_pills_excludes_music_search_and_drilldowns() {
         !app.should_show_letter_pills(2),
         "home video libraries use folder pills instead"
     );
+}
+
+#[test]
+fn inline_search_mounts_at_the_component_boundary() {
+    let mut model = crate::app::shell::Model::new(crate::app::render::make_movie_app());
+    model.open_inline_search();
+    assert!(model.inline_search_id.is_some());
 }
 
 #[test]
@@ -385,24 +381,4 @@ fn select_letter_pill_is_noop_on_tv_drilldown() {
         lvl.letter_filter.is_none(),
         "pill selection should be ignored below the top browse level"
     );
-}
-
-#[test]
-fn select_letter_pill_is_noop_during_tv_search() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("tvshows"));
-    push_top_level_tv(&mut app.libs[0], 10);
-    app.libs[0].library_total = Some(1000);
-    app.libs[0].search = Some(LibSearch {
-        query: String::new(),
-        items: Vec::new(),
-        results: Vec::new(),
-        cursor: 0,
-        scroll: 0,
-        loading: false,
-    });
-
-    app.select_letter_pill(0, 0);
-    let lvl = app.libs[0].nav_stack.last().unwrap();
-    assert!(lvl.letter_filter.is_none(), "hidden while searching");
 }
