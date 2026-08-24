@@ -1,4 +1,4 @@
-use super::types_selection_modal::{SelectionModalFilter, SelectionModalSource};
+use super::types_selection_modal::SelectionModalSource;
 use super::{App, SeriesDetail};
 
 impl App {
@@ -58,20 +58,12 @@ impl App {
     }
 
     fn refresh_series_modal(&mut self, series_id: &str) {
-        let Some(detail) = self.series_detail_cache.get(series_id) else {
-            return;
-        };
-        let source = SelectionModalSource::Series {
-            series_id: series_id.to_owned(),
-        };
-        let selected = 0.min(detail.seasons.len().saturating_sub(1));
-        self.refresh_selection_modal(
-            source,
-            super::lib_cursor_actions::series_modal_state_for_season(detail, selected),
-            Some(SelectionModalFilter {
-                labels: super::lib_cursor_actions::series_season_pill_labels(detail),
-                selected,
-            }),
+        self.pending_overlay = Some(
+            super::types_overlay::OverlayRequest::RefreshSelectionModalAtSelectedFilter {
+                source: SelectionModalSource::Series {
+                    series_id: series_id.to_owned(),
+                },
+            },
         );
     }
 }

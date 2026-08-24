@@ -147,6 +147,22 @@ impl Model {
                         .refresh(&source, state, filter);
                 }
             }
+            OverlayRequest::RefreshSelectionModalAtSelectedFilter { source } => {
+                let id = ComponentId::Overlay(OverlayId::SelectionModal);
+                let matches = self
+                    .application
+                    .get_component(&id)
+                    .and_then(|component| {
+                        component.as_any().downcast_ref::<SelectionModalComponent>()
+                    })
+                    .and_then(SelectionModalComponent::source)
+                    .is_some_and(|current| current == &source);
+                if matches {
+                    self.handle_selection_modal_request(
+                        super::super::components::ShellRequest::SelectionModalRefresh,
+                    );
+                }
+            }
             OverlayRequest::DismissConfirm => self.dismiss_modal(&Self::confirm_id()),
             OverlayRequest::DismissDaemonLost => self.dismiss_modal(&Self::daemon_lost_id()),
             OverlayRequest::DismissRemoteReanchor => {

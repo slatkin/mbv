@@ -200,6 +200,8 @@ pub enum ShellRequest {
     DismissSelectionModal,
     /// Select a source-specific filter in the Selection modal.
     SelectionModalFilterSelected(usize),
+    /// Rebuild a source-specific filter using the component-owned selection.
+    SelectionModalRefresh,
     /// Activate the selected Selection modal item by its opaque provider id.
     SelectionModalActivate(Option<String>),
     /// Commit the component-owned Multiselect choices through the legacy App

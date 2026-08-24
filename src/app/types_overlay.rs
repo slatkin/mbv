@@ -19,6 +19,9 @@ pub(super) enum OverlayRequest {
         state: SelectionModalListState,
         filter: Option<SelectionModalFilter>,
     },
+    RefreshSelectionModalAtSelectedFilter {
+        source: SelectionModalSource,
+    },
     DismissConfirm,
     DismissDaemonLost,
     DismissRemoteReanchor,
