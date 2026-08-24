@@ -173,22 +173,29 @@ contributing surface's group 2–4 conversion to have landed.
   field is read only within its cluster plus the shell. `album_track_focus`
   violates that, so it teardown-orders with the framework removal, not with
   the browse surfaces.
-- [ ] 5.3a-post **Relocate `album_cursor.rs` out of the render tree.** No
-  behavior change; prerequisite for the `album_track_focus` teardown at 5.3d.
-  `src/app/render/screens/album_cursor.rs` is 219 lines of grouped-album cursor
-  arithmetic with no rendering, and it mutates `App` state from inside the
-  render tree. Move it to `src/app/album_cursor_actions.rs` alongside its
-  siblings (`lib_cursor_actions.rs`, `actions_navigation.rs`), moving the module
-  declaration from `render/screens/mod.rs` to `src/app/mod.rs` and absolutising
-  the `use super::album_plan::{..}` import (`album_plan` stays in
-  `render/screens/`). The three public functions are already
-  `pub(in crate::app)` inherent methods on `App`, so no external call site
-  should need editing. Change no function body and no assertion. Verify
-  `rtk cargo nextest run -p mbv` with an unchanged test count, plus clippy,
-  `rtk ast-grep scan` at baseline, and `rtk make check-code-file-lines`.
+  A proposed `5.3a-post` — relocating `render/screens/album_cursor.rs` out of
+  the render tree into `src/app/album_cursor_actions.rs` — was **attempted and
+  withdrawn**, and the reason belongs with 5.3d's album work. The move does not
+  compile: `album_plan`'s types, fields, `row_target()`, and
+  `build_grouped_album_display_plan` are all `pub(in crate::app::render)`, so a
+  module outside `render` cannot name them, and a `render/mod.rs` re-export (the
+  D9 idiom) exposes only the type names, not the fields the cursor code reads.
+  Widening ~8 visibility markers would have been required.
+
+  That wall is correct, not incidental. `music_group_navigation`
+  (`album_cursor.rs:35-65`) *builds a display plan* to derive its navigation
+  targets — grouped-album cursor movement is defined over rendered rows, which
+  is what makes it column-aware. So this is render-dependent navigation, not
+  interaction logic that strayed into the render tree, and the right destination
+  is inward rather than outward: `MusicWorkspaceComponent`, which is already the
+  owner of render-derived cursor geometry for this surface (compare
+  `BrowserComponent`'s `layout`/`left_row_map` hit-testing). It cannot move
+  there for the same reason `album_track_focus` cannot — the component is
+  wide-only and these three `pub(in crate::app)` functions serve narrow too — so
+  it is folded into 5.3d below rather than scheduled separately.
 - [ ] 5.3b **Teardown — Feeds cluster.** Requires 3.6, 3.4, 3.10, 5.1. Delete `App.feed_tab` and move its readers to the component/shell boundary: `feed_tab_actions.rs` (cursor/playback/enqueue → typed `Msg` + shell handlers), `library_load_actions.rs`'s Home-Feeds section build (→ shell-owned projection, not direct `feed_tab.all_entries` access), `feeds_manage_actions.rs`'s post-subscription reset, and the Feeds branches in `input_feed_tab_keys.rs`/`input_mouse.rs`/`input_mouse_dispatch.rs`. The refresh `mpsc` and its result validation stay shell-owned. Rewrite the `App.feed_tab` tests around the component and shell boundary. Verify `rtk cargo nextest run -p mbv feeds` + scan.
 - [ ] 5.3c **Teardown — overlay/modal cluster.** Requires 2.1–2.5, 3.2, 3.7, 3.8, 3.9, 4.7, 4.8, 4.9, 5.2. Delete the `App` open-flags, overlay state, and the `handle_key_*` handlers the converted overlays still forward to, plus the duplicated variable-row geometry in `input_mouse_panels.rs`. Verify `rtk cargo nextest run -p mbv` + scan.
-- [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3a-post, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
+- [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
   **Also delete `LibraryTab.album_track_focus` here** (deferred from 5.3a — see
   the three reasons recorded there). Its readers can only move once the action
   layer does: relocate `actions.rs`'s focused-track target resolution and
@@ -202,7 +209,15 @@ contributing surface's group 2–4 conversion to have landed.
   modal instead), so the narrow readers in `render/components/album.rs` and the
   `LibEvent::RecursiveAlbumActivated` writer must be resolved explicitly — either
   by mounting the component in narrow mode or by confirming the narrow path
-  cannot reach a `Some` value — not by assuming the wide path covers them. Verify `rtk cargo check -p mbv` and that no `impl App` interaction handler and no component-local `App` field remains for any surface.
+  cannot reach a `Some` value — not by assuming the wide path covers them.
+  Move `render/screens/album_cursor.rs`'s three `pub(in crate::app)` entry
+  points (`move_music_group_display_cursor`, `jump_music_group_display_cursor`,
+  `page_grouped_album_cursor`) into `MusicWorkspaceComponent` in the same pass:
+  they derive navigation targets from a built display plan, so they are
+  component-owned render geometry, and their four `album_track_focus = None`
+  resets (lines 98, 147, 206 and the gate at 166) are the same reset this
+  teardown has to re-home anyway. Whichever narrow-mode answer the previous
+  paragraph settles on governs both. Verify `rtk cargo check -p mbv` and that no `impl App` interaction handler and no component-local `App` field remains for any surface.
 - [ ] 5.4 Confirm every mouse path reads component-owned geometry (no global hit map); verify the six precedence/mouse proofs (blocking-overlay swallow, parent/global precedence, simultaneous Queue+Library mouse, overlay blocks underlying mutation, deterministic focus restoration, geometry cannot drift) as tests.
   `KEY_POLICY` and `KeyPolicyGate::sub_clause()` are referenced nowhere outside
   `key_policy.rs`'s own ordering test — the file still carries
