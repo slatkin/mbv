@@ -96,6 +96,10 @@ impl SelectionModalComponent {
         })
     }
 
+    pub(in crate::app) fn list_state(&self) -> Option<&SelectionModalListState> {
+        self.modal.as_ref().map(|modal| &modal.state)
+    }
+
     pub(in crate::app) fn filter_selected(&self) -> Option<usize> {
         self.modal
             .as_ref()
@@ -162,20 +166,17 @@ impl SelectionModalComponent {
     }
 
     fn select_filter(&mut self, delta: i64) -> Option<Msg> {
-        let selected = {
+        {
             let filter = self.modal.as_mut()?.filter.as_mut()?;
             if filter.labels.is_empty() {
                 return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
             }
             filter.selected =
                 ((filter.selected as i64 + delta).rem_euclid(filter.labels.len() as i64)) as usize;
-            filter.selected
-        };
+        }
         let cursor = first_item_index(&self.modal.as_ref()?.state).unwrap_or(0);
         self.modal.as_mut()?.cursor = cursor;
-        Some(Msg::Shell(ShellRequest::SelectionModalFilterSelected(
-            selected,
-        )))
+        Some(Msg::Shell(ShellRequest::SelectionModalFilterSelected))
     }
 
     fn move_cursor(&mut self, delta: i64) {
@@ -222,9 +223,7 @@ impl SelectionModalComponent {
                 }
                 modal.cursor = first_item_index(&modal.state).unwrap_or(0);
             }
-            return Some(Msg::Shell(ShellRequest::SelectionModalFilterSelected(
-                *target,
-            )));
+            return Some(Msg::Shell(ShellRequest::SelectionModalFilterSelected));
         }
         if let Some((_, row_index)) = self.row_targets.iter().find(|(area, _)| area.contains(pos)) {
             if let Some(modal) = self.modal.as_mut() {

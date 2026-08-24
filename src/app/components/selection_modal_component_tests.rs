@@ -67,7 +67,7 @@ fn selection_modal_filter_selection_is_typed_and_local() {
     assert_eq!(component.filter_selected(), Some(1));
     assert_eq!(
         message,
-        Some(Msg::Shell(ShellRequest::SelectionModalFilterSelected(1)))
+        Some(Msg::Shell(ShellRequest::SelectionModalFilterSelected))
     );
 }
 
@@ -159,6 +159,6 @@ fn selection_modal_mouse_filter_updates_local_state() {
     assert_eq!(component.filter_selected(), Some(1));
     assert_eq!(
         message,
-        Some(Msg::Shell(ShellRequest::SelectionModalFilterSelected(1)))
+        Some(Msg::Shell(ShellRequest::SelectionModalFilterSelected))
     );
 }

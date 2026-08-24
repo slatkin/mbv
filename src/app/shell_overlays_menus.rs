@@ -57,7 +57,7 @@ impl Model {
         let id = Self::selection_modal_id();
         match request {
             ShellRequest::DismissSelectionModal => self.app.close_selection_modal(),
-            ShellRequest::SelectionModalFilterSelected(_) | ShellRequest::SelectionModalRefresh => {
+            ShellRequest::SelectionModalFilterSelected | ShellRequest::SelectionModalRefresh => {
                 let Some((source, selected)) = self
                     .application
                     .get_component(&id)
@@ -65,7 +65,10 @@ impl Model {
                         component.as_any().downcast_ref::<SelectionModalComponent>()
                     })
                     .and_then(|selection| {
-                        Some((selection.source()?.clone(), selection.filter_selected()?))
+                        Some((
+                            selection.source()?.clone(),
+                            selection.filter_selected().unwrap_or(0),
+                        ))
                     })
                 else {
                     return;

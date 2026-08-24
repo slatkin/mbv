@@ -549,7 +549,7 @@ impl Model {
                             self.app.feed_tab_enqueue_guid(&guid);
                         }
                         Msg::Shell(request @ ShellRequest::DismissSelectionModal)
-                        | Msg::Shell(request @ ShellRequest::SelectionModalFilterSelected(_))
+                        | Msg::Shell(request @ ShellRequest::SelectionModalFilterSelected)
                         | Msg::Shell(request @ ShellRequest::SelectionModalActivate(_)) => {
                             self.handle_selection_modal_request(request);
                         }

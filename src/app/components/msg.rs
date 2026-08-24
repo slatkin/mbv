@@ -199,7 +199,7 @@ pub enum ShellRequest {
     /// Dismiss the blocking Selection modal.
     DismissSelectionModal,
     /// Select a source-specific filter in the Selection modal.
-    SelectionModalFilterSelected(usize),
+    SelectionModalFilterSelected,
     /// Rebuild a source-specific filter using the component-owned selection.
     SelectionModalRefresh,
     /// Activate the selected Selection modal item by its opaque provider id.

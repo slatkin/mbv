@@ -117,6 +117,13 @@ mod selection_modal_tests {
         app
     }
 
+    fn podcast_filter() -> Option<SelectionModalFilter> {
+        Some(SelectionModalFilter {
+            labels: vec!["All".into(), "Played".into(), "Unplayed".into()],
+            selected: 0,
+        })
+    }
+
     #[test]
     fn album_tracks_fetched_event_populates_cache_and_clears_loading() {
         let mut app = make_app_stub();
@@ -179,10 +186,7 @@ mod selection_modal_tests {
                 series_id: "series-1".into(),
             },
             SelectionModalListState::Loading,
-            Some(SelectionModalFilter {
-                labels: vec!["01".into()],
-                selected: 0,
-            }),
+            None,
         );
         let season = item("season-1", "Season 1", "Season");
         let episode = item("episode-1", "Episode 1", "Episode");
@@ -207,10 +211,7 @@ mod selection_modal_tests {
                 series_id: "series-2".into(),
             },
             SelectionModalListState::Loading,
-            Some(SelectionModalFilter {
-                labels: vec!["01".into()],
-                selected: 0,
-            }),
+            None,
         );
         model.app.handle_lib_event(LibEvent::SeriesDetailFetched {
             series_id: "series-1".into(),
@@ -220,6 +221,51 @@ mod selection_modal_tests {
         model.sync_modal_requests();
 
         assert_eq!(selection_modal(&model).selected_id(), None);
+
+        let season = item("season-2", "Season 2", "Season");
+        let episode = item("episode-2", "Episode 2", "Episode");
+        let mut episodes = HashMap::new();
+        episodes.insert("season-2".into(), vec![episode]);
+        model.app.handle_lib_event(LibEvent::SeriesDetailFetched {
+            series_id: "series-2".into(),
+            seasons: vec![season],
+            episodes,
+        });
+        sync_series_refresh(&mut model);
+
+        assert_eq!(selection_modal(&model).selected_id(), Some("episode-2"));
+    }
+
+    #[test]
+    fn series_detail_completion_for_zero_seasons_shows_empty_modal() {
+        let mut model = Model::new(make_app_stub());
+        mount_selection_modal(
+            &mut model,
+            SelectionModalSource::Series {
+                series_id: "series-1".into(),
+            },
+            SelectionModalListState::Loading,
+            None,
+        );
+        model.app.handle_lib_event(LibEvent::SeriesDetailFetched {
+            series_id: "series-1".into(),
+            seasons: Vec::new(),
+            episodes: HashMap::new(),
+        });
+        model.sync_modal_requests();
+
+        assert!(matches!(
+            model.app.pending_overlay.as_ref(),
+            Some(OverlayRequest::RefreshSelectionModal {
+                state: SelectionModalListState::Empty,
+                ..
+            })
+        ));
+        model.sync_modal_requests();
+        assert!(matches!(
+            selection_modal(&model).list_state(),
+            Some(SelectionModalListState::Empty)
+        ));
     }
 
     #[test]
@@ -231,24 +277,16 @@ mod selection_modal_tests {
                 series_id: "series-1".into(),
             },
             SelectionModalListState::Loading,
-            Some(SelectionModalFilter {
-                labels: vec!["01".into(), "02".into()],
-                selected: 1,
-            }),
+            None,
         );
         let mut season_one = item("season-1", "Season 1", "Season");
         season_one.index_number = 1;
         let mut season_two = item("season-2", "Season 2", "Season");
         season_two.index_number = 2;
-        let mut episodes = HashMap::new();
-        episodes.insert(
-            "season-1".into(),
-            vec![item("episode-1", "Episode 1", "Episode")],
-        );
         model.app.handle_lib_event(LibEvent::SeriesDetailFetched {
             series_id: "series-1".into(),
             seasons: vec![season_one, season_two],
-            episodes,
+            episodes: HashMap::new(),
         });
         model.sync_modal_requests();
 
@@ -374,10 +412,7 @@ mod selection_modal_tests {
                 series_id: "series-2".into(),
             },
             SelectionModalListState::Loading,
-            Some(SelectionModalFilter {
-                labels: vec!["01".into()],
-                selected: 0,
-            }),
+            None,
         );
         model
             .app
@@ -424,7 +459,7 @@ mod selection_modal_tests {
                 library_item_id: "show-1".into(),
             },
             SelectionModalListState::Loading,
-            None,
+            podcast_filter(),
         );
         model
             .app
@@ -460,7 +495,7 @@ mod selection_modal_tests {
                 library_item_id: "show-1".into(),
             },
             SelectionModalListState::Loading,
-            None,
+            podcast_filter(),
         );
         model
             .app
@@ -520,7 +555,7 @@ mod selection_modal_tests {
                 library_item_id: "show-1".into(),
             },
             SelectionModalListState::Loading,
-            None,
+            podcast_filter(),
         );
         model
             .app

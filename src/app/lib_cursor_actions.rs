@@ -397,6 +397,14 @@ impl App {
         let Some(detail) = self.series_detail_cache.get(&series_id).cloned() else {
             return;
         };
+        if detail.seasons.is_empty() {
+            self.refresh_selection_modal(
+                SelectionModalSource::Series { series_id },
+                SelectionModalListState::Empty,
+                None,
+            );
+            return;
+        }
         if season_index >= detail.seasons.len() {
             return;
         }
