@@ -1,0 +1,113 @@
+use super::components::{PlaybackComponent, PlaybackProjection, PlaybackRequest};
+use super::shell::Model;
+use super::PanelFocus;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+impl Model {
+    pub(super) fn sync_playback(&mut self) {
+        let id = super::components::ComponentId::Playback;
+        if !self.application.mounted(&id) {
+            self.application
+                .mount(id.clone(), Box::new(PlaybackComponent::new()), vec![])
+                .expect("mount Playback");
+        }
+        let state = self.app.effective_playback_state();
+        let title = if state.active {
+            self.app
+                .playback_queue()
+                .item_at(state.active_idx)
+                .map(|item| item.title().to_string())
+        } else if let Some(cast) = self.app.cast_attachment.as_ref() {
+            self.app.cast_now_playing_title(cast)
+        } else {
+            self.app
+                .connected_session_state
+                .as_ref()
+                .and_then(|session| session.now_playing.clone())
+        };
+        let projection = PlaybackProjection {
+            state,
+            title,
+            player_area: self.app.layout.playback.player_area,
+            status_area: self.app.layout.playback.status_area,
+            show_controls: state.active
+                || self.app.connected_session_id.is_some()
+                || self.app.cast_attachment.is_some(),
+            focused: matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
+            stop_available: self.app.connected_session_id.is_some() || state.active,
+            next_available: self.app.transport_prev_next_available().1,
+            volume: self
+                .app
+                .playback_display_target()
+                .displayed_volume(&self.app)
+                .to_string(),
+            muted: self.app.playback_display_target().displayed_mute(&self.app),
+        };
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(playback) = comp.as_any_mut().downcast_mut::<PlaybackComponent>() {
+                playback.set_projection(projection);
+            }
+        }
+    }
+
+    pub(super) fn render_playback_component(&mut self, frame: &mut ratatui::Frame) {
+        let id = super::components::ComponentId::Playback;
+        if self.application.mounted(&id) {
+            self.application.view(&id, frame, frame.area());
+        }
+    }
+
+    pub(super) fn handle_playback_request(&mut self, request: PlaybackRequest) {
+        use super::action::Command;
+        match request {
+            PlaybackRequest::TogglePlayPause => self.dispatch_playback(Command::TogglePlayPause),
+            PlaybackRequest::Stop => self.dispatch_playback(Command::Stop),
+            PlaybackRequest::Previous => self.dispatch_playback(Command::PreviousTrack),
+            PlaybackRequest::Next => self.dispatch_playback(Command::NextTrack),
+            PlaybackRequest::SeekRelative(seconds) => {
+                self.dispatch_playback(Command::SeekRelative(seconds as f64));
+            }
+            PlaybackRequest::SeekTo(column) => self.app.seek_to_col(column),
+            PlaybackRequest::ToggleMute => self.dispatch_playback(Command::ToggleMute),
+            PlaybackRequest::VolumeDelta(delta) => {
+                self.dispatch_playback(Command::AdjustVolume(delta));
+            }
+            PlaybackRequest::CycleAudio => {
+                self.dispatch_playback(Command::ToggleMuteOrCycleAudio);
+            }
+            PlaybackRequest::CycleSubtitle => {
+                self.dispatch_playback(Command::CycleOrToggleSubtitle);
+            }
+            PlaybackRequest::ToggleVisualizer => {
+                self.app
+                    .handle_key(KeyEvent::new(KeyCode::Char('v'), KeyModifiers::NONE));
+            }
+        }
+    }
+
+    fn dispatch_playback(&mut self, command: super::action::Command) {
+        let _ = self.app.dispatch(command);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::components::Msg;
+    use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn playback_chrome_request_routes_through_shell_authority() {
+        let app = super::super::tests::make_app_stub();
+        let mut model = Model::new(app);
+        model.handle_playback_request(PlaybackRequest::VolumeDelta(5));
+        assert!(matches!(
+            Msg::Playback(PlaybackRequest::VolumeDelta(5)),
+            Msg::Playback(PlaybackRequest::VolumeDelta(_))
+        ));
+        let _ = Event::<super::super::components::UserEvent>::Keyboard(KeyEvent {
+            code: Key::Char('m'),
+            modifiers: KeyModifiers::NONE,
+        });
+    }
+}

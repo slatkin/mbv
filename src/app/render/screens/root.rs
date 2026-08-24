@@ -348,6 +348,7 @@ impl App {
                 now_playing_title,
                 playback_panel_bg,
             );
+            playback.player_area = player_area;
         }
 
         // Status bar sits at the bottom of the right panel only.

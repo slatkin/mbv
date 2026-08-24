@@ -21,8 +21,8 @@ use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
 use super::components::{
-    ComponentId, LegacyInput, LegacyTerminalEvent, Msg, OverlayId, PlaybackGatesComponent,
-    ShellRequest, UserEvent,
+    ComponentId, LegacyInput, LegacyTerminalEvent, Msg, OverlayId, PlaybackComponent, ShellRequest,
+    UserEvent,
 };
 use super::service_startup;
 use super::{
@@ -95,7 +95,7 @@ impl Model {
             .application
             .mount(
                 ComponentId::Playback,
-                Box::new(PlaybackGatesComponent::new()),
+                Box::new(PlaybackComponent::new()),
                 vec![],
             )
             .expect("mount PlaybackGates");
@@ -596,6 +596,9 @@ impl Model {
                         Msg::Queue(request) => {
                             self.handle_queue_request(request);
                         }
+                        Msg::Playback(request) => {
+                            self.handle_playback_request(request);
+                        }
                         Msg::Shell(ShellRequest::PlaybackPromptKey(key)) => {
                             if self.app.skip_intro_end_ticks.is_some() {
                                 self.app.handle_key_confirm_skip_intro(key);
@@ -627,6 +630,7 @@ impl Model {
             // modal; unmounts when `handle_key_confirm_modal` clears it
             // (task 2.2).
             self.sync_settings();
+            self.sync_playback();
             self.sync_confirm_modal();
             self.sync_daemon_lost_modal();
             self.sync_remote_reanchor_popup();
@@ -686,6 +690,7 @@ impl Model {
                 if let Err(e) = terminal.draw(|f| {
                     self.app.render(f);
                     self.render_settings_overlay(f);
+                    self.render_playback_component(f);
                     self.render_home_component(f);
                     self.render_feeds_component(f);
                     self.render_audiobookshelf_podcast_component(f);

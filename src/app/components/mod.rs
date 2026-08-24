@@ -22,6 +22,7 @@ pub mod legacy_input;
 pub mod library_routes;
 pub mod msg;
 pub mod multiselect;
+pub mod playback;
 pub mod playback_gates;
 pub mod playback_prompt;
 pub mod playlists;
@@ -47,12 +48,12 @@ pub use self::home::HomeComponent;
 pub use self::legacy_input::LegacyInput;
 pub use self::library_routes::LibraryRoutesComponent;
 pub use self::msg::{
-    LegacyTerminalEvent, Msg, PersistRequest, QueueMove, QueueRequest, ServiceRequest, ShellRequest,
+    LegacyTerminalEvent, Msg, PersistRequest, PlaybackRequest, QueueMove, QueueRequest,
+    ServiceRequest, ShellRequest,
 };
 pub use self::multiselect::MultiselectComponent;
-pub use self::playback_gates::{
-    PlaybackGatesComponent, ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE,
-};
+pub(in crate::app) use self::playback::{PlaybackComponent, PlaybackProjection};
+pub use self::playback_gates::{ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE};
 pub use self::playback_prompt::PlaybackPromptComponent;
 pub use self::playlists::PlaylistsComponent;
 pub use self::queue::QueueComponent;

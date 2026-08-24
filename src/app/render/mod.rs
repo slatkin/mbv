@@ -30,6 +30,7 @@ pub(in crate::app) use components::library_routes::{
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
+pub(in crate::app) use components::playback::render_playback_chrome_content;
 pub(in crate::app) use components::playback_prompt::render_playback_prompt_content;
 pub(in crate::app) use components::playlists::{
     render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,

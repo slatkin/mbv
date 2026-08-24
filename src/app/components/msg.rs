@@ -56,10 +56,20 @@ pub enum LegacyTerminalEvent {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NavTarget;
 
-// TODO(migrate-tui-to-tuirealm): flesh out at Playback chrome conversion
-// (task 4.10); opaque QueueSlotId keys are resolved by the shell/Player.
 #[derive(Debug, Clone, PartialEq)]
-pub struct PlaybackRequest;
+pub enum PlaybackRequest {
+    TogglePlayPause,
+    Stop,
+    Previous,
+    Next,
+    SeekRelative(i64),
+    SeekTo(u16),
+    ToggleMute,
+    VolumeDelta(i64),
+    CycleAudio,
+    CycleSubtitle,
+    ToggleVisualizer,
+}
 
 /// Queue requests carry slot identity, not a snapshot index. The queue can be
 /// reordered by the Player between paint and dispatch.
