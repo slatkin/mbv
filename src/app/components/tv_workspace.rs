@@ -28,11 +28,13 @@ pub struct TvWorkspaceComponent {
     context: TvWideRenderCtx,
     cursor: usize,
     scroll: usize,
+    season_cursor: usize,
     episode_cursor: Option<usize>,
     pane: Pane,
     initialized: bool,
     last_mirrored_cursor: usize,
     last_mirrored_scroll: usize,
+    last_mirrored_season: usize,
     last_mirrored_episode: Option<usize>,
     layout: crate::app::layout::LayoutMain,
 }
@@ -52,11 +54,13 @@ impl TvWorkspaceComponent {
             context,
             cursor: 0,
             scroll: 0,
+            season_cursor: 0,
             episode_cursor: None,
             pane: Pane::Series,
             initialized: false,
             last_mirrored_cursor: 0,
             last_mirrored_scroll: 0,
+            last_mirrored_season: 0,
             last_mirrored_episode: None,
             layout: Default::default(),
         }
@@ -66,6 +70,7 @@ impl TvWorkspaceComponent {
         if !self.initialized {
             self.cursor = context.list.cursor();
             self.scroll = context.list.scroll();
+            self.season_cursor = context.season_cursor;
             self.episode_cursor = context.episode_cursor;
             self.pane = if context.episode_cursor.is_some() {
                 Pane::Episodes
@@ -79,6 +84,9 @@ impl TvWorkspaceComponent {
             }
             if self.scroll == self.last_mirrored_scroll {
                 self.scroll = context.list.scroll();
+            }
+            if self.season_cursor == self.last_mirrored_season {
+                self.season_cursor = context.season_cursor;
             }
             if self.episode_cursor == self.last_mirrored_episode {
                 self.episode_cursor = context.episode_cursor;
@@ -95,6 +103,7 @@ impl TvWorkspaceComponent {
             .min(self.context.list.item_count().saturating_sub(1));
         self.last_mirrored_cursor = self.context.list.cursor();
         self.last_mirrored_scroll = self.context.list.scroll();
+        self.last_mirrored_season = self.context.season_cursor;
         self.last_mirrored_episode = self.context.episode_cursor;
     }
 
@@ -107,7 +116,7 @@ impl TvWorkspaceComponent {
             .context
             .series_detail
             .as_ref()
-            .and_then(|detail| detail.seasons.get(self.context.season_cursor))
+            .and_then(|detail| detail.seasons.get(self.season_cursor))
             .and_then(|season| {
                 self.context
                     .series_detail
@@ -174,10 +183,12 @@ impl Default for TvWorkspaceComponent {
 impl Component for TvWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = Default::default();
-        let context =
-            self.context
-                .clone()
-                .with_local_state(self.cursor, self.scroll, self.episode_cursor);
+        let context = self.context.clone().with_local_state(
+            self.cursor,
+            self.scroll,
+            self.season_cursor,
+            self.episode_cursor,
+        );
         self.scroll = render_wide_tv_with_ctx(frame, area, &context, &mut self.layout);
     }
 

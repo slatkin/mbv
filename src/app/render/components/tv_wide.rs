@@ -51,9 +51,11 @@ impl TvWideRenderCtx {
         mut self,
         cursor: usize,
         scroll: usize,
+        season_cursor: usize,
         episode_cursor: Option<usize>,
     ) -> Self {
         self.list = self.list.with_cursor_scroll(cursor, scroll);
+        self.season_cursor = season_cursor;
         self.episode_cursor = episode_cursor;
         self
     }
