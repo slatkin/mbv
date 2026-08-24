@@ -22,7 +22,7 @@ use tuirealm::listener::EventListenerCfg;
 
 use super::components::{
     ComponentId, LegacyInput, LegacyTerminalEvent, Msg, OverlayId, PlaybackGatesComponent,
-    ServiceRequest, ShellRequest, UserEvent,
+    ShellRequest, UserEvent,
 };
 use super::service_startup;
 use super::{
@@ -99,6 +99,7 @@ impl Model {
                 vec![],
             )
             .expect("mount PlaybackGates");
+        model.sync_settings();
         model
     }
 
@@ -602,12 +603,14 @@ impl Model {
                                 self.app.handle_key_confirm_next_up(key);
                             }
                         }
-                        // Search sidebar: debounce deadline passed. The
-                        // component owns the debounce; the shell owns the
-                        // Emby client and spawns the search thread (task 3.2).
-                        Msg::Service(ServiceRequest::SearchQuery(query)) => {
-                            if let Some(client) = self.app.emby_snapshot() {
-                                self.app.spawn_search_sidebar_query(client, query);
+                        Msg::Service(request) => {
+                            if self.handle_service_request(request) {
+                                quit = true;
+                            }
+                        }
+                        Msg::Persist(request) => {
+                            if self.handle_persist_request(request) {
+                                quit = true;
                             }
                         }
                         // No other Msg variants are produced yet.
@@ -623,6 +626,7 @@ impl Model {
             // after processing tick messages. Mounts when an action sets the
             // modal; unmounts when `handle_key_confirm_modal` clears it
             // (task 2.2).
+            self.sync_settings();
             self.sync_confirm_modal();
             self.sync_daemon_lost_modal();
             self.sync_remote_reanchor_popup();
@@ -681,6 +685,7 @@ impl Model {
                 }
                 if let Err(e) = terminal.draw(|f| {
                     self.app.render(f);
+                    self.render_settings_overlay(f);
                     self.render_home_component(f);
                     self.render_feeds_component(f);
                     self.render_audiobookshelf_podcast_component(f);

@@ -31,6 +31,7 @@ pub mod save_playlist;
 pub mod search_sidebar;
 pub mod selection_modal;
 pub mod sessions;
+pub mod settings;
 pub mod user_event;
 
 pub use self::audiobookshelf_book::AudiobookshelfBookComponent;
@@ -46,7 +47,7 @@ pub use self::home::HomeComponent;
 pub use self::legacy_input::LegacyInput;
 pub use self::library_routes::LibraryRoutesComponent;
 pub use self::msg::{
-    LegacyTerminalEvent, Msg, QueueMove, QueueRequest, ServiceRequest, ShellRequest,
+    LegacyTerminalEvent, Msg, PersistRequest, QueueMove, QueueRequest, ServiceRequest, ShellRequest,
 };
 pub use self::multiselect::MultiselectComponent;
 pub use self::playback_gates::{
@@ -60,6 +61,9 @@ pub use self::save_playlist::SavePlaylistComponent;
 pub use self::search_sidebar::SearchSidebarComponent;
 pub use self::selection_modal::SelectionModalComponent;
 pub use self::sessions::SessionsComponent;
+pub(in crate::app) use self::settings::{
+    ServiceRow, SettingsComponent, SettingsRow, SettingsSnapshot, SetupDraft,
+};
 pub use self::user_event::UserEvent;
 
 #[cfg(test)]

@@ -98,11 +98,28 @@ pub enum ServiceRequest {
     /// Dispatch a debounced search query to the Emby client. The shell owns
     /// the Emby client and spawns the search thread (task 3.2).
     SearchQuery(String),
+    SettingsKey {
+        cursor: usize,
+        key: KeyEvent,
+    },
+    ActivateService(usize),
+    SubmitEmbySetup {
+        server_url: String,
+        username: String,
+        password: String,
+    },
+    SubmitAudiobookshelfSetup {
+        server_url: String,
+        api_key: String,
+    },
+    CancelSetup,
 }
 
 // TODO(migrate-tui-to-tuirealm): flesh out at Settings conversion (task 4.9).
 #[derive(Debug, Clone, PartialEq)]
-pub struct PersistRequest;
+pub enum PersistRequest {
+    SettingsKey { cursor: usize, key: KeyEvent },
+}
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).

@@ -43,6 +43,9 @@ pub(in crate::app) use components::selection_modal::{
     render_selection_modal_content, SelectionModalRenderModel,
 };
 pub(in crate::app) use components::sessions::render_sessions_overlay_content;
+pub(in crate::app) use components::settings_component::{
+    render_settings_content, SettingsRenderModel,
+};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the
 // Interactive Components in `crate::app::components` (task 3.2+); the
