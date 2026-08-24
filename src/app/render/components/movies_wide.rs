@@ -46,31 +46,6 @@ impl App {
         self.selected_movie_item(lib_idx)
     }
 
-    /// Renders the wide Movies library: read-only shared selected-Emby hero
-    /// card on the left, letter pills (or the active search box) plus the
-    /// one-column Movies list in the right rail. Below the shared
-    /// breakpoint the caller keeps the existing inline presentation.
-    pub(in crate::app::render) fn render_wide_movies(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        lib_idx: usize,
-        focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        let ctx = self.library_list_render_ctx(lib_idx, false);
-        let selected_movie = self.selected_wide_movie(lib_idx, &ctx);
-        self.render_wide_movies_with_ctx(
-            f,
-            area,
-            lib_idx,
-            focused,
-            &ctx,
-            selected_movie.as_ref(),
-            layout,
-        );
-    }
-
     pub(in crate::app::render) fn render_wide_movies_with_ctx(
         &mut self,
         f: &mut Frame,

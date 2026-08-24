@@ -49,30 +49,6 @@ pub(in crate::app::render) fn wide_album_metadata(
 }
 
 impl App {
-    /// Renders the wide grouped Music layout: a left pane with album hero
-    /// and persistent tracks, and a right pane with music-group pills and
-    /// a one-column album browser.
-    pub(in crate::app::render) fn render_wide_music_group(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        lib_idx: usize,
-        focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        let ctx = self.library_list_render_ctx(lib_idx, true);
-        let track_cursor = self.libs[lib_idx].album_track_focus;
-        self.render_wide_music_group_with_ctx(
-            f,
-            area,
-            lib_idx,
-            focused,
-            &ctx,
-            track_cursor,
-            layout,
-        );
-    }
-
     pub(in crate::app::render) fn render_wide_music_group_with_ctx(
         &mut self,
         f: &mut Frame,

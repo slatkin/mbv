@@ -449,22 +449,6 @@ pub(in crate::app) fn render_library_routes_content(
     f.render_widget(Paragraph::new(lines), list_area);
 }
 
-impl App {
-    pub(in crate::app::render) fn render_library_routes_popup(&mut self, f: &mut Frame) {
-        let Some(popup) = self.library_routes_popup.as_ref() else {
-            return;
-        };
-        render_library_routes_content(
-            f,
-            &mut self.dim_backdrop_active,
-            LibraryRoutesRenderModel {
-                stage: &popup.stage,
-                cursor: popup.cursor,
-            },
-        );
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

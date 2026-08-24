@@ -202,22 +202,3 @@ fn render_feeds_manage_form(
         },
     );
 }
-
-impl App {
-    pub(in crate::app::render) fn render_feeds_manage_popup(&mut self, f: &mut Frame) {
-        let Some(popup) = self.feeds_manage_popup.as_ref() else {
-            return;
-        };
-        let feeds = self.config.lock().unwrap().feeds.clone();
-        render_feeds_manage_content(
-            f,
-            &mut self.dim_backdrop_active,
-            FeedsManageRenderModel {
-                feeds: &feeds,
-                stage: &popup.stage,
-                cursor: popup.cursor,
-                pending_add: popup.pending_add,
-            },
-        );
-    }
-}

@@ -14,26 +14,6 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 impl App {
-    pub(in crate::app::render) fn render_wide_library_rows(
-        &mut self,
-        f: &mut Frame,
-        list_area: Rect,
-        lib_idx: usize,
-        focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        let ctx = self.library_list_render_ctx(lib_idx, false);
-        let final_scroll = self
-            .render_generic_movies_home_video_rows_with_ctx(f, list_area, &ctx, focused, layout);
-        if ctx.is_search_active() {
-            if let Some(search) = &mut self.libs[lib_idx].search {
-                search.scroll = final_scroll;
-            }
-        } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-            level.scroll = final_scroll;
-        }
-    }
-
     pub(in crate::app::render) fn render_generic_movies_home_video_rows_with_ctx(
         &mut self,
         f: &mut Frame,
