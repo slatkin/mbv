@@ -217,7 +217,7 @@ mod tests {
     use tuirealm::event::{Event, KeyEvent, KeyModifiers};
 
     #[test]
-    fn keeps_episode_pane_cursor_local_between_syncs() {
+    fn tv_workspace_keeps_episode_pane_cursor_local_between_syncs() {
         let mut component = TvWorkspaceComponent::new();
         let mut list = LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0);
         list = list.with_cursor_scroll(0, 0);
@@ -247,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_the_wide_workspace_without_app() {
+    fn tv_workspace_renders_the_wide_workspace_without_app() {
         let mut component = TvWorkspaceComponent::new();
         component.set_content(TvWideRenderCtx::new(
             LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
