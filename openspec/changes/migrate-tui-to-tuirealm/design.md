@@ -480,6 +480,90 @@ Two consequences follow, and both are deliberate:
 The ledger records the two stages as two states: `component` (stage 1 landed)
 and `migrated` (stage 2 landed). Only `migrated` satisfies the completion gate.
 
+### **D15 — `Cmd` in, `Msg` out. Decide at 5.4; redraw gating explicitly deferred.**
+
+`Component::perform(&mut self, cmd: Cmd) -> CmdResult` is stubbed
+`CmdResult::NoChange` on all 28 components, alongside stub `query`/`attr`/
+`state`. Those stubs are honest today — mbv declined TuiRealm's state model
+(props in via `attr`, state out via `state`/`CmdResult`) in favour of its own:
+domain data in via `set_content()`, typed intent out via `Msg`. That remains
+the right call for the data path and is not reopened here.
+
+The **input** path is different, and 5.4 forces the question.
+
+**The problem 5.4 inherits.** `KEY_POLICY` and `KeyPolicyGate::sub_clause()`
+are referenced nowhere outside `key_policy.rs`'s own ordering test; the file
+still carries `#![allow(dead_code)]`. 5.2 turned the gate descriptions into
+real `SubClause` values, but nothing executes them. A precedence table with no
+execution path drifts silently from the behaviour it claims to describe — the
+failure mode that already produced stale entry-13/23 comments (fixed in
+`a3c7502`). 5.4's six precedence proofs must either give the table an
+execution path or assert against the table rather than runtime behaviour.
+
+**`perform` is that execution path.** `Application::get_component_mut` returns
+`Option<&mut dyn AppComponent<Msg, UserEvent>>` (`application.rs:237`) — a
+trait object. `perform(cmd)` therefore dispatches without a downcast, so the
+policy layer can resolve owner-id → `Cmd` → dispatch while naming no concrete
+component type. Every `sync_*` today gives that up: `get_component_mut` →
+`as_any_mut()` → `downcast_mut::<XComponent>()`.
+
+**Adopt the argument, not the return.** `CmdResult` serves two purposes, both
+already covered or unused here:
+
+* *"what changed"* for redraw gating — mbv redraws unconditionally at
+  `shell.rs:725`, and nothing in `src/` reads a `CmdResult`.
+* *reporting new state* — `Msg` is a real enum and beats
+  `CmdResult::Custom(&'static str, State::Any(Box<dyn Any>))` outright.
+
+So: `Cmd` in, `Msg` out, `perform` returns `NoChange`.
+
+**Vocabulary.** The built-ins cover most of it — `Move(Direction)`,
+`Scroll(Direction)`, `GoTo(Position::Begin|End|At(idx))`, `Submit`, `Cancel`,
+`Type(char)`. The residue (series↔episode pane switch, album-track mode entry)
+extends through `Cmd::Custom(&'static str)`, which carries no payload — and
+does not need to, because every residual action is a payload-free mode switch.
+Wrap the tag so the string never escapes:
+
+```rust
+enum Action { EnterTrackFocus, ExitTrackFocus, SwitchPane, ... }
+impl Action { const fn tag(self) -> &'static str; fn from_tag(&str) -> Option<Self> }
+impl From<Action> for Cmd { fn from(a: Action) -> Cmd { Cmd::Custom(a.tag()) } }
+```
+
+A round-trip test over all variants pins `tag`/`from_tag`, the same way the
+ordering test pins `KEY_POLICY`.
+
+**Cost — mostly schedule, not code.**
+
+1. **Not incrementally adoptable.** While any surface still forwards
+   `Msg::Legacy(LegacyTerminalEvent::Key(key))` to `App::handle_key`, the raw
+   crossterm key must survive the trip, and `Cmd` cannot carry it. So this
+   lands wholesale after 5.3d or not at all.
+2. **Modifier handling moves to the policy table.** `Cmd` has no modifier
+   concept, so state like `browser.rs:78`'s `Char('/')` *with*
+   `modifiers.is_empty()` must resolve to a distinct `Cmd` shell-side. That is
+   what the table is for, but it is a real relocation.
+3. **28 components change their input surface** — `perform` replaces
+   `handle_key`, a move rather than an addition, except during transition when
+   both exist.
+4. **Component-local key meaning must stay local.** `music_workspace.rs:108`
+   reads `Enter` as *enter track focus* only when `track_cursor.is_none()`, and
+   `Key::Up` as track-move or album-move depending on the same field. The
+   generic `Cmd` preserves this — the component receives `Move(Up)`/`Submit`
+   and decides locally. Any design that resolves those shell-side would
+   re-couple the shell to component state and undo the migration.
+
+**Deferred deliberately.** Redraw gating is the one genuine capability in
+`CmdResult` that mbv lacks, and it is worth having over ssh and on battery. It
+is not part of this decision. Adopting it means giving every `perform` and
+`view` an accurate changed/unchanged answer, which is a performance project,
+not an input-routing one.
+
+**If 5.4 declines this,** it must say so and assert its six proofs against the
+`KEY_POLICY` table directly, leaving `#![allow(dead_code)]` in place with a
+note naming this decision.
+
+
 ## Risks / Trade-offs
 
 - **TuiRealm delivers to active + subscribers, not first-match.** This differs

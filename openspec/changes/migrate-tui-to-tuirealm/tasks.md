@@ -153,5 +153,8 @@ contributing surface's group 2–4 conversion to have landed.
   dispatch, so the clauses do not execute until legacy input is removed at
   5.3c/5.3d. 5.4's six precedence proofs must either activate them first or
   assert against the table rather than runtime behaviour.
+  Read decision **D15** in `design.md` before choosing: it scopes adopting
+  `Component::perform(Cmd)` as the table's execution path (`Cmd` in, `Msg`
+  out), and requires an explicit note here if 5.4 declines it.
 - [ ] 5.5 Flip all `docs/architecture/interactive-surface-ledger.md` rows to `migrated` with verification records; verify no `legacy` **and no `component`** row remains (see 1.10).
 - [ ] 5.6 Final gate: `rtk cargo check -p mbv`, `rtk cargo nextest run -p mbv`, `rtk cargo clippy --workspace --all-targets`, `rtk ast-grep scan`, and `rtk make check-code-file-lines` all pass; confirm no parallel legacy interaction framework remains and the shell Model holds only shell/runtime authority plus the TuiRealm `Application`.
