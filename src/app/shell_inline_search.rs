@@ -117,7 +117,6 @@ mod tests {
     use crate::app::components::{InlineSearchComponent, LegacyTerminalEvent, Msg};
     use crate::app::render::make_movie_app;
     use crate::app::LibSearch;
-    use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]

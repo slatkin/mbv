@@ -5,10 +5,6 @@ use super::{PanelFocus, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    pub(super) fn handle_tv_workspace_key(&mut self, key: crossterm::event::KeyEvent) -> bool {
-        self.app.handle_key(key)
-    }
-
     fn tv_workspace_component_id(&self) -> Option<ComponentId> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
