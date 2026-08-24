@@ -1,22 +1,58 @@
 # Scoping: task 5.3a (teardown — Library/browse cluster)
 
 Written after 5.2 landed and the 4.10 playback defect was repaired (38/45).
-Read before sending an agent at 5.3a.
+**5.3a is now closed.** This document is kept for the field-by-field analysis
+below, which 5.3d still needs. The planning sections are superseded by
+`tasks.md`; read that first.
 
-## Split it in two
+## How it was actually split — and what it cost
 
-5.3a as written is one task deleting six fields across ~20 files, with four
-large test modules to rewrite. That is the size that produced this change's
-original three-session stall. Send two sequential agents:
+The original plan here was two sequential passes (Search, then a single
+"selection-mode cluster" of `album_track_focus` + `series_selection` +
+`series_season_cursor`). Two things went wrong with that, both worth keeping:
 
-* **5.3a-i — Search cluster.** `LibraryTab.search` and the `select()` split.
-* **5.3a-ii — Selection-mode cluster.** `album_track_focus`, `series_selection`,
-  `series_season_cursor`.
+**The sequencing note was addressed to the reader, not the agent, and an agent
+executed it anyway.** The line "Send two sequential agents" was read by the
+5.3a-i implementer as its own instruction; it dispatched a subagent at 5.3a-ii
+out of order, into the very files the sequencing existed to protect, and the run
+had to be discarded. Sequencing belongs in scoping and handoff documents that no
+implementer sees; every agent prompt now states only its own in-scope work plus
+an explicit "implement this yourself, do not delegate".
 
-They share almost no files outside `lib_cursor_actions.rs` and
-`input_mouse.rs`, so the second agent inherits a small merge surface. Do
-5.3a-i first: the `select()` extraction it performs is the shared body that
-5.3a-ii's activation paths also need.
+**The three selection-mode fields were sized by grep reference count, and that
+metric does not predict cost.** Most hits were exhaustive `LibraryTab { .. }`
+struct literals — 94 of them, ~30 in test modules — so *any* field deletion cost
+the same ~90 compile-forced one-line edits regardless of how entangled the field
+actually was. Task `5.3-pre` fixed this by adding `LibraryTab::new`, collapsing
+the per-field fan-out (`series_season_cursor` went from 38 files to 7). The
+counts in the next section predate that and should be read as reference counts
+only. **Size by compile-forced edit sites, not grep hits.**
+
+With the constructor in place the fields separated cleanly, and the real split
+was three passes, not two: Search (`008be6c5`..`9ac69d81`), the constructor
+(`5d9e77ec`), and series (`9e4bd7c`, `153c9b9`, `758d0a84`).
+`album_track_focus` turned out not to belong to this cluster at all and moved to
+5.3d — the reasons are recorded on task 5.3a in `tasks.md`.
+
+## The teardown hazard this task discovered
+
+The stage-1 mirror guard (`initialized` + `last_mirrored_*`) means "the shell is
+authoritative unless the user has moved." **It inverts to "preserve local state
+forever" the moment the shell stops supplying a real value.** Commit `153c9b9`
+deleted `series_selection`/`series_season_cursor` and left
+`shell_tv_workspace.rs` feeding literal `0, None`, so the guard compared local
+state against a constant and never re-mirrored — the season and episode cursors
+survived a change of series. `758d0a84` repaired it with an identity field
+(`last_series_id`) that resets local state before the guards run.
+
+Every remaining teardown (5.3b, 5.3c, 5.3d) has this hazard. When a field's
+shell-side source is deleted, the component's guard against it must be deleted
+in the same commit, not left comparing against a placeholder.
+
+It also slipped a weak verification gate: the agent deleted the test asserting
+the reset behaviour *because* it had deleted the behaviour. Test counts alone did
+not catch it (1213 → 1211 looked like ordinary cleanup). Teardown prompts now
+require naming every removed test and why it is obsolete rather than retargeted.
 
 ## Field-by-field consumer counts
 

@@ -136,15 +136,73 @@ contributing surface's group 2–4 conversion to have landed.
   Delete no field, change no assertion. Verify `rtk cargo nextest run -p mbv`
   passes with an unchanged test count, plus `rtk cargo clippy --workspace
   --all-targets` and `rtk make check-code-file-lines`.
-- [ ] 5.3a **Teardown — Library/browse cluster.** Requires 3.3, 3.5, 3.11, 4.2, 4.3, 4.4, 5.1. Delete `LibraryTab`'s component-owned fields (`search`, `nav_stack`/`library`/`library_total` cursors, `series_selection`/`series_season_cursor`, `album_track_focus`) and the `impl App` handlers that read them: `input_browse_dispatch.rs`'s `handle_key_emby_library` branches, `input_lib_keys.rs`, `lib_cursor_actions.rs`'s eight `search.is_some()` branches, `actions_navigation.rs`'s `select`/`go_back` search arms, `lib_event_actions.rs`'s `lib.search` handlers, and the `library_search_actions.rs` query-editing path. Extract `select(lib_idx)` → resolve item → `select_item(lib_idx, item)` so plain-list Enter and the component's activation `Msg` share one body. Rewrite the `App`-based browse/search tests around the component and shell boundary. Verify `rtk cargo nextest run -p mbv` + scan + `rtk make check-code-file-lines`.
-  The Search half landed (`008be6c5`..`9ac69d81`): `LibraryTab.search`,
+- [x] 5.3a **Teardown — Library/browse cluster.** Requires 3.3, 3.5, 3.11, 4.2, 4.3, 4.4, 5.1. Delete `LibraryTab`'s component-owned fields (`search`, `series_selection`/`series_season_cursor`) and the `impl App` handlers that read them: `input_browse_dispatch.rs`'s `handle_key_emby_library` branches, `input_lib_keys.rs`, `lib_cursor_actions.rs`'s eight `search.is_some()` branches, `actions_navigation.rs`'s `select`/`go_back` search arms, `lib_event_actions.rs`'s `lib.search` handlers, and the `library_search_actions.rs` query-editing path. Extract `select(lib_idx)` → resolve item → `select_item(lib_idx, item)` so plain-list Enter and the component's activation `Msg` share one body. Rewrite the `App`-based browse/search tests around the component and shell boundary. Verify `rtk cargo nextest run -p mbv` + scan + `rtk make check-code-file-lines`.
+  Landed in three passes. Search (`008be6c5`..`9ac69d81`): `LibraryTab.search`,
   `LibSearch`, and `key_policy` entry 13 are gone, and `select_item` is
-  extracted. What remains is the selection-mode cluster —
-  `album_track_focus`, `series_selection`, `series_season_cursor` — which
-  requires 5.3-pre first. Scoping: `scoping-5.3a.md`.
+  extracted. Prerequisite `5.3-pre` (`5d9e77ec`) added `LibraryTab::new`.
+  Series (`9e4bd7c`, `153c9b9`, `758d0a84`): `series_selection` and
+  `series_season_cursor` are gone; `TvWorkspaceComponent` owns the season and
+  episode cursors and resets them on a series-identity change via
+  `last_series_id`. Scoping: `scoping-5.3a.md`.
+
+  **`album_track_focus` was moved out of this cluster to 5.3d.** It is not a
+  component-owned field under the current boundary, for three independent
+  reasons found while scoping the album pass:
+
+  1. *The field outlives its component.* `MusicWorkspaceComponent` mounts only
+     when `is_wide_music_active()` (`shell_music_workspace.rs:16`), but
+     `album_track_focus` is read by the narrow grouped-album renderer
+     (`render/components/album.rs:472,508`) and written with no wide gate by
+     `LibEvent::RecursiveAlbumActivated` (`lib_event_actions.rs:496`). Driving
+     the field from `MusicWorkspaceComponent::track_cursor()` would zero it on
+     every tick the component is unmounted.
+  2. *Two of its three non-render readers sit in `impl App`, where the
+     component is unreachable.* `actions.rs:164` resolves play/enqueue/context
+     targets to the focused **track** rather than the album, and
+     `input_resolver.rs:70` (`track_select_active`) makes Esc exit track mode
+     instead of stopping playback. Both are Service/Player authority on the
+     wrong side of the boundary; relocating them is `AppLayout` and
+     legacy-input removal, i.e. 5.3d's work. Only the third reader,
+     `shell_gates.rs:25` (`ATTR_ALBUM_TRACK_FOCUSED`), is already in `Model`.
+  3. *Four of its mutation sites are inside the render tree.*
+     `render/screens/album_cursor.rs` clears the field at lines 98, 147 and 206
+     and gates on it at 166. See `5.3a-post` below.
+
+  This is the same finding that stalled task 3.6, and it is recorded here for
+  the same reason: the cluster boundary in the preamble to section 5 assumes a
+  field is read only within its cluster plus the shell. `album_track_focus`
+  violates that, so it teardown-orders with the framework removal, not with
+  the browse surfaces.
+- [ ] 5.3a-post **Relocate `album_cursor.rs` out of the render tree.** No
+  behavior change; prerequisite for the `album_track_focus` teardown at 5.3d.
+  `src/app/render/screens/album_cursor.rs` is 219 lines of grouped-album cursor
+  arithmetic with no rendering, and it mutates `App` state from inside the
+  render tree. Move it to `src/app/album_cursor_actions.rs` alongside its
+  siblings (`lib_cursor_actions.rs`, `actions_navigation.rs`), moving the module
+  declaration from `render/screens/mod.rs` to `src/app/mod.rs` and absolutising
+  the `use super::album_plan::{..}` import (`album_plan` stays in
+  `render/screens/`). The three public functions are already
+  `pub(in crate::app)` inherent methods on `App`, so no external call site
+  should need editing. Change no function body and no assertion. Verify
+  `rtk cargo nextest run -p mbv` with an unchanged test count, plus clippy,
+  `rtk ast-grep scan` at baseline, and `rtk make check-code-file-lines`.
 - [ ] 5.3b **Teardown — Feeds cluster.** Requires 3.6, 3.4, 3.10, 5.1. Delete `App.feed_tab` and move its readers to the component/shell boundary: `feed_tab_actions.rs` (cursor/playback/enqueue → typed `Msg` + shell handlers), `library_load_actions.rs`'s Home-Feeds section build (→ shell-owned projection, not direct `feed_tab.all_entries` access), `feeds_manage_actions.rs`'s post-subscription reset, and the Feeds branches in `input_feed_tab_keys.rs`/`input_mouse.rs`/`input_mouse_dispatch.rs`. The refresh `mpsc` and its result validation stay shell-owned. Rewrite the `App.feed_tab` tests around the component and shell boundary. Verify `rtk cargo nextest run -p mbv feeds` + scan.
 - [ ] 5.3c **Teardown — overlay/modal cluster.** Requires 2.1–2.5, 3.2, 3.7, 3.8, 3.9, 4.7, 4.8, 4.9, 5.2. Delete the `App` open-flags, overlay state, and the `handle_key_*` handlers the converted overlays still forward to, plus the duplicated variable-row geometry in `input_mouse_panels.rs`. Verify `rtk cargo nextest run -p mbv` + scan.
-- [ ] 5.3d **Teardown — framework removal.** Requires 5.3a–5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters. Verify `rtk cargo check -p mbv` and that no `impl App` interaction handler and no component-local `App` field remains for any surface.
+- [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3a-post, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
+  **Also delete `LibraryTab.album_track_focus` here** (deferred from 5.3a — see
+  the three reasons recorded there). Its readers can only move once the action
+  layer does: relocate `actions.rs`'s focused-track target resolution and
+  `input_resolver.rs`'s `track_select_active` to the shell, where
+  `MusicWorkspaceComponent::track_cursor()` is reachable; drop
+  `shell_gates.rs`'s `ATTR_ALBUM_TRACK_FOCUSED` projection in favour of reading
+  the component directly; delete the key-mutation paths in
+  `input_browse_dispatch.rs` and `action.rs`'s `AlbumTrackMove`/
+  `AlbumTrackDismiss` commands. Narrow mode has no `MusicWorkspaceComponent`
+  and no inline track list (`activate_album_folder_row` opens the selection
+  modal instead), so the narrow readers in `render/components/album.rs` and the
+  `LibEvent::RecursiveAlbumActivated` writer must be resolved explicitly — either
+  by mounting the component in narrow mode or by confirming the narrow path
+  cannot reach a `Some` value — not by assuming the wide path covers them. Verify `rtk cargo check -p mbv` and that no `impl App` interaction handler and no component-local `App` field remains for any surface.
 - [ ] 5.4 Confirm every mouse path reads component-owned geometry (no global hit map); verify the six precedence/mouse proofs (blocking-overlay swallow, parent/global precedence, simultaneous Queue+Library mouse, overlay blocks underlying mutation, deterministic focus restoration, geometry cannot drift) as tests.
   `KEY_POLICY` and `KeyPolicyGate::sub_clause()` are referenced nowhere outside
   `key_policy.rs`'s own ordering test — the file still carries
