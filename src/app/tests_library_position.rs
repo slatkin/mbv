@@ -4,7 +4,6 @@ use crate::app::tests::*;
 #[test]
 fn library_position_snapshot_captures_path_focus_and_feed_group() {
     let mut lib = LibraryTab {
-        library: make_item("Movies", "CollectionFolder"),
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -28,9 +27,7 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
             ..Default::default()
         }),
         album_track_focus: Some(1),
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(make_item("Movies", "CollectionFolder"))
     };
     lib.library.id = "lib-movies".into();
 
@@ -254,13 +251,9 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
 #[test]
 fn applying_library_position_clears_non_position_ui_state() {
     let mut lib = LibraryTab {
-        library: make_item("Movies", "CollectionFolder"),
-        nav_stack: Vec::new(),
         feed_home_video: Some(FeedHomeVideoState::default()),
         album_track_focus: Some(2),
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(make_item("Movies", "CollectionFolder"))
     };
     let position = crate::config::LibraryPosition {
         levels: Vec::new(),
@@ -308,7 +301,6 @@ fn save_default_library_position_persists_focused_item() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -325,11 +317,7 @@ fn save_default_library_position_persists_focused_item() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.save_default_library_position(0);
@@ -348,7 +336,6 @@ fn move_lib_cursor_persists_default_library_position() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -365,11 +352,7 @@ fn move_lib_cursor_persists_default_library_position() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.move_lib_cursor(0, 1);
@@ -388,7 +371,6 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -405,11 +387,7 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.library_position_state.libraries.insert(
         "hidden-lib".into(),
@@ -445,7 +423,6 @@ fn refresh_lib_clears_saved_position_for_active_library() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -462,11 +439,7 @@ fn refresh_lib_clears_saved_position_for_active_library() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);
@@ -503,7 +476,6 @@ fn trigger_lib_rescan_clears_only_active_scope() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -520,11 +492,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.tab = TabSelection::EmbyLibrary(0);
     app.replace_saved_library_position(

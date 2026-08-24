@@ -36,7 +36,6 @@ pub(super) fn make_music_album_app() -> App {
     album2.is_folder = true;
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![
             BrowseLevel {
                 parent_id: "lib-music".into(),
@@ -71,11 +70,7 @@ pub(super) fn make_music_album_app() -> App {
                 music_grouping: None,
             },
         ],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app
@@ -134,7 +129,6 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
         .collect();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![
             BrowseLevel {
                 parent_id: "lib-music".into(),
@@ -169,11 +163,7 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
                 music_grouping: None,
             },
         ],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app

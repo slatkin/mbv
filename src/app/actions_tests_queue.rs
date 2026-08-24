@@ -36,15 +36,7 @@ fn recursive_music_app() -> App {
     library.id = "music-lib".into();
     library.collection_type = "music".into();
     library.is_folder = true;
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     app
 }
 // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
@@ -125,7 +117,6 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     queued.id = "movie-2".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -142,11 +133,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     assert_eq!(

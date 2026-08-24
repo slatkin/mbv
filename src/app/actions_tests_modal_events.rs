@@ -430,7 +430,6 @@ fn series_season_fetch_producers_require_detail_cache_before_emitting_completion
     let mut series = make_item("Series 1", "Series");
     series.id = "series-1".into();
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "root".into(),
             title: "TV".into(),
@@ -447,11 +446,7 @@ fn series_season_fetch_producers_require_detail_cache_before_emitting_completion
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     // Both production season-fetch entry points must reject a missing detail

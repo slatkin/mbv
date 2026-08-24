@@ -16,7 +16,6 @@ pub(super) fn make_library_app() -> App {
 
     let items = make_items(2);
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -33,11 +32,7 @@ pub(super) fn make_library_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app
 }
@@ -118,7 +113,6 @@ fn ctrl_r_confirmation_targets_active_library() {
         library.collection_type = "movies".into();
         library.is_folder = true;
         app.libs.push(LibraryTab {
-            library,
             nav_stack: vec![BrowseLevel {
                 parent_id: lib_id.into(),
                 title: title.into(),
@@ -135,11 +129,7 @@ fn ctrl_r_confirmation_targets_active_library() {
                 letter_filter: None,
                 music_grouping: None,
             }],
-            feed_home_video: None,
-            album_track_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
+            ..LibraryTab::new(library)
         });
     }
     app.replace_saved_library_position(
@@ -437,15 +427,7 @@ fn mouse_tab_selection_from_queue_focus_applies_restore_result() {
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
     library.is_folder = true;
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),

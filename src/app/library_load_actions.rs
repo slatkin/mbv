@@ -300,14 +300,10 @@ impl App {
             let feed_home_video = saved.and_then(|s| s.feed_home_video.clone());
             let library_total = saved.and_then(|s| s.library_total);
             self.libs.push(super::LibraryTab {
-                library: view.clone(),
                 nav_stack: stack,
                 feed_home_video,
-
-                album_track_focus: None,
-                series_selection: None,
-                series_season_cursor: 0,
                 library_total,
+                ..super::LibraryTab::new(view.clone())
             });
         }
     }

@@ -372,7 +372,6 @@ mod tests {
         movie.id = "movie-focused".into();
 
         app.libs.push(LibraryTab {
-            library,
             nav_stack: vec![BrowseLevel {
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
@@ -389,12 +388,7 @@ mod tests {
                 letter_filter: None,
                 music_grouping: None,
             }],
-            feed_home_video: None,
-
-            album_track_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
+            ..LibraryTab::new(library)
         });
 
         app

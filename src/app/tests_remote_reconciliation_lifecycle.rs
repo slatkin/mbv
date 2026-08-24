@@ -235,15 +235,7 @@ fn library_focus_rescan_does_not_trigger_tracking_controls() {
     app.tab = TabSelection::EmbyLibrary(0);
     let mut lib_item = make_item("Movies", "CollectionFolder");
     lib_item.id = "lib-movies".into();
-    app.libs.push(LibraryTab {
-        library: lib_item,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(lib_item));
     app.remote_tracker = Some(tracker(&["a", "b"]));
 
     // Ctrl+R in library focus is the established library rescan, not the

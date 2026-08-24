@@ -316,7 +316,6 @@ pub fn make_movie_app() -> App {
     second.id = "movie-second".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -333,12 +332,7 @@ pub fn make_movie_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app
@@ -401,7 +395,6 @@ pub fn make_music_group_app() -> App {
     album.production_year = 2001;
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![
             BrowseLevel {
                 parent_id: "lib-music".into(),
@@ -436,12 +429,7 @@ pub fn make_music_group_app() -> App {
                 music_grouping: None,
             },
         ],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app
@@ -540,7 +528,6 @@ pub fn make_home_video_app() -> App {
     second.id = "video-2".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-homevideos".into(),
             title: "Home Videos".into(),
@@ -557,12 +544,7 @@ pub fn make_home_video_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app
@@ -578,7 +560,6 @@ pub fn make_large_movie_library_app(library_total: usize) -> App {
     library.collection_type = "movies".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -595,11 +576,8 @@ pub fn make_large_movie_library_app(library_total: usize) -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
         library_total: Some(library_total),
+        ..LibraryTab::new(library)
     });
 
     app

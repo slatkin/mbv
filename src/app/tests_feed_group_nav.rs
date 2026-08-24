@@ -13,7 +13,6 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
     folder.is_folder = true;
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -34,11 +33,7 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
             loading: true,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     assert!(!app.is_feed_home_video_group_view(0));
 
@@ -60,7 +55,6 @@ fn feed_home_video_group_view_stays_enabled_with_cached_groups() {
     video.id = "video-a1".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![
             BrowseLevel {
                 parent_id: "lib-youtube".into(),
@@ -104,11 +98,7 @@ fn feed_home_video_group_view_stays_enabled_with_cached_groups() {
             loading: false,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
@@ -131,7 +121,6 @@ fn fetch_home_preserves_feed_home_video_state() {
     video.id = "video-a1".into();
 
     app.libs.push(LibraryTab {
-        library: library.clone(),
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -157,11 +146,7 @@ fn fetch_home_preserves_feed_home_video_state() {
             loading: false,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library.clone())
     });
 
     app.rebuild_library_tabs_from_views(&[library]);
@@ -192,7 +177,6 @@ fn select_feed_folder_group_pushes_video_level_for_selected_folder() {
     second_video.id = "video-b1".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -218,11 +202,7 @@ fn select_feed_folder_group_pushes_video_level_for_selected_folder() {
             loading: false,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.select_feed_folder_group(0, 1);
@@ -253,7 +233,6 @@ fn select_feed_folder_group_zero_pushes_all_videos_level() {
     video.id = "video-a1".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -280,11 +259,7 @@ fn select_feed_folder_group_zero_pushes_all_videos_level() {
             selected_group: 1,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.select_feed_folder_group(0, 0);
@@ -325,7 +300,6 @@ fn select_feed_folder_group_uses_client_side_all_items_cache() {
     b_video.path = "/videos/b/one.mp4".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -357,11 +331,7 @@ fn select_feed_folder_group_uses_client_side_all_items_cache() {
             loading: false,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.select_feed_folder_group(0, 2);
@@ -402,7 +372,6 @@ fn select_feed_folder_group_updates_feed_state_when_detail_level_exists() {
     b_video.id = "video-b1".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -435,11 +404,7 @@ fn select_feed_folder_group_updates_feed_state_when_detail_level_exists() {
             selected_group: 1,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.select_feed_folder_group(0, 2);
@@ -471,7 +436,6 @@ fn go_back_keeps_feed_home_video_group_view_intact() {
     video.id = "video-a1".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -498,11 +462,7 @@ fn go_back_keeps_feed_home_video_group_view_intact() {
             selected_group: 1,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.go_back(0);
@@ -535,7 +495,6 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
     let video = make_item("A1", "Movie");
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -562,11 +521,7 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
             selected_group: 5,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.ensure_feed_home_video_group_level(0);
@@ -599,7 +554,6 @@ fn refresh_lib_targets_feed_selection() {
     video.id = "video-a1".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -626,11 +580,7 @@ fn refresh_lib_targets_feed_selection() {
             selected_group: 1,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.refresh_lib(0);

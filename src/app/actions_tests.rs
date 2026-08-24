@@ -87,15 +87,7 @@ fn recursive_music_app() -> App {
     library.id = "music-lib".into();
     library.collection_type = "music".into();
     library.is_folder = true;
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     app
 }
 #[test]

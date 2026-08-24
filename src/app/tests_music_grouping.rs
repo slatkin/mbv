@@ -57,13 +57,8 @@ fn make_music_app(albums: Vec<EmbyItem>) -> super::App {
     library.collection_type = "music".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![make_group_level(), make_music_album_level(albums)],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app
 }

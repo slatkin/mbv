@@ -122,7 +122,7 @@ contributing surface's group 2–4 conversion to have landed.
 
 - [x] 5.1 Convert the Library parent (active destination, Panel focus/mode, child routing); verify `rtk cargo nextest run -p mbv library_parent` + scan.
 - [x] 5.2 Convert Root UI + overlay-stack routing using TuiRealm's native LIFO focus stack (open = `active`, dismiss = `umount` → auto-`blur`/restore; no shell-owned focus stack), keeping only overlay z-order in the owning component. **Resolve here, as one unit, the precedence questions deferred from groups 2–4** (see "Deferred by construction"): the non-static per-key gates (`playback`, `lib_search`, `album_track_mode`) and how a per-instance `SubClause` is built at mount time for the one-component-per-tab surfaces. Verify `rtk cargo nextest run -p mbv root_ui` + scan.
-- [ ] 5.3-pre **Prerequisite — give `LibraryTab` a constructor.** No behavior
+- [x] 5.3-pre **Prerequisite — give `LibraryTab` a constructor.** No behavior
   change. `LibraryTab` has no constructor, so every one of the 94
   `LibraryTab { .. }` literal sites (~30 of them test modules) is a
   compile-forced edit when *any* field is deleted. That cost is constant per

@@ -31,7 +31,6 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     library.collection_type = "movies".into();
     library.is_folder = true;
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -48,11 +47,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     // Configure a feed subscription and select the Feeds tab.
@@ -148,7 +143,6 @@ fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
     library.collection_type = "movies".into();
     library.is_folder = true;
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -165,11 +159,7 @@ fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     // Start on the library tab so its position state is visible.
@@ -327,7 +317,6 @@ fn f5_on_feeds_tab_does_not_reach_emby_or_audiobookshelf_refresh() {
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -344,11 +333,7 @@ fn f5_on_feeds_tab_does_not_reach_emby_or_audiobookshelf_refresh() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     let abs_library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
@@ -404,7 +389,6 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -421,11 +405,7 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     let abs_library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
@@ -487,7 +467,6 @@ fn feeds_tab_keys_cannot_enter_emby_action_paths() {
     library.collection_type = "movies".into();
     library.is_folder = true;
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -504,11 +483,7 @@ fn feeds_tab_keys_cannot_enter_emby_action_paths() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
         name: "Test Feed".into(),

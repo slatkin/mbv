@@ -279,15 +279,7 @@ mod tests {
             .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
-        app.libs.push(LibraryTab {
-            library: lib_item,
-            nav_stack: Vec::new(),
-            feed_home_video: None,
-            album_track_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
+        app.libs.push(LibraryTab::new(lib_item));
 
         let resolved = app.route_for_active_library_view(0);
 
@@ -299,15 +291,7 @@ mod tests {
         let mut app = make_app_stub();
         let mut lib_item = make_item("Movies", "CollectionFolder");
         lib_item.id = "lib-movies".to_string();
-        app.libs.push(LibraryTab {
-            library: lib_item,
-            nav_stack: Vec::new(),
-            feed_home_video: None,
-            album_track_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
+        app.libs.push(LibraryTab::new(lib_item));
 
         assert_eq!(app.route_for_active_library_view(0), None);
     }
@@ -319,15 +303,7 @@ mod tests {
             .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
-        app.libs.push(LibraryTab {
-            library: lib_item,
-            nav_stack: Vec::new(),
-            feed_home_video: None,
-            album_track_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
+        app.libs.push(LibraryTab::new(lib_item));
         app.panel_focus = PanelFocus::Library;
         app.tab = TabSelection::EmbyLibrary(0);
         let mut item = make_item("Song", "Audio");
@@ -345,15 +321,7 @@ mod tests {
             .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
-        app.libs.push(LibraryTab {
-            library: lib_item,
-            nav_stack: Vec::new(),
-            feed_home_video: None,
-            album_track_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
-        });
+        app.libs.push(LibraryTab::new(lib_item));
         app.panel_focus = PanelFocus::Queue;
         app.tab = TabSelection::EmbyLibrary(0);
         let mut item = make_item("Song", "Audio");

@@ -27,7 +27,6 @@ fn make_movie_app() -> App {
     second.id = "movie-2".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -44,12 +43,7 @@ fn make_movie_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app
@@ -65,7 +59,6 @@ fn push_library(app: &mut App, id: &str, name: &str) {
     item.id = format!("{id}-item");
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: id.into(),
             title: name.into(),
@@ -82,11 +75,7 @@ fn push_library(app: &mut App, id: &str, name: &str) {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 }
 
@@ -315,7 +304,6 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
     library.id = "lib-movies".into();
     library.is_folder = true;
     lib.libs.push(crate::app::LibraryTab {
-        library,
         nav_stack: vec![crate::app::BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -332,12 +320,7 @@ fn period_key_opens_context_menu_from_all_three_view_handlers() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..crate::app::LibraryTab::new(library)
     });
     lib.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
     assert!(lib.context_menu.is_some(), "library view");
@@ -364,7 +347,6 @@ fn ctrl_a_enqueues_selected_from_library_view() {
     let mut movie = crate::app::tests::make_item("A Movie", "Movie");
     movie.id = "movie-1".into();
     app.libs.push(crate::app::LibraryTab {
-        library,
         nav_stack: vec![crate::app::BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -381,12 +363,7 @@ fn ctrl_a_enqueues_selected_from_library_view() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..crate::app::LibraryTab::new(library)
     });
 
     app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));

@@ -138,7 +138,6 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
         .collect();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-shows".into(),
             title: "Shows".into(),
@@ -155,11 +154,8 @@ fn tv_series_list_computes_sorted_indices_when_above_threshold() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
         library_total: Some(55),
+        ..LibraryTab::new(library)
     });
 
     let mut layout = LayoutMain::default();
@@ -238,7 +234,6 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
     episode.runtime_ticks = 3600 * mbv_core::api::TICKS_PER_SECOND;
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "library".into(),
             title: "Shows".into(),
@@ -255,11 +250,8 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
         library_total: Some(1),
+        ..LibraryTab::new(library)
     });
     let mut episodes = std::collections::HashMap::new();
     episodes.insert("season-1".into(), vec![episode]);

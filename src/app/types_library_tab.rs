@@ -28,6 +28,18 @@ pub(super) struct LibraryTab {
 }
 
 impl LibraryTab {
+    pub(super) fn new(library: EmbyItem) -> Self {
+        Self {
+            library,
+            nav_stack: Vec::new(),
+            feed_home_video: None,
+            album_track_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
+            library_total: None,
+        }
+    }
+
     pub(super) fn clear_music_focus(&mut self) {
         self.album_track_focus = None;
     }

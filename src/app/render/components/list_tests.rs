@@ -77,7 +77,6 @@ fn make_movie_list_app(titles: Vec<&str>) -> App {
     let total = items.len();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -94,12 +93,7 @@ fn make_movie_list_app(titles: Vec<&str>) -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app

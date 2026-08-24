@@ -13,7 +13,6 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
     library.is_folder = true;
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -34,11 +33,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
             loading: true,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     let mut folders = Vec::new();
@@ -94,7 +89,6 @@ fn make_home_video_app() -> App {
     library.is_folder = true;
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -115,11 +109,7 @@ fn make_home_video_app() -> App {
             loading: true,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app
@@ -254,7 +244,6 @@ fn refreshed_does_not_overwrite_feed_root_with_video_items() {
     video.id = "video-a1".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -280,11 +269,7 @@ fn refreshed_does_not_overwrite_feed_root_with_video_items() {
             loading: false,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.handle_lib_event(LibEvent::Refreshed {
@@ -320,7 +305,6 @@ fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
     video.id = "video-a1".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
@@ -337,12 +321,7 @@ fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
 
     app.handle_lib_event(LibEvent::Refreshed {

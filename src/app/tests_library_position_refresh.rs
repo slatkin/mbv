@@ -10,7 +10,6 @@ fn mixed_services_app() -> App {
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
@@ -27,11 +26,7 @@ fn mixed_services_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     let abs_library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts".into(),
@@ -159,13 +154,8 @@ fn two_emby_libraries_app() -> App {
             music_grouping: None,
         };
         app.libs.push(LibraryTab {
-            library,
             nav_stack: vec![level],
-            feed_home_video: None,
-            album_track_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
-            library_total: None,
+            ..LibraryTab::new(library)
         });
     }
     app

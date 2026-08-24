@@ -30,7 +30,6 @@ fn tv_app() -> App {
     episode.runtime_ticks = 3600 * mbv_core::api::TICKS_PER_SECOND;
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "library".into(),
             title: "Shows".into(),
@@ -47,11 +46,8 @@ fn tv_app() -> App {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
         library_total: Some(1),
+        ..LibraryTab::new(library)
     });
     let mut episodes = HashMap::new();
     episodes.insert("season-1".into(), vec![episode]);

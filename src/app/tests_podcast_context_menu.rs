@@ -10,16 +10,7 @@ fn podcast_library_detects_collection_type() {
     library.collection_type = "podcasts".into();
     library.is_folder = true;
 
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
 
     assert!(app.is_podcast_library(0));
 }
@@ -31,16 +22,7 @@ fn podcast_library_detects_name_when_collection_type_missing() {
     library.id = "lib-podcasts".into();
     library.is_folder = true;
 
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
 
     assert!(app.is_podcast_library(0));
 }
@@ -59,7 +41,6 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
     show.unplayed_item_count = 0;
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
@@ -76,12 +57,7 @@ fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.tab = TabSelection::EmbyLibrary(0);
 
@@ -109,7 +85,6 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
     show.unplayed_item_count = 3;
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
@@ -126,12 +101,7 @@ fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.tab = TabSelection::EmbyLibrary(0);
 
@@ -164,7 +134,6 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
     second.played = true;
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
@@ -191,11 +160,7 @@ fn podcast_context_menu_offers_mark_all_played_for_selected_show() {
             selected_group: 1,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);
@@ -261,7 +226,6 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
     second.media_type = "Audio".into();
 
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-podcasts".into(),
             title: "Podcasts".into(),
@@ -294,11 +258,7 @@ fn podcast_context_menu_mark_all_played_uses_all_pill_selection() {
             selected_group: 0,
             ..FeedHomeVideoState::default()
         }),
-
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     app.panel_focus = PanelFocus::Library;
     app.tab = TabSelection::EmbyLibrary(0);

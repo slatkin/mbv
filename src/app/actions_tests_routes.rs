@@ -36,15 +36,7 @@ fn recursive_music_app() -> App {
     library.id = "music-lib".into();
     library.collection_type = "music".into();
     library.is_folder = true;
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     app
 }
 fn make_remote_session(audio_only: bool) -> mbv_core::api::SessionInfo {
@@ -151,15 +143,7 @@ fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
     app.active_route = Some("music".to_string());
     let mut movies_item = make_item("Movies", "CollectionFolder");
     movies_item.id = "lib-movies".to_string();
-    app.libs.push(LibraryTab {
-        library: movies_item,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(movies_item));
     app.tab = TabSelection::EmbyLibrary(0);
 
     app.enqueue_selected(Some(0));
@@ -232,15 +216,7 @@ fn play_item_skips_library_routing_when_attached_to_a_session() {
     app.connected_session_id = Some("sess-1".to_string());
     let mut lib_item = make_item("Music", "CollectionFolder");
     lib_item.id = "lib-music".to_string();
-    app.libs.push(LibraryTab {
-        library: lib_item,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(lib_item));
     let mut item = make_item("Song", "Audio");
     item.id = "song-1".to_string();
 
@@ -277,15 +253,7 @@ fn play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel
 
     let mut lib_item = make_item("Music", "CollectionFolder");
     lib_item.id = "lib-music".to_string();
-    app.libs.push(LibraryTab {
-        library: lib_item,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(lib_item));
     let mut item = make_item("Song", "Audio");
     item.id = "song-1".to_string();
 

@@ -97,15 +97,7 @@ fn rejected_route_enqueue_leaves_tracking_active() {
     app.active_route = Some("music".to_string());
     let mut movies_item = make_item("Movies", "CollectionFolder");
     movies_item.id = "lib-movies".to_string();
-    app.libs.push(LibraryTab {
-        library: movies_item,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(movies_item));
     app.tab = TabSelection::EmbyLibrary(0);
     app.remote_tracker = Some(tracking_stub());
 

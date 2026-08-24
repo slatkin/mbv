@@ -21,15 +21,7 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     let level = crate::config::LibraryPositionLevel {
         parent_id: "lib-movies".into(),
         title: "Power".into(),
@@ -74,15 +66,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     library.collection_type = "movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     let pre_feature_position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
@@ -142,13 +126,8 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
-        library,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
         album_track_focus: Some(0),
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     let stale = crate::config::LibraryPosition {
         levels: vec![
@@ -236,15 +215,7 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
     let mut app = make_app_stub();
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
-    app.libs.push(LibraryTab {
-        library,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(library));
     let requested = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
@@ -298,7 +269,6 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
-        library,
         nav_stack: vec![BrowseLevel {
             parent_id: "lib-movies".into(),
             title: "Power".into(),
@@ -315,11 +285,7 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
             letter_filter: None,
             music_grouping: None,
         }],
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
+        ..LibraryTab::new(library)
     });
     let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {

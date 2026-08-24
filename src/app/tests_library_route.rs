@@ -79,15 +79,7 @@ fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
     app.active_route = Some("music".to_string());
     let mut lib_item = make_item("Music", "CollectionFolder");
     lib_item.id = "lib-music".to_string();
-    app.libs.push(LibraryTab {
-        library: lib_item,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(lib_item));
     let mut item = make_item("Song", "Audio");
     item.id = "song-1".to_string();
     app.tab = TabSelection::EmbyLibrary(0);
@@ -113,15 +105,7 @@ fn apply_route_for_playback_restores_local_when_item_has_no_route() {
     );
     let mut movies_item = make_item("Movies", "CollectionFolder");
     movies_item.id = "lib-movies".to_string();
-    app.libs.push(LibraryTab {
-        library: movies_item,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(movies_item));
     let mut item = make_item("Movie", "Movie");
     item.id = "movie-1".to_string();
 
@@ -169,15 +153,7 @@ fn apply_route_for_playback_double_failure_strips_using_local_playback() {
 
     let mut lib_item = make_item("Movies", "CollectionFolder");
     lib_item.id = "lib-movies".to_string();
-    app.libs.push(LibraryTab {
-        library: lib_item,
-        nav_stack: Vec::new(),
-        feed_home_video: None,
-        album_track_focus: None,
-        series_selection: None,
-        series_season_cursor: 0,
-        library_total: None,
-    });
+    app.libs.push(LibraryTab::new(lib_item));
     let mut item = make_item("Movie", "Movie");
     item.id = "movie-1".to_string();
     app.tab = TabSelection::EmbyLibrary(0);
