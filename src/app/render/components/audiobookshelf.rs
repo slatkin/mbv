@@ -107,6 +107,7 @@ impl App {
         focused: bool,
         layout: &mut LayoutMain,
     ) {
+        layout.audiobookshelf_podcast_area = area;
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };

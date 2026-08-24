@@ -150,6 +150,9 @@ pub(crate) struct LayoutMain {
     /// unlike the book tab, the narrow podcast presentation has no
     /// equivalent always-visible right pane.
     pub audiobookshelf_podcast_right_area: Rect,
+    /// Full area passed to the Audiobookshelf podcast component after the
+    /// legacy frame computes the current library layout.
+    pub audiobookshelf_podcast_area: Rect,
     /// Bounding rect of the Audiobookshelf book tab's wide-only right pane.
     /// Unlike `audiobookshelf_book_right_area`, this stays empty for the
     /// narrow inline presentation and is therefore safe for input gating.

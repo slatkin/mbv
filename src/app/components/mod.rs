@@ -8,6 +8,7 @@
 
 #![allow(dead_code)]
 
+pub mod audiobookshelf_podcast;
 pub mod component_id;
 pub mod confirm;
 pub mod context_menu;
@@ -28,7 +29,8 @@ pub mod selection_modal;
 pub mod sessions;
 pub mod user_event;
 
-pub use self::component_id::{ComponentId, ModalId, OverlayId, PopupId};
+pub use self::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
+pub use self::component_id::{BrowserKey, BrowserKind, ComponentId, ModalId, OverlayId, PopupId};
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;
 pub use self::daemon_lost::DaemonLostComponent;
@@ -50,6 +52,9 @@ pub use self::selection_modal::SelectionModalComponent;
 pub use self::sessions::SessionsComponent;
 pub use self::user_event::UserEvent;
 
+#[cfg(test)]
+#[path = "audiobookshelf_podcast_component_tests.rs"]
+mod audiobookshelf_podcast_component_tests;
 #[cfg(test)]
 #[path = "feeds_component_tests.rs"]
 mod feeds_component_tests;

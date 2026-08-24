@@ -48,6 +48,7 @@ const LEGACY_INPUT_LISTENER_MAX_POLL: usize = 60;
 pub struct Model {
     pub app: App,
     pub(super) application: Application<ComponentId, Msg, UserEvent>,
+    pub(super) abs_podcast_id: Option<ComponentId>,
 }
 
 impl Model {
@@ -60,7 +61,11 @@ impl Model {
             LEGACY_INPUT_LISTENER_MAX_POLL,
         );
         let application = Application::init(listener_cfg);
-        let mut model = Self { app, application };
+        let mut model = Self {
+            app,
+            application,
+            abs_podcast_id: None,
+        };
         // Checkpoint 1: the only mounted component is the temporary
         // LegacyInput bridge, occupying the UiRoot slot. It is the active
         // component so every terminal event is forwarded to it.
@@ -547,6 +552,14 @@ impl Model {
                         Msg::Shell(ShellRequest::FeedsManageKey(key)) => {
                             self.handle_feeds_manage_request(key);
                         }
+                        Msg::Shell(ShellRequest::AudiobookshelfPodcastKey(key)) => {
+                            if self.handle_audiobookshelf_podcast_key(key) {
+                                quit = true;
+                            }
+                        }
+                        Msg::Shell(ShellRequest::AudiobookshelfPodcastMouse(mouse)) => {
+                            self.handle_audiobookshelf_podcast_mouse(mouse);
+                        }
                         Msg::Shell(ShellRequest::PlaybackPromptKey(key)) => {
                             if self.app.skip_intro_end_ticks.is_some() {
                                 self.app.handle_key_confirm_skip_intro(key);
@@ -587,6 +600,7 @@ impl Model {
             self.sync_sessions();
             self.sync_home();
             self.sync_feeds();
+            self.sync_audiobookshelf_podcast();
             self.sync_playback_prompt();
             self.sync_precedence_gates();
 
@@ -630,6 +644,7 @@ impl Model {
                     self.app.render(f);
                     self.render_home_component(f);
                     self.render_feeds_component(f);
+                    self.render_audiobookshelf_podcast_component(f);
                     self.render_playback_prompt(f);
                     self.render_help_overlay(f);
                     self.render_confirm_overlay(f);

@@ -110,6 +110,7 @@ mod ws_event_actions;
 
 pub use self::app_struct::App;
 mod shell;
+mod shell_audiobookshelf_podcast;
 mod shell_feeds;
 mod shell_gates;
 mod shell_home;

@@ -170,4 +170,8 @@ pub enum ShellRequest {
     /// Persist the newly selected Home pill (section index) as the restored
     /// preference, matching `home_select_section`'s `save_prefs` call.
     HomeSectionSelected(usize),
+    /// Forward Audiobookshelf podcast effects to the legacy App handler while
+    /// the browser's local state remains component-owned.
+    AudiobookshelfPodcastKey(crossterm::event::KeyEvent),
+    AudiobookshelfPodcastMouse(crossterm::event::MouseEvent),
 }
