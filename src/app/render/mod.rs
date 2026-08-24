@@ -31,7 +31,9 @@ pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
 pub(in crate::app) use components::playback_prompt::render_playback_prompt_content;
-pub(in crate::app) use components::playlists::{render_playlists_content, PlaylistsRenderGeometry};
+pub(in crate::app) use components::playlists::{
+    render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,
+};
 pub(in crate::app) use components::remote_reanchor::render_remote_reanchor_popup_content;
 pub(in crate::app) use components::search_sidebar::render_search_sidebar;
 pub(in crate::app) use components::selection_modal::{

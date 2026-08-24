@@ -11,6 +11,66 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
+pub(in crate::app) fn render_save_playlist_content(
+    f: &mut Frame,
+    dim_backdrop_active: &mut bool,
+    input: &str,
+    rename: bool,
+) {
+    let title_text = if rename {
+        " Rename Playlist "
+    } else {
+        " Save as Playlist "
+    };
+    let inner = render_modal_frame(
+        f,
+        dim_backdrop_active,
+        title_text,
+        52,
+        7,
+        palette::SURFACE_FOCUSED,
+    );
+    let label = "Name: ";
+    let cursor = "▏";
+    let max_input = inner.width as usize - label.len() - cursor.len() - 2;
+    let visible: String = input
+        .chars()
+        .rev()
+        .take(max_input)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
+    let input_line = format!("{}{}{}", label, visible, cursor);
+    let hint = "Enter to save · Esc to cancel";
+    let input_y = inner.y + (inner.height.saturating_sub(3)) / 2;
+    let hint_y = input_y + 2;
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            input_line,
+            Style::default().fg(palette::TEXT_STRONG),
+        )),
+        Rect {
+            x: inner.x + 1,
+            y: input_y,
+            width: inner.width.saturating_sub(2),
+            height: 1,
+        },
+    );
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            hint,
+            Style::default().fg(palette::TEXT_SECONDARY),
+        )),
+        Rect {
+            x: inner.x + 1,
+            y: hint_y,
+            width: inner.width.saturating_sub(2),
+            height: 1,
+        },
+    );
+}
+
 #[derive(Default)]
 pub(in crate::app) struct PlaylistsRenderGeometry {
     pub panel_area: Rect,
@@ -522,57 +582,11 @@ impl App {
         let Some(ref dialog) = self.save_playlist_dialog else {
             return;
         };
-        let title_text = match dialog.stage {
-            SavePlaylistStage::RenamePlaylist { .. } => " Rename Playlist ",
-            _ => " Save as Playlist ",
-        };
-        let inner = render_modal_frame(
+        render_save_playlist_content(
             f,
             &mut self.dim_backdrop_active,
-            title_text,
-            52,
-            7,
-            palette::SURFACE_FOCUSED,
-        );
-        let label = "Name: ";
-        let cursor = "▏";
-        let max_input = inner.width as usize - label.len() - cursor.len() - 2;
-        let visible: String = dialog
-            .input
-            .chars()
-            .rev()
-            .take(max_input)
-            .collect::<String>()
-            .chars()
-            .rev()
-            .collect();
-        let input_line = format!("{}{}{}", label, visible, cursor);
-        let hint = "Enter to save · Esc to cancel";
-        let input_y = inner.y + (inner.height.saturating_sub(3)) / 2;
-        let hint_y = input_y + 2;
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                input_line,
-                Style::default().fg(palette::TEXT_STRONG),
-            )),
-            Rect {
-                x: inner.x + 1,
-                y: input_y,
-                width: inner.width.saturating_sub(2),
-                height: 1,
-            },
-        );
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                hint,
-                Style::default().fg(palette::TEXT_SECONDARY),
-            )),
-            Rect {
-                x: inner.x + 1,
-                y: hint_y,
-                width: inner.width.saturating_sub(2),
-                height: 1,
-            },
+            &dialog.input,
+            matches!(dialog.stage, SavePlaylistStage::RenamePlaylist { .. }),
         );
     }
 }

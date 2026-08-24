@@ -182,4 +182,7 @@ pub enum ShellRequest {
     /// local cursors and hit geometry remain component-owned.
     PlaylistsKey(crossterm::event::KeyEvent),
     PlaylistsMouse(crossterm::event::MouseEvent),
+    /// Forward Save-playlist effects to the legacy App handler while the
+    /// dialog's local input remains component-owned.
+    SavePlaylistKey(crossterm::event::KeyEvent),
 }
