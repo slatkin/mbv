@@ -35,7 +35,7 @@ impl App {
     /// The selected Movie from the active list source: the inline-search
     /// result cursor while search is open (the hero must not read the stale
     /// navigation-level cursor then), else the navigation cursor item.
-    fn selected_wide_movie(
+    pub(in crate::app::render) fn selected_wide_movie(
         &self,
         lib_idx: usize,
         ctx: &LibraryListRenderCtx,
