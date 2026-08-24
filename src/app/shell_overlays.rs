@@ -1,87 +1,15 @@
 //! Overlay sync/render methods for the shell `Model` (design D2/D9).
-//!
-//! Extracted from `shell.rs` to keep it under the 800-line cap. Each
-//! converted surface has a `sync_*` (mount/unmount on App field
-//! transitions), a `render_*_overlay` (set content via downcast then
-//! `application.view()`), and the shell's run-loop Msg handlers call the
-//! existing `App` handlers for cross-boundary work.
+//! Converted surfaces mirror App state, render through TuiRealm, and forward
+//! cross-boundary effects to the existing App handlers.
 
 use super::components::{
     ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, FeedsManageComponent,
-    HelpComponent, LibraryRoutesComponent, ModalId, MultiselectComponent, OverlayId,
-    PlaybackPromptComponent, PopupId, RemoteReanchorComponent, SearchSidebarComponent,
-    SelectionModalComponent, SessionsComponent, ShellRequest,
+    HelpComponent, LibraryRoutesComponent, ModalId, MultiselectComponent, OverlayId, PopupId,
+    RemoteReanchorComponent, SearchSidebarComponent, SelectionModalComponent, SessionsComponent,
+    ShellRequest,
 };
 use super::shell::Model;
-
 impl Model {
-    // --- Playback prompt ----------------------------------------------------
-
-    /// Sync the status-bar playback prompt with the shell-owned prompt state.
-    pub(super) fn sync_playback_prompt(&mut self) {
-        let id = ComponentId::PlaybackPrompt;
-        let mounted = self.application.mounted(&id);
-        let prompt_open =
-            self.app.skip_intro_end_ticks.is_some() || self.app.next_up_item.is_some();
-        if prompt_open && !mounted {
-            self.application
-                .mount(id.clone(), Box::new(PlaybackPromptComponent::new()), vec![])
-                .expect("mount PlaybackPrompt");
-            self.application
-                .active(&id)
-                .expect("activate PlaybackPrompt");
-        } else if !prompt_open && mounted {
-            let _ = self.application.umount(&id);
-        }
-        let visible = !self.app.status.is_empty()
-            && (!self.app.system_notifications || self.app.notif_failed);
-        let area = self.app.layout.playback.status_area;
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(prompt) = comp.as_any_mut().downcast_mut::<PlaybackPromptComponent>() {
-                prompt.set_content(&self.app.status, visible, area);
-            }
-        }
-    }
-
-    /// Render the prompt after the legacy frame has established the status-bar
-    /// geometry, before any blocking overlay paints its dimmed backdrop.
-    pub(super) fn render_playback_prompt(&mut self, f: &mut ratatui::Frame) {
-        let id = ComponentId::PlaybackPrompt;
-        if !self.application.mounted(&id) {
-            return;
-        }
-        let visible = !self.app.status.is_empty()
-            && (!self.app.system_notifications || self.app.notif_failed);
-        let area = self.app.layout.playback.status_area;
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(prompt) = comp.as_any_mut().downcast_mut::<PlaybackPromptComponent>() {
-                prompt.set_content(&self.app.status, visible, area);
-            }
-        }
-        self.application.view(&id, f, f.area());
-    }
-
-    /// True when a blocking overlay (context menu, selection modal,
-    /// daemon-lost, confirm, remote-reanchor, save-playlist) is mounted —
-    /// those swallow every key, including F1. Excludes Settings-child popups
-    /// (multiselect/library-routes), which the `mount_help` path closes by
-    /// closing settings.
-    pub(super) fn is_blocking_overlay_open(&self) -> bool {
-        self.application
-            .mounted(&ComponentId::Overlay(OverlayId::ContextMenu))
-            || self.app.selection_modal.is_some()
-            || self
-                .application
-                .mounted(&ComponentId::Modal(ModalId::DaemonLost))
-            || self
-                .application
-                .mounted(&ComponentId::Modal(ModalId::Confirm))
-            || self
-                .application
-                .mounted(&ComponentId::Modal(ModalId::RemoteReanchor))
-            || self.app.save_playlist_dialog.is_some()
-    }
-
     // --- Help sidebar -------------------------------------------------------
 
     /// Mount the Help overlay and make it the active component. Closes the

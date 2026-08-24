@@ -24,6 +24,7 @@ pub mod msg;
 pub mod multiselect;
 pub mod playback_gates;
 pub mod playback_prompt;
+pub mod playlists;
 pub mod remote_reanchor;
 pub mod search_sidebar;
 pub mod selection_modal;
@@ -48,6 +49,7 @@ pub use self::playback_gates::{
     PlaybackGatesComponent, ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE,
 };
 pub use self::playback_prompt::PlaybackPromptComponent;
+pub use self::playlists::PlaylistsComponent;
 pub use self::remote_reanchor::RemoteReanchorComponent;
 pub use self::search_sidebar::SearchSidebarComponent;
 pub use self::selection_modal::SelectionModalComponent;
@@ -69,6 +71,9 @@ mod home_component_tests;
 #[cfg(test)]
 #[path = "playback_prompt_component_tests.rs"]
 mod playback_prompt_component_tests;
+#[cfg(test)]
+#[path = "playlists_component_tests.rs"]
+mod playlists_component_tests;
 #[cfg(test)]
 #[path = "selection_modal_component_tests.rs"]
 mod selection_modal_component_tests;

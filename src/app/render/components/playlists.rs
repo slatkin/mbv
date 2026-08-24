@@ -4,11 +4,269 @@ use super::super::super::App;
 use super::super::super::{SavePlaylistStage, PLAYLISTS_PANEL_W};
 use super::chrome;
 use crate::app::render::components::modal_frame::render_modal_frame;
+use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+
+#[derive(Default)]
+pub(in crate::app) struct PlaylistsRenderGeometry {
+    pub panel_area: Rect,
+    pub content_area: Rect,
+    pub playlist_rows: Vec<(Rect, usize)>,
+    pub open_rows: Vec<(Rect, usize)>,
+}
+
+impl PlaylistsRenderGeometry {
+    pub(in crate::app) fn hit_test(
+        &self,
+        position: ratatui::layout::Position,
+    ) -> Option<(bool, usize)> {
+        self.open_rows
+            .iter()
+            .find(|(rect, _)| rect.contains(position))
+            .map(|(_, index)| (true, *index))
+            .or_else(|| {
+                self.playlist_rows
+                    .iter()
+                    .find(|(rect, _)| rect.contains(position))
+                    .map(|(_, index)| (false, *index))
+            })
+    }
+}
+
+pub(in crate::app) fn render_playlists_content(
+    frame: &mut Frame,
+    area: Rect,
+    panel_area: Option<Rect>,
+    playlists: &[EmbyItem],
+    playlists_cursor: &mut usize,
+    playlists_scroll: &mut usize,
+    playlists_loading: bool,
+    playlists_open: Option<&EmbyItem>,
+    open_items: &[EmbyItem],
+    open_cursor: &mut usize,
+    open_scroll: &mut usize,
+    open_loading: bool,
+    loaded_id: Option<&str>,
+    geometry: &mut PlaylistsRenderGeometry,
+) {
+    *geometry = PlaylistsRenderGeometry::default();
+    let (title, hint) = if let Some(playlist) = playlists_open {
+        (
+            playlist.name.to_uppercase(),
+            "[↵]play [←]back [Esc]close".to_string(),
+        )
+    } else {
+        (
+            "PLAYLISTS".to_string(),
+            "[↵]play [→]browse [n]rename [d]delete [r]refresh [Esc]close".to_string(),
+        )
+    };
+    let panel = panel_area.unwrap_or(area);
+    geometry.panel_area = panel;
+    let content = chrome::render_panel_shell_at(frame, panel, &title, &hint, true);
+    geometry.content_area = content;
+    if playlists_open.is_some() {
+        render_open_playlist_content(
+            frame,
+            content,
+            open_items,
+            open_cursor,
+            open_scroll,
+            open_loading,
+            geometry,
+        );
+        return;
+    }
+    if playlists_loading && playlists.is_empty() {
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                " Loading…",
+                Style::default().fg(palette::TEXT_SECONDARY),
+            )),
+            content,
+        );
+        return;
+    }
+    if playlists.is_empty() {
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                " No playlists found",
+                Style::default().fg(palette::TEXT_SECONDARY),
+            )),
+            content,
+        );
+        return;
+    }
+    if *playlists_cursor < *playlists_scroll {
+        *playlists_scroll = *playlists_cursor;
+    } else if *playlists_cursor >= *playlists_scroll + content.height as usize {
+        *playlists_scroll = (*playlists_cursor)
+            .saturating_add(1)
+            .saturating_sub(content.height as usize);
+    }
+    for (visible, playlist) in playlists[*playlists_scroll..].iter().enumerate() {
+        if visible >= content.height as usize {
+            break;
+        }
+        let index = *playlists_scroll + visible;
+        let selected = index == *playlists_cursor;
+        let loaded = loaded_id.is_some_and(|id| id == playlist.id);
+        let fg = if selected {
+            palette::ACCENT_ACTIVE
+        } else if loaded {
+            palette::TEXT_ACCENT_MUTED
+        } else {
+            palette::TEXT_PRIMARY
+        };
+        let count = if playlist.total_count > 0 {
+            format!(" ({})", playlist.total_count)
+        } else {
+            String::new()
+        };
+        let row = Rect {
+            x: content.x,
+            y: content.y + visible as u16,
+            width: content.width,
+            height: 1,
+        };
+        chrome::render_panel_row(
+            frame,
+            content.x,
+            row.y,
+            content.width,
+            selected,
+            vec![
+                Span::styled(
+                    trunc_str(
+                        &playlist.name,
+                        chrome::panel_row_text_width(content.width).saturating_sub(count.len()),
+                    ),
+                    Style::default().fg(fg).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(count, Style::default().fg(palette::TEXT_MUTED)),
+            ],
+        );
+        geometry.playlist_rows.push((row, index));
+    }
+    chrome::render_sidebar_scrollbar(frame, content, playlists.len(), *playlists_scroll);
+}
+
+fn render_open_playlist_content(
+    frame: &mut Frame,
+    content: Rect,
+    items: &[EmbyItem],
+    cursor: &mut usize,
+    scroll: &mut usize,
+    loading: bool,
+    geometry: &mut PlaylistsRenderGeometry,
+) {
+    if loading && items.is_empty() {
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                " Loading…",
+                Style::default().fg(palette::TEXT_SECONDARY),
+            )),
+            content,
+        );
+        return;
+    }
+    if items.is_empty() {
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                " Playlist is empty",
+                Style::default().fg(palette::TEXT_SECONDARY),
+            )),
+            content,
+        );
+        return;
+    }
+    *cursor = (*cursor).min(items.len() - 1);
+    *scroll = (*scroll).min(*cursor);
+    let item_lines = |item: &EmbyItem| {
+        usize::from(item.display_name().len() > (content.width as usize).saturating_sub(6)) + 1
+    };
+    while *scroll < *cursor {
+        let lines = items[*scroll..=*cursor]
+            .iter()
+            .map(item_lines)
+            .sum::<usize>();
+        if lines <= content.height as usize {
+            break;
+        }
+        *scroll += 1;
+    }
+    let mut y = 0usize;
+    for (visible, item) in items[*scroll..].iter().enumerate() {
+        if y >= content.height as usize {
+            break;
+        }
+        let index = *scroll + visible;
+        let selected = index == *cursor;
+        let fg = if selected {
+            palette::ACCENT_ACTIVE
+        } else {
+            palette::TEXT_PRIMARY
+        };
+        let num = format!("{:>2}. ", index + 1);
+        let text_width = chrome::panel_row_text_width(content.width).saturating_sub(num.len());
+        let label = item.display_name();
+        let (line1, line2) = if label.len() <= text_width {
+            (label, String::new())
+        } else {
+            let split = label[..text_width].rfind(' ').unwrap_or(text_width);
+            (
+                label[..split].to_string(),
+                label[split..].trim_start().to_string(),
+            )
+        };
+        let indent = " ".repeat(2 + num.len());
+        let row_y = content.y + y as u16;
+        let height = 1 + usize::from(!line2.is_empty());
+        let target = Rect {
+            x: content.x,
+            y: row_y,
+            width: content.width,
+            height: (height as u16).min(content.bottom().saturating_sub(row_y)),
+        };
+        chrome::render_panel_row(
+            frame,
+            content.x,
+            row_y,
+            content.width,
+            selected,
+            vec![
+                Span::styled(num, Style::default().fg(palette::TEXT_MUTED)),
+                Span::styled(line1, Style::default().fg(fg)),
+            ],
+        );
+        if !line2.is_empty() && y + 1 < content.height as usize {
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::raw(indent),
+                    Span::styled(
+                        trunc_str(&line2, text_width),
+                        Style::default().fg(palette::TEXT_SECONDARY),
+                    ),
+                ])),
+                Rect {
+                    x: content.x,
+                    y: row_y + 1,
+                    width: content.width,
+                    height: 1,
+                },
+            );
+        }
+        geometry.open_rows.push((target, index));
+        y += height;
+    }
+    let total = items.iter().map(item_lines).sum::<usize>();
+    let before = items[..*scroll].iter().map(item_lines).sum::<usize>();
+    chrome::render_sidebar_scrollbar(frame, content, total, before);
+}
 
 impl App {
     pub(in crate::app::render) fn render_playlists_panel(

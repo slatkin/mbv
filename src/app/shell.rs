@@ -570,6 +570,14 @@ impl Model {
                         Msg::Shell(ShellRequest::AudiobookshelfBookMouse(mouse)) => {
                             self.handle_audiobookshelf_book_mouse(mouse);
                         }
+                        Msg::Shell(ShellRequest::PlaylistsKey(key)) => {
+                            if self.app.handle_key_playlists(key).unwrap_or(false) {
+                                quit = true;
+                            }
+                        }
+                        Msg::Shell(ShellRequest::PlaylistsMouse(mouse)) => {
+                            self.app.handle_mouse_panels(mouse);
+                        }
                         Msg::Shell(ShellRequest::PlaybackPromptKey(key)) => {
                             if self.app.skip_intro_end_ticks.is_some() {
                                 self.app.handle_key_confirm_skip_intro(key);
@@ -612,6 +620,7 @@ impl Model {
             self.sync_feeds();
             self.sync_audiobookshelf_podcast();
             self.sync_audiobookshelf_book();
+            self.sync_playlists();
             self.sync_playback_prompt();
             self.sync_precedence_gates();
 
@@ -657,6 +666,7 @@ impl Model {
                     self.render_feeds_component(f);
                     self.render_audiobookshelf_podcast_component(f);
                     self.render_audiobookshelf_book_component(f);
+                    self.render_playlists_overlay(f);
                     self.render_playback_prompt(f);
                     self.render_help_overlay(f);
                     self.render_confirm_overlay(f);

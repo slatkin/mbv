@@ -178,4 +178,8 @@ pub enum ShellRequest {
     /// the browser's local state remains component-owned.
     AudiobookshelfBookKey(crossterm::event::KeyEvent),
     AudiobookshelfBookMouse(crossterm::event::MouseEvent),
+    /// Forward Playlists effects to the legacy App handler while the overlay's
+    /// local cursors and hit geometry remain component-owned.
+    PlaylistsKey(crossterm::event::KeyEvent),
+    PlaylistsMouse(crossterm::event::MouseEvent),
 }

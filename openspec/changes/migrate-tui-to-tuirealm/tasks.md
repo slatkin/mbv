@@ -105,7 +105,7 @@ order, **except** 3.3 and 3.5, which are gated on the shared render seam 3.11.
 - [ ] 4.4 Convert inline album-track interaction (child state machine of the Music workspace). **Gated on 3.11**; prefer scheduling after 4.3 so both read the same seam functions, but under the mirror-first bar it may mount independently and paint over — it is not hard-blocked on 4.3. Verify `rtk cargo nextest run -p mbv album_track` + scan.
 - [x] 4.5 Convert the Audiobookshelf podcast browser (show/episode workspace, selector targets); verify `rtk cargo nextest run -p mbv abs_podcast` + scan.
 - [x] 4.6 Convert the Audiobookshelf book browser (browser/chapter workspace, replacement geometry); verify `rtk cargo nextest run -p mbv abs_book` + scan.
-- [ ] 4.7 Convert Playlists sidebar with component-owned variable-row `hit_test`; verify `rtk cargo nextest run -p mbv playlists` + scan. (Removal of the duplicated mouse-path geometry in `input_mouse_panels.rs` is 5.3c, not here.)
+- [x] 4.7 Convert Playlists sidebar with component-owned variable-row `hit_test`; verify `rtk cargo nextest run -p mbv playlists` + scan. (Removal of the duplicated mouse-path geometry in `input_mouse_panels.rs` is 5.3c, not here.)
 - [ ] 4.8 Convert the Save-playlist dialog (child of the Playlists workflow); verify `rtk cargo nextest run -p mbv save_playlist` + scan.
 - [ ] 4.9 Convert the Settings sidebar and setup forms (Service effects stay shell-owned via `Msg::Service`); verify `rtk cargo nextest run -p mbv settings` + scan.
 - [ ] 4.10 Convert Playback chrome and global controls (Player authority stays outside; reduced playback-status projection only); verify `rtk cargo nextest run -p mbv playback_chrome` + scan.
