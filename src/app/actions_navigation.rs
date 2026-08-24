@@ -93,6 +93,10 @@ impl App {
         let Some(item) = self.current_lib_item(lib_idx) else {
             return;
         };
+        self.select_item(lib_idx, item);
+    }
+
+    pub(super) fn select_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let lib = &mut self.libs[lib_idx];
             lib.search = None;

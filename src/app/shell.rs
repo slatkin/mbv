@@ -509,6 +509,17 @@ impl Model {
                         Msg::Shell(ShellRequest::SearchActivate { id, item_type }) => {
                             self.app.activate_search_result(id, item_type);
                         }
+                        Msg::Shell(ShellRequest::InlineSearchActivate { id, item_type }) => {
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                if let Some(item) = self
+                                    .app
+                                    .current_lib_item(lib_idx)
+                                    .filter(|item| item.id == id && item.item_type == item_type)
+                                {
+                                    self.app.select_item(lib_idx, item);
+                                }
+                            }
+                        }
                         Msg::Shell(ShellRequest::DismissSessions) => {
                             self.app.show_sessions = false;
                         }

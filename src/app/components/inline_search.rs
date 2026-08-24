@@ -13,7 +13,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
-use super::msg::{LegacyTerminalEvent, Msg};
+use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, LibraryListRenderCtx};
 use crate::app::ui_util::move_cursor;
@@ -120,6 +120,10 @@ impl InlineSearchComponent {
         self.cursor = move_cursor(self.cursor, delta, self.pool.len());
     }
 
+    fn selected_item(&self) -> Option<mbv_core::api::EmbyItem> {
+        self.pool.items().get(self.cursor).cloned()
+    }
+
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
         if key
             .modifiers
@@ -132,6 +136,14 @@ impl InlineSearchComponent {
             Key::Down => self.move_cursor(1),
             Key::Home => self.cursor = 0,
             Key::End => self.cursor = self.pool.len().saturating_sub(1),
+            Key::Enter => {
+                if let Some(item) = self.selected_item() {
+                    return Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+                        id: item.id,
+                        item_type: item.item_type,
+                    }));
+                }
+            }
             Key::Char(c) => self.query.push(c),
             Key::Backspace => {
                 self.query.pop();
@@ -269,5 +281,33 @@ mod tests {
             .content()
             .iter()
             .any(|cell| cell.symbol() == "O"));
+    }
+
+    #[test]
+    fn inline_library_search_enter_emits_activation_message() {
+        let mut component = InlineSearchComponent::new();
+        let item = make_item("One", "Movie");
+        component.set_content(
+            String::new(),
+            SearchPool::Items(vec![item.clone()]),
+            false,
+            0,
+            0,
+            true,
+            Rect::new(0, 0, 40, 5),
+        );
+
+        let message = component.on(&Event::Keyboard(KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        }));
+
+        assert_eq!(
+            message,
+            Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+                id: item.id,
+                item_type: item.item_type,
+            }))
+        );
     }
 }

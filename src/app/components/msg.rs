@@ -171,6 +171,11 @@ pub enum ShellRequest {
         id: String,
         item_type: String,
     },
+    /// Activate the selected item in an inline library Search component.
+    InlineSearchActivate {
+        id: String,
+        item_type: String,
+    },
     /// Close the Sessions sidebar without changing the selected destination.
     DismissSessions,
     /// Refresh the Emby session and Cast receiver snapshots.
