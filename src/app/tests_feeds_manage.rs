@@ -24,9 +24,7 @@ fn feed_state_transition_is_safe_without_emby() {
         FeedKind::Audio,
     )];
     app.sync_feed_subscriptions();
-    app.feed_tab_move_cursor(1);
     assert_eq!(app.feed_tab.subscriptions[0].name, "Feed-only");
-    assert_eq!(app.feed_tab.cursor, 0);
 }
 
 /// §6.3: editing a subscription changes only its name and kind. A URL
@@ -103,8 +101,7 @@ fn removing_last_subscription_falls_back_to_home() {
     );
 }
 
-/// §6.4: after any mutation, `feed_tab` entries are cleared and
-/// `selected_group`/cursor/scroll are clamped into range for the new
+/// §6.4: after any mutation, shell-owned Feed entries are cleared for the new
 /// (possibly shorter) subscription list -- no auto-fetch.
 #[test]
 fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
@@ -143,9 +140,6 @@ fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
         }],
     ];
     app.feed_tab.rebuild_all_entries();
-    app.feed_tab.selected_group = 2; // subscription B
-    app.feed_tab.cursor = 0;
-
     // Remove subscription B (index 1): group 2 no longer exists.
     app.remove_feed_confirmed(1);
 
@@ -155,12 +149,6 @@ fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
         "fetched entries must be cleared, not carried over"
     );
     assert!(app.feed_tab.all_entries.is_empty());
-    assert!(app.feed_tab.visible_entries().is_empty());
-    assert!(
-        app.feed_tab.selected_group < app.feed_tab.group_count(),
-        "selected_group must be clamped into range"
-    );
-    assert_eq!(app.feed_tab.cursor, 0);
 }
 
 #[test]
@@ -198,7 +186,6 @@ fn stale_refresh_result_is_dropped_after_subscription_index_shifts() {
     app.drain_feed_tab_results();
 
     assert!(app.feed_tab.entries[0].is_empty());
-    assert!(app.feed_tab.visible_entries().is_empty());
 }
 
 /// §6.2: a background add result whose id no longer matches the popup's

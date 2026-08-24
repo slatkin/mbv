@@ -5,7 +5,6 @@
 //! data outright, so entries from other providers survive.
 
 use crate::app::tests::*;
-use crate::app::types_feed_tab::WatchedFilter;
 use crate::app::types_playback::HomeLatestSource;
 use mbv_core::audiobookshelf::{
     AudiobookshelfLibrary, AudiobookshelfShelf, AudiobookshelfShelfEntry,
@@ -456,7 +455,7 @@ fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
 
 /// Task 14.1: the "Latest Feeds" pill is built from `FeedTabState.all_entries`
 /// (the combined "All" group, newest-first) and is independent of the Feeds
-/// tab's own `selected_group`/`watched_filter` at the time Home populates.
+/// component's local selection at the time Home populates.
 #[test]
 fn feeds_pill_reflects_all_entries_newest_first_independent_of_tab_filter() {
     let mut app = make_app_stub();
@@ -499,18 +498,6 @@ fn feeds_pill_reflects_all_entries_newest_first_independent_of_tab_filter() {
     ];
     app.feed_tab.rebuild_all_entries();
 
-    // The Feeds tab itself is viewing a per-subscription group with a
-    // watched-state filter active; the Home pill must ignore both.
-    app.feed_tab.selected_group = 1;
-    app.feed_tab.watched_filter = WatchedFilter::Unwatched;
-    app.feed_tab.cursor = 1;
-    app.feed_tab.rebuild_filtered_entries();
-    assert_eq!(
-        app.feed_tab.visible_entries().len(),
-        1,
-        "tab filter must hide the played entry from the tab"
-    );
-
     assert!(app.fetch_home().is_ok());
     let feeds = app
         .home
@@ -533,8 +520,7 @@ fn feeds_pill_reflects_all_entries_newest_first_independent_of_tab_filter() {
 }
 
 /// Task 14.2: playing/enqueueing a Feed item from a Home pill submits through
-/// the shared helper and leaves the Feeds tab's own cursor/selected
-/// group/filter untouched.
+/// the shared helper without mutating the Feeds shell snapshot.
 #[test]
 fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
     let mut app = make_app_stub();
@@ -557,12 +543,6 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
 
     app.feed_tab.entries = vec![vec![entry("Feed one"), entry("Feed two")]];
     app.feed_tab.rebuild_all_entries();
-    app.feed_tab.selected_group = 1;
-    app.feed_tab.watched_filter = WatchedFilter::Unwatched;
-    app.feed_tab.cursor = 1;
-    app.feed_tab.rebuild_filtered_entries();
-    app.feed_tab.clamp_state();
-
     // Home pill for the same entries, with the cursor on a Feed item.
     app.home.latest = vec![(
         "Feeds".into(),
@@ -581,19 +561,7 @@ fn home_play_and_enqueue_leave_feeds_tab_state_untouched() {
     app.home_enqueue();
     app.home_play();
 
-    assert_eq!(
-        app.feed_tab.selected_group, 1,
-        "enqueue/play from Home must not touch the Feeds tab's group"
-    );
-    assert_eq!(
-        app.feed_tab.watched_filter,
-        WatchedFilter::Unwatched,
-        "enqueue/play from Home must not touch the Feeds tab's filter"
-    );
-    assert_eq!(
-        app.feed_tab.cursor, 1,
-        "enqueue/play from Home must not touch the Feeds tab's cursor"
-    );
+    assert_eq!(app.feed_tab.all_entries.len(), 2);
 }
 
 #[test]

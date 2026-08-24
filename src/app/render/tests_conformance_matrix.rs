@@ -2,6 +2,7 @@ use super::test_helpers::{
     buffer_to_string, make_movie_app, make_music_group_app, render_view_to_terminal,
 };
 use super::*;
+use crate::app::components::FeedsComponent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::audiobookshelf_book_tests::make_audiobookshelf_book_app;
 use crate::app::tests::make_item;
@@ -12,6 +13,7 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::collections::HashMap;
+use tuirealm::component::Component;
 
 fn render_library(app: &mut App, width: u16, height: u16) -> (Terminal<TestBackend>, LayoutMain) {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
@@ -100,6 +102,31 @@ fn feed_app() -> App {
     app.feed_tab.rebuild_all_entries();
     app.mini_view_focus = PanelFocus::Library;
     app
+}
+
+fn feed_component() -> FeedsComponent {
+    let subscriptions = [FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    let entries = vec![vec![FeedEntry {
+        guid: "entry-1".into(),
+        title: "Entry One".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: Some(FeedKind::Audio),
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
+    }]];
+    let all_entries = entries[0].clone();
+    let mut component = FeedsComponent::new();
+    component.set_content(&subscriptions, &entries, &all_entries, false, true);
+    component
 }
 
 fn mixed_home_app() -> App {
@@ -301,14 +328,23 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
         );
     }
 
-    for (surface, mut app) in [("Home", mixed_home_app()), ("Feeds", feed_app())] {
-        let (terminal, layout) = render_view_to_terminal(&mut app, 60, 30);
-        assert_one_pill_row_and_spacer(surface, &terminal, &layout);
-        assert!(
-            !buffer_to_string(&terminal).is_empty(),
-            "{surface} did not paint a buffer"
-        );
-    }
+    let (terminal, layout) = render_view_to_terminal(&mut mixed_home_app(), 60, 30);
+    assert_one_pill_row_and_spacer("Home", &terminal, &layout);
+    assert!(
+        !buffer_to_string(&terminal).is_empty(),
+        "Home did not paint a buffer"
+    );
+
+    let mut component = feed_component();
+    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 30)))
+        .unwrap();
+    assert_one_pill_row_and_spacer("Feeds", &terminal, component.layout());
+    assert!(
+        !buffer_to_string(&terminal).is_empty(),
+        "Feeds did not paint a buffer"
+    );
 }
 
 #[test]

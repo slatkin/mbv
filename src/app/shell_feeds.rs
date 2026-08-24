@@ -18,10 +18,6 @@ impl Model {
                     &state.subscriptions,
                     &state.entries,
                     &state.all_entries,
-                    state.watched_filter,
-                    state.selected_group,
-                    state.cursor,
-                    state.scroll,
                     state.loading,
                     focused,
                 );

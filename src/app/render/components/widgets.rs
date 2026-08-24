@@ -522,7 +522,7 @@ impl App {
                 self.render_home_list(f, area, focused, layout);
             }
             TabSelection::Feeds => {
-                self.render_feeds(f, area, focused, layout);
+                layout.feeds_area = area;
             }
             TabSelection::AudiobookshelfLibrary(_) => {
                 self.render_audiobookshelf_library(f, area, focused, layout);

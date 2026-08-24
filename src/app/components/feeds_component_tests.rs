@@ -8,7 +8,9 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 fn entry(title: &str, played: bool) -> FeedEntry {
     FeedEntry {
@@ -33,18 +35,38 @@ fn component() -> FeedsComponent {
         kind: FeedKind::Audio,
     }];
     let entries = vec![entry("First", false), entry("Second", true)];
+    let grouped_entries = vec![entries];
     let mut component = FeedsComponent::new();
     component.set_content(
         &subscriptions,
-        &[entries.clone()],
-        &entries,
-        WatchedFilter::All,
-        0,
-        0,
-        0,
+        &grouped_entries,
+        &grouped_entries[0],
         false,
         true,
     );
+    component
+}
+
+fn grouped_component() -> FeedsComponent {
+    let subscriptions = [
+        FeedSubscription {
+            name: "A".into(),
+            url: "https://example.test/a".into(),
+            kind: FeedKind::Audio,
+        },
+        FeedSubscription {
+            name: "B".into(),
+            url: "https://example.test/b".into(),
+            kind: FeedKind::Audio,
+        },
+    ];
+    let entries = vec![
+        vec![entry("A-unplayed", false), entry("A-played", true)],
+        vec![entry("B-unplayed", false), entry("B-played", true)],
+    ];
+    let all_entries = entries.iter().flatten().cloned().collect::<Vec<_>>();
+    let mut component = FeedsComponent::new();
+    component.set_content(&subscriptions, &entries, &all_entries, false, true);
     component
 }
 
@@ -70,6 +92,164 @@ fn watched_filter_rebuilds_the_component_visible_list() {
 
     assert_eq!(component.watched_filter(), WatchedFilter::Watched);
     assert_eq!(component.visible_titles(), ["Second"]);
+}
+
+#[test]
+fn visible_entries_all_group() {
+    assert_eq!(component().visible_titles().len(), 2);
+}
+
+#[test]
+fn visible_entries_subscription_group() {
+    let mut component = grouped_component();
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Char(']'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.visible_titles(), ["A-unplayed", "A-played"]);
+}
+
+#[test]
+fn clamp_state_works() {
+    let mut component = component();
+    component.set_content(&[], &[], &[], false, true);
+    assert_eq!(component.cursor(), 0);
+    assert_eq!(component.scroll(), 0);
+}
+
+#[test]
+fn watched_filter_cycle_order() {
+    let mut component = component();
+    for expected in [
+        WatchedFilter::Watched,
+        WatchedFilter::Unwatched,
+        WatchedFilter::All,
+    ] {
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Char('w'),
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert_eq!(component.watched_filter(), expected);
+    }
+}
+
+#[test]
+fn watched_filter_shows_only_played() {
+    let mut component = component();
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Char('w'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.visible_titles(), ["Second"]);
+}
+
+#[test]
+fn unwatched_filter_shows_only_unplayed() {
+    let mut component = component();
+    for _ in 0..2 {
+        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+            code: Key::Char('w'),
+            modifiers: KeyModifiers::NONE,
+        }));
+    }
+    assert_eq!(component.visible_titles(), ["First"]);
+}
+
+#[test]
+fn watched_filter_empty_result() {
+    let subscriptions = [FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    let entries = vec![vec![entry("First", false)]];
+    let mut component = FeedsComponent::new();
+    component.set_content(&subscriptions, &entries, &entries[0], false, true);
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Char('w'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(component.visible_titles().is_empty());
+}
+
+#[test]
+fn filter_cycle_resets_cursor_and_scroll() {
+    let mut component = component();
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Char('w'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.cursor(), 0);
+    assert_eq!(component.scroll(), 0);
+}
+
+#[test]
+fn filter_applies_to_subscription_group() {
+    let mut component = grouped_component();
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Char(']'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Char('w'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.visible_titles(), ["A-played"]);
+}
+
+#[test]
+fn group_change_reflects_active_filter() {
+    let mut component = grouped_component();
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Char('w'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Char(']'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.visible_titles(), ["A-played"]);
+}
+
+#[test]
+fn mouse_owns_feed_selector_and_row_geometry() {
+    let mut component = grouped_component();
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
+        .unwrap();
+    let selector = component.layout().selector_tabs[1].0;
+    component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+        column: selector.x,
+        row: selector.y,
+        kind: MouseEventKind::Down(MouseButton::Left),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.selected_group(), 1);
+    assert_eq!(component.cursor(), 0);
+}
+
+#[test]
+fn subscription_change_resets_component_selection() {
+    let mut component = grouped_component();
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(component.cursor(), 1);
+    let subscriptions = [FeedSubscription {
+        name: "Replacement".into(),
+        url: "https://example.test/replacement".into(),
+        kind: FeedKind::Audio,
+    }];
+    component.set_content(&subscriptions, &[Vec::new()], &[], false, true);
+    assert_eq!(component.selected_group(), 0);
+    assert_eq!(component.cursor(), 0);
+    assert_eq!(component.scroll(), 0);
 }
 
 #[test]

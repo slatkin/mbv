@@ -325,21 +325,16 @@ impl App {
         self.after_feeds_mutation();
     }
 
-    /// After every subscription mutation (§6.4): resync `feed_tab` from
-    /// config, clear its fetched entry data (no auto-fetch), clamp
-    /// group/cursor/scroll, and fall back to Home if the last subscription
-    /// was removed while Feeds is selected.
+    /// After every subscription mutation (§6.4): resync shell-owned Feed
+    /// data, clear fetched entries (no auto-fetch), and fall back to Home if
+    /// the last subscription was removed while Feeds is selected. The mounted
+    /// FeedsComponent resets its local selection when the subscription
+    /// identity changes during the next shell sync.
     pub(super) fn after_feeds_mutation(&mut self) {
         self.sync_feed_subscriptions();
         let n = self.feed_tab.subscriptions.len();
         self.feed_tab.entries = vec![Vec::new(); n];
         self.feed_tab.all_entries.clear();
-        self.feed_tab.rebuild_filtered_entries();
-        self.feed_tab.selected_group = self
-            .feed_tab
-            .selected_group
-            .min(self.feed_tab.group_count() - 1);
-        self.feed_tab.clamp_state();
         if n == 0 && self.tab.is_feeds() {
             self.tab = TabSelection::Home;
         }

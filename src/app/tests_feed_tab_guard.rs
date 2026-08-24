@@ -80,49 +80,14 @@ fn feeds_tab_does_not_route_into_library_behavior() {
         "a bounds-miss shuffle must not touch the queue"
     );
 
-    // 3. Down-cursor key must move the feed cursor, not a library cursor.
-    app.feed_tab.entries[0] = vec![
-        FeedEntry {
-            guid: "a".into(),
-            title: "Entry A".into(),
-            enclosure_url: None,
-            link: None,
-            mime_type: None,
-            duration_ticks: None,
-            pub_date_secs: Some(100),
-            feed_kind: Some(mbv_core::config::FeedKind::Audio),
-            feed_id: None,
-            position_ticks: 0,
-            played: false,
-        },
-        FeedEntry {
-            guid: "b".into(),
-            title: "Entry B".into(),
-            enclosure_url: None,
-            link: None,
-            mime_type: None,
-            duration_ticks: None,
-            pub_date_secs: Some(200),
-            feed_kind: Some(mbv_core::config::FeedKind::Audio),
-            feed_id: None,
-            position_ticks: 0,
-            played: false,
-        },
-    ];
-    app.feed_tab.rebuild_all_entries();
-    app.feed_tab.selected_group = 0; // "All"
-    app.feed_tab.cursor = 0;
-
+    // 3. Feeds must consume unsupported keys rather than leaking them into
+    // library or queue handling. Feed-local cursor movement is component-owned.
     let key_down = crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Down,
         crossterm::event::KeyModifiers::NONE,
     );
-    let consumed = app.handle_feed_tab_key(key_down);
+    let consumed = app.handle_key_feeds(key_down);
     assert_eq!(consumed, Some(false), "feed tab should consume Down key");
-    assert_eq!(
-        app.feed_tab.cursor, 1,
-        "cursor should advance within feed entries"
-    );
 
     // 4. The library tab's nav_stack cursor must be untouched — Feeds
     //    did not dispatch into library browsing.
@@ -190,16 +155,14 @@ fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
     assert_eq!(app.libs[0].nav_stack[0].scroll, 2);
 }
 
-/// `feed_tab_play_selected` on an empty entry list (or a stale cursor past
-/// the end of a non-empty list) must return without dispatching -- the
-/// `.get(cursor)` bounds check is the only guard, since `clamp_state`
-/// isn't guaranteed to have run.
+/// A guid request for an empty or stale Feed snapshot must return without
+/// dispatching.
 #[test]
-fn feed_tab_play_selected_out_of_range_cursor_is_noop() {
+fn feed_tab_play_guid_missing_entry_is_noop() {
     let mut app = make_app_stub();
 
     // Empty list: cursor 0 is already out of range.
-    app.feed_tab_play_selected();
+    app.feed_tab_play_guid("missing");
     assert!(
         app.status.is_empty(),
         "empty list must not flash or dispatch"
@@ -220,9 +183,7 @@ fn feed_tab_play_selected_out_of_range_cursor_is_noop() {
         played: false,
     }]];
     app.feed_tab.rebuild_all_entries();
-    app.feed_tab.selected_group = 0;
-    app.feed_tab.cursor = 5;
-    app.feed_tab_play_selected();
+    app.feed_tab_play_guid("missing");
     assert!(
         app.status.is_empty(),
         "out-of-range cursor must not flash or dispatch"
@@ -230,9 +191,9 @@ fn feed_tab_play_selected_out_of_range_cursor_is_noop() {
 }
 
 /// An entry with neither an enclosure URL nor a link has no playable
-/// source; `feed_tab_play_selected` must flash and not dispatch.
+/// source; `feed_tab_play_guid` must flash and not dispatch.
 #[test]
-fn feed_tab_play_selected_no_source_entry_does_not_dispatch() {
+fn feed_tab_play_guid_no_source_entry_does_not_dispatch() {
     let mut app = make_app_stub();
     app.feed_tab.entries = vec![vec![FeedEntry {
         guid: "a".into(),
@@ -248,10 +209,7 @@ fn feed_tab_play_selected_no_source_entry_does_not_dispatch() {
         played: false,
     }]];
     app.feed_tab.rebuild_all_entries();
-    app.feed_tab.selected_group = 0;
-    app.feed_tab.cursor = 0;
-
-    app.feed_tab_play_selected();
+    app.feed_tab_play_guid("a");
 
     assert!(
         app.status.contains("no playable source"),
@@ -272,7 +230,7 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
     app.feed_tab.entries = vec![vec![playable_feed_entry("feed-play")]];
     app.feed_tab.rebuild_all_entries();
 
-    app.feed_tab_play_selected();
+    app.feed_tab_play_guid("feed-play");
 
     match cmd_rx.try_recv().unwrap() {
         mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace {
@@ -295,7 +253,7 @@ fn direct_remote_feed_enqueue_uses_unified_append() {
     app.feed_tab.entries = vec![vec![playable_feed_entry("feed-append")]];
     app.feed_tab.rebuild_all_entries();
 
-    app.feed_tab_enqueue_selected();
+    app.feed_tab_enqueue_guid("feed-append");
 
     assert!(matches!(
         cmd_rx.try_recv().unwrap(),
@@ -493,15 +451,10 @@ fn feeds_tab_keys_cannot_enter_emby_action_paths() {
     app.feed_tab.entries.resize_with(1, Vec::new);
     app.feed_tab.entries[0] = vec![playable_feed_entry("a"), playable_feed_entry("b")];
     app.feed_tab.rebuild_all_entries();
-    app.feed_tab.selected_group = 0; // "All"
-    app.feed_tab.cursor = 1;
     app.tab = TabSelection::Feeds;
     app.panel_focus = PanelFocus::Library;
 
     let nav_len = app.libs[0].nav_stack.len();
-    let cursor_before = app.feed_tab.cursor;
-    let watched_before = app.feed_tab.watched_filter;
-
     let slash = crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Char('/'),
         crossterm::event::KeyModifiers::NONE,
@@ -555,13 +508,5 @@ fn feeds_tab_keys_cannot_enter_emby_action_paths() {
             app.status
         );
     }
-    assert_eq!(
-        app.feed_tab.cursor, cursor_before,
-        "Feeds cursor must be untouched by Emby-only keys"
-    );
-    assert_eq!(
-        app.feed_tab.watched_filter, watched_before,
-        "Feeds watched filter must be untouched by Emby-only keys"
-    );
     assert!(app.tab.is_feeds());
 }

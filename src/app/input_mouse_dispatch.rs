@@ -253,7 +253,6 @@ impl App {
                             }
                             match self.tab {
                                 TabSelection::Home => self.home_select_section(target),
-                                TabSelection::Feeds => self.feed_tab_select_group(target),
                                 TabSelection::AudiobookshelfLibrary(index) => {
                                     match self.audiobookshelf_kind_at(index) {
                                         Some(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book) => {
@@ -274,6 +273,7 @@ impl App {
                                         self.select_letter_pill(lib_idx, target);
                                     }
                                 }
+                                _ => {}
                             }
                             return;
                         }
@@ -606,7 +606,7 @@ impl App {
                     self.move_audiobookshelf_show_rows(delta * 3);
                 }
             }
-            TabSelection::Feeds => self.feed_tab_move_cursor(delta),
+            _ => {}
         }
     }
 }

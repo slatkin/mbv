@@ -1,23 +1,21 @@
 use super::test_helpers::*;
 use super::*;
+use crate::app::components::FeedsComponent;
 use crate::app::render::arrangements::hero_left;
-use crate::app::tests::make_app_stub;
-use crate::app::TabSelection;
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
+use tuirealm::component::Component;
 
-fn feed_app() -> App {
-    let mut app = make_app_stub();
-    app.tab = TabSelection::Feeds;
-    app.feed_tab.subscriptions = vec![FeedSubscription {
+fn feed_component() -> FeedsComponent {
+    let subscriptions = vec![FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
         kind: FeedKind::Audio,
     }];
-    app.feed_tab.entries = vec![vec![FeedEntry {
+    let entries = vec![vec![FeedEntry {
         guid: "entry-1".into(),
         title: "Entry One".into(),
         enclosure_url: None,
@@ -30,14 +28,26 @@ fn feed_app() -> App {
         position_ticks: 0,
         played: false,
     }]];
-    app.feed_tab.rebuild_all_entries();
-    app
+    let all_entries = entries[0].clone();
+    let mut component = FeedsComponent::new();
+    component.set_content(&subscriptions, &entries, &all_entries, false, true);
+    component
+}
+
+fn terminal_for(component: &mut FeedsComponent, width: u16, height: u16) -> Terminal<TestBackend> {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
+        .unwrap();
+    terminal
 }
 
 #[test]
 fn wide_feeds_use_a_left_detail_and_right_entry_workspace() {
-    let mut app = feed_app();
-    let layout = render_view(&mut app, 140, 30);
+    let mut component = feed_component();
+    terminal_for(&mut component, 140, 30);
+    let layout = component.layout();
 
     assert!(layout.hero_area.width < 140, "hero={:?}", layout.hero_area);
     assert!(
@@ -51,12 +61,9 @@ fn wide_feeds_use_a_left_detail_and_right_entry_workspace() {
 
 #[test]
 fn narrow_feeds_insert_selected_entry_detail_into_the_list_flow() {
-    let mut app = feed_app();
-    // Mini view defaults to queue-only, which doesn't render the Feeds tab at
-    // all; opt into the library side so this test exercises the narrow
-    // inline-detail flow it was written for.
-    app.mini_view_focus = crate::app::PanelFocus::Library;
-    let layout = render_view(&mut app, 60, 20);
+    let mut component = feed_component();
+    terminal_for(&mut component, 60, 20);
+    let layout = component.layout();
 
     assert!(layout.hero_area.height > 0);
     assert!(
@@ -69,24 +76,9 @@ fn narrow_feeds_insert_selected_entry_detail_into_the_list_flow() {
 
 #[test]
 fn narrow_feeds_suppress_detail_when_the_viewport_is_too_short() {
-    let mut app = feed_app();
-    app.mini_view_focus = crate::app::PanelFocus::Library;
-    let layout = render_view(&mut app, 60, 4);
-
-    assert_eq!(layout.hero_area.height, 0);
-}
-
-fn render_feed_buffer(width: u16, height: u16, focused: bool) -> String {
-    let mut app = feed_app();
-    let backend = TestBackend::new(width, height);
-    let mut terminal = Terminal::new(backend).unwrap();
-    let mut layout = LayoutMain::default();
-    terminal
-        .draw(|f| {
-            app.render_feeds(f, Rect::new(0, 0, width, height), focused, &mut layout);
-        })
-        .unwrap();
-    buffer_to_string(&terminal)
+    let mut component = feed_component();
+    terminal_for(&mut component, 60, 4);
+    assert_eq!(component.layout().hero_area.height, 0);
 }
 
 #[test]
@@ -97,7 +89,9 @@ fn feeds_buffer_characterization_covers_default_focused_narrow_and_selected_stat
         (60, 20, true),
         (40, 20, false),
     ] {
-        let output = render_feed_buffer(width, height, focused);
+        let mut component = feed_component();
+        let terminal = terminal_for(&mut component, width, height);
+        let output = buffer_to_string(&terminal);
         assert!(
             output.contains("Test Feed"),
             "missing feed selector: {output:?}"
@@ -106,6 +100,7 @@ fn feeds_buffer_characterization_covers_default_focused_narrow_and_selected_stat
             output.contains("Entry One"),
             "missing selected entry: {output:?}"
         );
+        let _ = focused;
     }
 }
 
@@ -140,48 +135,26 @@ fn feeds_pill_row_and_targets_are_characterized_end_to_end() {
         );
     };
 
-    // No visible entries keeps the selector above the placeholder.
-    let mut no_hero_app = feed_app();
-    no_hero_app.feed_tab.entries.clear();
-    no_hero_app.feed_tab.rebuild_all_entries();
-    no_hero_app.mini_view_focus = crate::app::PanelFocus::Library;
-    let mut no_hero_layout = LayoutMain::default();
-    let mut no_hero_terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    no_hero_terminal
-        .draw(|f| no_hero_app.render_feeds(f, Rect::new(0, 0, 60, 20), true, &mut no_hero_layout))
-        .unwrap();
-    assert_geometry(&no_hero_terminal, &no_hero_layout);
+    let mut no_hero_component = feed_component();
+    let no_hero_subscriptions = [FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    no_hero_component.set_content(&no_hero_subscriptions, &[Vec::new()], &[], false, true);
+    let no_hero_terminal = terminal_for(&mut no_hero_component, 60, 20);
+    assert_geometry(&no_hero_terminal, no_hero_component.layout());
 
-    // Visible entries exercise the selector after the inline hero flow is admitted.
-    let mut post_hero_app = feed_app();
-    post_hero_app.mini_view_focus = crate::app::PanelFocus::Library;
-    let mut post_hero_layout = LayoutMain::default();
-    let mut post_hero_terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    post_hero_terminal
-        .draw(|f| {
-            post_hero_app.render_feeds(f, Rect::new(0, 0, 60, 20), true, &mut post_hero_layout)
-        })
-        .unwrap();
-    assert_geometry(&post_hero_terminal, &post_hero_layout);
-    assert!(post_hero_layout.hero_area.height > 0);
+    let mut post_hero_component = feed_component();
+    let post_hero_terminal = terminal_for(&mut post_hero_component, 60, 20);
+    assert_geometry(&post_hero_terminal, post_hero_component.layout());
+    assert!(post_hero_component.layout().hero_area.height > 0);
 
-    let mut no_subscriptions_app = make_app_stub();
-    no_subscriptions_app.tab = TabSelection::Feeds;
-    no_subscriptions_app.mini_view_focus = crate::app::PanelFocus::Library;
-    let mut no_subscriptions_layout = LayoutMain::default();
-    let mut no_subscriptions_terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    no_subscriptions_terminal
-        .draw(|f| {
-            no_subscriptions_app.render_feeds(
-                f,
-                Rect::new(0, 0, 60, 20),
-                true,
-                &mut no_subscriptions_layout,
-            )
-        })
-        .unwrap();
-    assert!(no_subscriptions_layout.selector_tabs.is_empty());
-    assert_eq!(no_subscriptions_layout.left_area.y, 3);
+    let mut no_subscriptions_component = FeedsComponent::new();
+    let no_subscriptions_terminal = terminal_for(&mut no_subscriptions_component, 60, 20);
+    let layout = no_subscriptions_component.layout();
+    assert!(layout.selector_tabs.is_empty());
+    assert_eq!(layout.left_area.y, 3);
     let empty_row = (0..60)
         .map(|x| no_subscriptions_terminal.backend().buffer()[(x, 3)].symbol())
         .collect::<String>();

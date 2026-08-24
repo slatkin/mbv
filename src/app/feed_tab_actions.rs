@@ -32,6 +32,15 @@ impl App {
         self.feed_tab.entries.resize_with(n, Vec::new);
     }
 
+    pub(super) fn feed_latest_items(&self) -> Vec<QueueItem> {
+        self.feed_tab
+            .all_entries
+            .iter()
+            .cloned()
+            .map(QueueItem::Feed)
+            .collect()
+    }
+
     /// Drain completed background fetch results from the channel.
     pub(super) fn drain_feed_tab_results(&mut self) -> bool {
         let mut had_events = false;
@@ -83,7 +92,6 @@ impl App {
 
         if had_events {
             self.feed_tab.rebuild_all_entries();
-            self.feed_tab.clamp_state();
             // Reflect the freshly loaded entries in Home's "Feeds" pill
             // without waiting for the next Home population trigger.
             self.rebuild_feeds_latest();
@@ -140,131 +148,6 @@ impl App {
         }
     }
 
-    /// Move the feed tab cursor by `delta` rows (clamped).
-    pub(super) fn feed_tab_move_cursor(&mut self, delta: i64) {
-        let n = self.feed_tab.visible_entries().len();
-        if n == 0 {
-            return;
-        }
-        self.feed_tab.cursor = super::ui_util::move_cursor(self.feed_tab.cursor, delta, n);
-    }
-
-    /// Move the feed tab cursor by `item_rows` *display* rows (Up/Down,
-    /// j/k), resolved through the last frame's packed `left_item_rows` so a
-    /// two-column list moves visually down/up rather than sideways --
-    /// mirrors the Emby library list's `letter_vertical_delta`, simplified
-    /// since feed entries need no separate sorted-order translation (their
-    /// packed row order already matches `visible_entries()`). Falls back to
-    /// the flat `feed_tab_move_cursor` when the layout is stale (cursor not
-    /// found in `left_item_rows`, e.g. before the first render).
-    pub(super) fn feed_tab_move_cursor_rows(&mut self, item_rows: i64) {
-        let n = self.feed_tab.visible_entries().len();
-        if n == 0 {
-            return;
-        }
-        if let Some(delta) = self.feed_tab_row_delta(item_rows) {
-            self.feed_tab.cursor = super::ui_util::move_cursor(self.feed_tab.cursor, delta, n);
-        } else {
-            self.feed_tab_move_cursor(item_rows);
-        }
-    }
-
-    fn feed_tab_row_delta(&self, item_rows: i64) -> Option<i64> {
-        let rows: Vec<&Vec<usize>> = self
-            .layout
-            .main
-            .left_item_rows
-            .iter()
-            .filter(|r| !r.is_empty())
-            .collect();
-        if rows.is_empty() {
-            return None;
-        }
-        let cursor = self.feed_tab.cursor;
-        let (cur_row, cur_col) = rows
-            .iter()
-            .enumerate()
-            .find_map(|(r, row)| row.iter().position(|&i| i == cursor).map(|c| (r, c)))?;
-        let row_count = rows.len();
-        let target_row = if item_rows < 0 {
-            cur_row.saturating_sub(item_rows.unsigned_abs() as usize)
-        } else {
-            cur_row
-                .saturating_add(item_rows as usize)
-                .min(row_count.saturating_sub(1))
-        };
-        let target = rows[target_row]
-            .get(cur_col)
-            .copied()
-            .or_else(|| rows[target_row].last().copied())?;
-        Some(target as i64 - cursor as i64)
-    }
-
-    /// Jump the feed tab cursor to the start or end.
-    pub(super) fn feed_tab_jump_cursor(&mut self, to_end: bool) {
-        let n = self.feed_tab.visible_entries().len();
-        if n == 0 {
-            return;
-        }
-        self.feed_tab.cursor = if to_end { n - 1 } else { 0 };
-    }
-
-    /// Cycle the feed tab group selection by `delta` (wrapping).
-    pub(super) fn feed_tab_cycle_group(&mut self, delta: i64) {
-        let n = self.feed_tab.group_count();
-        if n == 0 {
-            return;
-        }
-        let cur = self.feed_tab.selected_group as i64;
-        self.feed_tab.selected_group = (cur + delta).rem_euclid(n as i64) as usize;
-        self.feed_tab.cursor = 0;
-        self.feed_tab.scroll = 0;
-        self.feed_tab.rebuild_filtered_entries();
-        self.feed_tab.clamp_state();
-    }
-
-    /// Select a specific group by index.
-    pub(super) fn feed_tab_select_group(&mut self, group_idx: usize) {
-        if group_idx < self.feed_tab.group_count() {
-            self.feed_tab.selected_group = group_idx;
-            self.feed_tab.cursor = 0;
-            self.feed_tab.scroll = 0;
-            self.feed_tab.rebuild_filtered_entries();
-            self.feed_tab.clamp_state();
-        }
-    }
-
-    /// Page the feed tab cursor up or down.
-    pub(super) fn feed_tab_page_cursor(&mut self, page_size: usize, forward: bool) {
-        let n = self.feed_tab.visible_entries().len();
-        if n == 0 {
-            return;
-        }
-        let cur = self.feed_tab.cursor;
-        if forward {
-            self.feed_tab.cursor = (cur + page_size).min(n - 1);
-        } else {
-            self.feed_tab.cursor = cur.saturating_sub(page_size);
-        }
-    }
-
-    /// Resolve the entry at the current cursor, applying the active watched
-    /// filter and subscription group, then submit it through the shared
-    /// queue-submission primitive (Task 12.1). The filtered-selection
-    /// resolution (`visible_entries()`/`cursor`) is unchanged from the
-    /// direct-tail version; admission guards stay ahead of the call.
-    pub(super) fn feed_tab_play_selected(&mut self) {
-        let Some(entry) = self
-            .feed_tab
-            .visible_entries()
-            .get(self.feed_tab.cursor)
-            .cloned()
-        else {
-            return;
-        };
-        self.play_feed_entry(entry);
-    }
-
     /// Resolve a component request against the shell-owned, newest-first
     /// combined Feed snapshot.
     pub(super) fn feed_tab_play_guid(&mut self, guid: &str) {
@@ -291,21 +174,6 @@ impl App {
         // Hydrate stored position/played before appending to the queue.
         let entry = self.hydrate_feed_entry_state(entry);
         self.submit_queue_item(QueueItem::Feed(entry), true);
-    }
-
-    /// Enqueue the entry at the current cursor into the canonical queue
-    /// without starting playback, using the same append path as library
-    /// enqueue.
-    pub(super) fn feed_tab_enqueue_selected(&mut self) {
-        let Some(entry) = self
-            .feed_tab
-            .visible_entries()
-            .get(self.feed_tab.cursor)
-            .cloned()
-        else {
-            return;
-        };
-        self.enqueue_feed_entry(entry);
     }
 
     /// Resolve a component request against the shell-owned, newest-first

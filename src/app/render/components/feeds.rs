@@ -20,7 +20,6 @@ use crate::app::render::screens::feeds_model::{
     pack_feed_rows, PackedFeedRow,
 };
 use crate::app::types_feed_tab::WatchedFilter;
-use crate::app::App;
 use mbv_core::config::FeedSubscription;
 use mbv_core::playback_queue::FeedEntry;
 use ratatui::layout::Rect;
@@ -426,33 +425,5 @@ pub(in crate::app) fn render_feeds_content(
                 focused,
             );
         }
-    }
-}
-
-impl App {
-    pub(in crate::app::render) fn render_feeds(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        let state = &mut self.feed_tab;
-        let visible_entries = state.visible_entries().to_vec();
-        render_feeds_content(
-            f,
-            area,
-            focused,
-            layout,
-            FeedsRenderModel {
-                subscriptions: &state.subscriptions,
-                visible_entries: &visible_entries,
-                watched_filter: state.watched_filter,
-                selected_group: state.selected_group,
-                loading: state.loading,
-                cursor: &mut state.cursor,
-                scroll: &mut state.scroll,
-            },
-        );
     }
 }

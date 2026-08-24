@@ -5,15 +5,17 @@
 //! and render geometry. Refresh, playback, enqueue, and the legacy mouse path
 //! remain shell work during the mirror-first stage.
 
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
+use super::legacy_input::to_crossterm_key_event;
 use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
@@ -35,6 +37,7 @@ pub struct FeedsComponent {
     loading: bool,
     focused: bool,
     layout: LayoutMain,
+    last_subscription_urls: Vec<String>,
 }
 
 impl FeedsComponent {
@@ -51,6 +54,7 @@ impl FeedsComponent {
             loading: false,
             focused: false,
             layout: LayoutMain::default(),
+            last_subscription_urls: Vec::new(),
         }
     }
 
@@ -61,20 +65,25 @@ impl FeedsComponent {
         subscriptions: &[FeedSubscription],
         entries: &[Vec<FeedEntry>],
         all_entries: &[FeedEntry],
-        watched_filter: WatchedFilter,
-        selected_group: usize,
-        cursor: usize,
-        scroll: usize,
         loading: bool,
         focused: bool,
     ) {
+        let subscription_urls: Vec<String> = subscriptions
+            .iter()
+            .map(|subscription| subscription.url.clone())
+            .collect();
+        let subscriptions_changed = self.last_subscription_urls != subscription_urls;
+        self.last_subscription_urls = subscription_urls;
         self.subscriptions = subscriptions.to_vec();
         self.entries = entries.to_vec();
         self.all_entries = all_entries.to_vec();
-        self.watched_filter = watched_filter;
-        self.selected_group = selected_group.min(self.group_count().saturating_sub(1));
-        self.cursor = cursor;
-        self.scroll = scroll;
+        self.selected_group = self
+            .selected_group
+            .min(self.group_count().saturating_sub(1));
+        if subscriptions_changed {
+            self.cursor = 0;
+            self.scroll = 0;
+        }
         self.loading = loading;
         self.focused = focused;
         self.rebuild_visible_entries();
@@ -89,6 +98,14 @@ impl FeedsComponent {
         self.watched_filter
     }
 
+    pub(in crate::app) fn selected_group(&self) -> usize {
+        self.selected_group
+    }
+
+    pub(in crate::app) fn scroll(&self) -> usize {
+        self.scroll
+    }
+
     pub(in crate::app) fn visible_titles(&self) -> Vec<&str> {
         self.visible_entries
             .iter()
@@ -101,6 +118,10 @@ impl FeedsComponent {
             .iter()
             .map(|subscription| subscription.name.as_str())
             .collect()
+    }
+
+    pub(in crate::app) fn layout(&self) -> &LayoutMain {
+        &self.layout
     }
 
     fn group_count(&self) -> usize {
@@ -268,9 +289,83 @@ impl FeedsComponent {
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(
-            to_crossterm_mouse_event(mouse),
-        )))
+        let position: Position = (mouse.column, mouse.row).into();
+        match mouse.kind {
+            MouseEventKind::ScrollDown if self.layout.left_area.contains(position) => {
+                self.move_cursor(1);
+            }
+            MouseEventKind::ScrollUp if self.layout.left_area.contains(position) => {
+                self.move_cursor(-1);
+            }
+            MouseEventKind::Down(MouseButton::Left | MouseButton::Right) => {
+                if let Some(target) = self
+                    .layout
+                    .selector_tabs
+                    .iter()
+                    .find(|(rect, _)| rect.contains(position))
+                    .map(|(_, target)| *target)
+                {
+                    if target < self.group_count() {
+                        self.selected_group = target;
+                        self.cursor = 0;
+                        self.scroll = 0;
+                        self.rebuild_visible_entries();
+                    }
+                    return Some(Msg::Legacy(LegacyTerminalEvent::NoOp));
+                }
+                if self.layout.left_area.contains(position) {
+                    let list_area = self.layout.left_area;
+                    let click_y = (mouse.row - list_area.y) as usize;
+                    let n = self.visible_entries.len();
+                    let cell_target = {
+                        let cols =
+                            crate::app::library_column_width::library_column_count(list_area.width);
+                        let cell_width =
+                            crate::app::library_column_width::library_cell_width(list_area, cols)
+                                as usize;
+                        let x = (mouse.column as usize).saturating_sub(list_area.x as usize);
+                        if !self.layout.left_item_rows.is_empty() && cols > 1 && cell_width > 0 {
+                            let cell = x
+                                / (cell_width
+                                    + crate::app::library_column_width::LIBRARY_COLUMN_GAP
+                                        as usize);
+                            (cell < cols)
+                                .then(|| {
+                                    self.layout
+                                        .left_item_rows
+                                        .get(self.scroll + click_y)
+                                        .and_then(|row| row.get(cell).copied())
+                                })
+                                .flatten()
+                        } else {
+                            None
+                        }
+                    };
+                    if let Some(item_idx) = cell_target {
+                        if item_idx < n {
+                            self.cursor = item_idx;
+                        }
+                    } else if let Some(Some(item_idx)) = self.layout.left_row_map.get(click_y) {
+                        if *item_idx < n {
+                            self.cursor = *item_idx;
+                        }
+                    } else if self.layout.left_row_map.is_empty() {
+                        let visible = list_area.height as usize;
+                        let offset = if self.cursor >= visible {
+                            self.cursor - visible + 1
+                        } else {
+                            0
+                        };
+                        let clicked = offset + click_y;
+                        if clicked < n {
+                            self.cursor = clicked;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        Some(Msg::Legacy(LegacyTerminalEvent::NoOp))
     }
 }
 

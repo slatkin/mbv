@@ -449,13 +449,7 @@ impl App {
         {
             return None;
         }
-        let items = self
-            .feed_tab
-            .all_entries
-            .iter()
-            .cloned()
-            .map(QueueItem::Feed)
-            .collect();
+        let items = self.feed_latest_items();
         Some(("Feeds".into(), HomeLatestSource::Feeds, items))
     }
 
