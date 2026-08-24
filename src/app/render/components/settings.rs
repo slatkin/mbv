@@ -3,6 +3,7 @@ use super::super::super::palette;
 use super::super::super::settings::{
     setting_label, setting_value, settings_cursor_to_key, settings_total_rows,
 };
+use super::super::super::types_overlay::OverlayRequest;
 use super::super::super::types_settings::{ServiceEntry, SettingsDestination, SERVICE_ENTRIES};
 use super::super::super::ui_util::{cycle_lang, next_subtitle_mode};
 use super::super::super::App;
@@ -32,27 +33,35 @@ impl App {
                 return;
             }
             SettingKey::HiddenLibraries => {
-                self.open_multiselect_popup(MultiSelectKind::HiddenLibraries);
+                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                    MultiSelectKind::HiddenLibraries,
+                ));
                 return;
             }
             SettingKey::HiddenLatest => {
-                self.open_multiselect_popup(MultiSelectKind::HiddenLatest);
+                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                    MultiSelectKind::HiddenLatest,
+                ));
                 return;
             }
             SettingKey::MyLanguages => {
-                self.open_multiselect_popup(MultiSelectKind::MyLanguages);
+                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                    MultiSelectKind::MyLanguages,
+                ));
                 return;
             }
             SettingKey::FeedViewLibraries => {
-                self.open_multiselect_popup(MultiSelectKind::FeedViewLibraries);
+                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
+                    MultiSelectKind::FeedViewLibraries,
+                ));
                 return;
             }
             SettingKey::LibraryRoutes => {
-                self.open_library_routes_popup();
+                self.pending_overlay = Some(OverlayRequest::OpenLibraryRoutes);
                 return;
             }
             SettingKey::ManageFeeds => {
-                self.open_feeds_manage_popup();
+                self.pending_overlay = Some(OverlayRequest::OpenFeedsManage);
                 return;
             }
             SettingKey::LogOut => {

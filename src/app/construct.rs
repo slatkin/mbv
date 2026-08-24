@@ -177,8 +177,6 @@ impl App {
             settings_scroll: 0,
             settings_save_at: None,
             confirm_logout: false,
-            multiselect_popup: None,
-            library_routes_popup: None,
             notif_failed: false,
             sessions: Vec::new(),
             cast_receivers: Vec::new(),
@@ -251,7 +249,6 @@ impl App {
             idle_feed: init.idle_feed,
             feed_seek_pending_slot: None,
             feed_tab: super::types_feed_tab::FeedTabState::default(),
-            feeds_manage_popup: None,
         };
         app.sync_feed_subscriptions();
         app

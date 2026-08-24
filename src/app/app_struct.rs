@@ -234,8 +234,6 @@ pub struct App {
     pub(super) settings_scroll: usize,
     pub(super) settings_save_at: Option<Instant>,
     pub(super) confirm_logout: bool,
-    pub(super) multiselect_popup: Option<MultiSelectPopup>,
-    pub(super) library_routes_popup: Option<LibraryRoutePopup>,
     pub(super) system_notifications: bool,
     pub(super) notif_failed: bool,
     pub(super) notif_action_tx: mpsc::Sender<String>,
@@ -385,9 +383,6 @@ pub struct App {
     pub(super) queue_scope: QueueScope,
     pub(super) idle_feed: Option<IdleFeed>,
     pub(super) feed_tab: FeedTabState,
-    /// State for the feeds management overlay (§6), opened from F2
-    /// Settings' `Manage feeds` row. `None` when the overlay is closed.
-    pub(super) feeds_manage_popup: Option<FeedsManagePopup>,
     /// When a seek was issued during Feed playback, the slot_id is stored
     /// here. The next `OutputStarted` clears it and persists the resulting
     /// position. This prevents ordinary output restarts (buffering,

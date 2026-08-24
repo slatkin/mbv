@@ -25,6 +25,7 @@ use super::components::{
     ShellRequest, UiRootComponent, UserEvent,
 };
 use super::service_startup;
+use super::types_feeds_manage::FeedsManagePopup;
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
@@ -54,6 +55,11 @@ pub struct Model {
     pub(super) inline_search_id: Option<ComponentId>,
     pub(super) abs_podcast_id: Option<ComponentId>,
     pub(super) abs_book_id: Option<ComponentId>,
+    /// Shell-owned mirror of the feeds-management popup's interaction state
+    /// plus its background add-feed channel (task 5.3c). The
+    /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
+    /// from here each tick; the mpsc cannot live in the component.
+    pub(super) feeds_manage: Option<FeedsManagePopup>,
 }
 
 impl Model {
@@ -75,6 +81,7 @@ impl Model {
             inline_search_id: None,
             abs_podcast_id: None,
             abs_book_id: None,
+            feeds_manage: None,
         };
         // UiRoot owns overlay z-order and delegates terminal translation to the
         // temporary bridge while converted surfaces still mirror App state.
@@ -284,7 +291,7 @@ impl Model {
 
             had_events |= self.app.drain_feed_tab_results();
 
-            had_events |= self.app.drain_feed_add_results();
+            had_events |= self.drain_feed_add_results();
 
             while let Ok((item_id, img_opt)) = self.app.card_image_rx.try_recv() {
                 had_events = true;

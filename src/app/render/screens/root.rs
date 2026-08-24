@@ -50,9 +50,7 @@ impl App {
         // so every image lookup and fetch trigger in this frame sees the right
         // mem-key. `render_modal_frame` resets it on entry so it stays accurate
         // for the receiver between frames too.
-        self.dim_backdrop_active = self.blocking_overlay_active
-            || self.multiselect_popup.is_some()
-            || self.library_routes_popup.is_some();
+        self.dim_backdrop_active = self.blocking_overlay_active;
 
         // Every render sub-call below writes into this fresh, local value
         // instead of `self.layout` directly. It's swapped into `self.layout`
@@ -142,8 +140,6 @@ impl App {
 
     pub(in crate::app) fn any_other_modal_open(&self) -> bool {
         self.blocking_overlay_active
-            || self.multiselect_popup.is_some()
-            || self.library_routes_popup.is_some()
     }
 }
 

@@ -1,6 +1,6 @@
 use super::components::{
-    ComponentId, ServiceRequest, ServiceRow, SettingsComponent, SettingsRow, SettingsSnapshot,
-    SetupDraft,
+    ComponentId, PopupId, ServiceRequest, ServiceRow, SettingsComponent, SettingsRow,
+    SettingsSnapshot, SetupDraft,
 };
 use super::shell::Model;
 use super::types_settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
@@ -13,9 +13,15 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
-        let child_open = self.app.multiselect_popup.is_some()
-            || self.app.library_routes_popup.is_some()
-            || self.app.feeds_manage_popup.is_some();
+        let child_open = self
+            .application
+            .mounted(&ComponentId::Popup(PopupId::Multiselect))
+            || self
+                .application
+                .mounted(&ComponentId::Popup(PopupId::LibraryRoutes))
+            || self
+                .application
+                .mounted(&ComponentId::Popup(PopupId::FeedManage));
         if !child_open && self.application.focus() != Some(&id) {
             self.application.active(&id).expect("activate Settings");
         }

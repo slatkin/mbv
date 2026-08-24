@@ -4,6 +4,7 @@ use super::types_feeds_manage::{
 };
 use super::*;
 use crate::app::tests::make_app_stub;
+use crate::app::Model;
 use mbv_core::config::{FeedKind, FeedSubscription};
 
 fn sub(name: &str, url: &str, kind: FeedKind) -> FeedSubscription {
@@ -32,23 +33,24 @@ fn feed_state_transition_is_safe_without_emby() {
 /// reach the persisted subscription -- the original URL is always kept.
 #[test]
 fn edit_changes_name_and_kind_but_not_url() {
-    let mut app = make_app_stub();
-    app.config.lock().unwrap().feeds = vec![sub(
+    let mut model = Model::new(make_app_stub());
+    model.app.config.lock().unwrap().feeds = vec![sub(
         "Old Name",
         "https://example.test/original",
         FeedKind::Video,
     )];
-    app.feeds_manage_popup = Some(FeedsManagePopup::new());
-    let mut form = FeedForm::new_edit(0, &app.config.lock().unwrap().feeds[0].clone());
+    let mut popup = FeedsManagePopup::new();
+    let mut form = FeedForm::new_edit(0, &model.app.config.lock().unwrap().feeds[0].clone());
     form.name = "New Name".to_string();
     form.url = "https://example.test/attempted-change".to_string();
     form.kind = FeedKind::Audio;
     form.focus = FeedFormField::Name;
-    app.feeds_manage_popup.as_mut().unwrap().stage = FeedsManageStage::Form(form);
+    popup.stage = FeedsManageStage::Form(form);
+    model.feeds_manage = Some(popup);
 
-    app.submit_feed_form();
+    model.submit_feed_form();
 
-    let feeds = app.config.lock().unwrap().feeds.clone();
+    let feeds = model.app.config.lock().unwrap().feeds.clone();
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].name, "New Name");
     assert_eq!(feeds[0].kind, FeedKind::Audio);
@@ -193,8 +195,8 @@ fn stale_refresh_result_is_dropped_after_subscription_index_shifts() {
 /// dropped without touching config.
 #[test]
 fn stale_add_result_is_dropped() {
-    let mut app = make_app_stub();
-    let popup = FeedsManagePopup::new();
+    let mut model = Model::new(make_app_stub());
+    let mut popup = FeedsManagePopup::new();
     popup
         .add_tx
         .send(FeedAddResult {
@@ -205,16 +207,15 @@ fn stale_add_result_is_dropped() {
             result: Ok(()),
         })
         .unwrap();
-    let mut popup = popup;
     popup.pending_add = Some(5); // a newer submission is the current one
-    app.feeds_manage_popup = Some(popup);
+    model.feeds_manage = Some(popup);
 
-    let had_events = app.drain_feed_add_results();
+    let had_events = model.drain_feed_add_results();
 
     assert!(had_events, "the stale message should still be drained");
-    assert!(app.config.lock().unwrap().feeds.is_empty());
+    assert!(model.app.config.lock().unwrap().feeds.is_empty());
     assert_eq!(
-        app.feeds_manage_popup.as_ref().unwrap().pending_add,
+        model.feeds_manage.as_ref().unwrap().pending_add,
         Some(5),
         "the still-current pending id must be untouched"
     );
@@ -224,12 +225,10 @@ fn stale_add_result_is_dropped() {
 /// fetch's eventual result must then be dropped as stale.
 #[test]
 fn cancelled_add_result_is_dropped() {
-    let mut app = make_app_stub();
-    app.feeds_manage_popup = Some(FeedsManagePopup::new());
-    app.feeds_manage_popup.as_mut().unwrap().pending_add = Some(1);
-    app.feeds_manage_popup
-        .as_ref()
-        .unwrap()
+    let mut model = Model::new(make_app_stub());
+    let mut popup = FeedsManagePopup::new();
+    popup.pending_add = Some(1);
+    popup
         .add_tx
         .send(FeedAddResult {
             id: 1,
@@ -239,27 +238,26 @@ fn cancelled_add_result_is_dropped() {
             result: Ok(()),
         })
         .unwrap();
+    model.feeds_manage = Some(popup);
 
     // Esc while the add is in flight.
-    app.cancel_feed_form();
+    model.cancel_feed_form();
 
-    let had_events = app.drain_feed_add_results();
+    let had_events = model.drain_feed_add_results();
 
     assert!(had_events);
-    assert!(app.config.lock().unwrap().feeds.is_empty());
+    assert!(model.app.config.lock().unwrap().feeds.is_empty());
 }
 
 /// §6.2/§6.3: a matching add result appends to `config.feeds` and returns
 /// the overlay to the List stage.
 #[test]
 fn matching_add_result_appends_feed_and_returns_to_list() {
-    let mut app = make_app_stub();
-    app.feeds_manage_popup = Some(FeedsManagePopup::new());
-    app.feeds_manage_popup.as_mut().unwrap().pending_add = Some(7);
-    app.feeds_manage_popup.as_mut().unwrap().stage = FeedsManageStage::Form(FeedForm::new_add());
-    app.feeds_manage_popup
-        .as_ref()
-        .unwrap()
+    let mut model = Model::new(make_app_stub());
+    let mut popup = FeedsManagePopup::new();
+    popup.pending_add = Some(7);
+    popup.stage = FeedsManageStage::Form(FeedForm::new_add());
+    popup
         .add_tx
         .send(FeedAddResult {
             id: 7,
@@ -269,29 +267,28 @@ fn matching_add_result_appends_feed_and_returns_to_list() {
             result: Ok(()),
         })
         .unwrap();
+    model.feeds_manage = Some(popup);
 
-    app.drain_feed_add_results();
+    model.drain_feed_add_results();
 
-    let feeds = app.config.lock().unwrap().feeds.clone();
+    let feeds = model.app.config.lock().unwrap().feeds.clone();
     assert_eq!(feeds.len(), 1);
     assert_eq!(feeds[0].name, "New Feed");
     assert!(matches!(
-        app.feeds_manage_popup.as_ref().unwrap().stage,
+        model.feeds_manage.as_ref().unwrap().stage,
         FeedsManageStage::List
     ));
-    assert_eq!(app.feeds_manage_popup.as_ref().unwrap().pending_add, None);
+    assert_eq!(model.feeds_manage.as_ref().unwrap().pending_add, None);
 }
 
 /// §6.2: a fetch failure surfaces via the status/flash path and does not
 /// save.
 #[test]
 fn add_fetch_failure_does_not_save() {
-    let mut app = make_app_stub();
-    app.feeds_manage_popup = Some(FeedsManagePopup::new());
-    app.feeds_manage_popup.as_mut().unwrap().pending_add = Some(1);
-    app.feeds_manage_popup
-        .as_ref()
-        .unwrap()
+    let mut model = Model::new(make_app_stub());
+    let mut popup = FeedsManagePopup::new();
+    popup.pending_add = Some(1);
+    popup
         .add_tx
         .send(FeedAddResult {
             id: 1,
@@ -301,9 +298,10 @@ fn add_fetch_failure_does_not_save() {
             result: Err("connection refused".into()),
         })
         .unwrap();
+    model.feeds_manage = Some(popup);
 
-    app.drain_feed_add_results();
+    model.drain_feed_add_results();
 
-    assert!(app.config.lock().unwrap().feeds.is_empty());
-    assert!(app.status.contains("Couldn't add feed"));
+    assert!(model.app.config.lock().unwrap().feeds.is_empty());
+    assert!(model.app.status.contains("Couldn't add feed"));
 }

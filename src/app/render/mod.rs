@@ -30,7 +30,7 @@ pub(in crate::app) use components::help::{help_destination, render_help_panel, H
 pub(in crate::app) use components::home::render_home_content;
 pub(in crate::app) use components::home_hero::HomeImagePaint;
 pub(in crate::app) use components::library_routes::{
-    render_library_routes_content, LibraryRoutesRenderModel,
+    render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };
 pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;

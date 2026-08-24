@@ -48,6 +48,17 @@ impl LibraryRoutesComponent {
         self.stage.clone().map(|stage| (stage, self.cursor))
     }
 
+    /// Read the current picker stage (task 5.3c): the shell drives stage
+    /// transitions once the component owns the interaction state.
+    pub(in crate::app) fn stage(&self) -> Option<&LibraryRouteStage> {
+        self.stage.as_ref()
+    }
+
+    /// Read the current picker cursor (task 5.3c).
+    pub(in crate::app) fn cursor(&self) -> usize {
+        self.cursor
+    }
+
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         match key.code {
             Key::Up => {

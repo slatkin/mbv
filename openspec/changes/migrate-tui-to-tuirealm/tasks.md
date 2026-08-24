@@ -246,7 +246,7 @@ contributing surface's group 2–4 conversion to have landed.
     `rtk cargo nextest run -p mbv` (1,154 passed), `rtk cargo clippy
     --workspace --all-targets`, `rtk cargo fmt --all -- --check`, and
     `rtk make check-code-file-lines`.
-  - [ ] *Settings popups* — `multiselect_popup`, `library_routes_popup`,
+  - [x] *Settings popups* — `multiselect_popup`, `library_routes_popup`,
     `feeds_manage_popup` + `input_feeds_manage_keys.rs`. 21 files (15 / 6),
     132 refs. One unit; the three share a parent and a dismissal path.
 - [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.

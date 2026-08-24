@@ -264,8 +264,6 @@ pub(crate) fn make_app_stub() -> App {
         settings_scroll: 0,
         settings_save_at: None,
         confirm_logout: false,
-        multiselect_popup: None,
-        library_routes_popup: None,
         system_notifications: false,
         notif_failed: false,
         notif_action_tx,
@@ -369,7 +367,6 @@ pub(crate) fn make_app_stub() -> App {
         idle_feed: None,
         feed_seek_pending_slot: None,
         feed_tab: super::types_feed_tab::FeedTabState::default(),
-        feeds_manage_popup: None,
     }
 }
 

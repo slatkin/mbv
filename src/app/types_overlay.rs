@@ -1,5 +1,5 @@
 use super::types_confirm::ConfirmModal;
-use super::types_context_menu::ContextMenu;
+use super::types_context_menu::{ContextMenu, MultiSelectKind};
 use super::types_daemon_lost::DaemonLostModal;
 use super::types_feed::SavePlaylistDialog;
 use super::types_playback::RemoteReanchorPopup;
@@ -29,6 +29,12 @@ pub(super) enum OverlayRequest {
     },
     ContextMenu(ContextMenu),
     DismissContextMenu,
+    /// Open a nested Settings Multiselect popup of the given kind (task 5.3c).
+    OpenMultiselect(MultiSelectKind),
+    /// Open a nested Settings Library-routes popup (task 5.3c).
+    OpenLibraryRoutes,
+    /// Open a nested Settings Feed-management popup (task 5.3c).
+    OpenFeedsManage,
     DismissConfirm,
     DismissDaemonLost,
     DismissRemoteReanchor,

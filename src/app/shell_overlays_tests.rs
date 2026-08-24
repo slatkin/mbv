@@ -2,7 +2,8 @@
 mod tests {
     use super::*;
     use crate::app::components::{
-        Msg, MultiselectComponent, PlaybackPromptComponent, SelectionModalComponent,
+        FeedsManageComponent, LibraryRoutesComponent, Msg, MultiselectComponent,
+        PlaybackPromptComponent, SelectionModalComponent, ShellRequest,
     };
     use crate::app::tests::make_app_stub;
     use crate::app::types_context_menu::{LibraryRoutePopup, LibraryRouteStage};
@@ -42,8 +43,8 @@ mod tests {
     #[test]
     fn selection_modal_shell_syncs_and_routes_dismissal() {
         let mut model = Model::new(make_app_stub());
-        model.app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::SelectionModal(
-            SelectionModal {
+        model.app.pending_overlay = Some(
+            crate::app::types_overlay::OverlayRequest::SelectionModal(SelectionModal {
                 source: SelectionModalSource::Album {
                     album_id: "album-1".into(),
                 },
@@ -57,8 +58,8 @@ mod tests {
                 )]),
                 cursor: 0,
                 filter: None,
-            },
-        ));
+            }),
+        );
         model.sync_modal_requests();
 
         let id = ComponentId::Overlay(OverlayId::SelectionModal);
@@ -84,7 +85,6 @@ mod tests {
 
         assert!(!model.application.mounted(&id));
     }
-
 
     #[test]
     fn series_season_completion_refreshes_the_selected_modal_pill_in_place() {
@@ -122,11 +122,13 @@ mod tests {
 
         let mut finale = crate::app::tests::make_item("Finale", "Episode");
         finale.id = "episode-2".into();
-        model.app.handle_lib_event(crate::app::LibEvent::SeriesSeasonEpisodesFetched {
-            series_id: "series-1".into(),
-            season_id: "season-2".into(),
-            episodes: vec![finale],
-        });
+        model
+            .app
+            .handle_lib_event(crate::app::LibEvent::SeriesSeasonEpisodesFetched {
+                series_id: "series-1".into(),
+                season_id: "season-2".into(),
+                episodes: vec![finale],
+            });
         model.sync_modal_requests();
         model.sync_modal_requests();
 
@@ -145,14 +147,26 @@ mod tests {
     #[test]
     fn settings_popup_multiselect_shell_syncs_and_commits_component_choices() {
         let mut model = Model::new(make_app_stub());
-        model.app.multiselect_popup = Some(MultiSelectPopup {
-            kind: MultiSelectKind::HiddenLibraries,
-            items: vec![("movies".into(), "Movies".into(), false)],
-            cursor: 0,
-        });
-        model.sync_multiselect();
-
         let id = ComponentId::Popup(PopupId::Multiselect);
+        model
+            .application
+            .mount(id.clone(), Box::new(MultiselectComponent::new()), vec![])
+            .expect("mount Multiselect");
+        model.application.active(&id).expect("activate Multiselect");
+        let popup = MultiSelectPopup {
+            kind: MultiSelectKind::HiddenLibraries,
+            items: vec![
+                ("movies".into(), "Movies".into(), true),
+                ("shows".into(), "Shows".into(), false),
+            ],
+            cursor: 0,
+        };
+        if let Some(comp) = model.application.get_component_mut(&id) {
+            if let Some(multiselect) = comp.as_any_mut().downcast_mut::<MultiselectComponent>() {
+                multiselect.set_content(&popup);
+            }
+        }
+
         let message = {
             let component = model
                 .application
@@ -166,28 +180,42 @@ mod tests {
                 modifiers: KeyModifiers::NONE,
             }))
         };
-        let Some(Msg::Shell(request)) = message else {
+        let Some(Msg::Shell(ShellRequest::MultiselectCommit { .. })) = message else {
             panic!("Multiselect should emit a shell request");
         };
         model.handle_multiselect_commit();
-        assert!(matches!(request, ShellRequest::MultiselectCommit { .. }));
-        model.sync_multiselect();
-        assert!(model.app.multiselect_popup.is_none());
+        assert_eq!(
+            model.app.config.lock().unwrap().hidden_libraries,
+            vec!["movies".to_string()],
+            "hidden selection must persist to config"
+        );
         assert!(!model.application.mounted(&id));
     }
 
     #[test]
     fn settings_popup_library_routes_shell_syncs_and_routes_escape() {
         let mut model = Model::new(make_app_stub());
-        model.app.library_routes_popup = Some(LibraryRoutePopup {
+        let id = ComponentId::Popup(PopupId::LibraryRoutes);
+        model
+            .application
+            .mount(id.clone(), Box::new(LibraryRoutesComponent::new()), vec![])
+            .expect("mount Library routes");
+        model
+            .application
+            .active(&id)
+            .expect("activate Library routes");
+        let popup = LibraryRoutePopup {
             stage: LibraryRouteStage::PickLibrary {
                 items: vec![("movies".into(), "Movies".into(), None)],
             },
             cursor: 0,
-        });
-        model.sync_library_routes();
+        };
+        if let Some(comp) = model.application.get_component_mut(&id) {
+            if let Some(routes) = comp.as_any_mut().downcast_mut::<LibraryRoutesComponent>() {
+                routes.set_content(&popup);
+            }
+        }
 
-        let id = ComponentId::Popup(PopupId::LibraryRoutes);
         let message = {
             let component = model
                 .application
@@ -201,23 +229,21 @@ mod tests {
                 modifiers: KeyModifiers::NONE,
             }))
         };
-        let Some(Msg::Shell(request)) = message else {
+        let Some(Msg::Shell(ShellRequest::LibraryRoutesEsc)) = message else {
             panic!("Library routes should emit a shell request");
         };
-        model.handle_library_routes_request(request);
-        model.sync_library_routes();
+        model.handle_library_routes_request(ShellRequest::LibraryRoutesEsc);
 
-        assert!(model.app.library_routes_popup.is_none());
         assert!(!model.application.mounted(&id));
     }
 
     #[test]
     fn settings_popup_feeds_manage_shell_syncs_and_routes_escape() {
         let mut model = Model::new(make_app_stub());
-        model.app.feeds_manage_popup = Some(FeedsManagePopup::new());
-        model.sync_feeds_manage();
-
+        model.open_feeds_manage();
         let id = ComponentId::Popup(PopupId::FeedManage);
+        assert!(model.application.mounted(&id));
+
         let message = {
             let component = model
                 .application
@@ -235,9 +261,8 @@ mod tests {
             panic!("Feed management should emit a shell request");
         };
         model.handle_feeds_manage_request(key);
-        model.sync_feeds_manage();
 
-        assert!(model.app.feeds_manage_popup.is_none());
+        assert!(model.feeds_manage.is_none());
         assert!(!model.application.mounted(&id));
     }
 }

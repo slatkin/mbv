@@ -63,6 +63,9 @@ impl Model {
             ComponentId::Modal(ModalId::DaemonLost),
             ComponentId::Modal(ModalId::RemoteReanchor),
             ComponentId::Modal(ModalId::SavePlaylist),
+            ComponentId::Popup(PopupId::Multiselect),
+            ComponentId::Popup(PopupId::LibraryRoutes),
+            ComponentId::Popup(PopupId::FeedManage),
         ]
         .iter()
         .any(|id| self.application.mounted(id))
@@ -72,7 +75,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::{HelpComponent, ModalId, OverlayId};
+    use crate::app::components::{HelpComponent, ModalId, OverlayId, PopupId};
     use crate::app::tests::make_app_stub;
 
     #[test]

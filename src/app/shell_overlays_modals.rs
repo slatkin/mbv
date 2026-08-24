@@ -196,6 +196,9 @@ impl Model {
                     }
                 }
             }
+            OverlayRequest::OpenMultiselect(kind) => self.open_multiselect(kind),
+            OverlayRequest::OpenLibraryRoutes => self.open_library_routes(),
+            OverlayRequest::OpenFeedsManage => self.open_feeds_manage(),
             OverlayRequest::DismissContextMenu => {
                 self.dismiss_modal(&ComponentId::Overlay(OverlayId::ContextMenu))
             }

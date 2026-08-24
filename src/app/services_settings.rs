@@ -204,7 +204,9 @@ impl App {
 
     pub(super) fn route_service_action(&mut self, intent: ServiceActionIntent) {
         match intent {
-            ServiceActionIntent::ManageFeeds => self.open_feeds_manage_popup(),
+            ServiceActionIntent::ManageFeeds => {
+                self.pending_overlay = Some(super::types_overlay::OverlayRequest::OpenFeedsManage);
+            }
             ServiceActionIntent::SetupAudiobookshelf => self.open_audiobookshelf_setup(),
             ServiceActionIntent::TestAudiobookshelf => self.test_audiobookshelf_connection(),
             ServiceActionIntent::RemoveAudiobookshelf => self.request_audiobookshelf_removal(),
