@@ -50,7 +50,7 @@ Nine `self.confirm_modal = Some(ConfirmModal { .. })` literals across
 `feeds_manage_actions.rs`, `input_lib_keys.rs`, `input_confirm_keys.rs`. Every
 one is compile-forced the moment the field moves.
 
-**5.3c-pre** (behaviour-neutral, compiles standalone): add
+**Overlay prep** (behaviour-neutral, compiles standalone): add
 `App::ask_confirm(ConfirmModal)` and route all nine through it. Same shape and
 same justification as `5.3-pre`. Do this before anything else in the cluster.
 
@@ -88,16 +88,16 @@ only option that keeps 5.3c a mechanical task, and 5.3d has to revisit every
 
 ### Split
 
-- **5.3c-pre** — `ask_confirm` helper; split `shell_overlays.rs`. No deletion.
-- **5.3c-1 Modals** — `confirm_modal`, `daemon_lost_modal`,
+- **Overlay prep** — `ask_confirm` helper; split `shell_overlays.rs`. No deletion.
+- **Modals** — `confirm_modal`, `daemon_lost_modal`,
   `remote_reanchor_popup`, `save_playlist_dialog` + `input_confirm_keys.rs`,
   `input_daemon_lost_keys.rs`, `input_remote_reanchor.rs`,
   `handle_key_save_playlist_entry`. All four have blocking-swallow semantics
   and one shared presence predicate.
-- **5.3c-2 Sidebars** — `show_settings`, `show_sessions`, `show_playlists`,
+- **Sidebars** — `show_settings`, `show_sessions`, `show_playlists`,
   `search_sidebar_open` + `input_settings_keys.rs`, `input_playlist_keys.rs`,
   `services_settings.rs`'s three `handle_key_*`. Open-flags, no payload.
-- **5.3c-3 Menus and popups** — `context_menu`, `selection_modal`,
+- **Menus and popups** — `context_menu`, `selection_modal`,
   `multiselect_popup`, `library_routes_popup`, `feeds_manage_popup` +
   `input_context_menu.rs`, `input_selection_modal_keys.rs`,
   `input_feeds_manage_keys.rs`, and the duplicated variable-row geometry in
@@ -143,24 +143,26 @@ be sequenced as one lane.
 
 ### Split
 
-- **5.3d-a `album_track_focus`.** Its own task, sized like 5.3a. Carries the
-  three blockers already recorded under 5.3a plus the withdrawn `5.3a-post`
+- **Album track focus.** Its own task, sized like 5.3a. Carries the
+  three blockers already recorded under 5.3a plus the withdrawn album-cursor follow-on
   finding, and must settle the narrow-mode question first: either mount
   `MusicWorkspaceComponent` in narrow mode, or prove the narrow path cannot
   reach a `Some`. Folds in `album_cursor.rs`'s three `pub(in crate::app)`
   entry points and their four `= None` resets.
-- **5.3d-b mouse geometry.** The 12 forwarding components take their own
+- **Mouse geometry.** The 12 forwarding components take their own
   `hit_test`, one commit per surface. Ends with `input_mouse.rs`,
   `input_mouse_dispatch.rs`, `input_mouse_panels.rs` deleted. Merge 5.4's six
   proofs into this lane — they assert exactly what it delivers.
-- **5.3d-c mirrors and framework.** Delete the 29 `sync_*`, then `AppLayout`,
+- **Mirrors and framework.** Delete the 29 `sync_*`, then `AppLayout`,
   `CONTEXT_STACK`, `LegacyInput`, in that order. Only tractable once (a) and
   (b) have landed; genuinely mechanical at that point.
 
 ### Sequencing
 
-5.3d-a is independent of 5.3c and can run in parallel with it. 5.3d-b requires
-5.3c (overlay hit-testing moves with the overlays). 5.3d-c requires everything.
+Album track focus is independent of 5.3c and can run in parallel with it.
+Mouse geometry requires
+5.3c (overlay hit-testing moves with the overlays). Mirrors and framework
+requires everything.
 
 ---
 

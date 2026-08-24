@@ -166,14 +166,14 @@ contributing surface's group 2–4 conversion to have landed.
      `shell_gates.rs:25` (`ATTR_ALBUM_TRACK_FOCUSED`), is already in `Model`.
   3. *Four of its mutation sites are inside the render tree.*
      `render/screens/album_cursor.rs` clears the field at lines 98, 147 and 206
-     and gates on it at 166. See `5.3a-post` below.
+     and gates on it at 166. See 5.3d below.
 
   This is the same finding that stalled task 3.6, and it is recorded here for
   the same reason: the cluster boundary in the preamble to section 5 assumes a
   field is read only within its cluster plus the shell. `album_track_focus`
   violates that, so it teardown-orders with the framework removal, not with
   the browse surfaces.
-  A proposed `5.3a-post` — relocating `render/screens/album_cursor.rs` out of
+  A proposed follow-on task — relocating `render/screens/album_cursor.rs` out of
   the render tree into `src/app/album_cursor_actions.rs` — was **attempted and
   withdrawn**, and the reason belongs with 5.3d's album work. The move does not
   compile: `album_plan`'s types, fields, `row_target()`, and
@@ -193,11 +193,27 @@ contributing surface's group 2–4 conversion to have landed.
   there for the same reason `album_track_focus` cannot — the component is
   wide-only and these three `pub(in crate::app)` functions serve narrow too — so
   it is folded into 5.3d below rather than scheduled separately.
-- [x] 5.3b **Teardown — Feeds cluster.** Requires 3.6, 3.4, 3.10, 5.1. Delete `App.feed_tab` and move its readers to the component/shell boundary: `feed_tab_actions.rs` (cursor/playback/enqueue → typed `Msg` + shell handlers), `library_load_actions.rs`'s Home-Feeds section build (→ shell-owned projection, not direct `feed_tab.all_entries` access), `feeds_manage_actions.rs`'s post-subscription reset, and the Feeds branches in `input_feed_tab_keys.rs`/`input_mouse.rs`/`input_mouse_dispatch.rs`. The refresh `mpsc` and its result validation stay shell-owned. Rewrite the `App.feed_tab` tests around the component and shell boundary. Verify `rtk cargo nextest run -p mbv feeds` + scan.
+- [x] 5.3b **Teardown — Feeds cluster.** Requires 3.6, 3.4, 3.10, 5.1. Delete `FeedTabState`'s interaction fields and move its readers to the component/shell boundary: `feed_tab_actions.rs` (cursor/playback/enqueue → typed `Msg` + shell handlers), `library_load_actions.rs`'s Home-Feeds section build (→ shell-owned projection, not direct `feed_tab.all_entries` access), `feeds_manage_actions.rs`'s post-subscription reset, and the Feeds branches in `input_feed_tab_keys.rs`/`input_mouse.rs`/`input_mouse_dispatch.rs`. The refresh `mpsc` and its result validation stay shell-owned. Rewrite the `App.feed_tab` tests around the component and shell boundary. Verify `rtk cargo nextest run -p mbv feeds` + scan.
+  `App.feed_tab` itself survives at `app_struct.rs:399` holding shell-owned
+  fetch state (subscriptions, entries, refresh bookkeeping) — that is not
+  component-owned interaction state and 5.6's gate does not require its removal.
   Loose ends verified: filtered playback selection, unchanged-snapshot cursor preservation, component group count, and exhaustive Feeds mouse routing.
 - [ ] 5.3c **Teardown — overlay/modal cluster.** Requires 2.1–2.5, 3.2, 3.7, 3.8, 3.9, 4.7, 4.8, 4.9, 5.2. Delete the `App` open-flags, overlay state, and the `handle_key_*` handlers the converted overlays still forward to, plus the duplicated variable-row geometry in `input_mouse_panels.rs`. Verify `rtk cargo nextest run -p mbv` + scan.
-  Scoped prerequisite 5.3c-pre landed: overlay sync/render methods are split by family and all production confirmation raises use `App::ask_confirm`; no field or clear site was deleted.
+  Dispatched as four named units, not as sub-numbered tasks — see
+  `scoping-5.3c-5.3d.md` for the measured breakdown of each:
+  - [x] *Overlay prep* — `shell_overlays.rs` split by family, `App::ask_confirm`
+    added. Behaviour-neutral; no field or clear site deleted (`75702a87`).
+  - [ ] *Modals* — `confirm_modal`, `daemon_lost_modal`, `remote_reanchor_popup`,
+    `save_playlist_dialog`, plus the shell-set `blocking_overlay_active` adapter
+    that replaces the five `impl App` presence reads.
+  - [ ] *Sidebars* — Help, Sessions, Playlists, Settings, Global Search, and the
+    duplicated variable-row geometry in `input_mouse_panels.rs`.
+  - [ ] *Menus and popups* — Context menu, Selection modal, Playback prompts,
+    Settings nested popups.
 - [ ] 5.3d **Teardown — framework removal.** Requires 5.3a, 5.3b, 5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters.
+  Dispatched as three named units, not as sub-numbered tasks: *Album track
+  focus* (independent of 5.3c, may run in parallel), *Mouse geometry* (requires
+  5.3c, and is one lane with 5.4), *Mirrors and framework* (requires everything).
   **Also delete `LibraryTab.album_track_focus` here** (deferred from 5.3a — see
   the three reasons recorded there). Its readers can only move once the action
   layer does: relocate `actions.rs`'s focused-track target resolution and
