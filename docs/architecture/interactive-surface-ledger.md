@@ -45,7 +45,7 @@ or mergeable endpoint even when individual rows are marked `component`.
 | Root | Playback chrome and global controls | legacy | `App`, `action.rs`, `input_mouse_dispatch.rs`, `render/components/chrome*` | Player authority remains outside UI |
 | Root | Queue | legacy | `App`, `input_queue_keys.rs`, `render/screens/queue.rs` | Cursor/scroll/scope may move; canonical queue may not |
 | Root | Library parent | legacy | `App`, `input_browse_dispatch.rs`, destination dispatcher | Parent for destination children |
-| Library | Home | legacy | `App.home`, `home_actions.rs`, `render/components/home*` | Cross-Service display |
+| Library | Home | component (2026-08-24) | `HomeComponent` (`src/app/components/home.rs`); shell mirrors Home content and preserves legacy input forwarding while cursor/section/scroll remain component-local | Cross-Service display; App teardown pending group 5; `rtk cargo nextest run -p mbv home`; App-free render and shell-routing tests; `rtk ast-grep scan` |
 | Library | Emby generic/Movies/home-video browser | legacy | `App.libs`, library actions, shared list/hero renderers | Instances remain destination-qualified |
 | Emby browser | Inline library Search | legacy | `LibSearch` in `LibraryTab`, `input_lib_keys.rs` | Distinct from global Search sidebar |
 | Library | TV workspace | legacy | `LibraryTab` series state, TV actions/renderers | Two interactive panes and child targets |

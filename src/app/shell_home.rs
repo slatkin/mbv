@@ -4,11 +4,9 @@
 //! made TuiRealm-`active`): keyboard/mouse input for Home stays on the
 //! legacy `App::handle_key`/`handle_mouse` path (see `components::home`'s
 //! module doc for why), so the component only needs to render. Every tick
-//! the shell mirrors `App.home` into the component, then paints the
-//! component's `view()` over the legacy frame -- the same "paint after"
-//! pattern `shell_overlays.rs` uses for Search/Sessions/Help, but for an
-//! inline (non-overlay) destination gated on `App.tab` instead of an open
-//! flag.
+//! the shell mirrors Home content into the component, then paints the
+//! component's `view()` over the legacy frame. Cursor/section/scroll state
+//! stays in the component and is not pushed back in from `App`.
 
 use super::components::{ComponentId, HomeComponent};
 use super::shell::Model;
@@ -25,11 +23,8 @@ impl Model {
             .expect("mount Home");
     }
 
-    /// Mirror `App.home`'s content and legacy-input-driven cursor/section/
-    /// scroll into the mounted `HomeComponent`, plus the runtime flags its
-    /// render needs (focus, Nerd Font capability). Called every tick before
-    /// rendering so the component's next `view()` matches what the legacy
-    /// path just computed.
+    /// Mirror `App.home`'s content and runtime render flags into the mounted
+    /// `HomeComponent`. Its cursor, section, and scroll are component-local.
     pub(super) fn sync_home(&mut self) {
         let continue_items: Vec<QueueItem> = self
             .app
@@ -48,13 +43,9 @@ impl Model {
             .collect();
         let focused = !matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
         let use_nerd_fonts = self.app.use_nerd_fonts;
-        let cursor = self.app.home.home_cursor;
-        let section = self.app.home.section;
-        let scroll = self.app.home.home_scroll;
         if let Some(comp) = self.application.get_component_mut(&ComponentId::Home) {
             if let Some(home) = comp.as_any_mut().downcast_mut::<HomeComponent>() {
                 home.set_content(continue_items, latest, self.app.home_loading);
-                home.sync_cursor_section_scroll(cursor, section, scroll);
                 home.set_focused(focused);
                 home.set_use_nerd_fonts(use_nerd_fonts);
             }
@@ -79,5 +70,50 @@ impl Model {
             .and_then(|comp| comp.as_any_mut().downcast_mut::<HomeComponent>())
             .and_then(|home| home.take_image_paint());
         self.app.paint_home_image(f, image_paint);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::components::msg::{LegacyTerminalEvent, Msg};
+    use crate::app::tests::make_app_stub;
+    use tuirealm::component::AppComponent;
+    use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn shell_sync_keeps_home_component_cursor_local() {
+        let mut model = Model::new(make_app_stub());
+        model.app.home.continue_items = vec![
+            crate::app::tests::make_item("one", "Movie"),
+            crate::app::tests::make_item("two", "Movie"),
+        ];
+        model.sync_home();
+
+        let message = {
+            let component = model
+                .application
+                .get_component_mut(&ComponentId::Home)
+                .expect("Home component mounted")
+                .as_any_mut()
+                .downcast_mut::<HomeComponent>()
+                .expect("Home component type");
+            component.on(&Event::Keyboard(KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            }))
+        };
+        assert_eq!(message, Some(Msg::Legacy(LegacyTerminalEvent::NoOp)));
+
+        model.sync_home();
+
+        let component = model
+            .application
+            .get_component(&ComponentId::Home)
+            .expect("Home component mounted")
+            .as_any()
+            .downcast_ref::<HomeComponent>()
+            .expect("Home component type");
+        assert_eq!(component.cursor(), 1);
     }
 }

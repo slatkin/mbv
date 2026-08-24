@@ -9,13 +9,12 @@
 //! input authority stays on the legacy `App::handle_key`/`handle_mouse`
 //! `CONTEXT_STACK` for now (converting it safely requires the precedence-
 //! safe TuiRealm subscription wiring `key_policy.rs` documents as deferred
-//! to per-surface conversion, not yet built) -- the shell mirrors the
-//! resulting `App.home.home_cursor`/`.section`/`.home_scroll` into this
-//! component via `sync_cursor_section_scroll` every frame so its own render
-//! stays display-consistent. `handle_crossterm_key`/`handle_crossterm_mouse`
-//! and the typed `ShellRequest::Home*` messages below are implemented and
-//! tested but not yet the live input path; they are the intended hand-off
-//! target for the follow-up task that gives Home real input ownership.
+//! to per-surface conversion, not yet built). Content is mirrored from the
+//! shell, while cursor/section/scroll state remains local to this component.
+//! `handle_crossterm_key`/`handle_crossterm_mouse` and the typed
+//! `ShellRequest::Home*` messages below are implemented and tested but not
+//! yet the live input path; they are the intended hand-off target for the
+//! follow-up task that gives Home real input ownership.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -101,23 +100,6 @@ impl HomeComponent {
 
     pub(in crate::app) fn set_use_nerd_fonts(&mut self, use_nerd_fonts: bool) {
         self.use_nerd_fonts = use_nerd_fonts;
-    }
-
-    /// Mirrors the legacy `App.home`'s flat cursor/section/scroll into the
-    /// component after `set_content`. Keyboard/mouse input for Home remains
-    /// on the legacy `App::handle_key`/`handle_mouse` path for now (task
-    /// 3.4's confirmed scope: convert rendering, not input authority yet);
-    /// this keeps the component's own render-owned cursor display-consistent
-    /// with what that legacy input just did.
-    pub(in crate::app) fn sync_cursor_section_scroll(
-        &mut self,
-        cursor: usize,
-        section: usize,
-        scroll: usize,
-    ) {
-        self.cursor = cursor;
-        self.section = section;
-        self.scroll = scroll;
     }
 
     /// Takes the cover image (if any) `view()` computed but could not

@@ -1,7 +1,9 @@
 use super::home::HomeComponent;
 use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use mbv_core::playback_queue::QueueItem;
-use tuirealm::component::AppComponent;
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
+use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 #[test]
@@ -103,4 +105,23 @@ fn ctrl_w_emits_toggle_watched_without_a_cursor_payload() {
         modifiers: KeyModifiers::CONTROL,
     }));
     assert_eq!(msg, Some(Msg::Shell(ShellRequest::HomeToggleWatched)));
+}
+
+#[test]
+fn home_renders_content_without_app_state() {
+    let mut home = two_section_home();
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+
+    terminal
+        .draw(|frame| home.view(frame, frame.area()))
+        .unwrap();
+
+    let output: String = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|cell| cell.symbol().to_owned())
+        .collect();
+    assert!(output.contains("cw1"));
 }
