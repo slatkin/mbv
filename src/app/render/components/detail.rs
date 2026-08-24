@@ -2,6 +2,7 @@ use crate::app::layout::LayoutMain;
 use crate::app::render::components::hero::{
     inline_hero_text_width, HeroContent, HeroImage, HeroLine,
 };
+use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::RENDER_FILTER;
 use crate::app::ui_util::*;
 use crate::app::{palette, App};
@@ -102,6 +103,15 @@ impl CompactBannerLayout {
 
 impl App {
     pub(crate) fn selected_movie_item(&self, lib_idx: usize) -> Option<mbv_core::api::EmbyItem> {
+        let ctx = self.library_list_render_ctx(lib_idx, false);
+        self.selected_movie_item_with_ctx(lib_idx, &ctx)
+    }
+
+    fn selected_movie_item_with_ctx(
+        &self,
+        lib_idx: usize,
+        ctx: &LibraryListRenderCtx,
+    ) -> Option<mbv_core::api::EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         let coll = lib.library.collection_type.as_str();
         if coll != "movies" && coll != "homevideos" && coll != "podcasts" {
@@ -111,8 +121,7 @@ impl App {
         let item = if self.is_feed_home_video_group_view(lib_idx) {
             self.selected_feed_home_video_item(lib_idx)?
         } else {
-            let level = lib.nav_stack.last()?;
-            level.items.get(level.cursor)?.clone()
+            ctx.items.get(ctx.cursor)?.clone()
         };
 
         if item.is_folder {
@@ -126,18 +135,21 @@ impl App {
     }
 
     pub(crate) fn selected_series_item(&self, lib_idx: usize) -> Option<mbv_core::api::EmbyItem> {
+        let ctx = self.library_list_render_ctx(lib_idx, false);
+        self.selected_series_item_with_ctx(lib_idx, &ctx)
+    }
+
+    fn selected_series_item_with_ctx(
+        &self,
+        lib_idx: usize,
+        ctx: &LibraryListRenderCtx,
+    ) -> Option<mbv_core::api::EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.library.collection_type != "tvshows" {
             return None;
         }
 
-        let item = if let Some(search) = &lib.search {
-            let item_idx = *search.results.get(search.cursor)?;
-            search.items.get(item_idx)?.clone()
-        } else {
-            let level = lib.nav_stack.last()?;
-            level.items.get(level.cursor)?.clone()
-        };
+        let item = ctx.items.get(ctx.cursor)?.clone();
 
         if item.item_type != "Series" {
             return None;
@@ -343,9 +355,10 @@ impl App {
         // or, on a tvshows library, the selected Series — the compact banner
         // layout is generic over the item, so a Series renders its meta +
         // overview the same way a Movie does (design decision 6).
+        let ctx = self.library_list_render_ctx(lib_idx, false);
         let Some(item) = self
-            .selected_movie_item(lib_idx)
-            .or_else(|| self.selected_series_item(lib_idx))
+            .selected_movie_item_with_ctx(lib_idx, &ctx)
+            .or_else(|| self.selected_series_item_with_ctx(lib_idx, &ctx))
         else {
             return;
         };
