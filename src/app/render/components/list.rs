@@ -23,8 +23,8 @@ impl App {
         layout: &mut LayoutMain,
     ) {
         let ctx = self.library_list_render_ctx(lib_idx, false);
-        let final_scroll =
-            self.render_wide_library_rows_with_ctx(f, list_area, &ctx, focused, layout);
+        let final_scroll = self
+            .render_generic_movies_home_video_rows_with_ctx(f, list_area, &ctx, focused, layout);
         if ctx.is_search_active() {
             if let Some(search) = &mut self.libs[lib_idx].search {
                 search.scroll = final_scroll;
@@ -34,7 +34,7 @@ impl App {
         }
     }
 
-    pub(in crate::app::render) fn render_wide_library_rows_with_ctx(
+    pub(in crate::app::render) fn render_generic_movies_home_video_rows_with_ctx(
         &mut self,
         f: &mut Frame,
         list_area: Rect,
