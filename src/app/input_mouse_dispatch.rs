@@ -273,7 +273,7 @@ impl App {
                                         self.select_letter_pill(lib_idx, target);
                                     }
                                 }
-                                _ => {}
+                                TabSelection::Feeds => {}
                             }
                             return;
                         }
@@ -606,7 +606,7 @@ impl App {
                     self.move_audiobookshelf_show_rows(delta * 3);
                 }
             }
-            _ => {}
+            TabSelection::Feeds => {}
         }
     }
 }

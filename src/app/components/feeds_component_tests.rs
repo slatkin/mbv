@@ -110,6 +110,12 @@ fn visible_entries_subscription_group() {
 }
 
 #[test]
+fn group_count_includes_all() {
+    assert_eq!(component().group_count(), 2);
+    assert_eq!(grouped_component().group_count(), 3);
+}
+
+#[test]
 fn clamp_state_works() {
     let mut component = component();
     component.set_content(&[], &[], &[], false, true);
@@ -254,22 +260,61 @@ fn subscription_change_resets_component_selection() {
 
 #[test]
 fn playback_requests_use_the_selected_entry_guid() {
-    let mut component = component();
+    let subscriptions = [FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    let entries = vec![
+        entry("Hidden", false),
+        entry("Second", true),
+        entry("Third", true),
+    ];
+    let mut component = FeedsComponent::new();
+    let grouped_entries = vec![entries.clone()];
+    component.set_content(&subscriptions, &grouped_entries, &entries, false, true);
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Char('w'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
 
     assert_eq!(
         component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
             code: Key::Enter,
             modifiers: KeyModifiers::NONE,
         })),
-        Some(Msg::Shell(ShellRequest::FeedsPlay("First".into())))
+        Some(Msg::Shell(ShellRequest::FeedsPlay("Third".into())))
     );
     assert_eq!(
         component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
             code: Key::Char('e'),
             modifiers: KeyModifiers::NONE,
         })),
-        Some(Msg::Shell(ShellRequest::FeedsEnqueue("First".into())))
+        Some(Msg::Shell(ShellRequest::FeedsEnqueue("Third".into())))
     );
+}
+
+#[test]
+fn unchanged_snapshot_does_not_overwrite_component_cursor() {
+    let mut component = component();
+    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let subscriptions = [FeedSubscription {
+        name: "Test Feed".into(),
+        url: "https://example.test/feed".into(),
+        kind: FeedKind::Audio,
+    }];
+    let entries = vec![entry("First", false), entry("Second", true)];
+    let grouped_entries = vec![entries.clone()];
+    component.set_content(&subscriptions, &grouped_entries, &entries, false, true);
+
+    assert_eq!(component.cursor(), 1);
 }
 
 #[test]

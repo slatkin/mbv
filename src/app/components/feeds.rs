@@ -124,7 +124,7 @@ impl FeedsComponent {
         &self.layout
     }
 
-    fn group_count(&self) -> usize {
+    pub(in crate::app) fn group_count(&self) -> usize {
         1 + self.subscriptions.len()
     }
 
