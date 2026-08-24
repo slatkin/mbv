@@ -77,16 +77,22 @@ impl App {
                 && crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
                     .is_some()
             {
-                let ctx = self.library_list_render_ctx(lib_idx, true);
-                self.render_wide_music_group_with_ctx(
-                    f,
-                    area,
-                    lib_idx,
-                    focused,
-                    &ctx,
-                    self.libs[lib_idx].album_track_focus,
-                    layout,
-                );
+                if let Some(album) = self.selected_album_item(lib_idx) {
+                    if !self.album_tracks_cache.contains_key(&album.id)
+                        && !self.album_tracks_loading.contains(&album.id)
+                    {
+                        self.fetch_album_tracks(album.id);
+                    }
+                }
+                let ctx = self.wide_music_render_ctx(lib_idx);
+                let output =
+                    super::music_wide::render_wide_music_group_with_ctx(f, area, &ctx, layout);
+                if let Some(search) = self.libs[lib_idx].search.as_mut() {
+                    search.scroll = output.final_scroll;
+                } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                    level.scroll = output.final_scroll;
+                }
+                self.paint_music_image(f, output.image_paint);
                 return;
             }
         }

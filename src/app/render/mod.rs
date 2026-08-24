@@ -8,6 +8,7 @@ mod theme;
 // `render::components::help`, but the `components` module is private. Re-export
 // them here so `crate::app::components::help` can import them without widening
 // the whole `render::components` module.
+pub(in crate::app) use components::album_art::MusicImagePaint;
 pub(in crate::app) use components::audiobookshelf_book::{
     render_audiobookshelf_book_content, AudiobookshelfBookGeometry,
 };
@@ -31,6 +32,9 @@ pub(in crate::app) use components::list::render_generic_movies_home_video_rows_w
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
+};
+pub(in crate::app) use components::music_wide::{
+    render_wide_music_group_with_ctx, MusicWideRenderCtx,
 };
 pub(in crate::app) use components::playback::render_playback_chrome_content;
 pub(in crate::app) use components::playback_prompt::render_playback_prompt_content;
@@ -191,7 +195,7 @@ mod settings_tests;
 #[path = "test_helpers.rs"]
 mod test_helpers;
 #[cfg(test)]
-pub(crate) use test_helpers::make_movie_app;
+pub(crate) use test_helpers::{make_movie_app, make_music_group_app};
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;

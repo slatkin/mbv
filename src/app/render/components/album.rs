@@ -398,7 +398,7 @@ impl App {
 
             match row {
                 GroupedAlbumDisplayRow::ArtistHeader(header) => {
-                    self.render_artist_header_row(
+                    super::album_rows::render_artist_header_row(
                         f,
                         row_area,
                         header,
@@ -415,7 +415,7 @@ impl App {
                 }
                 GroupedAlbumDisplayRow::AlbumWrappedContinuation => {}
                 GroupedAlbumDisplayRow::Album(idx) => {
-                    self.render_album_row(
+                    super::album_rows::render_album_row(
                         f,
                         AlbumRowCtx {
                             row_area,
@@ -443,7 +443,7 @@ impl App {
                             )
                         })
                         .count() as u16;
-                    self.render_album_row(
+                    super::album_rows::render_album_row(
                         f,
                         AlbumRowCtx {
                             row_area,

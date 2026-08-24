@@ -66,6 +66,26 @@ fn align_art(container: Rect, w: u16, h: u16, ax: ArtAnchorX, ay: ArtAnchorY) ->
 }
 
 impl App {
+    pub(in crate::app) fn paint_music_image(
+        &mut self,
+        f: &mut Frame,
+        image_paint: Option<MusicImagePaint>,
+    ) {
+        let Some(MusicImagePaint::Album {
+            area,
+            album,
+            centered,
+        }) = image_paint
+        else {
+            return;
+        };
+        if centered {
+            self.render_inline_album_art_centered(f, area, &album, &mut LayoutMain::default());
+        } else {
+            self.render_inline_album_art(f, area, &album, &mut LayoutMain::default());
+        }
+    }
+
     pub(in crate::app::render) fn render_inline_album_art(
         &mut self,
         f: &mut Frame,
@@ -198,4 +218,14 @@ impl App {
 
         img_rect
     }
+}
+
+/// Album artwork that a render component computed but cannot paint because
+/// image-cache authority remains in the shell during the migration.
+pub(in crate::app) enum MusicImagePaint {
+    Album {
+        area: Rect,
+        album: Box<mbv_core::api::EmbyItem>,
+        centered: bool,
+    },
 }

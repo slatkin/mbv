@@ -1,0 +1,185 @@
+//! Interactive Component for grouped Music's wide workspace.
+//!
+//! The shell mirrors album data and cached tracks. Album/track cursor state is
+//! local here; legacy keys still forward to App during stage 1.
+
+use ratatui::layout::Rect;
+use ratatui::Frame;
+use tuirealm::command::{Cmd, CmdResult};
+use tuirealm::component::{AppComponent, Component};
+use tuirealm::event::{Event, Key, MouseEvent};
+use tuirealm::props::{AttrValue, Attribute, QueryResult};
+use tuirealm::state::State;
+
+use super::legacy_input::{to_crossterm_key_event, to_crossterm_mouse_event};
+use super::msg::{LegacyTerminalEvent, Msg};
+use super::user_event::UserEvent;
+use crate::app::layout::{LayoutMain, LibraryRowTarget};
+use crate::app::render::{render_wide_music_group_with_ctx, MusicImagePaint, MusicWideRenderCtx};
+use crate::app::ui_util::move_cursor;
+
+pub struct MusicWorkspaceComponent {
+    context: MusicWideRenderCtx,
+    album_cursor: usize,
+    album_scroll: usize,
+    track_cursor: Option<usize>,
+    initialized: bool,
+    last_mirrored_cursor: usize,
+    last_mirrored_scroll: usize,
+    last_mirrored_track: Option<usize>,
+    layout: LayoutMain,
+    image_paint: Option<MusicImagePaint>,
+}
+
+impl MusicWorkspaceComponent {
+    pub fn new() -> Self {
+        Self {
+            context: MusicWideRenderCtx::new(
+                crate::app::render::LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
+                None,
+                String::new(),
+                Vec::new(),
+                0,
+                Vec::new(),
+                Vec::new(),
+                false,
+                false,
+                None,
+                false,
+                None,
+            ),
+            album_cursor: 0,
+            album_scroll: 0,
+            track_cursor: None,
+            initialized: false,
+            last_mirrored_cursor: 0,
+            last_mirrored_scroll: 0,
+            last_mirrored_track: None,
+            layout: LayoutMain::default(),
+            image_paint: None,
+        }
+    }
+
+    pub(in crate::app) fn set_content(&mut self, context: MusicWideRenderCtx) {
+        if !self.initialized {
+            self.album_cursor = context.list.cursor();
+            self.album_scroll = context.list.scroll();
+            self.track_cursor = context.track_cursor;
+            self.initialized = true;
+        } else {
+            if self.album_cursor == self.last_mirrored_cursor {
+                self.album_cursor = context.list.cursor();
+            }
+            if self.album_scroll == self.last_mirrored_scroll {
+                self.album_scroll = context.list.scroll();
+            }
+            if self.track_cursor == self.last_mirrored_track {
+                self.track_cursor = context.track_cursor;
+            }
+        }
+        self.context = context;
+        self.album_cursor = self
+            .album_cursor
+            .min(self.context.list.item_count().saturating_sub(1));
+        if let Some(cursor) = self.track_cursor {
+            let count = self.context.album_tracks.as_ref().map_or(0, Vec::len);
+            if count > 0 {
+                self.track_cursor = Some(cursor.min(count - 1));
+            }
+        }
+        self.last_mirrored_cursor = self.context.list.cursor();
+        self.last_mirrored_scroll = self.context.list.scroll();
+        self.last_mirrored_track = self.context.track_cursor;
+    }
+
+    pub(in crate::app) fn track_cursor(&self) -> Option<usize> {
+        self.track_cursor
+    }
+
+    fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Up | Key::Char('k') => {
+                self.album_cursor =
+                    move_cursor(self.album_cursor, -1, self.context.list.item_count())
+            }
+            Key::Down | Key::Char('j') => {
+                self.album_cursor =
+                    move_cursor(self.album_cursor, 1, self.context.list.item_count())
+            }
+            _ => {}
+        }
+        Some(Msg::Legacy(LegacyTerminalEvent::Key(
+            to_crossterm_key_event(key),
+        )))
+    }
+
+    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        let mouse = to_crossterm_mouse_event(mouse);
+        if matches!(
+            mouse.kind,
+            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+        ) {
+            let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
+            if self.layout.wide_music_browser_area.contains(position) {
+                let row = position
+                    .y
+                    .saturating_sub(self.layout.wide_music_browser_area.y)
+                    as usize;
+                if let Some(Some(LibraryRowTarget::Album(album))) =
+                    self.layout.left_row_targets.get(row)
+                {
+                    self.album_cursor = *album;
+                }
+            }
+        }
+        Some(Msg::Legacy(LegacyTerminalEvent::Mouse(mouse)))
+    }
+
+    pub(in crate::app) fn take_image_paint(&mut self) -> Option<MusicImagePaint> {
+        self.image_paint.take()
+    }
+}
+
+impl Default for MusicWorkspaceComponent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Component for MusicWorkspaceComponent {
+    fn view(&mut self, frame: &mut Frame, area: Rect) {
+        self.layout = LayoutMain::default();
+        let context = self.context.clone().with_local_state(
+            self.album_cursor,
+            self.album_scroll,
+            self.track_cursor,
+        );
+        let output = render_wide_music_group_with_ctx(frame, area, &context, &mut self.layout);
+        self.album_scroll = output.final_scroll;
+        self.image_paint = output.image_paint;
+    }
+
+    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+        None
+    }
+
+    fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
+
+    fn state(&self) -> State {
+        State::None
+    }
+
+    fn perform(&mut self, _cmd: Cmd) -> CmdResult {
+        CmdResult::NoChange
+    }
+}
+
+impl AppComponent<Msg, UserEvent> for MusicWorkspaceComponent {
+    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
+        match event {
+            Event::Keyboard(key) => self.handle_key(key),
+            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            _ => None,
+        }
+    }
+}

@@ -107,7 +107,7 @@ impl App {
             };
             match &grouped_rows[source_row] {
                 GroupedAlbumDisplayRow::ArtistHeader(header) => {
-                    self.render_artist_header_row(
+                    super::album_rows::render_artist_header_row(
                         f,
                         Rect {
                             y: area.y + (display_row - offset) as u16,
@@ -121,7 +121,7 @@ impl App {
                     );
                 }
                 GroupedAlbumDisplayRow::Album(idx) => {
-                    self.render_album_row(
+                    super::album_rows::render_album_row(
                         f,
                         AlbumRowCtx {
                             row_area: Rect {

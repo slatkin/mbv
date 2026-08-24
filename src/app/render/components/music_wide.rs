@@ -6,26 +6,92 @@ use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::music::{self as music_arrangement, WideMusicLeftLayout};
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
+use crate::app::render::components::music_wide_browser::render_wide_right_album_browser_with_ctx;
+use crate::app::render::components::music_wide_tracks::render_wide_left_tracks;
+use crate::app::render::MusicImagePaint;
 use crate::app::{palette, App, PanelFocus};
-use ratatui::layout::*;
-use ratatui::style::*;
-use ratatui::text::*;
-use ratatui::widgets::*;
+use mbv_core::api::EmbyItem;
+use ratatui::layout::Rect;
+use ratatui::style::{Modifier, Style};
 use ratatui::Frame;
 
-/// Reserved width for the right-aligned track duration column plus its
-/// leading space (`fmt_duration_mmss` output is unbounded but rarely
-/// exceeds this).
-const DURATION_COL_W: usize = 8;
+#[derive(Clone)]
+pub(in crate::app) struct MusicWideRenderCtx {
+    pub(in crate::app) list: LibraryListRenderCtx,
+    pub(in crate::app) selected_album: Option<EmbyItem>,
+    pub(in crate::app) album_artist: String,
+    pub(in crate::app) groups: Vec<EmbyItem>,
+    pub(in crate::app) group_cursor: usize,
+    pub(in crate::app) album_info: Vec<(String, String, String)>,
+    pub(in crate::app) album_order: Vec<usize>,
+    pub(in crate::app) focused: bool,
+    pub(in crate::app) images_enabled: bool,
+    pub(in crate::app) album_tracks: Option<Vec<EmbyItem>>,
+    pub(in crate::app) album_tracks_loading: bool,
+    pub(in crate::app) track_cursor: Option<usize>,
+}
+
+impl MusicWideRenderCtx {
+    #[allow(clippy::too_many_arguments)]
+    pub(in crate::app) fn new(
+        list: LibraryListRenderCtx,
+        selected_album: Option<EmbyItem>,
+        album_artist: String,
+        groups: Vec<EmbyItem>,
+        group_cursor: usize,
+        album_info: Vec<(String, String, String)>,
+        album_order: Vec<usize>,
+        focused: bool,
+        images_enabled: bool,
+        album_tracks: Option<Vec<EmbyItem>>,
+        album_tracks_loading: bool,
+        track_cursor: Option<usize>,
+    ) -> Self {
+        Self {
+            list,
+            selected_album,
+            album_artist,
+            groups,
+            group_cursor,
+            album_info,
+            album_order,
+            focused,
+            images_enabled,
+            album_tracks,
+            album_tracks_loading,
+            track_cursor,
+        }
+    }
+
+    pub(in crate::app) fn with_local_state(
+        mut self,
+        cursor: usize,
+        scroll: usize,
+        track_cursor: Option<usize>,
+    ) -> Self {
+        self.list = self.list.with_cursor_scroll(cursor, scroll);
+        self.track_cursor = track_cursor;
+        self
+    }
+}
+
+pub(in crate::app) struct MusicWideRenderOutput {
+    pub(in crate::app) final_scroll: usize,
+    pub(in crate::app) image_paint: Option<MusicImagePaint>,
+}
+
+impl Default for MusicWideRenderOutput {
+    fn default() -> Self {
+        Self {
+            final_scroll: 0,
+            image_paint: None,
+        }
+    }
+}
 
 /// Strips the "Artist (Year) " folder-name prefix from an album's display
-/// name, returning the bare title and resolved release year. Shared with
-/// the narrow Model A album hero (`render_album_hero_detail`) so both
-/// surfaces agree on the same title/year convention.
-pub(in crate::app::render) fn wide_album_metadata(
-    album: &mbv_core::api::EmbyItem,
-    artist: &str,
-) -> (String, u32) {
+/// name, returning the bare title and resolved release year.
+pub(in crate::app::render) fn wide_album_metadata(album: &EmbyItem, artist: &str) -> (String, u32) {
     let display_name = album.display_name();
     if let Some((parsed_artist, parsed_year, title)) =
         crate::app::render::parse_album_folder_name(&display_name)
@@ -49,415 +115,248 @@ pub(in crate::app::render) fn wide_album_metadata(
 }
 
 impl App {
-    pub(in crate::app::render) fn render_wide_music_group_with_ctx(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        lib_idx: usize,
-        focused: bool,
-        ctx: &LibraryListRenderCtx,
-        track_cursor: Option<usize>,
-        layout: &mut LayoutMain,
-    ) {
-        layout.wide_music_track_hitmap.clear();
-        layout.wide_music_art_area = Rect::default();
-
-        let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {
-            // Too narrow for wide mode — fall back to narrow rendering.
-            self.render_list(f, area, focused, layout);
-            return;
-        };
-        let left_panel = panes.left_panel;
-        let right_panel = panes.right_panel;
-
-        // Keep a library-side separator row below the left pane, while the
-        // right pane remains flush with the status bar below the library area.
-        f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-            Rect {
-                x: left_panel.x,
-                y: left_panel.bottom(),
-                width: left_panel.width,
-                height: 1,
-            },
-        );
-
-        let album = self.selected_album_item(lib_idx);
-
-        // The shared library content area already provides the outer
-        // horizontal gutter. Only retain vertical breathing room here so the
-        // wide panes do not acquire a second two-column frame.
-        let left_area = panes.left_area;
-        let right_area = panes.right_area;
-        layout.wide_music_right_area = right_area;
-
-        // ── Focus state ──────────────────────────────────────────────────
-        // Derive internal pane focus from outer PanelFocus and
-        // album_track_focus without adding persisted focus state.
-        let library_focused = matches!(self.effective_panel_focus(), PanelFocus::Library);
-        let track_active = self.libs[lib_idx].album_track_focus.is_some();
-        // In wide mode: track_active → left focused; otherwise → right focused.
-        let left_focused = library_focused && track_active;
-        let right_focused = library_focused && !track_active;
-
-        // ── Fetch and cache tracks ──────────────────────────────────────
-        let track_count = album
+    pub(in crate::app) fn wide_music_render_ctx(&self, lib_idx: usize) -> MusicWideRenderCtx {
+        let list = self.library_list_render_ctx(lib_idx, true);
+        let lib = &self.libs[lib_idx];
+        let level = lib.nav_stack.last();
+        let selected_album = level
+            .and_then(|level| level.items.get(level.cursor))
+            .cloned();
+        let album_artist = selected_album
             .as_ref()
-            .and_then(|album| self.album_tracks_cache.get(&album.id))
-            .map_or(0, Vec::len);
-        if let Some(album) = album.as_ref() {
-            if !self.album_tracks_cache.contains_key(&album.id)
-                && !self.album_tracks_loading.contains(&album.id)
-            {
-                self.fetch_album_tracks(album.id.clone());
-            }
-        }
-
-        // ── Left pane: hero + tracks ────────────────────────────────────
-        let left_layout = music_arrangement::wide_music_left_layout(
-            left_area,
-            album.is_some() && self.images_enabled(),
-            track_count,
-        );
-        layout.left_area = left_area;
-        layout.hero_area = left_layout.hero_area;
-
-        // Pane background (reciprocal palette).
-        let left_bg = palette::resolve_surface_focus(left_focused);
-        f.render_widget(
-            Block::default().style(Style::default().bg(left_bg)),
-            left_panel,
-        );
-
-        if let Some(album) = album.as_ref() {
-            self.render_wide_left_hero(
-                f,
-                &left_layout,
-                album,
-                left_focused,
-                library_focused,
-                layout,
-            );
+            .map(|album| self.resolve_group_album_artist(album))
+            .unwrap_or_default();
+        let (groups, group_cursor) = if lib.nav_stack.len() >= 2 {
+            let group = &lib.nav_stack[lib.nav_stack.len() - 2];
+            (group.items.clone(), group.cursor)
         } else {
-            crate::app::render::render_placeholder(f, left_area, " Loading\u{2026}");
-        }
-        layout.wide_music_art_area = left_layout.art_area;
-
-        if let Some(album) = album.as_ref() {
-            self.render_wide_left_tracks(
-                f,
-                &left_layout.track_area,
-                album,
-                track_cursor,
-                left_focused,
-                library_focused,
-                layout,
-            );
-        }
-
-        // ── Right pane: pills + album browser ───────────────────────────
-        // Keep the pill bar on the library-side surface. The focused green
-        // surface belongs only to the album list below it.
-        f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
-            right_panel,
-        );
-
-        // Pills at the top of the right rail, then the album browser below
-        // them (design.md decision 6's "pill row at top of list pane"). The
-        // list panel uses the same one-row padding and upper/lower
-        // three-quarter borders as Home's wide list panel; the browser
-        // itself is inset inside it.
-        let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
-        let pills_area = right_pane.pills_area;
-        let search_active = ctx.is_search_active();
-
-        // The fuzzy search box replaces the pill bar at the top of the right
-        // rail while search is active (never pills and filtering at once),
-        // occupying the exact one-row pill slot -- the gap row and browser
-        // panel below it are already reserved either way.
-        if search_active {
-            crate::app::render::components::hero::render_search_box(
-                f,
-                pills_area,
-                ctx.search_query.as_deref().unwrap_or_default(),
-                ctx.search_loading,
-            );
-        } else if pills_area.y + pills_area.height <= right_area.bottom() {
-            self.render_music_group_pills_row(f, pills_area, lib_idx, layout);
-        }
-
-        let list_panel = right_pane.list_panel;
-        // Standard panel padding: the album-row painters supply their own
-        // one-cell leading gutter (see `render_album_row`), so text lands at
-        // the panel's standard interior inset and `draw_column_selection_markers`
-        // draws the edge marker flush with the bg_green panel edge, matching
-        // every other list.
-        let browser_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
-        if list_panel.height > 0 {
-            let list_bg = palette::resolve_surface_focus(right_focused);
-            f.render_widget(
-                Block::default().style(Style::default().bg(list_bg)),
-                list_panel,
-            );
-        }
-        if browser_area.height > 0 && browser_area.width > 0 {
-            if search_active {
-                let cols =
-                    crate::app::library_column_width::library_column_count(browser_area.width);
-                let scroll = super::list_plain::render_plain_rows(
-                    f,
-                    ctx.rows(browser_area, cols, right_focused, 0),
-                    layout,
-                );
-                if let Some(sl) = self.libs[lib_idx].search.as_mut() {
-                    sl.scroll = scroll;
-                }
-            } else {
-                self.render_wide_right_album_browser(
-                    f,
-                    browser_area,
-                    list_panel,
-                    lib_idx,
-                    right_focused,
-                    layout,
-                );
-            }
-        }
-        hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
-    }
-
-    /// Renders the wide left pane's hero: album title, metadata, and
-    /// large centered artwork.
-    fn render_wide_left_hero(
-        &mut self,
-        f: &mut Frame,
-        left_layout: &WideMusicLeftLayout,
-        album: &mbv_core::api::EmbyItem,
-        left_focused: bool,
-        library_focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        let text = &left_layout.text_area;
-        let artist = self.resolve_group_album_artist(album);
-        let (title, release_year) = wide_album_metadata(album, &artist);
-        let title_style = if left_focused || library_focused {
-            Style::default()
-                .fg(palette::TEXT_FOCUS_ACCENT)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(palette::TEXT_FOCUS_ACCENT)
+            (Vec::new(), 0)
         };
-        let show_artist = !artist.is_empty() && artist != "Unknown Artist";
-        let year_text = (release_year > 0).then(|| release_year.to_string());
-        let mut hero_lines = vec![WrappedHeroLine {
-            text: &title,
-            style: title_style,
-        }];
-        if show_artist {
-            hero_lines.push(WrappedHeroLine {
-                text: &artist,
-                style: Style::default().fg(palette::TEXT_METADATA),
-            });
-        }
-        if let Some(year) = year_text.as_deref() {
-            hero_lines.push(WrappedHeroLine {
-                text: year,
-                style: Style::default().fg(palette::TEXT_SECONDARY),
-            });
-        }
-        hero_left::paint_hero_on_left_text(f, *text, &hero_lines);
+        let albums = level.map(|level| level.items.clone()).unwrap_or_default();
+        let catalog = level
+            .and_then(|level| level.music_grouping.as_ref())
+            .and_then(|state| state.settled.clone());
+        let album_info = self.group_album_info(&albums, catalog.as_ref());
+        let album_order = catalog
+            .as_ref()
+            .map(|catalog| {
+                catalog
+                    .entries
+                    .iter()
+                    .map(|entry| entry.album_index)
+                    .filter(|&index| index < albums.len())
+                    .collect()
+            })
+            .unwrap_or_else(|| crate::app::render::sorted_group_album_order(&album_info));
+        let (album_tracks, album_tracks_loading) = selected_album
+            .as_ref()
+            .map(|album| {
+                (
+                    self.album_tracks_cache.get(&album.id).cloned(),
+                    self.album_tracks_loading.contains(&album.id),
+                )
+            })
+            .unwrap_or((None, false));
 
-        // ── Artwork ──
-        if left_layout.art_area.width > 0 && left_layout.art_area.height > 0 {
-            if left_layout.stack_metadata {
-                self.render_inline_album_art_centered(f, left_layout.art_area, album, layout);
-            } else {
-                self.render_inline_album_art(f, left_layout.art_area, album, layout);
-            }
-        }
-    }
-
-    /// Renders the persistent track list in the wide left pane's lower
-    /// region. Shows tracks regardless of `album_track_focus`.
-    /// Keeps the focused track visible and records mouse hit targets.
-    fn render_wide_left_tracks(
-        &mut self,
-        f: &mut Frame,
-        track_area: &Rect,
-        album: &mbv_core::api::EmbyItem,
-        track_cursor: Option<usize>,
-        left_focused: bool,
-        library_focused: bool,
-        layout: &mut LayoutMain,
-    ) {
-        if track_area.height == 0 {
-            return;
-        }
-
-        // Standard hero-on-left recessed content block: same pattern as
-        // Home's overview block, using the shared `hero_on_left_recessed_box`.
-        let (track_panel, track_content) =
-            hero_left::hero_on_left_recessed_box(f, *track_area, PANE_PAD_X, PANE_PAD_Y);
-        if track_content.height == 0 || track_content.width == 0 {
-            return;
-        }
-
-        let list_area = track_content;
-        if list_area.height == 0 {
-            return;
-        }
-
-        match self.album_tracks_cache.get(&album.id) {
-            None => {
-                // Loading state.
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        "Loading\u{2026}",
-                        Style::default().fg(palette::TEXT_MUTED),
-                    ))),
-                    list_area,
-                );
-            }
-            Some(tracks) if tracks.is_empty() => {
-                // Empty state.
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        "(no tracks)",
-                        Style::default().fg(palette::TEXT_MUTED),
-                    ))),
-                    list_area,
-                );
-            }
-            Some(tracks) => {
-                // Track list.
-                let n = tracks.len();
-                let visible = list_area.height as usize;
-                // Preview mode starts from the beginning (offset 0);
-                // focused mode keeps the selected track visible.
-                let scroll = album_track_focus_scroll(track_cursor, n, visible);
-
-                let title_col_w = (list_area.width as usize).saturating_sub(DURATION_COL_W);
-
-                layout.wide_music_track_hitmap.clear();
-
-                for vi in 0..visible {
-                    let ti = scroll + vi;
-                    if ti >= n {
-                        break;
-                    }
-                    let track = &tracks[ti];
-                    let row_y = list_area.y + vi as u16;
-                    let row_rect = Rect {
-                        x: track_panel.x,
-                        y: row_y,
-                        width: track_panel.width,
-                        height: 1,
-                    };
-
-                    let is_cursor = Some(ti) == track_cursor;
-                    let selected = is_cursor && left_focused;
-
-                    let text_fg = if selected {
-                        palette::TEXT_FOCUS_ACCENT
-                    } else if left_focused {
-                        palette::TEXT_STRONG
-                    } else {
-                        palette::TEXT_EMPHASIS
-                    };
-
-                    // Focused-track cursor highlight.
-                    if is_cursor && left_focused {
-                        f.render_widget(
-                            Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
-                            row_rect,
-                        );
-                    }
-
-                    let track_num = if track.index_number > 0 {
-                        format!("{:>2}. ", track.index_number)
-                    } else {
-                        format!("{:>2}. ", ti + 1)
-                    };
-                    let name_w = title_col_w.saturating_sub(track_num.chars().count());
-                    let name = crate::app::ui_util::trunc_str(&track.name, name_w);
-                    let duration = if track.runtime_ticks > 0 {
-                        crate::app::ui_util::fmt_duration_mmss(
-                            track.runtime_ticks / mbv_core::api::TICKS_PER_SECOND,
-                        )
-                    } else {
-                        "\u{2014}".to_string()
-                    };
-
-                    let used = track_num.chars().count() + name.chars().count();
-                    let mut spans = vec![
-                        crate::app::render::selection_marker(
-                            selected,
-                            crate::app::render::MarkerEdge::Left,
-                        ),
-                        Span::raw(" "),
-                    ];
-                    spans.push(Span::styled(track_num, Style::default().fg(text_fg)));
-                    spans.push(Span::styled(name, Style::default().fg(text_fg)));
-                    // Duration right-aligned.
-                    let pad = (list_area.width as usize).saturating_sub(used + duration.len() + 1);
-                    if pad > 0 {
-                        spans.push(Span::raw(" ".repeat(pad)));
-                    }
-                    spans.push(Span::styled(
-                        format!(" {duration}"),
-                        Style::default().fg(palette::STATUS_AVAILABLE),
-                    ));
-
-                    f.render_widget(Paragraph::new(Line::from(spans)), row_rect);
-
-                    // Record the hit target for this track.
-                    layout.wide_music_track_hitmap.push((row_rect, ti));
-                }
-
-                // Scrollbar if needed.
-                if n > visible && library_focused {
-                    let max_offset = n.saturating_sub(visible);
-                    crate::app::render::render_right_scrollbar(
-                        f,
-                        list_area,
-                        max_offset,
-                        scroll,
-                        palette::SCROLLBAR,
-                    );
-                }
-
-                // Publish the selected track rect as the keyboard anchor.
-                if let Some(cursor) = track_cursor {
-                    if cursor >= scroll && cursor < scroll + visible {
-                        let cy = list_area.y + (cursor - scroll) as u16;
-                        layout.selected_item_rect = Some(Rect {
-                            x: list_area.x,
-                            y: cy,
-                            width: list_area.width,
-                            height: 1,
-                        });
-                    }
-                }
-            }
-        }
+        MusicWideRenderCtx::new(
+            list,
+            selected_album,
+            album_artist,
+            groups,
+            group_cursor,
+            album_info,
+            album_order,
+            matches!(self.effective_panel_focus(), PanelFocus::Library),
+            self.images_enabled(),
+            album_tracks,
+            album_tracks_loading,
+            lib.album_track_focus,
+        )
     }
 }
 
-fn album_track_focus_scroll(track_cursor: Option<usize>, count: usize, visible: usize) -> usize {
-    let Some(cursor) = track_cursor else {
-        return 0;
+/// App-free grouped Music painter. The legacy `App` path still performs the
+/// track fetch before building this context; this function consumes only its
+/// resolved presentation data.
+pub(in crate::app) fn render_wide_music_group_with_ctx(
+    f: &mut Frame,
+    area: Rect,
+    ctx: &MusicWideRenderCtx,
+    layout: &mut LayoutMain,
+) -> MusicWideRenderOutput {
+    layout.wide_music_area = area;
+    layout.wide_music_track_hitmap.clear();
+    layout.wide_music_art_area = Rect::default();
+    let mut output = MusicWideRenderOutput::default();
+
+    let Some(panes) = library_arrangement::wide_library_panes(area, 0, PANE_PAD_Y) else {
+        return output;
     };
-    let max_scroll = count.saturating_sub(visible);
-    cursor
-        .saturating_sub(visible.saturating_sub(1))
-        .min(max_scroll)
+    let left_panel = panes.left_panel;
+    let right_panel = panes.right_panel;
+    f.render_widget(
+        ratatui::widgets::Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+        Rect {
+            x: left_panel.x,
+            y: left_panel.bottom(),
+            width: left_panel.width,
+            height: 1,
+        },
+    );
+
+    let left_area = panes.left_area;
+    let right_area = panes.right_area;
+    layout.wide_music_right_area = right_area;
+    let track_active = ctx.track_cursor.is_some();
+    let left_focused = ctx.focused && track_active;
+    let right_focused = ctx.focused && !track_active;
+    let left_layout = music_arrangement::wide_music_left_layout(
+        left_area,
+        ctx.selected_album.is_some() && ctx.images_enabled,
+        ctx.album_tracks.as_ref().map_or(0, Vec::len),
+    );
+    layout.left_area = left_area;
+    layout.hero_area = left_layout.hero_area;
+    f.render_widget(
+        ratatui::widgets::Block::default()
+            .style(Style::default().bg(palette::resolve_surface_focus(left_focused))),
+        left_panel,
+    );
+
+    if let Some(album) = ctx.selected_album.as_ref() {
+        output.image_paint = render_wide_left_hero(
+            f,
+            &left_layout,
+            album,
+            &ctx.album_artist,
+            left_focused,
+            ctx.focused,
+            ctx.images_enabled,
+        );
+        layout.wide_music_art_area = left_layout.art_area;
+        render_wide_left_tracks(
+            f,
+            &left_layout.track_area,
+            album,
+            ctx.album_tracks.as_deref(),
+            ctx.album_tracks_loading,
+            ctx.track_cursor,
+            left_focused,
+            ctx.focused,
+            layout,
+        );
+    } else {
+        crate::app::render::render_placeholder(f, left_area, " Loading\u{2026}");
+    }
+
+    f.render_widget(
+        ratatui::widgets::Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+        right_panel,
+    );
+    let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
+    if ctx.list.is_search_active() {
+        crate::app::render::components::hero::render_search_box(
+            f,
+            right_pane.pills_area,
+            ctx.list.search_query.as_deref().unwrap_or_default(),
+            ctx.list.search_loading,
+        );
+    } else if right_pane.pills_area.y + right_pane.pills_area.height <= right_area.bottom() {
+        crate::app::render::components::music::render_music_group_pills_row_with_ctx(
+            f,
+            right_pane.pills_area,
+            &ctx.groups,
+            ctx.group_cursor,
+            layout,
+        );
+    }
+
+    let list_panel = right_pane.list_panel;
+    let browser_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
+    if list_panel.height > 0 {
+        f.render_widget(
+            ratatui::widgets::Block::default()
+                .style(Style::default().bg(palette::resolve_surface_focus(right_focused))),
+            list_panel,
+        );
+    }
+    if browser_area.height > 0 && browser_area.width > 0 {
+        if ctx.list.is_search_active() {
+            let cols = crate::app::library_column_width::library_column_count(browser_area.width);
+            output.final_scroll = super::list_plain::render_plain_rows(
+                f,
+                ctx.list.rows(browser_area, cols, right_focused, 0),
+                layout,
+            );
+        } else {
+            output.final_scroll = render_wide_right_album_browser_with_ctx(
+                f,
+                browser_area,
+                list_panel,
+                &ctx.album_info,
+                &ctx.album_order,
+                &ctx.list,
+                right_focused,
+                layout,
+            );
+        }
+    }
+    hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
+    output
+}
+
+fn render_wide_left_hero(
+    f: &mut Frame,
+    left_layout: &WideMusicLeftLayout,
+    album: &EmbyItem,
+    artist: &str,
+    left_focused: bool,
+    library_focused: bool,
+    images_enabled: bool,
+) -> Option<MusicImagePaint> {
+    let (title, release_year) = wide_album_metadata(album, artist);
+    let title_style = if left_focused || library_focused {
+        Style::default()
+            .fg(palette::TEXT_FOCUS_ACCENT)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(palette::TEXT_FOCUS_ACCENT)
+    };
+    let show_artist = !artist.is_empty() && artist != "Unknown Artist";
+    let year_text = (release_year > 0).then(|| release_year.to_string());
+    let mut hero_lines = vec![WrappedHeroLine {
+        text: &title,
+        style: title_style,
+    }];
+    if show_artist {
+        hero_lines.push(WrappedHeroLine {
+            text: artist,
+            style: Style::default().fg(palette::TEXT_METADATA),
+        });
+    }
+    if let Some(year) = year_text.as_deref() {
+        hero_lines.push(WrappedHeroLine {
+            text: year,
+            style: Style::default().fg(palette::TEXT_SECONDARY),
+        });
+    }
+    hero_left::paint_hero_on_left_text(f, left_layout.text_area, &hero_lines);
+
+    if images_enabled && left_layout.art_area.width > 0 && left_layout.art_area.height > 0 {
+        return Some(MusicImagePaint::Album {
+            area: left_layout.art_area,
+            album: Box::new(album.clone()),
+            centered: left_layout.stack_metadata,
+        });
+    }
+    None
 }
 
 #[cfg(test)]
 mod tests {
     use super::wide_album_metadata;
     use crate::app::tests::make_item;
+
     #[test]
     fn wide_album_metadata_removes_artist_and_year_prefix() {
         let mut album = make_item("Bob Dylan (1970) New Morning", "MusicAlbum");
