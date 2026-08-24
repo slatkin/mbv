@@ -73,7 +73,7 @@ impl App {
         );
     }
 
-    fn render_wide_music_group_with_ctx(
+    pub(in crate::app::render) fn render_wide_music_group_with_ctx(
         &mut self,
         f: &mut Frame,
         area: Rect,
