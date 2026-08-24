@@ -198,7 +198,7 @@ contributing surface's group 2–4 conversion to have landed.
   fetch state (subscriptions, entries, refresh bookkeeping) — that is not
   component-owned interaction state and 5.6's gate does not require its removal.
   Loose ends verified: filtered playback selection, unchanged-snapshot cursor preservation, component group count, and exhaustive Feeds mouse routing.
-- [ ] 5.3c **Teardown — overlay/modal cluster.** Requires 2.1–2.5, 3.2, 3.7, 3.8, 3.9, 4.7, 4.8, 4.9, 5.2. Delete the `App` open-flags, overlay state, and the `handle_key_*` handlers the converted overlays still forward to, plus the duplicated variable-row geometry in `input_mouse_panels.rs`. Verify `rtk cargo nextest run -p mbv` + scan.
+- [x] 5.3c **Teardown — overlay/modal cluster.** Requires 2.1–2.5, 3.2, 3.7, 3.8, 3.9, 4.7, 4.8, 4.9, 5.2. Delete the `App` open-flags, overlay state, and the `handle_key_*` handlers the converted overlays still forward to, plus the duplicated variable-row geometry in `input_mouse_panels.rs`. Verify `rtk cargo nextest run -p mbv` + scan.
   Dispatched as named units, not as sub-numbered tasks. A unit is sized by the
   **files it forces open**, not by reference count. *Modals* measured 48 files /
   958 changed lines and consumed one agent's whole context — it compiled and
