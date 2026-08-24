@@ -1,5 +1,4 @@
 use super::test_helpers::*;
-use super::*;
 use crate::app::components::{InlineSearchComponent, SearchPool};
 use ratatui::{backend::TestBackend, Terminal};
 use tuirealm::component::{AppComponent, Component};

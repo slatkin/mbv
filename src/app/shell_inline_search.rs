@@ -130,14 +130,13 @@ impl Model {
             }
         }
         self.sync_inline_search();
-        if recursive
+        if (recursive
             && matches!(
                 self.app.album_indexes.get(&self.app.libs[index].library.id),
                 Some(AlbumIndexState::Loading { .. })
-            )
+            ))
+            || needs_full_load
         {
-            self.set_inline_search_loading(true);
-        } else if needs_full_load {
             self.set_inline_search_loading(true);
         }
     }
