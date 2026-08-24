@@ -30,7 +30,7 @@ impl WatchedFilter {
         }
     }
 
-    fn matches(self, played: bool) -> bool {
+    pub(super) fn matches(self, played: bool) -> bool {
         match self {
             Self::All => true,
             Self::Watched => played,

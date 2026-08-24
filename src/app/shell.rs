@@ -79,6 +79,7 @@ impl Model {
         // input stays on the legacy path, only its render is component-owned
         // (task 3.4; see `shell_home.rs`/`components::home`'s module docs).
         model.mount_home();
+        model.mount_feeds();
         // Precedence-gate attribute carrier (see `components::playback_gates`
         // module docs) -- mounted for the whole session, never active/
         // subscribed, so a future `SubClause::HasAttrValue` guard on
@@ -510,6 +511,27 @@ impl Model {
                             }
                             self.app.show_sessions = false;
                         }
+                        Msg::Shell(ShellRequest::RefreshFeeds) => {
+                            self.app.refresh_feeds();
+                        }
+                        Msg::Shell(ShellRequest::FeedsPlay(cursor)) => {
+                            self.app.feed_tab.cursor = cursor;
+                            let _ = self
+                                .app
+                                .handle_feed_tab_key(crossterm::event::KeyEvent::new(
+                                    crossterm::event::KeyCode::Enter,
+                                    crossterm::event::KeyModifiers::NONE,
+                                ));
+                        }
+                        Msg::Shell(ShellRequest::FeedsEnqueue(cursor)) => {
+                            self.app.feed_tab.cursor = cursor;
+                            let _ = self
+                                .app
+                                .handle_feed_tab_key(crossterm::event::KeyEvent::new(
+                                    crossterm::event::KeyCode::Char('e'),
+                                    crossterm::event::KeyModifiers::NONE,
+                                ));
+                        }
                         // Search sidebar: debounce deadline passed. The
                         // component owns the debounce; the shell owns the
                         // Emby client and spawns the search thread (task 3.2).
@@ -538,6 +560,7 @@ impl Model {
             self.sync_search_sidebar();
             self.sync_sessions();
             self.sync_home();
+            self.sync_feeds();
             self.sync_precedence_gates();
 
             self.app.expire_music_grouping_candidates();
@@ -579,6 +602,7 @@ impl Model {
                 if let Err(e) = terminal.draw(|f| {
                     self.app.render(f);
                     self.render_home_component(f);
+                    self.render_feeds_component(f);
                     self.render_help_overlay(f);
                     self.render_confirm_overlay(f);
                     self.render_daemon_lost_overlay(f);

@@ -12,6 +12,7 @@ pub mod component_id;
 pub mod confirm;
 pub mod context_menu;
 pub mod daemon_lost;
+pub mod feeds;
 pub mod help;
 pub mod home;
 pub mod legacy_input;
@@ -26,6 +27,7 @@ pub use self::component_id::{ComponentId, ModalId, OverlayId};
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;
 pub use self::daemon_lost::DaemonLostComponent;
+pub use self::feeds::FeedsComponent;
 pub use self::help::HelpComponent;
 pub use self::home::HomeComponent;
 pub use self::legacy_input::LegacyInput;
@@ -38,6 +40,9 @@ pub use self::search_sidebar::SearchSidebarComponent;
 pub use self::sessions::SessionsComponent;
 pub use self::user_event::UserEvent;
 
+#[cfg(test)]
+#[path = "feeds_component_tests.rs"]
+mod feeds_component_tests;
 #[cfg(test)]
 #[path = "home_component_tests.rs"]
 mod home_component_tests;

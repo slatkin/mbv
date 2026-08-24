@@ -125,6 +125,14 @@ pub enum ShellRequest {
     SelectSession(usize),
     /// Detach the current session/cast playback target.
     DetachSessions,
+    /// Refresh the Feeds subscriptions through the shell-owned worker.
+    RefreshFeeds,
+    /// Play the Feeds component's selected entry through the existing shell
+    /// action path.
+    FeedsPlay(usize),
+    /// Enqueue the Feeds component's selected entry through the existing shell
+    /// action path.
+    FeedsEnqueue(usize),
     /// Play the Home item at the component-owned flat cursor (task 3.4).
     HomePlay(usize),
     /// Enqueue the Home item at the component-owned flat cursor.

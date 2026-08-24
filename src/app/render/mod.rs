@@ -11,6 +11,7 @@ mod theme;
 pub(in crate::app) use components::confirm_modal::render_confirm_modal_content;
 pub(in crate::app) use components::context_menu::render_context_menu_content;
 pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_content;
+pub(in crate::app) use components::feeds::{render_feeds_content, FeedsRenderModel};
 pub(in crate::app) use components::help::{help_destination, render_help_panel, HelpDestination};
 pub(in crate::app) use components::home::render_home_content;
 pub(in crate::app) use components::home_hero::HomeImagePaint;
