@@ -183,7 +183,7 @@ fn scroll_wheel_on_volume_pill_dispatches_the_same_command_as_the_keys() {
 #[test]
 fn settings_mouse_rows_follow_inset_content_area() {
     let mut app = make_app_stub();
-    app.show_settings = true;
+    app.open_sidebar(super::SidebarId::Settings);
     app.terminal_width = 20;
     app.terminal_height = 10;
     app.layout.settings_content_area = Rect::new(2, 4, 15, 3);

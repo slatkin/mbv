@@ -98,7 +98,7 @@ impl App {
         } else {
             self.set_queue_scope(QueueScope::Local);
         }
-        self.show_sessions = false;
+        self.close_sidebar(super::SidebarId::Sessions);
         self.flash(
             format!("Connected directly to {}", sess.device_name),
             ToastSeverity::Success,
@@ -433,7 +433,7 @@ impl App {
         self.remote_pos_s = sess.position_s;
         self.remote_pos_at = Instant::now();
         self.remote_api_pos_advanced_at = Instant::now();
-        self.show_sessions = false;
+        self.close_sidebar(super::SidebarId::Sessions);
         if let Some(error) = direct_upgrade_error {
             self.flash(
                 format!("Direct mbv control failed: {error}; using attached session {name}"),

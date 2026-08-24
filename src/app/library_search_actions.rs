@@ -2,13 +2,14 @@ use super::library_browse_actions::{
     build_album_index_with, fetch_all_album_index_items, recursive_album_search_eligible,
 };
 use super::{
-    AlbumIndexState, AlbumSearchEntry, App, BrowseLevel, LibEvent, PAGE_SIZE, PREFETCH_AHEAD,
+    AlbumIndexState, AlbumSearchEntry, App, BrowseLevel, LibEvent, SidebarId, PAGE_SIZE,
+    PREFETCH_AHEAD,
 };
 impl App {
     /// Open the global search sidebar. Sets the flag; the shell Model mounts
     /// the `SearchSidebarComponent` when it syncs after this call (task 3.2).
     pub(super) fn open_search_sidebar(&mut self) {
-        self.search_sidebar_open = true;
+        self.open_sidebar(SidebarId::Search);
     }
 
     pub(super) fn recursive_album_search_enabled(&self, lib_idx: usize) -> bool {

@@ -195,9 +195,9 @@ impl App {
     }
 
     pub(super) fn open_playlists_panel(&mut self) {
-        self.show_sessions = false;
+        self.close_sidebar(super::SidebarId::Sessions);
         self.close_settings();
-        self.show_playlists = true;
+        self.open_sidebar(super::SidebarId::Playlists);
         if self.playlists.is_empty() && !self.playlists_loading {
             self.spawn_load_playlists();
         }
@@ -240,7 +240,7 @@ impl App {
         };
         self.replace_queue_or_prompt(action);
         if !self.blocking_overlay_active {
-            self.show_playlists = false;
+            self.close_sidebar(super::SidebarId::Playlists);
             self.set_panel_focus(PanelFocus::Queue);
         }
     }

@@ -1,14 +1,14 @@
 use super::types_playback::PlaylistMutation;
 use super::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, SavePlaylistDialog,
-    SavePlaylistStage,
+    SavePlaylistStage, SidebarId,
 };
 use crossterm::event::{KeyCode, KeyEvent};
 use mbv_core::api::EmbyItem;
 
 impl App {
     pub(super) fn handle_key_playlists(&mut self, key: KeyEvent) -> Option<bool> {
-        if !self.show_playlists {
+        if !self.is_sidebar_open(SidebarId::Playlists) {
             return None;
         }
         match key.code {
@@ -20,7 +20,7 @@ impl App {
                     self.playlists_open = None;
                     self.playlists_open_items = Vec::new();
                 } else {
-                    self.show_playlists = false;
+                    self.close_sidebar(SidebarId::Playlists);
                 }
             }
             KeyCode::Backspace => {
@@ -30,12 +30,10 @@ impl App {
                 }
             }
             KeyCode::F(2) => {
-                self.show_playlists = false;
-                self.show_settings = true;
+                self.open_sidebar(SidebarId::Settings);
             }
             KeyCode::F(3) => {
-                self.show_playlists = false;
-                self.show_sessions = true;
+                self.open_sidebar(SidebarId::Sessions);
             }
             KeyCode::Up => {
                 if self.playlists_open.is_some() {
@@ -136,7 +134,7 @@ impl App {
                         };
                         self.replace_queue_or_prompt(action);
                         if !self.blocking_overlay_active {
-                            self.show_playlists = false;
+                            self.close_sidebar(SidebarId::Playlists);
                             self.set_panel_focus(PanelFocus::Queue);
                         }
                     }

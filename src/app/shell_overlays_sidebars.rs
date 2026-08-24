@@ -2,6 +2,7 @@ use super::super::components::{
     ComponentId, HelpComponent, OverlayId, SearchSidebarComponent, SessionsComponent,
 };
 use super::super::shell::Model;
+use super::super::SidebarId;
 
 impl Model {
     // --- Help sidebar -------------------------------------------------------
@@ -10,9 +11,9 @@ impl Model {
     /// non-blocking overlays (settings/sessions/playlists) first, matching the
     /// legacy F1 arms in each of their handlers.
     pub(in crate::app) fn mount_help(&mut self) {
-        self.app.show_settings = false;
-        self.app.show_sessions = false;
-        self.app.show_playlists = false;
+        self.app.close_sidebar(SidebarId::Settings);
+        self.app.close_sidebar(SidebarId::Sessions);
+        self.app.close_sidebar(SidebarId::Playlists);
         self.application
             .mount(
                 ComponentId::Overlay(OverlayId::Help),
@@ -54,7 +55,7 @@ impl Model {
     // --- Search sidebar -----------------------------------------------------
     //
     // The Search sidebar is a non-blocking overlay mounted when
-    // `App::search_sidebar_open` transitions to true. The component owns the
+    // `App::open_sidebar(Search)` transition. The component owns the
     // sidebar state (query, cursor, scroll, type_filter, loading, results)
     // and the 300 ms debounce (driven by `UserEvent::Clock`); the shell owns
     // the Emby client and spawns the search thread (design D4/D5).
@@ -63,16 +64,16 @@ impl Model {
         ComponentId::Overlay(OverlayId::Search)
     }
 
-    /// Sync the Search component mount state with `App::search_sidebar_open`.
+    /// Sync the Search component mount state with the Search sidebar state.
     pub(in crate::app) fn sync_search_sidebar(&mut self) {
         let id = Self::search_id();
         let mounted = self.application.mounted(&id);
-        if self.app.search_sidebar_open && !mounted {
+        if self.app.is_sidebar_open(SidebarId::Search) && !mounted {
             self.application
                 .mount(id.clone(), Box::new(SearchSidebarComponent::new()), vec![])
                 .expect("mount Search");
             self.application.active(&id).expect("activate Search");
-        } else if !self.app.search_sidebar_open && mounted {
+        } else if !self.app.is_sidebar_open(SidebarId::Search) && mounted {
             let _ = self.application.umount(&id);
         }
     }
@@ -121,12 +122,12 @@ impl Model {
     pub(in crate::app) fn sync_sessions(&mut self) {
         let id = Self::sessions_id();
         let mounted = self.application.mounted(&id);
-        if self.app.show_sessions && !mounted {
+        if self.app.is_sidebar_open(SidebarId::Sessions) && !mounted {
             self.application
                 .mount(id.clone(), Box::new(SessionsComponent::new()), vec![])
                 .expect("mount Sessions");
             self.application.active(&id).expect("activate Sessions");
-        } else if !self.app.show_sessions && mounted {
+        } else if !self.app.is_sidebar_open(SidebarId::Sessions) && mounted {
             let _ = self.application.umount(&id);
         }
     }

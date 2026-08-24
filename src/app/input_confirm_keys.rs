@@ -1,7 +1,7 @@
 use super::notify_actions::ToastSeverity;
 use super::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
-    SavePlaylistDialog, SavePlaylistStage, UndoEntry,
+    SavePlaylistDialog, SavePlaylistStage, SidebarId, UndoEntry,
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::playback_queue::RemoveSlotResult;
@@ -167,7 +167,7 @@ impl App {
                             self.execute_pending_queue_action(action);
                         }
                         if play_after {
-                            self.show_playlists = false;
+                            self.close_sidebar(SidebarId::Playlists);
                             self.set_panel_focus(PanelFocus::Queue);
                         }
                     }

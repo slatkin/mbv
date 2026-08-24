@@ -101,6 +101,7 @@ mod types_playback;
 mod types_player_tab;
 mod types_selection_modal;
 mod types_settings;
+mod types_sidebar;
 mod types_tab_selection;
 pub(crate) mod ui_util;
 mod visualizer;
@@ -163,6 +164,7 @@ use self::types_selection_modal::{
 use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};
 #[cfg(test)]
 use self::types_settings::{ServiceEntry, SettingsDestination, SERVICE_ENTRIES};
+pub(crate) use self::types_sidebar::SidebarId;
 use self::types_tab_selection::TabSelection;
 use mbv_core::api::EmbyClient;
 use std::sync::atomic::{AtomicBool, Ordering};

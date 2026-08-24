@@ -3,7 +3,7 @@
 use crate::app::action::Command;
 use crate::app::layout::LibraryRowTarget;
 use crate::app::{
-    App, PanelFocus, PendingQueueAction, QueueScope, PLAYLISTS_PANEL_W, SETTINGS_PANEL_W,
+    App, PanelFocus, PendingQueueAction, QueueScope, SidebarId, PLAYLISTS_PANEL_W, SETTINGS_PANEL_W,
 };
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
@@ -16,9 +16,9 @@ impl App {
         use crossterm::event::{MouseButton, MouseEventKind};
         let col = mouse.column;
         let row = mouse.row;
-        let panel_w: u16 = if self.show_settings {
+        let panel_w: u16 = if self.is_sidebar_open(SidebarId::Settings) {
             SETTINGS_PANEL_W
-        } else if self.show_playlists {
+        } else if self.is_sidebar_open(SidebarId::Playlists) {
             PLAYLISTS_PANEL_W
         } else {
             return false;
@@ -37,14 +37,14 @@ impl App {
         let content_area = self.layout.main.panel_content_area;
         let inside_panel = panel_area.contains((col, row).into());
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) && !inside_panel {
-            if self.show_settings {
+            if self.is_sidebar_open(SidebarId::Settings) {
                 self.close_settings();
             } else {
-                self.show_playlists = false;
+                self.close_sidebar(SidebarId::Playlists);
             }
             return true;
         }
-        if self.show_settings
+        if self.is_sidebar_open(SidebarId::Settings)
             && self.multiselect_popup.is_none()
             && self.feeds_manage_popup.is_none()
         {
@@ -87,7 +87,7 @@ impl App {
             }
             return true;
         }
-        if self.show_playlists {
+        if self.is_sidebar_open(SidebarId::Playlists) {
             let content_top = if panel { content_area.y } else { 1 };
             if self.playlists_open.is_some() {
                 match mouse.kind {
@@ -157,7 +157,7 @@ impl App {
                                     };
                                     self.replace_queue_or_prompt(action);
                                     if !self.blocking_overlay_active {
-                                        self.show_playlists = false;
+                                        self.close_sidebar(SidebarId::Playlists);
                                         self.set_panel_focus(PanelFocus::Queue);
                                     }
                                 }

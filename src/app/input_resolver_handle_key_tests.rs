@@ -100,11 +100,11 @@ fn repeated_space_dispatches_each_available_toggle() {
 #[test]
 fn f2_opens_settings_via_handle_key() {
     let mut app = make_app_stub();
-    assert!(!app.show_settings);
+    assert!(!app.is_sidebar_open(crate::app::SidebarId::Settings));
     app.handle_key(ev(KeyCode::F(2), KeyModifiers::NONE));
-    assert!(app.show_settings);
+    assert!(app.is_sidebar_open(crate::app::SidebarId::Settings));
     // PRESERVED QUIRK: a second F2 press does not close settings. Once
-    // `show_settings` is true, `handle_key_settings` (ordered ahead of
+    // Settings is open, `handle_key_settings` (ordered ahead of
     // `global_overlay_open`/`queue_column_width` in CONTEXT_STACK, matching the
     // pre-phase-2 branch order) claims F2 first and its match has no
     // `F(2)` arm, so it falls to `_ => {}` and swallows the key. This
@@ -112,7 +112,7 @@ fn f2_opens_settings_via_handle_key() {
     // regression introduced by this extraction.
     app.handle_key(ev(KeyCode::F(2), KeyModifiers::NONE));
     assert!(
-        app.show_settings,
+        app.is_sidebar_open(crate::app::SidebarId::Settings),
         "F2 does not toggle settings closed once open; only Esc/F1/F3/F4/q do"
     );
 }
@@ -120,17 +120,17 @@ fn f2_opens_settings_via_handle_key() {
 #[test]
 fn f3_opens_sessions_via_handle_key() {
     let mut app = make_app_stub();
-    assert!(!app.show_sessions);
+    assert!(!app.is_sidebar_open(crate::app::SidebarId::Sessions));
     app.handle_key(ev(KeyCode::F(3), KeyModifiers::NONE));
-    assert!(app.show_sessions);
+    assert!(app.is_sidebar_open(crate::app::SidebarId::Sessions));
 }
 
 #[test]
 fn f4_opens_playlists_via_handle_key() {
     let mut app = make_app_stub();
-    assert!(!app.show_playlists);
+    assert!(!app.is_sidebar_open(crate::app::SidebarId::Playlists));
     app.handle_key(ev(KeyCode::F(4), KeyModifiers::NONE));
-    assert!(app.show_playlists);
+    assert!(app.is_sidebar_open(crate::app::SidebarId::Playlists));
 }
 
 #[test]
@@ -265,7 +265,7 @@ fn context_menu_owns_keyboard_navigation_and_dismissal() {
 #[test]
 fn context_menu_open_is_refused_over_sidebar_surface() {
     let mut app = make_app_stub();
-    app.show_sessions = true;
+    app.open_sidebar(crate::app::SidebarId::Sessions);
     app.open_context_menu();
     assert!(app.context_menu.is_none());
 }
@@ -294,7 +294,8 @@ fn context_menu_swallow_regression_shortcuts() {
     for key in keys {
         app.handle_key_context_menu(key);
         assert!(app.context_menu.is_some(), "{key:?} must be swallowed");
-        assert!(!app.show_settings && !app.show_sessions);
+        assert!(!app.is_sidebar_open(crate::app::SidebarId::Settings));
+        assert!(!app.is_sidebar_open(crate::app::SidebarId::Sessions));
     }
 }
 

@@ -11,11 +11,13 @@ use ratatui::layout::Rect;
 impl Model {
     pub(super) fn sync_settings(&mut self) {
         let id = ComponentId::Overlay(super::components::OverlayId::Settings);
-        if self.app.show_settings && !self.application.mounted(&id) {
+        if self.app.is_sidebar_open(super::SidebarId::Settings) && !self.application.mounted(&id) {
             self.application
                 .mount(id.clone(), Box::new(SettingsComponent::new()), vec![])
                 .expect("mount Settings");
-        } else if !self.app.show_settings && self.application.mounted(&id) {
+        } else if !self.app.is_sidebar_open(super::SidebarId::Settings)
+            && self.application.mounted(&id)
+        {
             let _ = self.application.umount(&id);
             return;
         }
@@ -133,13 +135,13 @@ impl Model {
     pub(super) fn handle_service_request(&mut self, request: ServiceRequest) -> bool {
         match request {
             ServiceRequest::SettingsKey { cursor, key } => {
-                self.app.show_settings = true;
+                self.app.open_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
                 self.app.services_cursor = cursor;
                 self.app.handle_key_services_settings(key).unwrap_or(false)
             }
             ServiceRequest::ActivateService(cursor) => {
-                self.app.show_settings = true;
+                self.app.open_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
                 self.app.services_cursor = cursor;
                 self.app.activate_service_entry();

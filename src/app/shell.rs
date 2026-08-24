@@ -462,18 +462,18 @@ impl Model {
                         Msg::Shell(ShellRequest::Quit) => quit = true,
                         Msg::Shell(ShellRequest::DismissHelp) => self.umount_help(),
                         Msg::Shell(ShellRequest::OpenSettings) => {
-                            self.app.show_sessions = false;
+                            self.app.close_sidebar(super::SidebarId::Sessions);
                             self.umount_help();
-                            self.app.show_settings = true;
+                            self.app.open_sidebar(super::SidebarId::Settings);
                         }
                         Msg::Shell(ShellRequest::OpenSessions) => {
                             self.umount_help();
-                            self.app.show_sessions = true;
+                            self.app.open_sidebar(super::SidebarId::Sessions);
                             self.app.spawn_sessions_load();
                             self.app.spawn_cast_discovery();
                         }
                         Msg::Shell(ShellRequest::OpenPlaylists) => {
-                            self.app.show_sessions = false;
+                            self.app.close_sidebar(super::SidebarId::Sessions);
                             self.umount_help();
                             self.app.open_playlists_panel();
                         }
@@ -499,7 +499,7 @@ impl Model {
                         // open flag, which `sync_search_sidebar` picks up to
                         // unmount (task 3.2).
                         Msg::Shell(ShellRequest::DismissSearch) => {
-                            self.app.search_sidebar_open = false;
+                            self.app.close_sidebar(super::SidebarId::Search);
                         }
                         // Search sidebar: activate result (Enter). The
                         // component owns the cursor/results; the shell owns
@@ -517,7 +517,7 @@ impl Model {
                             self.activate_inline_search_item(id, item_type);
                         }
                         Msg::Shell(ShellRequest::DismissSessions) => {
-                            self.app.show_sessions = false;
+                            self.app.close_sidebar(super::SidebarId::Sessions);
                         }
                         Msg::Shell(ShellRequest::RefreshSessions) => {
                             self.app.spawn_sessions_load();
@@ -537,7 +537,7 @@ impl Model {
                                     ToastSeverity::Success,
                                 );
                             }
-                            self.app.show_sessions = false;
+                            self.app.close_sidebar(super::SidebarId::Sessions);
                         }
                         Msg::Shell(ShellRequest::RefreshFeeds) => {
                             self.app.refresh_feeds();

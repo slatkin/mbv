@@ -1,4 +1,4 @@
-use super::{App, PanelFocus, TabSelection};
+use super::{App, PanelFocus, SidebarId, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::api::EmbyItem;
 // The following are unused by input.rs's own code (the code that used them
@@ -84,11 +84,11 @@ impl App {
 
     pub(super) fn handle_key_global_overlay_open(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code == KeyCode::F(2) {
-            self.show_settings = !self.show_settings;
+            self.toggle_sidebar(SidebarId::Settings);
             return Some(false);
         }
         if key.code == KeyCode::F(3) {
-            self.show_sessions = true;
+            self.open_sidebar(SidebarId::Sessions);
             self.spawn_sessions_load();
             self.spawn_cast_discovery();
             return Some(false);
@@ -104,7 +104,7 @@ impl App {
         if key.modifiers.contains(KeyModifiers::CONTROL)
             && matches!(key.code, KeyCode::Char('/') | KeyCode::Char('_'))
         {
-            if self.search_sidebar_open {
+            if self.is_sidebar_open(SidebarId::Search) {
                 return Some(false);
             }
             self.open_search_sidebar();

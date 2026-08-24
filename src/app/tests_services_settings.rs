@@ -13,7 +13,7 @@ fn enter() -> KeyEvent {
 fn services_destination_is_programmatically_addressable() {
     let mut app = tests::make_app_stub();
     app.open_services_settings();
-    assert!(app.show_settings);
+    assert!(app.is_sidebar_open(crate::app::SidebarId::Settings));
     assert_eq!(app.settings_destination, SettingsDestination::Services);
     assert_eq!(app.services_cursor, 0);
 }
@@ -23,7 +23,7 @@ fn new_independent_empty_setup_opens_services_without_startup_worker() {
     let _guard = TestStateDirGuard::new();
     let app = App::new_independent(crate::config::Config::default());
 
-    assert!(app.show_settings);
+    assert!(app.is_sidebar_open(crate::app::SidebarId::Settings));
     assert_eq!(app.settings_destination, SettingsDestination::Services);
     assert!(app.emby_startup_request.is_none());
 }
@@ -35,7 +35,7 @@ fn validated_emby_setup_preserves_navigation_and_schedules_startup() {
     config.emby_setup = Some(EmbySetup::new("https://emby.example.test", "user-id"));
     let app = App::new_independent(config);
 
-    assert!(!app.show_settings);
+    assert!(!app.is_sidebar_open(crate::app::SidebarId::Settings));
     assert!(app.emby_startup_request.is_some());
 }
 
@@ -46,7 +46,7 @@ fn legacy_server_url_without_setup_opens_services_without_startup_worker() {
     config.server_url = "https://legacy.example.test".into();
     let app = App::new_independent(config);
 
-    assert!(app.show_settings);
+    assert!(app.is_sidebar_open(crate::app::SidebarId::Settings));
     assert_eq!(app.settings_destination, SettingsDestination::Services);
     assert!(app.emby_startup_request.is_none());
 }
@@ -62,7 +62,7 @@ fn feed_only_setup_preserves_navigation_without_emby_startup() {
     });
     let app = App::new_independent(config);
 
-    assert!(!app.show_settings);
+    assert!(!app.is_sidebar_open(crate::app::SidebarId::Settings));
     assert!(app.emby_startup_request.is_none());
 }
 
@@ -137,9 +137,9 @@ fn services_cursor_bounds_and_escape_back() {
     assert_eq!(app.services_cursor, 2);
     app.handle_key_services_settings(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert_eq!(app.settings_destination, SettingsDestination::Main);
-    assert!(app.show_settings);
+    assert!(app.is_sidebar_open(crate::app::SidebarId::Settings));
     app.handle_key_settings(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(!app.show_settings);
+    assert!(!app.is_sidebar_open(crate::app::SidebarId::Settings));
 }
 
 #[test]

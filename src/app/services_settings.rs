@@ -47,7 +47,7 @@ impl EmbySetupForm {
 
 impl App {
     pub(crate) fn open_services_settings(&mut self) {
-        self.show_settings = true;
+        self.open_sidebar(super::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Services;
         self.services_cursor = self.services_cursor.min(SERVICE_ENTRIES.len() - 1);
     }
@@ -214,7 +214,7 @@ impl App {
             KeyCode::Char('q') if key.modifiers.is_empty() => return Some(self.try_quit()),
             KeyCode::F(3) => {
                 self.close_settings();
-                self.show_sessions = true;
+                self.open_sidebar(super::SidebarId::Sessions);
             }
             KeyCode::F(4) => {
                 self.close_settings();

@@ -20,7 +20,7 @@ impl App {
             let cfg = self.config.lock().unwrap().clone();
             crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
         }
-        self.show_settings = false;
+        self.close_sidebar(crate::app::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Main;
     }
 

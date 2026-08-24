@@ -1,11 +1,11 @@
 use super::settings::settings_total_rows;
 use super::types_settings::SettingsDestination;
-use super::App;
+use super::{App, SidebarId};
 use crossterm::event::{KeyCode, KeyEvent};
 
 impl App {
     pub(super) fn handle_key_settings(&mut self, key: KeyEvent) -> Option<bool> {
-        if !self.show_settings {
+        if !self.is_sidebar_open(SidebarId::Settings) {
             return None;
         }
         if matches!(self.settings_destination, SettingsDestination::Services) {
@@ -65,7 +65,7 @@ impl App {
             if matches!(key.code, KeyCode::Char('y')) {
                 mbv_core::api::clear_cached_token();
                 self.confirm_logout = false;
-                self.show_settings = false;
+                self.close_sidebar(SidebarId::Settings);
                 return Some(true);
             } else {
                 self.confirm_logout = false;
@@ -81,7 +81,7 @@ impl App {
             }
             KeyCode::F(3) => {
                 self.close_settings();
-                self.show_sessions = true;
+                self.open_sidebar(SidebarId::Sessions);
             }
             KeyCode::F(4) => {
                 self.close_settings();

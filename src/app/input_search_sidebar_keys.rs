@@ -1,4 +1,4 @@
-use super::App;
+use super::{App, SidebarId};
 
 impl App {
     /// Activate a search result: navigate to the item and close the sidebar.
@@ -9,7 +9,7 @@ impl App {
     pub(super) fn activate_search_result(&mut self, item_id: String, item_type: String) {
         let libs = self.library_tabs_for_nav();
         self.spawn_navigate_to_item(item_id, item_type, libs);
-        self.search_sidebar_open = false;
+        self.close_sidebar(SidebarId::Search);
     }
 }
 

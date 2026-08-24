@@ -5,12 +5,12 @@ impl Model {
     pub(super) fn sync_playlists(&mut self) {
         let id = ComponentId::Overlay(OverlayId::Playlists);
         let mounted = self.application.mounted(&id);
-        if self.app.show_playlists && !mounted {
+        if self.app.is_sidebar_open(super::SidebarId::Playlists) && !mounted {
             self.application
                 .mount(id.clone(), Box::new(PlaylistsComponent::new()), vec![])
                 .expect("mount Playlists");
             self.application.active(&id).expect("activate Playlists");
-        } else if !self.app.show_playlists && mounted {
+        } else if !self.app.is_sidebar_open(super::SidebarId::Playlists) && mounted {
             let _ = self.application.umount(&id);
         }
         if let Some(comp) = self.application.get_component_mut(&id) {
@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn playlists_shell_mounts_and_routes_component() {
         let mut app = make_app_stub();
-        app.show_playlists = true;
+        app.open_sidebar(crate::app::SidebarId::Playlists);
         let mut model = Model::new(app);
         model.sync_playlists();
         let id = ComponentId::Overlay(OverlayId::Playlists);

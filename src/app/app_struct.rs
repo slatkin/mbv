@@ -22,6 +22,7 @@ use super::types_selection_modal::SelectionModal;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
 use super::types_tab_selection::TabSelection;
 use super::visualizer_worker::{PipeWireWorker, StereoSampleWindow};
+use super::SidebarId;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
@@ -229,7 +230,7 @@ pub struct App {
     pub(super) dim_backdrop_active: bool,
     pub(super) image_cache_size_total: usize,
     pub(super) context_menu: Option<ContextMenu>,
-    pub(super) show_settings: bool,
+    pub(super) open_sidebar: Option<SidebarId>,
     pub(super) settings_cursor: usize,
     pub(super) settings_destination: SettingsDestination,
     pub(super) services_cursor: usize,
@@ -251,7 +252,6 @@ pub struct App {
     /// `SearchSidebarComponent` owns the sidebar state (query, cursor, scroll,
     /// results, debounce); this flag tells the legacy render/input path the
     /// overlay is active (task 3.2).
-    pub(super) search_sidebar_open: bool,
     pub(super) sessions: Vec<mbv_core::api::SessionInfo>,
     /// Last cast discovery browse result (8.1), independent of `sessions`'s
     /// own reload cadence -- see `panel_targets::build_panel_targets`.
@@ -260,12 +260,10 @@ pub struct App {
     /// `cast_receivers` by `App::rebuild_panel_targets` (8.1/8.2).
     pub(super) panel_targets: Vec<PanelTarget>,
     pub(super) sessions_loading: bool,
-    pub(super) show_sessions: bool,
     pub(super) playlists: Vec<EmbyItem>,
     pub(super) playlists_cursor: usize,
     pub(super) playlists_scroll: usize,
     pub(super) playlists_loading: bool,
-    pub(super) show_playlists: bool,
     pub(super) playlists_open: Option<EmbyItem>, // playlist currently being browsed
     pub(super) playlists_open_items: Vec<EmbyItem>,
     pub(super) playlists_open_cursor: usize,
@@ -404,6 +402,28 @@ pub struct App {
 }
 
 impl App {
+    pub(super) fn is_sidebar_open(&self, sidebar: SidebarId) -> bool {
+        self.open_sidebar == Some(sidebar)
+    }
+
+    pub(super) fn open_sidebar(&mut self, sidebar: SidebarId) {
+        self.open_sidebar = Some(sidebar);
+    }
+
+    pub(super) fn close_sidebar(&mut self, sidebar: SidebarId) {
+        if self.open_sidebar == Some(sidebar) {
+            self.open_sidebar = None;
+        }
+    }
+
+    pub(super) fn toggle_sidebar(&mut self, sidebar: SidebarId) {
+        if self.is_sidebar_open(sidebar) {
+            self.open_sidebar = None;
+        } else {
+            self.open_sidebar(sidebar);
+        }
+    }
+
     pub(super) fn ask_confirm(&mut self, modal: ConfirmModal) {
         self.pending_overlay = Some(super::types_overlay::OverlayRequest::Confirm(modal));
         self.blocking_overlay_active = true;

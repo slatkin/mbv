@@ -186,7 +186,7 @@ impl App {
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout.settings_area.contains((col, row).into())
         {
-            self.show_settings = !self.show_settings;
+            self.toggle_sidebar(super::SidebarId::Settings);
             return;
         }
 
@@ -449,8 +449,8 @@ impl App {
                 }
 
                 if self.layout.playback.ind_rc.contains((col, row).into()) {
-                    self.show_sessions = !self.show_sessions;
-                    if self.show_sessions {
+                    self.toggle_sidebar(super::SidebarId::Sessions);
+                    if self.is_sidebar_open(super::SidebarId::Sessions) {
                         self.spawn_sessions_load();
                         self.spawn_cast_discovery();
                     }
