@@ -75,18 +75,10 @@ impl MusicWideRenderCtx {
     }
 }
 
+#[derive(Default)]
 pub(in crate::app) struct MusicWideRenderOutput {
     pub(in crate::app) final_scroll: usize,
     pub(in crate::app) image_paint: Option<MusicImagePaint>,
-}
-
-impl Default for MusicWideRenderOutput {
-    fn default() -> Self {
-        Self {
-            final_scroll: 0,
-            image_paint: None,
-        }
-    }
 }
 
 /// Strips the "Artist (Year) " folder-name prefix from an album's display
