@@ -21,4 +21,4 @@
 - [x] 4.1 Document `mbvd/libmpv -> ALSA playback endpoint -> paired capture endpoint -> Snapserver`, including host/LXC device provisioning, permissions, sample-format agreement, downstream-buffer ownership, migration, and rollback.
 - [x] 4.2 Update packaged configuration examples to show inherited `audio_device = "alsa"`, explicit loopback selection, and `audio_pipe_enabled = true` as the legacy path without removing existing pipe keys.
 - [x] 4.3 Run `cargo nextest run -p mbv-core` and the affected `mbvd` package tests, `cargo check` for both packages, workspace Clippy, and the code-file line-limit check through the repository's `rtk` commands.
-- [ ] 4.4 On a host with a writable ALSA endpoint, obtain explicit listener readiness before sending controls, then record synchronized startup, pause, and resume Player-boundary timings separately from audible and downstream Snapcast timing.
+- [x] 4.4 On a host with a writable ALSA endpoint, obtain explicit listener readiness before sending controls, then record synchronized startup, pause, and resume Player-boundary timings separately from audible and downstream Snapcast timing.

@@ -10,7 +10,12 @@ playback belongs to the terminal, Local daemon, or packaged `mbvd`.
   would collide with or rename an existing entry, flag it to the user instead
   of resolving it unilaterally.
 - Current (not superseded) ADRs in `docs/adr/` before architecture changes.
-- `openspec` contains current and archived specs for major implementations.
+- Design changes live in `openspec/changes/<name>/`; otherwise use GitHub
+  Issues/discussions (`slatkin/mbv`) and gists for ad-hoc notes.
+- Commit specs/plans/docs with code; merge applied deltas into `openspec/specs/`
+  and archive completed changes.
+- For code exploration, Serena can be used and should be scoped to the
+  current worktree.
 
 ## Boundaries
 
@@ -70,9 +75,3 @@ bypass filtering. `rtk grep` format flags (`-c/-l/-L/-o/-Z`) run raw.
   confirmed root cause before writing a fix. A fix proposed without that
   evidence is a guess, not a fix — say so and stop instead of shipping it.
 
-## Project process
-
-- Design changes live in `openspec/changes/<name>/`; otherwise use GitHub
-  Issues/discussions (`slatkin/mbv`) and gists for ad-hoc notes.
-- Commit specs/plans/docs with code; merge applied deltas into `openspec/specs/`
-  and archive completed changes.
