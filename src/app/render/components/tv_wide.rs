@@ -45,7 +45,7 @@ impl App {
         );
     }
 
-    fn render_wide_tv_with_ctx(
+    pub(in crate::app::render) fn render_wide_tv_with_ctx(
         &mut self,
         f: &mut Frame,
         area: Rect,
