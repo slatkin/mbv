@@ -21,8 +21,8 @@ use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
 use super::components::{
-    ComponentId, LegacyInput, LegacyTerminalEvent, LibraryComponent, Msg, OverlayId,
-    PlaybackComponent, ShellRequest, UserEvent,
+    ComponentId, LegacyTerminalEvent, LibraryComponent, Msg, OverlayId, PlaybackComponent,
+    ShellRequest, UiRootComponent, UserEvent,
 };
 use super::service_startup;
 use super::{
@@ -76,20 +76,20 @@ impl Model {
             abs_podcast_id: None,
             abs_book_id: None,
         };
-        // Checkpoint 1: the only mounted component is the temporary
-        // LegacyInput bridge, occupying the UiRoot slot. It is the active
-        // component so every terminal event is forwarded to it.
-        // TODO(migrate-tui-to-tuirealm): replace this mount with the real
-        // UiRoot component as surfaces convert (task 5.2); remove LegacyInput
-        // at task 5.3.
+        // UiRoot owns overlay z-order and delegates terminal translation to the
+        // temporary bridge while converted surfaces still mirror App state.
         model
             .application
-            .mount(ComponentId::UiRoot, Box::new(LegacyInput), vec![])
-            .expect("mount LegacyInput bridge");
+            .mount(
+                ComponentId::UiRoot,
+                Box::new(UiRootComponent::new()),
+                vec![],
+            )
+            .expect("mount UiRoot");
         model
             .application
             .active(&ComponentId::UiRoot)
-            .expect("activate LegacyInput bridge");
+            .expect("activate UiRoot");
         // Home is mounted for the whole session but never made active: its
         // input stays on the legacy path, only its render is component-owned
         // (task 3.4; see `shell_home.rs`/`components::home`'s module docs).
@@ -667,6 +667,7 @@ impl Model {
             self.sync_music_workspace();
             self.sync_inline_search();
             self.sync_library_parent();
+            self.sync_overlay_stack();
             self.sync_precedence_gates();
 
             self.app.expire_music_grouping_candidates();
@@ -707,7 +708,6 @@ impl Model {
                 }
                 if let Err(e) = terminal.draw(|f| {
                     self.app.render(f);
-                    self.render_settings_overlay(f);
                     self.render_playback_component(f);
                     self.render_home_component(f);
                     self.render_feeds_component(f);
@@ -718,20 +718,8 @@ impl Model {
                     self.render_music_workspace_component(f);
                     self.render_inline_search_component(f);
                     self.render_queue_component(f);
-                    self.render_playlists_overlay(f);
-                    self.render_save_playlist_overlay(f);
                     self.render_playback_prompt(f);
-                    self.render_help_overlay(f);
-                    self.render_confirm_overlay(f);
-                    self.render_daemon_lost_overlay(f);
-                    self.render_remote_reanchor_overlay(f);
-                    self.render_context_menu_overlay(f);
-                    self.render_selection_modal_overlay(f);
-                    self.render_multiselect_popup(f);
-                    self.render_library_routes_popup(f);
-                    self.render_feeds_manage_popup(f);
-                    self.render_search_overlay(f);
-                    self.render_sessions_overlay(f);
+                    self.render_overlay_stack(f);
                 }) {
                     log::error!(
                         target: "run_loop",

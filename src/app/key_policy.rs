@@ -10,7 +10,11 @@
 #![allow(dead_code)]
 
 use super::components::component_id::{ModalId, OverlayId};
-use super::components::ComponentId;
+use super::components::{
+    ComponentId, ATTR_ALBUM_TRACK_FOCUSED, ATTR_BLOCKING_OVERLAY_ACTIVE, ATTR_LIB_SEARCH_ACTIVE,
+};
+use tuirealm::props::{AttrValue, Attribute};
+use tuirealm::subscription::SubClause;
 
 /// One layer of the key-policy precedence stack: a name for assertions/debugging,
 /// the TuiRealm owner that receives the key, the gate that determines
@@ -46,6 +50,24 @@ pub(super) enum KeyPolicyGate {
     NotIsMounted(ComponentId),
     /// Custom gate described by string; wired at surface conversion.
     Custom(&'static str),
+    /// A live TuiRealm attribute clause for state resolved by the shell.
+    HasAttrValue(ComponentId, Attribute, AttrValue),
+    /// The negated form of a live TuiRealm attribute clause.
+    NotHasAttrValue(ComponentId, Attribute, AttrValue),
+}
+
+impl KeyPolicyGate {
+    pub(super) fn sub_clause(&self) -> Option<SubClause<ComponentId>> {
+        match self {
+            Self::HasAttrValue(id, attr, value) => {
+                Some(SubClause::HasAttrValue(id.clone(), *attr, value.clone()))
+            }
+            Self::NotHasAttrValue(id, attr, value) => Some(SubClause::Not(Box::new(
+                SubClause::HasAttrValue(id.clone(), *attr, value.clone()),
+            ))),
+            _ => None,
+        }
+    }
 }
 
 /// The full key-policy precedence table, first-match-wins, mirroring the exact
@@ -81,7 +103,11 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
     KeyPolicyEntry {
         name: "global_overlay_open",
         owner: KeyPolicyOwner::Sub(ComponentId::UiRoot),
-        gate: KeyPolicyGate::Custom("Not(IsMounted(blocking overlay))"),
+        gate: KeyPolicyGate::NotHasAttrValue(
+            ComponentId::Playback,
+            ATTR_BLOCKING_OVERLAY_ACTIVE,
+            AttrValue::Flag(true),
+        ),
         blocking: false,
     },
     // 12 — Queue column width
@@ -104,7 +130,11 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         // (e.g. a `SubClause` built per-instance at mount time) when wiring
         // this live.
         owner: KeyPolicyOwner::Active(None),
-        gate: KeyPolicyGate::Custom("active library tab's LibSearch is Some"),
+        gate: KeyPolicyGate::HasAttrValue(
+            ComponentId::Playback,
+            ATTR_LIB_SEARCH_ACTIVE,
+            AttrValue::Flag(true),
+        ),
         blocking: false,
     },
     // 15 — Panel mode cycle
@@ -182,7 +212,11 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         // Same runtime-parameterized-key limitation as `lib_search` above --
         // `Browser(BrowserKey)` has no single static value to assert.
         owner: KeyPolicyOwner::Active(None),
-        gate: KeyPolicyGate::Custom("album_track_focus.is_some()"),
+        gate: KeyPolicyGate::HasAttrValue(
+            ComponentId::Playback,
+            ATTR_ALBUM_TRACK_FOCUSED,
+            AttrValue::Flag(true),
+        ),
         blocking: false,
     },
     // 24 — View dispatch (catch-all; resolves to focused Library leaf at runtime)

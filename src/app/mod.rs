@@ -124,6 +124,7 @@ mod shell_playback;
 mod shell_playback_prompt;
 mod shell_playlists;
 mod shell_queue;
+mod shell_root;
 mod shell_settings;
 mod shell_tv_workspace;
 pub use self::shell::Model;

@@ -1,4 +1,4 @@
-use super::components::{ComponentId, ModalId, OverlayId, PlaybackPromptComponent};
+use super::components::{ComponentId, PlaybackPromptComponent};
 use super::shell::Model;
 
 impl Model {
@@ -44,18 +44,6 @@ impl Model {
     }
 
     pub(super) fn is_blocking_overlay_open(&self) -> bool {
-        self.application
-            .mounted(&ComponentId::Overlay(OverlayId::ContextMenu))
-            || self.app.selection_modal.is_some()
-            || self
-                .application
-                .mounted(&ComponentId::Modal(ModalId::DaemonLost))
-            || self
-                .application
-                .mounted(&ComponentId::Modal(ModalId::Confirm))
-            || self
-                .application
-                .mounted(&ComponentId::Modal(ModalId::RemoteReanchor))
-            || self.app.save_playlist_dialog.is_some()
+        self.blocking_overlay_active()
     }
 }

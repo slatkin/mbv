@@ -31,6 +31,7 @@ pub mod playback_prompt;
 pub mod playlists;
 pub mod queue;
 pub mod remote_reanchor;
+pub mod root;
 pub mod save_playlist;
 pub mod search_sidebar;
 pub mod selection_modal;
@@ -61,11 +62,15 @@ pub use self::msg::{
 pub use self::multiselect::MultiselectComponent;
 pub use self::music_workspace::MusicWorkspaceComponent;
 pub(in crate::app) use self::playback::{PlaybackComponent, PlaybackProjection};
-pub use self::playback::{ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE};
+pub use self::playback::{
+    ATTR_ALBUM_TRACK_FOCUSED, ATTR_BLOCKING_OVERLAY_ACTIVE, ATTR_LIB_SEARCH_ACTIVE,
+    ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE,
+};
 pub use self::playback_prompt::PlaybackPromptComponent;
 pub use self::playlists::PlaylistsComponent;
 pub use self::queue::QueueComponent;
 pub use self::remote_reanchor::RemoteReanchorComponent;
+pub(in crate::app) use self::root::UiRootComponent;
 pub use self::save_playlist::SavePlaylistComponent;
 pub use self::search_sidebar::SearchSidebarComponent;
 pub use self::selection_modal::SelectionModalComponent;
