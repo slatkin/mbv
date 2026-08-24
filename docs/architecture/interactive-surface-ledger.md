@@ -6,26 +6,30 @@ conversion policy are accepted in ADR 0022.
 
 The architecture map and ledger were reviewed on 2026-08-23. The earlier bespoke
 component and incremental-migration ADRs were replaced when the project was
-reframed as migration of the existing TUI framework to TuiRealm. Every row remains
-`legacy`; implementation waits for the TuiRealm integration design.
+reframed as migration of the existing TUI framework to TuiRealm. Rows move from
+`legacy` to `component` during the mirror-first implementation stage, then to
+`migrated` after teardown.
 
 ## States
 
 - `legacy`: local state, input, update, rendering, or render-derived interaction
   data still depends on global `App` ownership.
+- `component`: the component has landed and paints the surface; the shell still
+  mirrors `App` state and/or legacy input still forwards; `App` teardown is
+  pending group 5.
 - `migrated`: one component owns its approved local boundary; old `App` fields and
   handlers are removed rather than mirrored; static and behavior checks pass.
 
-No other committed state is valid. Temporary adapters may exist inside the
+These are the only committed states. Temporary adapters may exist inside the
 complete-conversion change, but a mixed TuiRealm/legacy framework is not a completed
-or mergeable endpoint even when individual rows are marked `migrated`.
+or mergeable endpoint even when individual rows are marked `component`.
 
 ## Update Rules
 
 - New independently interactive surfaces receive a row before implementation and
-  must enter as `migrated`.
-- Existing rows change to `migrated` only in the PR that completes and verifies the
-  ownership move.
+  enter as `legacy`, then change to `component` when their component lands.
+- Existing rows change to `component` when their component lands and to
+  `migrated` only in the PR that completes and verifies the ownership move.
 - Splitting or combining rows requires an update to the architecture map and a
   rationale in issue #603.
 - An exception to the legacy no-new-debt rule requires maintainer approval recorded
@@ -50,20 +54,20 @@ or mergeable endpoint even when individual rows are marked `migrated`.
 | Library | Audiobookshelf book browser | legacy | ABS book state/actions/renderers | Browser/chapter workspace |
 | Library | Feeds | legacy | feed state/actions/renderers | Grouping, selector and inline hero |
 | Root | Overlay stack | legacy | `App` options/flags and `CONTEXT_STACK` | Parent owns overlay presence and priority |
-| Overlay stack | Global Search sidebar | migrated (2026-08-23) | `SearchSidebarComponent` (`src/app/components/search_sidebar.rs`); shell Model mounts/umounts on `App::search_sidebar_open` transitions, component owns sidebar state (query/cursor/scroll/type_filter/loading/results) + 300 ms debounce driven by `UserEvent::Clock`, renders via `application.view()`, emits `Msg::Shell(DismissSearch/SearchActivate)` and `Msg::Service(SearchQuery)` for cross-boundary work | Component-owned debounce; 25 component+render tests + ast-grep clean |
+| Overlay stack | Global Search sidebar | component (2026-08-23) | `SearchSidebarComponent` (`src/app/components/search_sidebar.rs`); shell Model mounts/umounts on `App::search_sidebar_open` transitions, component owns sidebar state (query/cursor/scroll/type_filter/loading/results) + 300 ms debounce driven by `UserEvent::Clock`, renders via `application.view()`, emits `Msg::Shell(DismissSearch/SearchActivate)` and `Msg::Service(SearchQuery)` for cross-boundary work | Component-owned debounce; 25 component+render tests + ast-grep clean; teardown pending group 5 |
 | Overlay stack | Settings sidebar and setup forms | legacy | `App` settings/forms and settings input/render paths | Service effects remain shell-owned |
 | Settings | Multiselect popup | legacy | `App.multiselect_popup` and modal handlers | Nested Settings child |
 | Settings | Library-routes popup | legacy | `App.library_routes_popup` and modal handlers | Nested Settings child |
 | Settings | Feed-management popup | legacy | `App.feeds_manage_popup` and handlers | Nested Settings child |
-| Overlay stack | Sessions sidebar | migrated | `SessionsComponent` with shell-owned session/cast snapshots | OpenSpec `migrate-tui-to-tuirealm`, `rtk cargo nextest run -p mbv sessions`, component and render characterization tests, `rtk ast-grep scan` |
+| Overlay stack | Sessions sidebar | component | `SessionsComponent` with shell-owned session/cast snapshots | OpenSpec `migrate-tui-to-tuirealm`, `rtk cargo nextest run -p mbv sessions`, component and render characterization tests, `rtk ast-grep scan`; teardown pending group 5 |
 | Overlay stack | Playlists sidebar | legacy | `App` playlist state and handlers | Variable-row geometry is duplicated in mouse path |
 | Playlists | Save-playlist dialog | legacy | `App.save_playlist_dialog` and handlers | Child of Playlists workflow |
-| Overlay stack | Help sidebar | migrated (2026-08-23) | `HelpComponent` (`src/app/components/help.rs`); shell Model mounts/umounts, intercepts F1, renders via `application.view()` | Local scroll; destination-derived content; 27 component+render tests + ast-grep clean |
-| Overlay stack | Context menu | migrated (2026-08-23) | `ContextMenuComponent` (`src/app/components/context_menu.rs`); shell Model mounts/umounts on `App::context_menu` transitions, forwards keys to existing `handle_key_context_menu`, `App::render_context_menu` does placement (writes `layout.context_menu_rect`), component paints via `application.view()` | Exclusive overlay with anchor geometry; 4 component+render tests + ast-grep clean |
+| Overlay stack | Help sidebar | component (2026-08-23) | `HelpComponent` (`src/app/components/help.rs`); shell Model mounts/umounts, intercepts F1, renders via `application.view()` | Local scroll; destination-derived content; 27 component+render tests + ast-grep clean; teardown pending group 5 |
+| Overlay stack | Context menu | component (2026-08-23) | `ContextMenuComponent` (`src/app/components/context_menu.rs`); shell Model mounts/umounts on `App::context_menu` transitions, forwards keys to existing `handle_key_context_menu`, `App::render_context_menu` does placement (writes `layout.context_menu_rect`), component paints via `application.view()` | Exclusive overlay with anchor geometry; 4 component+render tests + ast-grep clean; teardown pending group 5 |
 | Overlay stack | Selection modal | legacy | `App.selection_modal`, source actions/input/render | Explicit row and selector targets |
-| Overlay stack | Confirm modal | migrated (2026-08-23) | `ConfirmComponent` (`src/app/components/confirm.rs`); shell Model mounts/umounts on `App::confirm_modal` transitions, forwards keys to existing `handle_key_confirm_modal`, renders via `application.view()` | Shared yes/no workflow; component forwards key, shell owns action dispatch; 7 component+render tests + ast-grep clean |
-| Overlay stack | Daemon-lost modal | migrated (2026-08-23) | `DaemonLostComponent` (`src/app/components/daemon_lost.rs`); shell Model mounts/umounts on `App::daemon_lost_modal` transitions, forwards keys to existing `handle_key_daemon_lost_modal`, renders via `application.view()` | Process-lifecycle effects remain shell-owned; 6 component+render tests + ast-grep clean |
-| Overlay stack | Remote-reanchor popup | migrated (2026-08-23) | `RemoteReanchorComponent` (`src/app/components/remote_reanchor.rs`); shell Model mounts/umounts on `App::remote_reanchor_popup` transitions, forwards keys to existing `handle_key_remote_reanchor`, renders via `application.view()` | Remote reconciliation stays shell-owned; 5 component+render tests + ast-grep clean |
+| Overlay stack | Confirm modal | component (2026-08-23) | `ConfirmComponent` (`src/app/components/confirm.rs`); shell Model mounts/umounts on `App::confirm_modal` transitions, forwards keys to existing `handle_key_confirm_modal`, renders via `application.view()` | Shared yes/no workflow; component forwards key, shell owns action dispatch; 7 component+render tests + ast-grep clean; teardown pending group 5 |
+| Overlay stack | Daemon-lost modal | component (2026-08-23) | `DaemonLostComponent` (`src/app/components/daemon_lost.rs`); shell Model mounts/umounts on `App::daemon_lost_modal` transitions, forwards keys to existing `handle_key_daemon_lost_modal`, renders via `application.view()` | Process-lifecycle effects remain shell-owned; 6 component+render tests + ast-grep clean; teardown pending group 5 |
+| Overlay stack | Remote-reanchor popup | component (2026-08-23) | `RemoteReanchorComponent` (`src/app/components/remote_reanchor.rs`); shell Model mounts/umounts on `App::remote_reanchor_popup` transitions, forwards keys to existing `handle_key_remote_reanchor`, renders via `application.view()` | Remote reconciliation stays shell-owned; 5 component+render tests + ast-grep clean; teardown pending group 5 |
 | Root | Playback prompts (skip-intro/next-up) | legacy | `App` prompt state, notification/input handlers | Player effects remain shell-owned |
 | Library | Inline album-track interaction | legacy | `LibraryTab.album_track_focus`, resolver and album handlers | Child state machine, not global Search |
 

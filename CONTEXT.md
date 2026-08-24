@@ -390,6 +390,12 @@ routed surface's local presentation state, input interpretation, updates,
 rendering, and geometry, and returns typed requests for work outside its authority.
 _Avoid_: component (bare), controller, render component, widget
 
+**`component` state**:
+The intermediate interactive-surface ledger state in which an Interactive
+Component paints the surface while the shell still mirrors `App` state and/or
+legacy input still forwards; `App` teardown remains pending group 5.
+_Avoid_: migrated (until the mirror and legacy handler are removed)
+
 **Arrangement**:
 A `src/app/render/arrangements/` unit that takes a typed content model plus a
 `Rect`, places one or more components, and owns breakpoints and rect
