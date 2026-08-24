@@ -98,7 +98,16 @@ impl App {
                 && crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
                     .is_some()
             {
-                self.render_wide_music_group(f, area, lib_idx, focused, layout);
+                let ctx = self.library_list_render_ctx(lib_idx, true);
+                self.render_wide_music_group_with_ctx(
+                    f,
+                    area,
+                    lib_idx,
+                    focused,
+                    &ctx,
+                    self.libs[lib_idx].album_track_focus,
+                    layout,
+                );
                 return;
             }
         }
@@ -114,7 +123,17 @@ impl App {
                 && crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
                     .is_some()
             {
-                self.render_wide_movies(f, area, lib_idx, focused, layout);
+                let ctx = self.library_list_render_ctx(lib_idx, false);
+                let selected_movie = self.selected_wide_movie(lib_idx, &ctx);
+                self.render_wide_movies_with_ctx(
+                    f,
+                    area,
+                    lib_idx,
+                    focused,
+                    &ctx,
+                    selected_movie.as_ref(),
+                    layout,
+                );
                 return;
             }
         }
@@ -124,7 +143,21 @@ impl App {
                 && crate::app::render::arrangements::hero_left::shared_hero_presentation(area)
                     .is_some()
             {
-                self.render_wide_tv(f, area, lib_idx, focused, layout);
+                let ctx = self.library_list_render_ctx(lib_idx, false);
+                let selected_series = ctx
+                    .items
+                    .get(ctx.cursor)
+                    .cloned()
+                    .filter(|item| item.item_type == "Series");
+                self.render_wide_tv_with_ctx(
+                    f,
+                    area,
+                    lib_idx,
+                    focused,
+                    &ctx,
+                    selected_series.as_ref(),
+                    layout,
+                );
                 return;
             }
         }
