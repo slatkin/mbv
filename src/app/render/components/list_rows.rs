@@ -245,6 +245,49 @@ pub(in crate::app::render) struct ListRenderCtx<'a> {
     pub(in crate::app::render) hero_rows: u16,
 }
 
+/// Owned browser-list inputs shared by narrow and wide renderers. The shell
+/// builds this once from the active source; renderers no longer choose between
+/// search results and the navigation level while painting rows.
+pub(in crate::app::render) struct LibraryListRenderCtx {
+    pub(in crate::app::render) items: Vec<mbv_core::api::EmbyItem>,
+    pub(in crate::app::render) cursor: usize,
+    pub(in crate::app::render) scroll: usize,
+    pub(in crate::app::render) total_count: usize,
+    pub(in crate::app::render) library_total: Option<usize>,
+    pub(in crate::app::render) letter_filter: Option<super::super::LetterFilter>,
+    pub(in crate::app::render) loading: bool,
+    pub(in crate::app::render) search_query: Option<String>,
+    pub(in crate::app::render) search_loading: bool,
+}
+
+impl LibraryListRenderCtx {
+    pub(in crate::app::render) fn rows(
+        &self,
+        content_area: Rect,
+        cols: usize,
+        focused: bool,
+        hero_rows: u16,
+    ) -> ListRenderCtx<'_> {
+        ListRenderCtx {
+            content_area,
+            items: &self.items,
+            cursor: self.cursor,
+            stored_scroll: self.scroll,
+            cols,
+            focused,
+            hero_rows,
+        }
+    }
+
+    pub(in crate::app::render) fn is_search_active(&self) -> bool {
+        self.search_query.is_some()
+    }
+
+    pub(in crate::app::render) fn true_total(&self) -> usize {
+        self.library_total.unwrap_or(self.total_count)
+    }
+}
+
 /// Builds the title (+ optional duration) spans for one list row, shared by
 /// both the letter-grouped and plain-list rendering branches (identical
 /// styling logic, only how `title`/`dur_str`/`avail` are computed differs
