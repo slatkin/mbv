@@ -35,6 +35,7 @@ pub(super) mod home_video;
 pub mod indicators;
 pub(super) mod library_routes;
 pub(super) mod list;
+pub(super) mod list_context;
 pub(super) mod list_letter_groups;
 pub(super) mod list_plain;
 pub(super) mod list_rows;
