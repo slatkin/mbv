@@ -47,9 +47,11 @@ impl Model {
             return;
         };
         let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index);
+        let columns = self.app.current_library_columns(index);
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(music) = comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>() {
                 music.set_content(context);
+                music.set_album_columns(columns);
             }
         }
     }

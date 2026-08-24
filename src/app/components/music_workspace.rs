@@ -21,6 +21,7 @@ use crate::app::ui_util::move_cursor;
 pub struct MusicWorkspaceComponent {
     context: MusicWideRenderCtx,
     album_cursor: usize,
+    album_columns: usize,
     album_scroll: usize,
     track_cursor: Option<usize>,
     initialized: bool,
@@ -49,6 +50,7 @@ impl MusicWorkspaceComponent {
                 None,
             ),
             album_cursor: 0,
+            album_columns: 1,
             album_scroll: 0,
             track_cursor: None,
             initialized: false,
@@ -92,6 +94,27 @@ impl MusicWorkspaceComponent {
         self.last_mirrored_track = self.context.track_cursor;
     }
 
+    pub(in crate::app) fn set_album_columns(&mut self, columns: usize) {
+        self.album_columns = columns.max(1);
+    }
+
+    pub(in crate::app) fn album_cursor(&self) -> usize {
+        self.album_cursor
+    }
+
+    fn move_album_rows(&mut self, rows: i64) {
+        let order = &self.context.album_order;
+        if order.is_empty() {
+            return;
+        }
+        let position = order
+            .iter()
+            .position(|&index| index == self.album_cursor)
+            .unwrap_or(0);
+        let delta = rows.saturating_mul(self.album_columns as i64);
+        self.album_cursor = order[move_cursor(position, delta, order.len())];
+    }
+
     pub(in crate::app) fn track_cursor(&self) -> Option<usize> {
         self.track_cursor
     }
@@ -118,14 +141,8 @@ impl MusicWorkspaceComponent {
             Key::Esc | Key::Backspace => self.track_cursor = None,
             Key::Up | Key::Char('k') if self.track_cursor.is_some() => self.move_track(-1),
             Key::Down | Key::Char('j') if self.track_cursor.is_some() => self.move_track(1),
-            Key::Up | Key::Char('k') => {
-                self.album_cursor =
-                    move_cursor(self.album_cursor, -1, self.context.list.item_count())
-            }
-            Key::Down | Key::Char('j') => {
-                self.album_cursor =
-                    move_cursor(self.album_cursor, 1, self.context.list.item_count())
-            }
+            Key::Up | Key::Char('k') => self.move_album_rows(-1),
+            Key::Down | Key::Char('j') => self.move_album_rows(1),
             _ => {}
         }
         Some(Msg::Legacy(LegacyTerminalEvent::Key(
