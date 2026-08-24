@@ -122,7 +122,26 @@ contributing surface's group 2–4 conversion to have landed.
 
 - [x] 5.1 Convert the Library parent (active destination, Panel focus/mode, child routing); verify `rtk cargo nextest run -p mbv library_parent` + scan.
 - [x] 5.2 Convert Root UI + overlay-stack routing using TuiRealm's native LIFO focus stack (open = `active`, dismiss = `umount` → auto-`blur`/restore; no shell-owned focus stack), keeping only overlay z-order in the owning component. **Resolve here, as one unit, the precedence questions deferred from groups 2–4** (see "Deferred by construction"): the non-static per-key gates (`playback`, `lib_search`, `album_track_mode`) and how a per-instance `SubClause` is built at mount time for the one-component-per-tab surfaces. Verify `rtk cargo nextest run -p mbv root_ui` + scan.
+- [ ] 5.3-pre **Prerequisite — give `LibraryTab` a constructor.** No behavior
+  change. `LibraryTab` has no constructor, so every one of the 94
+  `LibraryTab { .. }` literal sites (~30 of them test modules) is a
+  compile-forced edit when *any* field is deleted. That cost is constant per
+  field, is paid again by each 5.3 teardown, and is the real reason task 3.6
+  read as "Feeds is not an independent surface": an agent spends its context
+  on ~90 identical one-line deletions before its actual change compiles. Add
+  `LibraryTab::new(library: EmbyItem)` returning every other field at its
+  empty value (`EmbyItem` has no `Default` derive, so the one non-defaultable
+  field is the parameter), then rewrite each literal as
+  `LibraryTab { <only the fields that site sets>, ..LibraryTab::new(item) }`.
+  Delete no field, change no assertion. Verify `rtk cargo nextest run -p mbv`
+  passes with an unchanged test count, plus `rtk cargo clippy --workspace
+  --all-targets` and `rtk make check-code-file-lines`.
 - [ ] 5.3a **Teardown — Library/browse cluster.** Requires 3.3, 3.5, 3.11, 4.2, 4.3, 4.4, 5.1. Delete `LibraryTab`'s component-owned fields (`search`, `nav_stack`/`library`/`library_total` cursors, `series_selection`/`series_season_cursor`, `album_track_focus`) and the `impl App` handlers that read them: `input_browse_dispatch.rs`'s `handle_key_emby_library` branches, `input_lib_keys.rs`, `lib_cursor_actions.rs`'s eight `search.is_some()` branches, `actions_navigation.rs`'s `select`/`go_back` search arms, `lib_event_actions.rs`'s `lib.search` handlers, and the `library_search_actions.rs` query-editing path. Extract `select(lib_idx)` → resolve item → `select_item(lib_idx, item)` so plain-list Enter and the component's activation `Msg` share one body. Rewrite the `App`-based browse/search tests around the component and shell boundary. Verify `rtk cargo nextest run -p mbv` + scan + `rtk make check-code-file-lines`.
+  The Search half landed (`008be6c5`..`9ac69d81`): `LibraryTab.search`,
+  `LibSearch`, and `key_policy` entry 13 are gone, and `select_item` is
+  extracted. What remains is the selection-mode cluster —
+  `album_track_focus`, `series_selection`, `series_season_cursor` — which
+  requires 5.3-pre first. Scoping: `scoping-5.3a.md`.
 - [ ] 5.3b **Teardown — Feeds cluster.** Requires 3.6, 3.4, 3.10, 5.1. Delete `App.feed_tab` and move its readers to the component/shell boundary: `feed_tab_actions.rs` (cursor/playback/enqueue → typed `Msg` + shell handlers), `library_load_actions.rs`'s Home-Feeds section build (→ shell-owned projection, not direct `feed_tab.all_entries` access), `feeds_manage_actions.rs`'s post-subscription reset, and the Feeds branches in `input_feed_tab_keys.rs`/`input_mouse.rs`/`input_mouse_dispatch.rs`. The refresh `mpsc` and its result validation stay shell-owned. Rewrite the `App.feed_tab` tests around the component and shell boundary. Verify `rtk cargo nextest run -p mbv feeds` + scan.
 - [ ] 5.3c **Teardown — overlay/modal cluster.** Requires 2.1–2.5, 3.2, 3.7, 3.8, 3.9, 4.7, 4.8, 4.9, 5.2. Delete the `App` open-flags, overlay state, and the `handle_key_*` handlers the converted overlays still forward to, plus the duplicated variable-row geometry in `input_mouse_panels.rs`. Verify `rtk cargo nextest run -p mbv` + scan.
 - [ ] 5.3d **Teardown — framework removal.** Requires 5.3a–5.3c, 4.1, 4.10. Remove `LegacyInput`, `CONTEXT_STACK` interaction dispatch, `AppLayout`, all remaining duplicated mouse-coordinate paths, every `sync_<surface>()` mirror, and all remaining temporary adapters. Verify `rtk cargo check -p mbv` and that no `impl App` interaction handler and no component-local `App` field remains for any surface.
