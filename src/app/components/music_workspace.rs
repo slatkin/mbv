@@ -96,8 +96,28 @@ impl MusicWorkspaceComponent {
         self.track_cursor
     }
 
+    fn move_track(&mut self, delta: i64) {
+        let count = self.context.album_tracks.as_ref().map_or(0, Vec::len);
+        if count > 0 {
+            self.track_cursor = Some(move_cursor(self.track_cursor.unwrap_or(0), delta, count));
+        }
+    }
+
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
         match key.code {
+            Key::Enter if self.track_cursor.is_none() => {
+                if self
+                    .context
+                    .album_tracks
+                    .as_ref()
+                    .is_some_and(|tracks| !tracks.is_empty())
+                {
+                    self.track_cursor = Some(0);
+                }
+            }
+            Key::Esc | Key::Backspace => self.track_cursor = None,
+            Key::Up | Key::Char('k') if self.track_cursor.is_some() => self.move_track(-1),
+            Key::Down | Key::Char('j') if self.track_cursor.is_some() => self.move_track(1),
             Key::Up | Key::Char('k') => {
                 self.album_cursor =
                     move_cursor(self.album_cursor, -1, self.context.list.item_count())
@@ -120,7 +140,9 @@ impl MusicWorkspaceComponent {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
         ) {
             let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
-            if self.layout.wide_music_browser_area.contains(position) {
+            if let Some(track) = self.layout.wide_music_track_at(position) {
+                self.track_cursor = Some(track);
+            } else if self.layout.wide_music_browser_area.contains(position) {
                 let row = position
                     .y
                     .saturating_sub(self.layout.wide_music_browser_area.y)

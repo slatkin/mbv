@@ -3,12 +3,15 @@ use crate::app::render::{LibraryListRenderCtx, MusicWideRenderCtx};
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::component::Component;
+use tuirealm::component::{AppComponent, Component};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 fn context(track_cursor: Option<usize>) -> MusicWideRenderCtx {
     let album = make_item("First Album", "MusicAlbum");
     let mut track = make_item("Track One", "Audio");
     track.index_number = 1;
+    let mut second_track = make_item("Track Two", "Audio");
+    second_track.index_number = 2;
     MusicWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![album.clone()], 0, 0),
         Some(album),
@@ -19,10 +22,22 @@ fn context(track_cursor: Option<usize>) -> MusicWideRenderCtx {
         vec![0],
         true,
         true,
-        Some(vec![track]),
+        Some(vec![track, second_track]),
         false,
         track_cursor,
     )
+}
+
+#[test]
+fn music_workspace_keeps_track_cursor_local_between_syncs() {
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context(Some(0)));
+    component.on(&Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    component.set_content(context(Some(0)));
+    assert_eq!(component.track_cursor(), Some(1));
 }
 
 #[test]
