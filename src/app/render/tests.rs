@@ -117,13 +117,20 @@ fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
     let mut term = Terminal::new(backend).unwrap();
     let mut layout = LayoutPlayback::default();
     term.draw(|f| {
-        app.render_title_row(
+        let mut context = app.playback_panel_context(
+            Rect::new(0, 0, 60, 1),
+            &mut layout,
+            1,
+            true,
+            &Some(("Title".into(), palette::SURFACE_FOCUSED)),
+            palette::SURFACE_PLAYBACK,
+        );
+        render_title_row(
             f,
             Rect::new(0, 0, 60, 1),
             "Title",
             palette::SURFACE_FOCUSED,
-            &mut layout,
-            palette::SURFACE_PLAYBACK,
+            &mut context,
         );
     })
     .unwrap();
@@ -153,13 +160,20 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
     let mut term = Terminal::new(backend).unwrap();
     let mut layout = LayoutPlayback::default();
     term.draw(|f| {
-        app.render_title_row(
+        let mut context = app.playback_panel_context(
+            Rect::new(0, 0, 60, 1),
+            &mut layout,
+            1,
+            true,
+            &Some(("Title".into(), palette::SURFACE_FOCUSED)),
+            palette::SURFACE_PLAYBACK,
+        );
+        render_title_row(
             f,
             Rect::new(0, 0, 60, 1),
             "Title",
             palette::SURFACE_FOCUSED,
-            &mut layout,
-            palette::SURFACE_PLAYBACK,
+            &mut context,
         );
     })
     .unwrap();
@@ -190,14 +204,16 @@ fn narrow_queue_only_panel_puts_title_on_bottom_now_playing_row() {
     let mut term = Terminal::new(backend).unwrap();
     let mut layout = LayoutPlayback::default();
     term.draw(|f| {
-        app.render_player_panel(
+        render_player_panel(
             f,
-            Rect::new(0, 0, 60, 5),
-            &mut layout,
-            4,
-            true,
-            &Some(("My Title".to_string(), palette::TEXT_STRONG)),
-            palette::SURFACE_CHROME,
+            app.playback_panel_context(
+                Rect::new(0, 0, 60, 5),
+                &mut layout,
+                4,
+                true,
+                &Some(("My Title".to_string(), palette::TEXT_STRONG)),
+                palette::SURFACE_CHROME,
+            ),
         );
     })
     .unwrap();
@@ -237,14 +253,16 @@ fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
     let mut term = Terminal::new(backend).unwrap();
     let mut layout = LayoutPlayback::default();
     term.draw(|f| {
-        app.render_player_panel(
+        render_player_panel(
             f,
-            Rect::new(0, 0, 30, 5),
-            &mut layout,
-            4,
-            true,
-            &Some((long_title.to_string(), palette::TEXT_STRONG)),
-            palette::SURFACE_CHROME,
+            app.playback_panel_context(
+                Rect::new(0, 0, 30, 5),
+                &mut layout,
+                4,
+                true,
+                &Some((long_title.to_string(), palette::TEXT_STRONG)),
+                palette::SURFACE_CHROME,
+            ),
         );
     })
     .unwrap();
@@ -282,14 +300,16 @@ fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
     let mut term2 = Terminal::new(TestBackend::new(30, 5)).unwrap();
     term2
         .draw(|f| {
-            app.render_player_panel(
+            render_player_panel(
                 f,
-                Rect::new(0, 0, 30, 5),
-                &mut layout,
-                4,
-                true,
-                &Some((long_title.to_string(), palette::TEXT_STRONG)),
-                palette::SURFACE_CHROME,
+                app.playback_panel_context(
+                    Rect::new(0, 0, 30, 5),
+                    &mut layout,
+                    4,
+                    true,
+                    &Some((long_title.to_string(), palette::TEXT_STRONG)),
+                    palette::SURFACE_CHROME,
+                ),
             );
         })
         .unwrap();
@@ -315,13 +335,20 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
         let backend = TestBackend::new(30, 1);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_title_row(
+            let mut context = app.playback_panel_context(
+                Rect::new(0, 0, 30, 1),
+                layout,
+                1,
+                true,
+                &Some((long_title.to_string(), palette::TEXT_STRONG)),
+                palette::SURFACE_CHROME,
+            );
+            render_title_row(
                 f,
                 Rect::new(0, 0, 30, 1),
                 long_title,
                 palette::TEXT_STRONG,
-                layout,
-                palette::SURFACE_CHROME,
+                &mut context,
             );
         })
         .unwrap();
@@ -372,14 +399,16 @@ fn idle_feed_title_marquees_instead_of_truncating() {
         let backend = TestBackend::new(30, 4);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_player_panel(
+            render_player_panel(
                 f,
-                Rect::new(0, 0, 30, 4),
-                layout,
-                4,
-                false, // !show_controls => idle state
-                &None,
-                palette::SURFACE_CHROME,
+                app.playback_panel_context(
+                    Rect::new(0, 0, 30, 4),
+                    layout,
+                    4,
+                    false, // !show_controls => idle state
+                    &None,
+                    palette::SURFACE_CHROME,
+                ),
             );
         })
         .unwrap();

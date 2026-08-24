@@ -339,14 +339,16 @@ impl App {
             } else {
                 palette::SURFACE_PLAYBACK
             };
-            self.render_player_panel(
+            crate::app::render::render_player_panel(
                 f,
-                player_area,
-                playback,
-                player_h,
-                show_controls,
-                now_playing_title,
-                playback_panel_bg,
+                self.playback_panel_context(
+                    player_area,
+                    playback,
+                    player_h,
+                    show_controls,
+                    now_playing_title,
+                    playback_panel_bg,
+                ),
             );
             playback.player_area = player_area;
         }
@@ -386,14 +388,16 @@ impl App {
                         Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
                         panel_area,
                     );
-                    self.render_player_panel(
+                    crate::app::render::render_player_panel(
                         f,
-                        panel_area,
-                        playback,
-                        player_h,
-                        show_controls,
-                        now_playing_title,
-                        palette::SURFACE_CHROME,
+                        self.playback_panel_context(
+                            panel_area,
+                            playback,
+                            player_h,
+                            show_controls,
+                            now_playing_title,
+                            palette::SURFACE_CHROME,
+                        ),
                     );
                 } else {
                     let panel_area = Rect {
@@ -402,14 +406,16 @@ impl App {
                         width: left_content.width,
                         height: player_h,
                     };
-                    self.render_player_panel(
+                    crate::app::render::render_player_panel(
                         f,
-                        panel_area,
-                        playback,
-                        player_h,
-                        show_controls,
-                        now_playing_title,
-                        palette::SURFACE_CHROME,
+                        self.playback_panel_context(
+                            panel_area,
+                            playback,
+                            player_h,
+                            show_controls,
+                            now_playing_title,
+                            palette::SURFACE_CHROME,
+                        ),
                     );
                     narrow_player_h = player_h;
                     left_remaining = left_remaining.saturating_sub(player_h);

@@ -1,6 +1,6 @@
 use super::components::{PlaybackComponent, PlaybackProjection, PlaybackRequest};
 use super::shell::Model;
-use super::PanelFocus;
+use super::{palette, PanelFocus, PanelMode};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 impl Model {
@@ -25,15 +25,43 @@ impl Model {
                 .as_ref()
                 .and_then(|session| session.now_playing.clone())
         };
+        let now_playing_title = title
+            .clone()
+            .map(|title| (title, palette::PLAYBACK_VALUE_FG));
+        let show_controls = state.active
+            || self.app.connected_session_id.is_some()
+            || self.app.cast_attachment.is_some();
+        let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
         let projection = PlaybackProjection {
             state,
             title,
             player_area: self.app.layout.playback.player_area,
             status_area: self.app.layout.playback.status_area,
-            show_controls: state.active
-                || self.app.connected_session_id.is_some()
-                || self.app.cast_attachment.is_some(),
-            focused: matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
+            show_controls,
+            focused,
+            player_h: self.app.layout.playback.player_area.height.max(4),
+            panel_bg: if focused {
+                palette::SURFACE_FOCUSED
+            } else {
+                palette::SURFACE_PLAYBACK
+            },
+            narrow_player: self.app.effective_panel_mode() == PanelMode::QueueOnly,
+            now_playing_title: now_playing_title.clone(),
+            title_parts: now_playing_title
+                .as_ref()
+                .map(|(title, color)| self.app.playback_title_parts(title, *color))
+                .unwrap_or_default(),
+            status_indicators: self.app.build_status_indicator_spans(),
+            throbber: self.app.now_playing_throbber_span(),
+            idle_feed_title: self.app.idle_feed.as_ref().and_then(|feed| {
+                feed.items.get(feed.current_index).map(|item| {
+                    (
+                        item.title.clone(),
+                        item.link.as_deref().is_some_and(|link| !link.is_empty()),
+                    )
+                })
+            }),
+            use_nerd_fonts: self.app.use_nerd_fonts,
             stop_available: self.app.connected_session_id.is_some() || state.active,
             next_available: self.app.transport_prev_next_available().1,
             volume: self

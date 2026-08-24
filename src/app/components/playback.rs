@@ -1,6 +1,8 @@
 use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
+use ratatui::style::Color;
+use ratatui::text::Span;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
@@ -11,7 +13,9 @@ use tuirealm::state::State;
 use super::legacy_input::to_crossterm_mouse_event;
 use super::msg::{Msg, PlaybackRequest};
 use super::user_event::UserEvent;
-use crate::app::render::render_playback_chrome_content;
+use crate::app::layout::LayoutPlayback;
+use crate::app::palette;
+use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::types_playback::PlaybackState;
 
 /// Set when `App.skip_intro_end_ticks.is_some()`.
@@ -34,6 +38,15 @@ pub(in crate::app) struct PlaybackProjection {
     pub status_area: Rect,
     pub show_controls: bool,
     pub focused: bool,
+    pub player_h: u16,
+    pub panel_bg: Color,
+    pub narrow_player: bool,
+    pub now_playing_title: Option<(String, Color)>,
+    pub title_parts: Vec<(String, Color)>,
+    pub status_indicators: Option<Vec<Span<'static>>>,
+    pub throbber: Span<'static>,
+    pub idle_feed_title: Option<(String, bool)>,
+    pub use_nerd_fonts: bool,
     pub stop_available: bool,
     pub next_available: bool,
     pub volume: String,
@@ -49,6 +62,8 @@ pub struct PlaybackComponent {
     stop_area: Rect,
     next_area: Rect,
     seekbar_area: Rect,
+    marquee_text: String,
+    marquee_started_at: Instant,
 }
 
 impl PlaybackComponent {
@@ -67,6 +82,15 @@ impl PlaybackComponent {
                 status_area: Rect::default(),
                 show_controls: false,
                 focused: false,
+                player_h: 0,
+                panel_bg: palette::SURFACE_PLAYBACK,
+                narrow_player: false,
+                now_playing_title: None,
+                title_parts: Vec::new(),
+                status_indicators: None,
+                throbber: Span::raw(""),
+                idle_feed_title: None,
+                use_nerd_fonts: false,
                 stop_available: false,
                 next_available: false,
                 volume: String::new(),
@@ -79,6 +103,8 @@ impl PlaybackComponent {
             stop_area: Rect::default(),
             next_area: Rect::default(),
             seekbar_area: Rect::default(),
+            marquee_text: String::new(),
+            marquee_started_at: Instant::now(),
         }
     }
 
@@ -152,11 +178,40 @@ impl Default for PlaybackComponent {
 
 impl Component for PlaybackComponent {
     fn view(&mut self, frame: &mut Frame, _area: Rect) {
-        let geometry = render_playback_chrome_content(frame, &self.projection);
-        self.play_pause_area = geometry.play_pause_area;
-        self.stop_area = geometry.stop_area;
-        self.next_area = geometry.next_area;
-        self.seekbar_area = geometry.seekbar_area;
+        let mut playback = LayoutPlayback {
+            player_area: self.projection.player_area,
+            ..LayoutPlayback::default()
+        };
+        render_player_panel(
+            frame,
+            PlaybackRenderContext {
+                area: self.projection.player_area,
+                playback: &mut playback,
+                player_h: self.projection.player_h,
+                show_controls: self.projection.show_controls,
+                now_playing_title: self.projection.now_playing_title.clone(),
+                panel_bg: self.projection.panel_bg,
+                narrow_player: self.projection.narrow_player,
+                progress: (
+                    self.projection.state.position_ticks,
+                    self.projection.state.runtime_ticks,
+                    self.projection.state.paused,
+                ),
+                use_nerd_fonts: self.projection.use_nerd_fonts,
+                stop_available: self.projection.stop_available,
+                next_available: self.projection.next_available,
+                status_indicators: self.projection.status_indicators.clone(),
+                throbber: self.projection.throbber.clone(),
+                title_parts: self.projection.title_parts.clone(),
+                idle_feed_title: self.projection.idle_feed_title.clone(),
+                marquee_text: &mut self.marquee_text,
+                marquee_started_at: &mut self.marquee_started_at,
+            },
+        );
+        self.play_pause_area = playback.play_pause_area;
+        self.stop_area = playback.stop_area;
+        self.next_area = playback.next_area;
+        self.seekbar_area = playback.seekbar_area;
     }
 
     fn query<'a>(&'a self, attr: Attribute) -> Option<QueryResult<'a>> {
@@ -216,6 +271,15 @@ mod tests {
             status_area: Rect::new(0, 3, 40, 1),
             show_controls: true,
             focused: false,
+            player_h: 3,
+            panel_bg: palette::SURFACE_PLAYBACK,
+            narrow_player: false,
+            now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
+            title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
+            status_indicators: None,
+            throbber: Span::raw(" "),
+            idle_feed_title: None,
+            use_nerd_fonts: false,
             stop_available: false,
             next_available: false,
             volume: "50%".into(),

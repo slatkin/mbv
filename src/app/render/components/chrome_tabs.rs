@@ -17,9 +17,7 @@ impl App {
     /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
     /// Returns None if the local player is not active.
     /// Callers wrap these in [ ... ] with whatever surrounding style they need.
-    pub(in crate::app::render) fn build_status_indicator_spans(
-        &self,
-    ) -> Option<Vec<Span<'static>>> {
+    pub(in crate::app) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
         let data = self.playback_indicator_target().indicator_data(self)?;
         Some(indicators::indicator_spans(
             self.indicator_style,

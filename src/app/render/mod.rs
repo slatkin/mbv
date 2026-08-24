@@ -15,6 +15,10 @@ pub(in crate::app) use components::audiobookshelf_book::{
 pub(in crate::app) use components::audiobookshelf_podcast::{
     render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry,
 };
+#[allow(unused_imports)]
+pub(in crate::app) use components::chrome_player::{
+    render_player_panel, render_title_row, PlaybackRenderContext,
+};
 pub(in crate::app) use components::confirm_modal::render_confirm_modal_content;
 pub(in crate::app) use components::context_menu::render_context_menu_content;
 pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_content;
@@ -36,7 +40,6 @@ pub(in crate::app) use components::multiselect::{
 pub(in crate::app) use components::music_wide::{
     render_wide_music_group_with_ctx, MusicWideRenderCtx,
 };
-pub(in crate::app) use components::playback::render_playback_chrome_content;
 pub(in crate::app) use components::playback_prompt::render_playback_prompt_content;
 pub(in crate::app) use components::playlists::{
     render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,
