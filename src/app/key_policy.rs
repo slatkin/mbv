@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use super::components::component_id::{ModalId, OverlayId};
+use super::components::component_id::OverlayId;
 use super::components::{ComponentId, ATTR_ALBUM_TRACK_FOCUSED, ATTR_BLOCKING_OVERLAY_ACTIVE};
 use tuirealm::props::{AttrValue, Attribute};
 use tuirealm::subscription::SubClause;
@@ -239,12 +239,15 @@ mod tests {
 
     #[test]
     fn key_policy_order_matches_context_stack() {
-        let policy_names: Vec<&str> = KEY_POLICY.iter().map(|e| e.name).collect();
-        let context_names: Vec<&str> = CONTEXT_STACK.iter().map(|e| e.name).collect();
+        let policy_names: Vec<&str> = KEY_POLICY
+            .iter()
+            .map(|entry| entry.name)
+            .filter(|name| *name != "selection_modal")
+            .collect();
+        let context_names: Vec<&str> = CONTEXT_STACK.iter().map(|entry| entry.name).collect();
         assert_eq!(
             policy_names, context_names,
-            "KEY_POLICY must mirror CONTEXT_STACK's precedence order exactly; \
-             if this intentionally changes, update docs/adr/0002-centralized-input-handling.md too"
+            "KEY_POLICY must mirror the remaining legacy CONTEXT_STACK order; converted TuiRealm surfaces are excluded"
         );
     }
 }

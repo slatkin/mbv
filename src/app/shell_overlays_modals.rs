@@ -1,6 +1,6 @@
 use super::super::components::{
-    ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, RemoteReanchorComponent,
-    SavePlaylistComponent,
+    ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, OverlayId,
+    RemoteReanchorComponent, SavePlaylistComponent, SelectionModalComponent,
 };
 use super::super::shell::Model;
 use super::super::types_overlay::OverlayRequest;
@@ -118,6 +118,35 @@ impl Model {
                         .set_dialog(dialog.input, dialog.stage);
                 }
             }
+            OverlayRequest::SelectionModal(modal) => {
+                self.dismiss_blocking_modals();
+                let id = ComponentId::Overlay(OverlayId::SelectionModal);
+                self.application
+                    .mount(id.clone(), Box::new(SelectionModalComponent::new()), vec![])
+                    .expect("mount SelectionModal");
+                self.application
+                    .active(&id)
+                    .expect("activate SelectionModal");
+                if let Some(comp) = self.application.get_component_mut(&id) {
+                    comp.as_any_mut()
+                        .downcast_mut::<SelectionModalComponent>()
+                        .expect("SelectionModal component")
+                        .set_content(&modal);
+                }
+            }
+            OverlayRequest::RefreshSelectionModal {
+                source,
+                state,
+                filter,
+            } => {
+                let id = ComponentId::Overlay(OverlayId::SelectionModal);
+                if let Some(comp) = self.application.get_component_mut(&id) {
+                    comp.as_any_mut()
+                        .downcast_mut::<SelectionModalComponent>()
+                        .expect("SelectionModal component")
+                        .refresh(&source, state, filter);
+                }
+            }
             OverlayRequest::DismissConfirm => self.dismiss_modal(&Self::confirm_id()),
             OverlayRequest::DismissDaemonLost => self.dismiss_modal(&Self::daemon_lost_id()),
             OverlayRequest::DismissRemoteReanchor => {
@@ -125,6 +154,9 @@ impl Model {
             }
             OverlayRequest::DismissSavePlaylist => {
                 self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist))
+            }
+            OverlayRequest::DismissSelectionModal => {
+                self.dismiss_modal(&ComponentId::Overlay(OverlayId::SelectionModal))
             }
         }
         self.assert_modal_mount_exclusive();
@@ -152,5 +184,6 @@ impl Model {
         self.dismiss_modal(&Self::daemon_lost_id());
         self.dismiss_modal(&Self::remote_reanchor_id());
         self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist));
+        self.dismiss_modal(&ComponentId::Overlay(OverlayId::SelectionModal));
     }
 }

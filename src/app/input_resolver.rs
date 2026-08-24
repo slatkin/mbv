@@ -143,10 +143,6 @@ pub(super) struct ContextEntry {
 /// `docs/adr/0002-centralized-input-handling.md`.
 pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
-        name: "selection_modal",
-        handler: App::handle_key_selection_modal,
-    },
-    ContextEntry {
         name: "settings",
         handler: App::handle_key_settings,
     },

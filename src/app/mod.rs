@@ -42,7 +42,6 @@ mod input_playlist_keys;
 mod input_queue_keys;
 mod input_resolver;
 mod input_search_sidebar_keys;
-mod input_selection_modal_keys;
 mod input_settings_keys;
 mod key_policy;
 pub(crate) mod layout;

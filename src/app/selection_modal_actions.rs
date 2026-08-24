@@ -93,17 +93,19 @@ impl App {
             .iter()
             .position(|row| matches!(row, SelectionModalRow::Item(_)))
             .unwrap_or(0);
-        self.selection_modal = Some(SelectionModal {
-            source,
-            title,
-            state,
-            cursor,
-            filter,
-        });
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::SelectionModal(
+            SelectionModal {
+                source,
+                title,
+                state,
+                cursor,
+                filter,
+            },
+        ));
     }
 
     pub(crate) fn close_selection_modal(&mut self) {
-        self.selection_modal = None;
+        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissSelectionModal);
     }
 
     /// Opens the Album constituent-list modal (design.md decision 3/task
@@ -135,61 +137,22 @@ impl App {
         &mut self,
         source: SelectionModalSource,
         state: SelectionModalListState,
+        filter: Option<SelectionModalFilter>,
     ) {
-        let Some(modal) = self.selection_modal.as_mut() else {
-            return;
-        };
-        if modal.source != source {
-            return;
-        }
-        let selected_id = modal
-            .state
-            .rows()
-            .get(modal.cursor)
-            .and_then(SelectionModalRow::item_id)
-            .map(str::to_owned);
-        let state = state.normalize();
-        let cursor = selected_id
-            .as_deref()
-            .and_then(|id| {
-                state
-                    .rows()
-                    .iter()
-                    .position(|row| row.item_id() == Some(id))
-            })
-            .or_else(|| state.rows().iter().position(|row| row.item_id().is_some()))
-            .unwrap_or(0);
-        modal.state = state;
-        modal.cursor = cursor;
+        self.pending_overlay = Some(
+            super::types_overlay::OverlayRequest::RefreshSelectionModal {
+                source,
+                state,
+                filter,
+            },
+        );
     }
 
-    pub(crate) fn move_selection_modal_cursor(&mut self, delta: i64) {
-        let Some(modal) = self.selection_modal.as_mut() else {
-            return;
-        };
-        let item_positions: Vec<usize> = modal
-            .state
-            .rows()
-            .iter()
-            .enumerate()
-            .filter_map(|(i, row)| matches!(row, SelectionModalRow::Item(_)).then_some(i))
-            .collect();
-        let Some(pos) = item_positions.iter().position(|&i| i == modal.cursor) else {
-            return;
-        };
-        let next = (pos as i64 + delta).clamp(0, item_positions.len() as i64 - 1) as usize;
-        modal.cursor = item_positions[next];
-    }
-
-    pub(crate) fn activate_selection_modal_item(&mut self) {
-        let Some(modal) = self.selection_modal.as_ref() else {
-            return;
-        };
-        let source = modal.source.clone();
-        let item_id = match modal.state.rows().get(modal.cursor) {
-            Some(SelectionModalRow::Item(item)) => Some(item.id.clone()),
-            _ => None,
-        };
+    pub(crate) fn activate_selection_modal_item(
+        &mut self,
+        source: SelectionModalSource,
+        item_id: Option<String>,
+    ) {
         if let SelectionModalSource::Series { series_id } = source {
             let episode_id = item_id;
             let episode = episode_id.and_then(|id| {
@@ -256,139 +219,5 @@ impl App {
             return;
         }
         self.close_selection_modal();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::types_selection_modal::SelectionModalItem;
-
-    fn item(id: &str) -> SelectionModalRow {
-        SelectionModalRow::Item(SelectionModalItem {
-            name: id.into(),
-            meta: String::new(),
-            id: id.into(),
-        })
-    }
-
-    fn source() -> SelectionModalSource {
-        SelectionModalSource::Album {
-            album_id: "album-1".into(),
-        }
-    }
-
-    #[test]
-    fn matching_refresh_preserves_cursor_by_stable_item_id() {
-        let mut app = crate::app::tests::make_app_stub();
-        app.open_selection_modal(
-            source(),
-            "Tracks".into(),
-            SelectionModalListState::ready(vec![item("a"), item("b")]),
-            None,
-        );
-        app.move_selection_modal_cursor(1);
-
-        app.refresh_selection_modal(
-            source(),
-            SelectionModalListState::ready(vec![item("x"), item("b"), item("c")]),
-        );
-
-        let modal = app.selection_modal.as_ref().unwrap();
-        assert_eq!(modal.cursor, 1);
-        assert_eq!(modal.state.rows()[modal.cursor].item_id(), Some("b"));
-    }
-
-    #[test]
-    fn nonmatching_refresh_does_not_mutate_open_modal() {
-        let mut app = crate::app::tests::make_app_stub();
-        app.open_selection_modal(
-            source(),
-            "Tracks".into(),
-            SelectionModalListState::ready(vec![item("a")]),
-            None,
-        );
-
-        app.refresh_selection_modal(
-            SelectionModalSource::Series {
-                series_id: "series-1".into(),
-            },
-            SelectionModalListState::Empty,
-        );
-
-        let modal = app.selection_modal.as_ref().unwrap();
-        assert_eq!(modal.cursor, 0);
-        assert_eq!(modal.state.rows()[0].item_id(), Some("a"));
-    }
-
-    #[test]
-    fn matching_refresh_replaces_loading_ready_and_empty_in_place() {
-        let mut app = crate::app::tests::make_app_stub();
-        app.open_selection_modal(
-            source(),
-            "Tracks".into(),
-            SelectionModalListState::Loading,
-            None,
-        );
-
-        for state in [
-            SelectionModalListState::ready(vec![item("a")]),
-            SelectionModalListState::Empty,
-        ] {
-            app.refresh_selection_modal(source(), state);
-            assert!(app.selection_modal.is_some());
-        }
-
-        assert!(matches!(
-            app.selection_modal.as_ref().unwrap().state,
-            SelectionModalListState::Empty
-        ));
-    }
-
-    #[test]
-    fn album_modal_rows_include_track_number_in_name() {
-        let mut track = crate::app::tests::make_item("Track Name", "Audio");
-        track.index_number = 1;
-
-        let state = album_modal_state(&[track]);
-
-        assert!(matches!(
-            &state.rows()[0],
-            SelectionModalRow::Item(item) if item.name == " 1. Track Name"
-        ));
-    }
-
-    #[test]
-    fn album_modal_activation_replaces_queue_with_album_tracks() {
-        let mut app = crate::app::tests::make_app_stub();
-        crate::app::tests::install_test_emby(&mut app, crate::config::Config::default());
-        let mut first = crate::app::tests::make_item("First", "Audio");
-        first.id = "track-1".into();
-        first.media_type = "Audio".into();
-        let mut second = crate::app::tests::make_item("Second", "Audio");
-        second.id = "track-2".into();
-        second.media_type = "Audio".into();
-        app.album_tracks_cache
-            .insert("album-1".into(), vec![first.clone(), second.clone()]);
-        app.open_selection_modal(
-            source(),
-            "Tracks".into(),
-            SelectionModalListState::ready(vec![SelectionModalRow::Item(SelectionModalItem {
-                name: second.name.clone(),
-                meta: String::new(),
-                id: second.id.clone(),
-            })]),
-            None,
-        );
-
-        app.activate_selection_modal_item();
-
-        assert!(app.selection_modal.is_none());
-        assert_eq!(app.player_tab.total_queue_len(), 2);
-        assert_eq!(app.player_tab.queue_cursor, 1);
-        assert!(matches!(
-            app.queue_source,
-            crate::config::QueueSource::Album
-        ));
     }
 }

@@ -17,7 +17,8 @@ use super::msg::{LegacyTerminalEvent, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_selection_modal_content, SelectionModalRenderModel};
 use crate::app::types_selection_modal::{
-    SelectionModal, SelectionModalListState, SelectionModalRow,
+    SelectionModal, SelectionModalFilter, SelectionModalListState, SelectionModalRow,
+    SelectionModalSource,
 };
 
 pub struct SelectionModalComponent {
@@ -107,6 +108,32 @@ impl SelectionModalComponent {
 
     pub(in crate::app) fn selector_targets(&self) -> &[(Rect, usize)] {
         &self.selector_targets
+    }
+
+    pub(in crate::app) fn source(&self) -> Option<&SelectionModalSource> {
+        self.modal.as_ref().map(|modal| &modal.source)
+    }
+
+    pub(in crate::app) fn refresh(
+        &mut self,
+        source: &SelectionModalSource,
+        state: SelectionModalListState,
+        filter: Option<SelectionModalFilter>,
+    ) {
+        let Some(current) = self.modal.as_ref() else {
+            return;
+        };
+        if &current.source != source {
+            return;
+        }
+        let snapshot = SelectionModal {
+            source: current.source.clone(),
+            title: current.title.clone(),
+            state: state.normalize(),
+            cursor: current.cursor,
+            filter: filter.or_else(|| current.filter.clone()),
+        };
+        self.set_content(&snapshot);
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {

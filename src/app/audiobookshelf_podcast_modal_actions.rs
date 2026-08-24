@@ -7,15 +7,6 @@ use super::App;
 use crate::app::ui_util::fmt_duration_approx;
 
 impl App {
-    /// Opens the podcast constituent-list modal (design.md decisions 3/4):
-    /// a flat scrollable list of the selected show's `Item` rows, no headers
-    /// (episodes aren't hierarchical), with the played/unplayed filter shown
-    /// as pills at the modal's top. Mirrors `open_series_selection_modal`'s
-    /// shape; unlike Series/Album, whose ids are globally unique, an episode
-    /// id is only unique within its show (`(library_item_id, episode_id)`,
-    /// see `types_audiobookshelf_browse`'s progress-map key), so activation
-    /// resolves through the currently selected show's own filtered episode
-    /// list (`activate_selection_modal_item`) rather than a global scan.
     pub(super) fn open_podcast_selection_modal(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
@@ -46,41 +37,30 @@ impl App {
         );
     }
 
-    /// Cycles the played/unplayed filter shown as pills at the top of the
-    /// open podcast selection modal (design.md decision 4), rebuilding
-    /// modal state from the newly filtered episode list. Resets the cursor
-    /// to the first episode row, mirroring `AudiobookshelfEpisodeFilter`'s
-    /// existing reset-to-0 behavior for the (wide-only) in-hero episode
-    /// table (see `AudiobookshelfBrowseState::set_episode_filter`).
-    pub(super) fn cycle_podcast_selection_modal_filter(&mut self, delta: i64) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let Some(state) = self.audiobookshelf_browse.get(index) else {
-            return;
-        };
-        let current = AudiobookshelfEpisodeFilter::ALL
-            .iter()
-            .position(|filter| *filter == state.episode_filter)
-            .unwrap_or(0);
-        let next = (current as i64 + delta)
-            .rem_euclid(AudiobookshelfEpisodeFilter::ALL.len() as i64) as usize;
-        self.select_podcast_selection_modal_filter(next);
-    }
-
     /// Selects a visible modal filter, rebuilding the modal rows for both
     /// keyboard and mouse selection. The shared pill hit-test dispatch calls
     /// `select_audiobookshelf_filter`, so the modal path must not depend on
     /// the wide-only `episode_selection` state.
-    pub(super) fn select_podcast_selection_modal_filter(&mut self, selected: usize) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
+    pub(super) fn select_podcast_selection_modal_filter(
+        &mut self,
+        library_item_id: String,
+        selected: usize,
+    ) {
         let Some(filter) = AudiobookshelfEpisodeFilter::ALL.get(selected).copied() else {
             return;
         };
         let (rows, loading) = {
-            let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
+            let Some((_, state)) =
+                self.audiobookshelf_browse
+                    .iter_mut()
+                    .enumerate()
+                    .find(|(_, state)| {
+                        state
+                            .shows
+                            .iter()
+                            .any(|show| show.library_item_id == library_item_id)
+                    })
+            else {
                 return;
             };
             state.episode_filter = filter;
@@ -91,24 +71,16 @@ impl App {
             )
         };
 
-        let Some(modal) = self.selection_modal.as_mut() else {
-            return;
-        };
-        if !matches!(modal.source, SelectionModalSource::Podcast { .. }) {
-            return;
-        }
-        modal.cursor = rows
-            .iter()
-            .position(|row| matches!(row, SelectionModalRow::Item(_)))
-            .unwrap_or(0);
-        modal.state = if loading {
+        let state = if loading {
             SelectionModalListState::Loading
         } else {
             SelectionModalListState::ready(rows)
         };
-        if let Some(filter) = modal.filter.as_mut() {
-            filter.selected = selected;
-        }
+        self.refresh_selection_modal(
+            SelectionModalSource::Podcast { library_item_id },
+            state,
+            None,
+        );
     }
 }
 

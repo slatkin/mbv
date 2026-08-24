@@ -3,7 +3,7 @@
 use super::music_track_test_support::*;
 use super::*;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus, SelectionModalSource};
+use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -32,11 +32,10 @@ fn narrow_enter_at_album_folder_listing_opens_selection_modal_without_nav_push()
         "narrow Enter must not enter the in-hero track-focus mode"
     );
     assert_eq!(app.libs[0].nav_stack.len(), nav_len_before);
-    let modal = app
-        .selection_modal
-        .as_ref()
-        .expect("narrow Enter must open the selection modal");
-    assert!(matches!(modal.source, SelectionModalSource::Album { .. }));
+    assert!(matches!(
+        app.pending_overlay.as_ref(),
+        Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+    ));
 }
 
 #[test]
@@ -70,11 +69,17 @@ fn mouse_click_on_selected_album_folder_row_does_not_open_track_mode_or_modal() 
     });
 
     assert!(
-        app_key.selection_modal.is_some(),
+        matches!(
+            app_key.pending_overlay.as_ref(),
+            Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+        ),
         "Enter must open the modal"
     );
     assert!(
-        app_mouse.selection_modal.is_none(),
+        !matches!(
+            app_mouse.pending_overlay.as_ref(),
+            Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+        ),
         "a single click must not open the modal"
     );
     assert_eq!(app_key.libs[0].album_track_focus, None);

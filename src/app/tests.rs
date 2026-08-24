@@ -266,7 +266,6 @@ pub(crate) fn make_app_stub() -> App {
         settings_save_at: None,
         confirm_logout: false,
         multiselect_popup: None,
-        selection_modal: None,
         library_routes_popup: None,
         system_notifications: false,
         notif_failed: false,

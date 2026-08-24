@@ -228,7 +228,7 @@ contributing surface's group 2–4 conversion to have landed.
     `input_settings_keys.rs`, `input_playlist_keys.rs`, and
     `services_settings.rs`. 24 files (20 prod / 4 test), 98 refs; tractable
     only once the prep above has collapsed the write sites.
-  - [ ] *Selection modal* — `selection_modal` + `input_selection_modal_keys.rs`.
+  - [x] *Selection modal* — `selection_modal` + `input_selection_modal_keys.rs`.
     44 files (29 / 15), 362 refs, but only **four** write sites, all choked
     through `selection_modal_actions.rs`; the fan-out is presence-reads and
     render, which `blocking_overlay_active` already covers. At the ceiling —

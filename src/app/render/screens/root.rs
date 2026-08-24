@@ -158,7 +158,6 @@ impl App {
             || self.is_sidebar_open(SidebarId::Sessions)
             || self.is_sidebar_open(SidebarId::Playlists)
             || self.is_sidebar_open(SidebarId::Search)
-            || self.selection_modal.is_some()
     }
 }
 

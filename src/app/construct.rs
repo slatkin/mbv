@@ -179,7 +179,6 @@ impl App {
             settings_save_at: None,
             confirm_logout: false,
             multiselect_popup: None,
-            selection_modal: None,
             library_routes_popup: None,
             notif_failed: false,
             context_menu: None,

@@ -164,11 +164,6 @@ pub(crate) struct LayoutMain {
     /// Unlike `audiobookshelf_book_right_area`, this stays empty for the
     /// narrow inline presentation and is therefore safe for input gating.
     pub audiobookshelf_book_wide_right_area: Rect,
-    /// Bounds and row hit targets owned by the open selection modal. These
-    /// stay separate from browse geometry so modal clicks cannot reach the
-    /// underlying library.
-    pub selection_modal_area: Rect,
-    pub selection_modal_rows: Vec<(Rect, usize)>,
     /// The destination (`self.tab`) the last completed render frame was drawn
     /// for. Set by `App::render` only on the layout that completes and is
     /// installed, never on intermediate drafts; the fresh-frame replacement

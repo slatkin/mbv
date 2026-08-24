@@ -632,7 +632,6 @@ impl Model {
             self.sync_playback();
             self.sync_modal_requests();
             self.sync_context_menu();
-            self.sync_selection_modal();
             self.sync_multiselect();
             self.sync_library_routes();
             self.sync_feeds_manage();

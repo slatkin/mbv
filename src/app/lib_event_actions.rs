@@ -291,6 +291,7 @@ impl App {
                         book_id: library_item_id,
                     },
                     modal_state,
+                    None,
                 );
             }
             return;
@@ -340,6 +341,7 @@ impl App {
                 self.refresh_selection_modal(
                     SelectionModalSource::Podcast { library_item_id },
                     modal_state,
+                    None,
                 );
             }
             return;
@@ -554,7 +556,7 @@ impl App {
                 sort_audio_tracks(&mut tracks);
                 let state = album_modal_state(&tracks);
                 self.album_tracks_cache.insert(album_id.clone(), tracks);
-                self.refresh_selection_modal(SelectionModalSource::Album { album_id }, state);
+                self.refresh_selection_modal(SelectionModalSource::Album { album_id }, state, None);
             }
             LibEvent::SeriesDetailFetched {
                 series_id,
@@ -693,34 +695,31 @@ impl App {
                 },
             );
         }
-        let podcast_modal_state = self.selection_modal.as_ref().and_then(|modal| {
-            let SelectionModalSource::Podcast { library_item_id } = &modal.source else {
-                return None;
-            };
-            self.audiobookshelf_browse
+        // Refresh the mounted podcast modal if this progress update belongs to
+        // its show. The shell ignores this request when the modal is unmounted.
+        if let Some(state) = self.audiobookshelf_browse.iter().find(|state| {
+            state
+                .shows
                 .iter()
-                .find(|state| {
-                    state
-                        .shows
-                        .iter()
-                        .any(|show| show.library_item_id == *library_item_id)
-                })
-                .and_then(|state| {
-                    let modal_state = if state.detail_cache.contains_key(library_item_id) {
-                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state_for_detail(
-                            state,
-                            library_item_id,
-                        )
-                    } else if state.selected_id.as_deref() == Some(library_item_id) {
-                        super::audiobookshelf_podcast_modal_actions::podcast_modal_state(state)
-                    } else {
-                        return None;
-                    };
-                    Some((library_item_id.clone(), modal_state))
-                })
-        });
-        if let Some((library_item_id, state)) = podcast_modal_state {
-            self.refresh_selection_modal(SelectionModalSource::Podcast { library_item_id }, state);
+                .any(|show| show.library_item_id == library_item_id)
+        }) {
+            let modal_state = if state.detail_cache.contains_key(library_item_id) {
+                super::audiobookshelf_podcast_modal_actions::podcast_modal_state_for_detail(
+                    state,
+                    library_item_id,
+                )
+            } else if state.selected_id.as_deref() == Some(library_item_id) {
+                super::audiobookshelf_podcast_modal_actions::podcast_modal_state(state)
+            } else {
+                return;
+            };
+            self.refresh_selection_modal(
+                SelectionModalSource::Podcast {
+                    library_item_id: library_item_id.to_owned(),
+                },
+                modal_state,
+                None,
+            );
         }
         if !matching_slot_ids.is_empty() {
             self.save_queue_state();

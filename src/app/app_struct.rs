@@ -18,7 +18,6 @@ use super::types_playback::{
     RemoteQueueProjection, SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
-use super::types_selection_modal::SelectionModal;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
 use super::types_tab_selection::TabSelection;
 use super::visualizer_worker::{PipeWireWorker, StereoSampleWindow};
@@ -238,7 +237,6 @@ pub struct App {
     pub(super) settings_save_at: Option<Instant>,
     pub(super) confirm_logout: bool,
     pub(super) multiselect_popup: Option<MultiSelectPopup>,
-    pub(super) selection_modal: Option<SelectionModal>,
     pub(super) library_routes_popup: Option<LibraryRoutePopup>,
     pub(super) system_notifications: bool,
     pub(super) notif_failed: bool,

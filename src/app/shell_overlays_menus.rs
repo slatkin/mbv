@@ -51,93 +51,62 @@ impl Model {
         ComponentId::Overlay(OverlayId::SelectionModal)
     }
 
-    /// Sync the Selection modal mount state with the legacy App snapshot.
-    pub(in crate::app) fn sync_selection_modal(&mut self) {
-        let id = Self::selection_modal_id();
-        let mounted = self.application.mounted(&id);
-        if self.app.selection_modal.is_some() && !mounted {
-            self.application
-                .mount(id.clone(), Box::new(SelectionModalComponent::new()), vec![])
-                .expect("mount SelectionModal");
-            self.application
-                .active(&id)
-                .expect("activate SelectionModal");
-        } else if self.app.selection_modal.is_none() && mounted {
-            let _ = self.application.umount(&id);
-        }
-        if let Some(modal) = self.app.selection_modal.as_ref() {
-            if let Some(comp) = self.application.get_component_mut(&id) {
-                if let Some(selection) = comp.as_any_mut().downcast_mut::<SelectionModalComponent>()
-                {
-                    selection.set_content(modal);
-                }
-            }
-        }
-    }
-
     /// Route typed Selection modal requests to the existing source-specific
-    /// App actions after validating the current modal snapshot.
+    /// App actions after reading the component-owned snapshot.
     pub(in crate::app) fn handle_selection_modal_request(&mut self, request: ShellRequest) {
+        let id = Self::selection_modal_id();
         match request {
             ShellRequest::DismissSelectionModal => self.app.close_selection_modal(),
             ShellRequest::SelectionModalFilterSelected(selected) => {
-                let Some(modal) = self.app.selection_modal.as_ref() else {
+                let Some(source) = self
+                    .application
+                    .get_component(&id)
+                    .and_then(|component| {
+                        component.as_any().downcast_ref::<SelectionModalComponent>()
+                    })
+                    .and_then(SelectionModalComponent::source)
+                    .cloned()
+                else {
                     return;
                 };
-                let valid = modal
-                    .filter
-                    .as_ref()
-                    .is_some_and(|filter| selected < filter.labels.len());
-                if !valid {
-                    return;
-                }
-                match modal.source {
+                match source {
                     super::super::types_selection_modal::SelectionModalSource::Series {
-                        ..
-                    } => self.app.select_series_selection_modal_season(selected),
+                        series_id,
+                    } => self
+                        .app
+                        .select_series_selection_modal_season(series_id, selected),
                     super::super::types_selection_modal::SelectionModalSource::Podcast {
-                        ..
-                    } => self.app.select_podcast_selection_modal_filter(selected),
+                        library_item_id,
+                    } => self
+                        .app
+                        .select_podcast_selection_modal_filter(library_item_id, selected),
                     _ => {}
                 }
             }
             ShellRequest::SelectionModalActivate(item_id) => {
-                let Some(item_id) = item_id else {
-                    self.app.activate_selection_modal_item();
+                let Some(source) = self
+                    .application
+                    .get_component(&id)
+                    .and_then(|component| {
+                        component.as_any().downcast_ref::<SelectionModalComponent>()
+                    })
+                    .and_then(SelectionModalComponent::source)
+                    .cloned()
+                else {
                     return;
                 };
-                let Some(row_index) = self.app.selection_modal.as_ref().and_then(|modal| {
-                    modal
-                        .state
-                        .rows()
-                        .iter()
-                        .position(|row| row.item_id() == Some(item_id.as_str()))
-                }) else {
-                    return;
-                };
-                if let Some(modal) = self.app.selection_modal.as_mut() {
-                    modal.cursor = row_index;
-                }
-                self.app.activate_selection_modal_item();
+                self.app.activate_selection_modal_item(source, item_id);
             }
             _ => {}
         }
     }
 
-    /// Render the Selection modal from the shell-owned snapshot. Its component
+    /// Render the mounted Selection modal. The component owns its snapshot and
     /// records the returned geometry for its own mouse hit-testing.
     pub(in crate::app) fn render_selection_modal_overlay(&mut self, f: &mut ratatui::Frame) {
         let id = Self::selection_modal_id();
         if !self.application.mounted(&id) {
             return;
-        }
-        if let Some(modal) = self.app.selection_modal.as_ref() {
-            if let Some(comp) = self.application.get_component_mut(&id) {
-                if let Some(selection) = comp.as_any_mut().downcast_mut::<SelectionModalComponent>()
-                {
-                    selection.set_content(modal);
-                }
-            }
         }
         self.application.view(&id, f, f.area());
     }

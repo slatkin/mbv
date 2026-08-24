@@ -42,22 +42,24 @@ mod tests {
     #[test]
     fn selection_modal_shell_syncs_and_routes_dismissal() {
         let mut model = Model::new(make_app_stub());
-        model.app.selection_modal = Some(SelectionModal {
-            source: SelectionModalSource::Album {
-                album_id: "album-1".into(),
-            },
-            title: "Tracks".into(),
-            state: SelectionModalListState::Ready(vec![SelectionModalRow::Item(
-                SelectionModalItem {
-                    name: "Track".into(),
-                    meta: String::new(),
-                    id: "track-1".into(),
+        model.app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::SelectionModal(
+            SelectionModal {
+                source: SelectionModalSource::Album {
+                    album_id: "album-1".into(),
                 },
-            )]),
-            cursor: 0,
-            filter: None,
-        });
-        model.sync_selection_modal();
+                title: "Tracks".into(),
+                state: SelectionModalListState::Ready(vec![SelectionModalRow::Item(
+                    SelectionModalItem {
+                        name: "Track".into(),
+                        meta: String::new(),
+                        id: "track-1".into(),
+                    },
+                )]),
+                cursor: 0,
+                filter: None,
+            },
+        ));
+        model.sync_modal_requests();
 
         let id = ComponentId::Overlay(OverlayId::SelectionModal);
         assert!(model.application.mounted(&id));
@@ -78,9 +80,8 @@ mod tests {
             panic!("Selection modal should emit a shell request");
         };
         model.handle_selection_modal_request(request);
-        model.sync_selection_modal();
+        model.sync_modal_requests();
 
-        assert!(model.app.selection_modal.is_none());
         assert!(!model.application.mounted(&id));
     }
 

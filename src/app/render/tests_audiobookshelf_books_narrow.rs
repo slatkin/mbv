@@ -158,7 +158,10 @@ fn narrow_book_detail_is_suppressed_in_a_short_viewport() {
     };
     app.handle_mouse(click);
     app.handle_mouse(click);
-    assert!(app.selection_modal.is_none());
+    assert!(!matches!(
+        app.pending_overlay.as_ref(),
+        Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+    ));
     assert_eq!(app.status, "Audiobookshelf playback owner is unavailable");
 }
 
@@ -178,10 +181,11 @@ fn narrow_book_enter_uses_the_completed_60x20_layout_for_modal_activation() {
         )),
         Some(false)
     );
-    let modal = app
-        .selection_modal
-        .as_ref()
-        .expect("rendered narrow hero Enter must open the chapter modal");
+    let Some(crate::app::types_overlay::OverlayRequest::SelectionModal(modal)) =
+        app.pending_overlay.as_ref()
+    else {
+        panic!("rendered narrow hero Enter must open the chapter modal");
+    };
     assert!(matches!(
         modal.source,
         crate::app::SelectionModalSource::Book { .. }
@@ -213,7 +217,10 @@ fn cannot_fit_book_enter_uses_the_completed_60x4_layout_for_ordinary_activation(
         )),
         Some(false)
     );
-    assert!(app.selection_modal.is_none());
+    assert!(!matches!(
+        app.pending_overlay.as_ref(),
+        Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+    ));
     assert_eq!(app.status, "Audiobookshelf playback owner is unavailable");
 }
 
@@ -242,7 +249,10 @@ fn wide_book_enter_uses_the_completed_100x20_layout_for_chapter_workspace() {
         )),
         Some(false)
     );
-    assert!(app.selection_modal.is_none());
+    assert!(!matches!(
+        app.pending_overlay.as_ref(),
+        Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+    ));
     assert_eq!(app.audiobookshelf_book_browse[0].chapter_selection, Some(0));
     assert_ne!(app.status, "Audiobookshelf playback owner is unavailable");
 }
@@ -273,5 +283,8 @@ fn wide_book_chapter_target_keeps_mouse_activation_path() {
         Some(chapter)
     );
     app.handle_mouse(click);
-    assert!(app.selection_modal.is_none());
+    assert!(!matches!(
+        app.pending_overlay.as_ref(),
+        Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
+    ));
 }

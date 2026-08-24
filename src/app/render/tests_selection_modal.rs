@@ -1,7 +1,6 @@
+use super::components::selection_modal::SelectionModalRenderGeometry;
 use super::test_helpers::buffer_to_string;
 use super::{render_selection_modal_content, SelectionModalRenderModel};
-use crate::app::layout::LayoutMain;
-use crate::app::tests::make_app_stub;
 use crate::app::types_selection_modal::{
     SelectionModal, SelectionModalFilter, SelectionModalItem, SelectionModalListState,
     SelectionModalRow, SelectionModalSource,
@@ -43,7 +42,7 @@ fn render_with_layout(
     width: u16,
     height: u16,
     modal: SelectionModal,
-) -> (Terminal<TestBackend>, LayoutMain) {
+) -> (Terminal<TestBackend>, SelectionModalRenderGeometry) {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
     let mut dim_backdrop_active = false;
@@ -62,12 +61,7 @@ fn render_with_layout(
             ));
         })
         .unwrap();
-    let geometry = geometry.unwrap();
-    let mut layout = LayoutMain::default();
-    layout.selection_modal_area = geometry.area;
-    layout.selector_tabs = geometry.selector_tabs;
-    layout.selection_modal_rows = geometry.rows;
-    (terminal, layout)
+    (terminal, geometry.unwrap())
 }
 
 #[test]
@@ -145,56 +139,6 @@ fn selection_modal_header_row_has_no_marker_and_cursor_skips_headers() {
         "▸",
         "header row must not show the item cursor marker"
     );
-
-    // Moving down from the first item (index 1) must skip the "Season 2"
-    // header at index 2 and land on "Episode 2" at index 3.
-    let mut app = make_app_stub();
-    app.selection_modal = Some(modal);
-    app.move_selection_modal_cursor(1);
-    assert_eq!(app.selection_modal.as_ref().unwrap().cursor, 3);
-    // Moving back up must skip the header again, returning to index 1.
-    app.move_selection_modal_cursor(-1);
-    assert_eq!(app.selection_modal.as_ref().unwrap().cursor, 1);
-    // Clamped at the first item -- no wrap.
-    app.move_selection_modal_cursor(-1);
-    assert_eq!(app.selection_modal.as_ref().unwrap().cursor, 1);
-}
-
-#[test]
-fn close_selection_modal_after_open_returns_to_none() {
-    let mut app = make_app_stub();
-    app.open_selection_modal(
-        SelectionModalSource::Album {
-            album_id: "album-1".into(),
-        },
-        "Tracks".into(),
-        SelectionModalListState::Ready(vec![item("Track One", "3:21", "0")]),
-        None,
-    );
-    assert!(app.selection_modal.is_some());
-    assert_eq!(app.selection_modal.as_ref().unwrap().cursor, 0);
-
-    app.close_selection_modal();
-    assert!(app.selection_modal.is_none());
-}
-
-#[test]
-fn opening_header_only_ready_state_normalizes_to_empty() {
-    let mut app = make_app_stub();
-    app.open_selection_modal(
-        SelectionModalSource::Series {
-            series_id: "series-1".into(),
-        },
-        "Series".into(),
-        SelectionModalListState::Ready(vec![SelectionModalRow::Header("Season 1".into())]),
-        None,
-    );
-
-    assert!(matches!(
-        app.selection_modal.as_ref().unwrap().state,
-        SelectionModalListState::Empty
-    ));
-    assert_eq!(app.selection_modal.as_ref().unwrap().cursor, 0);
 }
 
 #[test]
@@ -214,7 +158,7 @@ fn selection_modal_renders_filter_pills_above_the_list() {
             selected: 0,
         }),
     };
-    let (terminal, layout) = render_with_layout(60, 16, modal);
+    let (terminal, geometry) = render_with_layout(60, 16, modal);
     let output = buffer_to_string(&terminal);
     assert!(output.contains("All"), "{output}");
     assert!(output.contains("Unplayed"), "{output}");
@@ -228,18 +172,14 @@ fn selection_modal_renders_filter_pills_above_the_list() {
         item_y == pill_y + 2,
         "filter pills must have exactly one parent-background spacer row"
     );
-    assert_eq!(layout.selector_tabs.len(), 2);
-    assert!(layout
+    assert_eq!(geometry.selector_tabs.len(), 2);
+    assert!(geometry
         .selector_tabs
         .iter()
         .all(|(rect, _)| rect.height == 1));
-    assert_eq!(layout.selection_modal_rows.len(), 2);
-    assert!(layout.selection_modal_rows.iter().all(|(rect, index)| {
-        rect.height == 1
-            && *index < 2
-            && layout
-                .selection_modal_area
-                .contains((rect.x, rect.y).into())
+    assert_eq!(geometry.rows.len(), 2);
+    assert!(geometry.rows.iter().all(|(rect, index)| {
+        rect.height == 1 && *index < 2 && geometry.area.contains((rect.x, rect.y).into())
     }));
 }
 

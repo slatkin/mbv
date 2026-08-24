@@ -64,26 +64,14 @@ impl App {
         let source = SelectionModalSource::Series {
             series_id: series_id.to_owned(),
         };
-        let selected = self
-            .selection_modal
-            .as_ref()
-            .filter(|modal| modal.source == source)
-            .and_then(|modal| modal.filter.as_ref().map(|filter| filter.selected))
-            .unwrap_or(0)
-            .min(detail.seasons.len().saturating_sub(1));
-        if let Some(modal) = self
-            .selection_modal
-            .as_mut()
-            .filter(|modal| modal.source == source)
-        {
-            modal.filter = Some(SelectionModalFilter {
-                labels: super::lib_cursor_actions::series_season_pill_labels(detail),
-                selected,
-            });
-        }
+        let selected = 0.min(detail.seasons.len().saturating_sub(1));
         self.refresh_selection_modal(
             source,
             super::lib_cursor_actions::series_modal_state_for_season(detail, selected),
+            Some(SelectionModalFilter {
+                labels: super::lib_cursor_actions::series_season_pill_labels(detail),
+                selected,
+            }),
         );
     }
 }

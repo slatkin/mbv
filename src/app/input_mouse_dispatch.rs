@@ -100,57 +100,6 @@ impl App {
             _ => {}
         }
 
-        // A selection modal owns the topmost browse targets. Consume every
-        // mouse event while it is open so the underlying library cannot see
-        // a click intended for a modal row or pill.
-        if self.selection_modal.is_some() {
-            if !matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-                return;
-            }
-            let pos = (col, row).into();
-            if !self.layout.main.selection_modal_area.contains(pos) {
-                self.close_selection_modal();
-                return;
-            }
-            if let Some(target) = self
-                .layout
-                .main
-                .selector_tabs
-                .iter()
-                .find(|(rect, _)| rect.contains(pos))
-                .map(|(_, target)| *target)
-            {
-                let source = self
-                    .selection_modal
-                    .as_ref()
-                    .map(|modal| modal.source.clone());
-                match source {
-                    Some(crate::app::types_selection_modal::SelectionModalSource::Series {
-                        ..
-                    }) => self.select_series_selection_modal_season(target),
-                    Some(crate::app::types_selection_modal::SelectionModalSource::Podcast {
-                        ..
-                    }) => self.select_podcast_selection_modal_filter(target),
-                    _ => {}
-                }
-                return;
-            }
-            if let Some(row_index) = self
-                .layout
-                .main
-                .selection_modal_rows
-                .iter()
-                .find(|(rect, _)| rect.contains(pos))
-                .map(|(_, row_index)| *row_index)
-            {
-                if let Some(modal) = self.selection_modal.as_mut() {
-                    modal.cursor = row_index;
-                }
-                self.activate_selection_modal_item();
-            }
-            return;
-        }
-
         if matches!(
             mouse.kind,
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown

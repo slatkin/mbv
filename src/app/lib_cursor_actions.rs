@@ -389,34 +389,11 @@ impl App {
         );
     }
 
-    pub(super) fn cycle_series_selection_modal_season(&mut self, delta: i64) {
-        let Some((series_id, current)) = self.selection_modal.as_ref().and_then(|modal| {
-            let SelectionModalSource::Series { series_id } = &modal.source else {
-                return None;
-            };
-            Some((series_id.clone(), modal.filter.as_ref()?.selected))
-        }) else {
-            return;
-        };
-        let Some(detail) = self.series_detail_cache.get(&series_id).cloned() else {
-            return;
-        };
-        if detail.seasons.is_empty() {
-            return;
-        }
-        let next = super::ui_util::move_cursor(current, delta, detail.seasons.len());
-        self.select_series_selection_modal_season(next);
-    }
-
-    pub(super) fn select_series_selection_modal_season(&mut self, season_index: usize) {
-        let Some(series_id) = self.selection_modal.as_ref().and_then(|modal| {
-            let SelectionModalSource::Series { series_id } = &modal.source else {
-                return None;
-            };
-            Some(series_id.clone())
-        }) else {
-            return;
-        };
+    pub(super) fn select_series_selection_modal_season(
+        &mut self,
+        series_id: String,
+        season_index: usize,
+    ) {
         let Some(detail) = self.series_detail_cache.get(&series_id).cloned() else {
             return;
         };
@@ -428,18 +405,7 @@ impl App {
             self.fetch_series_season_episodes(series_id.clone(), season_id);
         }
         let state = series_modal_state_for_season(&detail, season_index);
-        if let Some(modal) = self.selection_modal.as_mut() {
-            modal.state = state.normalize();
-            modal.cursor = modal
-                .state
-                .rows()
-                .iter()
-                .position(|row| row.item_id().is_some())
-                .unwrap_or(0);
-            if let Some(filter) = modal.filter.as_mut() {
-                filter.selected = season_index;
-            }
-        }
+        self.refresh_selection_modal(SelectionModalSource::Series { series_id }, state, None);
     }
 
     pub(super) fn is_home_video_view(&self, lib_idx: usize) -> bool {

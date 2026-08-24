@@ -516,7 +516,6 @@ fn context_stack_order_is_pinned() {
     assert_eq!(
         names,
         vec![
-            "selection_modal",
             "settings",
             "playlists",
             "global_overlay_open",
