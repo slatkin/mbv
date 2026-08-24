@@ -2,6 +2,7 @@ use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::hero_left::{self, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::padded_rect;
+use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::{palette, App, PanelFocus};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -25,6 +26,33 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        layout: &mut LayoutMain,
+    ) {
+        let ctx = self.library_list_render_ctx(lib_idx, false);
+        let selected_series = ctx
+            .items
+            .get(ctx.cursor)
+            .cloned()
+            .filter(|item| item.item_type == "Series");
+        self.render_wide_tv_with_ctx(
+            f,
+            area,
+            lib_idx,
+            focused,
+            &ctx,
+            selected_series.as_ref(),
+            layout,
+        );
+    }
+
+    fn render_wide_tv_with_ctx(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        focused: bool,
+        ctx: &LibraryListRenderCtx,
+        selected_series: Option<&mbv_core::api::EmbyItem>,
         layout: &mut LayoutMain,
     ) {
         layout.tv_wide_episode_rows.clear();
@@ -51,7 +79,7 @@ impl App {
             Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
             left_panel,
         );
-        if self.selected_series_item(lib_idx).is_some() {
+        if selected_series.is_some() {
             self.render_series_inline_detail(
                 f,
                 left_area,
@@ -66,12 +94,12 @@ impl App {
         }
 
         let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
-        if let Some(search) = self.libs[lib_idx].search.as_ref() {
+        if ctx.is_search_active() {
             crate::app::render::components::hero::render_search_box(
                 f,
                 right_pane.pills_area,
-                &search.query,
-                search.loading,
+                ctx.search_query.as_deref().unwrap_or_default(),
+                ctx.search_loading,
             );
         } else if self.should_show_letter_pills(lib_idx) {
             self.render_letter_pills_row(f, right_pane.pills_area, lib_idx, layout);
@@ -86,7 +114,15 @@ impl App {
             );
         }
 
-        self.render_wide_library_rows(f, list_area, lib_idx, right_focused, layout);
+        let final_scroll =
+            self.render_wide_library_rows_with_ctx(f, list_area, ctx, right_focused, layout);
+        if ctx.is_search_active() {
+            if let Some(search) = &mut self.libs[lib_idx].search {
+                search.scroll = final_scroll;
+            }
+        } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            level.scroll = final_scroll;
+        }
 
         hero_left::hero_on_left_list_panel_border(f, list_panel, right_focused);
     }
