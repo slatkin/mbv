@@ -1,6 +1,5 @@
 use super::super::super::palette;
 use super::super::super::types_context_menu::MultiSelectKind;
-use super::super::super::App;
 use crate::app::render::components::modal_frame::render_modal_frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -99,21 +98,4 @@ pub(in crate::app) fn render_multiselect_content(
         })
         .collect();
     f.render_widget(Paragraph::new(lines), list_area);
-}
-
-impl App {
-    pub(in crate::app::render) fn render_multiselect_popup(&mut self, f: &mut Frame) {
-        let Some(popup) = self.multiselect_popup.as_ref() else {
-            return;
-        };
-        render_multiselect_content(
-            f,
-            &mut self.dim_backdrop_active,
-            MultiSelectRenderModel {
-                kind: popup.kind,
-                items: &popup.items,
-                cursor: popup.cursor,
-            },
-        );
-    }
 }

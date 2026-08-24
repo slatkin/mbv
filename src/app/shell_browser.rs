@@ -4,10 +4,6 @@ use super::{PanelFocus, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    pub(super) fn handle_emby_browser_key(&mut self, key: crossterm::event::KeyEvent) -> bool {
-        self.app.handle_key(key)
-    }
-
     fn emby_browser_component_id(&self) -> Option<ComponentId> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
@@ -97,7 +93,7 @@ mod tests {
         let Some(Msg::Legacy(LegacyTerminalEvent::Key(key))) = message else {
             panic!("browser movement should forward to the legacy handler");
         };
-        assert!(!model.handle_emby_browser_key(key));
+        assert!(!model.app.handle_key(key));
         model.sync_emby_browser();
         assert_eq!(model.app.libs[0].nav_stack[0].cursor, 1);
         assert!(model

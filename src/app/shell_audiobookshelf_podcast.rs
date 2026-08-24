@@ -97,7 +97,6 @@ mod tests {
     use crate::app::components::{Msg, ShellRequest};
     use crate::app::tests_podcast::audiobookshelf_app;
     use mbv_core::audiobookshelf::AudiobookshelfShow;
-    use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]

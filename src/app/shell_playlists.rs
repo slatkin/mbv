@@ -95,7 +95,6 @@ mod tests {
     use super::*;
     use crate::app::components::{Msg, ShellRequest};
     use crate::app::tests::make_app_stub;
-    use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]

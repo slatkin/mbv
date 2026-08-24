@@ -105,7 +105,6 @@ mod tests {
     use crate::app::tests::make_app_stub;
     use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
     use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
-    use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]

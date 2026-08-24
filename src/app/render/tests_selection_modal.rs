@@ -1,4 +1,5 @@
 use super::test_helpers::buffer_to_string;
+use super::{render_selection_modal_content, SelectionModalRenderModel};
 use crate::app::layout::LayoutMain;
 use crate::app::tests::make_app_stub;
 use crate::app::types_selection_modal::{
@@ -43,14 +44,29 @@ fn render_with_layout(
     height: u16,
     modal: SelectionModal,
 ) -> (Terminal<TestBackend>, LayoutMain) {
-    let mut app = make_app_stub();
-    app.selection_modal = Some(modal);
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    let mut layout = LayoutMain::default();
+    let mut dim_backdrop_active = false;
+    let mut geometry = None;
     terminal
-        .draw(|f| app.render_selection_modal(f, &mut layout))
+        .draw(|f| {
+            geometry = Some(render_selection_modal_content(
+                f,
+                &mut dim_backdrop_active,
+                SelectionModalRenderModel {
+                    title: &modal.title,
+                    state: &modal.state,
+                    cursor: modal.cursor,
+                    filter: modal.filter.as_ref(),
+                },
+            ));
+        })
         .unwrap();
+    let geometry = geometry.unwrap();
+    let mut layout = LayoutMain::default();
+    layout.selection_modal_area = geometry.area;
+    layout.selector_tabs = geometry.selector_tabs;
+    layout.selection_modal_rows = geometry.rows;
     (terminal, layout)
 }
 
@@ -86,8 +102,7 @@ fn selection_modal_renders_items_with_cursor_row_highlighted() {
 
 #[test]
 fn selection_modal_header_row_has_no_marker_and_cursor_skips_headers() {
-    let mut app = make_app_stub();
-    app.selection_modal = Some(SelectionModal {
+    let modal = SelectionModal {
         source: SelectionModalSource::Series {
             series_id: "series-1".into(),
         },
@@ -100,13 +115,24 @@ fn selection_modal_header_row_has_no_marker_and_cursor_skips_headers() {
         ]),
         cursor: 1,
         filter: None,
-    });
+    };
 
     let backend = TestBackend::new(60, 16);
     let mut terminal = Terminal::new(backend).unwrap();
-    let mut layout = LayoutMain::default();
+    let mut dim_backdrop_active = false;
     terminal
-        .draw(|f| app.render_selection_modal(f, &mut layout))
+        .draw(|f| {
+            render_selection_modal_content(
+                f,
+                &mut dim_backdrop_active,
+                SelectionModalRenderModel {
+                    title: &modal.title,
+                    state: &modal.state,
+                    cursor: modal.cursor,
+                    filter: modal.filter.as_ref(),
+                },
+            );
+        })
         .unwrap();
     let output = buffer_to_string(&terminal);
     assert!(output.contains("Season 1"), "{output}");
@@ -122,6 +148,8 @@ fn selection_modal_header_row_has_no_marker_and_cursor_skips_headers() {
 
     // Moving down from the first item (index 1) must skip the "Season 2"
     // header at index 2 and land on "Episode 2" at index 3.
+    let mut app = make_app_stub();
+    app.selection_modal = Some(modal);
     app.move_selection_modal_cursor(1);
     assert_eq!(app.selection_modal.as_ref().unwrap().cursor, 3);
     // Moving back up must skip the header again, returning to index 1.

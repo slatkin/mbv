@@ -1,5 +1,4 @@
 use crate::app::render::components::hero::{paint_hero_content, HeroContent};
-use crate::app::render::RENDER_FILTER;
 use crate::app::ui_util::*;
 use crate::app::{images, palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -253,7 +252,7 @@ impl App {
     /// Triggers the Audiobookshelf cover fetch for `library_item_id` and
     /// returns its image cache key, or `None` with no server configured.
     /// Shared by every generic-hero cover: the two-column/Feed stacked-below
-    /// detail (`render_home_latest_detail`) and the narrow beside-image
+    /// detail (`render_home_latest_detail_content`) and the narrow beside-image
     /// hero (`home.rs`'s `HeroData::GenericBeside`).
     pub(in crate::app::render) fn audiobookshelf_cover_key(
         &mut self,
@@ -269,54 +268,12 @@ impl App {
             self.current_protocol_suffix(),
         ))
     }
-
-    /// Generic hero detail for a selected Audiobookshelf Home item, sharing its
-    /// title/subtitle/meta/overview shape with the Emby Keep Watching hero
-    /// via [`super::hero::render_home_hero_meta_block`], plus a 16:9 cover
-    /// image filling the column below it (unlike Keep Watching's image,
-    /// which sits beside the text -- an existing, preserved difference, not
-    /// something this shares). Audiobookshelf covers load through the
-    /// existing `ImageSource::Audiobookshelf` path; items with no artwork
-    /// degrade to no image, not an error.
-    /// `overview_pad` insets the overview text -- the two-column (wide)
-    /// hero's original 2-col padding; the single-column hero passes 0 to
-    /// stay flush with the title above it.
-    pub(in crate::app::render) fn render_home_latest_detail(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        item: &QueueItem,
-        focused: bool,
-        overview_pad: usize,
-    ) {
-        let Some(super::home_hero::HomeImagePaint::AudiobookshelfCover {
-            area: image_rect,
-            library_item_id,
-            ..
-        }) = render_home_latest_detail_content(f, area, item, focused, overview_pad)
-        else {
-            return;
-        };
-        let Some(image_key) = self.audiobookshelf_cover_key(&library_item_id) else {
-            return;
-        };
-        let Some(image) = self.cached_image_protocol_mut(&image_key) else {
-            return;
-        };
-        type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-        f.render_stateful_widget(
-            SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-            image_rect,
-            image,
-        );
-    }
 }
 
 /// Renders the generic Home hero detail's non-image content (title/meta/
 /// overview, or the whole no-image hero for a Feed) without `App`, returning
 /// the Audiobookshelf cover's target `Rect` (if any) still needing paint.
-/// Shared by the `App::render_home_latest_detail` wrapper above and
-/// `HomeComponent`'s render path (task 3.4's confirmed extraction).
+/// Shared by Home's render paths (task 3.4's confirmed extraction).
 pub(in crate::app::render) fn render_home_latest_detail_content(
     f: &mut Frame,
     area: Rect,
@@ -410,7 +367,6 @@ pub(in crate::app::render) fn render_home_latest_detail_content(
 mod tests {
     use super::*;
     use crate::app::render::test_helpers::buffer_to_string;
-    use crate::app::tests::make_app_stub;
     use mbv_core::playback_queue::{AudiobookshelfQueueItem, FeedEntry};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
@@ -491,7 +447,6 @@ mod tests {
     /// rather than panicking or rendering an empty duration row.
     #[test]
     fn detail_shows_title_and_duration_when_known() {
-        let mut app = make_app_stub();
         let item = abs_item(
             "a",
             Some(65 * TICKS_PER_SECOND as u64),
@@ -500,7 +455,7 @@ mod tests {
         let backend = TestBackend::new(40, 6);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_home_latest_detail(f, Rect::new(0, 0, 40, 6), &item, true, 0);
+            let _ = render_home_latest_detail_content(f, Rect::new(0, 0, 40, 6), &item, true, 0);
         })
         .unwrap();
         let out = buffer_to_string(&term);
@@ -515,12 +470,11 @@ mod tests {
     /// cover fetch.
     #[test]
     fn detail_without_duration_omits_duration_row() {
-        let mut app = make_app_stub();
         let item = abs_item("b", None, None);
         let backend = TestBackend::new(40, 6);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_home_latest_detail(f, Rect::new(0, 0, 40, 6), &item, true, 0);
+            let _ = render_home_latest_detail_content(f, Rect::new(0, 0, 40, 6), &item, true, 0);
         })
         .unwrap();
         let out = buffer_to_string(&term);
@@ -537,7 +491,6 @@ mod tests {
     /// ellipsis so the hero doesn't grow unboundedly.
     #[test]
     fn detail_truncates_long_description_with_ellipsis() {
-        let mut app = make_app_stub();
         // The truncation limit is on the description width; build a much wider
         // buffer item by item so the assertion below is about the ellipsis,
         // not about a coincidental line-wrap boundary.
@@ -559,7 +512,7 @@ mod tests {
         let backend = TestBackend::new(200, 40);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_home_latest_detail(f, Rect::new(0, 0, 200, 40), &item, true, 0);
+            let _ = render_home_latest_detail_content(f, Rect::new(0, 0, 200, 40), &item, true, 0);
         })
         .unwrap();
         let out = buffer_to_string(&term);
@@ -625,12 +578,11 @@ mod tests {
     /// Audiobookshelf items), never panicking.
     #[test]
     fn feed_detail_renders_title_without_duration_or_artwork() {
-        let mut app = make_app_stub();
         let item = feed_item("2");
         let backend = TestBackend::new(40, 6);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_home_latest_detail(f, Rect::new(0, 0, 40, 6), &item, true, 0);
+            let _ = render_home_latest_detail_content(f, Rect::new(0, 0, 40, 6), &item, true, 0);
         })
         .unwrap();
         let out = buffer_to_string(&term);

@@ -2,11 +2,9 @@ use super::super::super::palette;
 use super::super::super::types_selection_modal::{
     SelectionModalFilter, SelectionModalListState, SelectionModalRow,
 };
-use crate::app::layout::LayoutMain;
 use crate::app::render::components::modal_frame::render_modal_frame;
 use crate::app::render::components::widgets::{render_pill_bar, PillBar};
 use crate::app::ui_util::trunc_str;
-use crate::app::App;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -188,35 +186,5 @@ pub(in crate::app) fn render_selection_modal_content(
         area: inner,
         selector_tabs,
         rows,
-    }
-}
-
-/// Keep the App-bound characterization seam while the shell component owns
-/// the live modal during the mirror-first stage.
-impl App {
-    pub(in crate::app::render) fn render_selection_modal(
-        &mut self,
-        f: &mut Frame,
-        layout: &mut LayoutMain,
-    ) {
-        let Some(modal) = self.selection_modal.as_ref() else {
-            layout.selector_tabs = Vec::new();
-            layout.selection_modal_area = Rect::default();
-            layout.selection_modal_rows = Vec::new();
-            return;
-        };
-        let geometry = render_selection_modal_content(
-            f,
-            &mut self.dim_backdrop_active,
-            SelectionModalRenderModel {
-                title: &modal.title,
-                state: &modal.state,
-                cursor: modal.cursor,
-                filter: modal.filter.as_ref(),
-            },
-        );
-        layout.selection_modal_area = geometry.area;
-        layout.selector_tabs = geometry.selector_tabs;
-        layout.selection_modal_rows = geometry.rows;
     }
 }
