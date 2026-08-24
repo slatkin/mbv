@@ -5,6 +5,7 @@ use crate::app::render::arrangements::hero_left::{self, WrappedHeroLine, PANE_PA
 use crate::app::render::arrangements::library as library_arrangement;
 use crate::app::render::arrangements::music::{self as music_arrangement, WideMusicLeftLayout};
 use crate::app::render::arrangements::padded_rect;
+use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::{palette, App, PanelFocus};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -57,6 +58,29 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        layout: &mut LayoutMain,
+    ) {
+        let ctx = self.library_list_render_ctx(lib_idx, true);
+        let track_cursor = self.libs[lib_idx].album_track_focus;
+        self.render_wide_music_group_with_ctx(
+            f,
+            area,
+            lib_idx,
+            focused,
+            &ctx,
+            track_cursor,
+            layout,
+        );
+    }
+
+    fn render_wide_music_group_with_ctx(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        focused: bool,
+        ctx: &LibraryListRenderCtx,
+        track_cursor: Option<usize>,
         layout: &mut LayoutMain,
     ) {
         layout.wide_music_track_hitmap.clear();
@@ -148,7 +172,7 @@ impl App {
                 f,
                 &left_layout.track_area,
                 album,
-                lib_idx,
+                track_cursor,
                 left_focused,
                 library_focused,
                 layout,
@@ -170,16 +194,18 @@ impl App {
         // itself is inset inside it.
         let right_pane = hero_left::hero_on_left_right_pane(right_panel, right_area, PANE_PAD_Y);
         let pills_area = right_pane.pills_area;
-        let search_active = self.libs[lib_idx].search.is_some();
+        let search_active = ctx.is_search_active();
 
         // The fuzzy search box replaces the pill bar at the top of the right
         // rail while search is active (never pills and filtering at once),
         // occupying the exact one-row pill slot -- the gap row and browser
         // panel below it are already reserved either way.
         if search_active {
-            let s = self.libs[lib_idx].search.as_ref().unwrap();
             crate::app::render::components::hero::render_search_box(
-                f, pills_area, &s.query, s.loading,
+                f,
+                pills_area,
+                ctx.search_query.as_deref().unwrap_or_default(),
+                ctx.search_loading,
             );
         } else if pills_area.y + pills_area.height <= right_area.bottom() {
             self.render_music_group_pills_row(f, pills_area, lib_idx, layout);
@@ -201,32 +227,11 @@ impl App {
         }
         if browser_area.height > 0 && browser_area.width > 0 {
             if search_active {
-                // Fuzzy search results, a plain one/multi-column list fed from
-                // `lib.search` (same construction as the narrow path in
-                // `render_list`), replacing the grouped album browser.
-                let s = self.libs[lib_idx].search.as_ref().unwrap();
-                let items: Vec<mbv_core::api::EmbyItem> = s
-                    .results
-                    .iter()
-                    .filter_map(|&i| {
-                        s.items
-                            .get(i)
-                            .map(|item| self.recursive_album_display_item(lib_idx, i, item.clone()))
-                    })
-                    .collect();
                 let cols =
                     crate::app::library_column_width::library_column_count(browser_area.width);
                 let scroll = self.render_plain_rows(
                     f,
-                    crate::app::render::components::list_rows::ListRenderCtx {
-                        content_area: browser_area,
-                        items: &items,
-                        cursor: s.cursor,
-                        stored_scroll: s.scroll,
-                        cols,
-                        focused: right_focused,
-                        hero_rows: 0,
-                    },
+                    ctx.rows(browser_area, cols, right_focused, 0),
                     layout,
                 );
                 if let Some(sl) = self.libs[lib_idx].search.as_mut() {
@@ -305,7 +310,7 @@ impl App {
         f: &mut Frame,
         track_area: &Rect,
         album: &mbv_core::api::EmbyItem,
-        lib_idx: usize,
+        track_cursor: Option<usize>,
         left_focused: bool,
         library_focused: bool,
         layout: &mut LayoutMain,
@@ -354,7 +359,6 @@ impl App {
                 let visible = list_area.height as usize;
                 // Preview mode starts from the beginning (offset 0);
                 // focused mode keeps the selected track visible.
-                let track_cursor = self.libs[lib_idx].album_track_focus;
                 let scroll = if let Some(cursor) = track_cursor {
                     // Keep cursor visible.
                     let max_scroll = n.saturating_sub(visible);
