@@ -587,6 +587,14 @@ impl Model {
                                 quit = true;
                             }
                         }
+                        Msg::Shell(ShellRequest::QueueKey(key)) => {
+                            if self.app.handle_queue_key(key) {
+                                quit = true;
+                            }
+                        }
+                        Msg::Queue(request) => {
+                            self.handle_queue_request(request);
+                        }
                         Msg::Shell(ShellRequest::PlaybackPromptKey(key)) => {
                             if self.app.skip_intro_end_ticks.is_some() {
                                 self.app.handle_key_confirm_skip_intro(key);
@@ -629,6 +637,7 @@ impl Model {
             self.sync_feeds();
             self.sync_audiobookshelf_podcast();
             self.sync_audiobookshelf_book();
+            self.sync_queue();
             self.sync_playlists();
             self.sync_save_playlist();
             self.sync_playback_prompt();
@@ -676,6 +685,7 @@ impl Model {
                     self.render_feeds_component(f);
                     self.render_audiobookshelf_podcast_component(f);
                     self.render_audiobookshelf_book_component(f);
+                    self.render_queue_component(f);
                     self.render_playlists_overlay(f);
                     self.render_save_playlist_overlay(f);
                     self.render_playback_prompt(f);

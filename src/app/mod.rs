@@ -118,6 +118,7 @@ mod shell_home;
 mod shell_overlays;
 mod shell_playback_prompt;
 mod shell_playlists;
+mod shell_queue;
 pub use self::shell::Model;
 mod app_init;
 use self::app_init::AppInit;

@@ -46,6 +46,7 @@ pub(super) mod music_wide;
 pub(super) mod music_wide_browser;
 pub(super) mod playback_prompt;
 pub(super) mod playlists;
+pub(super) mod queue;
 pub(super) mod remote_reanchor;
 pub(super) mod search_sidebar;
 pub(super) mod selection_modal;

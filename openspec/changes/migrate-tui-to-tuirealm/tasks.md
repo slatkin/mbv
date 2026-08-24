@@ -99,7 +99,7 @@ order, **except** 3.3 and 3.5, which are gated on the shared render seam 3.11.
 
 ## 4. High-risk surfaces
 
-- [ ] 4.1 Convert Queue (cursor/scroll/scope move to the component; canonical queue stays in the Player owner, referenced by opaque `QueueSlotId`); verify `rtk cargo nextest run -p mbv queue` + scan.
+- [x] 4.1 Convert Queue (cursor/scroll/scope move to the component; canonical queue stays in the Player owner, referenced by opaque `QueueSlotId`); verify `rtk cargo nextest run -p mbv queue` + scan.
 - [ ] 4.2 Convert the TV workspace (two focusable panes, season/episode child targets). **Gated on 3.11**, independent of 3.5. Verify `rtk cargo nextest run -p mbv tv_workspace` + scan.
 - [ ] 4.3 Convert the grouped Music workspace (album/track focus coupling, track targets). **Gated on 3.11**, independent of 3.5. Verify `rtk cargo nextest run -p mbv music_workspace` + scan.
 - [ ] 4.4 Convert inline album-track interaction (child state machine of the Music workspace). **Gated on 3.11**; prefer scheduling after 4.3 so both read the same seam functions, but under the mirror-first bar it may mount independently and paint over — it is not hard-blocked on 4.3. Verify `rtk cargo nextest run -p mbv album_track` + scan.

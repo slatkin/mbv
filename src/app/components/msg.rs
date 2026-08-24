@@ -6,6 +6,7 @@
 //! surface converts (see per-type TODOs).
 
 use crossterm::event::{KeyEvent, MouseEvent};
+use mbv_core::playback_queue::QueueSlotId;
 
 /// The single TuiRealm outbound type, grouping surface output enums (design
 /// D4). `Application` requires `Msg: PartialEq`; convenience `Debug`/`Clone`
@@ -60,9 +61,35 @@ pub struct NavTarget;
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlaybackRequest;
 
-// TODO(migrate-tui-to-tuirealm): flesh out at Queue conversion (task 4.1).
+/// Queue requests carry slot identity, not a snapshot index. The queue can be
+/// reordered by the Player between paint and dispatch.
 #[derive(Debug, Clone, PartialEq)]
-pub struct QueueRequest;
+pub enum QueueRequest {
+    Cursor {
+        scope: crate::app::types_playback::QueueScope,
+        slot_id: QueueSlotId,
+    },
+    Scope(crate::app::types_playback::QueueScope),
+    Play {
+        scope: crate::app::types_playback::QueueScope,
+        slot_id: QueueSlotId,
+    },
+    Remove {
+        scope: crate::app::types_playback::QueueScope,
+        slot_id: QueueSlotId,
+    },
+    Move {
+        scope: crate::app::types_playback::QueueScope,
+        slot_id: QueueSlotId,
+        direction: QueueMove,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueMove {
+    Up,
+    Down,
+}
 
 // TODO(migrate-tui-to-tuirealm): flesh out as service-driven surfaces convert
 // (browse fetch / search / session / cast ops; tasks 3.x/4.x).
@@ -185,4 +212,6 @@ pub enum ShellRequest {
     /// Forward Save-playlist effects to the legacy App handler while the
     /// dialog's local input remains component-owned.
     SavePlaylistKey(crossterm::event::KeyEvent),
+    /// Forward queue keys whose effects are still shell-owned.
+    QueueKey(crossterm::event::KeyEvent),
 }

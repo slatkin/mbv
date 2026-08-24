@@ -25,6 +25,7 @@ pub mod multiselect;
 pub mod playback_gates;
 pub mod playback_prompt;
 pub mod playlists;
+pub mod queue;
 pub mod remote_reanchor;
 pub mod save_playlist;
 pub mod search_sidebar;
@@ -44,13 +45,16 @@ pub use self::help::HelpComponent;
 pub use self::home::HomeComponent;
 pub use self::legacy_input::LegacyInput;
 pub use self::library_routes::LibraryRoutesComponent;
-pub use self::msg::{LegacyTerminalEvent, Msg, ServiceRequest, ShellRequest};
+pub use self::msg::{
+    LegacyTerminalEvent, Msg, QueueMove, QueueRequest, ServiceRequest, ShellRequest,
+};
 pub use self::multiselect::MultiselectComponent;
 pub use self::playback_gates::{
     PlaybackGatesComponent, ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE,
 };
 pub use self::playback_prompt::PlaybackPromptComponent;
 pub use self::playlists::PlaylistsComponent;
+pub use self::queue::QueueComponent;
 pub use self::remote_reanchor::RemoteReanchorComponent;
 pub use self::save_playlist::SavePlaylistComponent;
 pub use self::search_sidebar::SearchSidebarComponent;
@@ -76,6 +80,9 @@ mod playback_prompt_component_tests;
 #[cfg(test)]
 #[path = "playlists_component_tests.rs"]
 mod playlists_component_tests;
+#[cfg(test)]
+#[path = "queue_component_tests.rs"]
+mod queue_component_tests;
 #[cfg(test)]
 #[path = "save_playlist_component_tests.rs"]
 mod save_playlist_component_tests;

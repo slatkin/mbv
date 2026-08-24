@@ -1,0 +1,90 @@
+use super::msg::{Msg, QueueRequest};
+use super::queue::QueueComponent;
+use crate::app::render::QueueTitleModel;
+use crate::app::types_playback::{PlaybackState, QueueScope};
+use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
+use tuirealm::component::{AppComponent, Component};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+fn key(code: Key) -> KeyEvent {
+    KeyEvent {
+        code,
+        modifiers: KeyModifiers::NONE,
+    }
+}
+
+fn queue() -> Vec<mbv_core::playback_queue::QueueSlot> {
+    PlaybackQueue::from_queue_items(
+        vec![
+            QueueItem::Emby(Box::new(crate::app::tests::make_item("one", "Movie"))),
+            QueueItem::Emby(Box::new(crate::app::tests::make_item("two", "Movie"))),
+        ],
+        None,
+    )
+    .slots()
+    .to_vec()
+}
+
+#[test]
+fn queue_activation_uses_slot_id_after_snapshot_reorder() {
+    let slots = queue();
+    let second = slots[1].slot_id;
+    let mut component = QueueComponent::new();
+    component.set_content(
+        slots.clone(),
+        0,
+        0,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+
+    assert!(matches!(
+        component.on(&Event::Keyboard(key(Key::Down))),
+        Some(Msg::Queue(QueueRequest::Cursor { slot_id, .. })) if slot_id == second
+    ));
+
+    let mut reordered = slots;
+    reordered.swap(0, 1);
+    component.set_content(
+        reordered,
+        0,
+        0,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    assert!(matches!(
+        component.on(&Event::Keyboard(key(Key::Enter))),
+        Some(Msg::Queue(QueueRequest::Play { slot_id, .. })) if slot_id == second
+    ));
+}
+
+#[test]
+fn queue_component_renders_a_snapshot_without_app_state() {
+    let mut component = QueueComponent::new();
+    component.set_content(
+        queue(),
+        0,
+        0,
+        QueueScope::Local,
+        true,
+        PlaybackState::default(),
+        QueueTitleModel::default(),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let output: String = (0..buffer.area().height)
+        .flat_map(|y| (0..buffer.area().width).map(move |x| buffer[(x, y)].symbol().to_owned()))
+        .collect();
+    assert!(output.contains("one"));
+    assert!(output.contains("two"));
+}
