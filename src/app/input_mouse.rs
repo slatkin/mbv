@@ -231,16 +231,15 @@ impl App {
             if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
                 let pos = (col, row).into();
                 if self.layout.main.is_wide_tv_active() {
-                    if let Some(episode) = self
+                    if self
                         .layout
                         .main
                         .tv_wide_episode_rows
                         .iter()
                         .find(|(rect, _)| rect.contains(pos))
-                        .map(|(_, episode)| *episode)
+                        .is_some()
                     {
                         self.set_panel_focus(PanelFocus::Library);
-                        self.libs[lib_idx].series_selection = Some(episode);
                         return true;
                     }
                 }
@@ -288,16 +287,15 @@ impl App {
             if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
                 if self.layout.main.is_wide_tv_active() {
                     let pos = (col, row).into();
-                    if let Some(season) = self
+                    if self
                         .layout
                         .main
                         .tv_wide_season_tabs
                         .iter()
                         .find(|(rect, _)| rect.contains(pos))
-                        .map(|(_, season)| *season)
+                        .is_some()
                     {
                         self.set_panel_focus(PanelFocus::Library);
-                        self.select_series_season(lib_idx, season);
                         return true;
                     }
                     if self.layout.main.tv_wide_left_area.contains(pos) {
@@ -314,13 +312,8 @@ impl App {
                             .copied()
                             .flatten();
                         if let Some(target) = target {
-                            let before = self.selected_series_item(lib_idx).map(|item| item.id);
                             if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                                 level.cursor = target;
-                            }
-                            if before != self.selected_series_item(lib_idx).map(|item| item.id) {
-                                self.libs[lib_idx].series_selection = None;
-                                self.libs[lib_idx].series_season_cursor = 0;
                             }
                         }
                         return true;

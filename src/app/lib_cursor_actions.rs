@@ -178,13 +178,7 @@ impl App {
         if lib_idx >= self.libs.len() {
             return;
         }
-        let before = self.selected_series_item(lib_idx).map(|item| item.id);
         self.move_lib_cursor_inner(lib_idx, delta);
-        let after = self.selected_series_item(lib_idx).map(|item| item.id);
-        if before != after {
-            self.libs[lib_idx].series_selection = None;
-            self.libs[lib_idx].series_season_cursor = 0;
-        }
     }
 
     fn move_lib_cursor_inner(&mut self, lib_idx: usize, delta: i64) {
@@ -340,16 +334,13 @@ impl App {
             .map(|i| i.item_type == "Season")
             .unwrap_or(false)
     }
-    /// Activates series-selection mode for the given Series item.
-    /// Ensures the series detail is fetched and sets `series_selection`
-    /// to start at the first episode.
-    pub(super) fn enter_series_selection(&mut self, lib_idx: usize, item: &EmbyItem) {
+    /// Ensures the series detail is fetched for the wide TV component.
+    pub(super) fn enter_series_selection(&mut self, _lib_idx: usize, item: &EmbyItem) {
         if item.item_type != "Series" || item.id.is_empty() {
             return;
         }
         // Ensure the series detail (seasons + episodes) is fetched.
         self.fetch_series_detail(item.id.clone());
-        self.libs[lib_idx].series_selection = Some(0);
     }
 
     /// Opens the Series constituent-list modal (design.md Decision 7): one
@@ -359,16 +350,7 @@ impl App {
     /// landed in `series_detail_cache` yet, opens with a loading placeholder
     /// instead of episode rows.
     pub(super) fn open_series_selection_modal(&mut self, item: &EmbyItem) {
-        let season_index = self
-            .libs
-            .iter()
-            .enumerate()
-            .find(|(lib_idx, _)| {
-                self.selected_series_item(*lib_idx)
-                    .is_some_and(|selected| selected.id == item.id)
-            })
-            .map(|(lib_idx, _)| self.libs[lib_idx].series_season_cursor)
-            .unwrap_or(0);
+        let season_index = 0;
         if self.series_detail_cache.contains_key(&item.id) {
             let season_id = self
                 .series_detail_cache
@@ -458,76 +440,6 @@ impl App {
                 filter.selected = season_index;
             }
         }
-    }
-
-    /// Returns the episodes for the current season in series-selection
-    /// mode, or `None` if not in selection mode.
-    pub(super) fn series_selection_episodes(&self, lib_idx: usize) -> Option<Vec<EmbyItem>> {
-        let _ep_idx = self.libs[lib_idx].series_selection?;
-        let item = self.selected_series_item(lib_idx)?;
-        let detail = self.series_detail_cache.get(&item.id)?;
-        let season = detail
-            .seasons
-            .get(self.libs[lib_idx].series_season_cursor)?;
-        detail.episodes.get(&season.id).cloned()
-    }
-
-    pub(super) fn activate_series_selection_episode(&mut self, lib_idx: usize) {
-        let Some(episodes) = self.series_selection_episodes(lib_idx) else {
-            return;
-        };
-        let ep_idx = self.libs[lib_idx].series_selection.unwrap_or(0);
-        let Some(episode) = episodes.get(ep_idx).cloned() else {
-            return;
-        };
-        self.libs[lib_idx].series_selection = None;
-        self.play_item(episode);
-    }
-
-    /// Switches to the previous (`delta == -1`) or next (`delta == 1`)
-    /// season while in series-selection mode. Adjusts the season cursor
-    /// and ensures episodes for the new season are fetched.
-    pub(super) fn switch_series_selection_season(&mut self, lib_idx: usize, delta: i64) {
-        let Some(item) = self.selected_series_item(lib_idx) else {
-            return;
-        };
-        let Some(detail) = self.series_detail_cache.get(&item.id).cloned() else {
-            return;
-        };
-        let n = detail.seasons.len();
-        if n == 0 {
-            return;
-        }
-        let cur = self.libs[lib_idx].series_season_cursor;
-        let new_cur = super::ui_util::move_cursor(cur, delta, n);
-        if new_cur == cur {
-            return;
-        }
-        let new_season = &detail.seasons[new_cur];
-        // Ensure episodes for the new season are fetched.
-        if !detail.episodes.contains_key(&new_season.id) {
-            self.fetch_series_season_episodes(item.id.clone(), new_season.id.clone());
-        }
-        self.libs[lib_idx].series_season_cursor = new_cur;
-        // Reset episode cursor to first episode.
-        self.libs[lib_idx].series_selection = Some(0);
-    }
-
-    pub(super) fn select_series_season(&mut self, lib_idx: usize, season: usize) {
-        let Some(item) = self.selected_series_item(lib_idx) else {
-            return;
-        };
-        let Some(detail) = self.series_detail_cache.get(&item.id).cloned() else {
-            return;
-        };
-        let Some(selected) = detail.seasons.get(season) else {
-            return;
-        };
-        if !detail.episodes.contains_key(&selected.id) {
-            self.fetch_series_season_episodes(item.id.clone(), selected.id.clone());
-        }
-        self.libs[lib_idx].series_season_cursor = season;
-        self.libs[lib_idx].series_selection = Some(0);
     }
 
     pub(super) fn is_home_video_view(&self, lib_idx: usize) -> bool {

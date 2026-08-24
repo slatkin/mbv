@@ -7,8 +7,7 @@ impl App {
         self.series_detail_loading.remove(&series_id);
         // Only the first season is needed up front: it's the default season
         // cursor/modal selection, and every other season is fetched lazily
-        // on demand as the user navigates to it (`switch_series_selection_season`,
-        // `select_series_season`, `select_series_selection_modal_season`).
+        // on demand as the user navigates to it (`select_series_selection_modal_season`).
         let first_season_id = self
             .series_detail_cache
             .get(&series_id)

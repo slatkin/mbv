@@ -48,10 +48,6 @@ fn single_click_on_hero_only_focuses_the_panel() {
         PanelFocus::Library,
         "click focuses the panel"
     );
-    assert_eq!(
-        app.libs[0].series_selection, None,
-        "a single click on the hero must not enter series selection"
-    );
     assert_eq!(app.libs[0].nav_stack.len(), 1);
 }
 
@@ -69,16 +65,7 @@ fn narrow_double_click_on_hero_opens_the_selection_modal() {
 
     let click = make_library_mouse_event(MouseEventKind::Down(MouseButton::Left), 12, 11);
     app.handle_mouse(click);
-    assert_eq!(
-        app.libs[0].series_selection, None,
-        "the first click of the pair only focuses"
-    );
-
     app.handle_mouse(click);
-    assert_eq!(
-        app.libs[0].series_selection, None,
-        "narrow double-click must not enter invisible wide-only Series focus"
-    );
     assert!(
         app.selection_modal.is_some(),
         "narrow double-click on the hero must open the Series selection modal"
@@ -98,11 +85,6 @@ fn wide_double_click_on_hero_keeps_series_workspace() {
     app.handle_mouse(click);
     app.handle_mouse(click);
 
-    assert_eq!(
-        app.libs[0].series_selection,
-        Some(0),
-        "wide double-click must retain the persistent Series workspace"
-    );
     assert!(
         app.selection_modal.is_none(),
         "wide double-click must not open the narrow Series modal"
@@ -118,7 +100,6 @@ fn wide_series_episode_target_changes_episode_focus() {
     app.layout.main.tv_wide_episode_rows = vec![(Rect::new(42, 4, 16, 1), 1)];
 
     assert!(app.click_set_cursor(43, 4));
-    assert_eq!(app.libs[0].series_selection, Some(1));
 }
 
 #[test]
@@ -190,10 +171,6 @@ fn narrow_series_enter_opens_selection_modal_with_season_and_episode_rows() {
     let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(!handled);
-    assert_eq!(
-        app.libs[0].series_selection, None,
-        "narrow Enter must not enter the in-hero series-selection mode"
-    );
     let modal = app
         .selection_modal
         .as_ref()
@@ -298,27 +275,10 @@ fn wide_series_enter_still_enters_series_selection_not_the_modal() {
     let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(!handled);
-    assert_eq!(
-        app.libs[0].series_selection,
-        Some(0),
-        "wide Enter must still enter the in-hero series-selection mode"
-    );
     assert!(
         app.selection_modal.is_none(),
         "wide Enter must not open the selection modal"
     );
-}
-
-#[test]
-fn keyboard_series_change_resets_the_season_cursor_before_first_season_fetch() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_series_app();
-    app.layout.main.tv_wide_right_area = Rect::new(10, 0, 20, 10);
-    app.libs[0].series_season_cursor = 1;
-
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-
-    assert_eq!(app.libs[0].series_season_cursor, 0);
 }
 
 /// Narrow (`is_wide_music_active() == false`, the default zero-area layout)

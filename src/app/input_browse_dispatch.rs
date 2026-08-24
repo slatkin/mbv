@@ -140,53 +140,13 @@ impl App {
             }
         }
 
-        // Series-selection mode: while the left panel has a Series item
-        // selected and selection mode is active, Enter/Escape/Up/Down/[/] are
-        // intercepted for navigating within the inline series detail (season
-        // pills + episode list) instead of drilling into `nav_stack`.
-        if self.libs[lib_idx].series_selection.is_some() {
-            match key.code {
-                KeyCode::Enter => {
-                    self.activate_series_selection_episode(lib_idx);
-                    return Some(false);
-                }
-                KeyCode::Esc | KeyCode::Backspace => {
-                    self.libs[lib_idx].series_selection = None;
-                    return Some(false);
-                }
-                KeyCode::Up | KeyCode::Down => {
-                    let delta: i64 = if key.code == KeyCode::Up { -1 } else { 1 };
-                    if let Some(episodes) = self.series_selection_episodes(lib_idx) {
-                        let count = episodes.len();
-                        if count > 0 {
-                            let cur = self.libs[lib_idx].series_selection.unwrap_or(0);
-                            let new_idx = super::ui_util::move_cursor(cur, delta, count);
-                            self.libs[lib_idx].series_selection = Some(new_idx);
-                        }
-                    }
-                    return Some(false);
-                }
-                KeyCode::Char('[') => {
-                    self.switch_series_selection_season(lib_idx, -1);
-                    return Some(false);
-                }
-                KeyCode::Char(']') => {
-                    self.switch_series_selection_season(lib_idx, 1);
-                    return Some(false);
-                }
-                _ => {}
-            }
-        }
         // Activate series-selection mode on Enter when the cursor is on a
         // Series item (instead of drilling down via `select`). Wide keeps
-        // the existing in-hero episode focus (`series_selection`); narrow
-        // has no inline season/episode block to focus (see
+        // the existing in-hero episode focus; narrow has no inline
+        // season/episode block to focus (see
         // `render_series_inline_detail`), so it opens the selection modal
         // instead (design.md Decision 6).
-        if key.code == KeyCode::Enter
-            && self.libs[lib_idx].series_selection.is_none()
-            && self.activate_selected_series(lib_idx)
-        {
+        if key.code == KeyCode::Enter && self.activate_selected_series(lib_idx) {
             return Some(false);
         }
 

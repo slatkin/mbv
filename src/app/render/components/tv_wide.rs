@@ -89,8 +89,8 @@ impl App {
             list,
             selected_series,
             series_detail,
-            self.libs[lib_idx].series_season_cursor,
-            self.libs[lib_idx].series_selection,
+            0,
+            None,
             focused && matches!(self.effective_panel_focus(), PanelFocus::Library),
             self.should_show_letter_pills(lib_idx),
         )

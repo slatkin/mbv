@@ -315,7 +315,6 @@ fn movie_enter_and_parent_double_click_match_narrow_and_wide() {
         keyboard.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(keyboard.status, "Emby is unavailable");
         assert!(keyboard.selection_modal.is_none());
-        assert!(keyboard.libs[0].series_selection.is_none());
 
         let mut mouse = make_library_app();
         mouse.layout.main.left_area = Rect::new(10, 5, 20, 5);
@@ -331,7 +330,6 @@ fn movie_enter_and_parent_double_click_match_narrow_and_wide() {
             "Movie double-click must use the same activation as Enter (wide={wide})"
         );
         assert!(mouse.selection_modal.is_none());
-        assert!(mouse.libs[0].series_selection.is_none());
     }
 }
 

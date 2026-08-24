@@ -131,12 +131,34 @@ impl TvWorkspaceComponent {
         }
     }
 
+    fn move_season(&mut self, delta: i64) {
+        let count = self
+            .context
+            .series_detail
+            .as_ref()
+            .map_or(0, |detail| detail.seasons.len());
+        if count > 0 {
+            self.season_cursor = move_cursor(self.season_cursor, delta, count);
+            self.episode_cursor = Some(0);
+        }
+    }
+
     fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
         match key.code {
             Key::Left | Key::Char('h') => self.pane = Pane::Series,
             Key::Right | Key::Char('l') => self.pane = Pane::Episodes,
+            Key::Enter if self.pane == Pane::Series => {
+                self.episode_cursor = Some(0);
+                self.pane = Pane::Episodes;
+            }
+            Key::Esc | Key::Backspace if self.episode_cursor.is_some() => {
+                self.episode_cursor = None;
+                self.pane = Pane::Series;
+            }
             Key::Up | Key::Char('k') if self.pane == Pane::Episodes => self.move_episode(-1),
             Key::Down | Key::Char('j') if self.pane == Pane::Episodes => self.move_episode(1),
+            Key::Char('[') if self.pane == Pane::Episodes => self.move_season(-1),
+            Key::Char(']') if self.pane == Pane::Episodes => self.move_season(1),
             Key::Up | Key::Char('k') => {
                 self.cursor = move_cursor(self.cursor, -1, self.context.list.item_count())
             }
@@ -159,6 +181,15 @@ impl TvWorkspaceComponent {
         ) {
             let position: ratatui::layout::Position = (mouse.column, mouse.row).into();
             if let Some((_, index)) = self
+                .layout
+                .tv_wide_season_tabs
+                .iter()
+                .find(|(rect, _)| rect.contains(position))
+            {
+                self.pane = Pane::Episodes;
+                self.season_cursor = *index;
+                self.episode_cursor = Some(0);
+            } else if let Some((_, index)) = self
                 .layout
                 .tv_wide_episode_rows
                 .iter()

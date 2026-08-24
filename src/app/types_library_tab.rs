@@ -11,14 +11,6 @@ pub(super) struct LibraryTab {
     /// `idx` indexes into that album's cached track list
     /// (`App::album_tracks_cache`). `None` = normal album-list navigation.
     pub(super) album_track_focus: Option<usize>,
-    /// `Some(ep_idx)` = series-selection mode is active for the Series item
-    /// currently shown inline at the library list nav level;
-    /// `ep_idx` indexes into the cached episode list for the current season.
-    /// `None` = normal list navigation.
-    pub(super) series_selection: Option<usize>,
-    /// Which season is selected in series-selection mode (index into
-    /// `SeriesDetail.seasons`). Only meaningful when `series_selection.is_some()`.
-    pub(super) series_season_cursor: usize,
     /// The library's TRUE unfiltered `TotalRecordCount`, captured from the
     /// first unfiltered fetch of the library's top level. `None` until that
     /// first load completes. Used to gate the letter pill row and per-letter
@@ -34,8 +26,6 @@ impl LibraryTab {
             nav_stack: Vec::new(),
             feed_home_video: None,
             album_track_focus: None,
-            series_selection: None,
-            series_season_cursor: 0,
             library_total: None,
         }
     }

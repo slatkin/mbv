@@ -1,18 +1,12 @@
-use crate::app::layout::LayoutMain;
 use crate::app::render::components::hero::{
     inline_hero_text_width, wrap_overview_lines, HeroContent, HeroImage, HeroLine,
 };
-use crate::app::render::components::list_rows::selection_marker;
-use crate::app::render::{render_pill_bar, render_placeholder, MarkerEdge, PillBar, RENDER_FILTER};
-use crate::app::ui_util::*;
+use crate::app::render::RENDER_FILTER;
 use crate::app::{palette, App};
-use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
-use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
-use unicode_width::UnicodeWidthStr;
 
 pub(in crate::app::render) const SERIES_DETAIL_DIVIDER_ROWS: usize = 1;
 pub(in crate::app::render) const SERIES_DETAIL_EPISODE_ROWS_ESTIMATE: usize = 8;
@@ -50,8 +44,6 @@ impl App {
         lib_idx: usize,
         focused: bool,
         show_title: bool,
-        persistent: bool,
-        layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;
@@ -60,11 +52,6 @@ impl App {
         let Some(item) = self.selected_series_item(lib_idx) else {
             return;
         };
-        // Wide (`persistent`) always shows the season/episode block; narrow
-        // never does -- the narrow inline hero routes Enter to the selection
-        // modal instead (see `open_series_selection_modal`).
-        let show_episodes = persistent;
-
         // Fetch series detail if not cached
         if !item.id.is_empty() {
             self.fetch_series_detail(item.id.clone());
@@ -131,13 +118,7 @@ impl App {
             // so the reserved space and what's actually drawn stay in sync.
             // Narrow renders no season/episode block below, so nothing is
             // reserved for it there.
-            let reserved_for_below = if show_episodes {
-                (SERIES_DETAIL_DIVIDER_ROWS
-                    + SERIES_DETAIL_EPISODE_ROWS_ESTIMATE
-                    + SERIES_DETAIL_TRAILING_BLANK_ROWS) as u16
-            } else {
-                0
-            };
+            let reserved_for_below = 0;
             let available_rows = (max_y
                 .saturating_sub(overview_start_row)
                 .saturating_sub(reserved_for_below)) as usize;
@@ -146,7 +127,6 @@ impl App {
             Vec::new()
         };
         let hero_lines: Vec<HeroLine> = overview_lines.into_iter().map(HeroLine::Plain).collect();
-        let has_overview_lines = !hero_lines.is_empty();
         let title = item.display_name();
 
         let hero_content = HeroContent {
@@ -167,28 +147,6 @@ impl App {
             &hero_content,
             focused,
         );
-        // Trailing spacer after the overview block, matching the original's
-        // "if !lines.is_empty() && row < max_y { row += 1 }".
-        let mut row = if has_overview_lines && result.next_row < max_y {
-            result.next_row + 1
-        } else {
-            result.next_row
-        };
-
-        let (img_actual_w, img_height) = match result.img_rect {
-            Some(r) => (r.width, r.height),
-            None => (0, 0),
-        };
-        let text_dims = |r: u16| -> (usize, u16) {
-            let width = inline_hero_text_width(
-                area.width,
-                img_actual_w,
-                img_height,
-                r.saturating_sub(area.y),
-            );
-            (width as usize, width)
-        };
-
         // ── Render series image last so it layers over text ───────────────
         if let Some(img_rect) = result.img_rect {
             if img_is_placeholder {
@@ -202,209 +160,6 @@ impl App {
                     SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
                     img_rect,
                     state,
-                );
-            }
-        }
-
-        // ── Grey divider with season tabs overlaid ───────────────────────
-        // Wide-only: narrow shows hero content only and routes Enter to the
-        // selection modal instead (`open_series_selection_modal`).
-        if persistent {
-            // Fetch series detail from cache
-            let series_detail = self.series_detail_cache.get(&item.id).cloned();
-            let season_cursor = self.libs[lib_idx].series_season_cursor;
-            let ep_cursor = self.libs[lib_idx].series_selection;
-            if let Some(ref detail) = series_detail {
-                if !detail.seasons.is_empty() && row < max_y {
-                    let (_, season_w16) = text_dims(row);
-                    let prefix_w = "Series: ".width();
-                    let tab_labels =
-                        crate::app::lib_cursor_actions::series_season_pill_labels(detail);
-                    let n_tabs = tab_labels.len();
-                    let ids: Vec<usize> = (0..n_tabs).collect();
-                    // Render the `Series:` label separately, then delegate the
-                    // remaining row to the shared pill bar so season choices
-                    // share the canonical pill appearance and keep the
-                    // selected season visible on overflow. The bar's returned
-                    // hitboxes are discarded: season navigation is
-                    // keyboard-only and must not alter library click targets.
-                    f.render_widget(
-                        Paragraph::new(Line::from(Span::styled(
-                            "Series: ",
-                            Style::default()
-                                .fg(palette::TEXT_FOCUS_ACCENT)
-                                .add_modifier(Modifier::BOLD),
-                        ))),
-                        Rect {
-                            x: area.x,
-                            y: row,
-                            width: prefix_w as u16,
-                            height: 1,
-                        },
-                    );
-                    let season_tabs = render_pill_bar(
-                        f,
-                        Rect {
-                            x: area.x + prefix_w as u16,
-                            y: row,
-                            width: season_w16.saturating_sub(prefix_w as u16),
-                            height: 1,
-                        },
-                        PillBar {
-                            labels: &tab_labels,
-                            ids: &ids,
-                            selected_pos: season_cursor,
-                            prefix: Some(" ⌘ "),
-                        },
-                    );
-                    layout.tv_wide_season_tabs = season_tabs;
-                    row += 1;
-                }
-
-                // ── Episode list ─────────────────────────────────────────────
-                let active_season = detail.seasons.get(season_cursor);
-                let episodes_loaded =
-                    active_season.is_some_and(|season| detail.episodes.contains_key(&season.id));
-                let episodes = active_season
-                    .and_then(|s| detail.episodes.get(&s.id))
-                    .map(|eps| eps.as_slice())
-                    .unwrap_or(&[]);
-                if show_episodes && !episodes.is_empty() && row < max_y {
-                    let (_, table_width) = text_dims(row);
-                    let table_area = Rect {
-                        x: area.x,
-                        y: row,
-                        width: table_width,
-                        height: max_y
-                            .saturating_sub(row)
-                            .saturating_sub(SERIES_DETAIL_TRAILING_BLANK_ROWS as u16),
-                    };
-                    if table_area.height > 0 {
-                        let show_length = table_area.width > 30;
-                        let dur_col_w: usize = if show_length { 7 } else { 0 };
-                        let title_col_w = (table_area.width as usize)
-                            .saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
-
-                        let visible = table_area.height as usize;
-                        let start = if persistent {
-                            ep_cursor
-                                .map(|cursor| cursor.saturating_sub(visible.saturating_sub(1)))
-                                .unwrap_or(0)
-                                .min(episodes.len().saturating_sub(visible))
-                        } else {
-                            0
-                        };
-                        let rows: Vec<Row> = episodes
-                            .iter()
-                            .enumerate()
-                            .skip(start)
-                            .take(visible)
-                            .map(|(i, ep)| {
-                                let is_cursor = ep_cursor == Some(i);
-                                let row_style = if is_cursor && focused {
-                                    Style::default().fg(palette::TEXT_FOCUS_ACCENT)
-                                } else if focused {
-                                    Style::default().fg(palette::TEXT_STRONG)
-                                } else {
-                                    Style::default().fg(palette::TEXT_SECONDARY)
-                                };
-                                let marker = selection_marker(is_cursor, MarkerEdge::Left);
-                                let ep_num_w = episodes.len().to_string().len();
-                                let ep_label = if ep.index_number > 0 {
-                                    format!("{:>ep_num_w$}. ", ep.index_number)
-                                } else {
-                                    format!("{:>ep_num_w$}. ", i + 1)
-                                };
-                                let label_w = ep_label.chars().count();
-                                let title =
-                                    trunc_str(&ep.name, title_col_w.saturating_sub(label_w));
-                                let mut title_spans = vec![marker];
-                                title_spans.push(Span::styled(
-                                    ep_label,
-                                    Style::default().fg(palette::TEXT_MUTED),
-                                ));
-                                title_spans.push(Span::raw(title));
-
-                                let title_cell = Cell::from(Line::from(title_spans));
-                                let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
-                                let length = if len_secs > 0 {
-                                    fmt_duration_approx(len_secs)
-                                } else {
-                                    "\u{2014}".to_string()
-                                };
-                                if show_length {
-                                    Row::new([
-                                        title_cell,
-                                        Cell::from(Line::from(length).alignment(Alignment::Right))
-                                            .style(Style::default().fg(palette::TEXT_MUTED)),
-                                        Cell::from(""),
-                                    ])
-                                    .style(row_style)
-                                } else {
-                                    Row::new([title_cell, Cell::from(""), Cell::from("")])
-                                        .style(row_style)
-                                }
-                            })
-                            .collect();
-                        for (visible_idx, (i, _)) in episodes
-                            .iter()
-                            .enumerate()
-                            .skip(start)
-                            .take(visible)
-                            .enumerate()
-                        {
-                            let row_rect = Rect {
-                                x: table_area.x,
-                                y: table_area.y + visible_idx as u16,
-                                width: table_area.width,
-                                height: 1,
-                            };
-                            layout.tv_wide_episode_rows.push((row_rect, i));
-                        }
-                        f.render_widget(
-                            Table::new(
-                                rows,
-                                [
-                                    Constraint::Min(10),
-                                    Constraint::Length(if show_length {
-                                        dur_col_w as u16
-                                    } else {
-                                        0
-                                    }),
-                                    Constraint::Length(1),
-                                ],
-                            )
-                            .column_spacing(1),
-                            table_area,
-                        );
-                    }
-                } else if show_episodes && active_season.is_some() && row < max_y {
-                    let status = if episodes_loaded {
-                        " (no episodes)"
-                    } else {
-                        " Loading\u{2026}"
-                    };
-                    render_placeholder(
-                        f,
-                        Rect {
-                            x: area.x,
-                            y: row,
-                            width: area.width,
-                            height: 1,
-                        },
-                        status,
-                    );
-                }
-            } else if row < max_y {
-                render_placeholder(
-                    f,
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: area.width,
-                        height: 1,
-                    },
-                    " Loading\u{2026}",
                 );
             }
         }

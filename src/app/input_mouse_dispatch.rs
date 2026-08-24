@@ -318,9 +318,8 @@ impl App {
                                     .tv_wide_episode_rows
                                     .iter()
                                     .any(|(rect, _)| rect.contains(pos))
+                                    || self.layout.main.tv_wide_right_area.contains(pos)
                                 {
-                                    self.activate_series_selection_episode(lib_idx);
-                                } else if self.layout.main.tv_wide_right_area.contains(pos) {
                                     self.activate_selected_series(lib_idx);
                                 }
                                 return;
@@ -330,17 +329,6 @@ impl App {
                         let in_left = self.layout.main.left_area.contains(pos)
                             || self.layout.main.inline_hero_area.contains(pos);
                         if let TabSelection::EmbyLibrary(lib_idx) = self.tab {
-                            if self.layout.main.is_wide_tv_active()
-                                && self
-                                    .layout
-                                    .main
-                                    .tv_wide_episode_rows
-                                    .iter()
-                                    .any(|(rect, _)| rect.contains(pos))
-                            {
-                                self.activate_series_selection_episode(lib_idx);
-                                return;
-                            }
                             if self.is_music_group_view(lib_idx) {
                                 let track_idx = self
                                     .layout
@@ -435,8 +423,6 @@ impl App {
                                     }
                                     if self.is_viewing_album_folders(lib_idx) {
                                         self.activate_album_folder_row(lib_idx);
-                                    } else if self.libs[lib_idx].series_selection.is_some() {
-                                        self.activate_series_selection_episode(lib_idx);
                                     } else if !self.activate_selected_series(lib_idx) {
                                         self.select(lib_idx);
                                     }

@@ -54,8 +54,8 @@ impl Model {
             list,
             selected_series,
             series_detail,
-            self.app.libs[index].series_season_cursor,
-            self.app.libs[index].series_selection,
+            0,
+            None,
             matches!(self.app.effective_panel_focus(), PanelFocus::Library),
             self.app.should_show_letter_pills(index),
         );

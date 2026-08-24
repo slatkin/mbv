@@ -220,10 +220,6 @@ fn narrow_tv_does_not_activate_an_invisible_episode_target() {
     app.layout.main.tv_wide_episode_rows = vec![(Rect::new(11, 8, 18, 1), 0)];
 
     assert!(app.click_set_cursor(12, 8));
-    assert_eq!(
-        app.libs[0].series_selection, None,
-        "narrow TV must not focus an invisible wide-only episode target"
-    );
 }
 
 #[test]

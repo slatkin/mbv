@@ -573,15 +573,7 @@ impl App {
             if selected_movie_item.is_some() {
                 self.render_compact_detail(f, content_rect, lib_idx, focused, true, layout);
             } else if selected_series_item.is_some() {
-                self.render_series_inline_detail(
-                    f,
-                    content_rect,
-                    lib_idx,
-                    focused,
-                    true,
-                    false,
-                    layout,
-                );
+                self.render_series_inline_detail(f, content_rect, lib_idx, focused, true);
             }
         }
 
