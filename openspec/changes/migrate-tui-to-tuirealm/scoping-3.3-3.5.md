@@ -121,8 +121,11 @@ this session and should be mapped by whoever picks this up before editing.
 
 ### 3.3 — Inline Search
 
-Only needs 3.5a (the `BrowserKey` type), not 3.5b/c/d — can run in parallel
-with both lanes above.
+**Superseded by the 2026-08-24 session-3 correction below: 3.3 does NOT run
+in parallel with Lane A/B on 3.5a alone.** It needs a real seam-extraction
+prerequisite of its own, overlapping Lane A's deferred render work. Left
+here for the original (too-optimistic) reasoning; see the correction section
+for the actual dependency.
 
 - Render entry: `render_search_box` (`hero.rs:657`) — distinct from the
   already-converted global search sidebar (`search_sidebar.rs`, task 3.2).
@@ -134,6 +137,124 @@ with both lanes above.
 - **Collision risk:** shares `library_load_actions.rs` and
   `types_library_tab.rs` with Lane B. If run truly in parallel, coordinate
   edit order on those two files or expect a merge.
+
+## Correction (2026-08-24, session 3): 3.3's real entanglement, found by tracing the code
+
+An `/opsx:apply` session scoped narrowly to 3.3 traced every read/write of
+`LibraryTab.search` and every caller of `render_search_box` before writing
+any code, and found the entanglement is bigger than this doc's "only needs
+3.5a" claim above — on both the input side (worse than expected) and the
+render side (much worse, and not previously identified at all). No code was
+written this session; `tasks.md`'s 3.3 checkbox is still unticked.
+
+### Input/cursor/mouse: 4 more files than scoped
+
+`LibraryTab.search` (the field, not just the query-editing keys) is read or
+written directly inside shared, not-yet-converted browse-cursor code that
+belongs to task 3.5, not 3.3:
+
+- `lib_cursor_actions.rs` — `move_lib_cursor`/`jump_lib_cursor`/
+  `current_library_columns`/`is_viewing_season_grid` all branch on
+  `lib.search.is_some()` to redirect cursor movement between search results
+  and the nav-stack list (8 branches total).
+- `actions_navigation.rs` — `select` (search-result activation reuses the
+  same folder-descend/play logic as a normal list select, resolved through
+  `current_lib_item`'s search branch) and `go_back` (Esc/Backspace pops
+  search before nav_stack).
+- `input_mouse.rs` — at least one click-to-select site sets `search.cursor`
+  as a fallback alongside `nav_stack` cursor (e.g. the wide-TV right-rail
+  click handler, ~line 318; there may be others not yet enumerated).
+- `lib_event_actions.rs` — three `LibEvent` handlers touch `lib.search`
+  directly: `SearchItemsLoaded` (async full-library fetch completion),
+  `RecursiveAlbumActivated` (clears search after a recursive-album
+  activation), and one more session-2 didn't isolate.
+
+This part is still tractable: once `InlineSearch` owns its own results
+cursor (Up/Down/PageUp/PageDown/Home/End over its own `results`/`cursor`/
+`scroll`, mirroring `SearchSidebarComponent::move_cursor`) and Enter emits
+one `Msg::Shell` carrying the resolved item (instead of round-tripping
+through `App::select`/`current_lib_item`'s search branch), every
+`search.is_some()` branch above collapses to its already-there `else` arm —
+mechanical dead-code deletion once the field is gone, not a redesign. `select`
+likely wants a small extraction (`select(lib_idx)` → resolve item →
+`select_item(lib_idx, item)`) so both the plain-list Enter and the new
+component's activation Msg share one body.
+
+Also non-trivial and not previously flagged: `update_lib_search`
+(`library_load_actions.rs:514`) and its neighbours in
+`library_search_actions.rs` are not just "edit a query string" — they cover
+two really different search modes:
+- **Plain mode:** fuzzy-match (`fuzzy_matcher` crate, local computation, no
+  network per keystroke — unlike the global Search sidebar's debounced
+  server round-trip) against either already-loaded `nav_stack` items or a
+  one-time full-library fetch (`spawn_search_items_load`,
+  `library_browse_actions.rs:588`, delivered back via
+  `LibEvent::SearchItemsLoaded`).
+- **Recursive album mode** (music libraries, `recursive_album_search_enabled`):
+  fuzzy-matches against `App.album_indexes` — a library-scoped, long-lived
+  cache built by `spawn_album_index_build`/`AlbumIndexBuilt`, NOT owned by
+  the search session — and `Enter` on a match runs `activate_recursive_album`
+  (`library_search_actions.rs:148`), a separate async multi-level fetch that
+  replaces the whole `nav_stack` and sets `album_track_focus`. This is
+  clearly shell-owned cross-boundary work (Service access, nav_stack
+  mutation), not something the component can do itself — but it means
+  `InlineSearch` needs two candidate-pool shapes (plain items vs. recursive
+  `AlbumSearchEntry`, which carries `ancestors`/`search_text` for the
+  fuzzy-match key and the activation path), pushed in by the shell the same
+  way `apply_drain` pushes results into `SearchSidebarComponent` today.
+
+### Render: not scoped at all before this session, and much larger
+
+`render_search_box` (`hero.rs:657`) only paints the single-row query input.
+The actual results *list* renders through the same shared, unconverted list
+painter used for the plain browse list — confirmed by grepping every caller
+and every `.search` reference under `src/app/render/`:
+
+- `render/components/list.rs` — `render_list` (536 lines) and
+  `render_wide_library_rows` (69 lines) both branch on `lib.search`, and not
+  just at the top: `search_active` feeds into hero-row sizing
+  (`selected_movie_item`/`selected_series_item`, which have their own search
+  branches in `detail.rs` — `selected_movie_item` ~104-126,
+  `selected_series_item` ~128-147), letter-pill suppression, column
+  computation, and the inline-hero-replacement geometry
+  (`InlineReplacementPlan`). `render_list` dispatches *first* into three
+  more full-page renderers for wide layouts, each with its own independent
+  `lib.search` branch:
+  - `render/components/tv_wide.rs::render_wide_tv` (~70 lines)
+  - `render/components/movies_wide.rs::render_wide_movies` (~104 lines,
+    plus `selected_wide_movie`'s own search branch)
+  - `render/components/music_wide.rs::render_wide_music_group` (~193 lines)
+    plus `render_wide_left_tracks` (~170 lines, the persistent wide-music
+    track list, also search-branching)
+
+Total: 5 files, roughly 1,500+ lines of dense, image/geometry-sensitive
+code, none of it parameterized for component use today (`render_plain_rows`/
+`render_letter_grouped_rows` in `list_letter_groups.rs` already take a typed
+`ListRenderCtx` rather than `&self` — a real seam already exists one layer
+down — but everything *above* that layer, the part that decides
+`items`/`cursor`/`scroll`/`cols`/hero sizing, is still `impl App` reading
+`lib.search`/`nav_stack` directly).
+
+### What this means for the task order
+
+3.3 as scoped ("child of one Emby browser," "distinct from global Search")
+undersold how deep its render ownership goes: it doesn't paint its own
+results, it swaps the item source feeding the SAME painter task 3.5 (and
+4.2 for TV, 4.3 for Music) haven't converted yet. Converting 3.3 first,
+correctly, means doing the render-seam-extraction half of 3.5b (parameterize
+`render_list`/`render_wide_library_rows`'s item-source selection and the
+three wide renderers to take component-supplied data) as 3.3's own
+prerequisite — not "3.5a only" as this doc previously claimed.
+
+Recommendation for whoever picks this up: either (a) sequence 3.3 genuinely
+after 3.5b's render-seam extraction lands (the render_list/wide_* seam this
+session found doubles as most of what 3.5b needs anyway, so this isn't
+wasted if done as part of 3.5), or (b) explicitly scope a "3.3 render seam"
+lane that does only the search-branch extraction in these 5 files (not the
+rest of 3.5b's seam work) as 3.3's prerequisite, accepting some duplicate
+effort against a later full 3.5b pass. Either way, budget for ~1,500 lines
+of careful, behavior-preserving extraction across dense image/layout code
+before any `InlineSearchComponent` can render — this is not a small task.
 
 ## Files read this session to produce this scoping (for the next agent's context)
 

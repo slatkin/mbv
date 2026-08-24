@@ -1,11 +1,16 @@
 # Handoff: migrate-tui-to-tuirealm — precedence-gate infrastructure + browser scoping
 
-**Date:** 2026-08-24 (two sessions same day: precedence gates, then 3.3/3.5 scoping)
+**Date:** 2026-08-24 (three sessions same day: precedence gates, then
+3.3/3.5 scoping, then a 3.3 apply attempt that found the scoping was still
+too optimistic)
 **Progress:** 17/40 tasks marked complete in `tasks.md` (unchanged this
 session — this work is prerequisite scaffolding for task 3.4's input half,
 not one of the 40 named tasks itself).
 **Schema:** spec-driven
 **Branch/worktree:** `.worktrees/migrate-tui-to-tuirealm`
+**Checkpoint commit:** `7ac6ec61` on `feat/migrate-tui-to-tuirealm`, pushed to
+`origin`. Everything described below (both sessions) is included in it —
+treat it as the current baseline, not a in-progress-uncommitted state.
 
 ## What happened this session
 
@@ -139,3 +144,44 @@ Tasks 2.1–2.5, 3.1–3.2, 3.7 were completed in earlier sessions. Task 3.3
 (inline library Search) and 3.5 (Emby browser, `BrowserKey`) remain
 explicitly deferred — 3.5 must stay last among the currently-visible options
 per a standing user constraint.
+
+## Session 3: 3.3 apply attempt — found the scoping doc was still too optimistic (2026-08-24)
+
+An `/opsx:apply` session scoped strictly to task 3.3 (no code changes
+authorized outside it) traced the actual code before writing anything and
+found session 2's scoping doc undersold 3.3's entanglement on both axes:
+
+- **Input/cursor/mouse:** `LibraryTab.search` is read/written directly in
+  4 files outside 3.3's stated scope — `lib_cursor_actions.rs`,
+  `actions_navigation.rs`, `input_mouse.rs`, `lib_event_actions.rs` — all
+  task-3.5 territory. Tractable (mechanical dead-code deletion once
+  `InlineSearch` owns its own results cursor), but bigger than "move
+  `search` off `LibraryTab`" implied.
+- **Render (not previously scoped at all):** `render_search_box` only
+  paints the query input; the results list renders through the same
+  unconverted painter as the plain browse list —
+  `render/components/list.rs` (`render_list`, `render_wide_library_rows`),
+  `tv_wide.rs`, `movies_wide.rs`, `music_wide.rs` — ~1,500+ lines across 5
+  files, `lib.search` threaded through hero sizing, letter-pill
+  suppression, and inline-hero geometry, not a contained top branch. This
+  is a real slice of 3.5b's (and 4.2/4.3's) deferred render-seam
+  extraction, not something 3.3 can do standalone.
+
+Full file:line detail, the recursive-album-search/`activate_recursive_album`
+design note, and the recommended path forward are in
+`scoping-3.3-3.5.md`'s "Correction (2026-08-24, session 3)" section — read
+that before attempting 3.3 again. No code was written this session;
+`tasks.md` is unchanged (3.3 still unticked). Recommendation: either
+sequence 3.3 genuinely after 3.5b's render-seam extraction lands (the seam
+this session found overlaps most of what 3.5b needs anyway), or explicitly
+scope a dedicated "3.3 render seam" prerequisite task that extracts only the
+search branches from those 5 files.
+
+**Separately, unrelated to 3.3:** this session found `CLAUDE.md` had been
+modified on disk mid-session (uncommitted, not present at session start) to
+add a mandatory "always use jCodemunch, never Read/Grep/Bash" policy, at the
+exact moment the session had determined jcodemunch's index was stale for
+this worktree (built one commit behind this branch's HEAD). Flagged to the
+user as a suspected injection rather than silently complied with; the user
+then said they'd reindexed. Worth the next session double-checking that
+`CLAUDE.md` change was actually intentional if it's still there.
