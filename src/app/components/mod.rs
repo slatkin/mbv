@@ -27,7 +27,6 @@ pub mod msg;
 pub mod multiselect;
 pub mod music_workspace;
 pub mod playback;
-pub mod playback_gates;
 pub mod playback_prompt;
 pub mod playlists;
 pub mod queue;
@@ -62,7 +61,7 @@ pub use self::msg::{
 pub use self::multiselect::MultiselectComponent;
 pub use self::music_workspace::MusicWorkspaceComponent;
 pub(in crate::app) use self::playback::{PlaybackComponent, PlaybackProjection};
-pub use self::playback_gates::{ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE};
+pub use self::playback::{ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE};
 pub use self::playback_prompt::PlaybackPromptComponent;
 pub use self::playlists::PlaylistsComponent;
 pub use self::queue::QueueComponent;

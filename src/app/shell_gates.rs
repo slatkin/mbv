@@ -1,9 +1,9 @@
 //! Precedence-gate sync for the shell `Model` (see
-//! `components::playback_gates` module docs).
+//! `components::playback` attributes.
 //!
 //! Mirrors the two `App` fields that gate `CONTEXT_STACK` entries above
 //! `view_dispatch` on ephemeral state (`skip_intro_end_ticks`, `next_up_item`)
-//! into `PlaybackGatesComponent`'s attributes every tick, the same "shell
+//! into `PlaybackComponent`'s attributes every tick, the same "shell
 //! mirrors App state into a mounted component" pattern `sync_home` uses --
 //! except via `Application::attr` (attribute storage a future `SubClause`
 //! guard can read) rather than a downcast+setter, since this component is

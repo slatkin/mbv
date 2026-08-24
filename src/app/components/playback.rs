@@ -10,10 +10,15 @@ use tuirealm::state::State;
 
 use super::legacy_input::to_crossterm_mouse_event;
 use super::msg::{Msg, PlaybackRequest};
-use super::playback_gates::{ATTR_NEXT_UP_PROMPT_VISIBLE, ATTR_SKIP_INTRO_PROMPT_VISIBLE};
 use super::user_event::UserEvent;
 use crate::app::render::render_playback_chrome_content;
 use crate::app::types_playback::PlaybackState;
+
+/// Set when `App.skip_intro_end_ticks.is_some()`.
+pub const ATTR_SKIP_INTRO_PROMPT_VISIBLE: Attribute =
+    Attribute::Custom("skip_intro_prompt_visible");
+/// Set when `App.next_up_item.is_some()`.
+pub const ATTR_NEXT_UP_PROMPT_VISIBLE: Attribute = Attribute::Custom("next_up_prompt_visible");
 
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {

@@ -116,7 +116,7 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
     },
     // 16–17 — Playback prompts, gated by real ephemeral state
     // (`App.skip_intro_end_ticks`/`App.next_up_item`; see
-    // `components::playback_gates` for the attribute carrier that exposes
+    // `components::playback` for the attribute carrier that exposes
     // this state to a future `SubClause::HasAttrValue` guard).
     KeyPolicyEntry {
         name: "confirm_skip_intro",

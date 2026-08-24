@@ -103,10 +103,7 @@ impl Model {
                 vec![],
             )
             .expect("mount Library parent");
-        // Precedence-gate attribute carrier (see `components::playback_gates`
-        // module docs) -- mounted for the whole session, never active/
-        // subscribed, so a future `SubClause::HasAttrValue` guard on
-        // `confirm_skip_intro`/`confirm_next_up` has real state to read.
+        // Playback is also the stable attribute carrier for precedence gates.
         model
             .application
             .mount(
@@ -114,7 +111,7 @@ impl Model {
                 Box::new(PlaybackComponent::new()),
                 vec![],
             )
-            .expect("mount PlaybackGates");
+            .expect("mount Playback");
         model.sync_settings();
         model
     }
