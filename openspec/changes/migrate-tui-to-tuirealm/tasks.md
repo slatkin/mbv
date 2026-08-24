@@ -252,6 +252,13 @@ contributing surface's group 2–4 conversion to have landed.
   - [ ] *Album track focus* — delete `LibraryTab.album_track_focus` and re-home
     its four `= None` resets. 30 files (21 / 9), 113 refs. Independent of 5.3c;
     may run in parallel with it.
+  - [ ] *Mouse gesture prep* — extract the three remaining `match self.tab`
+    dispatch points in `App::handle_mouse` (`input_mouse_dispatch.rs`: selector-tab
+    click, double-click activate, right-click menu) into one named method per
+    gesture per surface, mirroring the already-extracted
+    `handle_mouse_scroll_browse`. Behaviour-neutral, deletes no field. This is
+    what makes the twelve *Mouse geometry* agents independent — today they would
+    all edit the same four nested matches.
   - [ ] *Mouse geometry* — **not one unit.** `layout.main.*` is read across 43
     files (264 refs; 30 sites in `input_mouse.rs`, 16 in
     `input_mouse_dispatch.rs`, 13 in `lib_cursor_actions.rs`) and 12 components
