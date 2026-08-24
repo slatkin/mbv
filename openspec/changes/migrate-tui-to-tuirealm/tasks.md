@@ -34,21 +34,48 @@ behaviour-preserving; none except group 5 is a completion.
 
 - [x] 3.1 Extract the Search render seam: expose `render_panel_shell*`, `render_sidebar_scrollbar`, `panel_row_text_width`, `render_panel_row` as typed render-component functions (output-preserving, no `impl App`); verify existing Search buffer characterization is unchanged.
 - [x] 3.2 Convert the global Search sidebar as an ordinary row (component-owned 300 ms debounce driven by `UserEvent::Clock`; preserve the `global-search-sidebar` behaviour contract; do NOT fix its known bugs); verify `rtk cargo nextest run -p mbv search_sidebar` + scan.
-- [ ] 3.3 Convert inline library Search (`LibSearch`, child of one Emby browser, distinct from global Search); verify `rtk cargo nextest run -p mbv inline_library_search` + scan.
+- 3.3 Convert inline library Search — part of the §3.5-chain below; do not schedule standalone.
 - [ ] 3.4 Convert Home (cross-Service rows and hero presentation); verify `rtk cargo nextest run -p mbv home` + scan.
-- [ ] 3.5 Convert the Emby generic/Movies/home-video browser (shared list + hero paths, `Browser(BrowserKey)` instances); verify `rtk cargo nextest run -p mbv emby_browser` + scan.
+- 3.5 Convert the Emby generic/Movies/home-video browser — part of the §3.5-chain below; do not schedule standalone.
 - [ ] 3.6 Convert Feeds (grouping, selector, list, inline hero); verify `rtk cargo nextest run -p mbv feeds` + scan.
 - [x] 3.7 Convert Sessions sidebar (merged Emby/Cast targets, fixed-stride geometry); verify `rtk cargo nextest run -p mbv sessions` + scan.
 - [ ] 3.8 Convert Selection modal (filters, source-specific behaviour, explicit row/selector targets); verify `rtk cargo nextest run -p mbv selection_modal` + scan.
 - [ ] 3.9 Convert Playback prompts (skip-intro/next-up; Player effects stay shell-owned); verify `rtk cargo nextest run -p mbv playback_prompt` + scan.
 - [ ] 3.10 Convert Settings nested popups — Multiselect, Library-routes, Feed-management — as `Popup` children; verify `rtk cargo nextest run -p mbv settings_popup` + scan.
 
+### §3.5-chain — shared Emby browser render seam (sequential, dependency order overrides phase)
+
+`3.3`, `3.5`, `4.2`, `4.3`, and `4.4` all read or write the same render
+functions (`render/components/list.rs`, `tv_wide.rs`, `movies_wide.rs`,
+`music_wide.rs`) — see `scoping-3.3-3.5.md` "Correction (2026-08-24, session
+3)" for the full trace. The medium/high-risk phase split scattered this one
+dependency chain across group 3 and group 4 with nothing showing the real
+order; that split is retired for these five. Execute them in this order only
+— do not start a later step before the one above it has landed, and do not
+pull any of them out to run alongside the phase-4 items below:
+
+1. [ ] 3.5 Convert the Emby generic/Movies/home-video browser (owns the
+   shared render-seam extraction every downstream step here builds on);
+   verify `rtk cargo nextest run -p mbv emby_browser` + scan.
+2. [ ] 4.2 Convert the TV workspace (two focusable panes, season/episode
+   child targets; built on 3.5's seam); verify `rtk cargo nextest run -p mbv
+   tv_workspace` + scan.
+3. [ ] 4.3 Convert the grouped Music workspace (album/track focus coupling,
+   track targets; built on 3.5's seam); verify `rtk cargo nextest run -p mbv
+   music_workspace` + scan.
+4. [ ] 4.4 Convert inline album-track interaction (child state machine of
+   4.3's Music workspace); verify `rtk cargo nextest run -p mbv album_track`
+   + scan.
+5. [ ] 3.3 Convert inline library Search (`LibSearch`, child of one Emby
+   browser, distinct from global Search) — downstream of all four steps
+   above, since `render_search_box`'s results list renders through each of
+   their wide renderers; verify `rtk cargo nextest run -p mbv
+   inline_library_search` + scan.
+
 ## 4. High-risk surfaces
 
 - [ ] 4.1 Convert Queue (cursor/scroll/scope move to the component; canonical queue stays in the Player owner, referenced by opaque `QueueSlotId`); verify `rtk cargo nextest run -p mbv queue` + scan.
-- [ ] 4.2 Convert the TV workspace (two focusable panes, season/episode child targets); verify `rtk cargo nextest run -p mbv tv_workspace` + scan.
-- [ ] 4.3 Convert the grouped Music workspace (album/track focus coupling, track targets); verify `rtk cargo nextest run -p mbv music_workspace` + scan.
-- [ ] 4.4 Convert inline album-track interaction (child state machine of Music, not global Search); verify `rtk cargo nextest run -p mbv album_track` + scan.
+- 4.2, 4.3, 4.4 moved into the §3.5-chain above (section 3) — not independently schedulable here.
 - [ ] 4.5 Convert the Audiobookshelf podcast browser (show/episode workspace, selector targets); verify `rtk cargo nextest run -p mbv abs_podcast` + scan.
 - [ ] 4.6 Convert the Audiobookshelf book browser (browser/chapter workspace, replacement geometry); verify `rtk cargo nextest run -p mbv abs_book` + scan.
 - [ ] 4.7 Convert Playlists sidebar with component-owned variable-row `hit_test` (removes the duplicated mouse-path geometry in `input_mouse_panels.rs`); verify `rtk cargo nextest run -p mbv playlists` + scan.

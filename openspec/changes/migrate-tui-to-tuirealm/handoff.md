@@ -38,16 +38,33 @@ forward) are written up in
   standalone — doing it separately from 3.5b risks duplicate/diverging work
   on the same functions.
 
-## Open decision — resolve before starting 3.3 or 3.5
+## Resolved: task list resequenced (2026-08-24, this session)
 
-3.3 is structurally downstream of 3.5's render-seam work (and, for full
-coverage of every library kind, downstream of 4.2/TV and 4.3/Music too,
-since `render_search_box` is also called from their wide renderers). But an
-earlier session's notes say **"3.5 must stay last among the currently-visible
-options per a standing user constraint"** — the reasoning behind that
-constraint isn't recorded anywhere read this session. These two facts
-conflict. Ask the user whether that constraint still holds now that 3.3's
-dependency on 3.5 is known before resequencing the task list.
+The user confirmed the standing "3.5 must stay last" note no longer applies
+and separately flagged that having this dependency chain split across the
+group-3/group-4 risk-tier phase boundary was itself poorly planned. `tasks.md`
+now reflects both:
+
+- **Do next — mechanical, independent (no shared render seam):** 3.6
+  (Feeds), 3.8 (Selection modal), 3.9 (Playback prompts), 3.10 (Settings
+  popups). Same conversion pattern as the completed 3.1/3.2/3.7.
+- **`§3.5-chain` (new section in `tasks.md`, after 3.10):** 3.3, 3.5, 4.2,
+  4.3, 4.4 are now one explicit sequential block, in dependency order —
+  `3.5 → 4.2 → 4.3 → 4.4 → 3.3` — because all five read/write the same
+  render functions (`list.rs`, `tv_wide.rs`, `movies_wide.rs`,
+  `music_wide.rs`). They are no longer independently schedulable under
+  their old group-3/group-4 headings; the old line items there now just
+  point at the chain. Do not start a later step in the chain before the one
+  above it lands.
+- **3.4 (Home):** independent of the chain, but has its own unresolved
+  precedence-gate design question (`key_policy.rs`'s "lib_search"-style gap
+  — `playback`'s per-key gate can't be a static `SubClause`); needs design
+  work, not straight `/opsx:apply`.
+- **4.1, 4.5–4.10:** independent of the chain and of each other, schedulable
+  any time.
+
+Next agent: start with the mechanical group (3.6/3.8/3.9/3.10), then begin
+the `§3.5-chain` at 3.5.
 
 ## Unrelated: `CLAUDE.md` / jcodemunch note
 
