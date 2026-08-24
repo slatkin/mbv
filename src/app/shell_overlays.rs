@@ -7,10 +7,10 @@
 //! existing `App` handlers for cross-boundary work.
 
 use super::components::{
-    ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, HelpComponent,
-    LibraryRoutesComponent, ModalId, MultiselectComponent, OverlayId, PlaybackPromptComponent,
-    PopupId, RemoteReanchorComponent, SearchSidebarComponent, SelectionModalComponent,
-    SessionsComponent, ShellRequest,
+    ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, FeedsManageComponent,
+    HelpComponent, LibraryRoutesComponent, ModalId, MultiselectComponent, OverlayId,
+    PlaybackPromptComponent, PopupId, RemoteReanchorComponent, SearchSidebarComponent,
+    SelectionModalComponent, SessionsComponent, ShellRequest,
 };
 use super::shell::Model;
 
@@ -512,6 +512,66 @@ impl Model {
         }
     }
 
+    // --- Settings Feed-management popup ------------------------------------
+
+    fn feeds_manage_id() -> ComponentId {
+        ComponentId::Popup(PopupId::FeedManage)
+    }
+
+    pub(super) fn sync_feeds_manage(&mut self) {
+        let id = Self::feeds_manage_id();
+        let mounted = self.application.mounted(&id);
+        if self.app.feeds_manage_popup.is_some() && !mounted {
+            self.application
+                .mount(id.clone(), Box::new(FeedsManageComponent::new()), vec![])
+                .expect("mount FeedManage");
+            self.application.active(&id).expect("activate FeedManage");
+        } else if self.app.feeds_manage_popup.is_none() && mounted {
+            let _ = self.application.umount(&id);
+        }
+        let Some(popup) = self.app.feeds_manage_popup.as_ref() else {
+            return;
+        };
+        let feeds = self.app.config.lock().unwrap().feeds.clone();
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(feeds_manage) = comp.as_any_mut().downcast_mut::<FeedsManageComponent>() {
+                feeds_manage.set_content(popup, feeds);
+            }
+        }
+    }
+
+    fn sync_feeds_manage_to_app(&mut self) {
+        let id = Self::feeds_manage_id();
+        let Some((stage, cursor)) = self
+            .application
+            .get_component_mut(&id)
+            .and_then(|component| {
+                component
+                    .as_any_mut()
+                    .downcast_mut::<FeedsManageComponent>()
+                    .and_then(|feeds_manage| feeds_manage.snapshot())
+            })
+        else {
+            return;
+        };
+        if let Some(popup) = self.app.feeds_manage_popup.as_mut() {
+            popup.stage = stage;
+            popup.cursor = cursor;
+        }
+    }
+
+    pub(super) fn handle_feeds_manage_request(&mut self, key: crossterm::event::KeyEvent) {
+        self.sync_feeds_manage_to_app();
+        let _ = self.app.handle_key_feeds_manage(key);
+    }
+
+    pub(super) fn render_feeds_manage_popup(&mut self, f: &mut ratatui::Frame) {
+        let id = Self::feeds_manage_id();
+        if self.application.mounted(&id) {
+            self.application.view(&id, f, f.area());
+        }
+    }
+
     // --- Search sidebar -----------------------------------------------------
     //
     // The Search sidebar is a non-blocking overlay mounted when
@@ -634,6 +694,7 @@ mod tests {
     use crate::app::tests::make_app_stub;
     use crate::app::types_context_menu::{LibraryRoutePopup, LibraryRouteStage};
     use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
+    use crate::app::types_feeds_manage::FeedsManagePopup;
     use crate::app::types_selection_modal::{
         SelectionModal, SelectionModalItem, SelectionModalListState, SelectionModalRow,
         SelectionModalSource,
@@ -711,7 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn multiselect_shell_syncs_and_commits_component_choices() {
+    fn settings_popup_multiselect_shell_syncs_and_commits_component_choices() {
         let mut model = Model::new(make_app_stub());
         model.app.multiselect_popup = Some(MultiSelectPopup {
             kind: MultiSelectKind::HiddenLibraries,
@@ -745,7 +806,7 @@ mod tests {
     }
 
     #[test]
-    fn library_routes_shell_syncs_and_routes_escape() {
+    fn settings_popup_library_routes_shell_syncs_and_routes_escape() {
         let mut model = Model::new(make_app_stub());
         model.app.library_routes_popup = Some(LibraryRoutePopup {
             stage: LibraryRouteStage::PickLibrary {
@@ -776,6 +837,36 @@ mod tests {
         model.sync_library_routes();
 
         assert!(model.app.library_routes_popup.is_none());
+        assert!(!model.application.mounted(&id));
+    }
+
+    #[test]
+    fn settings_popup_feeds_manage_shell_syncs_and_routes_escape() {
+        let mut model = Model::new(make_app_stub());
+        model.app.feeds_manage_popup = Some(FeedsManagePopup::new());
+        model.sync_feeds_manage();
+
+        let id = ComponentId::Popup(PopupId::FeedManage);
+        let message = {
+            let component = model
+                .application
+                .get_component_mut(&id)
+                .expect("Feed management mounted")
+                .as_any_mut()
+                .downcast_mut::<FeedsManageComponent>()
+                .expect("Feed management type");
+            component.on(&Event::Keyboard(KeyEvent {
+                code: Key::Esc,
+                modifiers: KeyModifiers::NONE,
+            }))
+        };
+        let Some(Msg::Shell(ShellRequest::FeedsManageKey(key))) = message else {
+            panic!("Feed management should emit a shell request");
+        };
+        model.handle_feeds_manage_request(key);
+        model.sync_feeds_manage();
+
+        assert!(model.app.feeds_manage_popup.is_none());
         assert!(!model.application.mounted(&id));
     }
 }

@@ -149,6 +149,9 @@ pub enum ShellRequest {
     /// existing service/config action path.
     LibraryRoutesEnter,
     LibraryRoutesEsc,
+    /// Forward a Feed-management action after the component has synchronized
+    /// its local draft into the shell snapshot.
+    FeedsManageKey(crossterm::event::KeyEvent),
     /// Forward a playback prompt key to the shell-owned Player handler.
     PlaybackPromptKey(crossterm::event::KeyEvent),
     /// Play the Home item at the component-owned flat cursor (task 3.4).

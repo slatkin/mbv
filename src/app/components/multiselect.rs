@@ -129,6 +129,8 @@ impl AppComponent<Msg, UserEvent> for MultiselectComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
     use tuirealm::event::{KeyEvent, KeyModifiers};
 
     fn popup() -> MultiSelectPopup {
@@ -150,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn multiselect_keeps_local_cursor_and_choice() {
+    fn settings_popup_multiselect_keeps_local_cursor_and_choice() {
         let mut component = MultiselectComponent::new();
         component.set_content(&popup());
         component.on(&key(Key::Down));
@@ -161,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn multiselect_commit_is_typed() {
+    fn settings_popup_multiselect_commit_is_typed() {
         let mut component = MultiselectComponent::new();
         component.set_content(&popup());
 
@@ -171,5 +173,24 @@ mod tests {
                 super::super::msg::ShellRequest::MultiselectCommit { .. }
             ))
         ));
+    }
+
+    #[test]
+    fn settings_popup_multiselect_renders_without_app_state() {
+        let mut component = MultiselectComponent::new();
+        component.set_content(&popup());
+        let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        let output: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol().to_owned())
+            .collect();
+        assert!(output.contains("Hidden Libraries"));
+        assert!(output.contains("Movies"));
     }
 }
